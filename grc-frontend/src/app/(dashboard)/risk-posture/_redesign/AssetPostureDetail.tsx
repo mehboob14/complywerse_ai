@@ -75,7 +75,7 @@ type Internal = {
   contributions: Record<'cis' | 'vuln' | 'cia' | 'ctrl' | 'risk', number>;
 };
 // External is read loosely — same pragmatic `any` posture as EasmRiskView.
-type Easm = { mode: 'easm'; asset: any; score: number | null; band: { label: string; description?: string }; components: Record<string, any>; contributions: Record<string, number>; health?: any; probe?: any; data_quality?: number; subdomain_rollup?: { count: number; probed: number; weakest: string; own_score: number | null; total_cve: number; total_kev: number } };
+type Easm = { mode: 'easm'; asset: any; score: number | null; band: { label: string; description?: string }; components: Record<string, any>; contributions: Record<string, number>; health?: any; probe?: any; data_quality?: number; subdomain_rollup?: { count: number; probed: number; weakest: string; weakest_score: number | null; own_score: number | null; total_cve: number; total_kev: number } };
 type Posture = Internal | Easm;
 const isEasm = (d: Posture): d is Easm => (d as Easm).mode === 'easm';
 
@@ -353,6 +353,15 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   if (external) {
     const d = data;
     const probe = d.probe || {};
+    // DMARC comes back as a raw record (v=DMARC1; p=none; rua=mailto:…) that
+    // overflows the row — collapse it to just the policy.
+    const dmarcPolicy = (() => {
+      const raw = String(probe.dmarc || '').trim();
+      if (!raw || raw === 'none' || raw === 'missing') return 'none';
+      const m = raw.match(/p\s*=\s*(none|quarantine|reject)/i);
+      return m ? `p=${m[1].toLowerCase()}` : 'present';
+    })();
+    const dmarcWeak = dmarcPolicy === 'none' || dmarcPolicy === 'p=none';
     const comps = (Object.entries(d.components || {}) as [string, any][]).sort((a, c) => (c[1].weight || 0) - (a[1].weight || 0));
     const effW = comps.reduce((s, [, c]) => s + (c.weight || 0), 0) || 1;
     const grade = d.health?.grade ?? '—';
@@ -368,14 +377,14 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
     else if ((probe.cve_count ?? 0) > 0) contribs.push({ title: `${probe.cve_count} known CVE${probe.cve_count === 1 ? '' : 's'} on exposed service`, meta: 'patch the surface', col: '#C0682F' });
     if (probe.https_available === false) contribs.push({ title: 'No HTTPS on the public endpoint', meta: 'transport not encrypted', col: '#C0682F' });
     if (probe.spf === false || probe.spf === 'missing') contribs.push({ title: 'SPF record missing', meta: 'email spoofing risk', col: '#DB7B45' });
-    if (!probe.dmarc || probe.dmarc === 'none' || probe.dmarc === 'p=none') contribs.push({ title: 'DMARC not enforced', meta: probe.dmarc ? `${probe.dmarc}` : 'no record', col: '#E0AF33' });
+    if (dmarcWeak) contribs.push({ title: 'DMARC not enforced', meta: probe.dmarc ? dmarcPolicy : 'no record', col: '#E0AF33' });
 
     // Exposed-surface chips from real DNS/transport/email fields (no open-port list — the probe doesn't collect one).
     const surface: Array<[string, string, boolean]> = [];
     if (probe.tls_not_after) surface.push(['Cert expiry', `${String(probe.tls_not_after).slice(0, 10)}${probe.tls_days_to_expiry != null ? ` · ${probe.tls_days_to_expiry}d` : ''}`, !!probe.tls_expired || (probe.tls_days_to_expiry ?? 99) <= 30]);
     surface.push(['HTTPS', probe.https_available ? 'available' : 'not available', probe.https_available === false]);
     surface.push(['SPF', (probe.spf === false || probe.spf === 'missing') ? 'missing' : 'present', probe.spf === false || probe.spf === 'missing']);
-    surface.push(['DMARC', probe.dmarc || 'none', !probe.dmarc || probe.dmarc === 'none' || probe.dmarc === 'p=none']);
+    surface.push(['DMARC', dmarcPolicy, dmarcWeak]);
     surface.push(['DKIM', (probe.dkim === false || probe.dkim === 'missing') ? 'missing' : 'present', probe.dkim === false || probe.dkim === 'missing']);
     if (probe.cdn_waf) surface.push(['CDN/WAF', String(probe.cdn_waf), false]);
     surface.push(['Security headers', `${Object.keys(probe.security_headers || {}).length}/6`, Object.keys(probe.security_headers || {}).length < 4]);
@@ -394,14 +403,8 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
         ))}
 
         <div style={{ border: '1px solid #EAD9AE', background: '#FEFBF4', borderRadius: 11, padding: '11px 15px', fontSize: 12, color: '#7A6427', marginBottom: 12 }}>
-          This is an <b>externally-discovered</b> asset — scored on outside-in exposure hygiene (TLS, security headers, transport, email auth, known vulnerabilities), <b>not</b> CIA / CIS / control coverage, which can&apos;t be measured on an asset you only see from the internet.
+<b>Externally-discovered</b> — scored on outside-in exposure (TLS, headers, transport, email auth, known CVEs), <b>not</b> CIA / CIS / controls.
         </div>
-
-        {d.subdomain_rollup && d.subdomain_rollup.count > 0 && (
-          <div style={{ border: '1px solid #BFE6DA', background: '#F0FBF7', borderRadius: 11, padding: '11px 15px', fontSize: 12, color: '#0A5A4B', marginBottom: 12 }}>
-            <b>Domain rollup</b> — this score is the <b>weakest link</b> across this domain and its {d.subdomain_rollup.count} subdomain{d.subdomain_rollup.count === 1 ? '' : 's'} (weakest: <b>{d.subdomain_rollup.weakest}</b>). {d.subdomain_rollup.total_cve} finding{d.subdomain_rollup.total_cve === 1 ? '' : 's'}{d.subdomain_rollup.total_kev ? ` · ${d.subdomain_rollup.total_kev} KEV` : ''} summed across the whole domain.
-          </div>
-        )}
 
         <Card title="Why this score" sub={`weighted outside-in signals · total ${data.score ?? '—'}/100 · bar = signal severity, number = points added`} grow>
           {comps.length === 0 ? (
@@ -430,7 +433,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
               <Kv k="Response" v={probe.response_time_ms != null ? `${probe.response_time_ms} ms` : '—'} />
               <Kv k="Cert expiry" v={probe.tls_not_after ? `${String(probe.tls_not_after).slice(0, 10)}${probe.tls_days_to_expiry != null ? ` · ${probe.tls_days_to_expiry}d` : ''}` : '—'} c={probe.tls_expired || (probe.tls_days_to_expiry ?? 99) <= 30 ? '#B23A3A' : undefined} />
               <Kv k="Security headers" v={`${Object.keys(probe.security_headers || {}).length} of 6`} />
-              <Kv k="Email auth" v={`SPF ${(probe.spf === false || probe.spf === 'missing') ? 'missing' : 'ok'} · DMARC ${probe.dmarc || 'none'}`} c={(probe.spf === false || probe.spf === 'missing') ? '#B23A3A' : undefined} />
+              <Kv k="Email auth" v={`SPF ${(probe.spf === false || probe.spf === 'missing') ? 'missing' : 'ok'} · DMARC ${dmarcPolicy}`} c={(probe.spf === false || probe.spf === 'missing') ? '#B23A3A' : undefined} />
               <Kv k="Known CVEs" v={`${probe.cve_count ?? 0}${(probe.kev_count ?? 0) > 0 ? ` · ${probe.kev_count} KEV` : ''}`} c={(probe.kev_count ?? 0) > 0 ? '#B23A3A' : undefined} />
               <Kv k="Health grade" v={`${grade} · ${hScore}/100`} c="#9A6410" />
             </div>

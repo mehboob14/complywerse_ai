@@ -843,7 +843,7 @@ def _easm_cve_counts(asset: ITAsset, ep: Dict[str, Any], db=None) -> Tuple[int, 
         return cve, kev
 
 
-def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None) -> Dict[str, Any]:
+def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None, sub_rollup: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """Risk posture for an EXTERNAL asset. Health is an input, not the inverse."""
     health = ep.get("health") or {}
     hscore = health.get("score")
@@ -897,6 +897,19 @@ def _compute_easm_risk(asset: ITAsset, ep: Dict[str, Any], db=None) -> Dict[str,
         components["business"] = {
             "score": round(biz, 4), "weight": 0.15, "known": True,
             "label": _EASM_RISK_LABELS["business"], "detail": detail,
+        }
+
+    if sub_rollup and sub_rollup.get("weakest_score") is not None:
+        # Subdomains as a REAL weighted component — the ring, the rows and the
+        # total all reconcile, and the domain's children visibly move the score.
+        components["subdomains"] = {
+            "score": round(float(sub_rollup["weakest_score"]) / 100.0, 4),
+            "weight": 0.25, "known": True,
+            "label": "Subdomain exposure",
+            "detail": (
+                f"{sub_rollup['count']} subdomains · worst {sub_rollup['weakest']} "
+                f"({sub_rollup['weakest_score']}) · {sub_rollup['total_cve']} findings across the domain"
+            ),
         }
 
     weights = {k: c["weight"] for k, c in components.items()}
@@ -972,23 +985,22 @@ def _external_subdomain_ids(db, tenant_id: int, parent_id: int) -> List[int]:
     return [r[0] for r in rows]
 
 
-def _aggregate_external_children(db, tenant_id: int, parent: ITAsset, result: Dict[str, Any]) -> Dict[str, Any]:
-    """Weakest-link rollup for a parent domain (e.g. liztek.ca).
+def _external_subdomain_rollup(db, tenant_id: int, parent: ITAsset) -> Optional[Dict[str, Any]]:
+    """Domain rollup for a parent domain (e.g. liztek.ca): worst subdomain score
+    + findings summed across the whole domain (parent + subs).
 
-    A parent domain's external risk = the WORST of {itself, all its subdomains};
-    findings = SUMMED across the whole domain. Each subdomain keeps its own score
-    — this only changes what the PARENT shows. Was: the parent ignored its
-    subdomains entirely and scored only its own row.
-
-    Cost is flat regardless of subdomain count: the subdomains are loaded once and
-    their finding-counts fetched in two grouped queries, so each subdomain's score
-    is computed with db=None (no per-subdomain query).
+    Fed into _compute_easm_risk as a real weighted component ("Subdomain
+    exposure"), so the parent's ring, breakdown rows and total all reconcile —
+    subdomains visibly move the score instead of overriding it. Each subdomain
+    keeps its own score. Cost is flat regardless of subdomain count: subs are
+    loaded once, finding-counts come from two grouped queries, and each sub's
+    score is computed with db=None (no per-subdomain query).
     """
     if db is None:
-        return result
+        return None
     sub_ids = _external_subdomain_ids(db, tenant_id, parent.id)
     if not sub_ids:
-        return result  # not a parent domain (leaf subdomain / no children) → unchanged
+        return None  # leaf asset / no children
 
     subs = db.query(ITAsset).filter(
         ITAsset.id.in_(sub_ids), ITAsset.tenant_id == tenant_id,
@@ -1011,12 +1023,9 @@ def _aggregate_external_children(db, tenant_id: int, parent: ITAsset, result: Di
         .group_by(VulnerabilityAssetLink.asset_id).all()
     )
 
-    own_score = result.get("score")
-    worst_score = float(own_score) if isinstance(own_score, (int, float)) else -1.0
-    worst_name = parent.name
+    worst_score, worst_name, probed = -1.0, None, 0
     total_cve = int(cve_by.get(parent.id, 0))
     total_kev = int(kev_by.get(parent.id, 0))
-    probed = 1 if isinstance(own_score, (int, float)) else 0
 
     for s in subs:
         pp = getattr(s, "platform_properties", None)
@@ -1031,20 +1040,12 @@ def _aggregate_external_children(db, tenant_id: int, parent: ITAsset, result: Di
             if sc > worst_score:
                 worst_score, worst_name = float(sc), s.name
 
-    if worst_score >= 0:
-        result["score"] = round(worst_score, 1)
-        result["band"] = _band_for(result["score"])
-    result["subdomain_rollup"] = {
+    return {
         "count": len(subs), "probed": probed,
-        "weakest": worst_name, "own_score": own_score,
+        "weakest": worst_name,
+        "weakest_score": round(worst_score, 1) if worst_score >= 0 else None,
         "total_cve": total_cve, "total_kev": total_kev,
     }
-    cd = dict(result.get("cve_detection") or {})
-    cd["linked_findings"] = total_cve
-    cd["kev_findings"] = total_kev
-    cd["domain_aggregated"] = True
-    result["cve_detection"] = cd
-    return result
 
 
 # ─── Public API ─────────────────────────────────────────────────────────────
@@ -1069,9 +1070,12 @@ def compute_asset_risk(
     _pp = getattr(asset, "platform_properties", None)
     _ep = _pp.get("external_probe") if isinstance(_pp, dict) else None
     if getattr(asset, "last_seen_source", None) == "external" or (isinstance(_ep, dict) and _ep.get("health")):
-        res = _compute_easm_risk(asset, _ep or {}, db=db)
-        # Roll subdomains up into the parent domain (weakest-link + summed findings).
-        return _aggregate_external_children(db, tenant_id, asset, res)
+        # Subdomains feed the parent as a weighted "Subdomain exposure" component.
+        roll = _external_subdomain_rollup(db, tenant_id, asset)
+        res = _compute_easm_risk(asset, _ep or {}, db=db, sub_rollup=roll)
+        if roll:
+            res["subdomain_rollup"] = roll
+        return res
 
     components = {
         "cis":  _cis_gap(db, tenant_id, asset.id),
