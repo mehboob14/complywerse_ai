@@ -87,7 +87,20 @@ def main():
     slug = detect_slug()
     engine = create_engine(TMPL.format(slug=slug))
     with engine.begin() as c:
-        tid = c.execute(text("SELECT id FROM grc_tenants LIMIT 1")).scalar()
+        # Tenant id: derive it from the data that is ALREADY VISIBLE in the app — the
+        # majority tenant of existing findings (else assets). `grc_tenants LIMIT 1` is the
+        # last resort only: on prod that table holds the whole multi-tenant registry, and
+        # its arbitrary first row mis-tenanted the seed, making it invisible to the UI.
+        tid = c.execute(text(
+            "SELECT tenant_id FROM grc_vulnerabilities WHERE tenant_id IS NOT NULL "
+            "AND (source IS NULL OR source != 'manual') "
+            "GROUP BY tenant_id ORDER BY count(*) DESC LIMIT 1")).scalar()
+        if tid is None:
+            tid = c.execute(text(
+                "SELECT tenant_id FROM grc_it_assets WHERE tenant_id IS NOT NULL "
+                "GROUP BY tenant_id ORDER BY count(*) DESC LIMIT 1")).scalar()
+        if tid is None:
+            tid = c.execute(text("SELECT id FROM grc_tenants LIMIT 1")).scalar()
         inet = c.execute(text("""SELECT id,name,criticality FROM grc_it_assets WHERE internet_facing=true
                                  ORDER BY (name ~* '^(ubuntu|liztek)') DESC, length(name) ASC, id LIMIT 1""")).fetchone()
         if not inet:
@@ -140,6 +153,15 @@ def main():
             """), dict(v=vid, a=asset[0], now=now))
             added += 1
             print(f"  + {cve:18} {cwe:9} {sev:8} AV={vec.split('AV:')[1][0]} -> asset {asset[0]}")
+
+        # Self-heal: rows seeded by an earlier run under the wrong tenant id are invisible
+        # to the register/dashboard (both filter by the user's tenant). Move them to the
+        # tenant the real findings live in.
+        moved = c.execute(text(
+            "UPDATE grc_vulnerabilities SET tenant_id = :tid WHERE source = 'manual' AND tenant_id != :tid"
+        ), dict(tid=tid)).rowcount
+        if moved:
+            print(f"  re-tenanted {moved} seeded row(s) to tenant {tid} (they were invisible to the UI)")
 
         # Self-heal: any row (from an earlier run of this script) left with a NULL
         # created_at breaks getById + the list endpoint (VulnerabilityResponse needs a
