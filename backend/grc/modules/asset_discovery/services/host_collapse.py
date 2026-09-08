@@ -1,10 +1,15 @@
-"""Host-centric collapse: one asset per real machine, extra DNS names as aliases.
+"""Host-centric collapse: fold only EXACT-duplicate apex rows; keep real subdomains.
 
-Six liztek.ca names on one server are ONE house with six nameplates — the
-owner's model. This folds the surplus EASM name-rows into the primary asset for
-their (ip, apex-domain) pair: their names land in ``primary.dns_aliases``, their
-finding links re-point (deduplicated), their external identities follow, and the
-folded rows are deleted through the same reference purge the manual delete uses.
+Two rows for the SAME apex name on one IP (a re-scan artifact) are one machine —
+fold the surplus into the primary: its name lands in ``primary.dns_aliases``, its
+finding links re-point (deduplicated), its external identities follow, and the
+folded row is deleted through the same reference purge the manual delete uses.
+
+Distinct SUBDOMAINS are NOT folded, even on the apex's IP — the owner wants every
+name (www.liztek.ca, mta-sts.liztek.ca) shown as its own asset, nested under the
+apex domain in the register. (This module originally folded same-IP subdomains
+into the apex; that was reversed on owner request — subdomains are first-class
+rows now, and only genuine duplicates of the same name collapse.)
 
 GUARDRAILS — the Windows/Postgres rule. A row folds only when ALL hold:
   * origin_source == 'easm'              — born from the domain listing
@@ -12,11 +17,12 @@ GUARDRAILS — the Windows/Postgres rule. A row folds only when ALL hold:
   * discovery_state is 'unmanaged'/empty  — never logged into
   * no children (nothing has it as parent_asset_id)
   * carries an ip_address and a DNS name
+  * its DNS name IS the apex (registrable domain) — a true subdomain never folds
 Grouping is by (ip_address, registrable domain): shared-hosting neighbours on
-one IP but another domain never merge, and a subdomain on a different machine
-(mta-sts.liztek.ca) stays its own asset. Primary = the apex-named candidate when
-present, else the lowest id. Non-foldable same-group rows are reported as
-``skipped`` with explicit reasons — never silently. Idempotent.
+one IP but another domain never merge, and every subdomain stays its own asset.
+Primary = the apex-named candidate when present, else the lowest id. Non-foldable
+same-group rows are reported as ``skipped`` with explicit reasons — never
+silently. Idempotent.
 """
 from __future__ import annotations
 
@@ -48,6 +54,11 @@ def _fold_blockers(a: ITAsset, children_of: set) -> List[str]:
         reasons.append("discovery_state shows it was profiled with a login — it is its own machine")
     if a.id in children_of:
         reasons.append("has child assets pointing at it (parent_asset_id)")
+    dns = _asset_dns_name(a)
+    if dns and registrable_domain(dns) != dns:
+        reasons.append(
+            f"{dns} is a true subdomain of {registrable_domain(dns)} — same-IP subdomains are "
+            "kept as their own rows, nested under the apex in the UI, not folded into it")
     return reasons
 
 

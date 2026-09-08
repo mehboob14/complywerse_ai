@@ -3002,15 +3002,15 @@ export const vulnManagementApi = {
   },
   workflows: {
     getAvailableTransitions: (vulnId: number) =>
-      apiClient.get(`/vuln-management/workflows/vulnerabilities/${vulnId}/available-transitions`),
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/available-transitions`),
     getHistory: (vulnId: number) => 
-      apiClient.get(`/vuln-management/workflows/vulnerabilities/${vulnId}/history`),
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/history`),
     transition: (vulnId: number, data: { transition_name: string; comment?: string }) => 
-      apiClient.post(`/vuln-management/workflows/vulnerabilities/${vulnId}/transition`, data),
+      apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/transition`, data),
   },
   escalations: {
     getVulnerabilityEscalations: (vulnId: number) => 
-      apiClient.get(`/vuln-management/escalations/vulnerabilities/${vulnId}/escalations`),
+      apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/escalations`),
   },
   notifications: {
     getAll: () => apiClient.get('/vuln-management/notifications'),

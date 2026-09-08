@@ -150,8 +150,17 @@ def _merge_into(db: Session, asset: ITAsset, obs: DiscoveryObservation) -> None:
     now = datetime.utcnow()
     if obs.host_name and not asset.host_name:
         asset.host_name = obs.host_name
-    if obs.ip_address and not asset.ip_address:
-        asset.ip_address = obs.ip_address
+    if obs.ip_address:
+        if not asset.ip_address:
+            asset.ip_address = obs.ip_address
+        # Record every address discovery sees this machine at into its IP history.
+        # Discovery matched it by MAC / hostname (not IP — see the resolver ladder),
+        # so this is a PROVEN association: the box really answers on this IP. A
+        # later IP-only scanner finding at this address then links with no human
+        # step. Additive — never clobbers the curated primary above.
+        _ips = list(asset.known_ips or [])
+        if obs.ip_address not in _ips:
+            asset.known_ips = _ips + [obs.ip_address]
     if obs.fqdn and not asset.fqdn:
         asset.fqdn = obs.fqdn
     if obs.mac_address and not asset.primary_mac:

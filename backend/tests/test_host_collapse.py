@@ -1,10 +1,11 @@
-"""Host-centric collapse — the guardrails are the point.
+"""Host-centric collapse — subdomains stay, only exact apex duplicates fold.
 
-Locks the owner's rules: only EASM-born infrastructure names fold; a Windows/
-Linux host (network sweep / connect) and co-located software (application
-assets, own logins) are NEVER folded even on the same IP; unrelated domains on
-one shared-hosting IP never merge (group key is ip+apex, not ip); different-IP
-subdomains stay their own asset; finding links re-point with dedupe; idempotent.
+The reversed rule (owner request): every distinct subdomain (ftp/www/mta-sts.
+liztek.ca) is kept as its own asset even on the apex's IP — they must show nested
+under the apex, not folded away. Only a genuine DUPLICATE of the apex name on one
+IP (a re-scan artifact) collapses, re-pointing its finding links with dedupe.
+Still enforced: non-easm hosts and co-located software never fold; unrelated
+domains on a shared IP never merge; idempotent.
 """
 import pytest
 from sqlalchemy import create_engine
@@ -45,6 +46,10 @@ def db(monkeypatch):
 
     s.add_all([
         infra(1, "liztek.ca"),
+        # a DUPLICATE apex row on the same IP (re-scan artifact) — the ONLY thing
+        # that folds now; its links re-point to the primary with dedupe.
+        infra(8, "liztek.ca"),
+        # true subdomains on the apex's IP — kept as their own rows, NOT folded
         infra(2, "ftp.liztek.ca"),
         infra(3, "www.liztek.ca"),
         # different machine, same apex — must survive untouched
@@ -60,42 +65,46 @@ def db(monkeypatch):
         Vulnerability(id=100, tenant_id=TENANT, vuln_id="NS-1", title="f1", severity="info", status="open"),
         Vulnerability(id=101, tenant_id=TENANT, vuln_id="NS-2", title="f2", severity="info", status="open"),
     ])
-    # f1 linked to primary AND to ftp (dup after re-point → must dedupe);
-    # f2 linked only to ftp (must re-point to primary).
+    # f1 on primary AND the duplicate (dup after re-point → must dedupe);
+    # f2 only on the duplicate (must re-point to primary).
     s.add_all([
         VulnerabilityAssetLink(vulnerability_id=100, asset_id=1),
-        VulnerabilityAssetLink(vulnerability_id=100, asset_id=2),
-        VulnerabilityAssetLink(vulnerability_id=101, asset_id=2),
+        VulnerabilityAssetLink(vulnerability_id=100, asset_id=8),
+        VulnerabilityAssetLink(vulnerability_id=101, asset_id=8),
     ])
     s.flush()
     yield s
     s.close()
 
 
-def test_plan_folds_only_easm_infra_names(db):
+def test_plan_folds_only_duplicate_apex_keeps_subdomains(db):
     plan = plan_host_collapse(db, TENANT)
     assert len(plan) == 1
     g = plan[0]
-    assert g["primary"]["name"] == "liztek.ca"          # apex-named row wins
-    assert {f["name"] for f in g["fold"]} == {"ftp.liztek.ca", "www.liztek.ca"}
+    assert g["primary"]["name"] == "liztek.ca"           # apex-named row wins
+    assert [f["id"] for f in g["fold"]] == [8]           # ONLY the duplicate apex row
     skipped = {x["name"]: x["reasons"] for x in g["skipped"]}
-    assert "db.liztek.ca" in skipped and any("asset_type" in r for r in skipped["db.liztek.ca"])
-    assert "win.liztek.ca" in skipped and any("origin_source" in r for r in skipped["win.liztek.ca"])
+    # subdomains are explicitly kept (new blocker), not folded
+    assert any("subdomain" in r for r in skipped.get("ftp.liztek.ca", []))
+    assert any("subdomain" in r for r in skipped.get("www.liztek.ca", []))
+    # the original guardrails still hold
+    assert any("asset_type" in r for r in skipped.get("db.liztek.ca", []))
+    assert any("origin_source" in r for r in skipped.get("win.liztek.ca", []))
 
 
-def test_collapse_execution_and_dedupe(db):
+def test_collapse_keeps_subdomains_folds_duplicate_and_dedupes(db):
     out = collapse_hosts(db, TENANT)
-    assert out["folded"] == 2
-    # folded rows gone; guarded + different-machine + other-domain rows alive
+    assert out["folded"] == 1                             # only the duplicate apex row
     alive = {a.name for a in db.query(ITAsset).all()}
-    assert alive == {"liztek.ca", "mta-sts.liztek.ca", "db.liztek.ca",
-                     "win.liztek.ca", "other-company.com"}
+    # every subdomain survives as its own row; only the dup apex (id 8) is gone
+    assert alive == {"liztek.ca", "ftp.liztek.ca", "www.liztek.ca", "mta-sts.liztek.ca",
+                     "db.liztek.ca", "win.liztek.ca", "other-company.com"}
+    assert db.get(ITAsset, 8) is None
     primary = db.get(ITAsset, 1)
-    assert primary.dns_aliases == ["ftp.liztek.ca", "www.liztek.ca"]
     assert primary.ip_address == IP                       # identity untouched
     # links: f1 exactly once on primary (dup removed), f2 re-pointed to primary
-    links = db.query(VulnerabilityAssetLink).all()
-    assert {(l.vulnerability_id, l.asset_id) for l in links} == {(100, 1), (101, 1)}
+    links = {(l.vulnerability_id, l.asset_id) for l in db.query(VulnerabilityAssetLink).all()}
+    assert links == {(100, 1), (101, 1)}
 
 
 def test_shared_hosting_domain_never_merges_across_apex(db):
@@ -105,5 +114,5 @@ def test_shared_hosting_domain_never_merges_across_apex(db):
 
 
 def test_idempotent(db):
-    assert collapse_hosts(db, TENANT)["folded"] == 2
+    assert collapse_hosts(db, TENANT)["folded"] == 1
     assert collapse_hosts(db, TENANT)["folded"] == 0

@@ -44,6 +44,7 @@ import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesP
 import HostApplicationsPanel from './_host-applications-panel';
 import { PlatformDetails, PLATFORM_META } from './_platform-detail-card';
 import AssetOverviewDesign from './_overview-design';
+import AssetRecordShell from './_AssetRecordShell';
 import { buildOverviewData } from './_overview-map';
 import { ActivityPanel } from './_components/AssetWorkTabs';
 // Redesigned tab panels (Overview design language). Each is a drop-in that
@@ -57,6 +58,7 @@ import RisksPanel from './_tabs/RisksPanel';
 import VulnerabilitiesPanel from './_tabs/VulnerabilitiesPanel';
 import AttachmentsPanel from './_tabs/AttachmentsPanel';
 import CompliancePanel from './_tabs/CompliancePanel';
+import ScopeAuthorizationCard from './_ScopeAuthorizationCard';
 import TrajectoryPanel from './_tabs/TrajectoryPanel';
 import CriticalityPanel from './_tabs/CriticalityPanel';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
@@ -137,7 +139,9 @@ interface LinkedEvidence {
 /** Statuses that mean the finding is no longer an open item on this asset.
  *  Matches the closed-set used by the vulnerability register and by
  *  /asset-alerts, so an asset, its alerts and the register agree. */
-const CLOSED_VULN_STATUSES = new Set(['remediated', 'verified', 'closed', 'resolved', 'accepted', 'false_positive', 'auto_closed_decommissioned']);
+// ponytail: duplicated in VulnerabilitiesPanel + backend + _workspace/lib.tsx (RESOLVED_STATUSES).
+// Keep in sync — a stale copy here counts re-scan-closed findings as open (the 207-vs-209 bug).
+const CLOSED_VULN_STATUSES = new Set(['remediated', 'verified', 'closed', 'resolved', 'accepted', 'false_positive', 'auto_closed_decommissioned', 'auto_closed_fixed']);
 const isOpenVuln = (v: { status?: string | null }) =>
   !CLOSED_VULN_STATUSES.has((v.status || '').toLowerCase());
 
@@ -222,6 +226,7 @@ interface AssetDetailData {
   criticality_score?: number | null;
   last_seen_at?: string | null;
   last_seen_source?: string | null;
+  origin_source?: string | null;
   // CIS Module Updated drop — OS profile fields consumed by the
   // Compliance tab (AI Classification + Matched benchmark panels).
   // All optional; the panel handles "unknown" gracefully when missing.
@@ -729,13 +734,15 @@ export default function AssetDetailPage() {
     // it would show cannot exist without a login.
     ...(showsSoftware ? [{ id: 'software' as TabType, label: 'Software', icon: Package }] : []),
     { id: 'relationships', label: 'Relationships', icon: Network },
-    { id: 'lifecycle', label: 'Lifecycle', icon: GitBranch },
+    // A domain / outside-only asset has no procurement lifecycle (planned→disposed)
+    // and no host CIS benchmark — hide both, the same way Software is hidden.
+    ...(!outsideOnly ? [{ id: 'lifecycle' as TabType, label: 'Lifecycle', icon: GitBranch }] : []),
     { id: 'evidence', label: 'Attachments', icon: FileCheck },
     { id: 'notes', label: 'Notes', icon: MessageSquare },
     { id: 'history', label: 'History', icon: Clock },
     // ── Beyond the reference: our GRC-specific views ──
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
-    { id: 'compliance', label: 'Compliance', icon: Cpu },
+    ...(!outsideOnly ? [{ id: 'compliance' as TabType, label: 'Compliance', icon: Cpu }] : []),
     { id: 'trajectory', label: 'Trajectory', icon: Network },
     { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
@@ -758,7 +765,7 @@ export default function AssetDetailPage() {
     software,
     posture,
     kpis: {
-      openFindings: asset?.linked_vulnerabilities?.length ?? 0,
+      openFindings: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
       controlCoverage: asset?.coverage_percentage ?? 0,
       blastRadius: 0,
     },
@@ -794,105 +801,24 @@ export default function AssetDetailPage() {
   });
 
   return (
-    <div className="asset-suite assets-light risk-workspace -m-4 space-y-4 lg:-m-5">
-      {/* Header card — identity + action row (design handoff, warm theme) */}
-      {activeTab !== 'overview' && (
-      <div className="as-card" style={{ padding: '20px 24px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
-          <Link href="/assets" title="Back to inventory" style={{ width: 34, height: 34, borderRadius: 8, background: 'var(--as-subtle)', border: '1px solid var(--as-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', marginTop: 3, color: 'var(--as-primary)' }}>
-            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
-          </Link>
-          <div style={{ width: 44, height: 44, borderRadius: 10, background: '#F6E8D4', color: '#8A4A0F', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}>
-            {getAssetIcon(asset.asset_type)}
-          </div>
-          <div style={{ flex: 1, minWidth: 240 }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <h1 style={{ margin: 0, fontSize: 21, fontWeight: 600, letterSpacing: -0.3, color: 'var(--as-ink)' }}>{displayName}</h1>
-              <span className="as-pill" style={{ fontWeight: 700, letterSpacing: 0.4, color: '#8A4A0F', background: '#F6E8D4' }}>{(ASSET_TYPE_LABELS[asset.asset_type] || asset.asset_type).toUpperCase()}</span>
-              <span className="as-pill" style={{ fontWeight: 700, letterSpacing: 0.4, color: 'var(--as-green)', background: 'var(--as-green-bg)' }}>{(asset.status || 'active').toUpperCase()}</span>
-              <span className="as-pill" style={{ fontWeight: 700, letterSpacing: 0.4,
-                color: (asset.criticality || '').toLowerCase() === 'critical' ? '#7A2D17' : (asset.criticality || '').toLowerCase() === 'low' ? '#0E5A46' : '#8A4A0F',
-                background: (asset.criticality || '').toLowerCase() === 'critical' ? '#F7E4DC' : (asset.criticality || '').toLowerCase() === 'low' ? '#E2EDE8' : '#F6E8D4' }}>{(asset.criticality || '').toUpperCase()}</span>
-              <GuideMarker id="asset.criticality" n={1} />
-            </div>
-            <div style={{ fontSize: 13, color: 'var(--as-secondary)', marginTop: 5 }}>{asset.description || 'No description'}</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap', alignItems: 'center' }}>
-          <button onClick={() => assessRiskMutation.mutate()} disabled={assessRiskMutation.isPending} className="as-btn as-btn-primary" style={{ padding: '8px 15px', fontSize: 12.5, opacity: assessRiskMutation.isPending ? 0.6 : 1 }}>
-            {assessRiskMutation.isPending ? 'Assessing…' : 'Assess risk'}
-          </button>
-          {canEdit && <button onClick={() => setShowEditModal(true)} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }}>Edit</button>}
-          {canEdit && <button onClick={() => setShowLifecycleModal(true)} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }} title="Change lifecycle state — decommissioning auto-closes linked vulns">Lifecycle</button>}
-          <CreateIssueButton sourceType="asset" sourceId={assetId} presetFields={{ title: `Issue on ${asset.name}`, category: 'operations', issue_type: 'incident' }} />
-          <Link href={`/compliance-plugins/asset/${assetId}`} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }} title="View this asset's CIS plugin runs">CIS scans</Link>
-          <Link href={`/risk-posture/asset/${assetId}`} className="as-btn as-btn-secondary" style={{ padding: '8px 15px', fontSize: 12.5 }} title="View this asset's composite risk posture">Risk posture</Link>
-          <div style={{ flex: 1 }} />
-          {canDelete && <button onClick={() => setShowDeleteConfirm(true)} className="as-btn as-btn-danger" style={{ padding: '8px 15px', fontSize: 12.5 }}>Delete</button>}
-        </div>
-      </div>
-      )}
-
-      {/* D1 split: pinned left context column + scrolling right work column.
-          Every tab component is reused unchanged — only its placement changed. */}
-      <div className={activeTab === 'overview' ? 'space-y-4 pb-4' : 'mx-4 space-y-4 pb-4 sm:mx-6'}>
-        {/* Full-width work column — actions + status pills moved into the header. */}
-        <div className="space-y-4">
-          {/* Lightweight in-column section switcher */}
-          {/* Wraps onto as many rows as it needs — with 15 tabs a horizontal
-              scroller hid half of them behind a scrollbar nobody noticed. */}
-            {activeTab !== 'overview' && (
-          <div style={{ borderBottom: '1px solid var(--as-border)' }}>
-            <nav className="flex" style={{ gap: 4, flexWrap: 'wrap', rowGap: 0 }}>
-              {sections.map((s) => {
-                const Icon = s.icon;
-                const active = activeTab === s.id;
-                // Count badges, matching Command Center — you can see where the
-                // work is without opening every tab. Only rendered when > 0 so
-                // empty tabs stay quiet.
-                const count = tabCounts[s.id];
-                const urgent = s.id === 'alerts' || s.id === 'vulnerabilities';
-                return (
-                  <button
-                    key={s.id}
-                    onClick={() => setActiveTab(s.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '9px 12px', fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', background: 'transparent', border: 'none', borderBottom: active ? '2px solid var(--as-green)' : '2px solid transparent', color: active ? 'var(--as-green)' : 'var(--as-muted)', cursor: 'pointer', marginBottom: -1 }}
-                  >
-                    <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
-                    {s.label}
-                    {count != null && count > 0 && (
-                      <span
-                        className="as-mono"
-                        style={{
-                          fontSize: 10.5, lineHeight: 1, padding: '2px 5px', borderRadius: 99,
-                          background: urgent ? 'var(--as-danger-bg)' : 'var(--as-track)',
-                          color: urgent ? '#7A2D17' : 'var(--as-muted)',
-                        }}
-                      >
-                        {count}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
-            </nav>
-            </div>
-            )}
-
-          <div className={activeTab === 'overview' ? '' : 'cw-card rounded-xl p-4 sm:p-5'}>
+    <>
+      <AssetRecordShell asset={asset} overviewData={overviewData} displayName={displayName} sections={sections} activeTab={activeTab} onTab={setActiveTab} tabCounts={tabCounts} canEdit={canEdit} canDelete={canDelete} getIcon={getAssetIcon} onAssessRisk={() => assessRiskMutation.mutate()} assessing={assessRiskMutation.isPending} onEdit={() => setShowEditModal(true)} onLifecycle={() => setShowLifecycleModal(true)} onCisScans={() => router.push(`/compliance-plugins/asset/${assetId}`)} onRiskPosture={() => router.push(`/risk-posture/asset/${assetId}`)} onDelete={() => setShowDeleteConfirm(true)}>
             {activeTab === 'overview' && (
-              <AssetOverviewDesign A={overviewData} />
+              <>
+                {/* External (EASM) assets: scanning-scope authorization sits above
+                    the telemetry — passive is always allowed, active needs sign-off. */}
+                {overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
+                <AssetOverviewDesign A={overviewData} />
+              </>
             )}
             {activeTab === 'trajectory' && <TrajectoryPanel assetId={assetId} />}
             {activeTab === 'compliance' && (
               <RoomScanProvider>
-                <div className="space-y-4">
-                  <HostApplicationsPanel assetId={assetId} />
-                  <CompliancePanel asset={asset} />
-                  {/* Absorbed from the former Activity tab — the same scan runs,
-                      previously fetched a second time under its own cache key. */}
-                  <ActivityPanel assetId={assetId} />
-                </div>
+                {/* CompliancePanel now owns the whole Compliance experience
+                    (Host group / Benchmark match / Scan sessions / Activity),
+                    so the former standalone HostApplicationsPanel + ActivityPanel
+                    are dropped — they duplicated its Host-group and Activity tabs. */}
+                <CompliancePanel asset={asset} />
               </RoomScanProvider>
             )}
             {/* ── ITAM tab-bar parity. Each panel reads an endpoint that
@@ -992,9 +918,7 @@ export default function AssetDetailPage() {
                 rows the Controls list on Risk & Controls writes, and invalidated
                 the same cache — two tabs performing one action. It now sits with
                 the control list it feeds. */}
-          </div>
-        </div>
-      </div>
+      </AssetRecordShell>
 
       {showDeleteConfirm && (
         <DeleteConfirmModal
@@ -1060,7 +984,7 @@ export default function AssetDetailPage() {
           onRun={(data: any) => collectSvc.mutate(data)}
         />
       )}
-    </div>
+    </>
   );
 }
 

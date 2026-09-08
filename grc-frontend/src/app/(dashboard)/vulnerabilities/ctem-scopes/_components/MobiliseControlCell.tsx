@@ -12,7 +12,7 @@
  * A finding can carry 1..N controls — the dropdown is why this isn't a flat chip.
  */
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/lib/api';
 import { ShieldCheck, ChevronDown, X, Loader2 } from 'lucide-react';
@@ -54,6 +54,10 @@ export function MobiliseControlCell({ vulnId, count, canEdit, onChanged }: { vul
   const qc = useQueryClient();
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<Link | null>(null);
+  // Anchor the dropdown with position:fixed off the trigger's rect so it can
+  // never be clipped by the scrolled Mobilise accordion body (overflow:auto).
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
 
   const { data: links, isLoading, isError, refetch } = useQuery({
     queryKey: ['vuln-controls', vulnId],
@@ -73,7 +77,7 @@ export function MobiliseControlCell({ vulnId, count, canEdit, onChanged }: { vul
 
   return (
     <div className="relative">
-      <button type="button" onClick={() => setOpen((o) => !o)}
+      <button ref={btnRef} type="button" onClick={() => { const r = btnRef.current?.getBoundingClientRect(); if (r) setPos({ top: Math.min(r.bottom + 4, window.innerHeight - 260), left: Math.min(r.left, window.innerWidth - 346) }); setOpen((o) => !o); }}
         className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11.5px] font-medium text-primary-700 transition hover:border-primary-400">
         <ShieldCheck className="h-3 w-3" /> {count} control{count > 1 ? 's' : ''} <ChevronDown className="h-3 w-3 opacity-70" />
       </button>
@@ -81,7 +85,7 @@ export function MobiliseControlCell({ vulnId, count, canEdit, onChanged }: { vul
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-40 mt-1 w-[330px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+          <div className="z-40 w-[330px] rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl" style={{ position: 'fixed', top: pos?.top ?? 0, left: pos?.left ?? 0 }}>
             <p className="px-2 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Linked controls · {count}</p>
             {isLoading ? (
               <p className="px-2 py-2 text-[11px] text-slate-400">Loading…</p>

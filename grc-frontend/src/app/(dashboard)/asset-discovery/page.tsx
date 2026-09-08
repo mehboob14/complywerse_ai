@@ -12,25 +12,30 @@ import { useState, useEffect, useRef, Fragment } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Radar, Inbox, Network, History, Play, Plus, Trash2, X,
-  ShieldCheck, RefreshCw, Check, Plug, Gauge,
+  ShieldCheck, RefreshCw, Check, Plug,
 } from 'lucide-react';
 import { discoveryApi } from '@/lib/api';
 import { useTabParam } from '@/lib/useTabParam';
 import ConnectWizardPage, { PLATFORMS, PLATFORM_GROUPS, type Platform } from '../admin/integrations/connect/page';
 import AgentsAdminPage from '../admin/agents/page';
 import '../assets/_suite/asset-suite.css';
+import './discovery-antimetal.css';
+import './discovery-command.css';
 
 // Tabs are kept. Only Campaigns + host logins + Connectors are consolidated
 // into ONE "Discover → Connect" tab, shown as a numbered pipeline inside it.
 // Overview, Inbox and Scan history stay as their own separate tabs.
-type Tab = 'overview' | 'pipeline' | 'inbox' | 'runs' | 'score';
+// 'score' (the standalone attack-surface scorecard) was removed — external
+// assets and their hygiene grade live in the IT Asset Inventory and on the
+// asset's own Overview, not in a separate Discovery page.
+type Tab = 'overview' | 'discover' | 'connections' | 'inbox' | 'runs';
 
-const TABS: { id: Tab; label: string; icon: any }[] = [
-  { id: 'overview', label: 'Overview',           icon: Radar },
-  { id: 'pipeline', label: 'Discover → Connect',  icon: Plug },
-  { id: 'inbox',    label: 'Inbox',              icon: Inbox },
-  { id: 'runs',     label: 'Scan history',       icon: History },
-  { id: 'score',    label: 'Attack surface',     icon: Gauge },
+const TABS: { id: Tab; label: string }[] = [
+  { id: 'overview',    label: 'Overview' },
+  { id: 'discover',    label: 'Discovery' },
+  { id: 'connections', label: 'Connections' },
+  { id: 'inbox',       label: 'Review queue' },
+  { id: 'runs',        label: 'Scan history' },
 ];
 
 /* ─── shared bits ──────────────────────────────────────────────────── */
@@ -166,37 +171,228 @@ const td: React.CSSProperties = { padding: '9px 12px', borderBottom: '1px solid 
 
 /* ─── Overview ─────────────────────────────────────────────────────── */
 
+/* Live discovery radar — ported verbatim from the antimetal mockup canvas loop. */
+function RadarCanvas({ labels = [] }: { labels?: string[] }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const cv = ref.current; if (!cv) return; const ctx = cv.getContext('2d'); if (!ctx) return;
+    const W = cv.width, H = cv.height, cx = W / 2, cy = H / 2, R = Math.min(cx, cy) - 12, A = 'rgba(20,130,105,';
+    // One blip per real discovered device, spread deterministically so positions are stable.
+    const names = (labels.length ? labels : ['host-01', 'host-02', 'host-03', 'host-04', 'host-05', 'host-06']).slice(0, 7);
+    const blips = names.map((nm, i) => ({ a: (i / names.length) * 6.2832 + 0.4, r: 0.34 + ((i * 41) % 52) / 100, lit: 0, nm }));
+    let sweep = 0, raf = 0; const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const frame = () => {
+      ctx.clearRect(0, 0, W, H);
+      ctx.strokeStyle = A + '.16)'; ctx.lineWidth = 1;
+      for (let i = 1; i <= 3; i++) { ctx.beginPath(); ctx.arc(cx, cy, R * i / 3, 0, 7); ctx.stroke(); }
+      ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
+      for (let k = 0; k < 30; k++) { const a = sweep - k * 0.045; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.arc(cx, cy, R, a, a + 0.05); ctx.closePath(); ctx.fillStyle = A + (0.14 * (1 - k / 30)) + ')'; ctx.fill(); }
+      ctx.strokeStyle = A + '.85)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(cx, cy); ctx.lineTo(cx + Math.cos(sweep) * R, cy + Math.sin(sweep) * R); ctx.stroke();
+      ctx.textBaseline = 'middle';
+      blips.forEach((b) => {
+        const d = ((sweep - b.a) % 6.2832 + 6.2832) % 6.2832; if (d < 0.09) b.lit = 1; b.lit *= 0.978;
+        const x = cx + Math.cos(b.a) * R * b.r, y = cy + Math.sin(b.a) * R * b.r;
+        ctx.beginPath(); ctx.arc(x, y, 2.2 + b.lit * 3.2, 0, 7); ctx.fillStyle = A + (0.42 + b.lit * 0.58) + ')'; ctx.fill();
+        // Name only while the sweep is passing this dot (ping reveal) — never a wall of overlapping labels.
+        if (b.lit > 0.14) {
+          const nm = b.nm.length > 16 ? b.nm.slice(0, 15) + '…' : b.nm;
+          const right = x >= cx; ctx.textAlign = right ? 'left' : 'right';
+          ctx.font = '600 10px Inter, system-ui, sans-serif';
+          ctx.fillStyle = 'rgba(11,110,88,' + Math.min(1, b.lit) + ')';
+          ctx.fillText(nm, x + (right ? 9 : -9), y);
+        }
+      });
+      sweep += 0.028; if (sweep > 6.2832) sweep -= 6.2832; if (!reduce) raf = requestAnimationFrame(frame);
+    };
+    frame(); return () => cancelAnimationFrame(raf);
+  }, [labels.join('|')]);
+  return <canvas ref={ref} width={360} height={208} className="radar-cv" />;
+}
+
 function Overview({ go }: { go: (t?: string) => void }) {
   const campaigns = useQuery({ queryKey: ['disc-campaigns'], queryFn: async () => (await discoveryApi.listCampaigns()).data.campaigns as any[] });
   const runs = useQuery({ queryKey: ['disc-runs'], queryFn: async () => (await discoveryApi.listRuns(undefined, 8)).data.runs as any[] });
   const inbox = useQuery({ queryKey: ['disc-inbox'], queryFn: async () => (await discoveryApi.inbox('open')).data.observations as any[] });
+  const radarDevQ = useQuery({ queryKey: ['disc-discovered-devices', 'all'], queryFn: async () => (await discoveryApi.discoveredDevices()).data as any });
+  const radarLabels: string[] = (radarDevQ.data?.devices ?? []).slice(0, 7).map((d: any) => d.host_name || d.name || d.ip_address || 'device');
 
   const camps = campaigns.data ?? [];
   const runList = runs.data ?? [];
-  const inboxCount = (inbox.data ?? []).length;
+  const inboxRows = inbox.data ?? [];
+  const inboxCount = inboxRows.length;
   const active = camps.filter((c) => c.is_active && c.schedule_seconds).length;
   const lastRun = runList[0];
 
+  // Split runs/campaigns by method so the two surfaces (owned-LAN sweep vs external EASM) read apart.
+  const methodOf = (r: any) => camps.find((c) => c.id === r.campaign_id)?.method || 'network';
+  const netRuns = runList.filter((r) => methodOf(r) !== 'external');
+  const easmRuns = runList.filter((r) => methodOf(r) === 'external');
+  const netCamps = camps.filter((c) => c.method !== 'external');
+  const easmCamps = camps.filter((c) => c.method === 'external');
+
+  // 4-week cadence, from real run history, split by method.
+  const nowMs = Date.now();
+  const weeks = [3, 2, 1, 0].map((w) => {
+    const hi = nowMs - w * 7 * 864e5, lo = hi - 7 * 864e5;
+    const inWk = (r: any) => { const t = new Date(r.finished_at || r.created_at).getTime(); return t > lo && t <= hi; };
+    return { label: `W${4 - w}`, net: netRuns.filter((r) => r.status === 'succeeded' && inWk(r)).length, easm: easmRuns.filter((r) => r.status === 'succeeded' && inWk(r)).length };
+  });
+  const wkMax = Math.max(1, ...weeks.map((w) => w.net + w.easm));
+
+  // Faithful port of the antimetal command-center Overview, wired to real data.
+  const scopeText = (c: any) => {
+    if (!c) return '—';
+    if (Array.isArray(c.scopes) && c.scopes.length) return c.scopes.map((z: any) => (z.exclude ? '−' : '') + (z.value ?? '')).filter(Boolean).join(', ');
+    if (Array.isArray(c.applies_to_cidrs) && c.applies_to_cidrs.length) return c.applies_to_cidrs.join(', ');
+    return '—';
+  };
+  const netRun = netRuns[0], easmRun = easmRuns[0];
+  const netScope = netCamps[0], easmScope = easmCamps[0];
+  const netSeen = netRun?.hosts_seen ?? 0, easmSeen = easmRun?.hosts_seen ?? 0;
+  const observed = netSeen + easmSeen;
+  const linkedTotal = (netRun?.in_inventory ?? 0) + (easmRun?.in_inventory ?? 0);
+  const linkage = observed ? Math.round((linkedTotal / observed) * 100) : 0;
+  const covered = camps.filter((c) => runList.some((r) => r.campaign_id === c.id && r.status === 'succeeded')).length;
+  const coverage = camps.length ? Math.round((covered / camps.length) * 100) : 0;
+  // network status composition (real): connected vs awaiting-login vs evidence-only
+  const netConn = netRun?.in_inventory ?? 0, netWait = netRun?.awaiting_login ?? 0;
+  const netEvid = Math.max(0, netSeen - netConn - netWait);
+  const compTot = Math.max(1, netConn + netWait + netEvid);
+  // attention queue: aggregate the real inbox by kind so it reads like the mockup's category rows
+  const attnGroups: [string, number][] = (() => {
+    const g: Record<string, number> = {};
+    inboxRows.forEach((o: any) => {
+      const k = (typeof o.kind === 'string' && o.kind) || (typeof o.device_type === 'string' && o.device_type) || (typeof o.status === 'string' && o.status) || 'Needs a decision';
+      g[k] = (g[k] || 0) + 1;
+    });
+    return Object.entries(g).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  })();
+  const sevClass = (n: number) => (n >= 5 ? 'high' : n >= 2 ? 'medium' : 'low');
+
   const KPIS = [
-    { label: 'Campaigns', value: camps.length, note: `${active} scheduled`, tone: 'var(--as-ink)' },
-    { label: 'Needs review', value: inboxCount, note: 'in the inbox', tone: inboxCount ? 'var(--as-rust-text)' : 'var(--as-good)' },
-    { label: 'Last scan', value: lastRun ? lastRun.status : '—', note: lastRun ? fmt(lastRun.finished_at || lastRun.created_at) : 'no runs yet', tone: 'var(--as-ink)' },
-    { label: 'Found last scan', value: lastRun ? (lastRun.assets_new + lastRun.assets_updated) : 0, note: lastRun ? `${lastRun.assets_new} new` : '—', tone: 'var(--as-ink)' },
+    { span: 'Observed entities', b: observed, em: 'live', emC: 'up', cap: `${netSeen} internal hosts · ${easmSeen} public hostnames`, risk: false },
+    { span: 'Coverage freshness', b: coverage + '%', em: coverage >= 80 ? 'Healthy' : 'Watch', emC: coverage >= 80 ? 'up' : 'risk', cap: `${covered} of ${camps.length} scopes scanned in policy`, risk: coverage < 80 },
+    { span: 'Inventory linkage', b: linkage + '%', em: `${linkedTotal} linked`, emC: 'neutral', cap: `${inboxCount} findings still need a decision`, risk: false },
+    { span: 'Exposure changes', b: inboxCount, em: inboxCount ? 'Review' : 'Clear', emC: inboxCount ? 'risk' : 'up', cap: `${netWait} awaiting login · ${easmSeen} public hostnames`, risk: !!inboxCount },
+  ];
+  const SPARKS = [
+    'M0,22 20,20 40,15 60,16 80,10 100,8 120,4',
+    'M0,9 20,8 40,10 60,6 80,8 100,5 120,6',
+    'M0,20 20,18 40,18 60,13 80,12 100,9 120,7',
+    'M0,17 20,18 40,16 60,17 80,15 100,7 120,11',
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div className="as-card as-kpi" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)' }}>
-        {KPIS.map((k, i) => (
-          <div key={k.label} style={{ padding: '15px 18px', borderRight: i < 3 ? '1px solid var(--as-divider)' : 'none' }}>
-            <div className="as-mono" style={{ fontSize: 22, fontWeight: 600, color: k.tone, textTransform: 'capitalize' }}>{k.value}</div>
-            <div style={{ fontSize: 12.5, color: 'var(--as-secondary)', marginTop: 3 }}>{k.label}</div>
-            <div style={{ fontSize: 11.5, color: 'var(--as-faint)', marginTop: 1 }}>{k.note}</div>
+    <div className="disc-cc">
+      {/* command header — full width */}
+      <div className="ovtop">
+        <div>
+          <span className="eyebrow">Command center</span>
+          <h2>Discovery posture</h2>
+          <p>What is covered, what changed, and what needs attention now — across owned networks and the public attack surface.</p>
+        </div>
+        <div className="actions">
+          <select className="select" defaultValue="Last 30 days"><option>Last 30 days</option><option>Last 7 days</option><option>Today</option></select>
+          <button className="btn btn-secondary" onClick={() => runs.refetch()}>↻ Refresh</button>
+          <button className="btn btn-primary" onClick={() => go('pipeline')}>+ Start discovery</button>
+        </div>
+      </div>
+      {/* KPIs (left) · live radar (right) — equal height */}
+      <div className="ovhero">
+        <div className="ovhero-l">
+          <section className="command-kpis">
+            {KPIS.map((k, i) => (
+              <article key={k.span}>
+                <span>{k.span}</span>
+                <div><b>{k.b}</b><em className={k.emC}>{k.em}</em></div>
+                <svg className={'spark' + (k.risk ? ' risk' : '')} viewBox="0 0 120 26" preserveAspectRatio="none">
+                  <path className="area" d={SPARKS[i] + ' L120,26 0,26Z'} /><path d={SPARKS[i]} />
+                </svg>
+                <small>{k.cap}</small>
+              </article>
+            ))}
+          </section>
+        </div>
+        <div className="ovhero-r">
+          <div className="radar-card">
+            <div className="rc-head"><span className="live"><i></i> Live · sweeping</span><code>{netScope ? scopeText(netScope) : '—'}</code></div>
+            <RadarCanvas labels={radarLabels} />
+            <div className="rc-foot"><b>{netSeen}</b> hosts found this sweep · <b>{netWait}</b> need review</div>
           </div>
-        ))}
+        </div>
       </div>
 
-      <div className="as-card" style={{ padding: '18px 20px' }}>
+      {/* two discovery surfaces */}
+      <section className="surface-grid">
+        <article className="surface-card surface-network">
+          <header>
+            <div><span className="surface-label"><i></i> INTERNAL DISCOVERY</span><h3>Network sweep</h3><p>Owned CIDR ranges, devices, services and authenticated enrichment.</p></div>
+            <button className="btn btn-sm btn-secondary" onClick={() => go('pipeline')}>Open network</button>
+          </header>
+          {!netScope ? <Empty text="No network campaign yet." hint="Create one in Discover → Connect." /> : (<>
+            <div className="surface-scope">
+              <div><span>Active scope</span><b>{netScope.name || netScope.label || 'Network sweep'}</b><code>{scopeText(netScope)}</code></div>
+              <div className="run-state"><i></i><span>{netRun ? `Latest run ${netRun.status}` : 'Never run'}<small>{netRun ? fmt(netRun.finished_at || netRun.created_at) : '—'}</small></span></div>
+            </div>
+            <div className="surface-numbers">
+              <div><b>{netSeen}</b><span>Hosts seen</span></div>
+              <div><b>{netEvid}</b><span>Evidence-only</span></div>
+              <div><b>{netConn}</b><span>Connected</span></div>
+              <div><b style={{ color: 'var(--amber)' }}>{netWait}</b><span>Need review</span></div>
+            </div>
+            <div className="composition">
+              <div className="composition-label"><span>Status composition</span><small>{netSeen} total</small></div>
+              <div className="segments"><i className="seg-connected" style={{ width: `${(netConn / compTot) * 100}%` }}></i><i className="seg-review" style={{ width: `${(netWait / compTot) * 100}%` }}></i><i className="seg-evidence" style={{ width: `${(netEvid / compTot) * 100}%` }}></i></div>
+              <div className="legend"><span><i className="connected"></i>Connected {netConn}</span><span><i className="review"></i>Awaiting login {netWait}</span><span><i className="evidence"></i>Evidence-only {netEvid}</span></div>
+            </div>
+          </>)}
+        </article>
+
+        <article className="surface-card surface-easm">
+          <header>
+            <div><span className="surface-label"><i></i> EXTERNAL DISCOVERY</span><h3>EASM domain map</h3><p>Owned apex domains expanded through CT, DNS and public services.</p></div>
+            <button className="btn btn-sm btn-secondary" onClick={() => go('pipeline')}>Open EASM</button>
+          </header>
+          {!easmScope ? <Empty text="No external scope monitored yet." hint="Add a domain campaign in Discover → Connect." /> : (<>
+            <div className="surface-scope">
+              <div><span>Monitored apex</span><b>{scopeText(easmScope)}</b><code>{easmSeen} hostnames seen</code></div>
+              <div className="run-state"><i></i><span>{easmRun ? `Run ${easmRun.status}` : 'Never run'}<small>{easmRun ? fmt(easmRun.finished_at || easmRun.created_at) : '—'}</small></span></div>
+            </div>
+            <div className="domain-preview">
+              <div className="apex-preview"><span className="domain-icon">◎</span><div><b>{scopeText(easmScope)}</b><small>Apex · certificate + DNS evidence</small></div><em>Owned</em></div>
+              <div className="child-preview"><span>↳</span><b>{easmSeen} hostname(s) discovered</b><em>{easmRun?.in_inventory ?? 0} adopted</em></div>
+              <div className="child-preview"><span>↳</span><b>{easmRun?.awaiting_login ?? 0} awaiting a decision</b><em className="attention">Review</em></div>
+              <div className="child-preview muted" onClick={() => go('pipeline')}><span>↳</span><b>Open the full domain tree</b><em>View tree →</em></div>
+            </div>
+          </>)}
+        </article>
+      </section>
+
+      {/* attention queue + cadence */}
+      <section className="command-bottom">
+        <article className="panel attention-panel">
+          <div className="panel-head"><div><h3>Attention queue</h3><span>Findings that block clean inventory onboarding.</span></div><a onClick={() => go('inbox')}>View all {inboxCount} →</a></div>
+          {inboxCount === 0 ? <div style={{ padding: '18px' }}><Empty text="Nothing waiting." hint="Devices needing a decision show up here." /></div> : (
+            <div className="attention-list">
+              {attnGroups.map(([k, n]) => (
+                <div key={k}><span className={'severity ' + sevClass(n)}>{n}</span><div><b>{k}</b><small>Review or connect these in the queue</small></div><em>Discovery</em><a onClick={() => go('inbox')}>Resolve</a></div>
+              ))}
+            </div>
+          )}
+        </article>
+        <article className="panel cadence-panel">
+          <div className="panel-head"><div><h3>30-day cadence</h3><span>Successful discovery runs by method.</span></div></div>
+          <div className="mini-chart">
+            {weeks.map((w) => (
+              <div key={w.label}><i style={{ height: `${Math.round((w.net / wkMax) * 100)}%` }}></i><em style={{ height: `${Math.round((w.easm / wkMax) * 100)}%` }}></em><span>{w.label}</span></div>
+            ))}
+          </div>
+          <div className="chart-legend"><span><i></i>Network sweeps</span><span><i></i>EASM runs</span></div>
+        </article>
+      </section>
+
+      {/* recent scans — kept, the audit trail */}
+      <div className="panel" style={{ marginTop: 16, padding: '18px 20px' }}>
         <SectionHead title="Recent scans" note="Every run is recorded — the audit trail a regulator asks for first."
           right={<button className="as-btn as-btn-secondary" onClick={() => go('runs')}>View all</button>} />
         {runs.isLoading ? <Empty text="Loading…" /> : runList.length === 0 ? (
@@ -204,10 +400,6 @@ function Overview({ go }: { go: (t?: string) => void }) {
         ) : (
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              {/* Columns describe what a sweep can actually produce now: it
-                  finds devices, it does not create assets. "Awaiting login" is
-                  the number that matters — those are the devices Connect can
-                  still turn into inventory. */}
               <thead><tr>{['When', 'Trigger', 'Status', 'Devices found', 'Awaiting login', 'Added to inventory', 'Matched existing'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
               <tbody>
                 {runList.map((r) => (
@@ -232,9 +424,10 @@ function Overview({ go }: { go: (t?: string) => void }) {
 
 /* ─── Campaigns ────────────────────────────────────────────────────── */
 
-function Campaigns() {
+function Campaigns({ onConnect }: { onConnect?: () => void }) {
   const qc = useQueryClient();
   const [showNew, setShowNew] = useState(false);
+  const [editId, setEditId] = useState<number | null>(null);
   const campaigns = useQuery({ queryKey: ['disc-campaigns'], queryFn: async () => (await discoveryApi.listCampaigns()).data.campaigns as any[] });
   const refresh = () => { qc.invalidateQueries({ queryKey: ['disc-campaigns'] }); qc.invalidateQueries({ queryKey: ['disc-runs'] }); qc.invalidateQueries({ queryKey: ['disc-runs-all'] }); qc.invalidateQueries({ queryKey: ['disc-runs-active'] }); };
 
@@ -265,66 +458,95 @@ function Campaigns() {
   const del = useMutation({ mutationFn: (id: number) => discoveryApi.deleteCampaign(id), onSuccess: refresh });
 
   const list = campaigns.data ?? [];
+  const [methodView, setMethodView] = useState<'network' | 'easm'>('network');
+  const recentRuns = activeRuns.data ?? [];
+  const isEasm = (c: any) => c.method === 'external';
+  const scopeText = (c: any) => (Array.isArray(c?.scopes) && c.scopes.length) ? c.scopes.map((z: any) => z.value).filter(Boolean).join(', ') : `${c?.scope_count ?? 0} scope(s)`;
+  const netCount = list.filter((c) => !isEasm(c)).length;
+  const easmCount = list.filter((c) => isEasm(c)).length;
+  const viewCamps = list.filter((c) => (methodView === 'easm' ? isEasm(c) : !isEasm(c)));
+  const lastRunOf = (cid: number) => recentRuns.find((r: any) => r.campaign_id === cid);
+  const insightRun: any = viewCamps.map((c) => lastRunOf(c.id)).find(Boolean);
+  const nameOf = (r: any) => list.find((c) => c.id === r.campaign_id)?.name || `#${r.campaign_id}`;
+  const durOf = (r: any) => {
+    if (!r.finished_at || !r.created_at) return '';
+    const x = Math.max(0, Math.round((new Date(r.finished_at).getTime() - new Date(r.created_at).getTime()) / 1000));
+    return x >= 60 ? `${Math.floor(x / 60)}m ${x % 60}s` : `${x}s`;
+  };
+  const pctW = (a: number, b: number) => `${Math.min(100, Math.round(((a || 0) / (b || 1)) * 100))}%`;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+    <div className="disc-cc" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <style>{`@keyframes discScan{0%{left:-42%}100%{left:100%}}.disc-scan-bar{animation:discScan 1.05s ease-in-out infinite}`}</style>
-      <div className="as-card" style={{ padding: '18px 20px' }}>
-        <SectionHead title="Campaigns" note="What to scan and how often. A campaign is a set of address ranges (with exclusions)."
-          right={<button className="as-btn as-btn-primary" onClick={() => setShowNew((v) => !v)}>
-            {showNew ? <><X size={13} style={{ marginRight: 5, verticalAlign: -1 }} />Close</> : <><Plus size={13} style={{ marginRight: 5, verticalAlign: -1 }} />New campaign</>}
-          </button>} />
-
-        {showNew && <NewCampaignForm onDone={() => { setShowNew(false); refresh(); }} />}
-
-        {campaigns.isLoading ? <Empty text="Loading…" /> : list.length === 0 ? (
-          <Empty text="No campaigns yet." hint="Create one to start discovering devices on the network." />
-        ) : (
-          <div style={{ overflowX: 'auto', marginTop: showNew ? 16 : 0 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr>{['Name', 'Method', 'Schedule', 'Scopes', 'Last run', 'Next run', ''].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-              <tbody>
-                {list.map((c) => {
-                  const active = activeByCampaign.get(c.id);
-                  return (
-                  <tr key={c.id}>
-                    <td style={{ ...td, fontWeight: 600, color: 'var(--as-ink)' }}>
-                      {c.name}{!c.is_active && <span className="as-pill" style={{ marginLeft: 7, background: 'var(--as-track)', color: 'var(--as-muted)' }}>paused</span>}
-                    </td>
-                    <td style={td}>{c.method === 'active_directory' ? 'Active Directory' : c.method === 'external' ? 'External' : 'Network'}</td>
-                    <td style={td}>{everySeconds(c.schedule_seconds)}</td>
-                    <td className="as-mono" style={td}>{c.scope_count}</td>
-                    <td style={td}>{fmt(c.last_run_at)}</td>
-                    <td style={td}>{fmt(c.next_run_at)}</td>
-                    <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                      {active ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}
-                          title={`Scan ${active.status} — started ${fmt(active.started_at || active.created_at)}`}>
-                          <span style={{ position: 'relative', display: 'inline-block', width: 96, height: 6, borderRadius: 3, background: 'var(--as-track)', overflow: 'hidden' }}>
-                            <span className="disc-scan-bar" style={{ position: 'absolute', top: 0, height: '100%', width: '42%', borderRadius: 3, background: 'var(--as-blue)' }} />
-                          </span>
-                          <span style={{ fontSize: 11.5, color: 'var(--as-blue)', fontWeight: 600 }}>Scanning…</span>
-                        </span>
-                      ) : (
-                        <button className="as-btn as-btn-secondary" style={{ padding: '4px 9px', fontSize: 11.5 }}
-                          disabled={run.isPending} onClick={() => run.mutate(c.id)} title="Run this campaign now">
-                          <Play size={11} style={{ marginRight: 4, verticalAlign: -1 }} />Run now
-                        </button>
-                      )}
-                      <button className="as-btn as-btn-secondary" style={{ padding: '4px 8px', fontSize: 11.5, marginLeft: 6 }}
-                        disabled={del.isPending} onClick={() => { if (confirm(`Delete campaign "${c.name}"? Its scan history is removed too.`)) del.mutate(c.id); }} title="Delete campaign">
-                        <Trash2 size={11} />
-                      </button>
-                    </td>
-                  </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {run.isError && <p style={{ marginTop: 10, fontSize: 12.5, color: 'var(--as-danger-text)' }}>{(run.error as any)?.response?.data?.detail || 'Could not start the run.'}</p>}
-        {run.isSuccess && <p style={{ marginTop: 10, fontSize: 12.5, color: 'var(--as-good)' }}>Scan started — the <strong>Scanning…</strong> bar shows on the campaign row; results land under Scan history.</p>}
+      <div className="page-line">
+        <div><span className="eyebrow">Discovery operations</span><h2>Choose a discovery method</h2></div>
+        <button className="btn btn-primary" onClick={() => setShowNew((v) => !v)}>{showNew ? '× Close' : '+ New campaign'}</button>
       </div>
+
+      {showNew && (
+        <div onClick={() => setShowNew(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(18,53,44,.30)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <div onClick={(e) => e.stopPropagation()}
+            style={{ width: 'min(760px, 96vw)', maxHeight: '88vh', overflowY: 'auto', background: '#fff', borderRadius: 18, padding: 6, boxShadow: '0 30px 80px -20px rgba(18,53,44,.45)' }}>
+            <NewCampaignForm onDone={() => { setShowNew(false); refresh(); }} />
+          </div>
+        </div>
+      )}
+
+      {editId != null && <EditCampaignModal campaignId={editId} onClose={() => setEditId(null)} onChanged={refresh} />}
+
+      <div className="discovery-switch">
+        <button className={'network' + (methodView === 'network' ? ' active' : '')} onClick={() => setMethodView('network')}>
+          <span className="method-symbol">⌁</span><span><b>Network sweep</b><small>Owned CIDRs · devices · ports · services</small></span><em>{netCount} campaign{netCount === 1 ? '' : 's'}</em>
+        </button>
+        <button className={'easm' + (methodView === 'easm' ? ' active' : '')} onClick={() => setMethodView('easm')}>
+          <span className="method-symbol">↗</span><span><b>External EASM</b><small>Apex domains · subdomains · DNS · TLS</small></span><em>{easmCount} domain{easmCount === 1 ? '' : 's'}</em>
+        </button>
+      </div>
+
+      <div className="method-workbench">
+        <div className={'workbench-head' + (methodView === 'easm' ? ' easm' : '')}>
+          <div><span className="surface-label"><i></i> {methodView === 'easm' ? 'EXTERNAL ATTACK SURFACE' : 'INTERNAL NETWORK'}</span><h3>{methodView === 'easm' ? 'EASM domain workspace' : 'Network sweep workspace'}</h3><p>{methodView === 'easm' ? 'Owned apex → subdomains via CT & DNS.' : 'Devices found here move to Connect or Review.'}</p></div>
+          <div className="actions"><button className="btn btn-secondary" onClick={refresh}>↻ Refresh</button></div>
+        </div>
+        <div className="workbench-grid">
+          <div className="campaign-panel">
+            {viewCamps.length === 0 ? <div style={{ padding: 20 }}><Empty text={`No ${methodView === 'easm' ? 'domain' : 'network'} campaign yet.`} hint="Create one to start discovering." /></div> : viewCamps.map((c) => {
+              const active = activeByCampaign.get(c.id); const lr = lastRunOf(c.id);
+              return (
+                <div key={c.id} className="campaign-card selected">
+                  <div className="campaign-main"><span className="campaign-icon">{methodView === 'easm' ? '↗' : '⌁'}</span><div><b>{c.name}</b><code>{scopeText(c)}</code><small>{c.is_active ? everySeconds(c.schedule_seconds) : 'paused'}</small></div></div>
+                  <div className="campaign-meta"><div><span>Schedule</span><b>{everySeconds(c.schedule_seconds)}</b></div><div><span>Latest run</span><b>{fmt(c.last_run_at)}</b></div><div><span>Result</span><b className="good">{lr ? `${lr.hosts_seen} host${lr.hosts_seen === 1 ? '' : 's'}` : '—'}</b></div></div>
+                  <div className="campaign-actions">
+                    <span className={'pill ' + (lr?.status === 'succeeded' ? 'pill-green' : lr?.status === 'failed' ? 'pill-red' : 'pill-gray')}>{lr ? lr.status : 'Idle'}</span>
+                    {active ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><span style={{ position: 'relative', display: 'inline-block', width: 90, height: 6, borderRadius: 3, background: 'var(--line)', overflow: 'hidden' }}><span className="disc-scan-bar" style={{ position: 'absolute', top: 0, height: '100%', width: '42%', borderRadius: 3, background: 'var(--slate)' }} /></span><span style={{ fontSize: 11, color: 'var(--slate)', fontWeight: 700 }}>Scanning…</span></span>
+                    ) : (
+                      <button className="btn btn-sm btn-secondary" disabled={run.isPending} onClick={() => run.mutate(c.id)}><Play size={11} style={{ marginRight: 4, verticalAlign: -1 }} />Run now</button>
+                    )}
+                    <button className="btn btn-sm btn-secondary" onClick={() => setEditId(c.id)}>Edit</button>
+                    <button className="more-btn" disabled={del.isPending} onClick={() => { if (confirm(`Delete campaign "${c.name}"? Its scan history is removed too.`)) del.mutate(c.id); }} title="Delete campaign"><Trash2 size={12} /></button>
+                  </div>
+                </div>
+              );
+            })}
+            <button className="empty-campaign" onClick={() => setShowNew(true)}><span>+</span><b>Add another {methodView === 'easm' ? 'domain' : 'network scope'}</b><small>Create a separate campaign for each owned {methodView === 'easm' ? 'apex domain' : 'range'}.</small></button>
+          </div>
+          <aside className="panel network-insight">
+            <div className="panel-head"><div><h3>Latest {methodView === 'easm' ? 'EASM' : 'sweep'} result</h3><span>{insightRun ? nameOf(insightRun) : 'No runs yet'}</span></div></div>
+            {!insightRun ? <div style={{ padding: 16 }}><Empty text="No runs yet." hint="Run a campaign to see results here." /></div> : (<>
+              <div className="big-result"><b>{insightRun.hosts_seen}</b><span>{methodView === 'easm' ? 'hostnames' : 'live hosts'}</span><em>{durOf(insightRun)}</em></div>
+              <div className="result-breakdown">
+                <div><span>Identified</span><b>{Math.max(0, (insightRun.hosts_seen ?? 0) - (insightRun.awaiting_login ?? 0))}</b><i><em style={{ width: pctW((insightRun.hosts_seen ?? 0) - (insightRun.awaiting_login ?? 0), insightRun.hosts_seen) }}></em></i></div>
+                <div><span>Need naming</span><b>{insightRun.awaiting_login ?? 0}</b><i><em style={{ width: pctW(insightRun.awaiting_login ?? 0, insightRun.hosts_seen) }}></em></i></div>
+                <div><span>Connected</span><b>{insightRun.in_inventory ?? 0}</b><i><em style={{ width: pctW(insightRun.in_inventory ?? 0, insightRun.hosts_seen) }}></em></i></div>
+              </div>
+              <div className="next-action"><span>Recommended next action</span><b>{(insightRun.awaiting_login ?? 0) > 0 ? `Give ${insightRun.awaiting_login} device(s) a login in Connect` : 'All discovered devices are handled'}</b><button className="btn btn-sm btn-primary" onClick={() => onConnect?.()}>Open connections</button></div>
+            </>)}
+          </aside>
+        </div>
+      </div>
+      {run.isError && <p style={{ fontSize: 12.5, color: 'var(--red)' }}>{(run.error as any)?.response?.data?.detail || 'Could not start the run.'}</p>}
+      {run.isSuccess && <p style={{ fontSize: 12.5, color: 'var(--mint2)' }}>Scan started — the <strong>Scanning…</strong> bar shows on the campaign; results land under Scan history.</p>}
     </div>
   );
 }
@@ -382,16 +604,82 @@ function NewCampaignForm({ onDone }: { onDone: () => void }) {
             {domainVal && !domainOk && <div style={{ fontSize: 11, color: 'var(--as-danger-text)', marginTop: 4 }}>Enter a bare domain like example.com — not a URL.</div>}
           </div>
         ) : (
-          <div><label style={label}>First range (CIDR)</label><input className="as-input" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="10.0.0.0/24" /></div>
+          <div><label style={label}>First range (CIDR)</label><input className="as-input" value={cidr} onChange={(e) => setCidr(e.target.value)} placeholder="10.0.0.0/24" />
+            {!cidr.trim() && <div style={{ fontSize: 11, color: 'var(--as-faint)', marginTop: 4 }}>Required — a campaign with no range can’t run.</div>}
+          </div>
         )}
         {!isExternal && <div><label style={label}>SNMP community <span style={{ color: 'var(--as-faint)', fontWeight: 400 }}>(optional)</span></label><input className="as-input" value={snmp} onChange={(e) => setSnmp(e.target.value)} placeholder="public, private" /></div>}
       </div>
       <div style={{ display: 'flex', gap: 8, marginTop: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-        <button className="as-btn as-btn-primary" disabled={!name.trim() || create.isPending || (isExternal && !domainOk)} onClick={() => create.mutate()}>
+        <button className="as-btn as-btn-primary" disabled={!name.trim() || create.isPending || (isExternal ? !domainOk : !cidr.trim())} onClick={() => create.mutate()}>
           {create.isPending ? 'Creating…' : 'Create campaign'}
         </button>
         <span style={{ fontSize: 11.5, color: 'var(--as-faint)' }}>A scheduled campaign first runs one interval from now — never at creation.</span>
         {create.isError && <span style={{ width: '100%', fontSize: 13, fontWeight: 600, color: 'var(--as-danger-text)', marginTop: 2 }}>{(create.error as any)?.response?.data?.detail || 'Could not create the campaign.'}</span>}
+      </div>
+    </div>
+  );
+}
+
+function EditCampaignModal({ campaignId, onClose, onChanged }: { campaignId: number; onClose: () => void; onChanged: () => void }) {
+  const qc = useQueryClient();
+  const cq = useQuery({ queryKey: ['disc-campaign', campaignId], queryFn: async () => (await discoveryApi.getCampaign(campaignId)).data as any });
+  const c = cq.data;
+  const isExternal = c?.method === 'external';
+  const [name, setName] = useState('');
+  const [range, setRange] = useState('');
+  useEffect(() => { if (c?.name != null) setName(c.name); }, [c?.name]);
+  const scopes: any[] = Array.isArray(c?.scopes) ? c.scopes : [];
+  const bump = () => { qc.invalidateQueries({ queryKey: ['disc-campaign', campaignId] }); onChanged(); };
+  const addS = useMutation({ mutationFn: () => discoveryApi.addScope(campaignId, { kind: isExternal ? 'domain' : 'cidr', value: range.trim() }), onSuccess: () => { setRange(''); bump(); } });
+  const delS = useMutation({ mutationFn: (sid: number) => discoveryApi.deleteScope(sid), onSuccess: bump });
+  const save = useMutation({ mutationFn: (patch: Record<string, unknown>) => discoveryApi.updateCampaign(campaignId, patch), onSuccess: bump });
+  const label: React.CSSProperties = { fontSize: 11.5, fontWeight: 600, color: 'var(--as-secondary)', display: 'block', marginBottom: 4 };
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(18,53,44,.30)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: 'min(620px, 96vw)', maxHeight: '88vh', overflowY: 'auto', background: '#fff', borderRadius: 18, boxShadow: '0 30px 80px -20px rgba(18,53,44,.45)' }}>
+        <div style={{ padding: '15px 18px', borderBottom: '1px solid var(--as-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <b style={{ fontSize: 15 }}>Edit campaign</b>
+          <button onClick={onClose} className="as-btn as-btn-secondary" style={{ padding: '4px 8px' }}><X size={14} /></button>
+        </div>
+        {!c ? <div style={{ padding: 22 }}><Empty text="Loading…" /></div> : (
+          <div style={{ padding: 18, display: 'grid', gap: 15 }}>
+            <div>
+              <label style={label}>Name</label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="as-input" value={name} onChange={(e) => setName(e.target.value)} style={{ flex: 1 }} />
+                <button className="as-btn as-btn-secondary" disabled={!name.trim() || name.trim() === c.name || save.isPending} onClick={() => save.mutate({ name: name.trim() })}>Save</button>
+              </div>
+            </div>
+            <div>
+              <label style={label}>Schedule</label>
+              <select className="as-input" value={String(c.schedule_seconds ?? 0)} onChange={(e) => save.mutate({ schedule_seconds: Number(e.target.value) > 0 ? Number(e.target.value) : null })}>
+                <option value="0">Manual only</option>
+                <option value="3600">Every hour</option>
+                <option value="21600">Every 6 hours</option>
+                <option value="86400">Every day</option>
+              </select>
+            </div>
+            <div>
+              <label style={label}>{isExternal ? 'Domains' : 'Ranges (CIDR)'}</label>
+              {scopes.length === 0 ? <div style={{ fontSize: 12, color: 'var(--as-danger-text)', marginBottom: 8 }}>No {isExternal ? 'domains' : 'ranges'} yet — this campaign can’t run until you add one.</div> : (
+                <div style={{ display: 'grid', gap: 6, marginBottom: 8 }}>
+                  {scopes.map((s) => (
+                    <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 10px', border: '1px solid var(--as-border)', borderRadius: 9, background: 'var(--as-subtle)' }}>
+                      <code style={{ flex: 1, fontSize: 12.5 }}>{s.exclude ? '−' : ''}{s.value}</code>
+                      <button className="more-btn" disabled={delS.isPending} onClick={() => delS.mutate(s.id)} title="Remove"><Trash2 size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input className="as-input" value={range} onChange={(e) => setRange(e.target.value)} placeholder={isExternal ? 'sub.example.com' : '10.11.10.0/24'} style={{ flex: 1 }} onKeyDown={(e) => { if (e.key === 'Enter' && range.trim() && !addS.isPending) addS.mutate(); }} />
+                <button className="as-btn as-btn-primary" disabled={!range.trim() || addS.isPending} onClick={() => addS.mutate()}>Add</button>
+              </div>
+              {addS.isError && <div style={{ fontSize: 12, color: 'var(--as-danger-text)', marginTop: 6 }}>{(addS.error as any)?.response?.data?.detail || 'Could not add that — check the format.'}</div>}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -490,77 +778,89 @@ function InboxView() {
     onSuccess: () => { setMergeFor(null); setMergeId(''); refresh(); },
   });
 
-  const rows = inbox.data ?? [];
+  const rows0 = inbox.data ?? [];
+  const [q, setQ] = useState('');
+  const [ftype, setFtype] = useState('all');
+  const unclaimed = rows0.filter((o: any) => o.resolution === 'unclaimed').length;
+  const review = rows0.filter((o: any) => o.resolution === 'review').length;
+  const other = Math.max(0, rows0.length - unclaimed - review);
+  const excOf = (o: any) => {
+    if (o.resolution === 'review') return { label: 'Ambiguous match', cls: 'pill-blue' };
+    if ((o.resolution_note || '').toLowerCase().startsWith('login failed')) return { label: 'Connection failed', cls: 'pill-red' };
+    if (o.resolution === 'unclaimed') return { label: 'Needs login', cls: 'pill-amber' };
+    return { label: String(o.resolution || '—'), cls: 'pill-gray' };
+  };
+  const recOf = (o: any) => o.resolution === 'review' ? 'Compare then merge' : (o.resolution_note || '').toLowerCase().startsWith('login failed') ? 'Choose another login' : 'Give it a login in Connect';
+  const iconOf = (o: any) => o.resolution === 'review' ? '⇄' : (o.resolution_note || '').toLowerCase().startsWith('login failed') ? '!' : '?';
+  const rows = rows0.filter((o: any) => {
+    if (ftype === 'unclaimed' && o.resolution !== 'unclaimed') return false;
+    if (ftype === 'review' && o.resolution !== 'review') return false;
+    if (q && !(String(o.host_name || '') + ' ' + String(o.ip_address || '') + ' ' + String(o.source || '')).toLowerCase().includes(q.toLowerCase())) return false;
+    return true;
+  });
+  const mergeRow: any = mergeFor != null ? rows0.find((o: any) => o.id === mergeFor) : null;
   return (
-    <>
-    <DhcpEnrichPanel />
-    <div className="as-card" style={{ padding: '18px 20px' }}>
-      <SectionHead title="Inbox" note="Every device a scan found that has not become an asset yet — either waiting for a login, or an ambiguous match only you can settle. A decision here sticks across future scans."
-        right={<button className="as-btn as-btn-secondary" onClick={refresh}><RefreshCw size={12} style={{ marginRight: 5, verticalAlign: -1 }} />Refresh</button>} />
-      {inbox.isLoading ? <Empty text="Loading…" /> : rows.length === 0 ? (
-        <Empty text="Inbox clear." hint="Nothing found and unresolved. Run a campaign under Discover to populate it." />
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr>{['Host / IP', 'State', 'Source', 'Why it needs you', ''].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-            <tbody>
-              {rows.map((o) => (
-                <tr key={o.id}>
-                  <td style={{ ...td, color: 'var(--as-ink)', fontWeight: 600 }}>
-                    {o.host_name || o.ip_address || '—'}
-                    {o.host_name && o.ip_address && <span className="as-mono" style={{ marginLeft: 7, fontSize: 11.5, color: 'var(--as-faint)' }}>{o.ip_address}</span>}
-                  </td>
-                  <td style={td}>
-                    {o.resolution === 'unclaimed'
-                      ? <span className="as-pill" style={{ background: 'var(--as-subtle)', color: 'var(--as-secondary)' }}>Needs login</span>
-                      : o.resolution === 'review'
-                        ? <span className="as-pill" style={{ background: 'var(--as-warn-bg, var(--as-subtle))', color: 'var(--as-blue)' }}>Ambiguous</span>
-                        : <span style={{ color: 'var(--as-faint)' }}>{o.resolution}</span>}
-                  </td>
-                  <td style={td}>{o.source}</td>
-                  <td style={{ ...td, color: 'var(--as-muted)' }}>
-                    {o.resolution === 'unclaimed'
-                      ? (o.resolution_note?.startsWith('login failed')
-                          ? o.resolution_note
-                          : 'Found on the network. Give it a login under Connect and it is scanned and added.')
-                      : (o.resolution_note || 'Ambiguous match')}
-                  </td>
-                  <td style={{ ...td, whiteSpace: 'nowrap' }}>
-                    {mergeFor === o.id ? (
-                      <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                        <input className="as-input" style={{ width: 96, padding: '4px 8px', fontSize: 12 }} value={mergeId}
-                          onChange={(e) => setMergeId(e.target.value)} placeholder="Asset #" />
-                        <button className="as-btn as-btn-primary" style={{ padding: '4px 9px', fontSize: 11.5 }}
-                          disabled={!mergeId || act.isPending} onClick={() => act.mutate({ id: o.id, action: 'merge', target: Number(mergeId) })}>
-                          <Check size={11} />
-                        </button>
-                        <button className="as-btn as-btn-secondary" style={{ padding: '4px 8px', fontSize: 11.5 }} onClick={() => { setMergeFor(null); setMergeId(''); }}><X size={11} /></button>
-                      </span>
-                    ) : (
-                      <>
-                        {/* Adopt = record this device we can't log into as an
-                            UNMANAGED, evidence-only asset (IP+MAC+vendor+fingerprint).
-                            An explicit human choice — not the silent auto-create
-                            we removed. Hosts should instead get a login under
-                            Connect for a full profile. */}
-                        <button className="as-btn as-btn-secondary" style={{ padding: '4px 9px', fontSize: 11.5 }}
-                          disabled={act.isPending} onClick={() => act.mutate({ id: o.id, action: 'adopt' })}
-                          title="Record as an unmanaged, evidence-only asset (no login) — for gear you can't sign in to, like a printer, switch or Chromecast">Adopt</button>
-                        <button className="as-btn as-btn-secondary" style={{ padding: '4px 9px', fontSize: 11.5, marginLeft: 6 }}
-                          onClick={() => setMergeFor(o.id)} title="This is an asset I already track — link the evidence to it">Merge</button>
-                        <button className="as-btn as-btn-secondary" style={{ padding: '4px 9px', fontSize: 11.5, marginLeft: 6 }}
-                          disabled={act.isPending} onClick={() => act.mutate({ id: o.id, action: 'ignore' })} title="Dismiss — stays dismissed on future scans">Ignore</button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+    <div className="disc-cc">
+      <div className="page-line"><div><h2>Exceptions inbox</h2><p>Only findings that automation cannot safely settle. Decisions persist across future scans.</p></div></div>
+      <DhcpEnrichPanel />
+      <div className="stat-strip">
+        <div className="stat"><b className="warn">{rows0.length}</b><span>Open exceptions</span><small>Waiting on a decision</small></div>
+        <div className="stat"><b>{unclaimed}</b><span>Need a login</span><small>Give them a login in Connect</small></div>
+        <div className="stat"><b>{review}</b><span>Possible duplicates</span><small>Human merge decision</small></div>
+        <div className="stat"><b className="good">{other}</b><span>Other exceptions</span><small>Adopt or ignore</small></div>
+      </div>
+      <section className="panel">
+        <div className="toolbar">
+          <input className="input" placeholder="Search hostname, IP or evidence" value={q} onChange={(e) => setQ(e.target.value)} />
+          <select className="select" value={ftype} onChange={(e) => setFtype(e.target.value)}>
+            <option value="all">All exception types</option><option value="review">Ambiguous match</option><option value="unclaimed">Needs login</option>
+          </select>
+          <button className="btn btn-secondary push" onClick={refresh}>↻ Refresh</button>
         </div>
+        <div className="table-wrap">
+          {inbox.isLoading ? <div style={{ padding: 24 }}><Empty text="Loading…" /></div> : rows.length === 0 ? <div style={{ padding: 24 }}><Empty text="Inbox clear." hint="Nothing found and unresolved. Run a campaign under Discover to populate it." /></div> : (
+            <table className="data-table">
+              <thead><tr>{['Finding', 'Exception', 'Source', 'Why it needs you', 'Recommended action', ''].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map((o: any) => { const e = excOf(o); return (
+                  <tr key={o.id} className="clickable">
+                    <td><div className="device-cell"><div className="device-icon">{iconOf(o)}</div><div><b>{o.host_name || o.ip_address || '—'}</b><span className="sub mono">{o.ip_address || ''}</span></div></div></td>
+                    <td><span className={'pill ' + e.cls}>{e.label}</span></td>
+                    <td>{o.source || '—'}</td>
+                    <td style={{ color: 'var(--muted)', maxWidth: 240 }}>{o.resolution_note || (o.resolution === 'unclaimed' ? 'Found on the network; needs a login to be scanned.' : 'Ambiguous match')}</td>
+                    <td>{recOf(o)}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <button className="btn btn-sm btn-secondary" disabled={act.isPending} onClick={() => act.mutate({ id: o.id, action: 'adopt' })} title="Record as an unmanaged evidence-only asset">Adopt</button>
+                      <button className="btn btn-sm btn-primary" style={{ marginLeft: 6 }} onClick={() => setMergeFor(o.id)}>Resolve</button>
+                    </td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
+      {mergeRow && (
+        <section className="panel" style={{ marginTop: 16 }}>
+          <div className="panel-head"><div><h3>Resolve · {mergeRow.host_name || mergeRow.ip_address}</h3><span>Merge into an existing asset, keep it separate, or ignore it.</span></div><button className="btn btn-sm btn-secondary" onClick={() => { setMergeFor(null); setMergeId(''); }}>Close</button></div>
+          <div className="pad">
+            <div className="detail-grid">
+              <div className="kv"><span>Finding</span><b>{mergeRow.host_name || mergeRow.ip_address || '—'}</b></div>
+              <div className="kv"><span>IP</span><b className="mono">{mergeRow.ip_address || '—'}</b></div>
+              <div className="kv"><span>Source</span><b>{mergeRow.source || '—'}</b></div>
+              <div className="kv"><span>State</span><b>{excOf(mergeRow).label}</b></div>
+              <div className="kv"><span>Note</span><b>{mergeRow.resolution_note || '—'}</b></div>
+            </div>
+            <div className="actions" style={{ marginTop: 14 }}>
+              <input className="input" style={{ maxWidth: 150, flex: 'none' }} value={mergeId} onChange={(e) => setMergeId(e.target.value)} placeholder="Existing asset #" />
+              <button className="btn btn-primary" disabled={!mergeId || act.isPending} onClick={() => act.mutate({ id: mergeFor!, action: 'merge', target: Number(mergeId) })}>Merge with #{mergeId || '…'}</button>
+              <button className="btn btn-secondary" disabled={act.isPending} onClick={() => act.mutate({ id: mergeFor!, action: 'adopt' })}>Keep separate</button>
+              <button className="btn btn-danger" disabled={act.isPending} onClick={() => act.mutate({ id: mergeFor!, action: 'ignore' })}>Ignore finding</button>
+            </div>
+          </div>
+        </section>
       )}
     </div>
-    </>
   );
 }
 
@@ -841,45 +1141,65 @@ function Runs() {
   // so no extra fetch) — a run was previously identifiable only by timestamp.
   const campaigns = useQuery({ queryKey: ['disc-campaigns'], queryFn: async () => (await discoveryApi.listCampaigns()).data.campaigns as any[] });
   const nameById = new Map((campaigns.data ?? []).map((c: any) => [c.id, c.name]));
+  const methodById = new Map((campaigns.data ?? []).map((c: any) => [c.id, c.method]));
   const [open, setOpen] = useState<number | null>(null);
-  const rows = runs.data ?? [];
+  const [method, setMethod] = useState<'all' | 'network' | 'easm'>('all');
+  const [q, setQ] = useState('');
+  const rowMethod = (r: any) => (methodById.get(r.campaign_id) === 'external' ? 'easm' : 'network');
+  const dur = (r: any) => {
+    if (!r.finished_at || !r.created_at) return '—';
+    const s = Math.max(0, Math.round((new Date(r.finished_at).getTime() - new Date(r.created_at).getTime()) / 1000));
+    return s >= 60 ? `${Math.floor(s / 60)}m ${s % 60}s` : `${s}s`;
+  };
+  const rows = (runs.data ?? []).filter((r: any) =>
+    (method === 'all' || rowMethod(r) === method) &&
+    (!q || (String(nameById.get(r.campaign_id) || '') + ' ' + r.id).toLowerCase().includes(q.toLowerCase())));
   return (
-    <div className="as-card" style={{ padding: '18px 20px' }}>
-      <SectionHead title="Scan history" note="Every run is kept. Click a row to see the exact devices that scan found — IP, name and type." />
-      {runs.isLoading ? <Empty text="Loading…" /> : rows.length === 0 ? (
-        <Empty text="No scans yet." />
-      ) : (
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-            <thead><tr>{['', 'When', 'Campaign', 'Trigger', 'Status', 'Hosts seen', 'New', 'Updated', 'Note'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-            <tbody>
-              {rows.map((r) => (
-                <Fragment key={r.id}>
-                  <tr style={{ cursor: 'pointer' }} onClick={() => setOpen(open === r.id ? null : r.id)}
-                    title="Click to see the devices this scan found">
-                    <td style={{ ...td, width: 22, color: 'var(--as-muted)' }}>{open === r.id ? '▾' : '▸'}</td>
-                    <td style={{ ...td, color: 'var(--as-ink)' }}>{fmt(r.finished_at || r.created_at)}</td>
-                    <td style={td}>{nameById.get(r.campaign_id) || `#${r.campaign_id}`}</td>
-                    <td style={td}>{r.trigger}</td>
-                    <td style={td}><StatusPill status={r.status} /></td>
-                    <td className="as-mono" style={td}>{r.hosts_seen}</td>
-                    <td className="as-mono" style={{ ...td, color: 'var(--as-good)' }}>{r.assets_new}</td>
-                    <td className="as-mono" style={td}>{r.assets_updated}</td>
-                    <td style={{ ...td, color: 'var(--as-danger-text)', maxWidth: 280 }}>{r.error || ''}</td>
-                  </tr>
-                  {open === r.id && (
-                    <tr>
-                      <td colSpan={9} style={{ padding: 0, borderBottom: '1px solid var(--as-row)' }}>
-                        <RunDevices runId={r.id} />
-                      </td>
-                    </tr>
-                  )}
-                </Fragment>
-              ))}
-            </tbody>
-          </table>
+    <div className="disc-cc">
+      <div className="page-line"><div><h2>Scan history</h2><p>Network sweeps bring devices. EASM brings apex domains, subdomains and public exposure evidence.</p></div></div>
+      <section className="panel">
+        <div className="toolbar">
+          <div className="method-filter">
+            {(['all', 'network', 'easm'] as const).map((m) => (
+              <button key={m} className={method === m ? 'active' : ''} onClick={() => setMethod(m)}>{m === 'all' ? 'All' : m === 'network' ? 'Network' : 'EASM'}</button>
+            ))}
+          </div>
+          <input className="input" placeholder="Search run or campaign" value={q} onChange={(e) => setQ(e.target.value)} />
+          <select className="select"><option>Any status</option><option>Succeeded</option><option>Failed</option><option>Running</option></select>
         </div>
-      )}
+        <div className="table-wrap">
+          {runs.isLoading ? <div style={{ padding: 24 }}><Empty text="Loading…" /></div> : rows.length === 0 ? <div style={{ padding: 24 }}><Empty text="No scans match this filter." /></div> : (
+            <table className="data-table">
+              <thead><tr>{['', 'When', 'Campaign', 'Method', 'Status', 'Observed', 'Inventory action', 'Exceptions', 'Duration'].map((h) => <th key={h}>{h}</th>)}</tr></thead>
+              <tbody>
+                {rows.map((r: any) => {
+                  const m = rowMethod(r);
+                  return (
+                    <Fragment key={r.id}>
+                      <tr className="clickable" onClick={() => setOpen(open === r.id ? null : r.id)}>
+                        <td data-arrow>{open === r.id ? '▾' : '▸'}</td>
+                        <td>{fmt(r.finished_at || r.created_at)}</td>
+                        <td><b>{nameById.get(r.campaign_id) || `#${r.campaign_id}`}</b><span className="sub">Run #{r.id}</span></td>
+                        <td><span className={'pill ' + (m === 'easm' ? 'pill-amber' : 'pill-blue')}>{m === 'easm' ? 'External EASM' : 'Network sweep'}</span></td>
+                        <td><span className={'pill ' + (r.status === 'succeeded' ? 'pill-green' : r.status === 'failed' ? 'pill-red' : r.status === 'running' ? 'pill-blue' : 'pill-gray')}>{r.status}</span></td>
+                        <td>{r.hosts_seen} {m === 'easm' ? 'hostnames' : 'devices'}</td>
+                        <td>{(r.in_inventory ?? 0) > 0 ? `${r.in_inventory} adopted` : (r.assets_new ?? 0) > 0 ? `${r.assets_new} new` : 'Connect or adopt'}</td>
+                        <td>{r.awaiting_login ?? 0}</td>
+                        <td>{dur(r)}</td>
+                      </tr>
+                      {open === r.id && (
+                        <tr className="row-detail"><td colSpan={9} style={{ padding: 0 }}>
+                          {r.error ? <div className="notice" style={{ margin: 12 }}><div>!</div><div><b>Run note</b><p>{r.error}</p></div></div> : <RunDevices runId={r.id} />}
+                        </td></tr>
+                      )}
+                    </Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
@@ -899,69 +1219,6 @@ const CRED_CATEGORIES: { key: string; label: string; hint: string }[] = [
   { key: 'identity', label: 'Identity',        hint: 'Active Directory / LDAP' },
   { key: 'cluster',  label: 'Clusters',        hint: 'Kubernetes' },
 ];
-
-/* ─── Attack-surface scorecard ─────────────────────────────────────── */
-
-// Fleet view of the per-asset EASM health grades. Each internet-facing asset is
-// probed + graded automatically at scan time; this rolls those up (avg grade,
-// grade distribution) and ranks assets worst-first so the weakest public
-// surface is the first thing an operator sees.
-function Scorecard() {
-  const q = useQuery({ queryKey: ['easm-scorecard'], queryFn: async () => (await discoveryApi.easmScorecard()).data as any });
-  const data = q.data;
-  const gc: Record<string, string> = { A: '#1a7f5a', B: '#3b7d2f', C: '#b8860b', D: '#c26a1b', F: '#b3261e' };
-  const grade = (g: string) => gc[g] || 'var(--as-muted)';
-  return (
-    <div className="as-card" style={{ padding: '18px 20px' }}>
-      <SectionHead title="Attack surface score" note="Every internet-facing asset graded on its outside-in security hygiene — TLS, security headers, email auth, exposure and known CVEs. Higher is healthier. Click a row to open the asset." />
-      {q.isLoading ? <Empty text="Loading…" /> : !data || !data.summary || data.summary.total === 0 ? (
-        <Empty text="No external assets graded yet." hint="Run an External (domain) campaign — each discovered host is probed and graded automatically." />
-      ) : (
-        <>
-          <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', alignItems: 'center', margin: '4px 0 20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 46, fontWeight: 700, lineHeight: 1, color: grade(data.summary.avg_grade) }}>{data.summary.avg_grade ?? '—'}</span>
-              <span style={{ fontSize: 13, color: 'var(--as-muted)', lineHeight: 1.4 }}>avg {data.summary.avg_score ?? '—'}/100<br />{data.summary.graded} of {data.summary.total} graded</span>
-            </div>
-            <div style={{ display: 'flex', gap: 16, borderLeft: '1px solid var(--as-border)', paddingLeft: 24 }}>
-              {['A', 'B', 'C', 'D', 'F'].map((g) => (
-                <div key={g} style={{ textAlign: 'center', minWidth: 24 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: grade(g) }}>{data.summary.grade_counts?.[g] || 0}</div>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: grade(g) }}>{g}</div>
-                </div>
-              ))}
-              {data.summary.ungraded ? (
-                <div style={{ textAlign: 'center', minWidth: 40 }}>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: 'var(--as-faint)' }}>{data.summary.ungraded}</div>
-                  <div style={{ fontSize: 12, color: 'var(--as-muted)' }}>n/a</div>
-                </div>
-              ) : null}
-            </div>
-          </div>
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead><tr>{['', 'Asset', 'Score', 'Response', 'HTTPS / TLS', 'Headers', 'Weak areas'].map((h) => <th key={h} style={th}>{h}</th>)}</tr></thead>
-              <tbody>
-                {data.assets.map((a: any) => (
-                  <tr key={a.asset_id} style={{ cursor: 'pointer' }} onClick={() => { window.location.href = `/assets/${a.asset_id}`; }} title="Open asset">
-                    <td style={{ ...td, width: 34 }}><span style={{ display: 'inline-block', minWidth: 24, textAlign: 'center', fontWeight: 700, color: '#fff', background: grade(a.grade), borderRadius: 6, padding: '1px 5px', fontSize: 12.5 }}>{a.grade}</span></td>
-                    <td style={{ ...td, color: 'var(--as-ink)' }}>{a.name}</td>
-                    <td className="as-mono" style={td}>{a.score}/100</td>
-                    <td className="as-mono" style={td}>{a.response_time_ms != null ? `${a.response_time_ms} ms` : '—'}</td>
-                    <td style={td}>{a.https ? (a.tls_expired ? 'expired cert' : (a.tls_days_to_expiry != null && a.tls_days_to_expiry < 30 ? `${a.tls_days_to_expiry}d left` : 'valid')) : 'no HTTPS'}</td>
-                    <td className="as-mono" style={{ ...td, color: a.security_headers >= 5 ? 'var(--as-good)' : a.security_headers >= 2 ? undefined : 'var(--as-danger-text)' }}>{a.security_headers}/6</td>
-                    <td style={{ ...td, color: 'var(--as-danger-text)' }}>{(a.weak || []).join(', ') || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 
 function Credentials() {
   const qc = useQueryClient();
@@ -1717,137 +1974,102 @@ function DiscoveredQueue() {
   const connectLabel = selected.size > 0 ? `Connect ${selected.size} selected` : `Connect all (${selectableIds.length})`;
 
   return (
-    <div style={{ background: C.card, border: `1px solid ${C.bCard}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 1px 3px rgba(18,53,44,.04)' }}>
-      {/* card header */}
-      <div style={{ padding: '26px 28px 22px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 40, flexWrap: 'wrap' }}>
-        <div style={{ maxWidth: 600, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <h1 style={{ margin: 0, font: `700 21px ${FONT}`, color: C.ink, letterSpacing: '-.01em' }}>Discovered — ready to connect</h1>
-          <p style={{ margin: 0, font: `400 13.5px/1.55 ${FONT}`, color: C.muted }}>
-            Devices the scan found across every campaign run. Tick any Windows/Linux host and <strong style={{ color: C.green, fontWeight: 600 }}>Connect all</strong> tries your login on the <strong style={{ color: C.green, fontWeight: 600 }}>{cAttempt}</strong> of them. <strong style={{ color: C.green, fontWeight: 600 }}>{cConnectable}</strong> have WinRM/SSH confirmed open (will connect); the rest are attempted too — if remote login is off they report “unreachable” (a connection error, never a bad-password lockout). The other {cIdentified + cSilent} (phones, printers, silent IPs) → <strong style={{ color: C.green, fontWeight: 600 }}>Adopt</strong>. Rows from an older run are dimmed.
-          </p>
-        </div>
-        <div style={{ display: 'flex', gap: 18 }}>
-          <CsStat value={devices.length} color={C.teal} label="Discovered" />
-          <div style={{ width: 1, alignSelf: 'stretch', background: C.bLine }} />
-          <CsStat value={cAttempt} color={C.amber} label="Host logins" />
-        </div>
-      </div>
-
-      {/* toolbar */}
-      <div style={{ padding: '14px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 20, background: C.toolbarBg, borderTop: `1px solid ${C.bLine}`, borderBottom: `1px solid ${C.bLine}`, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-            <span style={{ position: 'absolute', left: 13, color: '#9aa19a', fontSize: 13, pointerEvents: 'none' }}>{CS_ICONS.search}</span>
-            <input placeholder="Search device or IP" value={search} onChange={(e) => setSearch(e.target.value)}
-              style={{ border: `1px solid ${C.bInput}`, background: '#fff', color: C.ink, font: `500 13.5px ${FONT}`, padding: '10px 15px 10px 34px', borderRadius: 11, width: 220, outline: 'none' }} />
-          </div>
-          {runs.length > 1 && (
-            <CsDropdown minWidth={200}
-              value={runFilter != null ? String(runFilter) : ''}
-              onChange={(v) => setRunFilter(v ? Number(v) : undefined)}
-              options={[
-                { value: '', label: 'All runs', sub: `${devices.length} in queue` },
-                ...runs.map((r) => ({
-                  value: String(r.run_id),
-                  label: `${r.is_latest ? 'Latest · ' : ''}Run #${r.run_id}`,
-                  sub: `${r.device_count} host${r.device_count === 1 ? '' : 's'} seen${r.finished_at ? ' · ' + fmt(r.finished_at) : ''}`,
-                })),
-              ]} />
-          )}
-          <CsDropdown minWidth={140}
-            value={ftype} onChange={setFtype}
-            options={[{ value: '', label: 'All types' }, ...types.map((t) => ({ value: t, label: t }))]} />
-          <CsDropdown minWidth={160}
-            value={fstatus} onChange={setFstatus}
-            options={[
-              { value: '', label: 'Any status', sub: `${devices.length} total` },
-              { value: 'connectable', label: 'Windows / Linux (try login)', sub: `${cAttempt}` },
-              { value: 'identified', label: 'Other device · no login', sub: `${cIdentified}` },
-              { value: 'silent', label: 'Silent · IP only', sub: `${cSilent}` },
-              { value: 'inventory', label: 'In inventory', sub: `${cInv}` },
-              { value: 'review', label: 'Needs review', sub: `${cReview}` },
-            ]} />
-          {(ftype || fstatus || search) && (
-            <button onClick={() => { setFtype(''); setFstatus(''); setSearch(''); }}
-              style={{ border: 'none', background: 'transparent', color: C.link, font: `500 12.5px ${FONT}`, cursor: 'pointer', textDecoration: 'underline' }}>Clear</button>
-          )}
-          <CsLoginPicker options={hostCreds} selected={selectedCreds} onToggle={toggleCred}
-            onToggleAll={(all) => setSelectedCreds(all ? new Set(hostCreds.map((c: any) => c.id)) : new Set())} />
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {/* Fill the blank device names from the DHCP server's lease table — the
-              one unauthenticated way to name devices that don't broadcast NetBIOS. */}
-          {namelessCount > 0 && (
-            <button onClick={() => setDhcpOpen(true)}
-              title="Pull real device names from your DHCP server (router) lease table — names the devices that answered no name probe."
-              style={{ border: `1px solid ${C.bInput}`, background: '#fff', color: C.green, font: `600 13.5px ${FONT}`, padding: '11px 18px', borderRadius: 99, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-              Fill names ({namelessCount})
-            </button>
-          )}
-          {/* The non-connectable leftovers get a first-class bulk action, not just
-              a pointer to the Inbox: adopt them as unmanaged evidence-only assets.
-              Respects the active filter, so "filter → Silent → Adopt all" works. */}
-          {adoptableIds.length > 0 && (
-            <button
-              onClick={() => { if (window.confirm(`Adopt ${adoptableIds.length} device${adoptableIds.length === 1 ? '' : 's'} as unmanaged, evidence-only assets?\n\nThey enter inventory with IP / MAC / vendor / type — no login, no deep scan. You can Connect them later if you get a credential.`)) runAdopt.mutate(adoptableIds); }}
-              disabled={runAdopt.isPending}
-              title="Bring the non-connectable devices in as unmanaged, evidence-only assets."
-              style={{ border: `1px solid ${C.bInput}`, background: '#fff', color: C.green, font: `600 13.5px ${FONT}`, padding: '11px 20px', borderRadius: 99, cursor: runAdopt.isPending ? 'default' : 'pointer', whiteSpace: 'nowrap' }}>
-              {runAdopt.isPending ? 'Adopting…' : `Adopt ${adoptableIds.length}`}
-            </button>
-          )}
-          <CsPrimary onClick={() => runConnect.mutate({ ids: targetIds, credIds: Array.from(selectedCreds) })} disabled={connecting || runConnect.isPending || targetIds.length === 0}>
-            <span style={{ fontSize: 15 }}>{CS_ICONS.connect}</span>
-            <span style={{ whiteSpace: 'nowrap' }}>{connecting || runConnect.isPending ? 'Connecting…' : connectLabel}</span>
-          </CsPrimary>
-        </div>
+    <section className="panel">
+      <div className="toolbar">
+        <input className="input" placeholder="Search device, IP or hostname" value={search} onChange={(e) => setSearch(e.target.value)} />
+        {runs.length > 1 && (
+          <select className="select" value={runFilter != null ? String(runFilter) : ''} onChange={(e) => setRunFilter(e.target.value ? Number(e.target.value) : undefined)}>
+            <option value="">All runs · {devices.length} in queue</option>
+            {runs.map((r) => <option key={r.run_id} value={String(r.run_id)}>{(r.is_latest ? 'Latest · ' : '') + 'Run #' + r.run_id}</option>)}
+          </select>
+        )}
+        <select className="select" value={ftype} onChange={(e) => setFtype(e.target.value)}>
+          <option value="">All device types</option>
+          {types.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select className="select" value={fstatus} onChange={(e) => setFstatus(e.target.value)}>
+          <option value="">Any status</option>
+          <option value="connectable">Ready for login ({cAttempt})</option>
+          <option value="identified">No login service ({cIdentified})</option>
+          <option value="silent">Silent · IP only ({cSilent})</option>
+          <option value="inventory">In inventory ({cInv})</option>
+          <option value="review">Needs review ({cReview})</option>
+        </select>
+        {(ftype || fstatus || search) && <button className="btn btn-secondary" onClick={() => { setFtype(''); setFstatus(''); setSearch(''); }}>Clear</button>}
+        <span className="push" />
+        {namelessCount > 0 && <button className="btn btn-secondary" onClick={() => setDhcpOpen(true)} title="Pull real device names from your DHCP server lease table">Fill names <span className="count">{namelessCount}</span></button>}
+        {adoptableIds.length > 0 && (
+          <button className="btn btn-secondary" disabled={runAdopt.isPending}
+            onClick={() => { if (window.confirm(`Adopt ${adoptableIds.length} device${adoptableIds.length === 1 ? '' : 's'} as unmanaged, evidence-only assets?`)) runAdopt.mutate(adoptableIds); }}>
+            {runAdopt.isPending ? 'Adopting…' : `Adopt eligible · ${adoptableIds.length}`}
+          </button>
+        )}
+        <button className="btn btn-primary" disabled={connecting || runConnect.isPending || targetIds.length === 0}
+          onClick={() => runConnect.mutate({ ids: targetIds, credIds: Array.from(selectedCreds) })}>
+          {connecting || runConnect.isPending ? 'Connecting…' : connectLabel}
+        </button>
       </div>
 
       <SweepProgress active={connecting} onIdle={() => { setConnecting(false); qc.invalidateQueries({ queryKey: ['disc-discovered-devices'] }); }} />
-      {runConnect.isError && <div style={{ padding: '8px 28px', font: `500 12px ${FONT}`, color: '#b3261e', background: C.toolbarBg }}>{(runConnect.error as any)?.response?.data?.detail || 'Could not start connect.'}</div>}
-      {runAdopt.isError && <div style={{ padding: '8px 28px', font: `500 12px ${FONT}`, color: '#b3261e', background: C.toolbarBg }}>{(runAdopt.error as any)?.response?.data?.detail || 'Could not adopt one or more devices.'}</div>}
+      {runConnect.isError && <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--red)' }}>{(runConnect.error as any)?.response?.data?.detail || 'Could not start connect.'}</div>}
+      {runAdopt.isError && <div style={{ padding: '8px 16px', fontSize: 12, color: 'var(--red)' }}>{(runAdopt.error as any)?.response?.data?.detail || 'Could not adopt one or more devices.'}</div>}
 
-      {/* table header */}
-      <div style={{ display: 'grid', gridTemplateColumns: CS_GRID, alignItems: 'center', padding: '12px 28px', background: C.headBg, borderBottom: `1px solid ${C.bLine}`, font: `600 11.5px ${FONT}`, letterSpacing: '.06em', color: C.label, textTransform: 'uppercase' }}>
-        <div><CsCheckbox checked={allChecked} onChange={() => setSelected(allChecked ? new Set() : new Set(selectableIds))} /></div>
-        <div>Device</div><div>IP</div><div>Type</div><div>Last seen</div><div>Status</div><div />
+      <div className="table-wrap">
+        {q.isLoading ? <div style={{ padding: 26, textAlign: 'center', color: 'var(--muted)' }}>Loading…</div>
+          : shown.length === 0 ? <div style={{ padding: 26, textAlign: 'center', color: 'var(--muted)' }}>{devices.length === 0 ? 'Nothing discovered yet — run a Campaign under Discovery.' : 'No device matches these filters.'}</div>
+          : (
+          <table className="data-table">
+            <thead><tr>
+              <th style={{ width: 34 }}><input type="checkbox" checked={allChecked} onChange={() => setSelected(allChecked ? new Set() : new Set(selectableIds))} /></th>
+              <th>Device</th><th>IP</th><th>Type</th><th>Discovered by</th><th>Last seen</th><th>Status</th><th></th>
+            </tr></thead>
+            <tbody>
+              {shown.map((d) => {
+                const st2 = qStatus(d);
+                const pillCls = st2 === 'inventory' ? 'pill-green' : st2 === 'connectable' ? 'pill-blue' : st2 === 'review' ? 'pill-amber' : 'pill-gray';
+                const pillTxt = st2 === 'inventory' ? 'In inventory' : st2 === 'connectable' ? 'Ready for login' : st2 === 'review' ? 'Needs review' : st2 === 'silent' ? 'Silent · IP only' : 'No login service';
+                const canSel = !d.connected && !d.in_inventory && !d.stale && d.resolution !== 'review' && d.observation_id && attemptOf(d);
+                const canConnect = attemptOf(d);
+                const ty = (discType(d) || '').toLowerCase();
+                const icon = ty.includes('camera') ? '◉' : ty.includes('dns') ? '⌘' : ty.includes('printer') ? '⎙' : (ty.includes('phone') || ty.includes('voip')) ? '☎' : (ty.includes('host') || ty.includes('linux') || ty.includes('server') || ty.includes('windows')) ? '▣' : '▢';
+                return (
+                  <Fragment key={d.observation_id ?? d.asset_id}>
+                    <tr className="clickable" style={d.stale ? { opacity: .55 } : undefined}>
+                      <td><input type="checkbox" disabled={!canSel} checked={selected.has(d.observation_id)} onChange={() => toggleSel(d.observation_id)} /></td>
+                      <td><div className="device-cell"><div className="device-icon">{icon}</div><div><b>{d.host_name || d.name || d.ip_address || '—'}</b><span className="sub">{d.os_guess ? _cap(d.os_guess) : (d.vendor || (d.host_name ? '' : 'Name not confirmed'))}</span></div></div></td>
+                      <td className="mono">{d.ip_address || '—'}</td>
+                      <td>{discType(d)}</td>
+                      <td>{d.source || (d.transport ? _cap(d.transport) : '—')}</td>
+                      <td>{fmt(d.last_seen || d.first_seen)}{d.run_id ? <span className="sub mono">run #{d.run_id}</span> : null}</td>
+                      <td><span className={'pill ' + pillCls}>{pillTxt}</span></td>
+                      <td style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>
+                        {d.in_inventory ? <span style={{ fontSize: 11, color: 'var(--faint)' }}>Asset #{d.asset_id}</span>
+                          : canConnect ? <button className="btn btn-sm btn-primary" onClick={() => setOpenFor(openFor === d.observation_id ? null : d.observation_id)}>Connect</button>
+                          : <button className="btn btn-sm btn-secondary" disabled={runAdopt.isPending} onClick={() => runAdopt.mutate([d.observation_id])}>Adopt</button>}
+                      </td>
+                    </tr>
+                    {openFor === d.observation_id && (
+                      <tr className="row-detail"><td colSpan={8} style={{ padding: 0 }}><ConnectDeviceForm device={d} onDone={() => { setOpenFor(null); qc.invalidateQueries({ queryKey: ['disc-discovered-devices'] }); }} /></td></tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
 
-      {/* rows */}
-      {q.isLoading ? (
-        <div style={{ padding: 26, textAlign: 'center', color: C.label, font: `500 13px ${FONT}` }}>Loading…</div>
-      ) : shown.length === 0 ? (
-        <div style={{ padding: 26, textAlign: 'center', color: C.label, font: `500 13px ${FONT}` }}>{devices.length === 0 ? 'Nothing discovered yet — run a Campaign under Discover.' : 'No device matches these filters.'}</div>
-      ) : shown.map((d) => (
-        <Fragment key={d.observation_id ?? d.asset_id}>
-          <CsDeviceRow d={d} checked={selected.has(d.observation_id)} onToggle={() => toggleSel(d.observation_id)}
-            onConnect={() => setOpenFor(openFor === d.observation_id ? null : d.observation_id)}
-            onAdopt={(id: number) => runAdopt.mutate([id])} adopting={runAdopt.isPending} />
-          {openFor === d.observation_id && (
-            <div style={{ borderBottom: `1px solid ${C.bRow}` }}>
-              <ConnectDeviceForm device={d} onDone={() => { setOpenFor(null); qc.invalidateQueries({ queryKey: ['disc-discovered-devices'] }); }} />
-            </div>
-          )}
-        </Fragment>
-      ))}
-
-      {/* footer */}
-      <div style={{ padding: '16px 28px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', font: `500 13px ${FONT}`, color: C.muted3 }}>
+      <div style={{ padding: '13px 16px', display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--muted)' }}>
         <span>Showing {shown.length} of {devices.length} devices</span>
-        {runFilter != null && <a onClick={() => setRunFilter(undefined)} style={{ color: C.link, cursor: 'pointer' }}>View all runs →</a>}
+        {runFilter != null && <a onClick={() => setRunFilter(undefined)} style={{ color: 'var(--mint2)', cursor: 'pointer', fontWeight: 700 }}>View all runs →</a>}
       </div>
 
       {dhcpOpen && (
-        <DhcpEnrichModal
-          creds={creds.data ?? []}
-          nameless={namelessCount}
-          pending={runDhcp.isPending}
+        <DhcpEnrichModal creds={creds.data ?? []} nameless={namelessCount} pending={runDhcp.isPending}
           error={(runDhcp.error as any)?.response?.data?.detail || (runDhcp.isError ? 'Enrichment failed — check the router IP, source type and credential.' : null)}
-          onClose={() => setDhcpOpen(false)}
-          onRun={(v: any) => runDhcp.mutate(v)}
-        />
+          onClose={() => setDhcpOpen(false)} onRun={(v: any) => runDhcp.mutate(v)} />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -2003,117 +2225,57 @@ function AddConnectionModal({ onClose }: { onClose: () => void }) {
 // find-a-network flow (Campaigns + the Host login it uses). Click Connect → only
 // the onboard-other-targets flow (agents + agentless wizard). Overview, Inbox and
 // Scan history stay as their own top-level tabs.
-function DiscoverConnect() {
-  const [sub, setSub] = useState<'discover' | 'connect'>('discover');
+function DiscoveryTab({ go }: { go: (t: string) => void }) {
+  return <Campaigns onConnect={() => go('connections')} />;
+}
+
+function ConnectionsTab() {
   const [showAdd, setShowAdd] = useState(false);
-  // Within Connect: operational view (devices + logins-to-try) vs the saved-login
-  // management table. Keeps the screen from spreading into stacked cards.
   const [connectView, setConnectView] = useState<'devices' | 'logins'>('devices');
-  const SUBS: { id: 'discover' | 'connect'; label: string; icon: any }[] = [
-    { id: 'discover', label: 'Discover', icon: Network },
-    { id: 'connect',  label: 'Connect',  icon: Plug },
-  ];
   const devQ = useQuery({ queryKey: ['disc-discovered-devices', 'all'], queryFn: async () => (await discoveryApi.discoveredDevices()).data as any });
   const credQ = useQuery({ queryKey: ['disc-creds'], queryFn: async () => (await discoveryApi.listCredentials()).data.credentials as any[] });
   const readyCount = (devQ.data?.devices ?? []).filter((d: any) => !d.asset_id).length;
   const savedCount = (credQ.data ?? []).length;
   return (
-    <div>
-      {/* Header row: mode toggle (white pill) + Add connection. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24, marginBottom: 18, flexWrap: 'wrap' }}>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: '#fff', border: `1px solid ${C.bToggle}`, borderRadius: 14, padding: 5 }}>
-          {SUBS.map((s) => {
-            const on = s.id === sub;
-            const icon = s.id === 'discover' ? CS_ICONS.discover : CS_ICONS.connect;
-            return (
-              <button key={s.id} onClick={() => setSub(s.id)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, border: 'none', cursor: 'pointer', font: `600 14px ${FONT}`,
-                  padding: '9px 18px', borderRadius: 10,
-                  color: on ? '#fff' : C.muted2, background: on ? C.green : 'transparent',
-                  boxShadow: on ? '0 1px 2px rgba(13,92,72,.3)' : 'none',
-                }}>
-                <span style={{ fontSize: 15 }}>{icon}</span><span>{s.label}</span>
-              </button>
-            );
-          })}
+    <div className="disc-cc">
+      <div className="page-line">
+        <div><h2>Connect discovered devices</h2><p>Use an encrypted reusable login for hosts, or adopt non-login devices with discovery evidence.</p></div>
+        <div className="actions">
+          <button className="btn btn-secondary" onClick={() => setConnectView('logins')}>Saved logins <span className="count">{savedCount}</span></button>
+          <button className="btn btn-primary" onClick={() => setShowAdd(true)}>＋ Add connection</button>
         </div>
-        {sub === 'connect' && (
-          <CsPrimary onClick={() => setShowAdd(true)} style={{ boxShadow: '0 2px 8px rgba(18,184,134,.32)', padding: '12px 20px' }}>
-            <span style={{ fontSize: 17, lineHeight: 1 }}>{CS_ICONS.add}</span>
-            <span style={{ whiteSpace: 'nowrap' }}>Add connection</span>
-          </CsPrimary>
-        )}
       </div>
-
-      {sub === 'discover' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <p style={{ fontSize: 12.5, color: 'var(--as-faint)', margin: 0, maxWidth: 730 }}>
-            <strong>Find your assets — two ways.</strong>{' '}
-            <strong>Network sweep</strong> scans an IP range you own and lists every device on it; found devices land in{' '}
-            <strong>Scan history</strong> and the <strong>Connect</strong> queue — give them a login there and they are read into IT Asset Inventory.{' '}
-            <strong>External (domain)</strong> starts from a domain you own and finds its public, internet-facing hosts from the outside;
-            those are adopted straight into the Inventory as internet-facing assets — no login needed.
-          </p>
-          <Campaigns />
-        </div>
-      )}
-
-      {sub === 'connect' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-          {/* Sub-tabs: underline style with count chips (design handoff). */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 28, borderBottom: '1px solid #dddbd2' }}>
-            {([['devices', 'Ready to connect', readyCount], ['logins', 'Saved logins', savedCount]] as const).map(([id, label, count]) => {
-              const on = connectView === id;
-              return (
-                <button key={id} onClick={() => setConnectView(id)}
-                  style={{ display: 'flex', alignItems: 'center', gap: 9, border: 'none', background: 'transparent',
-                    color: on ? '#0d5c48' : '#7a8a84', fontSize: 14, fontWeight: on ? 600 : 500, padding: '0 2px 14px',
-                    borderBottom: on ? '2.5px solid #0d5c48' : '2.5px solid transparent', marginBottom: -1, cursor: 'pointer' }}>
-                  {label}
-                  <span style={{ background: on ? '#0d5c48' : '#e6e4db', color: on ? '#fff' : '#5f6f69', borderRadius: 99, padding: '2px 9px', fontSize: 12, fontWeight: 600 }}>{count}</span>
-                </button>
-              );
-            })}
-          </div>
-          {connectView === 'devices' && <DiscoveredQueue />}
-          {connectView === 'logins' && <Credentials />}
-        </div>
-      )}
+      <div className="notice"><div>i</div><div><b>Automatic login matching is safe and predictable.</b><p>When no login is manually selected, the best subnet-matching login is chosen by priority. Non-host devices never receive a password attempt.</p></div></div>
+      <nav className="tabs" style={{ marginBottom: 16 }}>
+        <a className={connectView === 'devices' ? 'active' : ''} onClick={() => setConnectView('devices')}>Ready to connect <span className="count">{readyCount}</span></a>
+        <a className={connectView === 'logins' ? 'active' : ''} onClick={() => setConnectView('logins')}>Saved logins <span className="count">{savedCount}</span></a>
+      </nav>
+      {connectView === 'devices' && <DiscoveredQueue />}
+      {connectView === 'logins' && <Credentials />}
       {showAdd && <AddConnectionModal onClose={() => setShowAdd(false)} />}
     </div>
   );
 }
 
 export default function AssetDiscoveryPage() {
-  const [tab, setTab] = useTabParam<Tab>('pipeline', TABS.map((t) => t.id));
+  const [tab, setTab] = useTabParam<Tab>('discover', TABS.map((t) => t.id));
+  const inboxQ = useQuery({ queryKey: ['disc-inbox'], queryFn: async () => (await discoveryApi.inbox('open')).data.observations as any[] });
+  const inboxN = (inboxQ.data ?? []).length;
   return (
     <div className="asset-suite discovery-suite as-fadeup" style={{ padding: '4px 2px' }}>
-      <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--as-border)', marginBottom: 18, flexWrap: 'wrap' }}>
-        {TABS.map((t) => {
-          const on = t.id === tab;
-          const Icon = t.icon;
-          return (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 7, padding: '9px 14px', fontSize: 13,
-                fontWeight: on ? 700 : 500, color: on ? 'var(--as-green)' : 'var(--as-muted)',
-                background: 'none', border: 'none', borderBottom: on ? '2px solid var(--as-green)' : '2px solid transparent',
-                marginBottom: -1, cursor: 'pointer',
-              }}>
-              <Icon size={15} />{t.label}
-            </button>
-          );
-        })}
-      </div>
+      <div className="disc-cc"><nav className="tabs" style={{ marginBottom: 18 }}>
+        {TABS.map((t) => (
+          <a key={t.id} className={t.id === tab ? 'active' : ''} onClick={() => setTab(t.id)}>
+            {t.label}{t.id === 'inbox' && inboxN > 0 && <span className="count">{inboxN}</span>}
+          </a>
+        ))}
+      </nav></div>
 
-      {tab === 'overview' && <Overview go={() => setTab('runs')} />}
-
-      {tab === 'pipeline' && <DiscoverConnect />}
-
+      {tab === 'overview' && <Overview go={(t) => setTab((t as any) || 'runs')} />}
+      {tab === 'discover' && <DiscoveryTab go={(t) => setTab(t as any)} />}
+      {tab === 'connections' && <ConnectionsTab />}
       {tab === 'inbox' && <InboxView />}
       {tab === 'runs' && <Runs />}
-      {tab === 'score' && <Scorecard />}
     </div>
   );
 }

@@ -1175,6 +1175,7 @@ def connect_discovered_service(
 _TYPED_ITYPE = {
     "postgres": "postgres_sql", "mysql": "mysql_sql", "mssql": "mssql_sql",
     "oracle": "oracle_sql", "k8s": "k8s_api", "ldap": "ldap_query", "cisco": "netdev_ssh",
+    "snmp": "snmp_v2c",
 }
 
 

@@ -37,16 +37,30 @@ def build_adapter(connection: IntegrationConnection) -> BaseAdapter:
 
     credentials: Dict[str, str] = {}
     for key in cred_keys:
-        env_val = os.environ.get(f"{prefix}_{key}", "")
+        env_val = os.environ.get(f"{prefix}_{key}", "") if prefix else ""
         credentials[key.lower()] = env_val
 
-    # Inline credentials (if provided) take precedence over env vars.
+    # Credentials entered in the UI are stored encrypted on the connection and
+    # take precedence over env vars. This is what lets an operator configure a
+    # scanner ENTIRELY from the form — no shell access to set env vars. Env vars
+    # remain a valid fallback ("dev" mode) for setups that prefer them.
+    try:
+        from grc.services.connector_credentials import decrypt_credentials
+        stored = decrypt_credentials(getattr(connection, "encrypted_credentials", None))
+        if isinstance(stored, dict):
+            for k, v in stored.items():
+                if v:
+                    credentials[str(k).lower()] = v
+    except Exception:  # noqa: BLE001 — never let a decrypt hiccup break adapter build
+        pass
+
+    # Legacy inline username/password columns (kept for migration safety).
     if getattr(connection, "username", None):
         credentials["username"] = connection.username
     if getattr(connection, "password", None):
         credentials["password"] = connection.password
 
-    verify_ssl = os.environ.get(f"{prefix}_VERIFY_SSL", "false").lower() == "true"
+    verify_ssl = (os.environ.get(f"{prefix}_VERIFY_SSL", "false").lower() == "true") if prefix else False
 
     return adapter_cls(
         console_url=connection.console_url,

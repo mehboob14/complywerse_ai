@@ -13,7 +13,8 @@ export type Platform =
   | 'cisco'
   | 'oracle' | 'mssql' | 'postgres' | 'mysql'
   | 'ad'
-  | 'aws' | 'digitalocean' | 'digitalocean_api' | 'azure' | 'k8s';
+  | 'aws' | 'digitalocean' | 'digitalocean_api' | 'azure' | 'k8s'
+  | 'snmp';
 type ConnectMode = 'installer' | 'manual';
 
 type IssueTokenResp = {
@@ -46,6 +47,7 @@ export const PLATFORMS: Array<{ id: Platform; label: string; logo: string; subti
   { id: 'digitalocean_api', label: 'DigitalOcean', logo: '🌊', subtitle: 'Read-only API token — all droplets, volumes, VPCs, DBs, K8s' },
   { id: 'azure',        label: 'Azure subscription',      logo: '🟦', subtitle: 'Service principal with Reader role + Entra ID.' },
   { id: 'k8s',          label: 'Kubernetes cluster',      logo: '☸️', subtitle: 'Any K8s 1.24+ — kubeconfig or server+token.' },
+  { id: 'snmp',         label: 'SNMP device',             logo: '📶', subtitle: 'SNMPv2c UDP 161 — read-only community. Routers, switches, printers, UPS, NAS.' },
 ];
 
 // Categorisation matches the package layout. Each group's hint explains
@@ -107,6 +109,7 @@ const DEFAULT_PORTS: Record<Platform, string> = {
   digitalocean: '22',
   digitalocean_api: '443',
   azure: '443',
+  snmp: '161',
   k8s: '443',
 };
 
@@ -489,7 +492,17 @@ export default function ConnectWizardPage({
             need a per-platform form (TNS hostname, MSSQL instance, AD
             base DN, AWS access key, etc.). Track in the deferred Phase 2
             of the CIS Module Updated drop. */}
-        {tokenData && status?.state !== 'ready' && picked && !['windows', 'linux', 'digitalocean', 'digitalocean_api', 'aws', 'postgres', 'mssql', 'mysql', 'oracle'].includes(picked) && (
+        {tokenData && status?.state !== 'ready' && picked === 'snmp' && (
+          <SnmpForm
+            token={tokenData.token}
+            initialHostname={prefillHostname}
+            initialLabel={prefillLabel}
+            assetId={prefillAssetId}
+            onCancel={() => { setTokenData(null); setPicked(null); setStatus(null); }}
+          />
+        )}
+
+        {tokenData && status?.state !== 'ready' && picked && !['windows', 'linux', 'digitalocean', 'digitalocean_api', 'aws', 'postgres', 'mssql', 'mysql', 'oracle', 'snmp'].includes(picked) && (
           <div className="bg-white rounded-xl shadow-md p-8 border border-amber-200 max-w-3xl mx-auto text-center">
             <div className="text-5xl mb-3">🚧</div>
             <h2 className="text-xl font-bold text-slate-900 mb-2">
@@ -968,6 +981,94 @@ function DoAccountForm({ token, onCancel }: { token: string; onCancel: () => voi
         <button type="submit" disabled={submitting || !apiToken.trim()}
           className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
           {submitting ? 'Connecting…' : 'Connect account'}
+        </button>
+        <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600">Cancel</button>
+      </div>
+    </form>
+  );
+}
+
+
+// SNMP device (no login) — a read-only SNMPv2c community string. Host + community
+// go through the same handshake; the backend stores the community as the connection
+// secret (integration_type snmp_v2c) and validates it with a live SNMP GET.
+function SnmpForm({ token, onCancel, initialHostname = '', initialLabel = '', assetId = null }: { token: string; onCancel: () => void; initialHostname?: string; initialLabel?: string; assetId?: number | null }) {
+  const [label, setLabel] = useState(initialLabel);
+  const [hostname, setHostname] = useState(initialHostname);
+  const [port, setPort] = useState<number>(161);
+  const [community, setCommunity] = useState('public');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
+  useEffect(() => { if (initialHostname && !hostname) setHostname(initialHostname); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [initialHostname]);
+  useEffect(() => { if (initialLabel && !label) setLabel(initialLabel); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [initialLabel]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setSubmitting(true);
+    try {
+      const cleanHost = (hostname || '').trim();
+      const cleanLabel = (label || '').trim();
+      const cleanComm = (community || '').trim() || 'public';
+      const r = await apiClient.post('/connect-wizard/handshake', {
+        tenant_token: token,
+        hostname: cleanHost,
+        display_label: cleanLabel || cleanHost,
+        os_name: 'SNMP device',
+        agent_password: cleanComm,   // community string rides in the secret field
+        db_port: port,               // handshake reads db_port for the SNMP UDP port
+        asset_id: assetId ?? undefined,
+      });
+      if (r.status >= 200 && r.status < 300) setSuccess(true);
+    } catch (e: any) {
+      const d = e?.response?.data?.detail;
+      if (d && typeof d === 'object' && d.preflight_failed) setError(`${d.message}\n\nWhat to do: ${d.hint}`);
+      else setError(typeof d === 'string' ? d : (d?.message || e?.message || 'Failed to connect SNMP device'));
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (success) {
+    return (
+      <div className="bg-white rounded-xl shadow-md p-8 border-2 border-emerald-300 text-center">
+        <div className="text-5xl mb-3">✅</div>
+        <h2 className="text-2xl font-bold text-slate-900 mb-2">SNMP device connected!</h2>
+        <p className="text-slate-600 mb-4"><strong className="text-slate-900">{hostname}</strong> answered SNMPv2c and is now in inventory.</p>
+        <button onClick={() => window.location.href = '/assets'} className="mt-3 px-5 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700">Go to inventory →</button>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} className="bg-white rounded-xl shadow-md p-8 border border-slate-200 max-w-xl mx-auto">
+      <div className="flex items-center gap-2 mb-1"><span className="text-2xl">📶</span>
+        <h2 className="text-lg font-bold text-slate-900">Connect SNMP device</h2></div>
+      <p className="text-sm text-slate-500 mb-5">Read-only SNMPv2c over UDP 161 — routers, switches, firewalls, printers, UPS, NAS. Enter the device IP/host and its read community string.</p>
+      <label className="block text-xs font-medium text-slate-700 mb-1">Friendly label</label>
+      <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="core-switch-01"
+        className="w-full mb-4 rounded-lg border border-slate-300 px-3 py-2 text-sm" />
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="col-span-2">
+          <label className="block text-xs font-medium text-slate-700 mb-1">Host or IP</label>
+          <input value={hostname} onChange={(e) => setHostname(e.target.value)} placeholder="192.168.1.1" required
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-700 mb-1">Port</label>
+          <input type="number" min={1} max={65535} value={port} onChange={(e) => setPort(Math.max(1, Math.min(65535, Number(e.target.value) || 161)))}
+            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+        </div>
+      </div>
+      <label className="block text-xs font-medium text-slate-700 mb-1">Community string (read-only)</label>
+      <input type="password" value={community} onChange={(e) => setCommunity(e.target.value)} placeholder="public" required
+        className="w-full mb-4 rounded-lg border border-slate-300 px-3 py-2 text-sm font-mono" />
+      {error && <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700 whitespace-pre-line">{error}</div>}
+      <div className="flex gap-2">
+        <button type="submit" disabled={submitting || !hostname.trim()}
+          className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
+          {submitting ? 'Connecting…' : 'Connect device'}
         </button>
         <button type="button" onClick={onCancel} className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600">Cancel</button>
       </div>

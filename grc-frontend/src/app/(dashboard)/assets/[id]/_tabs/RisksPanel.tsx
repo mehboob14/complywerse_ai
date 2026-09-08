@@ -2,28 +2,32 @@
 
 /*
  * RisksPanel — the asset-detail "Risk & Controls" tab (activeTab === 'risks'),
- * restyled VERBATIM into the delivered Overview design language
- * (see ../_overview-design.tsx — warm cards, IBM Plex Mono values, green accent).
+ * restyled to match the approved RiskControls.html mock (mint-teal tokens,
+ * Poppins, ring + dimension-bar residual risk card, findings banner,
+ * mapped-controls table with a coverage ring).
  *
- * PRESENTATION ONLY. This is a drop-in replacement for the old
- * <RiskControlsTab><ControlsTab/><RisksTab/><MappingRecommendationsTab/></RiskControlsTab>
- * block in page.tsx. Every data source and capability is preserved exactly:
- *   - three top cards each read the SAME react-query keys / mutations as before
- *     (['asset-risk-posture', id] for Residual + CIS, CIA suggest/save mutations),
- *   - the control list, risk list and coverage summary are fed by the same props
- *     the parent already computes,
+ * PRESENTATION ONLY. Every real data source and behavior from the previous
+ * version is preserved exactly:
+ *   - Residual Risk / CIA / CIS all read the SAME react-query key
+ *     (['asset-risk-posture', id]) and the same CIA suggest/save mutations,
+ *   - the findings banner reads the vuln component's real `open_count` off
+ *     that same query (no new fetch, no fabricated number),
+ *   - the control list, risk list and coverage ring are fed by the same
+ *     props the parent already computes (allControls, coveragePctFromApi,
+ *     link/unlink handlers),
  *   - Mapping Recommendations keeps its own query + accept mutation untouched.
  *
- * The design tokens below mirror _overview-design.tsx one-for-one; no colours or
- * spacing are invented. Band/semantic colours (residual bands, CIA rating scale,
- * confidence tiers) are meaning-bearing and kept from the original component.
+ * The mock only shows the Residual Risk / Findings / Mapped Controls trio —
+ * CIA editing, the CIS summary, Associated Risks and Mapping Recommendations
+ * have no equivalent in it, so they're kept below (restyled to the same
+ * mint-teal language) rather than dropped.
  */
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Gauge, Lock, Cpu, Sparkles, ArrowRight, ShieldCheck, AlertCircle, Loader2,
+  Lock, Cpu, Sparkles, ArrowRight, ShieldCheck, AlertCircle, Loader2,
   Shield, X, AlertTriangle, Plus, Filter, Layers, ChevronDown, ChevronRight,
 } from 'lucide-react';
 import { assetsApi, riskPostureApi } from '@/lib/api';
@@ -32,36 +36,34 @@ import { InlineLinkPicker, PageLoader } from '@/components/ui';
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-/* ─── design tokens (mirror _overview-design.tsx exactly) ──────────────── */
+/* ─── design tokens (mint-teal, mirrors RiskControls.html exactly) ─────── */
 
-const MONO = "font-['IBM_Plex_Mono',ui-monospace,monospace]";
-const SHADOW = 'shadow-[0_1px_2px_rgba(18,45,36,0.05),0_12px_26px_-18px_rgba(18,45,36,0.22)]';
-const CARD = `bg-white border border-[#e6e9e3] rounded-2xl overflow-hidden ${SHADOW}`;
-const PILL_OK = 'inline-flex items-center gap-1.5 text-[10.5px] font-bold tracking-[0.03em] uppercase text-[#0f7a5c] bg-[#e7f6ee] border border-[#c3ead2] px-2.5 py-[3px] rounded-full';
-const INPUT = 'text-[12.5px] px-3 py-[7px] border border-[#dfe3db] rounded-lg bg-[#f9faf8] outline-none focus:border-[#0d5c48] text-[#1a2b24]';
-const BTN_PRIMARY = 'inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3.5 py-2 rounded-lg whitespace-nowrap border bg-[#0d5c48] text-white border-[#0d5c48] disabled:opacity-50';
-const BTN_GHOST = 'inline-flex items-center gap-1.5 text-[12.5px] font-semibold px-3 py-1.5 rounded-lg whitespace-nowrap border bg-white text-[#1a2b24] border-[#dfe3db] hover:bg-[#f9faf8] disabled:opacity-50';
+const MONO = 'tabular-nums';
+const SHADOW = 'shadow-[0_1px_2px_rgba(16,24,40,0.04)]';
+const CARD = `bg-white border border-[#E8ECEE] rounded-[15px] overflow-hidden ${SHADOW}`;
+const BTN_PRIMARY = 'inline-flex items-center gap-1.5 text-[12px] font-semibold px-3.5 py-2 rounded-[9px] whitespace-nowrap border bg-[#17B898] text-[#06342B] border-[#17B898] hover:bg-[#12A085] disabled:opacity-50';
+const BTN_GHOST = 'inline-flex items-center gap-1.5 text-[12px] font-semibold px-3 py-[7px] rounded-[9px] whitespace-nowrap border bg-white text-[#3A4653] border-[#E8ECEE] hover:bg-[#F4F6F7] disabled:opacity-50';
 
-// coverage / confidence badge tones from the design's badge palette
+// coverage-status tone + label — single source for the Mapped Controls table.
 const covBadge = (s?: string) =>
-  s === 'full' ? 'text-[#0f7a5c] bg-[#e7f6ee] border-[#c3ead2]'
-  : s === 'partial' ? 'text-[#a86a12] bg-[#fdf3e3] border-[#f0dcae]'
-  : 'text-[#5c6b62] bg-[#f0f2ee] border-[#e0e4dc]';
+  s === 'full' ? { label: 'Covered', cls: 'text-[#1F7A54] bg-[#E7F5EE]' }
+  : s === 'partial' ? { label: 'Partial', cls: 'text-[#9A6410] bg-[#FBF2DF]' }
+  : { label: 'Not set', cls: 'text-[#6B7787] bg-[#F1F4F6]' };
 
 // Confidence-tier chrome for the mapping recommender. Literal class strings so
 // Tailwind's JIT keeps them (dynamic interpolation would be purged).
 const BAND: Record<'high' | 'medium' | 'low', { headerBg: string; pill: string }> = {
-  high:   { headerBg: 'bg-[#e7f6ee]', pill: 'text-[#0f7a5c] bg-[#d7efe1] border border-[#c3ead2]' },
-  medium: { headerBg: 'bg-[#fdf3e3]', pill: 'text-[#a86a12] bg-[#f8e6c8] border border-[#f0dcae]' },
-  low:    { headerBg: 'bg-[#f0f2ee]', pill: 'text-[#5c6b62] bg-[#e6e9e2] border border-[#e0e4dc]' },
+  high:   { headerBg: 'bg-[#E4F8F2]', pill: 'text-[#12A085] bg-[#E4F8F2]' },
+  medium: { headerBg: 'bg-[#FBF2DF]', pill: 'text-[#9A6410] bg-[#FBF2DF]' },
+  low:    { headerBg: 'bg-[#F1F4F6]', pill: 'text-[#6B7787] bg-[#F1F4F6]' },
 };
 
 /* ─── residual bands (higher = worse; thresholds match backend RISK_BANDS) ─ */
 const bandTone = (score: number) =>
-  score >= 75 ? { fg: '#7A2D17', bg: '#F7E4DC', label: 'severe' }
-  : score >= 50 ? { fg: '#8A4A0F', bg: '#F6E8D4', label: 'elevated' }
-  : score >= 25 ? { fg: '#6E5410', bg: '#F4ECD2', label: 'watch' }
-  : { fg: '#0E5A46', bg: '#E2EDE8', label: 'contained' };
+  score >= 75 ? { fg: '#B23A3A', bg: '#FBEAEA', label: 'severe' }
+  : score >= 50 ? { fg: '#9A6410', bg: '#FBF2DF', label: 'elevated' }
+  : score >= 25 ? { fg: '#2E63A8', bg: '#E9F1FB', label: 'watch' }
+  : { fg: '#1F7A54', bg: '#E7F5EE', label: 'contained' };
 
 const DIMS: { key: string; concept: string; dim: string; guideId: string; guideN: number }[] = [
   { key: 'cia',  concept: 'Impact',        dim: 'CIA ratings', guideId: 'asset.cia', guideN: 2 },
@@ -73,87 +75,67 @@ const DIMS: { key: string; concept: string; dim: string; guideId: string; guideN
 
 const CIA_LABELS = ['—', 'Low', 'Low-Med', 'Medium', 'High', 'Critical'];
 
+/* ─── donut ring (residual score + coverage %) ─────────────────────────── */
+
+function Ring({ pct, size = 110, stroke = 12, color, trackColor = '#F0F3F5' }: { pct: number; size?: number; stroke?: number; color: string; trackColor?: string }) {
+  const r = 52;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - Math.max(0, Math.min(100, pct)) / 100);
+  return (
+    <svg viewBox="0 0 120 120" style={{ width: size, height: size, transform: 'rotate(-90deg)' }} aria-hidden="true">
+      <circle cx="60" cy="60" r={r} fill="none" stroke={trackColor} strokeWidth={stroke} />
+      <circle cx="60" cy="60" r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={offset} />
+    </svg>
+  );
+}
+
 /* ─── shared card shell ────────────────────────────────────────────────── */
 
 function BigCard({
   icon, title, guide, subtitle, right, children,
-}: { icon: React.ReactNode; title: string; guide?: React.ReactNode; subtitle?: string; right?: React.ReactNode; children: React.ReactNode }) {
+}: { icon: React.ReactNode; title: string; guide?: React.ReactNode; subtitle?: React.ReactNode; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className={CARD}>
-      <div className="flex items-center justify-between gap-3 px-5 py-4 border-b border-[#eceee8]">
+      <div className="flex items-start justify-between gap-3 px-4 py-[13px] border-b border-[#F0F3F5]">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-[#8a948b]">{icon}</span>
-            <span className="text-[15px] font-extrabold tracking-[-0.01em] text-[#1a2b24]">{title}</span>
+            <span className="text-[#8A95A1]">{icon}</span>
+            <span className="text-[12.5px] font-semibold text-[#0F1F2B]">{title}</span>
             {guide}
           </div>
-          {subtitle && <div className="text-[11.5px] text-[#aab2a8] mt-px">{subtitle}</div>}
+          {subtitle && <div className="text-[10.5px] text-[#8A95A1] mt-0.5">{subtitle}</div>}
         </div>
         {right}
       </div>
-      <div className="px-5 py-[18px]">{children}</div>
+      <div className="px-4 py-4">{children}</div>
     </div>
   );
 }
 
 /* ─── residual-risk dimension bar ──────────────────────────────────────── */
 
-function DimBar({ label, sub, pct, known, tone, guideId, guideN }: { label: string; sub: string; pct: number; known: boolean; tone: string; guideId?: string; guideN?: number }) {
+function DimBar({ label, sub, pct, known, tone, guideId, guideN, weightPct }: { label: string; sub: string; pct: number; known: boolean; tone: string; guideId?: string; guideN?: number; weightPct?: number }) {
   return (
-    <div className="flex items-center gap-3">
-      <div className="w-44 flex-none">
-        <div className="flex items-center gap-1.5 text-[13px] font-semibold text-[#1a2b24]">
+    <div className="grid grid-cols-[160px_minmax(0,1fr)_38px] gap-3 items-center">
+      <div className="min-w-0">
+        <div className="flex items-center gap-1.5 text-[12px] font-semibold text-[#0F1F2B]">
           {label}
+          {weightPct != null && (
+            <span className="rounded bg-[#F0F3F5] px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#3A4653]">{weightPct}%</span>
+          )}
           {guideId && guideN != null && <GuideMarker id={guideId} n={guideN} />}
         </div>
-        <div className="text-[11px] text-[#aab2a8]">{sub}</div>
+        <div className="text-[10px] text-[#AEB8C2] truncate">{sub}</div>
       </div>
-      <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#eef1ec]">
-        {known && <div className="h-full rounded-full" style={{ width: `${Math.max(2, pct)}%`, background: tone }} />}
+      <div className="h-[9px] rounded-full bg-[#F0F3F5] overflow-hidden">
+        {known && <div className="h-full rounded-full" style={{ width: `${Math.max(2, Math.min(100, pct))}%`, background: tone }} />}
       </div>
-      <div className={'w-16 flex-none text-right text-[12.5px] font-semibold tabular-nums text-[#1a2b24] ' + MONO}>
-        {known ? Math.round(pct) : <span className="text-[#c6ccc2]">—</span>}
+      <div className="text-right text-[12px] font-semibold tabular-nums text-[#0F1F2B]">
+        {known ? Math.round(pct) : <span className="text-[#AEB8C2] font-medium">—</span>}
       </div>
     </div>
   );
 }
-
-/* ─── Exposure Health — dedicated breakdown for the health score (external) ── */
-// The health grade (e.g. F · 52) is the SAME five EASM signals as the residual
-// risk below, read the other way: higher = healthier. Shown for external assets
-// so the health number gets its own breakdown, not just a tile.
-function HealthScoreCard({ assetId }: { assetId: number }) {
-  const q = useQuery({
-    queryKey: ['asset-risk-posture', assetId],
-    queryFn: async () => (await riskPostureApi.asset(assetId)).data as any,
-  });
-  const d = q.data;
-  if (!d || d.mode !== 'easm' || !d.health?.grade) return null;
-  const grade = d.health.grade as string;
-  const hscore = d.health.score as number;
-  const comps = Object.entries(d.components || {}) as [string, any][];
-  const gc = ({ A: '#1a7f5a', B: '#3b7d2f', C: '#b8860b', D: '#c26a1b', F: '#b3261e' } as Record<string, string>)[grade] || '#8a948b';
-  return (
-    <BigCard icon={<Gauge size={15} />} title="Exposure health" subtitle="The same outside-in signals as residual risk, read the other way — higher = healthier.">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="text-[34px] font-semibold leading-none" style={{ color: gc }}>{grade}</span>
-        <span className="text-[15px] font-semibold text-[#1a2b24]">{hscore}<span className="text-[13px] text-[#aab2a8]"> / 100</span></span>
-        <span className="rounded-full px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-wider" style={{ color: gc, background: `${gc}1a` }}>outside-in health</span>
-      </div>
-      <div className="mt-5 space-y-2.5">
-        {comps.map(([k, c]) => {
-          const hp = Math.round((1 - (c.score ?? 0)) * 100);
-          const t = hp >= 60 ? '#1a7f5a' : hp >= 40 ? '#b8860b' : '#b3261e';
-          return <DimBar key={k} label={c.label} sub={c.detail} pct={hp} known tone={t} />;
-        })}
-      </div>
-      <div className="mt-4 flex items-center justify-between border-t border-[#f2f4ef] pt-3 text-[12px] text-[#8a948b]">
-        <span>Weighted composite of {comps.length} exposure signals · higher = healthier.</span>
-      </div>
-    </BigCard>
-  );
-}
-
 
 /* ─── Card 1: Residual Risk (single source: /risk-posture/asset/{id}) ───── */
 
@@ -166,89 +148,142 @@ function ResidualRiskCard({ assetId, asset }: { assetId: number; asset: any }) {
   const score = d?.score ?? null;
   const tone = score != null ? bandTone(score) : null;
   const isEasm = d?.mode === 'easm';
-  // External (EASM) assets return exposure dimensions (tls/headers/transport/
-  // email/vuln) with their own labels; internal assets use the fixed 5 signals.
-  // Build one row list from whichever the posture returned so the bars match.
-  const rows: { key: string; concept: string; dim: string; pct: number; known: boolean; positive: string | null; guideId?: string; guideN?: number }[] = isEasm
-    // Show each signal's CONTRIBUTION to the composite (the bars sum to the score)
-    // rather than its raw 0-100 severity — so "0/6 present" pairs with the points
-    // it ADDS to the risk, not a 100 that reads like a coverage score.
+  const rows: { key: string; concept: string; dim: string; pct: number; known: boolean; positive: string | null; guideId?: string; guideN?: number; weightPct?: number }[] = isEasm
     ? Object.entries(d.components || {}).map(([key, c]: [string, any]) => ({
-        key, concept: c.label || key, dim: c.detail || '', pct: Math.round(d.contributions?.[key] ?? (c.score ?? 0) * 100), known: true, positive: null,
+        key,
+        concept: c.label || key,
+        dim: c.detail || '',
+        pct: Math.round((c.score ?? 0) * 100),
+        known: true,
+        positive: null,
+        weightPct: c.weight_pct ?? Math.round((c.weight ?? 0) * 100),
       }))
     : DIMS.map((x) => {
         const c = d?.components?.[x.key];
         return {
           key: x.key, concept: x.concept, dim: x.dim, pct: (c?.score ?? 0) * 100, known: !!c?.known,
           positive: c?.coverage_pct != null ? `${Math.round(c.coverage_pct)}% of controls cover it`
-            : c?.pass_rate != null ? `${c.pass_rate}% of checks pass` : null,
+            : c?.pass_rate != null ? `${c.pass_rate}% of checks pass`
+            : c?.open_count != null ? `${c.open_count} open`
+            : null,
           guideId: x.guideId, guideN: x.guideN,
         };
       });
   const total = rows.length;
   const knownCount = rows.filter((r) => r.known).length;
+  const cve = d?.cve_detection;
 
-  return (
+  const card = (
     <BigCard
-      icon={<Gauge size={15} />}
-      title="Residual Risk"
-      guide={<GuideMarker id="asset.residualRisk" n={1} />}
+      icon={<AlertTriangle size={15} />}
+      title={isEasm ? 'Compromise risk' : 'Residual Risk'}
+      guide={isEasm ? undefined : <GuideMarker id="asset.residualRisk" n={1} />}
+      subtitle={isEasm ? 'Likelihood × impact: hygiene (one factor) + exploitability + exposure + business context. Not 100 minus health.' : `Weighted composite of ${total} signals · higher = more risk`}
       right={
-        <Link href={`/risk-posture/asset/${assetId}`} className="flex items-center gap-1 text-[12.5px] font-semibold text-[#0d5c48] hover:underline whitespace-nowrap">
+        <Link href={`/risk-posture/asset/${assetId}`} className="flex items-center gap-1 text-[11px] font-semibold text-[#12A085] hover:text-[#17B898] whitespace-nowrap mt-px">
           Full posture <ArrowRight size={12} />
         </Link>
       }
     >
       {q.isLoading ? (
-        <div className="flex items-center gap-2 py-6 text-[13px] text-[#aab2a8]"><Loader2 size={14} className="animate-spin" /> Computing risk…</div>
+        <div className="flex items-center gap-2 py-6 text-[13px] text-[#8A95A1]"><Loader2 size={14} className="animate-spin" /> Computing risk…</div>
       ) : !d ? (
-        <div className="py-6 text-[13px] text-[#aab2a8]">Risk posture is unavailable for this asset.</div>
+        <div className="py-6 text-[13px] text-[#8A95A1]">Risk posture is unavailable for this asset.</div>
       ) : score == null || !tone ? (
-        <div className="py-6 text-[13px] text-[#8a948b]">
+        <div className="py-6 text-[13px] text-[#8A95A1]">
           No risk score yet — this asset hasn’t been assessed. Add CIA ratings, link controls or risks, or run a CIS scan to compute its residual risk.
         </div>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-[34px] font-semibold leading-none" style={{ color: tone.fg }}>{Math.round(score)}</span>
-            <span className="text-[13px] text-[#aab2a8]">/ 100</span>
-            <span className="rounded-full px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-wider" style={{ color: tone.fg, background: tone.bg }}>
-              {d.band?.label ?? tone.label} risk
-            </span>
-            {asset?.internet_facing && <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-[#b42318] bg-[#fdeceb]">exposed</span>}
-            {(asset?.criticality || '').toLowerCase() === 'critical' && <span className="rounded-full px-2.5 py-1 text-[11px] font-semibold text-[#b42318] bg-[#fdeceb]">critical</span>}
+          <div className="grid grid-cols-[128px_minmax(0,1fr)] gap-5 items-center">
+            <div>
+              <div className="relative w-[110px] h-[110px] mx-auto">
+                <Ring pct={score} color={tone.fg} />
+                <div className="absolute inset-0 grid place-items-center text-center">
+                  <div>
+                    <b className="block text-[26px] font-semibold leading-none tabular-nums" style={{ color: tone.fg }}>{Math.round(score)}</b>
+                    <small className="block text-[10px] text-[#AEB8C2] mt-0.5">of 100</small>
+                  </div>
+                </div>
+              </div>
+              <span className="block w-max max-w-full mx-auto mt-[9px] text-center rounded-full px-2.5 py-[2px] text-[10px] font-semibold" style={{ color: tone.fg, background: tone.bg }}>
+                {d.band?.label ?? tone.label} risk
+              </span>
+              {(asset?.internet_facing || (asset?.criticality || '').toLowerCase() === 'critical') && (
+                <div className="flex justify-center gap-1 mt-2 flex-wrap">
+                  {asset?.internet_facing && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-[#B23A3A] bg-[#FBEAEA]">exposed</span>}
+                  {(asset?.criticality || '').toLowerCase() === 'critical' && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold text-[#B23A3A] bg-[#FBEAEA]">critical</span>}
+                </div>
+              )}
+            </div>
+
+            <div className="grid gap-[11px]">
+              {rows.map((r) => (
+                <DimBar
+                  key={r.key}
+                  label={r.concept}
+                  sub={r.positive ? `${r.dim} · ${r.positive}` : r.dim}
+                  pct={r.pct}
+                  known={r.known}
+                  tone={tone.fg}
+                  guideId={r.guideId}
+                  guideN={r.guideN}
+                  weightPct={r.weightPct}
+                />
+              ))}
+            </div>
           </div>
 
-          <div className="mt-5 space-y-2.5">
-            {rows.map((r) => (
-              <DimBar
-                key={r.key}
-                label={r.concept}
-                sub={r.positive ? `${r.dim} · ${r.positive}` : r.dim}
-                pct={r.pct}
-                known={r.known}
-                tone={tone.fg}
-                guideId={r.guideId}
-                guideN={r.guideN}
-              />
-            ))}
-          </div>
-
-          <div className="mt-4 flex items-center justify-between border-t border-[#f2f4ef] pt-3 text-[12px] text-[#8a948b]">
-            <span>Weighted composite of {total} signals · higher = more risk.</span>
-            <span className={'flex items-center gap-1.5 ' + (knownCount < total ? 'text-[#a86a12]' : '')}>
-              {knownCount} of {total} signals known{d.data_quality != null ? ` · ${Math.round(d.data_quality)}% data quality` : ''}
-              <GuideMarker id="posture.dataQuality" n={7} />
+          <div className="mt-3 pt-[11px] border-t border-[#F0F3F5] flex items-center justify-between gap-3 text-[11px] text-[#8A95A1] flex-wrap">
+            <span>
+              <b className="text-[#0F1F2B]">{knownCount} of {total}</b> signals known{d.data_quality != null ? ` · ${Math.round(d.data_quality)}% data quality` : ''}
+              {!isEasm && <GuideMarker id="posture.dataQuality" n={7} />}
             </span>
+            {knownCount < total && (
+              <span className="max-w-[420px]">Unknown signals (no data yet) are excluded from the score rather than counted as zero, so the number isn’t artificially low.</span>
+            )}
           </div>
-          {knownCount < total && (
-            <p className="mt-1 text-[11.5px] text-[#aab2a8]">
-              Unknown signals (no data yet) are excluded from the score rather than counted as zero, so the number isn’t artificially low.
+          {isEasm && cve && (
+            <p className="mt-3 rounded-lg border border-[#F0DCAE] bg-[#FBF2DF] px-3 py-2 text-[11.5px] leading-relaxed text-[#5c4a1a]">
+              <b>How CVEs are detected:</b> {cve.limits || 'Banner → CPE heuristic plus findings already linked to this host. Not an active exploit test.'}
+              {cve.banner_cpe ? ` Banner CPE: ${cve.banner_cpe}.` : ''}
+              {` Linked findings: ${cve.linked_findings ?? 0}${cve.kev_findings ? ` · KEV: ${cve.kev_findings}` : ''}.`}
             </p>
           )}
         </>
       )}
     </BigCard>
+  );
+  if (isEasm) {
+    return <div className="rounded-[17px] border-2 border-[#9A6410] bg-[#FBF2DF] p-0.5">{card}</div>;
+  }
+  return card;
+}
+
+/* ─── Findings banner: open vuln count, feeds the Likelihood signal ────── */
+
+function FindingsBanner({ assetId }: { assetId: number }) {
+  const q = useQuery({
+    queryKey: ['asset-risk-posture', assetId],
+    queryFn: async () => (await riskPostureApi.asset(assetId)).data as any,
+  });
+  const openCount = q.data?.components?.vuln?.open_count;
+  if (openCount == null) return null; // unknown (e.g. EASM assets) — don't fabricate a number
+
+  return (
+    <Link href="/vulnerabilities" className={CARD + ' flex items-center gap-3 px-4 py-[14px] hover:border-[#AEB8C2] transition-colors'}>
+      <div className="w-[34px] h-[34px] rounded-[10px] bg-[#FBEAEA] text-[#B23A3A] grid place-items-center flex-none">
+        <AlertTriangle size={18} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <span className="text-[21px] font-semibold text-[#B23A3A] tabular-nums">{openCount}</span>{' '}
+        <span className="text-[12.5px] font-semibold text-[#0F1F2B]">open finding{openCount === 1 ? '' : 's'}</span>
+        <p className="text-[11px] text-[#8A95A1] mt-0.5">Unresolved vulnerabilities detected on this asset — feeds the Likelihood signal above.</p>
+      </div>
+      <span className="text-[12px] font-semibold text-[#12A085] whitespace-nowrap flex items-center gap-1 flex-none">
+        View in Vulnerabilities <ArrowRight size={12} />
+      </span>
+    </Link>
   );
 }
 
@@ -291,19 +326,19 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
 
   const Row = ({ label, value, set }: { label: string; value: number; set: (n: number) => void }) => (
     <div className="flex items-center gap-3 py-1.5">
-      <span className="w-32 flex-none text-[13px] text-[#3a4a42]">{label}</span>
+      <span className="w-28 flex-none text-[12px] text-[#3A4653]">{label}</span>
       <div className="flex flex-1 gap-1">
         {[1, 2, 3, 4, 5].map((n) => (
           <button
             key={n}
             onClick={() => { set(n); setDirty(true); }}
             title={CIA_LABELS[n]}
-            className="h-6 flex-1 rounded transition-colors"
-            style={{ background: n <= value ? (value >= 4 ? '#C2542E' : value === 3 ? '#C79A2A' : '#B08420') : '#EDECE4' }}
+            className="h-[22px] flex-1 rounded transition-colors"
+            style={{ background: n <= value ? (value >= 4 ? '#B23A3A' : value === 3 ? '#9A6410' : '#2E63A8') : '#F0F3F5' }}
           />
         ))}
       </div>
-      <span className="w-16 flex-none text-right text-[12px] font-semibold text-[#3a4a42]">{value ? CIA_LABELS[value] : '—'}</span>
+      <span className="w-16 flex-none text-right text-[11.5px] font-semibold text-[#3A4653]">{value ? CIA_LABELS[value] : '—'}</span>
     </div>
   );
 
@@ -313,7 +348,7 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
       title="CIA Impact Ratings"
       guide={<GuideMarker id="asset.cia" n={8} />}
       right={
-        <span className="rounded-full bg-[#f0f2ee] border border-[#e0e4dc] px-2 py-0.5 text-[10.5px] font-semibold uppercase tracking-wider text-[#5c6b62] whitespace-nowrap">
+        <span className="rounded-full bg-[#F1F4F6] px-2 py-0.5 text-[10.5px] font-semibold text-[#6B7787] whitespace-nowrap">
           {asset.criticality_manual_override ? 'manual override' : 'auto-derived'}
         </span>
       }
@@ -323,21 +358,21 @@ function CIACard({ assetId, asset }: { assetId: number; asset: any }) {
       <Row label="Availability" value={a} set={setA} />
 
       {rationale && (
-        <p className="mt-3 rounded-lg bg-[#eef4f1] border border-[#d7e6de] px-3 py-2 text-[12px] leading-relaxed text-[#134a3a]">
+        <p className="mt-3 rounded-lg bg-[#E4F8F2] px-3 py-2 text-[12px] leading-relaxed text-[#0F1F2B]">
           <b>AI:</b> {rationale}
         </p>
       )}
 
-      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#f2f4ef] pt-3">
+      <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-[#F0F3F5] pt-3">
         <button onClick={() => suggest.mutate()} disabled={suggest.isPending} className={BTN_GHOST}>
           {suggest.isPending ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />} AI suggest
         </button>
         <button onClick={() => save.mutate()} disabled={!dirty || save.isPending} className={BTN_PRIMARY}>
           {save.isPending ? <Loader2 size={12} className="animate-spin" /> : <ShieldCheck size={12} />} Save &amp; recalculate
         </button>
-        {save.isSuccess && !dirty && <span className="text-[12px] text-[#0f7a5c]">Saved — risk recalculated.</span>}
+        {save.isSuccess && !dirty && <span className="text-[12px] text-[#1F7A54]">Saved — risk recalculated.</span>}
       </div>
-      <p className="mt-2 text-[11px] text-[#aab2a8]">
+      <p className="mt-2 text-[11px] text-[#AEB8C2]">
         Saving updates the asset’s derived criticality and re-scores its risk. CIA is edited here only — the one place it lives.
       </p>
     </BigCard>
@@ -359,29 +394,29 @@ function CISCard({ assetId, onOpenCompliance }: { assetId: number; onOpenComplia
       icon={<Cpu size={15} />}
       title="CIS Benchmark Compliance"
       guide={<GuideMarker id="asset.cisGap" n={9} />}
-      subtitle={'Continuously monitored · feeds the “Hardening gap” signal above.'}
+      subtitle={'Continuously monitored · feeds the "Hardening gap" signal above.'}
       right={onOpenCompliance ? (
-        <button onClick={onOpenCompliance} className="flex items-center gap-1 text-[12.5px] font-semibold text-[#0d5c48] hover:underline whitespace-nowrap">
+        <button onClick={onOpenCompliance} className="flex items-center gap-1 text-[11px] font-semibold text-[#12A085] hover:text-[#17B898] whitespace-nowrap">
           Full scans <ArrowRight size={12} />
         </button>
       ) : undefined}
     >
       {!cis || !cis.known ? (
-        <div className="flex items-start gap-2 rounded-lg border border-dashed border-[#dfe3db] bg-[#fafbf8] px-4 py-3 text-[12.5px] text-[#8a948b]">
+        <div className="flex items-start gap-2 rounded-lg border border-dashed border-[#E8ECEE] bg-[#F4F6F7] px-4 py-3 text-[12.5px] text-[#8A95A1]">
           <AlertCircle size={14} className="mt-0.5 flex-none" />
           No CIS benchmark has been scanned against this asset yet. Run a scan from the Compliance tab to populate this.
         </div>
       ) : (
         <>
           <div className="flex items-baseline gap-2">
-            <span className="text-[24px] font-extrabold text-[#1a2b24]">{hardening ?? '—'}</span>
-            <span className="text-[13px] text-[#aab2a8]">/ 100 hardening</span>
+            <span className="text-[22px] font-semibold text-[#0F1F2B] tabular-nums">{hardening ?? '—'}</span>
+            <span className="text-[12px] text-[#8A95A1]">/ 100 hardening</span>
           </div>
-          <div className="mt-3 flex flex-wrap gap-4 text-[13px]">
-            <span className="text-[#0f7a5c]"><b>{cis.passed ?? 0}</b> pass</span>
-            <span className="text-[#b42318]"><b>{cis.failed ?? 0}</b> fail</span>
-            {cis.total != null && <span className="text-[#8a948b]">of {cis.total} checks</span>}
-            {cis.ip_group_augmented && <span className="text-[#aab2a8]">· blended with co-located assets</span>}
+          <div className="mt-3 flex flex-wrap gap-4 text-[12.5px]">
+            <span className="text-[#1F7A54]"><b>{cis.passed ?? 0}</b> pass</span>
+            <span className="text-[#B23A3A]"><b>{cis.failed ?? 0}</b> fail</span>
+            {cis.total != null && <span className="text-[#8A95A1]">of {cis.total} checks</span>}
+            {cis.ip_group_augmented && <span className="text-[#AEB8C2]">· blended with co-located assets</span>}
           </div>
         </>
       )}
@@ -389,11 +424,15 @@ function CISCard({ assetId, onOpenCompliance }: { assetId: number; onOpenComplia
   );
 }
 
-/* ─── Manage: Linked Controls (props-driven, was ControlsTab) ──────────── */
+/* ─── Mapped Controls: coverage ring + table (was ControlsSection) ─────── */
 
 type CtrlLink = { id: number; code?: string; internal_control_id?: number; name: string; category?: string; coverage_status?: string };
 
-function ControlsSection({
+const KIND_LABEL: Record<'internal' | 'framework' | 'legacy', string> = {
+  internal: 'Internal Control', framework: 'Framework Control', legacy: 'Legacy Control',
+};
+
+function MappedControlsCard({
   asset, allControls, controlsLoading, coveragePctFromApi,
   onLinkControl, isLinkingControl,
   onUnlinkInternalControl, onUnlinkFrameworkControl, isUnlinkingInternal, isUnlinkingFramework,
@@ -417,56 +456,43 @@ function ControlsSection({
       label: c.internal_id ? `${c.internal_id} — ${c.name}` : c.name,
       subLabel: c.category,
     }));
-  const totalControls =
-    (asset.linked_controls?.length || 0) +
-    (asset.linked_internal_controls?.length || 0) +
-    (asset.linked_framework_controls?.length || 0);
 
-  const all: CtrlLink[] = [...(asset.linked_internal_controls || []), ...(asset.linked_framework_controls || []), ...(asset.linked_controls || [])];
-  const fullCount = all.filter((c) => c.coverage_status === 'full').length;
-  const partialCount = all.filter((c) => c.coverage_status === 'partial').length;
-
-  const Row = ({ icon, code, name, category, status, onUnlink, disabled }: { icon: React.ReactNode; code?: string; name: string; category?: string; status?: string; onUnlink?: () => void; disabled?: boolean }) => (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-[#eceee8] bg-[#fafbf8] px-3.5 py-2.5">
-      <div className="flex items-center gap-3 min-w-0">
-        <span className="text-[#0d5c48] flex-none">{icon}</span>
-        <div className="min-w-0">
-          {code && <span className={'text-[11px] font-bold text-[#0d5c48] ' + MONO}>{code}</span>}
-          <p className="text-[13px] font-semibold text-[#1a2b24] break-words">{name}</p>
-          {category && <span className="text-[11px] text-[#8a948b]">{category}</span>}
-        </div>
-        {status !== undefined && (
-          <span className={`rounded-md border px-2 py-0.5 text-[10.5px] font-semibold whitespace-nowrap ${covBadge(status)}`}>
-            {status || 'Not set'}
-          </span>
-        )}
-      </div>
-      {onUnlink && (
-        <button onClick={onUnlink} disabled={disabled} className="rounded p-1 text-[#97a19a] hover:text-[#b42318] disabled:opacity-50 flex-none" title="Unlink Control">
-          <X className="h-4 w-4" />
-        </button>
-      )}
-    </div>
-  );
+  type Row = CtrlLink & { kind: 'internal' | 'framework' | 'legacy' };
+  const rows: Row[] = [
+    ...(asset.linked_internal_controls || []).map((c) => ({ ...c, kind: 'internal' as const })),
+    ...(asset.linked_framework_controls || []).map((c) => ({ ...c, kind: 'framework' as const })),
+    ...(asset.linked_controls || []).map((c) => ({ ...c, kind: 'legacy' as const })),
+  ];
+  const totalControls = rows.length;
+  const pct = coveragePctFromApi ?? null;
+  const ringColor = pct == null ? '#AEB8C2' : pct < 40 ? '#B23A3A' : pct < 70 ? '#9A6410' : '#1F7A54';
 
   return (
-    <div className="space-y-5">
-      {/* coverage summary + link CTA */}
-      <div className="rounded-2xl border border-[#e6e9e3] bg-[#f4f7f3] p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex-1 min-w-0">
-            <h3 className="flex items-center gap-2 text-[15px] font-extrabold text-[#1a2b24]">
-              <Shield className="h-5 w-5 text-[#0d5c48]" />
-              Linked Controls
-              <span className="rounded-full bg-[#e7f6ee] border border-[#c3ead2] px-2 py-0.5 text-[11px] font-bold text-[#0f7a5c]">{totalControls}</span>
-            </h3>
-            <p className="mt-1 text-[12px] text-[#5c6b62]">
-              Controls applied to this asset across Internal Controls, Framework Controls, and the Normalized
-              Control Library. Linking more controls reduces this asset’s contribution to the tenant’s risk score.
-            </p>
+    <div className={CARD}>
+      <div className="flex flex-wrap items-start justify-between gap-3.5 px-4 py-[14px] border-b border-[#F0F3F5]">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-[14px] font-semibold text-[#0F1F2B]">
+            <Shield size={15} className="text-[#8A95A1]" />
+            Mapped Controls
+            <span className="rounded-full bg-[#F1F4F6] text-[#6B7787] px-2 py-0.5 text-[11px] font-bold">{totalControls}</span>
+          </h3>
+          <p className="text-[11px] text-[#8A95A1] mt-[3px] max-w-[420px]">
+            Controls applied to this asset across Internal Controls, Framework Controls, and the Normalized Control Library. Mapping more reduces this asset’s contribution to the tenant’s risk score.
+          </p>
+        </div>
+        <div className="flex items-center gap-4 flex-none">
+          <div>
+            <div className="relative w-14 h-14">
+              <Ring pct={pct ?? 0} size={56} stroke={9} color={ringColor} />
+              <div className="absolute inset-0 grid place-items-center text-[13px] font-bold tabular-nums" style={{ color: ringColor }}>
+                {pct != null ? `${Math.round(pct)}%` : '—'}
+              </div>
+            </div>
+            <div className="text-[9.5px] text-[#8A95A1] text-center mt-[3px]">coverage</div>
           </div>
           <InlineLinkPicker
-            triggerLabel="+ Link Control"
+            triggerLabel="+ Map Control"
+            triggerClassName={BTN_PRIMARY}
             items={controlPickerItems}
             isLoading={controlsLoading || isLinkingControl}
             emptyText="No controls available"
@@ -474,74 +500,73 @@ function ControlsSection({
             onSelect={(value) => onLinkControl(Number(value))}
           />
         </div>
-
-        {totalControls > 0 && (
-          <div className="mt-3 flex flex-wrap gap-4 text-[11px] text-[#5c6b62]">
-            {fullCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-[#0f9d78] mr-1 align-middle" />{fullCount} fully covered</span>}
-            {partialCount > 0 && <span><span className="inline-block h-2 w-2 rounded-full bg-[#d9a441] mr-1 align-middle" />{partialCount} partial</span>}
-            {totalControls > fullCount + partialCount && (
-              <span><span className="inline-block h-2 w-2 rounded-full bg-[#aab2a8] mr-1 align-middle" />{totalControls - fullCount - partialCount} not rated</span>
-            )}
-          </div>
-        )}
       </div>
 
-      {asset.linked_internal_controls && asset.linked_internal_controls.length > 0 && (
-        <div>
-          <h4 className="mb-3 text-[10px] font-bold tracking-[0.05em] uppercase text-[#8a948b]">Risk Management Internal Controls</h4>
-          <div className="space-y-2">
-            {asset.linked_internal_controls.map((control) => (
-              <Row
-                key={control.id}
-                icon={<ShieldCheck className="h-5 w-5" />}
-                code={control.code || `IC-${control.internal_control_id}`}
-                name={control.name}
-                category={control.category}
-                status={control.coverage_status}
-                onUnlink={() => onUnlinkInternalControl(control.id)}
-                disabled={isUnlinkingInternal}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {asset.linked_framework_controls && asset.linked_framework_controls.length > 0 && (
-        <div>
-          <h4 className="mb-3 text-[10px] font-bold tracking-[0.05em] uppercase text-[#8a948b]">Framework Controls</h4>
-          <div className="space-y-2">
-            {asset.linked_framework_controls.map((control) => (
-              <Row
-                key={control.id}
-                icon={<Shield className="h-5 w-5" />}
-                code={control.code}
-                name={control.name}
-                status={control.coverage_status}
-                onUnlink={() => onUnlinkFrameworkControl(control.id)}
-                disabled={isUnlinkingFramework}
-              />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {asset.linked_controls && asset.linked_controls.length > 0 && (
-        <div>
-          <h4 className="mb-3 text-[10px] font-bold tracking-[0.05em] uppercase text-[#8a948b]">Legacy Normalized Controls</h4>
-          <div className="space-y-2">
-            {asset.linked_controls.map((control) => (
-              <Row key={control.id} icon={<ShieldCheck className="h-5 w-5" />} code={control.code} name={control.name} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {totalControls === 0 && (
-        <p className="rounded-lg border border-dashed border-[#dfe3db] bg-[#fafbf8] px-4 py-3 text-[12.5px] text-[#8a948b]">
-          No controls linked yet — this dimension is treated as unmeasured and left out of the score.
-          Use <span className="font-semibold text-[#1a2b24]">+ Link Control</span> above to start scoring it.
-        </p>
-      )}
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr>
+              {['Control', 'Framework', 'Status', 'Coverage'].map((h) => (
+                <th key={h} className="text-[9.5px] uppercase tracking-[0.04em] text-[#8A95A1] text-left font-semibold px-4 py-[9px] border-b border-[#F0F3F5] whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {totalControls === 0 ? (
+              <tr><td colSpan={4}>
+                <div className="py-[30px] px-4 text-center">
+                  <div className="w-9 h-9 rounded-[11px] bg-[#F0F3F5] text-[#AEB8C2] grid place-items-center mx-auto mb-2.5">
+                    <ShieldCheck size={18} />
+                  </div>
+                  <p className="text-[12px] text-[#8A95A1] inline-flex items-center gap-1.5 flex-wrap justify-center">
+                    No controls mapped yet ·
+                    <InlineLinkPicker
+                      triggerLabel="Map controls →"
+                      triggerIcon={<></>}
+                      triggerClassName="text-[12px] font-semibold text-[#12A085] hover:text-[#17B898]"
+                      items={controlPickerItems}
+                      isLoading={controlsLoading || isLinkingControl}
+                      emptyText="No controls available"
+                      searchPlaceholder="Search controls"
+                      onSelect={(value) => onLinkControl(Number(value))}
+                    />
+                  </p>
+                </div>
+              </td></tr>
+            ) : (
+              rows.map((c, idx) => {
+                const status = covBadge(c.coverage_status);
+                const onUnlink = c.kind === 'internal' ? () => onUnlinkInternalControl(c.id)
+                  : c.kind === 'framework' ? () => onUnlinkFrameworkControl(c.id)
+                  : undefined;
+                const unlinking = c.kind === 'internal' ? isUnlinkingInternal : isUnlinkingFramework;
+                return (
+                  <tr key={`${c.kind}-${c.id}-${idx}`} className="border-b border-[#F0F3F5] last:border-0 hover:bg-[#F4F6F7]">
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2 justify-between">
+                        <div className="min-w-0">
+                          {c.code && <span className={'block text-[10.5px] font-bold text-[#12A085] ' + MONO}>{c.code}</span>}
+                          <p className="text-[12px] font-semibold text-[#0F1F2B] truncate">{c.name}</p>
+                        </div>
+                        {onUnlink && (
+                          <button onClick={onUnlink} disabled={unlinking} className="rounded p-1 text-[#AEB8C2] hover:text-[#B23A3A] disabled:opacity-50 flex-none" title="Unlink Control">
+                            <X size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                    <td className="px-4 py-2.5 text-[11.5px] text-[#3A4653] whitespace-nowrap">{c.category || KIND_LABEL[c.kind]}</td>
+                    <td className="px-4 py-2.5">
+                      <span className={'rounded-full px-2 py-[2px] text-[10.5px] font-semibold ' + status.cls}>{status.label}</span>
+                    </td>
+                    <td className="px-4 py-2.5 text-[11.5px] text-[#3A4653] capitalize whitespace-nowrap">{c.coverage_status || '—'}</td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -550,32 +575,32 @@ function ControlsSection({
 
 function RisksSection({ asset }: { asset: RisksPanelAsset }) {
   return (
-    <div className="space-y-4">
-      <h3 className="flex items-center gap-2 text-[15px] font-extrabold text-[#1a2b24]">
-        <AlertTriangle className="h-5 w-5 text-[#0d5c48]" />
+    <div className="space-y-3">
+      <h3 className="flex items-center gap-2 text-[13px] font-semibold text-[#0F1F2B]">
+        <AlertTriangle size={16} className="text-[#12A085]" />
         Associated Risks
-        <span className="rounded-full bg-[#f0f2ee] border border-[#e0e4dc] px-2 py-0.5 text-[11px] font-bold text-[#5c6b62]">{asset.linked_risks?.length || 0}</span>
+        <span className="rounded-full bg-[#F1F4F6] px-2 py-0.5 text-[11px] font-bold text-[#6B7787]">{asset.linked_risks?.length || 0}</span>
       </h3>
 
       {asset.linked_risks && asset.linked_risks.length > 0 ? (
         <div className="space-y-2">
           {asset.linked_risks.map((risk) => (
-            <div key={risk.risk_id} className="flex items-center justify-between gap-3 rounded-xl border border-[#eceee8] bg-[#fafbf8] px-3.5 py-2.5">
+            <div key={risk.risk_id} className="flex items-center justify-between gap-3 rounded-xl border border-[#F0F3F5] bg-[#F4F6F7] px-3.5 py-2.5">
               <div className="flex items-center gap-3 min-w-0">
-                <AlertTriangle className="h-5 w-5 text-[#d9a441] flex-none" />
+                <AlertTriangle size={16} className="text-[#9A6410] flex-none" />
                 <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-[#1a2b24] break-words">{risk.title || `Risk #${risk.risk_id}`}</p>
-                  <p className="text-[11px] text-[#8a948b]">Risk ID: {risk.risk_id}{risk.status ? ` • ${risk.status}` : ''}</p>
+                  <p className="text-[12.5px] font-semibold text-[#0F1F2B] break-words">{risk.title || `Risk #${risk.risk_id}`}</p>
+                  <p className="text-[11px] text-[#8A95A1]">Risk ID: {risk.risk_id}{risk.status ? ` • ${risk.status}` : ''}</p>
                 </div>
               </div>
-              <Link href={`/erm/risks/${risk.risk_id}`} className="text-[12.5px] font-semibold text-[#0d5c48] hover:underline whitespace-nowrap">
+              <Link href={`/erm/risks/${risk.risk_id}`} className="text-[12px] font-semibold text-[#12A085] hover:text-[#17B898] whitespace-nowrap">
                 View Details
               </Link>
             </div>
           ))}
         </div>
       ) : (
-        <p className="rounded-lg border border-dashed border-[#dfe3db] bg-[#fafbf8] px-4 py-3 text-[12.5px] text-[#8a948b]">
+        <p className="rounded-lg border border-dashed border-[#E8ECEE] bg-[#F4F6F7] px-4 py-3 text-[12.5px] text-[#8A95A1]">
           No risks linked to this asset. Risks are linked from the risk register.
         </p>
       )}
@@ -680,14 +705,14 @@ function MappingRecommendationsSection({ assetId }: { assetId: number }) {
 
   if (recsQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center rounded-2xl border border-[#e6e9e3] bg-white py-12">
+      <div className="flex items-center justify-center rounded-[15px] border border-[#E8ECEE] bg-white py-12">
         <PageLoader size="sm" />
       </div>
     );
   }
   if (recsQuery.error) {
     return (
-      <div className="rounded-lg border border-[#f3cfcb] bg-[#fdf1f0] p-4 text-[13px] text-[#b42318]">
+      <div className="rounded-lg bg-[#FBEAEA] p-4 text-[13px] text-[#B23A3A]">
         Failed to load mapping recommendations.
       </div>
     );
@@ -696,49 +721,49 @@ function MappingRecommendationsSection({ assetId }: { assetId: number }) {
   return (
     <div className="space-y-4">
       {bannerMessage && (
-        <div className="flex items-center justify-between rounded-lg border border-[#c3ead2] bg-[#e7f6ee] px-3 py-2 text-[13px] text-[#0f6b4f]">
+        <div className="flex items-center justify-between rounded-lg bg-[#E7F5EE] px-3 py-2 text-[13px] text-[#1F7A54]">
           <span>{bannerMessage}</span>
-          <button type="button" onClick={() => setBannerMessage(null)} className="text-[#0f7a5c] hover:text-[#0d5c48]" aria-label="Dismiss">
+          <button type="button" onClick={() => setBannerMessage(null)} className="text-[#1F7A54] hover:text-[#12A085]" aria-label="Dismiss">
             <X className="h-4 w-4" />
           </button>
         </div>
       )}
 
-      <h3 className="flex items-center gap-2 text-[15px] font-extrabold text-[#1a2b24]">
-        <Sparkles className="h-4 w-4 text-[#d9a441]" />
+      <h3 className="flex items-center gap-2 text-[13px] font-semibold text-[#0F1F2B]">
+        <Sparkles className="h-4 w-4 text-[#9A6410]" />
         Auto-suggested framework controls
       </h3>
 
-      <div className="rounded-2xl border border-[#e6e9e3] bg-[#f4f7f3] p-3">
+      <div className="rounded-[15px] border border-[#E8ECEE] bg-[#F4F6F7] p-3">
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-[12px] text-[#3a4a42]">
-            <Filter className="h-3.5 w-3.5 text-[#8a948b]" />
+          <label className="flex items-center gap-2 text-[12px] text-[#3A4653]">
+            <Filter className="h-3.5 w-3.5 text-[#8A95A1]" />
             Framework
             <select
               value={frameworkFilter}
               onChange={(e) => setFrameworkFilter(e.target.value === '' ? '' : Number(e.target.value))}
-              className="rounded-lg border border-[#dfe3db] bg-white px-2 py-1 text-[12px] text-[#1a2b24] focus:border-[#0d5c48] focus:outline-none"
+              className="rounded-[9px] border border-[#E8ECEE] bg-white px-2 py-1 text-[12px] text-[#0F1F2B] focus:border-[#17B898] focus:outline-none"
             >
               <option value="">All</option>
               {frameworkOptions.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
             </select>
           </label>
-          <label className="flex items-center gap-2 text-[12px] text-[#3a4a42]">
+          <label className="flex items-center gap-2 text-[12px] text-[#3A4653]">
             Min score
-            <input type="range" min={1} max={12} value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="h-1 w-32 accent-[#0d5c48]" />
-            <span className="w-6 text-center font-semibold text-[#1a2b24]">{minScore}</span>
+            <input type="range" min={1} max={12} value={minScore} onChange={(e) => setMinScore(Number(e.target.value))} className="h-1 w-32 accent-[#17B898]" />
+            <span className="w-6 text-center font-semibold text-[#0F1F2B]">{minScore}</span>
           </label>
-          <label className="flex items-center gap-2 text-[12px] text-[#3a4a42]">
-            <input type="checkbox" checked={includeLinked} onChange={(e) => setIncludeLinked(e.target.checked)} className="h-3.5 w-3.5 rounded border-[#dfe3db] text-[#0d5c48] focus:ring-[#0d5c48]" />
+          <label className="flex items-center gap-2 text-[12px] text-[#3A4653]">
+            <input type="checkbox" checked={includeLinked} onChange={(e) => setIncludeLinked(e.target.checked)} className="h-3.5 w-3.5 rounded border-[#E8ECEE] text-[#17B898] focus:ring-[#17B898]" />
             Include already-linked
           </label>
           <div className="ml-auto flex items-center gap-2">
-            <label className="flex items-center gap-1.5 text-[12px] text-[#3a4a42]">
+            <label className="flex items-center gap-1.5 text-[12px] text-[#3A4653]">
               Link as
               <select
                 value={coverageStatus}
                 onChange={(e) => setCoverageStatus(e.target.value as 'partial' | 'full' | 'minimal')}
-                className="rounded-lg border border-[#dfe3db] bg-white px-2 py-1 text-[12px] text-[#1a2b24] focus:border-[#0d5c48] focus:outline-none"
+                className="rounded-[9px] border border-[#E8ECEE] bg-white px-2 py-1 text-[12px] text-[#0F1F2B] focus:border-[#17B898] focus:outline-none"
               >
                 <option value="partial">Partial</option>
                 <option value="full">Full</option>
@@ -759,9 +784,9 @@ function MappingRecommendationsSection({ assetId }: { assetId: number }) {
       </div>
 
       {recs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#dfe3db] bg-[#fafbf8] py-10 px-4 text-center">
-          <ShieldCheck className="mb-3 h-10 w-10 text-[#c6ccc2]" />
-          <h4 className="text-[15px] font-semibold text-[#1a2b24]">No recommendations</h4>
+        <div className="flex flex-col items-center justify-center rounded-[15px] border border-dashed border-[#E8ECEE] bg-[#F4F6F7] py-10 px-4 text-center">
+          <ShieldCheck className="mb-3 h-10 w-10 text-[#AEB8C2]" />
+          <h4 className="text-[15px] font-semibold text-[#0F1F2B]">No recommendations</h4>
         </div>
       ) : (
         (['high', 'medium', 'low'] as const).map((band) => {
@@ -769,37 +794,37 @@ function MappingRecommendationsSection({ assetId }: { assetId: number }) {
           if (list.length === 0) return null;
           const cls = BAND[band];
           return (
-            <div key={band} className="overflow-hidden rounded-2xl border border-[#e6e9e3] bg-white">
-              <div className={`flex items-center justify-between border-b border-[#eceee8] ${cls.headerBg} px-3 py-2`}>
+            <div key={band} className="overflow-hidden rounded-[15px] border border-[#E8ECEE] bg-white">
+              <div className={`flex items-center justify-between border-b border-[#F0F3F5] ${cls.headerBg} px-3 py-2`}>
                 <div className="flex items-center gap-2">
                   <span className={`inline-flex h-5 items-center rounded-full px-2 text-[11px] font-semibold capitalize ${cls.pill}`}>
                     {band} confidence
                   </span>
-                  <span className="text-[12px] text-[#5c6b62]">{list.length} control{list.length === 1 ? '' : 's'}</span>
+                  <span className="text-[12px] text-[#3A4653]">{list.length} control{list.length === 1 ? '' : 's'}</span>
                 </div>
-                <button type="button" onClick={() => selectAllOfConfidence(band)} className="text-[12px] font-semibold text-[#0d5c48] hover:underline">
+                <button type="button" onClick={() => selectAllOfConfidence(band)} className="text-[12px] font-semibold text-[#12A085] hover:underline">
                   Select all
                 </button>
               </div>
-              <ul className="divide-y divide-[#f2f4ef]">
+              <ul className="divide-y divide-[#F0F3F5]">
                 {list.map((r) => {
                   const isSelected = selectedIds.has(r.framework_control_id);
                   const isExpanded = expandedId === r.framework_control_id;
                   return (
-                    <li key={r.framework_control_id} className={isSelected ? 'bg-[#eef4f1]' : ''}>
+                    <li key={r.framework_control_id} className={isSelected ? 'bg-[#E4F8F2]' : ''}>
                       <div className="flex items-start gap-3 px-3 py-2.5">
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => toggle(r.framework_control_id)}
-                          className="mt-1 h-4 w-4 rounded border-[#dfe3db] text-[#0d5c48] focus:ring-[#0d5c48]"
+                          className="mt-1 h-4 w-4 rounded border-[#E8ECEE] text-[#17B898] focus:ring-[#17B898]"
                         />
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <span className={'rounded bg-[#f0f2ee] px-1.5 py-0.5 text-[11px] text-[#3a4a42] ' + MONO}>{r.code}</span>
-                            <span className="text-[13px] font-semibold text-[#1a2b24]">{r.name}</span>
+                            <span className={'rounded bg-[#F1F4F6] px-1.5 py-0.5 text-[11px] text-[#3A4653] ' + MONO}>{r.code}</span>
+                            <span className="text-[13px] font-semibold text-[#0F1F2B]">{r.name}</span>
                             {r.framework_short_code && (
-                              <span className="inline-flex items-center gap-1 rounded-full border border-[#e0e4dc] px-2 py-0.5 text-[11px] text-[#5c6b62]">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-[#E8ECEE] px-2 py-0.5 text-[11px] text-[#6B7787]">
                                 <Layers className="h-3 w-3" />
                                 {r.framework_short_code}
                               </span>
@@ -810,18 +835,18 @@ function MappingRecommendationsSection({ assetId }: { assetId: number }) {
                           </div>
                           <div className="mt-1.5 flex flex-wrap gap-1">
                             {r.matched_signals.map((s) => (
-                              <span key={s.key} title={`+${s.weight}`} className="inline-flex items-center rounded-full bg-[#e7f6ee] px-2 py-0.5 text-[11px] text-[#0f6b4f]">
+                              <span key={s.key} title={`+${s.weight}`} className="inline-flex items-center rounded-full bg-[#E7F5EE] px-2 py-0.5 text-[11px] text-[#1F7A54]">
                                 {s.label}
                               </span>
                             ))}
                             {r.negative_notes.map((n, i) => (
-                              <span key={`n-${i}`} className="inline-flex items-center rounded-full bg-[#fdeceb] px-2 py-0.5 text-[11px] text-[#b42318]">
+                              <span key={`n-${i}`} className="inline-flex items-center rounded-full bg-[#FBEAEA] px-2 py-0.5 text-[11px] text-[#B23A3A]">
                                 {n}
                               </span>
                             ))}
                           </div>
                           {isExpanded && r.statement && (
-                            <p className="mt-2 rounded-md bg-[#fafbf8] border border-[#eceee8] p-2 text-[12px] leading-relaxed text-[#3a4a42]">
+                            <p className="mt-2 rounded-md bg-[#F4F6F7] border border-[#F0F3F5] p-2 text-[12px] leading-relaxed text-[#3A4653]">
                               {r.statement}
                             </p>
                           )}
@@ -830,7 +855,7 @@ function MappingRecommendationsSection({ assetId }: { assetId: number }) {
                           <button
                             type="button"
                             onClick={() => setExpandedId(isExpanded ? null : r.framework_control_id)}
-                            className="rounded p-1 text-[#97a19a] hover:bg-[#f0f2ee] hover:text-[#3a4a42]"
+                            className="rounded p-1 text-[#8A95A1] hover:bg-[#F1F4F6] hover:text-[#3A4653]"
                             title={isExpanded ? 'Collapse' : 'Show statement'}
                           >
                             {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -839,7 +864,7 @@ function MappingRecommendationsSection({ assetId }: { assetId: number }) {
                             type="button"
                             disabled={acceptMutation.isPending}
                             onClick={() => acceptOne(r.framework_control_id)}
-                            className="inline-flex items-center gap-1 rounded-lg border border-[#dfe3db] bg-white px-2 py-1 text-[12px] text-[#3a4a42] hover:bg-[#f9faf8] disabled:opacity-50"
+                            className="inline-flex items-center gap-1 rounded-[9px] border border-[#E8ECEE] bg-white px-2 py-1 text-[12px] text-[#3A4653] hover:bg-[#F4F6F7] disabled:opacity-50"
                           >
                             <Plus className="h-3 w-3" /> Link
                           </button>
@@ -874,6 +899,9 @@ export interface RisksPanelAsset {
   availability_rating?: number;
   criticality_manual_override?: boolean;
   internet_facing?: boolean;
+  last_seen_source?: string | null;
+  origin_source?: string | null;
+  platform_properties?: any;
   linked_controls?: CtrlLink[];
   linked_internal_controls?: CtrlLink[];
   linked_framework_controls?: CtrlLink[];
@@ -905,41 +933,50 @@ export default function RisksPanel({
   // External (EASM) assets have no CIA ratings or CIS baseline — those two
   // editable cards don't apply; the Residual Risk card shows the exposure
   // dimensions that do.
-  const isExternal = !!(asset?.platform_properties?.external_probe) || asset?.last_seen_source === 'external';
+  const isExternal = !!(asset?.platform_properties?.external_probe) || asset?.last_seen_source === 'external' || asset?.origin_source === 'easm';
   return (
-    <div className="space-y-4 font-['Public_Sans',system-ui,sans-serif] text-[#1a2b24]">
-      {/* The three cards mirror the reference product exactly, from OUR single
-          source of truth (/risk-posture/asset/{id}). */}
-      {isExternal && <HealthScoreCard assetId={assetId} />}
+    <div className="space-y-3.5 font-sans text-[13.5px] text-[#0F1F2B]">
+      {isExternal && (
+        <div className="rounded-[13px] border border-[#2E63A8] bg-[#E9F1FB] px-4 py-3">
+          <div className="text-[11px] font-bold tracking-[0.06em] uppercase text-[#2E63A8]">Public attack surface</div>
+          <p className="mt-0.5 text-[12.5px] text-[#3A4653]">
+            This host was found from the internet. This tab shows its compromise risk. The configuration-hygiene score and its per-parameter breakdown live on the <b>Overview</b> tab — click the hygiene card there. Internal CIA / CIS scores do not apply.
+          </p>
+        </div>
+      )}
+
+      {/* Reproduces RiskControls.html main content 1:1: ring + dimension
+          bars, findings banner, mapped-controls table with coverage ring. */}
       <ResidualRiskCard assetId={assetId} asset={asset} />
+      <FindingsBanner assetId={assetId} />
+      <MappedControlsCard
+        asset={asset}
+        allControls={allControls}
+        controlsLoading={controlsLoading}
+        coveragePctFromApi={coveragePctFromApi}
+        onLinkControl={onLinkControl}
+        isLinkingControl={isLinkingControl}
+        onUnlinkInternalControl={onUnlinkInternalControl}
+        onUnlinkFrameworkControl={onUnlinkFrameworkControl}
+        isUnlinkingInternal={isUnlinkingInternal}
+        isUnlinkingFramework={isUnlinkingFramework}
+      />
+
       {!isExternal && (
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid gap-3.5 lg:grid-cols-2">
           <CIACard assetId={assetId} asset={asset} />
           <CISCard assetId={assetId} onOpenCompliance={onOpenCompliance} />
         </div>
       )}
 
-      {/* Below the fold: management the reference cannot do — link controls and
-          risks, accept mapping suggestions. Subordinate, never restates a
-          headline number the cards above already show. */}
-      <div className="mt-6 border-t-2 border-[#e6e9e3] pt-5">
-        <div className="mb-4">
-          <div className="text-[11px] font-extrabold tracking-[0.07em] uppercase text-[#5c6b62]">Manage</div>
-          <p className="mt-0.5 text-[12.5px] text-[#aab2a8]">What feeds the scores above — link controls and risks to this asset.</p>
+      {/* Below the fold: real management the mock doesn't show — associated
+          risks and AI-suggested mappings. */}
+      <div className="mt-5 border-t-2 border-[#E8ECEE] pt-4">
+        <div className="mb-3">
+          <div className="text-[11px] font-bold tracking-[0.06em] uppercase text-[#3A4653]">Manage</div>
+          <p className="mt-0.5 text-[12px] text-[#8A95A1]">What else feeds the scores above — linked risks and AI-suggested control mappings.</p>
         </div>
-        <div className="space-y-6">
-          <ControlsSection
-            asset={asset}
-            allControls={allControls}
-            controlsLoading={controlsLoading}
-            coveragePctFromApi={coveragePctFromApi}
-            onLinkControl={onLinkControl}
-            isLinkingControl={isLinkingControl}
-            onUnlinkInternalControl={onUnlinkInternalControl}
-            onUnlinkFrameworkControl={onUnlinkFrameworkControl}
-            isUnlinkingInternal={isUnlinkingInternal}
-            isUnlinkingFramework={isUnlinkingFramework}
-          />
+        <div className="space-y-5">
           <RisksSection asset={asset} />
           <MappingRecommendationsSection assetId={assetId} />
         </div>

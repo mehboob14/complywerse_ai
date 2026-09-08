@@ -16,7 +16,14 @@ class ITAsset(Base):
     owner_name = Column(String(255), nullable=True)
     custodian = Column(String(255), nullable=True)
     host_name = Column(String(255), nullable=True)
-    ip_address = Column(String(50), nullable=True)
+    ip_address = Column(String(50), nullable=True)  # latest/primary address
+    # Every IP this machine has answered on. One box legitimately has several —
+    # wired + Wi-Fi at once (multi-NIC), and a new one each time DHCP re-leases.
+    # `ip_address` is just the latest; a scan finding taken at ANY address in this
+    # set still links to the asset (see finding_asset_linker._iter_asset_ips), and
+    # a successful link teaches new addresses back into it — so an IP only has to
+    # be associated with the machine once, then it sticks. list[str] | None.
+    known_ips = Column(JSON, nullable=True)
     # NO default. A row created without an explicit rating is UNRATED, not
     # "medium" — a default here is indistinguishable downstream from a real
     # assessment and was being laundered into CIA ratings, risk scores and
@@ -36,7 +43,7 @@ class ITAsset(Base):
     # HIPAA ePHI scope flag + inventory attributes for ePHI assets (mirrors the
     # PCI CDE columns above): { ephi_data, encrypted, retention,
     # hipaa_safeguard, assessment }.
-    ephi_environment = Column(Boolean, default=False)
+    ephi_environment = Column(Boolean, default=False, server_default="false", nullable=True)
     hipaa = Column(JSON, nullable=True)
 
     # ── Phase 5.1: Exposure metadata ───────────────────────────────────────

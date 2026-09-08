@@ -13,8 +13,8 @@ const navIconProps = {
   strokeWidth: 1.5,
 };
 
-const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
-  '/vulnerabilities': { title: 'Vulnerability Register', subtitle: 'Track, manage, and remediate security vulnerabilities across your organization' },
+const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: string }> = {
+  '/vulnerabilities': { title: 'Vulnerability Register', subtitle: 'Track, manage, and remediate security vulnerabilities across your organization', section: 'Cybersecurity Assurance' },
   '/vulnerabilities/dashboard': { title: 'Vulnerability Dashboard', subtitle: 'Real-time security posture' },
   '/vulnerabilities/sla': { title: 'SLA Configuration' },
   '/vulnerabilities/reports': { title: 'Vulnerability Reports' },
@@ -51,8 +51,8 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string }> = {
   '/control-library': { title: 'Control Library' },
   '/auditor-portal': { title: 'Auditor Portal', subtitle: 'Review certification journeys, evidence, and compliance progress' },
   '/auditor-portal/statutory-audit': { title: 'Statutory Audit', subtitle: 'Register and track regulator requirements and audit observations' },
-  '/assets': { title: 'IT Asset Inventory & Valuation', subtitle: 'Manage and track IT assets with CIA ratings and valuations.' },
-  '/asset-discovery': { title: 'IT Asset Discovery', subtitle: 'Find devices on the network, decide what to adopt, and see what changed.' },
+  '/assets': { title: 'IT Asset Inventory', subtitle: 'Manage and track IT assets with CIA ratings and valuations.', section: 'Cybersecurity Assurance' },
+  '/asset-discovery': { title: 'IT Asset Discovery', subtitle: 'Find devices on the network, decide what to adopt, and see what changed.', section: 'Cybersecurity Assurance' },
   '/integrations': { title: 'Integrations', subtitle: 'Configure and manage third-party integrations.' },
   '/integrations/connections': { title: 'Scanner Connections', subtitle: 'Manage vulnerability scanner connections and sync schedules.' },
   '/integrations/exceptions': { title: 'Integration Exceptions', subtitle: 'Review and manage integration exceptions.' },
@@ -186,7 +186,30 @@ export default function Header() {
       <div className="flex-1 min-w-0 px-1">
         {(() => {
           const info = PAGE_TITLES[pathname ?? ''];
+          // Asset detail pages (/assets/<id>) have no static entry — show the
+          // section breadcrumb here so the page needs no second bar of its own.
+          if (!info && /^\/assets\/[^/]+$/.test(pathname ?? '')) {
+            return (
+              <div className="flex items-center gap-1.5 min-w-0 text-sm leading-none">
+                <span className="font-medium text-[var(--color-muted)] truncate">Cybersecurity Assurance</span>
+                <span className="text-[var(--color-muted)]">/</span>
+                <Link href="/assets" className="font-semibold text-[var(--color-text)]">IT Asset Inventory</Link>
+              </div>
+            );
+          }
           if (!info) return null;
+          // Pages that render their own big heading in the body (redesign kit)
+          // get a breadcrumb here instead of a repeated title+subtitle, so the
+          // page name doesn't appear twice on screen.
+          if (info.section) {
+            // Section label only — the page name lives in the body <h1>, so we
+            // deliberately don't repeat the title here (no double heading).
+            return (
+              <div className="flex items-center min-w-0 text-sm leading-none">
+                <span className="font-medium text-[var(--color-muted)] truncate">{info.section}</span>
+              </div>
+            );
+          }
           return (
             <div className="flex items-baseline gap-2 min-w-0">
               <span className="text-sm font-semibold text-[var(--color-text)] truncate leading-none">{info.title}</span>

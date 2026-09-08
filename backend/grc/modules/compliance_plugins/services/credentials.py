@@ -99,6 +99,19 @@ def resolve_credentials_for_connection(connection: IntegrationConnection) -> Dic
             "ssh_accept_unknown_hosts": accept_unknown,
         }
 
+    if integration_type == "snmp_v2c":
+        # SNMP device (no login). Host from the connection row / SNMP_HOST env;
+        # community string is the secret — stored encrypted in `password` like
+        # the other kinds — port defaults to 161. Read-only SNMPv2c.
+        host = env("SNMP_HOST") or (connection.console_url or "").replace("https://", "").replace("http://", "").rstrip("/")
+        port = env("SNMP_PORT") or str(connection.console_port or 161)
+        community = env("SNMP_COMMUNITY") or decrypt_secret(connection.password) or "public"
+        return {
+            "snmp_host": host,
+            "snmp_port": int(port) if str(port).isdigit() else 161,
+            "snmp_community": community,
+        }
+
     if integration_type == "windows_winrm":
         # Endpoint can be supplied directly or assembled from host/port/scheme
         # so legacy IntegrationConnection rows (which only carry host/port) keep

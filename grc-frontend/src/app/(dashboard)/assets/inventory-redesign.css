@@ -1,0 +1,66 @@
+/*
+ * IT Asset Inventory register — redesign (Redesign project kickoff / "IT Asset Inventory.dc.html").
+ * Light mint-teal product palette. Scoped under .inv2 so nothing leaks into the rest of the suite.
+ * Charts use Recharts (per CLAUDE.md); this file is layout/tokens only.
+ */
+.inv2{
+  --ac:#17B898;--ac-strong:#12A085;--ac-soft:#E4F8F2;
+  --bg:#F4F6F7;--card:#fff;--bd:#E8ECEE;--bd2:#EEF1F3;--bd3:#F0F3F5;
+  --ink:#0F1F2B;--sec:#334049;--muted:#5F6A76;--muted2:#69747F;--faint:#78838F;
+  --crit:#A32B2B;--critbg:#F7D8D8;--high:#8A5A0C;--highbg:#F6E7C2;--blue:#28578F;--bluebg:#DBE8FA;--good:#186A49;--goodbg:#D3EEE1;
+  font-family:'Poppins',system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--ink);
+  font-size:13.5px;line-height:1.5;
+}
+.inv2 *{box-sizing:border-box}
+.inv2 .num{font-variant-numeric:tabular-nums}
+.inv2 .mono{font-family:ui-monospace,'Cascadia Code',Consolas,monospace;font-variant-numeric:tabular-nums}
+.inv2 h1,.inv2 h2,.inv2 h3{font-weight:600;letter-spacing:-.015em}
+.inv2 .card{background:var(--card);border:1px solid var(--bd);border-radius:16px;box-shadow:0 1px 2px rgba(16,24,40,.04)}
+@keyframes invBar{from{width:0}}
+@keyframes invUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.inv2 .fade{animation:invUp .25s ease}
+.inv2 .grow{animation:invBar 1s cubic-bezier(.3,.8,.3,1)}
+/* head */
+.inv2 .btn{height:38px;padding:0 14px;border:1px solid var(--bd);border-radius:11px;background:#fff;color:var(--sec);font-size:12.5px;font-weight:500;display:inline-flex;align-items:center;gap:7px;cursor:pointer}
+.inv2 .btn:hover{border-color:#CFD6DC}
+.inv2 .btn-pri{border-color:var(--ac);background:var(--ac);color:#06342B;font-weight:600}
+.inv2 .btn-pri:hover{background:var(--ac-strong);border-color:var(--ac-strong)}
+.inv2 .sel{height:38px;border:1px solid var(--bd);border-radius:11px;background:#fff;padding:0 12px;font-size:12.5px;color:var(--sec);cursor:pointer}
+/* rail */
+.inv2 .railcap{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#828E9A;padding:2px 6px 6px}
+.inv2 .rbtn{position:relative;display:flex;align-items:center;gap:11px;padding:9px 12px;border:0;border-radius:10px;background:none;color:var(--sec);font-size:12.5px;font-weight:500;text-align:left;width:100%;cursor:pointer}
+.inv2 .rbtn:hover{background:#F1F4F6}
+.inv2 .rbtn.on{background:var(--ac-soft);color:#0A5A4B;font-weight:600}
+.inv2 .rbtn .bar{position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:0 3px 3px 0;background:var(--ac);opacity:0}
+.inv2 .rbtn.on .bar{opacity:1}
+.inv2 .rbtn .cnt{margin-left:auto;font-size:11.5px;color:#3A4653;font-weight:600}
+.inv2 .dot{width:9px;height:9px;border-radius:50%;flex:none}
+/* tab seg */
+.inv2 .segwrap{display:inline-flex;background:#EAEEF1;border-radius:11px;padding:3px;gap:2px}
+.inv2 .seg{height:32px;padding:0 16px;border:0;border-radius:9px;background:none;color:#6B7787;font-size:12.5px;font-weight:600;cursor:pointer}
+.inv2 .seg.on{background:#fff;color:var(--ac-strong);box-shadow:0 1px 2px rgba(16,24,40,.06)}
+.inv2 .search{width:100%;height:38px;border:1px solid var(--bd);border-radius:11px;background:#fff;padding:0 12px 0 34px;font-size:12.5px}
+.inv2 .search:focus{outline:none;border-color:var(--ac)}
+/* attention pills */
+.inv2 .att{background:#F6E7C2;border:1px solid #E0C07A;color:#7A4E0A;border-radius:999px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer}
+.inv2 .att:hover{background:#F0DCA8}
+/* insights */
+.inv2 .idim{display:grid;grid-template-columns:160px 34px minmax(0,1fr) 26px;gap:11px;align-items:center;font-size:12px}
+.inv2 .track{height:7px;border-radius:999px;background:#EAEEF1;overflow:hidden}
+.inv2 .track i{display:block;height:100%;border-radius:999px}
+/* insight ribbon — compact flex band (matches the mock): score grows, totals inline, attention fixed right */
+.inv2 .ribbon{display:flex;align-items:stretch;flex-wrap:wrap;margin-bottom:16px}
+.inv2 .rib-score{padding:14px 18px;display:flex;flex-direction:column;justify-content:center;min-width:230px;flex:1}
+.inv2 .rib-tot{display:flex;align-items:center;gap:18px;padding:14px 18px;flex-wrap:wrap;border-left:1px solid var(--bd2)}
+.inv2 .rib-att{padding:14px 18px;display:flex;flex-direction:column;justify-content:center;background:#FCF3DE;border-left:1px solid var(--bd2);border-radius:0 16px 16px 0;min-width:196px}
+.inv2 .bulkb{height:30px;padding:0 11px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);color:#fff;border-radius:8px;font-size:11.5px;cursor:pointer}
+.inv2 .bulkb:hover{background:rgba(255,255,255,.2)}
+.inv2 .bulkb.danger{color:#FFB4BD}
+.inv2 .rrow:hover{background:#F7FBFA}
+@media(max-width:820px){.inv2 .rib-score,.inv2 .rib-tot,.inv2 .rib-att{flex:1 1 100%}.inv2 .rib-tot,.inv2 .rib-att{border-left:0;border-top:1px solid var(--bd2)}.inv2 .rib-att{border-radius:0 0 16px 16px}}
+@media(max-width:1100px){.inv2 .rail{display:none}}
+/* CIS overview grids — pack like the mock (4 KPI across, ~5 category across) */
+.inv2 .cisKpi{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.inv2 .cisCats{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px;margin-bottom:14px}
+@media(max-width:1000px){.inv2 .cisKpi{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:560px){.inv2 .cisKpi{grid-template-columns:1fr}}

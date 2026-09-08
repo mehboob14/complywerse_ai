@@ -108,6 +108,10 @@ export default function ConnectionsPage() {
   // connections list until this one's last_sync_at advances past the baseline we
   // captured when the sync started.
   const [syncingId, setSyncingId] = useState<number | null>(null);
+  // How credentials are supplied: 'form' = paste the keys here (Production,
+  // fully UI, stored encrypted); 'env' = read PREFIX_* from server env vars
+  // (Dev / desk-test path — needs shell access to set them).
+  const [credMode, setCredMode] = useState<'form' | 'env'>('form');
   const syncBaselineRef = useRef<Record<number, string | null>>({});
 
   const { data: connectionsData, isLoading, isError } = useQuery({
@@ -234,7 +238,10 @@ export default function ConnectionsPage() {
       integration_type: integrationType,
       console_url: form.get('console_url') as string,
       console_port: parseInt(form.get('console_port') as string) || (integrationType === 'nessus' ? 8834 : 3780),
-      credential_env_prefix: form.get('credential_env_prefix') as string,
+      credential_env_prefix: (form.get('credential_env_prefix') as string) || undefined,
+      access_key: (form.get('access_key') as string) || undefined,
+      secret_key: (form.get('secret_key') as string) || undefined,
+      api_key: (form.get('api_key') as string) || undefined,
       username: (form.get('username') as string) || undefined,
       password: (form.get('password') as string) || undefined,
       sync_schedule: (form.get('sync_schedule') as string) || '0 */4 * * *',
@@ -327,18 +334,60 @@ export default function ConnectionsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Credential Env Prefix</label>
-              <input
-                name="credential_env_prefix"
-                required
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                placeholder={selectedType === 'nessus' ? 'NESSUS_PROD' : 'NEXPOSE_PROD'}
-              />
-              <p className="text-xs text-slate-400 mt-1">
-                {selectedType === 'nessus'
-                  ? 'System will read PREFIX_ACCESS_KEY, PREFIX_SECRET_KEY from env vars'
-                  : 'System will read PREFIX_USERNAME, PREFIX_PASSWORD, PREFIX_API_KEY from env vars'}
-              </p>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">Credentials</label>
+              {/* Toggle: paste the keys here (Production) vs read them from
+                  server env vars (Dev / desk-test). */}
+              <div className="inline-flex rounded-lg border border-slate-200 p-0.5 mb-2">
+                <button
+                  type="button"
+                  onClick={() => setCredMode('form')}
+                  className={'px-3 py-1 text-xs font-semibold rounded-md ' + (credMode === 'form' ? 'bg-primary-600 text-[#0a0a0a]' : 'text-slate-500')}
+                >
+                  Enter keys (Production)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCredMode('env')}
+                  className={'px-3 py-1 text-xs font-semibold rounded-md ' + (credMode === 'env' ? 'bg-slate-700 text-white' : 'text-slate-500')}
+                >
+                  Env vars (Dev)
+                </button>
+              </div>
+
+              {credMode === 'form' ? (
+                <div className="space-y-2">
+                  <input
+                    name="access_key"
+                    required
+                    type="password"
+                    autoComplete="off"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Access Key"
+                  />
+                  <input
+                    name="secret_key"
+                    required
+                    type="password"
+                    autoComplete="off"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder="Secret Key"
+                  />
+                  <p className="text-xs text-slate-400">
+                    Pasted here and stored <b>encrypted</b> — no server access needed. For Tenable.io: Console URL <span className="font-mono">https://cloud.tenable.com</span>, keys from Settings → My Account → API Keys.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <input
+                    name="credential_env_prefix"
+                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    placeholder={selectedType === 'nessus' ? 'NESSUS_PROD' : 'NEXPOSE_PROD'}
+                  />
+                  <p className="text-xs text-slate-400 mt-1">
+                    Dev only — reads <span className="font-mono">PREFIX_ACCESS_KEY</span> / <span className="font-mono">PREFIX_SECRET_KEY</span> from server env vars (needs shell access).
+                  </p>
+                </div>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Username (optional)</label>
