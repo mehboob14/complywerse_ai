@@ -1,0 +1,101 @@
+{
+ "framework": "sama_csf",
+ "hop": "direct",
+ "authored_by": "claude:a4-sama-csf-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0. Authored directly rather than through the gap-closure workflow: SAMA CSF resolves through SCF's own published crosswalk and so had no direct file, which left its 11 unmapped requirements with no rationale and stuck at disposition=pending.",
+ "mappings": [
+  {
+   "code": "3.3.12.1",
+   "scf_ids": [
+    "GOV-02",
+    "CPL-02"
+   ],
+   "confidence": "medium",
+   "rationale": "The requirement is to define, approve, implement and monitor a cyber security standard for payment systems. GOV-02 is the mechanism that establishes, maintains and disseminates the policies, standards and procedures themselves, and CPL-02 supplies the controls oversight function that monitors whether they are adhered to. SCF is technology-agnostic, so neither control is scoped to payment systems by name; the mapping is to the general mechanism of which a payment-systems standard is one instance.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "3.3.12.2",
+   "scf_ids": [
+    "GOV-05"
+   ],
+   "confidence": "high",
+   "rationale": "The clause requires that the effectiveness of the payment-systems standard process be measured and periodically evaluated. GOV-05 develops, reports and monitors measures of performance for the security, compliance and resilience programme, which is that measurement obligation applied to one of the programme's constituent standards.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "3.3.13.1",
+   "scf_ids": [
+    "GOV-02",
+    "WEB-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Cyber security standards for electronic banking services must be defined, approved and implemented. GOV-02 establishes, maintains and disseminates standards generally; WEB-01 is the enterprise-wide web management policy with its associated standards, controls and procedures, which is where a bank's electronic-banking standard sits in the catalogue. Neither control names electronic banking, so this is the general mechanism rather than a like-for-like counterpart.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "3.3.13.2",
+   "scf_ids": [
+    "CPL-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Compliance with the electronic banking security standards must be monitored. CPL-02 is the controls oversight function reporting to executive leadership, which is the mechanism by which adherence to an internal standard is monitored. SCF carries no channel-specific compliance monitor, so the mapping is to the general oversight function.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "3.3.13.3",
+   "scf_ids": [
+    "GOV-05"
+   ],
+   "confidence": "high",
+   "rationale": "The effectiveness of the electronic banking security standard must be measured and periodically evaluated. GOV-05 is the measures-of-performance mechanism and discharges the measurement and evaluation duty directly.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "3.3.13.4",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control covers consumer-facing brand protection; the catalogue's reputation controls are post-incident repair and email domain authentication, neither of which defends the brand across public app stores, websites and social platforms.",
+   "unmappable_reason": "The clause requires brand protection measures for the organisation's public-facing online services, including social media. SCF contains no control for consumer-facing brand protection: IRO-16 is public relations and reputation repair after an incident has already occurred, and NET-20.1 covers email domain reputation protections such as sender authentication, neither of which obliges an organisation to monitor and defend its brand across public app stores, websites and social platforms. This is a customer-channel duty and the catalogue stops at the organisation's own estate."
+  },
+  {
+   "code": "3.3.13.5",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control governs the publication channel of an organisation's own consumer application; MDM-07 restricts what the organisation installs, not what it publishes to customers.",
+   "unmappable_reason": "The clause requires online and mobile banking to be distributed through official application stores and websites. SCF has no control governing the publication channel of an organisation's own consumer application. MDM-07 restricts which applications may be installed on organisation-owned devices, which runs in the opposite direction: it governs what the organisation consumes, not what it publishes to its customers."
+  },
+  {
+   "code": "3.3.13.6",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control covers detection or take-down of third-party impersonation assets; the catalogue's detection controls stop at infrastructure the organisation operates.",
+   "unmappable_reason": "The clause requires detection and take-down of malicious applications and websites impersonating the organisation. SCF provides no control for detecting third-party impersonation assets or pursuing their removal; its detection controls are scoped to the organisation's own networks, endpoints and applications, and nothing in the catalogue obliges action against infrastructure the organisation does not operate."
+  },
+  {
+   "code": "3.3.13.7",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control covers client-side application sandboxing on a customer's device; NET-03.6 and IRO-15 isolate untrusted components inside the organisation's own environment.",
+   "unmappable_reason": "The clause requires sandboxing for online and mobile banking, meaning the consumer application isolates its own data and execution on the customer's device. SCF has no control for client-side application sandboxing: NET-03.6 dynamically isolates untrusted components at runtime inside the organisation's own environment and IRO-15 provides detonation chambers for analysing suspect content, and neither reaches an application running on a device the organisation does not manage."
+  },
+  {
+   "code": "3.3.13.8",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control specifies cache-control behaviour for delivered web content; IAC-10.10 governs only cached authenticators, not cached page data.",
+   "unmappable_reason": "The clause requires non-caching techniques for online and mobile banking, so that sensitive account content is not retained in the customer's browser or device cache. WEB-01 sits in the right domain as the enterprise web management policy but does not discharge the duty: no SCF control specifies cache-control behaviour for delivered content, and IAC-10.10 governs only the expiration of cached authenticators, not cached page data."
+  },
+  {
+   "code": "3.3.13.9",
+   "scf_ids": [
+    "CRY-03",
+    "NET-09",
+    "WEB-10"
+   ],
+   "confidence": "high",
+   "rationale": "Communication techniques must be used to avoid man-in-the-middle attacks on online and mobile banking. CRY-03 protects the confidentiality of data being transmitted, NET-09 protects the authenticity and integrity of the communications session, and WEB-10 requires web application content to be delivered using cryptographic mechanisms. Together these are the interception and session-tampering defences the clause is asking for.",
+   "unmappable_reason": null
+  }
+ ]
+}

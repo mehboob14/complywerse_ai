@@ -42,8 +42,19 @@ Rebuilt from NIST's own CSF 2.0 Reference Tool export (public domain) via `grc.t
 **A3. ISO 45001 decision** · **interim applied, still your call** · 36 requirements
 Marked `out_of_scope` wholesale via a registry blanket, with the reason recorded — occupational health and safety, outside the security/privacy catalogue by design. That was option two of three and is reversible in one registry edit. Option three, authoring platform-native OH&S controls, remains open but starts a second control set we would own and maintain.
 
-**A4. The remaining `pending`** · engineer + reviewer · ~half a day
-Now **11**, not 86 — the disposition pass accounted for the rest. All 11 are SAMA CSF sections 3.3.12 and 3.3.13 (payment-systems and electronic-banking security standards). They are real, mappable security requirements: SCF's SAMA crosswalk simply skips those two sections, jumping `3.3.11` to `3.3.14`. Closing them means authoring 11 one-hop mappings — the same authored route as the other 4,858, and the last thing between us and 100% dispositioned.
+**A4. The remaining `pending`** · **DONE — 100% dispositioned**
+Was 11, all SAMA CSF sections 3.3.12 and 3.3.13 (payment-systems and electronic-banking security standards), which SCF's SAMA crosswalk skips entirely — it jumps `3.3.11` to `3.3.14`. SAMA CSF resolves through that published crosswalk and so had no direct file, which is why its refusals had no rationale and sat at `pending`.
+
+`crosswalks/direct/sama_csf.json` now carries all 11: **6 mapped, 5 refused with written rationale.**
+
+- **3.3.12.1 / 3.3.13.1** payment-systems and e-banking standards → GOV-02 (+CPL-02, WEB-01), confidence 0.60 — SCF is technology-agnostic, so these are the general mechanism, not a like-for-like counterpart
+- **3.3.12.2 / 3.3.13.3** measure effectiveness → GOV-05, 0.85
+- **3.3.13.2** monitor compliance → CPL-02, 0.60
+- **3.3.13.9** avoid man-in-the-middle → CRY-03 + NET-09 + WEB-10, 0.85
+
+The five refusals are one coherent finding, not five separate gaps: **SCF 2026.2 has no consumer-channel controls.** Brand protection incl. social media (3.3.13.4), publishing to official app stores (.5), take-down of impersonating apps and sites (.6), client-side sandboxing on the customer's device (.7) and non-caching of delivered content (.8) all concern protecting the bank's *customers* on public platforms. SCF is an enterprise catalogue and stops at the organisation's own estate — IRO-16 is post-incident reputation repair, NET-20.1 is email sender authentication, NET-03.6 isolates components inside our own environment, IAC-10.10 covers cached authenticators not cached pages. All five are dispositioned `out_of_scope` / `no-scf-mechanism`, the existing convention for "the catalogue has nothing that does this".
+
+*Verified:* dispositions **3,892 of 3,892 (100%)**, pending 0, mapped 3,703 → 3,709; the 10 new rows carry `provenance=ai` at 0.60/0.85 so they stay distinguishable from resolver rows; imported to both tenants (80,635 → 80,645 mappings).
 
 ---
 

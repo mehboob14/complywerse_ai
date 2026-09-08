@@ -31,11 +31,61 @@ OUT_DIR = SCF_DIR / "crosswalks" / "direct"
 CONFIDENCE = {"high": 0.85, "medium": 0.60, "low": 0.35}
 
 
+def _merge_authored() -> int:
+    """Fold the per-framework authored JSONs into direct.csv.gz, dropping nothing.
+
+    The JSONs are NOT a complete record of the csv: 968 of the 4,858 direct rows
+    have no JSON entry at all (158 NDMO codes appear only in the csv), so
+    rebuilding the csv from them would silently discard a fifth of the mappings.
+    This unions instead — every existing row is kept, authored rows are added —
+    so a hand-authored file can reach the csv safely. SAMA CSF needed this: it
+    resolves through SCF's own published crosswalk and so never had a workflow
+    run to write its direct file.
+    """
+    path = SCF_DIR / "direct.csv.gz"
+    header = ["scf_id", "source_slug", "requirement_code", "match_mode",
+              "provenance", "confidence", "pivot_via_slug"]
+    existing: set = set()
+    if path.exists():
+        with gzip.open(path, "rt", encoding="utf-8", newline="") as gz:
+            r = csv.reader(gz)
+            next(r, None)
+            existing = set(map(tuple, r))
+
+    authored: set = set()
+    for p in sorted(OUT_DIR.glob("*.json")):
+        doc = json.loads(p.read_text(encoding="utf-8"))
+        slug = doc["framework"]
+        for m in doc.get("mappings") or []:
+            for sid in m.get("scf_ids") or []:
+                authored.add((sid, slug, m["code"], "exact", "ai",
+                              str(CONFIDENCE.get(m.get("confidence", "low"), 0.35)), ""))
+
+    added = authored - existing
+    merged = sorted(existing | authored)
+    with gzip.open(path, "wt", encoding="utf-8", newline="") as gz:
+        w = csv.writer(gz)
+        w.writerow(header)
+        w.writerows(merged)
+    print(f"merged authored mappings: {len(existing)} existing + {len(added)} new "
+          f"= {len(merged)} rows (nothing removed)")
+    for slug in sorted({r[1] for r in added}):
+        print(f"  +{sum(1 for r in added if r[1] == slug):>4}  {slug}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--source", required=True)
-    ap.add_argument("--gaps", required=True, help="the gap bundle directory")
+    ap.add_argument("--source")
+    ap.add_argument("--gaps", help="the gap bundle directory")
+    ap.add_argument("--merge-authored", action="store_true",
+                    help="union crosswalks/direct/*.json into direct.csv.gz, leaving those files untouched")
     args = ap.parse_args()
+
+    if args.merge_authored:
+        return _merge_authored()
+    if not args.source or not args.gaps:
+        ap.error("--source and --gaps are required unless --merge-authored is given")
 
     raw = json.loads(Path(args.source).read_text(encoding="utf-8"))
     results = (raw.get("result") or raw).get("results") or []
