@@ -5009,6 +5009,9 @@ export const automationApi = {
   // the reason it cannot be (binds the regulator, outside the catalogue).
   getRequirementCoverage: (framework?: string) =>
     apiClient.get('/automation/common/coverage', { params: framework ? { framework } : undefined }),
+  // Library, automation, crosswalk, evidence and assurance aggregates for the
+  // common control library — each answered by the system that actually holds it.
+  getCommonOverview: () => apiClient.get('/automation/common/overview'),
   // Mappings a reviewer should look at, worst first — lowest confidence, then
   // fan-out, then material controls. Rows already ruled on never come back.
   getMappingReviewQueue: (params?: { framework?: string; limit?: number }) =>

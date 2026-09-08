@@ -201,7 +201,8 @@ const navigation: NavEntry[] = [
     icon: Zap,
     requiredModules: ['controls'],
     items: [
-      { name: 'SOC 2 Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Overview', href: '/automation/overview', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Common Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
       { name: 'Automated Checks', href: '/automation/checks', icon: PlayCircle, requiredPermissions: ['controls:control_library:*', 'compliance:scan:execute', 'compliance:frameworks:*'] },
     ],
   },

@@ -21,8 +21,12 @@ from sqlalchemy.orm import Session
 from grc.models import (
     CompliancePlugin,
     CompliancePluginRun,
+    ControlAssuranceSnapshot,
+    ControlWorkEvidence,
+    ControlWorkItem,
     GRCUser,
     IntegrationConnection,
+    NormalizedControl,
     SCFControl,
     SCFMapping,
     SCFMappingReview,
@@ -973,6 +977,260 @@ def _suppressed_pairs(db: Session, tenant_id: int) -> set:
         .filter(SCFMappingReview.tenant_id == tenant_id,
                 SCFMappingReview.verdict == "suppressed")
         .all()
+    }
+
+
+def _check_index(db: Session):
+    """soc2 code -> [(plugin, check_ids)], built once.
+
+    `_checks_for_control` re-queries every plugin per control, which is fine for
+    one control and quadratic for 1,534. Same binding rule, inverted: index the
+    codes each check names rather than scanning the checks for each code.
+    """
+    idx: Dict[str, List[Any]] = defaultdict(list)
+    for p in (db.query(CompliancePlugin)
+              .filter(CompliancePlugin.benchmark.in_([BENCHMARK, CONNECTOR_BENCHMARK]),
+                      CompliancePlugin.enabled.is_(True)).all()):
+        if p.benchmark == CONNECTOR_BENCHMARK:
+            provider = (p.check_definition or {}).get("provider")
+            for c in (CONNECTOR_CHECKS.get(provider) or {}).get("checks", []):
+                for code in c.get("controls") or []:
+                    idx[code].append((p, {c.get("id")}))
+        elif p.rule_id:
+            idx[p.rule_id].append((p, set()))
+    return idx
+
+
+@common_router.get("/overview")
+def common_controls_overview(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """One screen for the state of the common control library.
+
+    Six questions, each answered from the system that actually knows: what the
+    library contains (SCF), what a check can assert (the plugin engine), which
+    frameworks it discharges (the crosswalk), what evidence it asks for (the
+    consolidated sets), who owns it and whether it was tested (the control
+    workbench), and which way the numbers moved (the assurance snapshots).
+
+    Where a system holds nothing yet the count is zero and the caller is told
+    which system it came from, because "0 implemented" and "implementation is
+    not tracked here yet" are different statements and only one is true today.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    release = (
+        db.query(SCFRelease)
+        .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True))
+        .first()
+    )
+    if release is None:
+        raise HTTPException(status_code=409, detail="No SCF release imported for this tenant")
+
+    controls = (
+        db.query(SCFControl.scf_id, SCFControl.domain_identifier, SCFControl.domain_name,
+                 SCFControl.is_material, SCFControl.pptdf, SCFControl.ao_count,
+                 SCFControl.conformity_cadence)
+        .filter(SCFControl.release_id == release.id)
+        .order_by(SCFControl.sort_key)
+        .all()
+    )
+
+    # ── crosswalk: frameworks per control, and how firm each claim is ──────────
+    fw_of: Dict[str, set] = defaultdict(set)
+    soc2_of: Dict[str, List[str]] = defaultdict(list)
+    inferred: Dict[str, set] = defaultdict(set)
+    fw_reqs: Dict[str, set] = defaultdict(set)
+    fw_controls: Dict[str, set] = defaultdict(set)
+    mapping_modes: Counter = Counter()
+    for scf_id, slug, code, mode in (
+        db.query(SCFMapping.scf_id, SCFMapping.source_slug,
+                 SCFMapping.requirement_code, SCFMapping.match_mode)
+        .filter(SCFMapping.release_id == release.id,
+                SCFMapping.provenance.in_(("resolver", "ai")))
+        .all()
+    ):
+        fw_of[scf_id].add(slug)
+        fw_controls[slug].add(scf_id)
+        fw_reqs[slug].add(code)
+        mapping_modes[mode or "exact"] += 1
+        if mode and mode != "exact":
+            # a requirement, not a row: one code mapped to five controls by parent
+            # rollup is one inferred requirement, not five
+            inferred[slug].add(code)
+        if slug == "soc2":
+            soc2_of[scf_id].append(code)
+
+    # ── automation: what a check can currently assert ─────────────────────────
+    idx = _check_index(db)
+    plugin_ids = {p.id for lst in idx.values() for p, _ in lst}
+    latest = _latest_runs_by_plugin(db, tenant_id, sorted(plugin_ids))
+    status_of: Dict[str, str] = {}
+    checks_per_control: Dict[str, int] = {}
+    for scf_id, codes in soc2_of.items():
+        bound = {}
+        for code in codes:
+            for p, cids in idx.get(code, []):
+                bound.setdefault(p.id, (p, set()))[1].update(cids)
+        if not bound:
+            continue
+        checks_per_control[scf_id] = len(bound)
+        sts = [_status_from_run(latest[pid], cids, codes) if latest.get(pid) else "not_run"
+               for pid, (_, cids) in bound.items()]
+        status_of[scf_id] = _aggregate_status(sts)
+
+    # ── evidence: the consolidated sets, including D2's catalogue deliverables ─
+    ev = _consolidated_evidence()
+    ev_owners: Counter = Counter()
+    ev_method: Counter = Counter()
+    ev_artifacts = 0
+    for entry in ev.values():
+        for a in entry.get("artifacts") or []:
+            ev_artifacts += 1
+            ev_method[a.get("collection_method") or "manual"] += 1
+            if a.get("owner"):
+                ev_owners[a["owner"]] += 1
+
+    # ── assurance: ownership and testing live in the control workbench ────────
+    scf_of_norm = {nid: sid for nid, sid in
+                   db.query(NormalizedControl.id, NormalizedControl.scf_id)
+                   .filter(NormalizedControl.scf_id.isnot(None)).all()}
+    now = datetime.utcnow()
+    assurance = {k: 0 for k in ("tracked", "assigned", "implemented", "tested", "effective",
+                                "partially_effective", "ineffective", "overdue",
+                                "evidence_pending")}
+    impl_status: Counter = Counter()
+    assured_of: Dict[str, Dict[str, Any]] = {}
+    work_ids: List[int] = []
+    for wi in (db.query(ControlWorkItem)
+               .filter(ControlWorkItem.tenant_id == tenant_id,
+                       ControlWorkItem.source_type == "normalized").all()):
+        scf_id = scf_of_norm.get(wi.source_id)
+        if not scf_id:
+            continue
+        work_ids.append(wi.id)
+        assurance["tracked"] += 1
+        impl_status[wi.implementation_status or "not_started"] += 1
+        if wi.assigned_user_ids or wi.assigned_to_user_id:
+            assurance["assigned"] += 1
+        if wi.implementation_status in ("implemented", "verified"):
+            assurance["implemented"] += 1
+        eff = wi.operating_effectiveness or wi.design_effectiveness
+        if eff and eff != "not_tested":
+            assurance["tested"] += 1
+            if eff in assurance:
+                assurance[eff] += 1
+        elif wi.last_tested_at:
+            assurance["tested"] += 1
+        if wi.next_test_date and wi.next_test_date < now:
+            assurance["overdue"] += 1
+        assured_of[scf_id] = {"implementation_status": wi.implementation_status,
+                              "effectiveness": eff}
+    if work_ids:
+        assurance["evidence_pending"] = (
+            db.query(func.count(ControlWorkEvidence.id))
+            .filter(ControlWorkEvidence.tenant_id == tenant_id,
+                    ControlWorkEvidence.work_item_id.in_(work_ids),
+                    ControlWorkEvidence.review_status == "pending").scalar() or 0)
+
+    # ── per-domain rollup: the category axis ──────────────────────────────────
+    doms: Dict[str, Dict[str, Any]] = {}
+    pptdf: Counter = Counter()
+    cadence: Counter = Counter()
+    posture: Counter = Counter()
+    material = orphans = 0
+    for scf_id, dom_id, dom, is_material, pp, ao, cad in controls:
+        d = doms.setdefault(dom or "Unclassified", {
+            "domain": dom or "Unclassified", "identifier": dom_id, "controls": 0,
+            "material": 0, "with_checks": 0, "with_evidence": 0, "frameworks": set(),
+            "tracked": 0, "implemented": 0, "objectives": 0})
+        d["controls"] += 1
+        d["objectives"] += ao or 0
+        d["frameworks"] |= fw_of.get(scf_id, set())
+        pptdf[pp or "Unspecified"] += 1
+        cadence[cad or "Unspecified"] += 1
+        if is_material:
+            material += 1
+            d["material"] += 1
+        if not fw_of.get(scf_id):
+            orphans += 1
+        if scf_id in checks_per_control:
+            d["with_checks"] += 1
+        if scf_id in ev:
+            d["with_evidence"] += 1
+        a = assured_of.get(scf_id)
+        if a:
+            d["tracked"] += 1
+            if a["implementation_status"] in ("implemented", "verified"):
+                d["implemented"] += 1
+        posture[status_of.get(scf_id, "manual")] += 1
+    by_domain = sorted(
+        ({**d, "frameworks": len(d["frameworks"])} for d in doms.values()),
+        key=lambda x: -x["controls"])
+
+    # ── review progress on the crosswalk itself ───────────────────────────────
+    reviewed = (db.query(func.count(SCFMappingReview.id))
+                .filter(SCFMappingReview.tenant_id == tenant_id).scalar() or 0)
+
+    # Same source as `assurance`, so the series moves with it. The snapshot's own
+    # `controls` count is deliberately not carried: it counts the workbench's
+    # framework controls, a different denominator from the 1,534 here, and putting
+    # the two numbers on one screen invites reading a ratio that does not exist.
+    trend = [
+        {"date": s.snapshot_date, "tested": s.tested,
+         "effective": s.effective, "assigned": s.assigned, "overdue": s.overdue}
+        for s in (db.query(ControlAssuranceSnapshot)
+                  .filter(ControlAssuranceSnapshot.tenant_id == tenant_id)
+                  .order_by(ControlAssuranceSnapshot.snapshot_date.desc())
+                  .limit(30).all())
+    ][::-1]
+
+    disp = _disposition_index().get("frameworks", {})
+    frameworks = []
+    for slug in sorted(fw_controls):
+        counts = (disp.get(slug) or {}).get("counts") or {}
+        n = len(fw_reqs[slug])
+        frameworks.append({
+            "key": slug, "label": _FW_LABELS.get(slug, slug.replace("_", " ").title()),
+            "controls": len(fw_controls[slug]), "requirements": n,
+            "requirement_total": (disp.get(slug) or {}).get("total"),
+            "counts": counts,
+            # the share of this framework's mapped requirements that were inferred
+            # from a broader or narrower code rather than matched on it
+            "inferred": len(inferred.get(slug, ())),
+            "inferred_pct": round(100 * len(inferred.get(slug, ())) / n, 1) if n else 0.0,
+        })
+    frameworks.sort(key=lambda f: -f["requirements"])
+
+    last_run = max((r.started_at for r in latest.values() if r.started_at), default=None)
+    return {
+        "release": release.version,
+        "library": {
+            "controls": len(controls), "domains": len(doms), "material": material,
+            "orphans": orphans, "objectives": sum(d["objectives"] for d in by_domain),
+            "pptdf": dict(pptdf), "cadence": dict(cadence), "by_domain": by_domain,
+        },
+        "automation": {
+            "controls_with_checks": len(checks_per_control),
+            "checks_bound": sum(checks_per_control.values()),
+            "plugins_enabled": len(plugin_ids),
+            "plugins_run": len(latest),
+            "last_run_at": last_run.isoformat() if last_run else None,
+            "posture": dict(posture),
+        },
+        "frameworks": frameworks,
+        "crosswalk": {"rows": sum(mapping_modes.values()), "by_match_mode": dict(mapping_modes),
+                      "reviewed": reviewed},
+        "evidence": {
+            "controls_with_set": len(ev), "artifacts": ev_artifacts,
+            "by_method": dict(ev_method),
+            "top_owners": [{"owner": o, "artifacts": n} for o, n in ev_owners.most_common(8)],
+        },
+        # `source` names the system so an empty panel reads as "not tracked here
+        # yet" rather than "nothing is implemented".
+        "assurance": {**assurance, "by_implementation_status": dict(impl_status),
+                      "source": "control workbench"},
+        "trend": trend,
     }
 
 
