@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections import defaultdict
+from collections import Counter, defaultdict
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -24,6 +25,7 @@ from grc.models import (
     IntegrationConnection,
     SCFControl,
     SCFMapping,
+    SCFMappingReview,
     SCFObjective,
     SCFRelease,
     get_db,
@@ -949,6 +951,158 @@ def requirement_coverage(
     }
 
 
+class MappingReviewBody(BaseModel):
+    source_slug: str
+    requirement_code: str
+    scf_id: str
+    verdict: str                      # confirmed | suppressed | retargeted
+    retarget_scf_id: Optional[str] = None
+    note: Optional[str] = None
+
+
+_VERDICTS = {"confirmed", "suppressed", "retargeted"}
+
+
+def _suppressed_pairs(db: Session, tenant_id: int) -> set:
+    """(source_slug, requirement_code, scf_id) a reviewer has struck out."""
+    return {
+        (r.source_slug, r.requirement_code, r.scf_id)
+        for r in db.query(SCFMappingReview.source_slug,
+                          SCFMappingReview.requirement_code,
+                          SCFMappingReview.scf_id)
+        .filter(SCFMappingReview.tenant_id == tenant_id,
+                SCFMappingReview.verdict == "suppressed")
+        .all()
+    }
+
+
+@common_router.get("/review-queue")
+def mapping_review_queue(
+    framework: Optional[str] = None,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Mappings a reviewer should look at, worst first.
+
+    Ranked by how likely the row is to be wrong and how much rests on it:
+    lowest confidence first, then fan-out — a requirement claiming many controls
+    or a control claimed by many requirements is diluted either way — then
+    material controls, because a wrong mapping there costs the most. Rows the
+    reviewer has already ruled on never come back.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    release = (
+        db.query(SCFRelease)
+        .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True))
+        .order_by(desc(SCFRelease.imported_at))
+        .first()
+    )
+    if release is None:
+        raise HTTPException(503, "No SCF release is loaded")
+
+    decided = {
+        (r.source_slug, r.requirement_code, r.scf_id)
+        for r in db.query(SCFMappingReview.source_slug,
+                          SCFMappingReview.requirement_code,
+                          SCFMappingReview.scf_id)
+        .filter(SCFMappingReview.tenant_id == tenant_id).all()
+    }
+
+    q = (
+        db.query(SCFMapping.source_slug, SCFMapping.requirement_code, SCFMapping.scf_id,
+                 SCFMapping.confidence, SCFMapping.match_mode, SCFMapping.provenance)
+        .filter(SCFMapping.release_id == release.id,
+                SCFMapping.provenance != "scf")     # SCF's own rows are not ours to review
+    )
+    if framework:
+        q = q.filter(SCFMapping.source_slug == framework)
+    rows = q.all()
+
+    # fan-out both ways, computed once over the candidate set
+    per_req = Counter((r.source_slug, r.requirement_code) for r in rows)
+    per_ctl = Counter((r.source_slug, r.scf_id) for r in rows)
+    material = {
+        c.scf_id for c in db.query(SCFControl.scf_id)
+        .filter(SCFControl.release_id == release.id, SCFControl.is_material.is_(True)).all()
+    }
+    labels = _requirement_index()
+
+    out = []
+    for r in rows:
+        key = (r.source_slug, r.requirement_code, r.scf_id)
+        if key in decided:
+            continue
+        conf = float(r.confidence or 0)
+        fan = per_req[(r.source_slug, r.requirement_code)] + per_ctl[(r.source_slug, r.scf_id)]
+        meta = (labels.get(r.source_slug) or {}).get(r.requirement_code) or {}
+        out.append({
+            "source_slug": r.source_slug,
+            "framework": _FW_LABELS.get(r.source_slug, r.source_slug.replace("_", " ").title()),
+            "requirement_code": r.requirement_code,
+            "reference": meta.get("reference") or r.requirement_code,
+            "requirement_title": meta.get("title"),
+            "scf_id": r.scf_id,
+            "confidence": conf,
+            "match_mode": r.match_mode,
+            "provenance": r.provenance,
+            "fan_out": fan,
+            "is_material": r.scf_id in material,
+            # ascending confidence, then most diluted, then material first
+            "_rank": (conf, -fan, 0 if r.scf_id in material else 1),
+        })
+    out.sort(key=lambda x: x.pop("_rank"))
+    return {
+        "release": release.version,
+        "remaining": len(out),
+        "reviewed": len(decided),
+        "items": out[: max(1, min(limit, 200))],
+    }
+
+
+@common_router.post("/review")
+def record_mapping_review(
+    body: MappingReviewBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Record one standing decision. Idempotent on the mapping's identity."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    verdict = (body.verdict or "").strip().lower()
+    if verdict not in _VERDICTS:
+        raise HTTPException(400, f"verdict must be one of {sorted(_VERDICTS)}")
+    if verdict == "retargeted" and not (body.retarget_scf_id or "").strip():
+        raise HTTPException(400, "retargeted requires retarget_scf_id")
+
+    release = (
+        db.query(SCFRelease)
+        .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True))
+        .order_by(desc(SCFRelease.imported_at))
+        .first()
+    )
+    row = (
+        db.query(SCFMappingReview)
+        .filter(SCFMappingReview.tenant_id == tenant_id,
+                SCFMappingReview.source_slug == body.source_slug,
+                SCFMappingReview.requirement_code == body.requirement_code,
+                SCFMappingReview.scf_id == body.scf_id)
+        .first()
+    )
+    if row is None:
+        row = SCFMappingReview(tenant_id=tenant_id, source_slug=body.source_slug,
+                               requirement_code=body.requirement_code, scf_id=body.scf_id)
+        db.add(row)
+    row.verdict = verdict
+    row.retarget_scf_id = (body.retarget_scf_id or None) if verdict == "retargeted" else None
+    row.note = body.note or None
+    row.reviewed_by = current_user.id
+    row.reviewed_at = datetime.utcnow()
+    row.release_version = release.version if release else None
+    db.commit()
+    return {"ok": True, "verdict": verdict,
+            "identity": [body.source_slug, body.requirement_code, body.scf_id]}
+
+
 def _legacy_common_controls(db: Session, tenant_id: int) -> Dict[str, Any]:
     """Pre-SCF Probo library. Kept only until every tenant has an SCF release."""
     data = _read_json("common", "controls.json")
@@ -1286,6 +1440,12 @@ def get_common_control(
     idx = _requirement_index()
     versions = idx.get("__versions__", {})
 
+    # A reviewer's suppression is a standing decision: the row is wrong and does
+    # not come back on the next release. Applied at read time rather than by
+    # deleting the mapping, so the catalogue stays a faithful copy of what was
+    # imported and the decision remains visible and reversible.
+    suppressed = _suppressed_pairs(db, tenant_id)
+
     groups: Dict[str, Dict[str, Any]] = {}
     for slug, code, prov, conf, mode, pivot in (
         db.query(SCFMapping.source_slug, SCFMapping.requirement_code,
@@ -1296,6 +1456,8 @@ def get_common_control(
                 SCFMapping.provenance.in_(("resolver", "ai")))
         .all()
     ):
+        if (slug, code, scf_id) in suppressed:
+            continue
         g = groups.setdefault(slug, {
             "framework": slug,
             "label": _FW_LABELS.get(slug, slug.replace("_", " ").title()),

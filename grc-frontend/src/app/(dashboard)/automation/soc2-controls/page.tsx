@@ -11,7 +11,7 @@ import { Fragment, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Loader2, RefreshCw, Search, Layers, List, ListChecks } from 'lucide-react';
+import { Loader2, RefreshCw, Search, Layers, List, ListChecks, ShieldCheck } from 'lucide-react';
 import { automationApi } from '@/lib/api';
 import {
   SubTypeChip, ControlStatusPill, CONTROL_STATUS, FrameworkBadge,
@@ -215,6 +215,13 @@ export default function CommonControlsLibraryPage() {
           >
             <ListChecks className="h-3.5 w-3.5" />
             Coverage
+          </Link>
+          <Link
+            href="/automation/soc2-controls/review"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+            Review
           </Link>
           <button
             onClick={() => seed.mutate()}

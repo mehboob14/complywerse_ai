@@ -5009,6 +5009,20 @@ export const automationApi = {
   // the reason it cannot be (binds the regulator, outside the catalogue).
   getRequirementCoverage: (framework?: string) =>
     apiClient.get('/automation/common/coverage', { params: framework ? { framework } : undefined }),
+  // Mappings a reviewer should look at, worst first — lowest confidence, then
+  // fan-out, then material controls. Rows already ruled on never come back.
+  getMappingReviewQueue: (params?: { framework?: string; limit?: number }) =>
+    apiClient.get('/automation/common/review-queue', { params }),
+  // One standing decision, keyed on the mapping's identity so it survives the
+  // next SCF release re-import.
+  recordMappingReview: (body: {
+    source_slug: string;
+    requirement_code: string;
+    scf_id: string;
+    verdict: 'confirmed' | 'suppressed' | 'retargeted';
+    retarget_scf_id?: string;
+    note?: string;
+  }) => apiClient.post('/automation/common/review', body),
   listCriteria: (framework: AutomationFramework = 'soc2') =>
     apiClient.get(`/automation/${framework}/criteria`),
   listChecks: (params?: { control_id?: string }) =>

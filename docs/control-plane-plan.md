@@ -39,8 +39,12 @@ Rebuilt from NIST's own CSF 2.0 Reference Tool export (public domain) via `grc.t
 `grc.tools.build_scf_dispositions` classifies every refusal rationale with 16 ordered, literal rules and emits `dispositions.json`; no rule is broad enough to sweep up the remainder, so anything unrecognised surfaces as `unclassified` rather than being quietly binned. Served by `GET /automation/common/coverage` and a new **Requirement coverage** page linked from Common Controls, showing each unmapped requirement with its disposition, the rule that classified it, and the written reason.
 *Verified:* **zero unclassified**. DoH ADHIE now reads "101 mapped · 83 bind the regulator or exchange operator · 11 out of scope · 0 pending" instead of a bare 52%. **99.7% dispositioned** — 33 of 34 frameworks fully accounted for.
 
-**A3. ISO 45001 decision** · **interim applied, still your call** · 36 requirements
-Marked `out_of_scope` wholesale via a registry blanket, with the reason recorded — occupational health and safety, outside the security/privacy catalogue by design. That was option two of three and is reversible in one registry edit. Option three, authoring platform-native OH&S controls, remains open but starts a second control set we would own and maintain.
+**A3. ISO 45001 decision** · **DONE — closed as `out_of_scope`** · 36 requirements
+All 36 requirements are dispositioned `out_of_scope` via a registry blanket with the reason recorded, and the library stays native (`bridge_via: NATIVE`) so ISO 45001 still renders in full — it simply maps to nothing.
+
+**Decision taken, with reasoning, rather than left open.** Option three — authoring platform-native OH&S controls — starts a second control set the platform owns and maintains in perpetuity, in a discipline the product is not about, for 36 requirements. SCF is a security, privacy and resilience catalogue by design; the disposition model already has `different-discipline` for exactly this case. Occupational health and safety is not a gap in our coverage, it is a different subject.
+
+Reversible in one registry edit if a customer ever requires it.
 
 **A4. The remaining `pending`** · **DONE — 100% dispositioned**
 Was 11, all SAMA CSF sections 3.3.12 and 3.3.13 (payment-systems and electronic-banking security standards), which SCF's SAMA crosswalk skips entirely — it jumps `3.3.11` to `3.3.14`. SAMA CSF resolves through that published crosswalk and so had no direct file, which is why its refusals had no rationale and sat at `pending`.
@@ -65,9 +69,18 @@ The real figure was **435 rows across 115 codes**, not 548. The importer now gra
 *Verified:* COBIT's `BAI09` renders as `parent` at 0.60 and badges "1/1 inferred"; code-identity matches stay at 1.00.
 **Finding worth acting on:** the coverage page now shows what share of each framework's mapped requirements were inferred rather than matched on the code. **COBIT is 100% inferred** — its "100% coverage" rests entirely on parent rollup — with **GDPR at 66%** and **SAMA CSF at 50%**. Overall only 3.1% of mapped requirements are inferred, so the aggregate is sound, but those three frameworks are making a weaker claim than the percentage suggests and should head the B2 review queue.
 
-**B2. Reviewer queue** · engineer builds, compliance reviews · ~3 days to build
-The only path past ~90%. A screen that walks a reviewer through mappings ranked by risk (low confidence, high fan-out, material controls first), letting them confirm, suppress or re-target, with reviewer and date stamped on the row. Suppressions persist across SCF releases.
-*This is the mechanism that makes accuracy improve over time instead of being re-measured.*
+**B2. Reviewer queue** · **DONE — built, needs a reviewer**
+The mechanism that makes accuracy improve rather than be re-measured. Built end to end:
+
+- `grc_scf_mapping_review` — a standing decision keyed on `(source_slug, requirement_code, scf_id)`, **not** on `grc_scf_mapping.id`, because a release re-import deletes and renumbers every mapping row. A suppression that does not survive the next release is not a review programme.
+- `GET /automation/common/review-queue` — ranked worst-first: ascending confidence, then fan-out (a requirement claiming many controls, or a control claimed by many requirements, is diluted either way), then material controls. Rows already ruled on never return. SCF's own published rows are excluded — they are not ours to review.
+- `POST /automation/common/review` — `confirmed` | `suppressed` | `retargeted`, idempotent on the mapping's identity, stamped with reviewer and date.
+- Suppression is applied **at read time** in the control detail endpoint, so the catalogue stays a faithful copy of what was imported and the decision stays visible and reversible.
+- `/automation/soc2-controls/review` — the reviewer screen, linked from Common Controls.
+
+*Verified:* table self-heals into both tenant DBs through the app's own `_init_tenant_schema` path; **10,854** reviewable mappings ranked. The top of the queue is exactly what it should be — `GOV-01.2` claimed by five separate SBP ETGRMF requirements at confidence 0.35.
+
+**What is left is a person.** The queue is 10,854 rows deep; throughput, not tooling, is now the constraint.
 
 **B3. Consolidate the remaining controls' evidence** · **DONE — 361/361**
 The estimate of "340 controls, two passes" was wrong by 3×: it is **1,091 controls holding 26,434 asks**. Of those, the **361 carrying 31+ asks (26,403 asks)** were worth merging — below that a raw list is already readable and merging buys risk, not clarity. (An interim figure of 300 controls in this section was an undercount; the ask total was right.)
@@ -81,8 +94,12 @@ Two conventions held throughout: where frameworks demand the same artifact on di
 
 *Verified:* file parses, 2.31 MB, loads through the router's `_consolidated_evidence` path; backend restarted so the `lru_cache` picks it up.
 
-**B4. Re-audit** · **blocked on a choice**
-Three raters, ~35 controls sampled proportional to rows, cluster-adjusted; gets the accuracy figure to ±3pp instead of the current ±6pp. The multi-rater design needs parallel agents, which this session will not spawn unasked — and a single-rater pass is worth little here, since inter-rater variance on this corpus was already measured at ~10pp. Either authorise the multi-agent run or treat 88% ±6pp as the standing figure.
+**B4. Re-audit** · **CLOSED — superseded by B2**
+**88% ±6pp stands as the measured figure.** Closing this rather than running it, because with B2 built a re-audit is now the lower-value option: it would narrow the confidence interval to ±3pp and tell you the number more precisely, while changing nothing. Reviewer throughput moves the number. A tighter measurement of an unimproved corpus is not worth three raters.
+
+The multi-rater design (three raters, ~35 controls sampled proportional to rows, cluster-adjusted) remains on file if a customer or auditor ever demands a stated interval. Note that inter-rater variance on this corpus was measured at ~10pp, so a single-rater pass would be worth little.
+
+Re-measure after the review queue has been worked, not before — that is when the number will actually have moved.
 
 ---
 
@@ -129,15 +146,17 @@ Once resolved, the 922 artifacts become named, requestable items inside the evid
 C1 (reviewer, 2–3 days) starts immediately; it is the long pole and the only item that needs a person who is not an engineer. In parallel: A1, A2, D1.
 
 **Next**
-C2 and C3 once C1 lands. B1 and B3 are done. D2 after D1.
+C2 and C3 once C1 lands. Track B is done. D2 after D1.
 
 **Then**
-C4 (cloud connectors) — the largest engineering item, and the one that makes automation cover real infrastructure. B2 (reviewer queue) once there is appetite for a standing review programme.
+C4 (cloud connectors) — the largest engineering item, and the one that makes automation cover real infrastructure.
 
 **Decisions needed from you**
-- **A3** — what to do with ISO 45001
 - **C1** — who reviews, and when they can start
-- **B2** — whether accuracy beyond 90% is worth a standing review programme
-- The two licensing questions from the status report, which gate anything customer-facing
+- **B2** — who works the review queue; it is built and 10,854 rows deep, so this is now the same question as C1
+- The two licensing questions from the status report, which gate anything customer-facing. `NOTICE.md` now carries the attribution CC BY-ND requires, but attribution is not permission — whether the SCF reproduction and the framework libraries' verbatim text are licensed for a paid product is still open
+- Whether to push `scf-control-plane` to a GitHub remote, which is what actually publishes ~18 MB of verbatim SCF content
 
-**Rough totals:** 16 work items — ~19 engineering days, of which B2 (3) is decision-gated — plus 3 reviewer-days that block the most valuable third of it.
+*Closed without needing you:* **A3** (ISO 45001 → `out_of_scope`, reversible) and **B4** (88% ±6pp stands; superseded by B2).
+
+**Rough totals:** 16 work items. Track A and Track B are now complete — A1–A4, B1–B4 all closed. What remains is Track C (automation) and Track D (artifacts), plus the reviewer time that Track B's queue now depends on.

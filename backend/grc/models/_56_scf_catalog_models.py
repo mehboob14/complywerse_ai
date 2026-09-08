@@ -404,3 +404,43 @@ class SCFAuditPeriod(Base):
         UniqueConstraint("tenant_id", "scope_id", "name", name="uq_scf_audit_period_name"),
         Index("ix_scf_audit_period_status", "tenant_id", "status"),
     )
+
+
+class SCFMappingReview(Base):
+    """A reviewer's standing decision on one requirement->control mapping.
+
+    Keyed on the mapping's stable identity (source_slug, requirement_code,
+    scf_id) rather than on grc_scf_mapping.id, because a release re-import
+    deletes and renumbers every mapping row. That is the whole point: a
+    suppression that does not survive the next SCF release is not a review
+    programme, it is a re-measurement, and the accuracy figure never improves.
+
+    verdict:
+      confirmed   the mapping stands; stops it reappearing in the queue
+      suppressed  the mapping is wrong; excluded from requirement groups
+      retargeted  wrong control, right requirement; retarget_scf_id carries the
+                  replacement, surfaced alongside the resolver's own rows
+    """
+    __tablename__ = "grc_scf_mapping_review"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+
+    source_slug = Column(String(64), nullable=False)
+    requirement_code = Column(String(96), nullable=False)
+    scf_id = Column(String(16), nullable=False)
+
+    verdict = Column(String(12), nullable=False)          # confirmed|suppressed|retargeted
+    retarget_scf_id = Column(String(16), nullable=True)
+    note = Column(Text, nullable=True)
+
+    reviewed_by = Column(Integer, nullable=False, index=True)
+    reviewed_at = Column(DateTime, default=datetime.utcnow)
+    # provenance only — which release the reviewer was looking at when deciding
+    release_version = Column(String(16), nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "source_slug", "requirement_code", "scf_id",
+                         name="uq_scf_mapping_review_identity"),
+        Index("ix_scf_mapping_review_lookup", "tenant_id", "source_slug", "verdict"),
+    )

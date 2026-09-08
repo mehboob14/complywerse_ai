@@ -152,11 +152,12 @@ def main() -> int:
         print(f"{slug:<26}{len(clean):>7}{len(clean)-gaps:>8}{gaps:>6}{bad:>5}{n_rows:>7}  "
               f"h={conf['high']} m={conf['medium']} l={conf['low']}")
 
-    with gzip.open(SCF_DIR / "direct.csv.gz", "wt", encoding="utf-8", newline="") as gz:
-        w = csv.writer(gz)
-        w.writerow(["scf_id", "source_slug", "requirement_code", "match_mode",
-                    "provenance", "confidence", "pivot_via_slug"])
-        w.writerows(sorted(set(map(tuple, rows))))
+    # The csv has exactly one writer, and it unions. Rebuilding it from this
+    # run's rows alone would drop every row belonging to a framework this
+    # result does not cover — 968 of the 4,858 rows already have no JSON entry
+    # to be rebuilt from, so that loss would be silent and unrecoverable.
+    print("-" * 84)
+    _merge_authored()
 
     print("-" * 84)
     print(f"{'TOTAL':<26}{tot['judged']:>7}{tot['judged']-tot['gap']:>8}{tot['gap']:>6}{tot['bad']:>5}"
