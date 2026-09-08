@@ -3,10 +3,10 @@ Vulnerability Register + finding detail show GENUINELY DIFFERENT attack scenario
 (network RCE, local privilege-escalation, user-interaction), instead of the single
 generic no-CWE chain every unclassified scanner finding collapses to.
 
-Usage (run from the backend dir, with the app venv):
-    python scripts/seed_demo_cves.py [tenant_slug]
+Usage (run from the backend dir, with the app venv / python3):
+    python3 scripts/seed_known_cves.py [tenant_slug]
 
-No slug -> auto-detects the tenant that holds the liztek / ubuntu demo assets
+No slug -> auto-detects the tenant that holds the liztek / ubuntu assets
 (skipping *_bak_* backups). Idempotent: skips any CVE already present. Links
 network vulns to an internet-facing asset and local priv-esc vulns to an internal
 asset (falling back to the internet-facing one if the tenant has no internal host).
@@ -57,7 +57,7 @@ CVES = [
 def detect_slug():
     if len(sys.argv) > 1:
         return sys.argv[1]
-    # scan tenant DBs for the one holding the liztek/ubuntu demo assets, skip backups
+    # scan tenant DBs for the one holding the liztek/ubuntu assets, skip backups
     admin_url = MASTER or TMPL.format(slug="postgres")
     eng = create_engine(admin_url)
     with eng.connect() as c:
