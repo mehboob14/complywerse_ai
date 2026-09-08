@@ -72,6 +72,13 @@ export type ChartKind =
   | 'pie' | 'donut' | 'treemap'                  // proportion
   | 'radar' | 'scatter' | 'heatmap';             // compare
 
+/** What the report BODY renders (distinct from `ReportView`, which is the
+ *  explore-grid's saved view state).
+ *  · `table`     — rows, the detail view
+ *  · `dashboard` — every visible column auto-charted, no setup needed
+ *  · ChartKind   — one chart built from the Summarize setup */
+export type ReportBodyView = 'table' | 'dashboard' | ChartKind;
+
 /** A saved report definition — the unit the builder edits and persists. */
 export interface ReportSpec {
   id: string;
@@ -85,7 +92,7 @@ export interface ReportSpec {
   measures: Measure[];
   rules: FilterRules;
   search: string;
-  view: 'table' | ChartKind;
+  view: ReportBodyView;
   measureIdx: number;          // which measure the chart plots (charts show one)
   visibleColumns?: string[];     // flat table columns (detail mode)
   columnWidths?: Record<string, number>;

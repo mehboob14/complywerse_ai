@@ -7,8 +7,9 @@ import {
   AlertCircle, ArrowDownUp, Bookmark, Check, ChevronDown, Columns3, Copy, Download,
   FileSpreadsheet, FileText, FileType2, Filter, FolderOpen, LayoutGrid, Loader2,
   Lock, Plus, Printer, Save, Search, Sigma, Trash2, Users, X, Pencil,
+  BarChart3, Table2,
 } from 'lucide-react';
-import type { ColType, ColumnDef, FilterRules, ReportDataset, ReportSpec, Row, ServerQuery, SortSpec } from './types';
+import type { ChartKind, ColType, ColumnDef, FilterRules, ReportDataset, ReportSpec, ReportBodyView, Row, ServerQuery, SortSpec } from './types';
 import { emptySpec } from './types';
 import {
   asRows, compareRows, describeRules, isActiveCondition,
@@ -18,6 +19,10 @@ import {
   aggregateRows, canServerAggregate, isSummaryMode, measureColKey, measureLabel,
 } from './aggregate-utils';
 import ReportDataTable from './ReportDataTable';
+import DashboardView from './DashboardView';
+import ChartViewStrip from './ChartViewStrip';
+import PivotChart from './PivotChart';
+import { buildPivot } from './pivot';
 import FilterBuilder from './FilterBuilder';
 import ColumnPicker from './ColumnPicker';
 import SummarizePanel from './SummarizePanel';
@@ -559,6 +564,28 @@ export default function ReportBuilder({
   const displayCols = summaryTable?.cols ?? cols;
   const displayRows = summaryTable?.rows ?? filteredRows;
   const displayVisibleKeys = summaryTable?.visibleKeys ?? visibleKeys;
+
+  // ── View mode ─────────────────────────────────────────────────────────────
+  // `spec.view` is persisted with the report, so a saved report reopens in the
+  // view it was saved in. Anything that isn't 'table' or 'dashboard' is a chart
+  // kind, which needs a Summarize setup to have anything to plot.
+  const view: ReportBodyView = spec.view ?? 'table';
+  const chartMode = view !== 'table' && view !== 'dashboard';
+  const setView = (v: ReportBodyView) => patch({ view: v });
+
+  /** Pivot backing the single-chart view. Null until Summarize is configured —
+   *  PivotChart renders its own "add a Row / Value" guidance in that case. */
+  const chartPivot = useMemo(() => {
+    if (!chartMode) return null;
+    return buildPivot(cols, filteredRows, dimensions, spec.col, spec.measures);
+  }, [chartMode, cols, filteredRows, dimensions, spec.col, spec.measures]);
+
+  /** Stable colour domain: taken from unfiltered rows so filtering a series out
+   *  never repaints the survivors. */
+  const chartColDomain = useMemo(() => {
+    if (!chartPivot?.hasCol) return [''];
+    return chartPivot.colKeys;
+  }, [chartPivot]);
 
   const ruleCount = spec.rules.conditions.filter(isActiveCondition).length;
   const activeConditions = spec.rules.conditions.filter(isActiveCondition);
@@ -1256,7 +1283,37 @@ export default function ReportBuilder({
           </ToolbarBtn>
         )}
 
-        <span className="ml-auto text-[11px] tabular-nums text-slate-400">
+        <div className="ml-auto inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+          {([
+            { v: 'table' as ReportBodyView, label: 'Table', icon: <Table2 className="h-3.5 w-3.5" /> },
+            { v: 'dashboard' as ReportBodyView, label: 'Dashboard', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+            { v: (chartMode ? view : 'bar') as ReportBodyView, label: 'Chart', icon: <BarChart3 className="h-3.5 w-3.5" /> },
+          ]).map((o, i) => {
+            const active = i === 0 ? view === 'table' : i === 1 ? view === 'dashboard' : chartMode;
+            return (
+              <button
+                key={o.label}
+                type="button"
+                onClick={() => setView(o.v)}
+                title={
+                  o.label === 'Dashboard'
+                    ? 'Every visible column charted automatically'
+                    : o.label === 'Chart'
+                      ? 'One chart from your Summarize setup'
+                      : 'Full rows with sort and export'
+                }
+                className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold transition-colors ${
+                  active ? 'bg-white text-primary-800 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                {o.icon}
+                <span className="hidden sm:inline">{o.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <span className="text-[11px] tabular-nums text-slate-400">
           {summaryMode
             ? `${displayRows.length.toLocaleString()} group${displayRows.length === 1 ? '' : 's'}`
             : `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows`}
@@ -1700,7 +1757,70 @@ export default function ReportBuilder({
       )}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col p-3 pt-2">
-        {summaryMode && !summaryTable && (serverAggLoading || isLoading || isFetching) ? (
+        {chartMode && (
+          <div className="mb-2 shrink-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <ChartViewStrip view={view as Exclude<ReportBodyView, 'dashboard'>} onChange={(v) => setView(v)} />
+          </div>
+        )}
+
+        {(view === 'dashboard' || chartMode) && (isLoading || isFetching) && filteredRows.length === 0 ? (
+          <div className="flex flex-1 items-center justify-center text-slate-400">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : view === 'dashboard' ? (
+          <DashboardView
+            cols={summaryMode && summaryTable ? displayCols : cols}
+            rows={summaryMode && summaryTable ? displayRows : filteredRows}
+            visibleKeys={summaryMode && summaryTable ? displayVisibleKeys : visibleKeys}
+            labelFor={(k) =>
+              summaryMode && summaryTable
+                ? (displayCols.find((c) => c.key === k)?.label ?? k)
+                : labelFor(k)
+            }
+            totalRows={rows.length}
+            showLegend={spec.showLegend !== false}
+            onOpenColumns={openAddData}
+          />
+        ) : chartMode && !summaryMode ? (
+          // A chart needs a Summarize setup; the Dashboard does not. Say so and
+          // offer both routes rather than leaving PivotChart's bare hint.
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
+            <BarChart3 className="h-9 w-9 text-slate-300" />
+            <h2 className="mt-3 text-base font-semibold text-slate-800">This chart needs a summary</h2>
+            <p className="mt-1 max-w-md text-sm text-slate-500">
+              Pick what to group by and what to measure, and this becomes a single chart. Or switch
+              to Dashboard, which charts every column you have selected with no setup.
+            </p>
+            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPanel('summarize')}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-600"
+              >
+                <Sigma className="h-3.5 w-3.5" />
+                Set up summary
+              </button>
+              <button
+                type="button"
+                onClick={() => setView('dashboard')}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Use Dashboard instead
+              </button>
+            </div>
+          </div>
+        ) : chartMode && chartPivot ? (
+          <div className="min-h-0 flex-1 rounded-xl border border-slate-200 bg-white p-3">
+            <PivotChart
+              result={chartPivot}
+              kind={view as ChartKind}
+              measureIdx={Math.min(spec.measureIdx ?? 0, Math.max(0, spec.measures.length - 1))}
+              colDomain={chartColDomain}
+              options={{ legend: spec.showLegend !== false, labels: !!spec.showLabels }}
+            />
+          </div>
+        ) : summaryMode && !summaryTable && (serverAggLoading || isLoading || isFetching) ? (
           <div className="flex flex-1 items-center justify-center text-slate-400">
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
