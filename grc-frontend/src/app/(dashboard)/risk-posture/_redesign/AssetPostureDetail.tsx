@@ -389,7 +389,14 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
     if (probe.cdn_waf) surface.push(['CDN/WAF', String(probe.cdn_waf), false]);
     surface.push(['Security headers', `${Object.keys(probe.security_headers || {}).length}/6`, Object.keys(probe.security_headers || {}).length < 4]);
 
-    const extraPill = <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, background: '#FBF2DF', color: '#9A6410' }}>Health {grade} · {hScore}/100</span>;
+    const extraPill = (
+      <>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, background: '#FBF2DF', color: '#9A6410' }}>Health {grade} · {hScore}/100</span>
+        {d.subdomain_rollup && d.subdomain_rollup.count > 0 && (
+          <span title="This score includes a weighted Subdomain-exposure component" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, background: '#E4F8F2', color: '#0A5A4B' }}>+{d.subdomain_rollup.count} subdomains in score</span>
+        )}
+      </>
+    );
     const subLine = `${titleCase(d.asset?.asset_type) || 'External asset'} · criticality ${(d.asset?.criticality || 'not set')} · scored on read · signals from EASM domain discovery`;
 
     return (

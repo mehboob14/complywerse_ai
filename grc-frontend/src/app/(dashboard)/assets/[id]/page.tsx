@@ -809,7 +809,11 @@ export default function AssetDetailPage() {
               <>
                 {/* External (EASM) assets: scanning-scope authorization sits above
                     the telemetry — passive is always allowed, active needs sign-off. */}
-                {overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
+                {/* Scanning-scope/authorization card hidden: it gated "active scanning", which is
+                    DELIBERATELY not implemented (external_probe.py) — so it exposed no extra data and
+                    only implied the passive scan was incomplete. Re-enable ONLY alongside a real
+                    active-scan feature (which the backend requires be authorization-gated). */}
+                {false && overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
                 <AssetOverviewDesign A={overviewData} />
               </>
             )}
