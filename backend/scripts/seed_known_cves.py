@@ -115,12 +115,12 @@ def main():
                    cve_id, cwe_id, cwe_ids, plugin_family, status, source,
                    epss_score, epss_percentile, kev_flag, kev_date_added, composite_priority,
                    public_exploit_count, exploitdb_count, remediation_guidance,
-                   first_detected, last_seen, discovered_at)
+                   first_detected, last_seen, discovered_at, created_at, updated_at)
                 VALUES
                   (:tid, :vid, :title, :descr, :sev, :cvss, :vec, '3.1',
                    :cve, :cwe, CAST(:cwes AS json), :fam, 'open', 'manual',
                    :epss, :epssp, :kev, :kevd, :cp,
-                   :pub, :edb, :rem, :first, :last, :disc)
+                   :pub, :edb, :rem, :first, :last, :disc, :disc, :now)
                 RETURNING id
             """), dict(
                 tid=tid, vid=cve, title=title,
@@ -129,14 +129,27 @@ def main():
                 epss=epss, epssp=min(0.99, epss), kev=kev, kevd=(now - timedelta(days=30)) if kev else None,
                 cp=cp, pub=pub, edb=edb,
                 rem=f"Apply the vendor patch for {cve}. Until patched, restrict exposure with a compensating control.",
-                first=first, last=now, disc=first,
+                first=first, last=now, disc=first, now=now,
             )).scalar()
+            # created_at/updated_at are ORM-side defaults that do NOT fire on a raw INSERT;
+            # set them explicitly above, else VulnerabilityResponse (created_at: datetime,
+            # non-optional) fails to serialise and getById + the list endpoint 500.
             c.execute(text("""
                 INSERT INTO grc_vulnerability_asset_links (vulnerability_id, asset_id, link_source, auto_linked, created_at)
                 VALUES (:v, :a, 'manual', false, :now) ON CONFLICT (vulnerability_id, asset_id) DO NOTHING
             """), dict(v=vid, a=asset[0], now=now))
             added += 1
             print(f"  + {cve:18} {cwe:9} {sev:8} AV={vec.split('AV:')[1][0]} -> asset {asset[0]}")
+
+        # Self-heal: any row (from an earlier run of this script) left with a NULL
+        # created_at breaks getById + the list endpoint (VulnerabilityResponse needs a
+        # datetime). Backfill it so re-running this script repairs prod in place.
+        healed = c.execute(text(
+            "UPDATE grc_vulnerabilities SET created_at = COALESCE(created_at, discovered_at, first_detected, now()) "
+            "WHERE created_at IS NULL")).rowcount
+        c.execute(text("UPDATE grc_vulnerabilities SET updated_at = COALESCE(updated_at, created_at, now()) WHERE updated_at IS NULL"))
+        if healed:
+            print(f"  healed {healed} row(s) that had a NULL created_at")
 
         total = c.execute(text("SELECT count(*) FROM grc_vulnerabilities")).scalar()
         withcve = c.execute(text("SELECT count(*) FROM grc_vulnerabilities WHERE cve_id IS NOT NULL AND cve_id<>''")).scalar()
