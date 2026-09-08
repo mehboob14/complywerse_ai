@@ -53,8 +53,8 @@ const CRIT: Record<string, { bg: string; fg: string }> = {
 };
 const CRIT_ORDER: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 
-const td: React.CSSProperties = { padding: '12px 14px', borderBottom: '1px solid #F0F3F5', color: '#3A4653' };
-const th: React.CSSProperties = { textAlign: 'left', padding: '11px 14px', borderBottom: '1px solid #E8ECEE', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.05em', color: '#8A95A1', fontWeight: 600, position: 'sticky', top: 0, background: '#FAFBFC', zIndex: 1, whiteSpace: 'nowrap' };
+const td: React.CSSProperties = { padding: '11px 12px', borderBottom: '1px solid #F0F3F5', color: '#3A4653' };
+const th: React.CSSProperties = { textAlign: 'left', padding: '10px 12px', borderBottom: '1px solid #E8ECEE', fontSize: 9.5, textTransform: 'uppercase', letterSpacing: '.05em', color: '#8A95A1', fontWeight: 600, position: 'sticky', top: 0, background: '#FAFBFC', zIndex: 1, whiteSpace: 'nowrap' };
 
 // ── EASM subdomain roll-up ──────────────────────────────────────────────────
 // registrableDomain (apex) is the full Public Suffix List, imported from @/lib/domains.
@@ -199,8 +199,7 @@ export default function InventoryRedesign(p: Props) {
       {/* INSIGHT RIBBON — 3-column grid */}
       <section className="card ribbon">
         <div className="rib-score">
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}><span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Inventory score</span><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.09em', padding: '2px 9px', borderRadius: 999, background: sBg, color: sColor }}>{gradeLbl}</span></div>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, margin: '3px 0 9px' }}><b className="num" style={{ fontSize: 22, fontWeight: 600, letterSpacing: '-.03em' }}>{score == null ? '—' : scorePct}</b><span style={{ fontSize: 13, color: '#8A95A1' }}>/ 100</span></div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 5 }}><span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 500 }}>Inventory score</span><b className="num" style={{ fontSize: 15, fontWeight: 600 }}>{score == null ? '—' : scorePct}</b><span style={{ fontSize: 10.5, color: '#8A95A1' }}>/ 100</span><span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '.09em', padding: '2px 9px', borderRadius: 999, background: sBg, color: sColor }}>{gradeLbl}</span></div>
           <div style={{ position: 'relative', height: 9, borderRadius: 999, background: '#EAEEF1' }}><i className="grow" style={{ display: 'block', height: '100%', width: scorePct + '%', borderRadius: 999, background: sGrad }} /><span style={{ position: 'absolute', top: -4, left: '85%', width: 2, height: 17, background: '#0F1F2B', borderRadius: 2 }} /></div>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--faint)', marginTop: 6 }}><span>Weighted across 7 dimensions</span><span>target 85</span></div>
         </div>
@@ -210,8 +209,8 @@ export default function InventoryRedesign(p: Props) {
           <div><div style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 500 }}>CDE / PCI</div><div style={{ margin: '3px 0' }}><b className="num" style={{ fontSize: 17, fontWeight: 600, color: '#28578F' }}>{c.cde}</b></div><div style={{ fontSize: 10.5, color: 'var(--faint)' }}>cardholder env</div></div>
         </div>
         <div className="rib-att">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={16} style={{ color: '#8A5A0C' }} /><span style={{ fontSize: 12, color: '#7A4E0A', fontWeight: 500 }}>Needs attention</span><b className="num" style={{ marginLeft: 'auto', fontSize: 18, color: '#8A5A0C' }}>{attnTotal}</b></div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 11 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}><AlertTriangle size={16} style={{ color: '#8A5A0C' }} /><span style={{ fontSize: 12, color: '#7A4E0A', fontWeight: 500 }}>Needs attention</span><b className="num" style={{ marginLeft: 'auto', fontSize: 15, color: '#8A5A0C' }}>{attnTotal}</b></div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 6 }}>
             <button className="att" onClick={() => { setView('critical'); setTab('reg'); }}>{openVulns} open vulns</button>
             <button className="att" onClick={() => { setView('unowned'); setTab('reg'); }}>{c.unowned} unowned</button>
             <button className="att" onClick={() => { setView('needcia'); setTab('reg'); }}>{c.needcia} unassessed</button>
@@ -221,8 +220,8 @@ export default function InventoryRedesign(p: Props) {
       </section>
 
       {/* WORKSPACE */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,236px) minmax(0,1fr)', gap: 18, alignItems: 'start' }}>
-        <aside className="rail card" style={{ padding: '14px 12px', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,224px) minmax(0,1fr)', gap: 14, alignItems: 'start' }}>
+        <aside className="rail card" style={{ padding: '9px 9px', display: 'flex', flexDirection: 'column', gap: 3 }}>
           <div className="railcap">Views</div>
           {railBtn('all', 'All assets', c.total)}
           {railBtn('critical', 'Critical', c.critical, '#C2453F')}
@@ -270,7 +269,7 @@ export default function InventoryRedesign(p: Props) {
                   <span style={{ flex: 1 }} /><button className="bulkb" onClick={() => setSel(new Set())}>Deselect all</button>
                 </div>
               )}
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '13px 16px', borderBottom: '1px solid var(--bd2)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '9px 16px', borderBottom: '1px solid var(--bd2)' }}>
                 <h3 style={{ fontSize: 13.5 }}>Asset Register</h3>
                 <span style={{ fontSize: 11.5, color: 'var(--muted2)' }}><b className="num" style={{ color: 'var(--sec)' }}>{rows.length}</b> shown · {c.total} total</span>
               </div>

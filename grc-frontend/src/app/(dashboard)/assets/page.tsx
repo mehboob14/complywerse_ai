@@ -397,7 +397,7 @@ export default function AssetsPage() {
   const noopEvent = { stopPropagation: () => {} } as unknown as React.MouseEvent;
 
   return (
-    <div className="asset-suite assets-light space-y-2 px-3 sm:px-4 pt-0" style={{ marginTop: -10 }}>
+    <div className="asset-suite assets-light space-y-2 px-3 sm:px-4 pt-0" style={{ marginTop: -10, fontSize: 13.5 }}>
       {/* Common header (mock): one title + actions on top, the Inventory | CIS
           toggle below it — so the page name appears once and the toggle sits
           left, styled like the mock (grey track, white pill, green active). */}
