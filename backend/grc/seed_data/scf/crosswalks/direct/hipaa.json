@@ -1,0 +1,29 @@
+{
+ "framework": "hipaa",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "§164.522",
+   "scf_ids": [
+    "PRI-05.4",
+    "PRI-06.4"
+   ],
+   "confidence": "medium",
+   "rationale": "The covered entity must let individuals request restrictions on uses and disclosures and accommodate reasonable confidential-communication requests; PRI-05.4 restricts processing to what the data subject has authorised, which is the mechanism that gives effect to an agreed restriction, and PRI-06.4 is the process for receiving and responding to such subject requests — the mandatory out-of-pocket restriction is a HIPAA-specific rule with no SCF analogue.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "§164.400",
+   "scf_ids": [
+    "IRO-04.1",
+    "IRO-10",
+    "IRO-10.2"
+   ],
+   "confidence": "high",
+   "rationale": "Breaches of unsecured PHI must be notified to individuals, HHS and sometimes media within 60 days with prescribed content, and business associates must notify the covered entity; IRO-04.1 addresses data breaches according to applicable law, IRO-10 delivers the timely reporting to affected clients and regulatory authorities, and IRO-10.2 is the timely reporting of incidents involving sensitive or regulated data.",
+   "unmappable_reason": null
+  }
+ ]
+}

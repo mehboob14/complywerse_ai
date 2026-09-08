@@ -1,0 +1,638 @@
+{
+ "framework": "sbp_internet_banking",
+ "library": "sbp_internet_banking.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "2",
+   "iso_clauses": [
+    "5.1",
+    "5.2",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a board-approved, periodically reviewed Internet Banking security framework document with defined BOD/management/employee roles — the definition-approval-review lifecycle of 5.1 plus the role allocation of 5.2 and management ownership of 5.4."
+  },
+  {
+   "control_id": "2(a)",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The stated objective is that systems are free from unauthorized access and customer information is not modified, which is the access-control policy objective of 5.15 stated as a goal rather than an implemented control."
+  },
+  {
+   "control_id": "2(b)",
+   "iso_clauses": [
+    "8.24",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Confidentiality of customer data specifically at rest, in processing and in transit is achieved in ISO 27002 by cryptographic protection (8.24) and by secured transfer channels (5.14)."
+  },
+  {
+   "control_id": "2(c)",
+   "iso_clauses": [
+    "5.30",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Availability and prompt access to Internet Banking systems maps to ICT continuity readiness (5.30) and to the redundancy of processing facilities that delivers required availability (8.14)."
+  },
+  {
+   "control_id": "2(d)",
+   "iso_clauses": [
+    "8.15",
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Traceability of every transaction is delivered by transaction logging (8.15), and the objective explicitly requires SOPs to achieve it (5.37)."
+  },
+  {
+   "control_id": "2(e)",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Proactive detection of unauthorized access and identification of anomalous/fraudulent transactions is exactly the anomalous-behaviour monitoring required by 8.16."
+  },
+  {
+   "control_id": "2.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Conducting, documenting and annually re-performing a security risk assessment is an ISMS management-process requirement (ISO 27001 clause 6.1.2/8.2), not an ISO 27002 control — 27002 contains no risk-assessment control to map to."
+  },
+  {
+   "control_id": "2.1(a)",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires a current documented description of systems and the locations/methods holding customer information, which is the asset and information inventory of 5.9 applied as a risk-assessment input."
+  },
+  {
+   "control_id": "2.1(b)",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying the information and information systems to be protected is verbatim the identification of information and associated assets required by 5.9."
+  },
+  {
+   "control_id": "2.1(c)",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ranking sensitive systems, payment data and applications high/medium/low by importance is information classification per 5.12."
+  },
+  {
+   "control_id": "2.1(d)",
+   "iso_clauses": [
+    "8.8",
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assessing threats and vulnerabilities to systems and payment data corresponds to technical vulnerability identification (8.8) informed by threat information (5.7), though SBP frames it as a risk-assessment input rather than an operational process."
+  },
+  {
+   "control_id": "2.1(e)",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "ISO 27002 has no fraud or identity-theft control; the only related theme is the identity lifecycle assurance of 5.16, so this is a thematic link only."
+  },
+  {
+   "control_id": "2.1(f)",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Evaluating effectiveness of existing controls against each threat is closest to the independent review of the information security approach in 5.35, but SBP requires it as part of self-performed risk assessment rather than an independent review."
+  },
+  {
+   "control_id": "2.1(g)",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining security and contractual responsibilities of service providers with access to bank systems and data is precisely the agreement content required by 5.20."
+  },
+  {
+   "control_id": "2.1(h)",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Assessing compliance, concentration, operational, country and legal risk before entering and while managing outsourcing arrangements is the supplier-relationship risk process of 5.19."
+  },
+  {
+   "control_id": "2.1(i)",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires assessment of the bank's obligations under named sections of the Payment Systems and EFT Act 2007, which is the identification of legal/statutory requirements in 5.31."
+  },
+  {
+   "control_id": "2.2",
+   "iso_clauses": [
+    "5.15",
+    "8.3",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates a minimum baseline of access rights management, OS access, application access, remote and network access controls — 5.15 for the access-control rule set, 8.3 for application/data access restriction, 8.20 for network access."
+  },
+  {
+   "control_id": "2.2.1",
+   "iso_clauses": [
+    "8.5",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Section heading introducing the mandatory customer authentication control set, matching secure authentication (8.5) and the handling of authentication credentials (5.17)."
+  },
+  {
+   "control_id": "2.2.1(a)",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Registration/enrollment of Internet Banking customers only after due verification is the identity proofing and registration step of the identity lifecycle in 5.16."
+  },
+  {
+   "control_id": "2.2.1(b)",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandatory two-factor authentication (password plus one-time token/dongle) is the strong authentication technique explicitly required by 8.5."
+  },
+  {
+   "control_id": "2.2.1(c)",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Additional layered authentication for high-value transactions is the risk-based step-up authentication contemplated by 8.5, though the transaction-value trigger is banking-specific."
+  },
+  {
+   "control_id": "2.2.1(d)",
+   "iso_clauses": [
+    "8.5",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Failed log-in attempt limits, session timeout and re-authentication are the log-on control behaviours of 8.5; mandated password change frequency is credential management under 5.17."
+  },
+  {
+   "control_id": "2.2.1(e)",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Periodic re-assessment of authentication controls against changing threats and breach history shares only its subject matter with 8.5; the reassessment cycle itself is an ISO 27001 management-process requirement."
+  },
+  {
+   "control_id": "2.2.2",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Heading scoping the following controls to bank employees using Internet Banking systems; only the general access-control rule-setting of 5.15 corresponds, with the substance in its sub-requirements."
+  },
+  {
+   "control_id": "2.2.2(a)",
+   "iso_clauses": [
+    "5.18",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Access rights matched to job function, authorized before change, periodically reviewed and least-privilege enforced is the provisioning/review cycle of 5.18, with least privilege over sensitive systems covered by 8.2."
+  },
+  {
+   "control_id": "2.2.2(b)",
+   "iso_clauses": [
+    "8.2",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting, regularly monitoring and auditing privileged operating-system access is the privileged access rights control 8.2, with the monitoring obligation in 8.16."
+  },
+  {
+   "control_id": "2.2.2(c)",
+   "iso_clauses": [
+    "6.7",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Remote access to high-risk assets requiring written management approval, strong authentication and encrypted communications matches the remote-working security measures of 6.7 and the strong authentication requirement of 8.5."
+  },
+  {
+   "control_id": "2.2.2(d)",
+   "iso_clauses": [
+    "7.2",
+    "7.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting physical access to systems, segments and data sites and logging/monitoring it is the physical entry control 7.2 combined with the surveillance and logging of 7.4."
+  },
+  {
+   "control_id": "2.2.2(e)",
+   "iso_clauses": [
+    "8.20",
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Securing IT networks through multiple layers of controls is the layered network security of 8.20, with the layering between zones realised through network segregation (8.22)."
+  },
+  {
+   "control_id": "2.2.2(f)",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Firewalls deployed between security domains to control traffic per network risk classification is the gateway-enforced network segregation of 8.22 within the network security management of 8.20."
+  },
+  {
+   "control_id": "2.2.2(g)",
+   "iso_clauses": [
+    "8.16",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "IDS/IPS deployed between security domains is the intrusion-detection tooling named in 8.16, applied to network traffic managed under 8.20."
+  },
+  {
+   "control_id": "2.2.2(h)",
+   "iso_clauses": [
+    "5.16",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "ISO 27002 has no identity-theft/fraud-prevention control; the programme's identity-assurance element touches 5.16 and its protection of customer identity data touches 5.34, so the link is thematic only."
+  },
+  {
+   "control_id": "2.2.2(i)",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires reliable encryption for access, storage and data communication of sensitive payment data — the cryptographic use control 8.24."
+  },
+  {
+   "control_id": "2.2.2(j)",
+   "iso_clauses": [
+    "8.15",
+    "5.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining traceability of executed transactions to discharge statutory burden-of-proof obligations is transaction logging (8.15) plus the retention and integrity of those records (5.33)."
+  },
+  {
+   "control_id": "2.2.2(k)",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular employee training on security risks, controls, monitoring mechanisms and policy changes is the awareness, education and training control 6.3."
+  },
+  {
+   "control_id": "2.2.3",
+   "iso_clauses": [
+    "5.19",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Contractually binding service providers to these security regulations while the bank retains accountability is the supplier relationship policy of 5.19 implemented through the agreement requirements of 5.20."
+  },
+  {
+   "control_id": "2.2.3(a)",
+   "iso_clauses": [
+    "6.6",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires non-disclosure provisions and bank/SBP right-to-audit clauses in service provider contracts — NDA terms per 6.6 embedded in supplier agreements per 5.20."
+  },
+  {
+   "control_id": "2.2.3(b)",
+   "iso_clauses": [
+    "8.12",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires service providers to implement measures preventing loss, theft or leakage of customer information, i.e. data leakage prevention (8.12) imposed as a supplier agreement obligation (5.20)."
+  },
+  {
+   "control_id": "2.2.3(c)",
+   "iso_clauses": [
+    "5.22",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Service provider access to customer information must be request-triggered, strictly monitored, logged and periodically audited with no transfer to unauthorized media — supplier service monitoring/review (5.22) over a restricted access path (8.3)."
+  },
+  {
+   "control_id": "2.2.3(d)",
+   "iso_clauses": [
+    "5.30",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires service providers to hold DR plans, DR site tiers and asset lifecycle documentation — ICT continuity readiness (5.30) imposed on the supplier under the supplier relationship control (5.19)."
+  },
+  {
+   "control_id": "2.2.3(d)(i)",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A disaster recovery plan aligned to the bank's business requirements is ICT readiness for business continuity based on business-derived recovery objectives (5.30)."
+  },
+  {
+   "control_id": "2.2.3(d)(ii)",
+   "iso_clauses": [
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining cold/warm/hot/satellite recovery sites is the provision of redundant information processing facilities in 8.14."
+  },
+  {
+   "control_id": "2.2.3(d)(iii)",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Documentation of IT asset life cycle management at the service provider is the maintained asset inventory and ownership record of 5.9."
+  },
+  {
+   "control_id": "2.3",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A formally approved mechanism for monitoring security controls, including analysis of monitoring method effectiveness, is the establishment of monitoring activities under 8.16."
+  },
+  {
+   "control_id": "2.3(a)",
+   "iso_clauses": [
+    "8.16",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Collecting and analysing host and network data on security events such as privileged access, configuration changes and critical application access is monitoring (8.16) fed by event logs (8.15)."
+  },
+  {
+   "control_id": "2.3(b)",
+   "iso_clauses": [
+    "5.24",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Nominating a rapid response team and documenting breach response methods is the incident response structure and responsibilities of 5.24, driven by proactive IDS/IPS monitoring (8.16)."
+  },
+  {
+   "control_id": "2.3(c)",
+   "iso_clauses": [
+    "8.16",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Monitoring and reporting on authentication controls maps to 8.16, and the requirement that it be formally documented and approved by senior management maps to management responsibilities in 5.4."
+  },
+  {
+   "control_id": "2.3(d)",
+   "iso_clauses": [
+    "5.30",
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defining system restoration procedures and restoration times is the recovery-time/procedure element of ICT continuity readiness (5.30), operationally supported by backup restoration (8.13)."
+  },
+  {
+   "control_id": "2.3(e)",
+   "iso_clauses": [
+    "5.35",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Self-assessments and independent security audits are the independent review of 5.35, and penetration testing is the vulnerability identification technique required by 8.8."
+  },
+  {
+   "control_id": "2.3(f)",
+   "iso_clauses": [
+    "5.36",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying policy violations is the compliance verification of 5.36, and detecting unauthorized configuration changes is the configuration monitoring/drift detection required by 8.9."
+  },
+  {
+   "control_id": "2.3(g)",
+   "iso_clauses": [
+    "8.15",
+    "5.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular periodic review of logs and audit trails is 8.15, and the mandated ten-year retention of those security logs is protection and retention of records under 5.33."
+  },
+  {
+   "control_id": "3",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A formal awareness programme on Internet Banking threats and safeguards matches 6.3, which extends awareness obligations to relevant interested parties, though ISO frames it around personnel rather than retail customers."
+  },
+  {
+   "control_id": "3(a)",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Explaining respective liabilities and responsibilities of bank and customer is a consumer-disclosure obligation; only the act of communicating security responsibilities to an interested party touches 6.3."
+  },
+  {
+   "control_id": "3(b)",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Compliance with the Section 30 disclosure requirements of the Payment Systems and EFT Act 2007 is the identification and meeting of a specific statutory requirement under 5.31."
+  },
+  {
+   "control_id": "3(c)",
+   "iso_clauses": [
+    "6.8",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Publishing help desk contact details for reporting lost credentials, fraud or identity theft is the security event reporting channel of 6.8 and the point-of-contact preparation required by 5.24."
+  },
+  {
+   "control_id": "3(d)",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A defined procedure for re-authenticating Internet Banking customers is a log-on/authentication procedure under 8.5, here communicated to customers as awareness material."
+  },
+  {
+   "control_id": "3(e)",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Customer complaint handling and dispute resolution for banking transactions is a consumer-protection and financial-redress obligation with no counterpart in ISO 27002, whose incident controls address security events, not customer disputes."
+  },
+  {
+   "control_id": "3(f)",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Yearly re-issuance of risk-mitigation guidelines to customers is the periodic refresh of awareness material required by 6.3."
+  },
+  {
+   "control_id": "3(g)",
+   "iso_clauses": [
+    "6.3",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Management review and evaluation of the awareness programme matches the evaluation of awareness effectiveness in 6.3 and management's ownership of security promotion in 5.4."
+  },
+  {
+   "control_id": "4",
+   "iso_clauses": [
+    "5.5",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandatory quarterly submission of established security breach reports to the SBP Payment Systems Department is reporting to a regulatory authority under 5.5, discharged as a statutory obligation under 5.31."
+  },
+  {
+   "control_id": "5",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "States the regulations operate subject to all other SBP laws, rules and circulars — the identification and tracking of applicable regulatory requirements in 5.31."
+  },
+  {
+   "control_id": "5(a)",
+   "iso_clauses": [
+    "5.31",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Compliance with the SBP Outsourcing Arrangements circular is a regulatory obligation (5.31) whose subject matter is supplier/outsourcing security governance (5.19)."
+  },
+  {
+   "control_id": "5(b)",
+   "iso_clauses": [
+    "5.31",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Compliance with the SBP IT Security Guidelines circular is a regulatory obligation (5.31) requiring the bank's security policy set to reflect that external standard (5.1)."
+  },
+  {
+   "control_id": "5(c)",
+   "iso_clauses": [
+    "5.35",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The referenced circular covers information systems audits (independent review, 5.35) and system switchover planning (ICT readiness for continuity, 5.30)."
+  },
+  {
+   "control_id": "5(d)",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Compliance with the SBP Business Continuity Planning guidelines maps to maintaining information security during disruption (5.29) and the ICT continuity capability that supports it (5.30)."
+  },
+  {
+   "control_id": "ANNEX-I",
+   "iso_clauses": [
+    "5.5",
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The quarterly template compels reporting breach details to the regulator (5.5) and its columns for breach cause, impact and rectifying action capture the lessons-learned analysis of 5.27."
+  }
+ ]
+}

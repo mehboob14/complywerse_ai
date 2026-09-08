@@ -1,0 +1,621 @@
+{
+ "framework": "sbp_cloud",
+ "hop": "direct",
+ "mappings": [
+  {
+   "code": "1.1",
+   "scf_ids": [
+    "CLD-09",
+    "TPM-04.4",
+    "DCH-26"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation is to keep workloads with onshore CSPs and out of hostile jurisdictions, which is discharged by controls that constrain the geographic location of cloud processing/storage (CLD-09), restrict the third party's processing/storage locations (TPM-04.4), and manage exposure to arbitrary enforcement under foreign sovereignty regimes (DCH-26).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.4",
+   "scf_ids": [
+    "TPM-05.4",
+    "GOV-17"
+   ],
+   "confidence": "medium",
+   "rationale": "Only two clauses bind the RE: retained accountability for outsourced functions, discharged by delineating which security/compliance responsibilities stay with the RE versus the CSP (TPM-05.4), and submitting details of cloud outsourcing arrangements to SBP, discharged by regulator status-reporting (GOV-17).",
+   "uncovered_clause": "SBP's own powers to restrict outsourcing or direct migration to a designated community cloud bind the regulator, not the assessed entity, and have no control."
+  },
+  {
+   "code": "2.1",
+   "scf_ids": [
+    "GOV-02",
+    "CLD-01",
+    "TPM-01"
+   ],
+   "confidence": "high",
+   "rationale": "This is a genuinely programme-level requirement for a board-approved cloud outsourcing policy, so the policy-establishment and dissemination mechanism (GOV-02) plus the cloud (CLD-01) and third-party (TPM-01) programme controls it must span are the correct level.",
+   "uncovered_clause": "Board-of-Directors approval of the policy itself is not separately discharged by any control."
+  },
+  {
+   "code": "2.2",
+   "scf_ids": [
+    "TPM-04.1",
+    "TPM-02",
+    "TPM-03"
+   ],
+   "confidence": "high",
+   "rationale": "Due diligence of a CSP before outsourcing is discharged by a pre-acquisition third-party risk assessment (TPM-04.1) and criticality assessment (TPM-02), while proactive identification of sub-contracting risk is discharged by supply-chain risk evaluation and remediation (TPM-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3",
+   "scf_ids": [
+    "RSK-01",
+    "RSK-09",
+    "CLD-09"
+   ],
+   "confidence": "high",
+   "rationale": "Updating the ERM framework for cloud risk is itself programme-level, so the ERM-aligned risk management programme (RSK-01) is the right altitude; the sub-contracting limb is discharged by a documented supply chain risk management plan (RSK-09) and the service-location/jurisdiction limb by geolocation control over cloud processing and storage (CLD-09).",
+   "uncovered_clause": "Feasibility of RE/SBP/external audit staff travelling onsite is a contracting consideration with no matching control mechanism."
+  },
+  {
+   "code": "2.4",
+   "scf_ids": [
+    "GOV-01.1",
+    "GOV-05.1",
+    "GOV-05.2"
+   ],
+   "confidence": "high",
+   "rationale": "Delegating cloud oversight to the ITSC is discharged by the steering-committee oversight mechanism (GOV-01.1), and the delegated subject matter of reviewing KPIs and KRIs by the controls that develop, report and monitor those indicators (GOV-05.1, GOV-05.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.5",
+   "scf_ids": [
+    "TPM-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Executing every cloud outsourcing arrangement through a binding agreement carrying the prescribed security, compliance and resilience terms is discharged by the third-party contract-requirements mechanism (TPM-05).",
+   "uncovered_clause": "Vetting of the SLA by the RE's legal function, execution by the RE rather than a parent/subsidiary, and selection of Pakistani governing law are contract-formation obligations with no control mechanism."
+  },
+  {
+   "code": "2.6",
+   "scf_ids": [
+    "TPM-05.4",
+    "CLD-06.1",
+    "CLD-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Agreeing IT and operational roles before assets move to the CSP is discharged by a RASCI-style split of control responsibilities with the provider (TPM-05.4) and a documented CSP-versus-customer responsibility matrix (CLD-06.1), with the pre-transfer timing enforced by secured cloud onboarding (CLD-01.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.7",
+   "scf_ids": [
+    "CPL-02.1",
+    "CPL-01.4",
+    "GOV-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Independent certification of regulatory compliance to the board is discharged by an internal audit function (CPL-02.1) performing conformity assessment against statutory and regulatory obligations (CPL-01.4) and reporting its conclusions to the governing body (GOV-01.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.2",
+   "scf_ids": [
+    "TPM-04.1",
+    "CLD-09",
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing a CSP's control environment before use is discharged by pre-outsourcing third-party risk assessment (TPM-04.1); the data-residency-control limb by geolocation control over cloud processing/storage (CLD-09); and adherence to international standards by obtaining independent third-party assessment attestations (TPM-05.8).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.3",
+   "scf_ids": [
+    "TPM-05.2",
+    "CPL-03.3",
+    "TPM-05.8",
+    "BCD-10.3"
+   ],
+   "confidence": "high",
+   "rationale": "The four distinct due-diligence limbs map separately: sub-contracting risk to contractual flow-down of requirements (TPM-05.2); RE/SBP/auditor access and audit rights to granting assessors logical and physical access (CPL-03.3); certifications and attestations to third-party assessment attestations (TPM-05.8); and contingency/resilience to contractually requiring provider contingency plans (BCD-10.3).",
+   "uncovered_clause": "Exit arrangements as a due-diligence criterion are handled under 7.1 rather than here."
+  },
+  {
+   "code": "3.4",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.7"
+   ],
+   "confidence": "medium",
+   "rationale": "Imposing liability on the CSP for unauthorized transactions, disruptions, breaches and consequential regulatory penalties is a contractual term, discharged partially by the third-party contract-requirements mechanism (TPM-05) and by break clauses for failure to meet contract criteria (TPM-05.7).",
+   "uncovered_clause": "Financial liability and penalty quantification for CSP-caused regulatory enforcement against the RE has no dedicated control mechanism."
+  },
+  {
+   "code": "3.5",
+   "scf_ids": [
+    "IAO-02.2",
+    "CPL-03.1",
+    "BCD-02.4",
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "An independent threat and vulnerability assessment of CSP data centres covering physical, environmental and perimeter security is discharged by specialised assessments (IAO-02.2) performed by independent assessors (CPL-03.1) as periodic security reviews of the storage locations holding the RE's regulated data (BCD-02.4), with the permitted SOC-report fallback discharged by third-party attestations (TPM-05.8).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1",
+   "scf_ids": [
+    "TPM-08",
+    "TPM-12.1",
+    "TPM-10",
+    "TPM-09"
+   ],
+   "confidence": "high",
+   "rationale": "Ongoing CSP oversight decomposes into recurring review of provider compliance and performance against contract (TPM-08), monitoring for changes of ownership or control (TPM-12.1), controlling changes to the services the provider delivers (TPM-10), and driving remediation of identified provider deficiencies (TPM-09).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2",
+   "scf_ids": [
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Continuous review of the CSP's compliance with legal, regulatory and contractual obligations is precisely the mechanism of recurring monitoring and assessment of external service providers against established contractual requirements (TPM-08).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3",
+   "scf_ids": [
+    "MON-01.8",
+    "MON-02",
+    "MON-18"
+   ],
+   "confidence": "high",
+   "rationale": "Monitoring access to cloud data and workloads through activity reports is discharged by ongoing event-log review with escalation (MON-01.8), centralised collection of those cloud logs (MON-02), and file activity monitoring over the sensitive data itself (MON-18).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.4",
+   "scf_ids": [
+    "IAO-02.3",
+    "TPM-05.8",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Reviewing the CSP's internal control and audit reports to obtain assurance is discharged by accepting and responding to assessment results produced by impartial external organisations (IAO-02.3) and by obtaining and using third-party assessment attestations (TPM-05.8) as part of recurring provider review (TPM-08).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.5",
+   "scf_ids": [
+    "TPM-08",
+    "CPL-03.1",
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "A biennial comprehensive audit of the CSP by the RE or its assessors is the entity auditing its own supplier, discharged by recurring provider assessment (TPM-08) using independent assessors (CPL-03.1), with the documented fallback to recognised certifications discharged by third-party attestations (TPM-05.8).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-12.2",
+    "BCD-10.2",
+    "CAP-04"
+   ],
+   "confidence": "medium",
+   "rationale": "The composite splits into a formal cloud BC/DR plan covering unavailability scenarios (BCD-01.7), redundancy by design through near-real-time failover (BCD-12.2), robust connectivity via telecommunications services from separated providers (BCD-10.2), and health and monitoring checks that alert on the operating state of the workload (CAP-04).",
+   "uncovered_clause": "Contractual penalties for CSP disruption and downtime are a commercial term with no control mechanism."
+  },
+  {
+   "code": "5.2",
+   "scf_ids": [
+    "BCD-06",
+    "BCD-06.1",
+    "BCD-01.5"
+   ],
+   "confidence": "high",
+   "rationale": "Periodic review and update of the contingency plan for developments in people, process and technology is discharged by ongoing contingency planning (BCD-06) and identification of the components that affect plan executability (BCD-06.1), while the activation limb is discharged by defined criteria for initiating BC/DR plans (BCD-01.5).",
+   "uncovered_clause": "Naming a specific individual responsible for signing off the plan is not separately discharged."
+  },
+  {
+   "code": "5.3",
+   "scf_ids": [
+    "BCD-04",
+    "TPM-11",
+    "RSK-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Annual scenario testing of the contingency plan is discharged by contingency plan tests and exercises (BCD-04), collaborative testing with the CSP by conducting response and recovery testing jointly with critical providers (TPM-11), and the record-and-remediate limb by risk response to findings from tests and assessments (RSK-06.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.2",
+    "CPL-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Securing unrestricted audit and onsite assessment rights over the CSP is an obligation on the RE to contract for them, discharged by third-party contract requirements (TPM-05) flowed down to sub-contractors (TPM-05.2) and by granting assessors the logical and physical access needed to perform conformity assessments (CPL-03.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.2",
+   "scf_ids": [
+    "TPM-05",
+    "CPL-03.3",
+    "TPM-05.2"
+   ],
+   "confidence": "high",
+   "rationale": "The enumerated scope of contractual access, audit and information rights over premises, systems, testing results and personnel is discharged by embedding those requirements in the provider contract (TPM-05), granting assessors logical and physical access to the artefacts and facilities (CPL-03.3), and flowing the same rights down to sub-contractors (TPM-05.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.3",
+   "scf_ids": [
+    "TPM-05.8",
+    "IAO-02.3",
+    "CPL-01.6",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Relying on recognised certifications when onsite audit is impractical is discharged by obtaining independent third-party assessment attestations (TPM-05.8) and formally accepting and responding to those external results (IAO-02.3); the required understanding of assessor ability is discharged by validating assessor qualifications and subject matter expertise (CPL-01.6), and the right to expand scope by the provider contract requirements (TPM-05).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.4",
+   "scf_ids": [
+    "TPM-09",
+    "TPM-05",
+    "CPL-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Following up with the CSP until audit findings are remediated is discharged by third-party deficiency remediation (TPM-09), while compelling the CSP to supply information SBP requests is discharged by contractual information requirements (TPM-05) and assessor access provisions (CPL-03.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.1",
+   "scf_ids": [
+    "CLD-01.2",
+    "TDA-20.3",
+    "BCD-04"
+   ],
+   "confidence": "medium",
+   "rationale": "The exit plan's core transition mechanism is cloud offboarding that securely moves or archives data on decommissioning (CLD-01.2); the continuity-measures limb is discharged by escrow arrangements (TDA-20.3) and the periodic-testing limb by plan testing and exercises (BCD-04).",
+   "uncovered_clause": "Defined trigger events, stressed-versus-non-stressed exit scenarios and sign-off/activation ownership for the exit plan have no dedicated control."
+  },
+  {
+   "code": "7.2",
+   "scf_ids": [
+    "DCH-21",
+    "CLD-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Complete removal of data and logs from all CSP locations on exit is discharged by secure disposal, destruction or erasure of information (DCH-21) executed as part of cloud service decommissioning (CLD-01.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.3",
+   "scf_ids": [
+    "TPM-05.7",
+    "TPM-12.2",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Termination rights for provider breach and deteriorating performance are discharged by contractual break clauses (TPM-05.7), the change-of-ownership trigger by contractual safeguards including termination on ownership change (TPM-12.2), and the remaining anti-lock-in and minimum-notice terms by third-party contract requirements (TPM-05).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1",
+   "scf_ids": [
+    "TPM-01.1",
+    "TPM-03",
+    "RSK-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Visibility of the CSP supply chain through a maintained sub-contractor list is discharged by keeping a current and complete inventory of external service providers (TPM-01.1), and assessing the resilience impact of complex sub-contracting by supply chain risk evaluation (TPM-03) with periodic supply chain risk assessment (RSK-09.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2",
+   "scf_ids": [
+    "TPM-05.2",
+    "TPM-03",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Permitting sub-contracting only where the sub-contractor accepts the RE's legal, audit and access requirements is discharged by contractual flow-down to sub-contractors and suppliers (TPM-05.2); the excessive-risk test by supply chain risk evaluation and remediation (TPM-03); and the ongoing review of material sub-contracting by recurring provider compliance review (TPM-08).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-17",
+    "IAC-20.5",
+    "IAC-20.4"
+   ],
+   "confidence": "medium",
+   "rationale": "The composite maps limb by limb: the full access lifecycle to formal user registration and de-registration (IAC-07); independent periodic review of access changes to periodic review of account privileges (IAC-17); the four-eye principle for access administration to dual authorization for privileged commands (IAC-20.5); and confining privileged account use to dedicated machines to restricting administrative tasks to a dedicated machine (IAC-20.4).",
+   "uncovered_clause": "Enhanced password controls (length, complexity, age) and controlled, monitored use of service and generic accounts are not covered by the returned controls."
+  },
+  {
+   "code": "9.2",
+   "scf_ids": [
+    "IAC-06",
+    "IAC-15.9",
+    "BCD-11.9",
+    "IAC-05.2"
+   ],
+   "confidence": "medium",
+   "rationale": "MFA for cloud users maps to enforced multi-factor authentication (IAC-06); the master account limb to establishing and controlling emergency-access-only accounts (IAC-15.9); backup and log-data access controls to restricting backup access to assigned privileged roles (BCD-11.9); and the bar on CSP access to RE systems and data to prohibiting privileged access by non-organizational users (IAC-05.2).",
+   "uncovered_clause": "IP source restrictions for users accessing the cloud environment are not discharged by any returned control."
+  },
+  {
+   "code": "10.1",
+   "scf_ids": [
+    "CHG-02",
+    "CFG-06.1",
+    "CHG-03",
+    "TPM-10"
+   ],
+   "confidence": "high",
+   "rationale": "Configuration change control procedures for the cloud estate map to technical configuration change control (CHG-02); detection of unauthorized changes with automated alerting to identifying unauthorized deviations from an approved baseline with automated response (CFG-06.1); change prioritisation and impact assessment to security impact analysis prior to change (CHG-03); and the CSP's own change discipline and advance notification to controlling changes to supplier-delivered services (TPM-10).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.2",
+   "scf_ids": [
+    "CHG-02.2",
+    "CFG-01.1",
+    "CFG-02",
+    "CFG-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "Pre-production testing of changes maps to testing and documenting changes in a non-production environment (CHG-02.2); segregation of infrastructure, security and application configuration roles to segregation of duties for configuration management (CFG-01.1); and baselines for cloud-hosted systems with periodic review and non-compliance reporting to secure baseline configurations (CFG-02) under automated central management and reporting (CFG-02.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.1",
+   "scf_ids": [
+    "IRO-02",
+    "IRO-07",
+    "IRO-11.2",
+    "TPM-05.1"
+   ],
+   "confidence": "high",
+   "rationale": "Documented escalation, containment and closure procedures map to the incident handling lifecycle (IRO-02); the designated SIRT to an integrated security incident response team (IRO-07); CSP assistance to RE investigations and access to root cause reports to a formal cooperative relationship between the incident response capability and external providers (IRO-11.2); and provider notification obligations to security compromise notification agreements (TPM-05.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.2",
+   "scf_ids": [
+    "IRO-13",
+    "GOV-01.1",
+    "IRO-06",
+    "IRO-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "Formal post-incident review by the CSP maps to root cause analysis and lessons learned (IRO-13); ITSC review of cloud incidents to steering committee oversight (GOV-01.1); annual testing of the incident response plan to formal incident response testing (IRO-06); and its periodic review to regular modification of incident response practices (IRO-04.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.1",
+   "scf_ids": [
+    "CRY-05",
+    "CRY-03",
+    "DCH-18.2",
+    "CLD-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Encryption at rest including backups maps to cryptographic protection of data at rest (CRY-05) and in transit to transmission confidentiality (CRY-03); desensitising production data before non-production use to minimising sensitive data in testing and training (DCH-18.2); and clear identification and segregation of the RE's data to multi-tenant segmentation of provider and tenant assets (CLD-06).",
+   "uncovered_clause": "The prohibitions on the CSP disclosing RE data to third parties including foreign governments without consent, and on the CSP using RE data for commercial purposes, are not discharged by the returned controls."
+  },
+  {
+   "code": "12.2",
+   "scf_ids": [
+    "BCD-11.1",
+    "DCH-02",
+    "NET-17",
+    "CLD-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Half-yearly restoration testing against defined RPOs maps to routine backup testing that verifies process reliability and data integrity (BCD-11.1); classification of information assets by sensitivity to data and asset classification (DCH-02); prevention of unauthorized exfiltration through content inspection and download controls to data loss prevention (NET-17); and notification and rejection rights over changes to data location to geolocation control of cloud processing and storage (CLD-09).",
+   "uncovered_clause": "Ransomware protection of the backup mechanism itself is not discharged by the returned controls."
+  },
+  {
+   "code": "13.1",
+   "scf_ids": [
+    "CRY-09",
+    "CRY-09.7",
+    "CRY-01.5"
+   ],
+   "confidence": "high",
+   "rationale": "Policies governing the full lifecycle of cryptographic material map to the key management mechanism (CRY-09); sole RE generation and administration of keys held in a CSP environment to maintaining control of keys for material stored or transmitted through an external system (CRY-09.7); and SME review of algorithms, key lengths and renewal parameters to the documented review of deployed cipher suites and protocols (CRY-01.5).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.2",
+   "scf_ids": [
+    "CRY-09.1",
+    "CRY-09.2",
+    "IAC-12.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Changing keys in line with international standards maps to production and management of symmetric (CRY-09.1) and asymmetric (CRY-09.2) keys using validated standards, and the material-workload HSM requirement to the use of hardware security modules (IAC-12.1).",
+   "uncovered_clause": "Storing encryption keys separately from virtual images and information assets is not discharged by any returned control."
+  },
+  {
+   "code": "14.1",
+   "scf_ids": [
+    "DCH-23.4",
+    "DCH-18.1",
+    "IAC-05.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Tokenization to shrink the data footprint is mechanically the replacement of sensitive values with surrogates (DCH-23.4) in service of minimising the sensitive data held (DCH-18.1), and the bar on CSP access to or control over the tokenization solution maps to prohibiting privileged access by non-organizational users (IAC-05.2).",
+   "uncovered_clause": "Assessment and evaluation of the tokenization solution's features and data interactions before deployment has no matching control."
+  },
+  {
+   "code": "15.1",
+   "scf_ids": [
+    "NET-03",
+    "NET-08",
+    "WEB-03",
+    "NET-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Each named control has a direct mechanism: perimeter security to boundary protection at external and key internal boundaries (NET-03), network IDS/IPS to network intrusion detection and prevention systems (NET-08), WAF to web application firewalls (WEB-03), and DDoS protection to denial of service protection (NET-02.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "15.2",
+   "scf_ids": [
+    "NET-06",
+    "NET-06.1",
+    "CLD-03",
+    "NET-06.5"
+   ],
+   "confidence": "high",
+   "rationale": "Segmenting by workload type and purpose maps to network segmentation (NET-06); the isolated management network for administration to security management subnets (NET-06.1); routing all internet traffic through a dedicated security segment to hosting security-specific technologies in a dedicated cloud subnet (CLD-03); and denying other segments direct internet access to direct internet access restrictions (NET-06.5).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "15.3",
+   "scf_ids": [
+    "NET-14.3",
+    "NET-12",
+    "NET-04.1",
+    "NET-04.6"
+   ],
+   "confidence": "high",
+   "rationale": "Securing cloud-to-on-premise traffic over VPN maps to routing access through managed access control points such as VPN concentrators (NET-14.3) with strong cryptography over open networks (NET-12); stringent source and destination rules to deny-by-default firewall and router configuration (NET-04.1); and regular firewall and access list review after changes to routine human review of ACLs and rulesets (NET-04.6).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "16.1",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-07"
+   ],
+   "confidence": "high",
+   "rationale": "Annual vulnerability assessment and penetration testing of RE systems hosted with the CSP is discharged directly by routine vulnerability scanning (VPM-06) and penetration testing of technology assets and services (VPM-07).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "16.2",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-08",
+    "IAO-02.3"
+   ],
+   "confidence": "medium",
+   "rationale": "The RE cannot itself test CSP-managed infrastructure, so the obligation is to compel and consume the CSP's annual testing, discharged by contractual requirements on the provider (TPM-05), recurring review of provider compliance (TPM-08), and formally accepting and responding to the external assessment results including their scope (IAO-02.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "16.3",
+   "scf_ids": [
+    "VPM-07",
+    "VPM-06.2",
+    "THR-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Requiring security testing to cover hypervisor jumping, API weaknesses and side-channel and wrapping attacks is a scoping obligation on the testing programme, discharged by penetration testing (VPM-07), defining the breadth and depth of assessment coverage (VPM-06.2), and threat analysis that identifies the cloud-specific attack scenarios to be exercised (THR-10).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "16.4",
+   "scf_ids": [
+    "VPM-02",
+    "VPM-03",
+    "VPM-05.3",
+    "TPM-09"
+   ],
+   "confidence": "high",
+   "rationale": "Tracking vulnerabilities through to validated rectification maps to the vulnerability remediation process (VPM-02); risk categorisation to vulnerability risk ranking (VPM-03); timeliness to remediation benchmarks and time-to-remediate metrics (VPM-05.3); and the alternate assurance route for CSP-managed infrastructure to third-party deficiency remediation (TPM-09).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "16.5",
+   "scf_ids": [
+    "CPL-03.1",
+    "IAO-02.2",
+    "BCD-02.4"
+   ],
+   "confidence": "high",
+   "rationale": "An annual independent threat and vulnerability assessment of CSP data centres for material arrangements is discharged by using independent assessors at planned intervals (CPL-03.1) to perform specialised assessments (IAO-02.2) as periodic security reviews of the locations holding the RE's regulated data (BCD-02.4).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "17.1",
+   "scf_ids": [
+    "CFG-02.2",
+    "CFG-06.1",
+    "MON-01.11",
+    "OPS-06"
+   ],
+   "confidence": "high",
+   "rationale": "Leveraging cloud-native tooling to enforce consistent standards and baselines maps to automated central management and reporting of baseline configurations (CFG-02.2) with automated response to deviations (CFG-06.1); automated response, remediation and notification maps to pre-determined corrective actions on detected events (MON-01.11) orchestrated through SOAR (OPS-06).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "17.2",
+   "scf_ids": [
+    "MON-02",
+    "MON-02.1",
+    "MON-01.2",
+    "CLD-06.2"
+   ],
+   "confidence": "high",
+   "rationale": "Integrating CSP services with the SIEM maps to centralised collection of security event logs in a SIEM (MON-02) with correlation across the enterprise (MON-02.1) and near real-time analysis and escalation (MON-01.2); the CSP-side feed that makes this possible is multi-tenant provider logging capability for customers (CLD-06.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "17.3",
+   "scf_ids": [
+    "OPS-04",
+    "MON-01.8"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring the SOC to monitor cloud activity around the clock is discharged by maintaining a Security Operations Center with a 24x7 capability (OPS-04) performing ongoing event log review and escalation (MON-01.8).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "18.1",
+   "scf_ids": [
+    "CAP-03",
+    "CAP-04",
+    "SAT-03",
+    "SAT-03.5"
+   ],
+   "confidence": "high",
+   "rationale": "The two limbs map separately: capacity utilisation monitoring and review to capacity planning (CAP-03) with centralised monitoring and alerting on operating state (CAP-04); and cloud training for end-users and privileged users to role-based training (SAT-03) with specific training for privileged users (SAT-03.5).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "18.2",
+   "scf_ids": [
+    "IRO-10.5",
+    "IRO-10",
+    "IRO-13",
+    "HRS-07"
+   ],
+   "confidence": "high",
+   "rationale": "Reporting security incidents to SBP within mandated timelines maps to serious incident reporting to the relevant authority (IRO-10.5) as part of incident stakeholder reporting to regulators (IRO-10); the investigation and prevent-recurrence limb to root cause analysis and lessons learned (IRO-13); and fixing responsibility for the lapse to personnel sanctions (HRS-07).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.3",
+   "scf_ids": [
+    "TPM-04.4"
+   ],
+   "confidence": "low",
+   "rationale": "The clause is permissive - it grants EMIs and non-designated PSOs/PSPs latitude to place material and non-material workloads with offshore CSPs - so it imposes no duty of its own. The only assessable mechanism an entity relying on it needs is control over where processing and storage occur (TPM-04.4). Not CLD-10, which restricts sensitive data in public cloud rather than governing jurisdiction of hosting.",
+   "uncovered_clause": "The permission itself; no obligation is created by this paragraph."
+  }
+ ]
+}

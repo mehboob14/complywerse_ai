@@ -1,0 +1,3780 @@
+{
+ "framework": "qcb_technology_risks",
+ "hop": "direct",
+ "mappings": [
+  {
+   "code": "1.1.1",
+   "scf_ids": [
+    "GOV-01",
+    "GOV-01.1",
+    "GOV-04",
+    "GOV-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Genuinely programme-level obligation: establish a security function and framework with board approval, which maps to the programme-implementation control plus the steering-committee/oversight body, the assignment of a qualified individual to centrally manage it, and alignment of the programme to a recognised framework.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.1.2",
+   "scf_ids": [
+    "GOV-03",
+    "GOV-01.2",
+    "RSK-13.2"
+   ],
+   "confidence": "high",
+   "rationale": "Annual senior-management review of control adequacy against emerging threats is the periodic programme review mechanism, reported up through governance status reporting, with the required justification for material gaps discharged by documented executive justification for material risk decisions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.1.4",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Board approval of a cyber security policy is discharged by the mechanism that establishes, maintains and disseminates policies, coupled with the governing-body reporting/decision mechanism that carries material matters to the board for decision.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.1.6",
+   "scf_ids": [
+    "GOV-01.1",
+    "GOV-04",
+    "GOV-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "A security function drawing representation from IT, risk, HR, BCM, legal and compliance is exactly the cross-functional steering/advisory body mechanism, backed by assigned central responsibility and an enforced stakeholder accountability structure.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.1.7",
+   "scf_ids": [
+    "GOV-03"
+   ],
+   "confidence": "high",
+   "rationale": "Annual update and review of policies, standards and procedures is discharged precisely by the periodic review-and-update-of-programme-documentation mechanism; no umbrella control is needed.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.2.1",
+   "scf_ids": [
+    "GOV-01.1",
+    "GOV-02",
+    "RSK-01",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite: board/senior-management oversight and the IT Strategy/IT Steering/technology-risk committees map to the steering-committee oversight mechanism, the IT policy-and-standards obligation to the documentation-publishing mechanism, technology risk management to the risk management programme, and 'IT capable of supporting business strategies' to the strategic security plan and objectives.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.2.2",
+   "scf_ids": [
+    "GOV-01",
+    "GOV-04",
+    "GOV-01.4",
+    "GOV-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Programme-level by its own terms: an organisation that designs, establishes, operates and improves the security programme in line with leading practice maps to the programme control, assigned central ownership, industry-framework alignment, and the continual-improvement resourcing mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.2.3",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-04",
+    "RSK-04",
+    "GOV-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite ten-part programme content list; the selected controls discharge policy development/maintenance, assignment of roles and accountability, periodic risk assessment of controls, and generation of security performance metrics.",
+   "uncovered_clause": "Classification and ownership of information assets, monitoring of security incidents, identity and access management processes, and user/board awareness sessions are not covered by these four ids (they sit in the asset-classification, incident-response, identification-and-authentication and awareness domains respectively)."
+  },
+  {
+   "code": "1.2.4",
+   "scf_ids": [
+    "PRM-01.1",
+    "GOV-02",
+    "RSK-01.5"
+   ],
+   "confidence": "high",
+   "rationale": "A board-approved policy documenting the cyber strategy and the acceptable level of risk maps to the strategic security plan and objectives mechanism, the policy-publishing mechanism, and the defined risk appetite mechanism that fixes 'acceptable levels of risk'.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.2.5",
+   "scf_ids": [
+    "HRS-11",
+    "GOV-04",
+    "GOV-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation is a structural split between the Information Security group and the IT division that implements controls, which is the separation-of-duties mechanism, supported by assigned central security responsibility and an authoritative chain of command that removes reporting ambiguity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.2.7",
+   "scf_ids": [
+    "GOV-04",
+    "GOV-04.2",
+    "CPL-02"
+   ],
+   "confidence": "high",
+   "rationale": "Appointing a CISO is the assignment of a qualified individual to centrally manage the enterprise security programme; the prohibition on reporting through the CIO/CTO is discharged by the authoritative chain-of-command mechanism and the oversight function that reports to executive leadership rather than to IT.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.2.11",
+   "scf_ids": [
+    "GOV-04",
+    "IAO-03",
+    "SEA-02",
+    "GOV-01.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite CISO duty list: assigned security responsibilities carry the ownership of security plans and procedures, authoritative system security documentation carries the system security plans, enterprise security architecture carries the architecture aligned to business strategy, and the resourcing/continual-improvement mechanism carries the dedicated budget presented to the CEO.",
+   "uncovered_clause": "The duty to perform regular review of system audit trails, logs and configuration integrity is not discharged by any of these four ids; it belongs to the monitoring and configuration domains."
+  },
+  {
+   "code": "1.3.2",
+   "scf_ids": [
+    "CPL-03.1",
+    "CPL-01.6",
+    "IAO-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Assessment of indicators through independent compliance checks by qualified professionals maps precisely to the independent-assessor mechanism, the assessor professional-qualification/subject-matter-expertise mechanism, and assessor independence for control assessments.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.1",
+   "scf_ids": [
+    "HRS-01",
+    "HRS-03",
+    "HRS-10"
+   ],
+   "confidence": "high",
+   "rationale": "HR policies aligned to the security policy are the personnel-security control programme; documenting security responsibilities for employees is the defined-roles-and-responsibilities mechanism, and the same for third parties and contractors is the third-party personnel governance mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.2",
+   "scf_ids": [
+    "HRS-03",
+    "HRS-05"
+   ],
+   "confidence": "high",
+   "rationale": "Embedding information security responsibilities in job descriptions and monitoring them through employment maps to defining cybersecurity roles and responsibilities for all personnel and to the terms-of-employment mechanism requiring staff to apply those principles in daily work.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.4",
+   "scf_ids": [
+    "HRS-07",
+    "HRS-05.1"
+   ],
+   "confidence": "high",
+   "rationale": "A defined, enforced disciplinary process for policy violations is the personnel-sanctions mechanism; the requirement that employees be aware of it is discharged by the rules-of-behaviour mechanism that states consequences for unacceptable behaviour.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.5",
+   "scf_ids": [
+    "HRS-06",
+    "HRS-06.1",
+    "HRS-05"
+   ],
+   "confidence": "high",
+   "rationale": "Signed terms and conditions plus confidentiality/NDA at joining or role change maps to the access-agreement mechanism required before access is granted, the specific confidentiality/NDA mechanism covering employees and third parties, and the terms-of-employment mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.6",
+   "scf_ids": [
+    "PRI-01",
+    "PRI-01.6",
+    "PRI-04"
+   ],
+   "confidence": "high",
+   "rationale": "Handling personnel personal data with due care under the privacy law is the data privacy programme requiring lawful and fair processing, the logical/physical safeguarding of personal data, and the restriction of collection and processing to the identified purpose.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.7",
+   "scf_ids": [
+    "PES-06",
+    "PES-06.1",
+    "PES-06.2",
+    "PES-06.3"
+   ],
+   "confidence": "high",
+   "rationale": "Visitor logging with identifying detail and authorisation is the visitor-control mechanism, the badge/visible 'Visitor' sign is the distinguish-visitors-from-personnel mechanism, identity capture at admittance is the photo-identification mechanism, and escorting in secure areas is the restrict-unescorted-access mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.8",
+   "scf_ids": [
+    "HRS-08",
+    "HRS-09",
+    "AST-10",
+    "HRS-09.4"
+   ],
+   "confidence": "high",
+   "rationale": "Composite and fully covered: access adjustment on reassignment is the personnel-transfer mechanism, contract termination is the termination-governance mechanism, return of physical and logical assets is the return-of-assets mechanism, and the HR-generated change request is the automated employment-status notification to identity-and-access personnel.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.9",
+   "scf_ids": [
+    "IAC-21",
+    "IAC-20"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting user rights to the minimum needed for the job under least-privilege and need-to-have is the least-privilege mechanism, enforced through logical access-control permissions that conform to least privilege.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1.10",
+   "scf_ids": [
+    "NET-17",
+    "MON-11",
+    "HRS-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "The obligation to prevent unauthorised disclosure, misuse or corruption of information by staff, vendors and visitors is only partially discharged: data loss prevention blocks the disclosure channel, disclosure monitoring detects it, and rules of behaviour with consequences bind the individuals; no single control covers the whole breadth.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.1",
+   "scf_ids": [
+    "SAT-01",
+    "GOV-01.3",
+    "PRM-02"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing a security awareness programme is the workforce-development-and-awareness mechanism, and the explicit budget obligation for initiation, execution and maintenance is discharged by the resource/budget commitment mechanism and the capital planning and investment mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2",
+   "scf_ids": [
+    "SAT-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Annual review and update of training content for new threats, system changes and legal changes is discharged exactly by the mechanism that periodically reviews awareness training to account for changes in policies, roles, threats and obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3",
+   "scf_ids": [
+    "SAT-02",
+    "HRS-05.1",
+    "IRO-11"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite content list: the awareness training mechanism carries the security, legal and business-process content, the rules-of-behaviour mechanism carries acceptable usage and the enforcement/disciplinary content, and the incident reporting assistance mechanism carries the contact information for reporting security incidents.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.5",
+   "scf_ids": [
+    "SAT-03",
+    "SAT-02",
+    "TPM-06"
+   ],
+   "confidence": "high",
+   "rationale": "Training appropriate to job function, role and responsibility is the role-based training mechanism plus the awareness training mechanism covering employees and contractors, with third-party staff obligations carried by the third-party personnel security requirements mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.6",
+   "scf_ids": [
+    "SAT-03",
+    "SAT-02",
+    "SAT-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "Induction training before duties and annual refresher map to the role-based training timing mechanism and the recurring awareness training mechanism, while the specific obligation to recognise social engineering attempts is the social engineering and social mining awareness mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.7",
+   "scf_ids": [
+    "SAT-04",
+    "SAT-04.1",
+    "HRS-05.7",
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: attendance records are the training-records mechanism, the post-training effectiveness assessment is the monitor-results-and-report mechanism, the employee acknowledgement of having received and understood the training is the policy familiarisation and acknowledgement mechanism, and targeted sessions for senior management and board members are role-based training.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.9",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-01.1",
+    "SAT-04",
+    "SAT-03.6"
+   ],
+   "confidence": "high",
+   "rationale": "Composite programme characteristics: mandatory annual training for all staff is the awareness training mechanism, annual update for latest attack techniques is the training-relevancy review mechanism, monitoring for completion is the training-records mechanism, and the focus on current intruder methods is the cyber-threat-environment role-based training mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.1",
+   "scf_ids": [
+    "CPL-01",
+    "GOV-01",
+    "CPL-02"
+   ],
+   "confidence": "high",
+   "rationale": "Genuinely programme-level: a governance programme addressing legal and compliance requirements for cyber security maps to the identification and implementation of statutory, regulatory and contractual controls, the overall programme mechanism, and the compliance-controls oversight function.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.2",
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Complying with current and future amended laws and regulations is the mechanism that identifies and implements relevant statutory and regulatory controls, together with the mechanism that demonstrates ongoing conformity with applicable laws and regulations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.3",
+   "scf_ids": [
+    "CPL-02.2",
+    "IAO-01.1",
+    "CPL-03.1",
+    "CPL-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "Composite and fully covered: annual audit of information systems is the periodic-audit mechanism, the scope covering all assets, people and processes is the assessment-boundary mechanism, the trigger on significant change is the independent-assessor-at-planned-intervals-or-on-significant-change mechanism, and remediating non-conformance within timelines is the corrective-action mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.7",
+   "scf_ids": [
+    "CPL-01",
+    "AST-02.7",
+    "DCH-18",
+    "GOV-01.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite legal-instruments list: identification of applicable legislation is the statutory/regulatory/contractual identification mechanism, IPR and proprietary software compliance is the software licensing restriction mechanism, protection of organisational records is the media and data retention mechanism, and periodic communication of legal risks to senior management and the board is the governance status-reporting mechanism.",
+   "uncovered_clause": "Protection of records specifically from falsification (integrity) rather than retention is only partly addressed by the retention mechanism."
+  },
+  {
+   "code": "3.1.9",
+   "scf_ids": [
+    "CPL-02.1",
+    "GOV-02",
+    "CPL-04"
+   ],
+   "confidence": "medium",
+   "rationale": "An audit charter defining the internal audit function's mandate, authority and accountability maps to the internal audit function mechanism and the documentation-publishing mechanism that establishes such a charter; the SLA-style operating provisions for audit conduct sit with the audit-planning mechanism.",
+   "uncovered_clause": "The charter's commercial provisions (costs, grievance redressal, quality of service for an external audit provider) are not discharged by any SCF control at this altitude."
+  },
+  {
+   "code": "3.1.10",
+   "scf_ids": [
+    "CPL-02.1",
+    "CPL-04",
+    "IAO-01.1",
+    "CPL-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "A structured risk-based audit programme evaluating risk practices and internal controls maps to the internal audit function, the thoughtful audit planning mechanism, the assessment-boundary/audit-universe mechanism, and the periodic conformity audit mechanism that supplies execution and evidence.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.11",
+   "scf_ids": [
+    "IAO-02.1",
+    "CPL-03.1",
+    "CPL-02",
+    "RSK-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: independence and objectivity of the audit function is the assessor-independence mechanism reinforced by the independent-assessor mechanism, the reporting structure preserving independence is the oversight function reporting to executive leadership, and the follow-up and escalation of audit issues is the risk-response mechanism for remediating audit findings.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.12",
+   "scf_ids": [
+    "CPL-02.2",
+    "CPL-04",
+    "RSK-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "An audit cycle with defined maximum frequencies is the periodic-audit mechanism scheduled through the audit-planning mechanism, with frequency tiering by criticality supplied by the impact-level prioritisation mechanism; SCF does not fix the 6/12/18/36-month bands.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.14",
+   "scf_ids": [
+    "IAO-02.2",
+    "CPL-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Application control audit as part of internal audit maps to the specialised-assessment mechanism that explicitly covers applications, carried out by the internal audit function; the specific data-integrity focus is a scoping instruction SCF leaves to the assessor.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1.15",
+   "scf_ids": [
+    "RSK-04.2",
+    "CPL-03.4",
+    "CPL-03.5",
+    "CPL-03.7"
+   ],
+   "confidence": "high",
+   "rationale": "Composite methodology requirement: the risk assessment methodology mechanism carries the risk-basis, the assessment-methods mechanism carries acceptable audit techniques, the assessment-rigor mechanism carries scoping depth and quality, and the evidence-sampling mechanism carries sample collection criteria.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.1",
+   "scf_ids": [
+    "TDA-01",
+    "TPM-05",
+    "TPM-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "A procurement policy for hardware, software and consulting services maps to the tailored acquisition strategies, contract tools and procurement methods mechanism, with contractual cyber security requirements carried by the third-party contract requirements mechanism and vendor selection criteria by the pre-acquisition risk assessment and approval mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.3",
+   "scf_ids": [
+    "TPM-05",
+    "HRS-06.1",
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "Contract clauses for cyber security, responsibilities, liabilities and named standards such as PCI DSS are the third-party contract requirements mechanism; the confidentiality clause is the NDA/confidentiality agreement mechanism, and the right-to-audit outcome is evidenced through the independent third-party attestation mechanism.",
+   "uncovered_clause": "A contractual right of the bank to itself audit the vendor on demand is only indirectly covered; SCF expresses it as attestation and ongoing review rather than as a right-to-audit clause."
+  },
+  {
+   "code": "4.1.4",
+   "scf_ids": [
+    "TPM-05.2",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring the bank's own security controls, policies and regulations to apply to engaged vendors and be highlighted in third-party agreements is the contract flow-down mechanism, resting on the third-party contract requirements mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.5",
+   "scf_ids": [
+    "TPM-08",
+    "TPM-05.8",
+    "TPM-05.6"
+   ],
+   "confidence": "high",
+   "rationale": "The bank auditing its own vendors at least annually is the recurring review and assessment of external service providers against contractual requirements, satisfied either by an independent third-party attestation or, in the alternative the clause permits, by an evaluated vendor self-declaration.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.6",
+   "scf_ids": [
+    "CFG-02",
+    "AST-13"
+   ],
+   "confidence": "high",
+   "rationale": "Hardening vendor devices to remove default and insecure configurations is the secure baseline configuration mechanism built on accepted hardening standards, applied to third-party assets attached to the network through the third-party device risk-reduction mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.2",
+   "scf_ids": [
+    "RSK-11",
+    "CPL-03",
+    "IAO-02"
+   ],
+   "confidence": "high",
+   "rationale": "Periodic testing of risk management practices and internal controls, and ongoing monitoring that the desired risk mitigation is achieved, maps to the risk monitoring mechanism that tracks control effectiveness, the control conformity monitoring mechanism, and the formal control assessment mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.4",
+   "scf_ids": [
+    "AST-02",
+    "DCH-02",
+    "BCD-02"
+   ],
+   "confidence": "high",
+   "rationale": "A detailed, current inventory of information assets is the asset inventory mechanism, classification against sensitivity criteria is the data and asset classification mechanism, and the requirement to indicate business criticality is the identification of critical assets supporting essential business functions.",
+   "uncovered_clause": "Inclusion of 'key personnel' as inventoried assets is not discharged by these asset-inventory controls."
+  },
+  {
+   "code": "5.1.5",
+   "scf_ids": [
+    "AST-02",
+    "AST-03",
+    "AST-03.1",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Composite field list fully covered: asset identification and location are the inventory-content mechanism, asset group and owner are the asset ownership assignment mechanism, the designated custodian is the accountability-information mechanism capturing the individual responsible for administering the asset, and security/risk classification is the data and asset classification mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.4",
+   "scf_ids": [
+    "THR-09",
+    "THR-10",
+    "RSK-11"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining a threat register containing denial-of-service, internal sabotage, malware and other cyber threats is the threat catalog mechanism, with the assessment of those threats by the threat analysis mechanism and the monitoring obligation by the risk monitoring mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.1",
+   "scf_ids": [
+    "CPL-03",
+    "IAO-02",
+    "RSK-07"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing that implemented controls remain effective under changed scenarios is the control conformity monitoring mechanism and the formal control assessment mechanism, with the 'changed scenarios / new challenges' trigger discharged by the mechanism that routinely updates risk assessments as new vulnerabilities emerge.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.4",
+   "scf_ids": [
+    "THR-03",
+    "THR-01",
+    "THR-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Consuming internal and external threat intelligence feeds so mitigations track evolving risks is the threat intelligence feeds mechanism, within the threat intelligence programme with its cross-organisation sharing, sustained by the dynamic threat awareness mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.1",
+   "scf_ids": [
+    "BCD-01",
+    "GOV-01.4",
+    "CPL-01"
+   ],
+   "confidence": "high",
+   "rationale": "BCM policy, procedures and plans formulated as a management system map to the business continuity management system mechanism; alignment to a global standard such as ISO 22301 is the industry-framework alignment mechanism, and compliance with the QCB BCM Circular is the statutory/regulatory obligation identification mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-01.6",
+    "IRO-16"
+   ],
+   "confidence": "medium",
+   "rationale": "An emergency response plan is the formal BC/DR plan mechanism; the communications strategy element is the recovery-operations communications mechanism to internal and external stakeholders, and the media strategy element is the public relations and reputation management mechanism.",
+   "uncovered_clause": "Physical evacuation procedures and command-centre operations (life-safety logistics) are not discharged by any SCF control cited; SCF's facility controls address emergency lighting and shutoff, which is a different mechanism."
+  },
+  {
+   "code": "6.1.3",
+   "scf_ids": [
+    "THR-09",
+    "IRO-01",
+    "IRO-02"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying natural and man-made threat scenarios including cyber is the threat catalog mechanism covering internal and external, natural and manmade threats, and putting incident management procedures in place is the incident response operations and incident handling mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.7",
+   "scf_ids": [
+    "BCD-01.6",
+    "IRO-16",
+    "IRO-10",
+    "BCD-04"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: a formal strategy for communicating with regulators, customers, partners and providers during disruption is the recovery-operations communications mechanism plus the timely stakeholder/regulator reporting mechanism; the trained spokesperson, press releases and templates are the public relations management mechanism; and regular communication drills are the contingency plan testing and exercise mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.8",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-04.2",
+    "BCD-06",
+    "BCD-03"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: annual testing of BC plans is the contingency plan testing and exercise mechanism, testing from alternate sites with relevant systems and personnel is the alternate storage and processing site testing mechanism, using test results to modify responsibilities, systems and personnel is the ongoing contingency plan update mechanism, and the awareness-promotion purpose is the contingency training mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.9",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-03.1",
+    "BCD-04.2",
+    "TPM-11"
+   ],
+   "confidence": "high",
+   "rationale": "Composite test-type list: table-top, technical recovery and complete rehearsals are the contingency testing and exercise mechanism, simulation testing to train crisis-role personnel is the simulated-events contingency training mechanism, DR/parallel operation testing is the alternate-site testing mechanism, and tests of supplier facilities and SLAs are the response/recovery testing with critical suppliers mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.11",
+   "scf_ids": [
+    "BCD-12",
+    "BCD-01.7",
+    "BCD-02",
+    "AST-04"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: procedures to recover key critical systems and infrastructure are the recovery and reconstitution mechanism, DR plans detailed enough and kept current are the formal BC/DR plan mechanism, identification of the critical systems in scope is the critical asset identification mechanism, and the full description of information systems and information flow is the network and data flow diagram mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.12",
+   "scf_ids": [
+    "BCD-01.4",
+    "BCD-12",
+    "TPM-11",
+    "BCD-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: recovery aligned to defined and measured RTOs is the recovery time/point objective mechanism, safe resumption of critical operations after a cyber-attack with secured processes and data is the secure recovery and reconstitution to a known state mechanism, and collaborative resilience testing with vendors and partners across interconnected systems is the supplier response/recovery testing mechanism reinforced by coordinated testing with related plans.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.13",
+   "scf_ids": [
+    "IRO-04",
+    "IRO-02",
+    "BCD-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "A standalone Cyber Crisis Management Plan covering detection, response, containment and recovery is discharged by maintaining a formal incident response plan (IRO-04) whose handling lifecycle explicitly spans detection, analysis, containment, eradication and recovery (IRO-02), coordinated with the separate BCP/DR plans (BCD-01.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.16",
+   "scf_ids": [
+    "HRS-14",
+    "NET-14.5",
+    "IAC-21.6"
+   ],
+   "confidence": "high",
+   "rationale": "Barring work-from-home for critical-function staff is an authorized-work-location determination (HRS-14) governed by telecommuting rules (NET-14.5), while the carve-out for privileged users connecting on prior approval is the authorization of remote privileged command execution (IAC-21.6).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.1.2",
+   "scf_ids": [
+    "CPL-02.3",
+    "RSK-06.4",
+    "GOV-01.2",
+    "GOV-17"
+   ],
+   "confidence": "medium",
+   "rationale": "Remediating identified material control gaps is corrective action for non-conformity (CPL-02.3) documented as a risk treatment plan (RSK-06.4), reported to and signed off by the governing body (GOV-01.2) and submitted onward to the regulator (GOV-17).",
+   "uncovered_clause": "the specific requirement that the report carry the board's signature is not itself a discrete SCF mechanism"
+  },
+  {
+   "code": "7.2.1",
+   "scf_ids": [
+    "GOV-02.1",
+    "RSK-13",
+    "RSK-13.2"
+   ],
+   "confidence": "high",
+   "rationale": "Seeking an exception to a mandatory requirement with business justification is exception management requiring formal risk assessment, approval and recording (GOV-02.1), with board approval and its written justification captured as executive risk decision-making (RSK-13, RSK-13.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1.1",
+   "scf_ids": [
+    "CHG-01",
+    "CHG-07",
+    "CFG-02.3",
+    "CHG-03"
+   ],
+   "confidence": "high",
+   "rationale": "A change management policy spanning major, minor and emergency changes is the change management programme itself (CHG-01) with a defined emergency-change path (CHG-07), while documented rollback procedures are retained prior baseline versions (CFG-02.3) and pre-implementation impact assessment is change impact analysis (CHG-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1.2",
+   "scf_ids": [
+    "CHG-01"
+   ],
+   "confidence": "low",
+   "rationale": "Classifying changes so resources are allocated proportionately is a design element of the change management programme (CHG-01); SCF has no discrete change-classification control, so this is a programme-level match only.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1.4",
+   "scf_ids": [
+    "CHG-03",
+    "CHG-02.3",
+    "RSK-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Reassessing a system when a change affects security posture is security impact analysis of proposed changes (CHG-03) with a security representative in the change review (CHG-02.3), and the requirement to run risk analysis within the change process is a defined instance requiring a risk assessment (RSK-04.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1.5",
+   "scf_ids": [
+    "CHG-02.2",
+    "CHG-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Testing impending changes against a documented test plan in a non-production environment before migration is CHG-02.2, governed by the configuration change control process (CHG-02).",
+   "uncovered_clause": "explicit user sign-off on UAT results as a gate to production release is not discharged by any SCF control"
+  },
+  {
+   "code": "8.1.6",
+   "scf_ids": [
+    "HRS-11",
+    "CHG-04.4"
+   ],
+   "confidence": "high",
+   "rationale": "Preventing the change requester from also implementing it is separation of duties (HRS-11), enforced technically by limiting operational privileges for implementing changes to competent authorized staff (CHG-04.4).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1.7",
+   "scf_ids": [
+    "TDA-08",
+    "TDA-07"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining physically and logically separate development, testing, staging and production environments is TDA-08, with the development network itself segmented under TDA-07.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1.9",
+   "scf_ids": [
+    "CHG-02",
+    "AST-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Updating process and system documentation after a change is part of documented configuration change control (CHG-02), and the asset-record half of that update is inventory maintenance on installation, removal or upgrade (AST-02.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1.10",
+   "scf_ids": [
+    "CHG-06"
+   ],
+   "confidence": "high",
+   "rationale": "Verifying post-implementation that the change met its objective without unexpected side effects is control functionality verification following implemented changes (CHG-06).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.1",
+   "scf_ids": [
+    "IRO-01",
+    "IRO-02",
+    "IRO-02.4",
+    "MON-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "The incident management framework and policy is IRO-01, its detect-evaluate-contain-recover procedure content is the incident handling lifecycle (IRO-02) with severity-based prioritization (IRO-02.4), and the mandated automatic alerting from network monitoring and IDS/IPS is MON-01.1.",
+   "uncovered_clause": "the damage-evaluation and cost-quantification step is only partly covered"
+  },
+  {
+   "code": "8.2.2",
+   "scf_ids": [
+    "IRO-07",
+    "GOV-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying dedicated incident-handling resources is the integrated security incident response team (IRO-07), and documenting the roles and responsibilities of staff who record, analyse, remediate and monitor incidents is the accountability structure requirement (GOV-04.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.3",
+   "scf_ids": [
+    "GOV-04",
+    "IRO-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Appointing a named owner of the incident management programme who is accountable for its budget, definition and execution is the assignment of a qualified individual with the mission and resources for that capability (GOV-04), exercised over the incident response programme (IRO-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.5",
+   "scf_ids": [
+    "IRO-02.4",
+    "MON-17.1",
+    "IRO-07"
+   ],
+   "confidence": "high",
+   "rationale": "Classifying and prioritizing incidents by criticality is IRO-02.4, the escalation and resolution timeframes keyed to severity are the incident escalation matrix (MON-17.1), and delegating severity assignment to a centralized team is the integrated incident response team (IRO-07).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.6",
+   "scf_ids": [
+    "IRO-13",
+    "IRO-09.3"
+   ],
+   "confidence": "high",
+   "rationale": "Performing root cause and impact analysis on major incidents and acting on it is IRO-13, with the incident record capturing timelines, affected parties and remediation actions in the incident tracking repository (IRO-09.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.7",
+   "scf_ids": [
+    "IRO-08",
+    "IRO-08.1"
+   ],
+   "confidence": "high",
+   "rationale": "Collecting, retaining and presenting incident evidence to the standard of the relevant jurisdiction is forensics with maintained chain of custody (IRO-08), performed where necessary by licensed investigators for evidentiary use (IRO-08.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.8",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-16",
+    "IRO-14"
+   ],
+   "confidence": "high",
+   "rationale": "A communication plan for reporting incidents to internal stakeholders and external bodies is IRO-10, the involvement of Public Relations/Communications is IRO-16, and the maintained channels to QCB and the Ministry of Interior are regulatory and law enforcement contacts (IRO-14).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.9",
+   "scf_ids": [
+    "SAT-02",
+    "IRO-05",
+    "BCD-03"
+   ],
+   "confidence": "high",
+   "rationale": "Integrating incident management with awareness training so all users know how to report incidents is general awareness training (SAT-02) plus incident-response role training (IRO-05), while training users to respond to fire and natural disasters is contingency training (BCD-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.10",
+   "scf_ids": [
+    "IRO-10.5",
+    "IRO-10"
+   ],
+   "confidence": "high",
+   "rationale": "Reporting critical incidents to QCB and government authorities within one hour is serious incident reporting to local authorities against mandatory timelines (IRO-10.5), within the wider stakeholder reporting mechanism (IRO-10).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.11",
+   "scf_ids": [
+    "IRO-06",
+    "IRO-05.1",
+    "IRO-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Annually testing the escalation and response plan through realistic ransomware/DDoS exercises is incident response testing (IRO-06) using simulated incidents (IRO-05.1), with the efficiency findings fed back to improve the process (IRO-04.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.12",
+   "scf_ids": [
+    "IRO-13",
+    "IRO-04.2",
+    "IRO-09.3"
+   ],
+   "confidence": "high",
+   "rationale": "Compiling incident information and evaluating lessons learned to improve handling is IRO-13, folded into revised incident response practices (IRO-04.2) and recorded in the incident repository (IRO-09.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.14",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-14",
+    "THR-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Keeping QCB and MOI informed of large-scale incidents so sector-wide risk can be reduced is regulatory stakeholder reporting (IRO-10) over maintained regulator/law-enforcement contacts (IRO-14), with the sector-benefit dimension served by cross-organization threat information sharing (THR-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.3.1",
+   "scf_ids": [
+    "VPM-01",
+    "VPM-05.8",
+    "VPM-05.6",
+    "VPM-04.3"
+   ],
+   "confidence": "medium",
+   "rationale": "A defined patch management process with roles and responsibilities is the vulnerability and patch management programme (VPM-01); obtaining and validating patches from authorized sources is VPM-05.8, pre-deployment testing is VPM-05.6, and the business-impact judgement on applying or withholding a patch is VPM-04.3.",
+   "uncovered_clause": "procedures for handling failed patch deployment (rollback, redeployment) are not discharged by any SCF control"
+  },
+  {
+   "code": "8.3.2",
+   "scf_ids": [
+    "VPM-05",
+    "VPM-04.1",
+    "CHG-01"
+   ],
+   "confidence": "high",
+   "rationale": "Regularly patching operating systems, network and infrastructure devices, security software and remote-access machines is software and firmware patching across deployed assets (VPM-05) kept at the latest stable versions (VPM-04.1), executed through the change management programme (CHG-01) as the requirement directs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.3.3",
+   "scf_ids": [
+    "VPM-05.7",
+    "VPM-02.1",
+    "THR-03"
+   ],
+   "confidence": "high",
+   "rationale": "Applying patches expeditiously for publicly reported vulnerabilities via an emergency process is out-of-cycle patching (VPM-05.7) prioritized on known exploited vulnerabilities (VPM-02.1), driven by continuous monitoring of vendor and OEM releases through threat intelligence feeds (THR-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.3.4",
+   "scf_ids": [
+    "VPM-05.6",
+    "RSK-06.2"
+   ],
+   "confidence": "high",
+   "rationale": "Testing critical patches in a test environment before production is pre-deployment patch testing (VPM-05.6), and devising alternative blocking controls when a patch breaks a business application is compensating countermeasures (RSK-06.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.3.5",
+   "scf_ids": [
+    "RSK-06.2",
+    "VPM-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting systems by disabling services or adding access controls where no patch exists is the implementation of compensating countermeasures (RSK-06.2) following a documented decision to defer patching (VPM-04.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.1",
+   "scf_ids": [
+    "MON-01",
+    "MON-01.16",
+    "MON-03"
+   ],
+   "confidence": "high",
+   "rationale": "Defining a logging and security monitoring policy that names the assets and processes in scope is the enterprise monitoring programme (MON-01) with monitoring scope prioritized by asset criticality (MON-01.16), and the logging of access and modification events is event log content (MON-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.2",
+   "scf_ids": [
+    "MON-01",
+    "MON-01.16"
+   ],
+   "confidence": "medium",
+   "rationale": "Employing processes and technology for continuous monitoring of applications, network devices and servers with responsibilities allocated for each asset is the enterprise-wide monitoring capability (MON-01) scoped and prioritized per asset (MON-01.16).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.4",
+   "scf_ids": [
+    "MON-03",
+    "MON-08",
+    "MON-08.2",
+    "MON-08.3"
+   ],
+   "confidence": "high",
+   "rationale": "Enabling logging across all equipment and applications handling critical information is MON-03, restricting log access to prevent modification or deletion is MON-08 with access limited to a subset of privileged users (MON-08.2), and continuous log integrity monitoring is cryptographic integrity protection of event logs (MON-08.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.6",
+   "scf_ids": [
+    "MON-03.3",
+    "MON-01.15",
+    "IAC-21.4"
+   ],
+   "confidence": "high",
+   "rationale": "Reviewing audit trails of system administrator and elevated-privilege activity when an alert or incident occurs is logging and review of privileged user actions (MON-03.3) with enhanced privileged-user oversight (MON-01.15) over audited privileged function execution (IAC-21.4).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.9",
+   "scf_ids": [
+    "MON-02",
+    "MON-01.2",
+    "MON-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Implementing a SIEM to collect, aggregate, correlate and analyse disparate source data and alert on suspicious events is centralized SIEM collection (MON-02) with near-real-time analysis (MON-01.2) and enterprise-wide correlation (MON-02.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.10",
+   "scf_ids": [
+    "MON-02",
+    "MON-10",
+    "MON-04"
+   ],
+   "confidence": "high",
+   "rationale": "An enterprise log repository for managing, aggregating and retaining logs is centralized log collection (MON-02) with defined retention periods (MON-10) and proactively managed log storage capacity (MON-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.12",
+   "scf_ids": [
+    "MON-03.1",
+    "MON-03.5"
+   ],
+   "confidence": "high",
+   "rationale": "Applying privacy protection to logs containing personal information is protection of sensitive/regulated data in log files (MON-03.1) and limiting the personal data elements captured in audit records (MON-03.5).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.15",
+   "scf_ids": [
+    "MON-17",
+    "MON-01.12"
+   ],
+   "confidence": "high",
+   "rationale": "Integrating system monitoring with incident handling so observed exceptions are recorded and worked through the incident process is event log analysis and triage tied to incident response (MON-17), with detected anomalies automatically alerting incident response personnel (MON-01.12).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4.16",
+   "scf_ids": [
+    "NET-08",
+    "MON-01.1",
+    "MON-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Network surveillance using intrusion detection and prevention devices against network intrusion attacks is NIDS/NIPS deployment (NET-08) and IDS/IPS on critical systems (MON-01.1), monitoring inbound and outbound traffic for hostile activity (MON-01.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.5.1",
+   "scf_ids": [
+    "CAP-01",
+    "CAP-03"
+   ],
+   "confidence": "high",
+   "rationale": "A capacity management policy setting utilization thresholds, performance guidance and a capacity plan forecasting future requirements is the capacity and performance management programme (CAP-01) with formal capacity planning (CAP-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.5.2",
+   "scf_ids": [
+    "CAP-04",
+    "CAP-01"
+   ],
+   "confidence": "high",
+   "rationale": "Continuously monitoring system performance against agreed targets is centralized monitoring and alerting on operating state and health of critical assets (CAP-04) under the capacity and performance management programme (CAP-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.5.3",
+   "scf_ids": [
+    "CAP-03",
+    "CAP-05",
+    "CAP-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Planning capacity for sudden transaction upsurges is capacity planning (CAP-03) supported by elastic scaling as demand changes (CAP-05), while diagnosing performance and capacity incidents rests on performance state monitoring and alerting (CAP-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.5.4",
+   "scf_ids": [
+    "CAP-03",
+    "CAP-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Assessing the effect of a proposed change on capacity planning and IT service performance is a capacity planning input (CAP-03) under the capacity and performance management programme (CAP-01); SCF's change impact analysis control addresses security rather than capacity impact.",
+   "uncovered_clause": "the linkage making capacity impact a mandatory gate in the change process is not itself an SCF control"
+  },
+  {
+   "code": "8.5.5",
+   "scf_ids": [
+    "CAP-04"
+   ],
+   "confidence": "high",
+   "rationale": "Deploying tools or scripts to continuously capture CPU, network and memory utilization is automated central monitoring and alerting on the operating state and health of critical assets (CAP-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.5.6",
+   "scf_ids": [
+    "CAP-03"
+   ],
+   "confidence": "high",
+   "rationale": "Extending capacity planning to backup systems and the disaster recovery environment is capacity planning that ensures sufficient processing, telecommunications and environmental capacity exists during contingency operations (CAP-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.6.4",
+   "scf_ids": [
+    "IRO-13",
+    "IRO-09.4",
+    "IRO-09.2"
+   ],
+   "confidence": "high",
+   "rationale": "Problem management that identifies root cause, finds permanent fixes and prevents recurrence is root cause analysis and lessons learned (IRO-13) informed by aggregate pattern analysis of historical incidents (IRO-09.4) and periodic review for recurring incidents (IRO-09.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.7.1",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-11.9",
+    "DCH-18"
+   ],
+   "confidence": "high",
+   "rationale": "A backup and archiving process defining frequency, media and classification is recurring backup creation (BCD-11), the access-privilege clause is restriction of backup access to assigned privileged roles (BCD-11.9), and alignment with local retention regulation is media and data retention against statutory obligations (DCH-18).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.7.2",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-08",
+    "BCD-11.6",
+    "BCD-12.2"
+   ],
+   "confidence": "high",
+   "rationale": "Implementing backup and archival technologies is BCD-11; the offsite tape, offsite disk and replication strategies are the alternate storage site (BCD-08) and transfer of backup data to it (BCD-11.6), and real-time replicated high-availability systems are failover capability (BCD-12.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.7.3",
+   "scf_ids": [
+    "BCD-11.4",
+    "DCH-07.2",
+    "DCH-07"
+   ],
+   "confidence": "high",
+   "rationale": "Encrypting backup tapes and disks before they are moved offsite is cryptographic protection of backup information (BCD-11.4) and encryption of data stored on media during transport (DCH-07.2), within controlled media transportation (DCH-07).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.7.4",
+   "scf_ids": [
+    "BCD-11.1",
+    "BCD-11.5"
+   ],
+   "confidence": "high",
+   "rationale": "Semi-annual testing and validation that backup media can actually support recovery is routine backup testing for reliability and integrity (BCD-11.1), performed by sampling available backups to test recovery capability (BCD-11.5).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.8.1",
+   "scf_ids": [
+    "SEA-07.1",
+    "TDA-01",
+    "AST-30",
+    "AST-09"
+   ],
+   "confidence": "medium",
+   "rationale": "A management-approved IT refresh policy covering refresh cycles is technology lifecycle management (SEA-07.1); the hardware and software acquisition element is the technology development and acquisition programme (TDA-01), and decommission and disposal are AST-30 and AST-09.",
+   "uncovered_clause": "the standardization requirement (a single approved technology standard set) is only indirectly covered"
+  },
+  {
+   "code": "8.8.2",
+   "scf_ids": [
+    "AST-02",
+    "AST-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining an up-to-date software and hardware inventory for production and DR, including warranty and support contract detail, is asset inventory at the required granularity with organization-defined accountability information (AST-02), kept current through installations, removals and upgrades (AST-02.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.8.4",
+   "scf_ids": [
+    "TDA-17",
+    "SEA-02.3",
+    "SEA-07.1",
+    "RSK-06.2"
+   ],
+   "confidence": "high",
+   "rationale": "Tracking EOL/EOS dates and phasing out or upgrading outdated devices is prevention of unsupported technology with documented justification for continued use (TDA-17), surfaced by technical debt reviews (SEA-02.3) within lifecycle management (SEA-07.1), with mitigating controls for systems kept in service as compensating countermeasures (RSK-06.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.8.5",
+   "scf_ids": [
+    "AST-02"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining an inventory of software and hardware components held in UAT, test, staging, store and stock is asset inventory covering all technology assets in use and held (AST-02).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.9.1",
+   "scf_ids": [
+    "CLD-01",
+    "TPM-04.1",
+    "CLD-13.2"
+   ],
+   "confidence": "medium",
+   "rationale": "A management-approved and periodically reviewed cloud computing policy is the cloud services management programme (CLD-01); its required coverage of provider infrastructure and operational risk is the pre-outsourcing third-party risk assessment (TPM-04.1), and its coverage of which applications and data may be hosted is the formal process for placing sensitive data on hosted services (CLD-13.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.9.2",
+   "scf_ids": [
+    "TPM-05",
+    "CLD-01.2",
+    "CLD-07",
+    "TPM-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Mandating minimum contractual coverage with a cloud provider is third-party contract requirements (TPM-05); the exit, transition and roll-back clauses are cloud offboarding with secure data transition (CLD-01.2), the migration and portability clauses are secure data import/export and portability (CLD-07), and the breach and third-party access notification clauses are compromise notification agreements (TPM-05.1).",
+   "uncovered_clause": "the commercial clauses (cancellation and modification fees, overhead and run-away costs) have no SCF counterpart"
+  },
+  {
+   "code": "8.9.4",
+   "scf_ids": [
+    "TPM-08",
+    "CLD-13"
+   ],
+   "confidence": "high",
+   "rationale": "Obtaining periodic security compliance reports on the cloud instance and the provider overall is regular review and assessment of external service providers against contractual security requirements (TPM-08) applied to the hosted services in scope (CLD-13).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.9.5",
+   "scf_ids": [
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "Obtaining ISAE or equivalent service-organisation assurance reports on the provider's security controls is obtaining an independent third-party assessment attestation of control conformity (TPM-05.8).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.9.6",
+   "scf_ids": [
+    "CLD-06.1",
+    "RSK-04",
+    "TPM-05.4"
+   ],
+   "confidence": "high",
+   "rationale": "Preventing use of cloud services as a justification for delegating risk control is formal delineation of provider versus customer control responsibility in a Customer Responsibility Matrix (CLD-06.1) and a RASCI matrix (TPM-05.4), with the enumerated leakage, interception, integrity, availability and legal risks assessed under recurring risk assessment (RSK-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.9.7",
+   "scf_ids": [
+    "TPM-04.1",
+    "TPM-05.8"
+   ],
+   "confidence": "medium",
+   "rationale": "Obligation is to obtain documentary evidence of a cloud vendor's security capability before contracting, discharged by the pre-acquisition third-party risk assessment mechanism and by obtaining an independent third-party attestation as that documentary evidence.",
+   "uncovered_clause": "the enumerated breadth of domains (e.g. physical security, media protection, procurement) is not itself enumerated by any single SCF control"
+  },
+  {
+   "code": "8.9.9",
+   "scf_ids": [
+    "TPM-05",
+    "CLD-13"
+   ],
+   "confidence": "high",
+   "rationale": "Requirement that the cloud agreement carry key security controls is discharged by the mechanism imposing security/compliance/resilience terms in third-party contracts and by the mechanism specifying which controls external hosted services must implement per those contracts.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.9.10",
+   "scf_ids": [
+    "TPM-04.1",
+    "CLD-09",
+    "CLD-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Due diligence covering cloud-specific attributes maps to the pre-outsourcing risk assessment mechanism plus the controls for cloud processing/storage geolocation (sovereignty, offshoring) and tenant segmentation in multi-tenant environments.",
+   "uncovered_clause": "recoverability and audit-rights attributes of the due-diligence review"
+  },
+  {
+   "code": "8.9.11",
+   "scf_ids": [
+    "TPM-05",
+    "VPM-07"
+   ],
+   "confidence": "medium",
+   "rationale": "The obligation is a contractual right to pen-test provider-supplied VM images and application instances: contract requirements provide the right, penetration testing provides the exercise of it, but no SCF control names a cloud-provider testing right specifically.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.9.12",
+   "scf_ids": [
+    "CLD-01.2",
+    "TPM-05",
+    "DCH-21"
+   ],
+   "confidence": "high",
+   "rationale": "Contractual power and means to destroy data held by the provider on termination is discharged by cloud offboarding (secure transition/disposition of data at decommissioning), the contract-requirements mechanism, and secure information disposal.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.1.2",
+   "scf_ids": [
+    "IAC-08",
+    "IAC-21",
+    "IAC-20"
+   ],
+   "confidence": "high",
+   "rationale": "Policy basis of RBAC, least privilege and need-to-know is discharged directly by the role-based access control, least-privilege and least-privilege access-enforcement mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.1.3",
+   "scf_ids": [
+    "HRS-11",
+    "HRS-12.1",
+    "IAC-08"
+   ],
+   "confidence": "high",
+   "rationale": "Segregation of duties to avoid conflict of interest maps to the SoD mechanism, the 4-eye requirement to the two-person rule for changes to sensitive assets, and role-segregated account privileges to RBAC enforcement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.1.5",
+   "scf_ids": [
+    "IAC-10.13",
+    "IAC-10",
+    "IAC-28"
+   ],
+   "confidence": "high",
+   "rationale": "Handling of lost/stolen/compromised passwords is discharged by the mechanism forcing credential change upon suspicion of compromise, authenticator management for the documented reset process, and identity verification before issuing a replacement authenticator.",
+   "uncovered_clause": "making users aware of the process and notifying the information security team"
+  },
+  {
+   "code": "8.10.1.7",
+   "scf_ids": [
+    "IAC-20",
+    "DCH-01.4",
+    "IAC-08"
+   ],
+   "confidence": "medium",
+   "rationale": "An owner-defined access control matrix over create/update/delete/transmit rights maps to logical access enforcement, the mechanism by which data owners explicitly define access authorizations, and role-based enforcement of those definitions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.1.8",
+   "scf_ids": [
+    "HRS-11",
+    "HRS-12.1",
+    "IAC-21"
+   ],
+   "confidence": "high",
+   "rationale": "Division of responsibilities so no individual fully controls a critical process is discharged by separation of duties, the two-person rule for sensitive changes, and least privilege.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.1.9",
+   "scf_ids": [
+    "AST-02.5",
+    "IAC-04"
+   ],
+   "confidence": "high",
+   "rationale": "Controlling logical network access with NAC restricted to authorized devices maps to the NAC mechanism that detects and blocks unauthorized devices, and to device-level identification and authentication before connection.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.1.10",
+   "scf_ids": [
+    "SEA-18"
+   ],
+   "confidence": "high",
+   "rationale": "Banners stating authorized-use-only, acceptable usage and legal consequences are exactly the system use notification / logon banner mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.1.12",
+   "scf_ids": [
+    "BCD-11.9",
+    "IAC-15.10",
+    "IAC-15.8"
+   ],
+   "confidence": "medium",
+   "rationale": "Preventing concurrent production and backup access maps to restricting backup access to assigned backup/recovery roles and separating accounts across infrastructure environments, with usage conditions enforcing the specific-reason and timeframe authorisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.1",
+   "scf_ids": [
+    "IAC-09.1",
+    "MON-03.2",
+    "MON-09"
+   ],
+   "confidence": "high",
+   "rationale": "Unique identifiers for all users including contractors and temporary staff so actions are accountable maps to user identity management plus the mechanisms linking system access to an individual and providing non-repudiation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.2",
+   "scf_ids": [
+    "IAC-15.5",
+    "IAC-19",
+    "IAC-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Discouraging and tightly controlling anonymous/guest/shared accounts maps to authorising shared/group accounts only under defined conditions, preventing generic credential sharing, and requiring an individual authenticator whenever a group authenticator is used.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.4",
+   "scf_ids": [
+    "MON-03.3",
+    "MON-01.15",
+    "MON-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Monitoring and logging all user and privileged accounts for historical purposes maps to logging and reviewing elevated-privilege actions, enhanced privileged-user activity monitoring, and centralised collection of the resulting event logs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.5",
+   "scf_ids": [
+    "IAC-02.1",
+    "IAC-15.5",
+    "IAC-15.8"
+   ],
+   "confidence": "high",
+   "rationale": "Where unique IDs are impossible, tying shared IDs to authorised users by time and location maps to requiring an individual authenticator behind a group authenticator, conditional authorisation of shared accounts, and enforced usage conditions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.7",
+   "scf_ids": [
+    "IAC-02",
+    "IAC-06"
+   ],
+   "confidence": "high",
+   "rationale": "Managed authentication for system access plus sensitivity-driven MFA maps to organizational-user identification and authentication and to the MFA enforcement mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.8",
+   "scf_ids": [
+    "IAC-20",
+    "DCH-01.4",
+    "IAC-08"
+   ],
+   "confidence": "medium",
+   "rationale": "Owner-defined access control matrix governing read/create/update/delete/transmit of information assets maps to logical access enforcement, owner definition of access authorizations for regulated data, and role-based enforcement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.9",
+   "scf_ids": [
+    "IAC-02.2",
+    "IAC-10.5",
+    "NET-09"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting authentication data in use against replay, man-in-the-middle and session hijacking maps to replay-resistant authentication, protection of authenticators commensurate with sensitivity, and communications session integrity/authenticity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.10",
+   "scf_ids": [
+    "IAC-10.1",
+    "IAC-10.4",
+    "IAC-06"
+   ],
+   "confidence": "high",
+   "rationale": "A password policy enforcing strong complex passwords with reset procedures and 2FA consideration maps to password complexity/length/lifespan enforcement, automated password strength validation, and the MFA mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.11",
+   "scf_ids": [
+    "IAC-10.1",
+    "IAC-10.4",
+    "IAC-10.8"
+   ],
+   "confidence": "high",
+   "rationale": "60-day maximum and 1-day minimum password age with forced change at logon after expiry or reset maps to password lifespan enforcement, automated policy compliance checking, and forced change of issued/default authenticators.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.12",
+   "scf_ids": [
+    "IAC-24"
+   ],
+   "confidence": "high",
+   "rationale": "Configuring systems and devices to lock the screen per policy is the session lock mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.13",
+   "scf_ids": [
+    "IAC-22"
+   ],
+   "confidence": "high",
+   "rationale": "Suspension after no more than three failed authentication attempts with a 30-minute delay is the account lockout threshold and lockout-duration mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.14",
+   "scf_ids": [
+    "IAC-28",
+    "IAC-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Helpdesk password reset only after confirming and verifying the user maps to identity verification prior to issuing authenticators or changing permissions, within authenticator management.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.15",
+   "scf_ids": [
+    "IAC-15.3",
+    "IAC-07",
+    "IAC-15.7"
+   ],
+   "confidence": "high",
+   "rationale": "Suspending accounts inactive beyond 60 days and deleting accounts no longer needed maps to automated disabling of inactive accounts, the formal de-provisioning process, and account reviews that disable accounts with no owner or business process.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.2.16",
+   "scf_ids": [
+    "MON-03",
+    "MON-01.8",
+    "MON-17"
+   ],
+   "confidence": "medium",
+   "rationale": "Enabling audit trails for accounts handling highly classified information, logging successful and failed logins and reviewing them on alert maps to event log content requirements, ongoing log review with escalation, and log analysis/triage tied to incident response.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.3.1",
+   "scf_ids": [
+    "OPS-01.1",
+    "IAC-15",
+    "NET-14"
+   ],
+   "confidence": "medium",
+   "rationale": "Documented standard operating procedures stating which data types which users may access, on what schedule and by which method maps to the SOP documentation mechanism, account-type governance for employees/contractors/third parties, and defined approved remote access methods for the internal/external/VPN dimension.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.3.3",
+   "scf_ids": [
+    "HRS-04",
+    "HRS-10"
+   ],
+   "confidence": "high",
+   "rationale": "Vetting system users in line with personnel security requirements maps to personnel screening prior to authorizing access, extended to third-party personnel.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.3.4",
+   "scf_ids": [
+    "SAT-03",
+    "HRS-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Educating users on responsibilities and acceptable usage before granting system access maps to role-based training delivered before authorizing access, plus communicating user roles and responsibilities.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.4.1",
+   "scf_ids": [
+    "MON-03.3",
+    "MON-03",
+    "MON-01.15"
+   ],
+   "confidence": "high",
+   "rationale": "Recording privileged-account activities such as startup/shutdown, failures, maintenance, backup and recovery maps to logging and reviewing elevated-privilege actions, event log content sufficiency, and enhanced privileged user monitoring.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.4.2",
+   "scf_ids": [
+    "IAC-16.4",
+    "MON-01.15",
+    "MON-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Separate day-to-day accounts for administrators with close supervision and periodic review of their activity maps to dedicated privileged accounts used solely for privileged duties plus privileged user oversight and privileged function logging.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.4.3",
+   "scf_ids": [
+    "IAC-21.3",
+    "IAC-28.1"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring director and ISO approval for creation, change or deletion of privileged accounts maps to restricting privileged account assignment to management-approved roles and to management approval for new or changed accounts.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.4.4",
+   "scf_ids": [
+    "IAC-16.1",
+    "IAC-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining a master list of privileged users and their access boundaries is the privileged account inventory mechanism, supported by the authorized user and service account list.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.4.5",
+   "scf_ids": [
+    "MON-08.2",
+    "MON-08",
+    "IAC-19"
+   ],
+   "confidence": "medium",
+   "rationale": "Barring privileged users from the logs recording their own activity maps to restricting event log management to a defined subset of privileged users and protecting logs from unauthorized modification; the no-shared-privileged-account clause maps to prevention of credential sharing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.5.1",
+   "scf_ids": [
+    "NET-14",
+    "IAC-28.1",
+    "RSK-04.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Granting remote access only on business justification with departmental and security approval, after considering risk, maps to defined and reviewed approved remote access methods, management approval for new access permissions, and defined instances that trigger a risk assessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.5.3",
+   "scf_ids": [
+    "NET-14.2",
+    "CRY-03"
+   ],
+   "confidence": "high",
+   "rationale": "End-to-end encryption of the whole remote session including identification and authentication maps to cryptographic protection of remote access session confidentiality and integrity and to transmission confidentiality.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.5.4",
+   "scf_ids": [
+    "END-05",
+    "END-04",
+    "NET-14.7"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring personal firewall and anti-malware before remote access maps to host-based firewall software, antimalware technologies, and validation of endpoint security posture prior to allowing a device to connect.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.5.5",
+   "scf_ids": [
+    "VPM-05",
+    "END-04.1",
+    "NET-14.7"
+   ],
+   "confidence": "high",
+   "rationale": "Keeping security software on remote access systems patched and current maps to software and firmware patching, automatic antimalware signature updates, and pre-connection endpoint posture validation of patch levels.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.10.5.6",
+   "scf_ids": [
+    "CFG-03.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Prohibiting reconfiguration of remote access systems for split tunneling is the split tunneling prevention mechanism.",
+   "uncovered_clause": "dual-homing of remote access systems"
+  },
+  {
+   "code": "8.11.1.1",
+   "scf_ids": [
+    "HRS-05.1",
+    "HRS-05.3",
+    "HRS-05"
+   ],
+   "confidence": "high",
+   "rationale": "Holding users responsible for the assets issued to them and requiring handling per the acceptable usage policy maps to defined rules of behavior, technology usage restrictions, and terms of employment applying protection principles in daily work.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.2",
+   "scf_ids": [
+    "HRS-05.1",
+    "HRS-03.1",
+    "HRS-05.3"
+   ],
+   "confidence": "high",
+   "rationale": "Making users aware that bank resources including internet access are for business purposes only, with personal use prohibited, maps to rules of behavior with consequences, communication of user responsibilities, and technology use restrictions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.3",
+   "scf_ids": [
+    "HRS-05.1",
+    "HRS-05.3"
+   ],
+   "confidence": "high",
+   "rationale": "Defining an acceptable usage policy covering information assets, internet and email maps to the mechanism defining acceptable and unacceptable rules of behavior for technology use and to usage restrictions for organizational technologies.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.7",
+   "scf_ids": [
+    "NET-18",
+    "HRS-05.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Barring use of public webmail from bank systems is enforced technically by URL/DNS content filtering that blocks prohibited internet services, and policy-wise by technology use restrictions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.8",
+   "scf_ids": [
+    "HRS-06.1",
+    "DCH-14",
+    "RSK-04.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Signed NDAs with external parties, agreed usage terms and a risk assessment before exchanging classified data map to confidentiality agreements covering third parties, the governed information sharing decision process, and defined instances requiring a risk assessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.9",
+   "scf_ids": [
+    "NET-18",
+    "CFG-05",
+    "END-03"
+   ],
+   "confidence": "high",
+   "rationale": "Preventing access to unauthorized websites and the download/installation of unauthorized software on workstations maps to URL/DNS content filtering plus restriction of software installation by non-privileged users and prohibition of installation without privileged status.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.10",
+   "scf_ids": [
+    "NET-18.1",
+    "NET-18"
+   ],
+   "confidence": "high",
+   "rationale": "Providing web access only through secure proxies and filtering gateways maps to routing internal traffic to approved proxy servers at managed interfaces and forcing Internet-bound traffic through a filtering policy enforcement point.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.11",
+   "scf_ids": [
+    "END-08",
+    "NET-20",
+    "END-04"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting email against viruses, phishing and spam via gateways that filter content maps to anti-phishing and spam protection technologies, email filtering for malicious attachments, and antimalware detection.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.11.1.13",
+   "scf_ids": [
+    "HRS-05.2",
+    "NET-20.8",
+    "DCH-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Restricting use of bank email on public forums and non-work sites maps to rules of behavior restricting posting and account sharing on external sites, while the classification-of-email clause maps to email labeling and media marking per the classification policy.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.1",
+   "scf_ids": [
+    "AST-04"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining high- and low-level network and security architecture diagrams that stay current and are reviewed on significant change is the network diagram / DFD maintenance mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.2",
+   "scf_ids": [
+    "AST-02",
+    "AST-02.9"
+   ],
+   "confidence": "high",
+   "rationale": "A detailed inventory of network devices, servers and workstations maps to the technology asset inventory mechanism and its CMDB implementation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.3",
+   "scf_ids": [
+    "SEA-03",
+    "NET-06",
+    "NET-06.2",
+    "CFG-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Layered defense-in-depth and secure-by-design network protection maps to the defense-in-depth architecture mechanism, physical/logical network segmentation with VLAN separation, and least functionality for disabling unused ports and restricting services.",
+   "uncovered_clause": "elimination of single points of failure / network redundancy, and port security / sticky MAC configuration on switches and wireless controllers"
+  },
+  {
+   "code": "9.1.1.4",
+   "scf_ids": [
+    "MON-02",
+    "MON-17",
+    "MON-10"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining and reviewing daily audit trails for critical devices on alert or incident maps to centralised event log collection, log analysis and triage integrated with incident response, and log retention for after-the-fact investigation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.5",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-07"
+   ],
+   "confidence": "high",
+   "rationale": "Semi-annual vulnerability assessment and penetration testing of infrastructure and network devices maps directly to the routine vulnerability scanning and penetration testing mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.7",
+   "scf_ids": [
+    "NET-05.2",
+    "RSK-04.3",
+    "NET-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Documented risk analysis for each application needing network access and termination of unnecessary connections maps to authorising and documenting internal system connections, defined instances requiring a risk assessment, and interconnection security agreements for authorised connections.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.8",
+   "scf_ids": [
+    "CFG-02",
+    "CFG-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Defining a minimum hardening baseline for servers, VMs and network devices from industry standards and vendor guidance, reviewed biannually, maps to secure baseline configurations and their scheduled review and update.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.11",
+   "scf_ids": [
+    "CHG-03",
+    "CHG-02"
+   ],
+   "confidence": "high",
+   "rationale": "An assessment process ensuring additions or changes to network devices do not introduce vulnerability elsewhere maps to security impact analysis performed prior to change implementation, within configuration change control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.1.12",
+   "scf_ids": [
+    "CRY-03",
+    "NET-12",
+    "WEB-10"
+   ],
+   "confidence": "high",
+   "rationale": "Strong application-level transport encryption such as AES or TLS plus network-level encryption maps to transmission confidentiality, strong cryptography safeguarding data over open networks, and TLS delivery of web application content.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.2.1",
+   "scf_ids": [
+    "PES-12.1",
+    "NET-06.3"
+   ],
+   "confidence": "medium",
+   "rationale": "The obligation is physically separate cabling/routing/distribution for high-classification systems: PES-12.1 is the physical protection of data-carrying cabling against interception and interference, and NET-06.3 supplies the segregated enclave for sensitive data that the separate distribution serves.",
+   "uncovered_clause": "No SCF control mandates classification-driven separation of cable distribution frames specifically; PES-12.1 covers protection rather than separation."
+  },
+  {
+   "code": "9.1.2.2",
+   "scf_ids": [
+    "AST-02",
+    "AST-04"
+   ],
+   "confidence": "medium",
+   "rationale": "A cable register with identification, classification, source/destination and annual inspection is an asset inventory obligation (AST-02, inventory accuracy and recurring verification) plus maintained current architecture/floor-plan documentation (AST-04).",
+   "uncovered_clause": "Annual physical inspection of cables against the register for inconsistencies is only implicitly covered by inventory verification."
+  },
+  {
+   "code": "9.1.2.3",
+   "scf_ids": [
+    "END-14"
+   ],
+   "confidence": "high",
+   "rationale": "The requirement to disable remote initiation of conferencing equipment is exactly the prohibition on remote activation of collaborative computing devices in END-14.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.2.5",
+   "scf_ids": [
+    "PES-12.1"
+   ],
+   "confidence": "high",
+   "rationale": "Encasing cables in conduit to prevent tampering, sabotage or accidental damage is the physical cabling-protection mechanism of PES-12.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.2.6",
+   "scf_ids": [
+    "BCD-10",
+    "BCD-10.2"
+   ],
+   "confidence": "high",
+   "rationale": "Provisioning auxiliary communication routes to survive cable sabotage is the single-point-of-failure reduction for telecommunications services in BCD-10, with BCD-10.2 covering path/provider separation of the alternate route.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.2.7",
+   "scf_ids": [
+    "SEA-14",
+    "NET-03.3"
+   ],
+   "confidence": "low",
+   "rationale": "Leaving conduits in public areas unlabelled is a concealment measure (SEA-14) aimed at not disclosing internal infrastructure information (NET-03.3); neither control names physical conduit labelling, so this is a related-mechanism match only.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.3.1",
+   "scf_ids": [
+    "NET-06.1",
+    "NET-06.8",
+    "NET-06.2",
+    "CFG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting administrative and network-control traffic to a dedicated management VLAN maps to the management subnet (NET-06.1), management/control/data plane separation (NET-06.8) and VLAN separation (NET-06.2); disabling VLAN 1 is a hardened baseline setting (CFG-02).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.3.2",
+   "scf_ids": [
+    "CAP-02",
+    "NET-06.8"
+   ],
+   "confidence": "medium",
+   "rationale": "Prioritised QoS marking for control traffic is resource prioritisation under CAP-02, and running the management/control VLANs in their own STP instance is the separation of network appliance planes in NET-06.8.",
+   "uncovered_clause": "Spanning Tree Protocol instance separation for path resilience has no dedicated SCF control."
+  },
+  {
+   "code": "9.1.3.3",
+   "scf_ids": [
+    "NET-06.2"
+   ],
+   "confidence": "high",
+   "rationale": "Pruning VLANs on trunk interfaces so devices cannot piggyback onto other VLANs is the VLAN separation mechanism of NET-06.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.3.4",
+   "scf_ids": [
+    "AST-21",
+    "CAP-02"
+   ],
+   "confidence": "high",
+   "rationale": "Logical or physical separation of VoIP from data networks is AST-21 directly, and the dedicated QoS provisioning for voice flows is resource prioritisation under CAP-02.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.4.3",
+   "scf_ids": [
+    "PES-12",
+    "PES-12.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Protecting multi-function devices against theft is equipment siting and protection to minimise damage and unauthorised access (PES-12), with PES-12.2 covering physical access restriction to output devices such as MFDs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.5.1",
+   "scf_ids": [
+    "NET-10.2",
+    "NET-10"
+   ],
+   "confidence": "high",
+   "rationale": "Signed zone files, zone-transfer integrity and cryptographic origin/mutual authentication are the DNS data-origin authentication and integrity verification of NET-10.2, within the secured name-resolution design of NET-10.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.5.3",
+   "scf_ids": [
+    "NET-10.1",
+    "WEB-02",
+    "CFG-02",
+    "NET-18"
+   ],
+   "confidence": "high",
+   "rationale": "Redundant DNS with internal/external role separation is NET-10.1, DMZ placement of the public resolver is WEB-02, hardening to baselines is CFG-02, and the DNS firewall blocking malware command-and-control resolution is DNS/content filtering under NET-18.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.6.1",
+   "scf_ids": [
+    "NET-18",
+    "NET-18.2",
+    "END-04"
+   ],
+   "confidence": "high",
+   "rationale": "Forcing internet-bound traffic through filtering gateways is NET-18, deep packet inspection of encrypted sessions is the proxy visibility mechanism of NET-18.2, and scanning downloaded files for malicious code is END-04.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.6.2",
+   "scf_ids": [
+    "NET-04.1",
+    "CFG-02"
+   ],
+   "confidence": "high",
+   "rationale": "An explicit deny rule permitting traffic only by exception is NET-04.1, and hardening the gateway router/firewall/L3 switch to bank guidelines is the secure baseline configuration of CFG-02.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.7.1",
+   "scf_ids": [
+    "NET-10.3"
+   ],
+   "confidence": "high",
+   "rationale": "Configuring the mail server so bounce/undeliverable mail only goes to SPF-verifiable senders is the SPF record validation mechanism of NET-10.3.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.7.3",
+   "scf_ids": [
+    "BCD-12.2",
+    "BCD-11.7"
+   ],
+   "confidence": "medium",
+   "rationale": "Redundant mail servers for high availability map to the failover capability of BCD-12.2 and the non-collocated redundant secondary system of BCD-11.7; neither is email-specific.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.7.4",
+   "scf_ids": [
+    "CFG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Hardening email servers to the bank's guidelines is the secure baseline configuration obligation of CFG-02.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.8.6",
+   "scf_ids": [
+    "CFG-02",
+    "NET-15.1",
+    "NET-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Hardening wireless access points and replacing default SSIDs, keys and SNMP strings at installation is CFG-02, securing the wireless authentication/encryption parameters is NET-15.1, and keeping the SSID hidden and free of bank or product identifiers is preventing disclosure of internal network information (NET-03.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.8.7",
+   "scf_ids": [
+    "NET-03",
+    "NET-04.1",
+    "NET-15.1"
+   ],
+   "confidence": "high",
+   "rationale": "A firewall between the access point and the internal network is boundary control at a key internal boundary (NET-03), explicit denial of incoming unknown ports is NET-04.1, and MAC filtering is device authentication before wireless association (NET-15.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.9.1",
+   "scf_ids": [
+    "CFG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Hardening NTP servers per the bank's guidelines is the secure baseline configuration obligation of CFG-02.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.9.2",
+   "scf_ids": [
+    "CFG-02",
+    "MON-07.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Requiring authenticated NTP and refusing unauthenticated requests is a hardened service configuration (CFG-02) applied to the authoritative time synchronisation mechanism (MON-07.1).",
+   "uncovered_clause": "NTP authentication (MD5 keying) has no dedicated SCF control; only the baseline-configuration mechanism carries it."
+  },
+  {
+   "code": "9.1.9.3",
+   "scf_ids": [
+    "MON-07.1",
+    "SEA-20"
+   ],
+   "confidence": "high",
+   "rationale": "Synchronising infrastructure to the NTP server and the NTP server to an authoritative national/government reference, with variance testing, is MON-07.1 supported by the enterprise clock-synchronisation technology of SEA-20.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.10.1",
+   "scf_ids": [
+    "NET-14",
+    "IAC-17",
+    "NET-14.1"
+   ],
+   "confidence": "high",
+   "rationale": "A policy restricting VPN access to approved, business-justified cases is the definition and control of approved remote access methods (NET-14), the monthly reconciliation and revocation is the periodic privilege review of IAC-17, and monitoring of remote-access devices is NET-14.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.10.3",
+   "scf_ids": [
+    "CFG-03.4"
+   ],
+   "confidence": "high",
+   "rationale": "Prohibiting split tunnelling unless compensating endpoint controls are provisioned is precisely the split-tunnelling restriction of CFG-03.4.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.10.4",
+   "scf_ids": [
+    "NET-14.2",
+    "CRY-01"
+   ],
+   "confidence": "high",
+   "rationale": "Enforcing encryption of VPN sessions is NET-14.2, and the requirement to establish and document uniform organisation-wide cryptographic standards is genuinely programme-level, which is what CRY-01 governs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.10.5",
+   "scf_ids": [
+    "NET-14.7"
+   ],
+   "confidence": "high",
+   "rationale": "Posture assessment of remote computers for patch level, antivirus and configuration before VPN connection is the endpoint security validation of NET-14.7.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.11.1",
+   "scf_ids": [
+    "NET-05",
+    "RSK-04.3",
+    "RSK-04"
+   ],
+   "confidence": "high",
+   "rationale": "Authorising and documenting trusted network interconnections, including cascaded connections to untrusted domains, is NET-05; RSK-04.3 defines connection events as an instance requiring assessment and RSK-04 supplies the documented risk assessment itself.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.11.2",
+   "scf_ids": [
+    "DCH-07",
+    "DCH-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting physical media in transit outside controlled areas is DCH-07, and the reliable/trusted courier requirement is the identification of media custodians throughout transport in DCH-07.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.11.5",
+   "scf_ids": [
+    "HRS-06.1",
+    "TPM-05",
+    "DCH-14"
+   ],
+   "confidence": "high",
+   "rationale": "Signed NDAs with vendors and third parties are HRS-06.1, the exchange agreement detailing responsibilities, liabilities, technical standards and ownership is the contractual requirements mechanism of TPM-05, and the pre-exchange decision process for protecting shared data is DCH-14.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.12.1",
+   "scf_ids": [
+    "IAC-20.5",
+    "HRS-12.1",
+    "HRS-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "Dual control / four-eye administrative access to confidential-traffic gateways is enforced by dual authorisation for privileged commands (IAC-20.5) and the two-person rule for changes to sensitive assets (HRS-12.1), while staffing gateways with trained, experienced personnel is the competency requirement of HRS-03.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.12.2",
+   "scf_ids": [
+    "CFG-02",
+    "NET-04.1",
+    "VPM-05",
+    "NET-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Pre-production gateway hardening against a defined parameter list is CFG-02, deny-by-default connectivity is NET-04.1, currency of vendor-approved firmware is VPM-05, and DoS resistance is NET-02.1.",
+   "uncovered_clause": "Rogue network monitoring and information-leakage parameters of the hardening list are not discharged by these four controls."
+  },
+  {
+   "code": "9.1.12.4",
+   "scf_ids": [
+    "NET-18.6",
+    "THR-03.1",
+    "MON-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Integrating gateways with IP reputation services is the internet address denylisting of NET-18.6, advanced threat management is fed by external threat intelligence feeds (THR-03.1), and big-data analytics over gateway telemetry is the SIEM correlation mechanism of MON-02.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.13.1",
+   "scf_ids": [
+    "RSK-04",
+    "RSK-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing the legal, regulatory and infrastructure-impact risks of virtualisation is a recurring risk assessment (RSK-04) triggered by a defined instance requiring assessment (RSK-04.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.13.2",
+   "scf_ids": [
+    "CFG-02",
+    "CFG-03",
+    "END-15",
+    "IAC-08"
+   ],
+   "confidence": "medium",
+   "rationale": "Hardening VMs, hypervisors and management systems to baselines is CFG-02; disabling unnecessary services, peripheral device passthrough and host/guest file sharing is least functionality (CFG-03); restricting hypervisor administration consoles is END-15; per-VM least-privilege role assignment is IAC-08.",
+   "uncovered_clause": "Per-VM resource limits (CPU, memory, disk, virtual NICs) are not discharged by any of these controls."
+  },
+  {
+   "code": "9.1.13.3",
+   "scf_ids": [
+    "END-15",
+    "PES-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Preventing unauthorised access to the virtual environment is discharged logically by restricting hypervisor management access (END-15) and physically by facility access enforcement over the hosting infrastructure (PES-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.13.4",
+   "scf_ids": [
+    "CHG-02",
+    "VPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring changes to the virtual environment to follow change management is CHG-02, and patching/updating VMs per the patch policy is VPM-05.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.14.1",
+   "scf_ids": [
+    "CFG-02",
+    "AST-28"
+   ],
+   "confidence": "high",
+   "rationale": "Hardening databases and subsystems and replacing default passwords, connection strings and SNMP communities at installation is CFG-02, operated through the documented database administration processes of AST-28.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.14.2",
+   "scf_ids": [
+    "IAC-21",
+    "IAC-08",
+    "IAC-20.2",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Governing database access by least privilege is IAC-21, by roles is IAC-08, restricted to those whose job requires it at the database itself is IAC-20.2, and classifying the information held in the database is DCH-02.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.14.3",
+   "scf_ids": [
+    "IAC-27",
+    "IAC-20.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Ensuring normal database access controls cannot be bypassed at the file level is the always-invoked, tamperproof enforcement point of IAC-27, applied as restricted database access under IAC-20.2; SCF names no view- or kernel-function technique specifically.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1.14.4",
+   "scf_ids": [
+    "IAC-15.5",
+    "IAC-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring individual OS accounts for DBA staff and permitting group accounts only for automated maintenance jobs is the conditional authorisation of shared/group accounts in IAC-15.5, with IAC-02.1 requiring individual authentication where a group authenticator exists.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.1.1",
+   "scf_ids": [
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Defining a classification scheme that categorises data by sensitivity and impact into restricted/private/public tiers is the data and asset classification mechanism of DCH-02.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.1.2",
+   "scf_ids": [
+    "DCH-04",
+    "DCH-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Treating unlabelled, draft or damaged-label assets as confidential by default is a marking rule under DCH-04, backed by the highest-sensitivity classification default of DCH-02.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.1.3",
+   "scf_ids": [
+    "DCH-04",
+    "DCH-15"
+   ],
+   "confidence": "medium",
+   "rationale": "A default 'private' marking for all information unless created for public release is a media/data marking rule (DCH-04), with the public-release exception governed by publicly accessible content control (DCH-15).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.1.5",
+   "scf_ids": [
+    "DCH-04",
+    "DCH-05"
+   ],
+   "confidence": "high",
+   "rationale": "Marking classified information for identification against its C-I-A ratings is DCH-04, implemented as security attributes bound to the information under DCH-05.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.1.6",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "Making staff, employees and partners aware of data labelling and need-to-know is general awareness training (SAT-02), with SAT-03 covering the role-specific handling training for those who label data.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.2.1",
+   "scf_ids": [
+    "IRO-04.1",
+    "IRO-02",
+    "IRO-10.2"
+   ],
+   "confidence": "high",
+   "rationale": "Defined handling and reporting procedures for theft, loss or leakage of customer data are the data-breach response provisions of IRO-04.1, the incident handling process of IRO-02, and the regulated-data incident reporting of IRO-10.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.2.3",
+   "scf_ids": [
+    "MON-16",
+    "MON-11",
+    "CFG-08.1"
+   ],
+   "confidence": "high",
+   "rationale": "Detecting suspicious access, modification or transfer of data is behavioural analytics over user and entity activity (MON-16) plus monitoring for unauthorised disclosure/exfiltration (MON-11), evidenced by logging of sensitive-data actions (CFG-08.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.2.4",
+   "scf_ids": [
+    "NET-17",
+    "DCH-12"
+   ],
+   "confidence": "high",
+   "rationale": "Endpoint DLP against unauthorised download of customer data to portable media is NET-17, and the restriction of removable media use itself is DCH-12.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.2.5",
+   "scf_ids": [
+    "CFG-03",
+    "DCH-12",
+    "NET-03.6"
+   ],
+   "confidence": "high",
+   "rationale": "Disabling portable storage ports on computers is least-functionality restriction of ports and devices (CFG-03) applied to removable media restrictions (DCH-12), and reading such media only in an isolated environment is the sandboxed isolation of untrusted components in NET-03.6.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.2.6",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-08",
+    "HRS-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring outsourcing providers that store or access customer data to comply with the bank's data security and leakage controls through contract clauses is TPM-05, the regular assessment and validation of their compliance is TPM-08, and the signed NDA is HRS-06.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.3.1",
+   "scf_ids": [
+    "CHG-02",
+    "DCH-22"
+   ],
+   "confidence": "low",
+   "rationale": "A documented data-migration policy and methodology has no dedicated SCF control; the closest mechanisms are governing the migration as a controlled technical change (CHG-02) and verifying data accuracy and completeness afterwards (DCH-22).",
+   "uncovered_clause": "A documented migration plan and methodology verifying completeness, consistency and integrity of data and processes during migration."
+  },
+  {
+   "code": "9.2.3.2",
+   "scf_ids": [
+    "CHG-02"
+   ],
+   "confidence": "low",
+   "rationale": "Pre- and post-migration activities with named responsibilities and timelines are only reachable as change planning and implementation governance under CHG-02; SCF has no migration-policy control.",
+   "uncovered_clause": "Documented pre/post-migration activity list, responsibilities and timelines."
+  },
+  {
+   "code": "9.2.4.1",
+   "scf_ids": [
+    "DCH-20",
+    "DCH-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Defining access rights in the retention and archival policy so archived privileged information cannot be accessed without authorisation is the protection of archived data sets (DCH-20) with explicitly defined access authorisations for sensitive data (DCH-01.4).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2.4.2",
+   "scf_ids": [
+    "MON-01.7",
+    "BCD-11",
+    "DCH-20"
+   ],
+   "confidence": "high",
+   "rationale": "File/data integrity tooling over hosted information is FIM under MON-01.7, and backup, archival and recovery procedures that verify integrity are BCD-11, with archived copies protected to the same standard under DCH-20.",
+   "uncovered_clause": "Confidentiality (encryption) of backup and archive media is not explicitly covered by these three."
+  },
+  {
+   "code": "9.2.4.3",
+   "scf_ids": [
+    "DCH-18",
+    "DCH-20",
+    "PRI-05"
+   ],
+   "confidence": "high",
+   "rationale": "Documenting archival frequency and retention periods and holding financial transaction records for 15 years is the statutory-driven retention mechanism of DCH-18, protection of those archives is DCH-20, and alignment with the Data Privacy Protection Law for personal information is PRI-05.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.3.1",
+   "scf_ids": [
+    "MDM-01",
+    "MDM-03",
+    "MDM-10"
+   ],
+   "confidence": "high",
+   "rationale": "Implementing an MDM solution is MDM-01, encrypting only the corporate container rather than the whole personal device is the container-based encryption of MDM-03, and the containerisation itself is the separate work/personal device workspace of MDM-10.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.3.2",
+   "scf_ids": [
+    "AST-16",
+    "MDM-06"
+   ],
+   "confidence": "high",
+   "rationale": "Defining a BYOD policy for personal device usage in the bank's environment is the BYOD programme of AST-16, enforced as restrictions on connecting personally-owned devices under MDM-06.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.3.3",
+   "scf_ids": [
+    "AST-16",
+    "MDM-03",
+    "MDM-06",
+    "AST-12"
+   ],
+   "confidence": "medium",
+   "rationale": "BYOD guidelines are governed by the BYOD programme control, with device/container encryption for stored data, restriction of personally-owned device connection for the non-compliance clause, and restriction of personal device possession in controlled facilities for the high-risk-area prohibition.",
+   "uncovered_clause": "BYOD user training and system recovery aspects of the guidelines; PDs being 'managed and accounted in the same manner as bank owned devices'"
+  },
+  {
+   "code": "9.4.2.2",
+   "scf_ids": [
+    "TDA-09",
+    "TDA-09.5",
+    "VPM-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Security testing throughout development plus application-level penetration testing discharge the lifecycle testing obligation, and the vulnerability remediation process supplies the tracking-to-closure mechanism.",
+   "uncovered_clause": "formal sharing of test reports with stakeholders"
+  },
+  {
+   "code": "9.4.2.3",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-07",
+    "TDA-09.7"
+   ],
+   "confidence": "high",
+   "rationale": "The three named activities map one-to-one: routine vulnerability scanning, penetration testing, and manual code review across the application infrastructure.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.2.4",
+   "scf_ids": [
+    "TDA-06",
+    "WEB-07"
+   ],
+   "confidence": "high",
+   "rationale": "Formulating secure development guidelines is discharged by the secure software development practices control, and the OWASP alignment specifically by the web security verification standard control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.2.5",
+   "scf_ids": [
+    "CRY-05",
+    "CRY-03",
+    "WEB-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Protecting web application information at rest and in motion is discharged by encryption at rest, transmission confidentiality, and delivery of web content over cryptographic transport.",
+   "uncovered_clause": "protection of information 'in use' (runtime/memory protection)"
+  },
+  {
+   "code": "9.4.3.3",
+   "scf_ids": [
+    "VPM-07"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation is to conduct penetration testing at a stated frequency, which the penetration testing control discharges directly.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.4.1",
+   "scf_ids": [
+    "NET-10.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Locking the domain registrar against unauthorised transfer or modification protects the bank's own domain registration, which is the first half of the requirement.",
+   "uncovered_clause": "procurement of a domain monitoring service that flags newly registered deceptive/look-alike domains — no SCF control covers brand/typosquat registration monitoring"
+  },
+  {
+   "code": "9.4.4.3",
+   "scf_ids": [
+    "NET-20.9",
+    "IRO-10"
+   ],
+   "confidence": "medium",
+   "rationale": "The suspicious-email submission mailbox is discharged by the user threat reporting control that ingests phishing submissions, and the duty to inform QCB of phishing incidents by incident reporting to regulatory authorities.",
+   "uncovered_clause": "educating the bank's customers (external consumers) about phishing — SCF awareness controls bind the workforce, not customers"
+  },
+  {
+   "code": "9.4.4.4",
+   "scf_ids": [
+    "IRO-08"
+   ],
+   "confidence": "high",
+   "rationale": "Preserving phishing evidence for subsequent prosecution is exactly the forensic collection and chain-of-custody mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.5.1",
+   "scf_ids": [
+    "END-04",
+    "NET-20",
+    "SAT-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Malware detection and mitigation is split across host antimalware technologies, email/network content filtering at the gateway, and workforce awareness training for the user layer.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.5.2",
+   "scf_ids": [
+    "END-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Keeping antimalware software and signature definitions current is discharged by the automatic antimalware signature update control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.5.3",
+   "scf_ids": [
+    "CFG-03",
+    "END-04.7",
+    "DCH-12"
+   ],
+   "confidence": "medium",
+   "rationale": "Disabling auto-run is a least-functionality configuration restriction, real-time always-on antimalware provides the automatic scan on media insertion, and removable media handling restrictions govern the media itself.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.5.4",
+   "scf_ids": [
+    "NET-20"
+   ],
+   "confidence": "high",
+   "rationale": "Filtering attachments at the email gateway is precisely the email filtering service that detects malicious attachments and blocks user access to them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.6.1",
+   "scf_ids": [
+    "NET-02.1",
+    "THR-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Identifying DoS-vulnerable bottlenecks and single points of failure is a threat impact/likelihood analysis feeding the automated denial-of-service protection control.",
+   "uncovered_clause": "the specific technique named — network design analysis and configuration testing"
+  },
+  {
+   "code": "9.4.6.2",
+   "scf_ids": [
+    "TPM-04.1",
+    "BCD-10",
+    "NET-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Weighing DDoS resistance when selecting an ISP is a pre-acquisition third-party risk assessment, supported by reducing single points of failure in primary telecommunications services and by DoS protection at application and volumetric layers.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.7.4",
+   "scf_ids": [
+    "IRO-04.1",
+    "IRO-04"
+   ],
+   "confidence": "high",
+   "rationale": "A cyber-breach response plan within the incident response framework is discharged by the data breach response plan component of the maintained Incident Response Plan.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4.7.5",
+   "scf_ids": [
+    "IRO-02",
+    "IRO-08",
+    "IRO-13"
+   ],
+   "confidence": "high",
+   "rationale": "Determining extent of infiltration, impact and exploited vulnerabilities is the analysis phase of incident handling, backed by digital forensics and root cause analysis.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.5.1",
+   "scf_ids": [
+    "PES-01.2",
+    "PES-04",
+    "PES-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Zoning physical space by security requirement is the zone-based physical security control, with identification of environments needing limited access and the physical security plan documenting the underlying risk determination.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.5.2",
+   "scf_ids": [
+    "PES-09",
+    "PES-08.1",
+    "PES-07.5"
+   ],
+   "confidence": "high",
+   "rationale": "Monitoring environmental conditions affecting processing facilities is discharged by temperature/humidity monitoring, fire and smoke detection devices, and water damage protection.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.5.3",
+   "scf_ids": [
+    "PES-07.3",
+    "PES-07"
+   ],
+   "confidence": "high",
+   "rationale": "UPS and backup generators are the alternate/emergency power supply mechanism, with protection of power equipment and cabling covering electrical supply interference.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.5.4",
+   "scf_ids": [
+    "PES-03",
+    "PES-03.1",
+    "PES-04",
+    "PES-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Barriers and entry controls for data centres and PIN facilities are physical access enforcement at controlled ingress/egress points, with identification of restricted rooms and a maintained authorised-personnel list supporting periodic access review.",
+   "uncovered_clause": "clause c — buildings giving minimum indication of their purpose (facility signage concealment)"
+  },
+  {
+   "code": "9.5.5",
+   "scf_ids": [
+    "PES-06",
+    "PES-06.3"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring vendors, contractors and guests follow the physical access policy is the visitor identification, authorisation and monitoring control plus the restriction on unescorted facility access.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.5.6",
+   "scf_ids": [
+    "PES-01.1",
+    "OPS-01.1",
+    "PES-19",
+    "PES-05"
+   ],
+   "confidence": "medium",
+   "rationale": "A site security plan summarising physical risks and controls is the Physical Security Plan, the secure-area SOPs are standardised operating procedures, key and access-credential enrolment/removal is the physical access device inventory, and audit-trail inspection and incident detection sit under monitoring physical access.",
+   "uncovered_clause": "staff security clearances and periodic security briefings; end-of-day lockup checks"
+  },
+  {
+   "code": "9.5.7",
+   "scf_ids": [
+    "PES-09.1",
+    "PES-05.1",
+    "PES-03.3",
+    "CAP-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Detecting compromise of environmental controls is discharged by temperature/humidity alarming and intrusion alarm/surveillance monitoring, with physical access logs for the log review clause and centralised health-state alerting for power, telecommunications and server availability.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.6.1.5",
+   "scf_ids": [
+    "IAC-10.5",
+    "CRY-05",
+    "BCD-11.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Protecting passwords from disclosure at rest and in transit is the protection-of-authenticators control, privileged password encryption is encryption of data at rest, and the off-site copy taken at each change is separate-facility storage of backup copies of security-related information.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.1.1",
+   "scf_ids": [
+    "TDA-06",
+    "WEB-07"
+   ],
+   "confidence": "high",
+   "rationale": "An S-SDLC built on OWASP/CERT/CWE is the secure software development practices control together with incorporation of the OWASP verification standard into the SSDLC.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.1.2",
+   "scf_ids": [
+    "TDA-08",
+    "TDA-07",
+    "IAC-21"
+   ],
+   "confidence": "high",
+   "rationale": "Isolating test and development environments from production is the separation-of-environments control with a segmented development network, and least privilege limits access to those systems to users with a business need.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.1.4",
+   "scf_ids": [
+    "TDA-09.7",
+    "TDA-09.2"
+   ],
+   "confidence": "high",
+   "rationale": "Source code review for coding flaws and malicious insertions is discharged by manual code review supported by static code analysis.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.1.5",
+   "scf_ids": [
+    "TDA-20.3"
+   ],
+   "confidence": "high",
+   "rationale": "Arranging escrow of source code and supporting documentation for critical custom applications is exactly the software escrow control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.1.6",
+   "scf_ids": [
+    "PRM-05",
+    "TDA-02"
+   ],
+   "confidence": "high",
+   "rationale": "Developing and implementing functional, technical and assurance security requirements as part of system requirements specifications is the security requirements definition control, with minimum viable product security specifications carrying them into the build.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.2.1",
+   "scf_ids": [
+    "TDA-02.5",
+    "MON-01.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Reviewing whether an application attempts external connections is discharged by requiring process owners to identify and justify the ports, protocols and services a solution needs, with continuous outbound traffic monitoring detecting undeclared connections.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.2.2",
+   "scf_ids": [
+    "BCD-11.1",
+    "BCD-13.1",
+    "END-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Integrity checking of backup information is the backup reliability/integrity testing control plus verification of restoration assets before use, with file integrity monitoring maintaining the separately-held integrity baselines updated after legitimate changes.",
+   "uncovered_clause": "requirement that integrity checks be run on a replica environment rather than the live system"
+  },
+  {
+   "code": "9.7.2.3",
+   "scf_ids": [
+    "WEB-02",
+    "NET-08.1"
+   ],
+   "confidence": "high",
+   "rationale": "Hosting internet-facing web, mail, file and VoIP servers in a DMZ is the demilitarized zone control, with DMZ segment monitoring separating untrusted from trusted networks.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.3.1",
+   "scf_ids": [
+    "RSK-04"
+   ],
+   "confidence": "low",
+   "rationale": "Assessing the significance of macro- and script-capable office software is only reachable through the recurring risk assessment control; SCF has no control specific to office productivity macro capability.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7.3.2",
+   "scf_ids": [
+    "END-10",
+    "CFG-05"
+   ],
+   "confidence": "medium",
+   "rationale": "User-developed macros and scripts are mobile code, so the mobile code governance control carries the review-and-authorise-before-use obligation, with restrictions on non-privileged users installing unauthorised software limiting their introduction.",
+   "uncovered_clause": "explicit pre-use testing of macros for integrity and reliability"
+  },
+  {
+   "code": "9.8.1.1",
+   "scf_ids": [
+    "DCH-02",
+    "AST-31",
+    "DCH-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Classifying hardware and media according to the information they contain is data and asset classification plus asset categorisation, with physical securing of media supplying the protective controls clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.1.2",
+   "scf_ids": [
+    "DCH-04",
+    "PES-16"
+   ],
+   "confidence": "high",
+   "rationale": "Visually identifiable, uniformly applied classification labelling is media marking for handling caveats, extended by hardware component marking that indicates the classification level the component may process.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.1",
+   "scf_ids": [
+    "DCH-09",
+    "DCH-09.1",
+    "DCH-09.2"
+   ],
+   "confidence": "high",
+   "rationale": "Defining sanitization processes, adopting tools and testing them periodically maps to media sanitization, its documentation and verification, and testing of sanitization equipment and procedures.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.2",
+   "scf_ids": [
+    "MNT-06",
+    "MNT-02"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting repair and maintenance of classified media to authorised personnel is the authorised maintenance personnel list operating within controlled maintenance activities.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.3",
+   "scf_ids": [
+    "DCH-08",
+    "DCH-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Documented destruction and disposal procedures are discharged by secure media disposal using formal procedures with documented and verified sanitization/disposal actions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.4",
+   "scf_ids": [
+    "DCH-09",
+    "AST-09"
+   ],
+   "confidence": "high",
+   "rationale": "Degaussing and physical destruction are sanitization techniques commensurate with classification, applied through secure destruction of equipment so information cannot be recovered.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.5",
+   "scf_ids": [
+    "DCH-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Staff supervision and due diligence over media destruction is the control requiring sanitization and disposal actions to be supervised, tracked, documented and verified.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.6",
+   "scf_ids": [
+    "DCH-08",
+    "DCH-21"
+   ],
+   "confidence": "medium",
+   "rationale": "Discreet disposal of media and media waste to defeat dumpster diving is an application of secure media disposal under formal procedures and secure destruction/erasure of information; SCF does not separately address disposal discretion.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.7",
+   "scf_ids": [
+    "DCH-09",
+    "AST-09"
+   ],
+   "confidence": "high",
+   "rationale": "Sanitizing classified and faulty media prior to disposal is media sanitization prior to release from organisational control, with secure disposal of the underlying components.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.8.2.8",
+   "scf_ids": [
+    "TPM-05",
+    "DCH-08"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring third-party disposal firms to contract to acceptable disposal procedures is the third-party contract requirements control applied to formal secure media disposal.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.1.1",
+   "scf_ids": [
+    "PES-04",
+    "PES-03.4",
+    "SEA-01.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Securing the data centre against internal and external threats is physical security of rooms and facilities plus dedicated physical access control for critical systems, with achievement of resilience requirements covering the resiliency half.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.1.2",
+   "scf_ids": [
+    "RSK-04",
+    "PES-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Bringing the data centre perimeter, surroundings and buildings into scope of threat and vulnerability assessment is the recurring risk assessment control, documented through the Physical Security Plan that records applicable physical risks and threats.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.1.3",
+   "scf_ids": [
+    "PES-07.3",
+    "PES-09",
+    "PES-08",
+    "BCD-10"
+   ],
+   "confidence": "medium",
+   "rationale": "The four areas named map to alternate/emergency power, temperature and humidity control, fire suppression on an independent energy source, and reduction of single points of failure in telecommunications; the assessment framing itself is only implied.",
+   "uncovered_clause": "the formal assessment of redundancy and fault tolerance as an exercise, distinct from implementing the redundancy"
+  },
+  {
+   "code": "9.9.1.4",
+   "scf_ids": [
+    "PES-08",
+    "PES-08.2"
+   ],
+   "confidence": "high",
+   "rationale": "Implementing fire protection and suppression is the fire suppression and detection systems control with suppression devices that notify personnel and emergency responders on activation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.1.5",
+   "scf_ids": [
+    "PES-07.3",
+    "PES-07"
+   ],
+   "confidence": "high",
+   "rationale": "UPS, battery arrays and diesel generators at each data centre are the alternate power supply capable of sustaining minimum operations, with protection of power equipment and cabling.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.2.1",
+   "scf_ids": [
+    "PES-03.4",
+    "PES-02"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting data centre access to authorised staff is enforcement of physical access to critical systems beyond facility controls, driven by the maintained list of personnel authorised for those areas.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.2.2",
+   "scf_ids": [
+    "IAC-20.6",
+    "PES-02"
+   ],
+   "confidence": "high",
+   "rationale": "Immediate withdrawal of data centre access when no longer required is the revocation of physical access authorisations, reflected in the current authorised-personnel list.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.2.3",
+   "scf_ids": [
+    "PES-06",
+    "PES-06.3",
+    "MNT-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Notified and approved temporary access for vendors is visitor identification and authorisation, permanent escorting is the restriction on unescorted access, and maintenance personnel lacking access authorisations are covered by the control mitigating that specific risk.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.2.4",
+   "scf_ids": [
+    "PES-04",
+    "PES-03.1",
+    "PES-05"
+   ],
+   "confidence": "high",
+   "rationale": "Securing and monitoring the data centre perimeter, building and equipment room is physical security of facilities and rooms with controlled, monitored ingress/egress points and monitoring for physical security incidents.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.2.5",
+   "scf_ids": [
+    "PES-01"
+   ],
+   "confidence": "medium",
+   "rationale": "The requirement is stated at programme level — employ physical, human and procedural controls — so the facilitation of physical and environmental protection controls is the appropriately-scoped control rather than any specific mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.2.6",
+   "scf_ids": [
+    "PES-05.1",
+    "PES-05.2"
+   ],
+   "confidence": "high",
+   "rationale": "Deploying security systems and surveillance to monitor and record data centre activity is monitoring of intrusion alarms and surveillance equipment, extended to monitoring physical access to critical systems.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9.2.7",
+   "scf_ids": [
+    "PES-03.2",
+    "PES-12",
+    "DCH-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Preventing unauthorised physical access to systems, equipment and racks is enforced by lockable physical casings and equipment siting that minimises opportunity for unauthorised access, with physical securing of media covering backup tapes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.1",
+   "scf_ids": [
+    "TPM-01",
+    "GOV-04.1",
+    "GOV-19.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Board and senior management accountability for outsourced processes is the third-party management programme anchored in a stakeholder accountability structure, with the outsourcing oversight control requiring governance assurance equivalent to in-house delivery.",
+   "uncovered_clause": "the explicit duty to set a framework ensuring service quality equal to in-house provision"
+  },
+  {
+   "code": "9.10.1.3",
+   "scf_ids": [
+    "TPM-04.1",
+    "TPM-03",
+    "TPM-04.4"
+   ],
+   "confidence": "high",
+   "rationale": "Pre-outsourcing risk assessment and due diligence is discharged by TPM-04.1's assessment-before-acquisition mechanism and TPM-03's supply-chain risk evaluation plus mitigation, while the jurisdiction-of-data clause is discharged by TPM-04.4's restriction on where a provider may process/store information.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.5",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.2"
+   ],
+   "confidence": "medium",
+   "rationale": "The obligation is a contractual clause governing onward subcontracting, which TPM-05 (imposing security/compliance terms in third-party contracts) and TPM-05.2 (flowing those terms down to sub-contractors) partially discharge.",
+   "uncovered_clause": "The requirement for the bank's prior approval of significant subcontracting is not itself a mechanism in the catalog; flow-down of requirements is not the same as an approval gate."
+  },
+  {
+   "code": "9.10.1.6",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-08",
+    "CPL-03.3"
+   ],
+   "confidence": "medium",
+   "rationale": "A right-to-audit clause is a contract requirement (TPM-05) exercised through recurring supplier review (TPM-08), with CPL-03.3 supplying the assessor-access mechanism, but none of them create examiner access for a banking regulator.",
+   "uncovered_clause": "Extension of the audit right to QCB examiners specifically."
+  },
+  {
+   "code": "9.10.1.7",
+   "scf_ids": [
+    "TPM-05.8",
+    "IAO-02.3",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring an ISAE assurance report from the provider is discharged by TPM-05.8's mechanism for obtaining an independent assessment-organization attestation, with IAO-02.3 covering acceptance and response to that external assessment and TPM-05 making it a contract term.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.8",
+   "scf_ids": [
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Continuous monitoring, review and audit of provider reports against SLAs is precisely TPM-08's mechanism of monitoring and regularly assessing external service providers for compliance with established contractual requirements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.10",
+   "scf_ids": [
+    "CHG-02",
+    "TDA-20",
+    "TDA-07"
+   ],
+   "confidence": "high",
+   "rationale": "Subjecting vendor code changes to the bank's change control is discharged by CHG-02's configuration change control and TDA-20's restriction of privileges to change software in libraries, while confining external developers to a test environment is discharged by TDA-07's segmented development environment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.12",
+   "scf_ids": [
+    "TDA-20.3",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Guaranteeing unobstructed access to third-party-developed source code is discharged by TDA-20.3's source-code escrow mechanism, made binding through TPM-05's contractual requirements on the provider.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.13",
+   "scf_ids": [
+    "TPM-05.1",
+    "TPM-08",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "The provider's contractual duty to report incidents is discharged by TPM-05.1's compelled compromise-notification agreements, and its duty to report on security posture by TPM-08's recurring provider review, both imposed via TPM-05 contract terms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.14",
+   "scf_ids": [
+    "BCD-10.3",
+    "TPM-11",
+    "BCD-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring continuity measures at the provider's own site is discharged by BCD-10.3's contractual requirement that providers hold contingency plans meeting the organization's requirements, with TPM-11 covering joint response/recovery testing and BCD-01.2 the coordination of the two plan sets.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.16",
+   "scf_ids": [
+    "TPM-05",
+    "GOV-19.3"
+   ],
+   "confidence": "high",
+   "rationale": "Compelling the provider to run controls at least as stringent as the bank's own is discharged by TPM-05's mechanism of imposing the organization's own security, compliance and resilience requirements contractually, with GOV-19.3 covering assurance of the provider's internal oversight.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.1.17",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.2"
+   ],
+   "confidence": "high",
+   "rationale": "Embedding a named baseline of security controls in the service agreement is TPM-05's contract-requirements mechanism, and extending it to the provider's subcontractors is TPM-05.2's contract flow-down mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.2.3",
+   "scf_ids": [
+    "CHG-02",
+    "TPM-10",
+    "TPM-08",
+    "OPS-03"
+   ],
+   "confidence": "high",
+   "rationale": "Subjecting vendors to the bank's change management is discharged by CHG-02 and TPM-10 (control of supplier-initiated service changes), monitoring by TPM-08, and the separate obligation that service quality and availability to customers not degrade by OPS-03's service-management mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.2.4",
+   "scf_ids": [
+    "TPM-04.1",
+    "TPM-04.4",
+    "DCH-26",
+    "TPM-05.7"
+   ],
+   "confidence": "medium",
+   "rationale": "Multi-jurisdiction due diligence is discharged by TPM-04.1's pre-outsourcing risk assessment, the jurisdiction/data-location clause by TPM-04.4 and DCH-26's digital-sovereignty constraint mechanism, and contract termination on failure by TPM-05.7's break clauses.",
+   "uncovered_clause": "A full exit strategy / transition-out plan, and the periodic re-review of jurisdictional information on significant change, have no discrete mechanism in the catalog."
+  },
+  {
+   "code": "9.10.2.5",
+   "scf_ids": [
+    "TPM-05",
+    "CPL-03.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Ensuring contracts do not obstruct audits and inspections is discharged by TPM-05's contractual requirements and CPL-03.3's mechanism for granting assessors the access needed to conduct a conformity assessment.",
+   "uncovered_clause": "The duty to notify QCB as a priority when the bank's or the regulator's access rights are likely to be impeded."
+  },
+  {
+   "code": "9.10.2.6",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.2"
+   ],
+   "confidence": "medium",
+   "rationale": "As with 9.10.1.5, the subcontracting clause is a contract term (TPM-05) with flow-down of requirements to sub-contractors (TPM-05.2).",
+   "uncovered_clause": "The bank's prior-approval gate for significant subcontracting is not a distinct catalog mechanism."
+  },
+  {
+   "code": "9.10.2.7",
+   "scf_ids": [
+    "TPM-05",
+    "BCD-10.3",
+    "OPS-03"
+   ],
+   "confidence": "medium",
+   "rationale": "The compliance, audit and security content of the outsourcing agreement is discharged by TPM-05's contract-requirements mechanism and the contingency/DR/backup-facility content by BCD-10.3's contractually-required provider contingency plans, with OPS-03 covering service-management planning and support.",
+   "uncovered_clause": "Quantified performance targets, service levels, reliability and scalability commitments have no dedicated SLA-definition mechanism in the catalog."
+  },
+  {
+   "code": "9.10.2.8",
+   "scf_ids": [
+    "BCD-10.3",
+    "TPM-11",
+    "BCD-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring the provider to build a DR contingency framework with documented, maintained and tested plans is discharged by BCD-10.3 and TPM-11's joint response/recovery planning and testing, while the bank's own ability to keep operating through the disruption is discharged by BCD-02.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.10.2.9",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-06",
+    "BCD-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Periodic testing of the DR plan is discharged by BCD-04's contingency-plan tests and exercises, review and update by BCD-06's ongoing contingency planning, and identification of somewhere to resume IT operations by BCD-09's alternate processing site.",
+   "uncovered_clause": "The exit-management plan and the identification of additional or alternate technology service providers."
+  },
+  {
+   "code": "9.10.2.10",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-08",
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "Imposing equally stringent provider controls is TPM-05's contractual mechanism, periodic monitoring and review of those controls is TPM-08, and obtaining periodic expert reports on the provider's security adequacy is TPM-05.8's independent third-party attestation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.1.1",
+   "scf_ids": [
+    "HRS-11",
+    "THR-04",
+    "MON-16.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Preventing employee fraud is discharged through concrete personnel-control mechanisms: HRS-11's separation of duties to block unilateral inappropriate activity, THR-04's insider threat programme, and MON-16.1's monitoring of internal personnel activity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.1.5",
+   "scf_ids": [
+    "DCH-06.1",
+    "PES-04.1",
+    "PES-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Confining media holding account numbers, PINs, limits and balances to an authorized-personnel-only area is discharged by DCH-06.1's physical securing of sensitive media and PES-04.1's restriction of secure areas to authorized personnel, while the mandated physical separation of card production from PIN generation is discharged by PES-01.2's zone-based physical security.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.2.3",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-10.5",
+    "IRO-14"
+   ],
+   "confidence": "high",
+   "rationale": "Reporting ATM/POS fraud attempts, embezzlement, hacking and forged-card events to the MOI hotline and QCB is discharged by IRO-10's timely incident reporting to regulatory authorities, IRO-10.5's serious-incident reporting to relevant authorities, and IRO-14's maintained regulatory and law-enforcement contacts.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.3.4",
+   "scf_ids": [
+    "DCH-07",
+    "DCH-07.1",
+    "NET-11"
+   ],
+   "confidence": "high",
+   "rationale": "Securing cards, cheque books and internet passwords in courier transit is discharged by DCH-07's protection of media in transport outside controlled areas, DCH-07.1's named custodians throughout that transport, and NET-11's out-of-band physical delivery to the authorized individual.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.3.5",
+   "scf_ids": [
+    "WEB-06",
+    "IAC-02.4",
+    "DCH-25.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Two-factor authentication and separate transaction credentials for internet banking are discharged by WEB-06's Strong Customer Authentication, the multi-channel payee-registration step by IAC-02.4's out-of-band authentication, and the transaction value ceiling by DCH-25.1's transfer activity limits.",
+   "uncovered_clause": "SMS alerting of customers on transactions has no dedicated customer-notification mechanism in the catalog."
+  },
+  {
+   "code": "10.3.6",
+   "scf_ids": [
+    "IAC-21",
+    "IAC-08",
+    "DCH-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Limiting information access to employees who need it to validate transactions is discharged by IAC-21's least privilege, IAC-08's role-based access enforcement, and DCH-03.1's restriction of sensitive-data disclosure to parties with a need to know.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.3.7",
+   "scf_ids": [
+    "HRS-04",
+    "TPM-04.1",
+    "IAC-28"
+   ],
+   "confidence": "medium",
+   "rationale": "The know-your-employee limb is discharged by HRS-04's pre-access personnel screening and the know-your-vendor limb by TPM-04.1's risk assessment before engaging a provider; IAC-28's identity verification covers only the identity-proofing part of customer onboarding.",
+   "uncovered_clause": "KYC/AML customer due diligence as a financial-crime obligation is not a mechanism in the catalog."
+  },
+  {
+   "code": "10.3.8",
+   "scf_ids": [
+    "PES-01",
+    "GOV-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Standing up a dedicated physical-infrastructure security team is an assignment-of-responsibility obligation, discharged by GOV-04's assignment of qualified individuals with mission and resources, operating the physical protection function that PES-01 governs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.4.1",
+   "scf_ids": [
+    "HRS-15",
+    "DCH-25.1",
+    "IRO-02",
+    "IRO-11"
+   ],
+   "confidence": "medium",
+   "rationale": "Fraud-reporting channels are discharged by HRS-15's reprisal-free suspicious-activity reporting and IRO-11's reporting assistance to users, system triggers on exceptional transactions by DCH-25.1's anomalous-transaction identification, and detailed investigation by IRO-02's intake, analysis and containment handling.",
+   "uncovered_clause": "Seeding and mystery-shopping detection exercises have no corresponding mechanism."
+  },
+  {
+   "code": "10.4.2",
+   "scf_ids": [
+    "HRS-15",
+    "CPL-07",
+    "IRO-02"
+   ],
+   "confidence": "high",
+   "rationale": "The well-publicized whistle-blowing mechanism is discharged by HRS-15's reprisal-free reporting channel, stakeholder disputes and exceptions by CPL-07's grievance intake and analysis, and the thorough investigation duty by IRO-02's incident analysis process.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.4.3",
+   "scf_ids": [
+    "IRO-11",
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "A staffed email and phone channel for customers to report suspected fraud is discharged by IRO-11's mechanism for providing reporting assistance and advice to users, and training phone-banking and branch staff to handle those enquiries by SAT-03's role-based training.",
+   "uncovered_clause": "The specific requirement for a dedicated email address and telephone number is an implementation detail no mechanism prescribes."
+  },
+  {
+   "code": "10.5.3",
+   "scf_ids": [
+    "IRO-08",
+    "IRO-08.1",
+    "MON-01.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Computer forensics capability is discharged by IRO-08's digital forensics and chain-of-custody mechanism with IRO-08.1's licensed investigators, and large-volume data analysis tooling by MON-01.2's SIEM-based analysis capability.",
+   "uncovered_clause": "Forensic accounting skills have no corresponding mechanism."
+  },
+  {
+   "code": "10.6.1",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-14"
+   ],
+   "confidence": "high",
+   "rationale": "Reporting merchant-acquiring fraud to QCB is discharged by IRO-10's timely incident reporting to regulatory authorities, supported by IRO-14's maintained regulatory contacts.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.6.3",
+   "scf_ids": [
+    "CPL-05",
+    "CPL-05.2"
+   ],
+   "confidence": "high",
+   "rationale": "Producing data and documents on police request is discharged by CPL-05's legal assessment of the investigative inquiry and CPL-05.2's provisioning of investigators with scoped access to support the official investigation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.9.2",
+   "scf_ids": [
+    "NET-20.9"
+   ],
+   "confidence": "medium",
+   "rationale": "Encouraging customers to report phishing emails and sites and acting on those reports is discharged by NET-20.9's mechanism for taking in user submissions of phishing attempts and using them to protect the organization.",
+   "uncovered_clause": "Maintaining a customer-facing cyber security awareness and education programme; the catalog's awareness controls bind the workforce, not retail customers."
+  },
+  {
+   "code": "10.10.1",
+   "scf_ids": [
+    "GOV-01",
+    "OPS-02"
+   ],
+   "confidence": "high",
+   "rationale": "This obligation is itself programme-level - a security strategy for the confidentiality, integrity and availability of data and systems - which GOV-01's governance programme and OPS-02's documented plan for achieving security objectives discharge directly.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.10.2",
+   "scf_ids": [
+    "CRY-01",
+    "CRY-01.5",
+    "WEB-10"
+   ],
+   "confidence": "high",
+   "rationale": "Adopting only cryptographic algorithms drawn from established, publicly scrutinised standards is exactly CRY-01's mechanism, with CRY-01.5 supplying the review of deployed cipher suites and WEB-10 the cryptographic delivery of the internet-facing systems being evaluated.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.10.3",
+   "scf_ids": [
+    "WEB-06",
+    "IAC-02.4"
+   ],
+   "confidence": "high",
+   "rationale": "Two-factor transaction signing for online banking authorization is discharged by WEB-06's Strong Customer Authentication for consumers, with IAC-02.4's out-of-band authentication supplying the independent second factor.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.10.4",
+   "scf_ids": [
+    "WEB-06",
+    "RSK-04",
+    "IAC-02.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Authorizing institutional and corporate transactions with token-based mechanisms is discharged by WEB-06's Strong Customer Authentication and IAC-02.4's out-of-band authentication, and the required risk assessment of those systems by RSK-04's recurring risk assessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.10.5",
+   "scf_ids": [
+    "WEB-10",
+    "CRY-11",
+    "NET-09"
+   ],
+   "confidence": "high",
+   "rationale": "Assuring customers that online login and transactions on the bank's website are protected and authenticated is discharged by WEB-10's cryptographic delivery of all web content, CRY-11's use of defined certificate authorities to establish protected sessions, and NET-09's protection of session authenticity and integrity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.10.7",
+   "scf_ids": [
+    "MON-01.12",
+    "DCH-25.1",
+    "MON-17"
+   ],
+   "confidence": "high",
+   "rationale": "Alerting on abnormal system activity and transmission errors is discharged by MON-01.12's automated alerting on anomalous activity, unusual online transactions by DCH-25.1's anomalous-transaction identification, and the action plan to verify and close issues by MON-17's analysis and triage tied into incident response.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.10.8",
+   "scf_ids": [
+    "VPM-07",
+    "TDA-09.5",
+    "VPM-06"
+   ],
+   "confidence": "high",
+   "rationale": "Vulnerability assessment and penetration testing of the online banking system is discharged by VPM-07's penetration testing, TDA-09.5's application-level penetration testing of the banking application itself, and VPM-06's routine vulnerability scanning.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.10.9",
+   "scf_ids": [
+    "NET-02.1",
+    "CAP-02",
+    "CAP-03",
+    "CAP-04"
+   ],
+   "confidence": "high",
+   "rationale": "Guarding online systems against DoS and DDoS is discharged by NET-02.1's denial-of-service protection and CAP-02's resource prioritisation for DoS-susceptible assets, while planning and tracking capacity utilisation is discharged by CAP-03's capacity planning and CAP-04's central monitoring of operating state and health.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.11.1",
+   "scf_ids": [
+    "WEB-04",
+    "WEB-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Security measures for the bank's mobile online services and payments are discharged by WEB-04's controls protecting client data on client-facing services and WEB-06's Strong Customer Authentication; the mobile-device-management controls are not applicable because the devices are the customers', not the bank's.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.11.3",
+   "scf_ids": [
+    "DCH-01.2",
+    "CRY-03",
+    "WEB-04"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting sensitive information used in mobile online services and payments is discharged by DCH-01.2's protection of sensitive data wherever processed or stored, CRY-03's cryptographic protection of that data in transmission, and WEB-04's client-data controls on the client-facing service.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.11.4",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "The obligation is to educate retail customers on protecting their own personally-owned mobile devices from malware; the catalog's awareness and training mechanisms bind employees and contractors, and its mobile controls bind organization-managed devices, so no control discharges this.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.11.5",
+   "scf_ids": [
+    "WEB-06",
+    "IAC-28"
+   ],
+   "confidence": "medium",
+   "rationale": "Implementing 3D Secure for cardholder authentication is discharged by WEB-06's Strong Customer Authentication for consumers, and the dedicated customer enrolment step by IAC-28's identity verification before issuing authenticators.",
+   "uncovered_clause": "Informing customers about the authentication procedure has no corresponding customer-communication mechanism."
+  },
+  {
+   "code": "10.12.1",
+   "scf_ids": [
+    "CPL-01",
+    "GOV-01.4",
+    "WEB-07"
+   ],
+   "confidence": "high",
+   "rationale": "Compliance with named external payment and application security standards is discharged by CPL-01's identification and implementation of applicable contractual and regulatory controls and GOV-01.4's alignment of the programme with industry-recognized frameworks, with WEB-07 discharging the OWASP verification-standard limb specifically.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.12.2",
+   "scf_ids": [
+    "GOV-17",
+    "CPL-01.5",
+    "CPL-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Annual reporting of standards compliance to QCB is discharged by GOV-17's mechanism for submitting programme status reporting to statutory and regulatory authorities, supported by CPL-01.5's declaration of conformity and CPL-01.3's ability to demonstrate conformity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.12.7",
+   "scf_ids": [
+    "IAC-28"
+   ],
+   "confidence": "low",
+   "rationale": "Withholding activation of a mailed payment card until the customer instructs it is related to IAC-28's verification of a user's identity before an authenticator is issued, but no control specifies an activation gate on a physically-delivered payment instrument.",
+   "uncovered_clause": "The activation-on-customer-instruction gate itself."
+  },
+  {
+   "code": "10.12.8",
+   "scf_ids": [
+    "WEB-06",
+    "IAC-02.4"
+   ],
+   "confidence": "high",
+   "rationale": "OTP-based two-factor authentication for card-not-present internet transactions is discharged by WEB-06's Strong Customer Authentication, with IAC-02.4's out-of-band authentication supplying the one-time-password delivery channel.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.13.1",
+   "scf_ids": [
+    "AST-07",
+    "AST-08",
+    "PES-05.1",
+    "CRY-03"
+   ],
+   "confidence": "high",
+   "rationale": "Anti-skimming and tamper-resistant hardware on ATMs and kiosks is discharged by AST-07's protection of point-of-interaction devices from tampering and substitution and AST-08's periodic inspection for indicators of compromise, CCTV coverage by PES-05.1's surveillance-equipment monitoring, and PIN encryption on the pad and in transmission by CRY-03.",
+   "uncovered_clause": "Physical measures to prevent shoulder-surfing of customer PINs."
+  },
+  {
+   "code": "10.13.3",
+   "scf_ids": [
+    "TPM-05",
+    "DCH-13.3",
+    "DCH-06.4"
+   ],
+   "confidence": "high",
+   "rationale": "Prohibiting merchants from retaining clear-text card data is discharged by TPM-05's imposition of security requirements in the merchant contract, DCH-13.3's protection requirements for sensitive data held on external parties' systems, and DCH-06.4's rendering of stored sensitive data human-unreadable.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.13.5",
+   "scf_ids": [
+    "DCH-03.2",
+    "DCH-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Suppressing card details on merchant and customer receipts is discharged by DCH-03.2's masking of sensitive data that is displayed or printed, with DCH-03.1 restricting disclosure of that data to parties with a need to know.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.14.1",
+   "scf_ids": [
+    "DCH-06",
+    "DCH-06.1",
+    "PES-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Keeping account numbers, holder names and signatures on cheques in a secure area is discharged by DCH-06's secure storage of non-digital media within controlled areas, DCH-06.1's physical securing of all sensitive media, and PES-04.1's restriction of the secure area to authorized personnel.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.14.2",
+   "scf_ids": [
+    "CRY-08",
+    "CRY-13",
+    "CRY-09"
+   ],
+   "confidence": "high",
+   "rationale": "Securing digitally signed cheques by cryptographic technique is discharged by CRY-08's PKI, which produces and validates the signatures, CRY-13's hash mechanism underpinning the integrity check, and CRY-09's management of the signing keys.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.15.1",
+   "scf_ids": [
+    "SEA-01.2",
+    "BCD-12.2",
+    "NET-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Reliability and resilience of core banking servers is discharged by SEA-01.2's achievement of resilience requirements in normal and adverse situations and BCD-12.2's near-real-time failover for critical assets, with NET-01's network security control procedures covering the cross-reference to network management guidelines.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.15.2",
+   "scf_ids": [
+    "DCH-01.2",
+    "CRY-05.3",
+    "TDA-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Securing core banking applications is discharged by TDA-06's secure software development practices and securing the databases by CRY-05.3's database encryption, with DCH-01.2 covering protection of the sensitive data wherever it is processed or stored.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.15.3",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-07",
+    "TDA-09.5"
+   ],
+   "confidence": "high",
+   "rationale": "Vulnerability assessment and penetration testing of applications linked to the core banking system and its database is discharged by VPM-06's routine vulnerability scanning, VPM-07's penetration testing, and TDA-09.5's application-level penetration testing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.15.4",
+   "scf_ids": [
+    "CRY-01",
+    "CRY-09"
+   ],
+   "confidence": "high",
+   "rationale": "Adherence of core banking systems to cryptographic and key management guidelines is discharged by CRY-01's use of standards-based cryptographic protections and CRY-09's key management controls.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.15.5",
+   "scf_ids": [
+    "SEA-01.2",
+    "MON-10",
+    "CRY-05.3",
+    "IAC-08"
+   ],
+   "confidence": "medium",
+   "rationale": "Core-system resilience is discharged by SEA-01.2's resilience requirements in adverse situations, archiving of security events for later analysis and legal retention by MON-10's retention of event logs against records-retention requirements, encryption of sensitive core database records by CRY-05.3, and restriction of core information to authorized users by IAC-08's role-based access control.",
+   "uncovered_clause": "Integrity-control processes over the main core database data and the versioning system for application changes."
+  },
+  {
+   "code": "7.1.3",
+   "scf_ids": [
+    "CPL-03.3",
+    "CPL-01.3"
+   ],
+   "confidence": "medium",
+   "rationale": "The clause states a regulator right, but the assessable duty falling on the bank is to be auditable by QCB on demand: grant the assessor logical and physical access (CPL-03.3) and be able to evidence conformity with the circular when asked (CPL-01.3). Deliberately not CPL-02.x (internal audit function) or CPL-04 (planning the organisation's own audits) - the mechanism here is supporting a supervisory examination, not running one. Nothing in SCF creates the regulator's power itself; that half is outside the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2.13",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation is to educate the bank's retail customers via notifications and press releases. Every SCF awareness control is scoped to the workforce - SAT-02 to employees and contractors, SAT-03.x to internal roles, SAT-03.4 to vendors. Mapping to SAT-02 would be right domain, wrong audience and wrong mechanism. PRI-01.3 concerns publishing privacy-programme contact information, not security awareness campaigns.",
+   "uncovered_clause": "Outbound security-awareness communication to banking customers (notifications, press releases) - SCF has no consumer-education control."
+  },
+  {
+   "code": "9.10.1.2",
+   "scf_ids": [
+    "TPM-04.1",
+    "GOV-06",
+    "TPM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Binds the bank: a gate before signing any outsourcing agreement, plus submission of the outsourced scope to the supervisor. TPM-04.1 is the pre-acquisition assessment-and-approval gate that the QCB submission attaches to; GOV-06 is the documented regulator-contact channel through which approval is sought; TPM-01.1 maintains the provider/scope record that has to be submitted. SCF cannot supply the external approval decision itself.",
+   "uncovered_clause": "QCB's prior written approval as a precondition to contract execution - an external regulatory consent, not an organisational mechanism."
+  },
+  {
+   "code": "9.10.2.11",
+   "scf_ids": [
+    "TPM-04.1",
+    "GOV-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Same bank-side duty as 9.10.1.2 without the scope-submission limb: no service-provider engagement may be contracted until approval is obtained, so the pre-contract approval gate (TPM-04.1) must include the supervisory step, exercised through the documented regulator contact channel (GOV-06). Avoided CPL-01 as an umbrella - the obligation is a specific procurement gate, not general regulatory-compliance identification.",
+   "uncovered_clause": "The regulator's grant or refusal of prior approval."
+  },
+  {
+   "code": "10.7.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Continuous fraud-risk education aimed at customers for their own protection. SCF's fraud-adjacent control (DCH-25.1) is a detection mechanism over anomalous transaction activity, not customer communication, and the SAT family is workforce-scoped. Forcing either would be a mechanism mismatch.",
+   "uncovered_clause": "Ongoing fraud-awareness education delivered to customers."
+  },
+  {
+   "code": "10.9.1",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Two limbs, both outside SCF's mechanism set: board/senior-management sponsorship of a consumer-education programme and resourcing of it. GOV-01.1 and GOV-04.1 concern executive oversight and accountability for the internal security programme, so using them here would be an umbrella substitution for a specific external-education obligation.",
+   "uncovered_clause": "Governing-body commitment and resourcing for ongoing customer education initiatives."
+  },
+  {
+   "code": "10.12.9",
+   "scf_ids": [
+    "DCH-25.1"
+   ],
+   "confidence": "low",
+   "rationale": "Composite. The detection limb - identifying card withdrawals or charges that exceed defined thresholds as anomalous transaction activity to curb fraud - is discharged by DCH-25.1. The delivery limb is not: SCF has no control requiring a prompt alert to the cardholder carrying transaction source and amount, and MON-01.12 routes alerts to incident-response personnel, not to the account holder, so it would be the wrong recipient.",
+   "uncovered_clause": "Prompt cardholder-facing transaction alerts, including source and amount, on customer-defined thresholds."
+  },
+  {
+   "code": "10.13.2",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The obligation is regular awareness messaging to customers about ATM tampering indicators. AST-07 (protecting point-of-interaction devices from tampering and substitution) and AST-08 (periodic inspection for indicators of compromise) address the same threat but discharge it through the bank inspecting and hardening its own ATMs - a different mechanism from telling customers what to look for, so mapping them would be right domain, wrong mechanism.",
+   "uncovered_clause": null
+  }
+ ]
+}

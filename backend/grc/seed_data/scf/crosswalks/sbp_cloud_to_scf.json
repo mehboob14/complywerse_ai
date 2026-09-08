@@ -1,0 +1,574 @@
+{
+ "framework": "sbp_cloud",
+ "library": "sbp_cloud.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "1.1",
+   "iso_clauses": [
+    "5.23",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Restricts where cloud workloads and data may be hosted (onshore preference, no hostile jurisdictions), which is a cloud-service acquisition/use decision (5.23) driven by jurisdictional legal exposure (5.31)."
+  },
+  {
+   "control_id": "1.2",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requires prior SBP approval before offshore material workloads — a Pakistan-specific licensing obligation with no ISO analogue beyond the generic duty to identify and satisfy applicable regulatory requirements."
+  },
+  {
+   "control_id": "1.3",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Pure permissive scoping statement telling EMIs and non-designated PSOs/PSPs which workloads they are allowed to place offshore; it imposes no security control, so nothing in ISO 27002 corresponds."
+  },
+  {
+   "control_id": "1.4",
+   "iso_clauses": [
+    "5.19",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "States that outsourcing does not transfer the RE's accountability for operations, compliance and customer data protection — the retained-responsibility principle of supplier relationship management (5.19) plus the regulator's standing power to direct workload placement (5.31)."
+  },
+  {
+   "control_id": "2.1",
+   "iso_clauses": [
+    "5.1",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates a board-approved topic-specific cloud outsourcing policy, which is exactly 5.1's requirement for defined, management-approved topic-specific policies, applied to the cloud-use topic of 5.23."
+  },
+  {
+   "control_id": "2.2",
+   "iso_clauses": [
+    "5.19",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires pre-engagement due diligence of CSPs and proactive identification of risks including those arising from CSP sub-contracting — supplier relationship risk assessment (5.19) extended down the ICT supply chain (5.21)."
+  },
+  {
+   "control_id": "2.3",
+   "iso_clauses": [
+    "5.19",
+    "5.23",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the enterprise risk framework to absorb cloud-specific risks (service location, jurisdiction, connectivity, ease of oversight), overlapping supplier risk (5.19), cloud-use risk (5.23) and jurisdictional legal exposure (5.31), though ERM framework design itself is broader than ISO 27002."
+  },
+  {
+   "control_id": "2.4",
+   "iso_clauses": [
+    "5.2",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Delegates cloud SLA, KPI/KRI and incident oversight to the ITSC with amended ToRs — an allocation of defined security governance responsibilities (5.2) and an expression of management's duty to require security be applied (5.4)."
+  },
+  {
+   "control_id": "2.5",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires every cloud arrangement to run through a legally binding, legally vetted SLA containing prescribed security areas — the direct equivalent of establishing and agreeing security requirements within supplier agreements."
+  },
+  {
+   "control_id": "2.6",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires roles and responsibilities of IT and operational departments (testing, UAT, data validation) to be defined and agreed before assets move to a CSP — definition and allocation of responsibilities per 5.2."
+  },
+  {
+   "control_id": "2.7",
+   "iso_clauses": [
+    "5.35",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the Internal Audit function to independently certify to the Board that cloud arrangements meet legal and regulatory obligations — an independent review of the security posture (5.35) targeted at compliance obligations (5.31)."
+  },
+  {
+   "control_id": "3.1",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Sets pre-contract due diligence criteria (feasibility, cost, financial strength, competence, track record, ability to meet Pakistani law) — supplier selection assessment under 5.19, though the financial-strength element sits outside ISO 27002's infosec scope."
+  },
+  {
+   "control_id": "3.2",
+   "iso_clauses": [
+    "5.19",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires assessment of the CSP's confidentiality/integrity/availability/resilience controls, entity-level governance, data-residency control and adherence to international security standards before engagement — supplier security assessment (5.19) applied specifically to cloud service selection (5.23)."
+  },
+  {
+   "control_id": "3.3",
+   "iso_clauses": [
+    "5.20",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Due diligence must confirm contractual audit/access/information rights, data security controls and current certifications (5.20) and that sub-contracting risk is managed across the CSP's chain (5.21)."
+  },
+  {
+   "control_id": "3.4",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires liability for unauthorized transactions, outages, security breaches and regulator-imposed penalties to be placed on the CSP — a liability/remedy term that must be written into the supplier agreement per 5.20."
+  },
+  {
+   "control_id": "3.5",
+   "iso_clauses": [
+    "5.19",
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "For material workloads, requires independent threat and vulnerability assessment of every CSP data centre covering physical/environmental and perimeter security and access controls — supplier assurance (5.19) evaluated against physical security perimeter requirements (7.1)."
+  },
+  {
+   "control_id": "4.1",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates an ongoing oversight mechanism tracking CSP performance against service levels, viability, cybersecurity practices, location changes, sub-contracting and ownership changes — verbatim the scope of monitoring, review and change management of supplier services."
+  },
+  {
+   "control_id": "4.2",
+   "iso_clauses": [
+    "5.22",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires continuous review of the CSP's adherence to legal, regulatory and contractual obligations — ongoing supplier service review (5.22) against identified compliance obligations (5.31)."
+  },
+  {
+   "control_id": "4.3",
+   "iso_clauses": [
+    "8.16",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the RE to monitor who accesses its cloud data and workloads using cloud activity reports — access monitoring (8.16) built on the CSP's activity log records (8.15)."
+  },
+  {
+   "control_id": "4.4",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires review of the CSP's internal control assessment and audit reports to obtain security and resilience assurance — the report-review method of supplier service monitoring in 5.22."
+  },
+  {
+   "control_id": "4.5",
+   "iso_clauses": [
+    "5.22",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires a comprehensive biennial audit of the CSP's delivery infrastructure, directly or via third-party/pooled audit — periodic supplier assurance (5.22) delivered through independent review (5.35)."
+  },
+  {
+   "control_id": "5.1",
+   "iso_clauses": [
+    "5.30",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a contingency plan for CSP outage with resilient deployment choices, redundancy by design, health checks for high availability and diverse international connectivity — ICT readiness for business continuity (5.30) delivered through redundancy of processing facilities and links (8.14)."
+  },
+  {
+   "control_id": "5.2",
+   "iso_clauses": [
+    "5.30",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires named owners for signing off, updating and activating the contingency plan and periodic refresh as availability zones, business needs and technology change — plan maintenance under 5.30 with responsibilities assigned per 5.2."
+  },
+  {
+   "control_id": "5.3",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires at least annual scenario-based testing of the cloud contingency plan (connectivity loss, CSP unavailability) with recorded deficiencies and corrective action — the exercise-and-test requirement of ICT continuity readiness."
+  },
+  {
+   "control_id": "6.1",
+   "iso_clauses": [
+    "5.20",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires unrestricted audit and onsite assessment rights over the CSP and its sub-contractors for RE auditors, independent assessors and SBP — audit and access rights that must be embedded in the supplier agreement (5.20) to enable independent review (5.35)."
+  },
+  {
+   "control_id": "6.2",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enumerates exactly what the contractual access, audit and information rights must reach (premises, data, systems, networks, CSP and sub-contractor security test results, auditors and personnel) — a specification of clauses required in supplier agreements."
+  },
+  {
+   "control_id": "6.3",
+   "iso_clauses": [
+    "5.20",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Permits reliance on third-party certifications only after reviewing their scope and methodology and requires a contractual right to expand assessment scope — certification-based supplier assurance (5.22) underpinned by an agreement term (5.20)."
+  },
+  {
+   "control_id": "6.4",
+   "iso_clauses": [
+    "5.22",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the CSP to supply information demanded by SBP and requires the RE to chase timely remediation of audit findings — follow-up on supplier service reviews (5.22) driven by a regulator's information powers (5.31)."
+  },
+  {
+   "control_id": "7.1",
+   "iso_clauses": [
+    "5.19",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires a tested exit plan with trigger events, alternative solutions, transition steps and escrow arrangements — the exit/termination strategy element of supplier relationship management (5.19) serving continuity of critical services (5.30)."
+  },
+  {
+   "control_id": "7.2",
+   "iso_clauses": [
+    "8.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires complete removal of data including logs from all CSP locations on exit — deletion of information no longer required, from the systems that hold it."
+  },
+  {
+   "control_id": "7.3",
+   "iso_clauses": [
+    "5.19",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prohibits lock-in/exclusivity and requires enumerated termination rights (ownership change, insolvency, breach, security breach, service deterioration) and a documented minimum termination period — supplier exit strategy (5.19) implemented as contract terms (5.20)."
+  },
+  {
+   "control_id": "8.1",
+   "iso_clauses": [
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires the CSP to maintain and supply an up-to-date sub-contractor list and requires impact assessment of complex sub-contracting on resilience — visibility and risk management of the ICT supply chain."
+  },
+  {
+   "control_id": "8.2",
+   "iso_clauses": [
+    "5.21",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Permits sub-contracting only where sub-contractors accept the same legal, security, audit and access obligations and the CSP can oversee them — flow-down of requirements through the ICT supply chain (5.21) enforced via agreement terms (5.20)."
+  },
+  {
+   "control_id": "9.1",
+   "iso_clauses": [
+    "8.2",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Governs the cloud user access lifecycle with four-eye administration, independent periodic review of access changes, and controlled/monitored service, generic and administrative accounts on dedicated machines with MFA — privileged access rights (8.2) plus provisioning and periodic review of access rights (5.18)."
+  },
+  {
+   "control_id": "9.2",
+   "iso_clauses": [
+    "8.5",
+    "8.2",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires MFA and source-IP restriction for cloud users (8.5), monitored exception-only use of the master account (8.2), and access controls over backups, log data and CSP personnel reach into RE systems (5.15)."
+  },
+  {
+   "control_id": "10.1",
+   "iso_clauses": [
+    "8.32",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires documented change procedures agreed with the CSP (request, approval, impact assessment, patch timelines, advance notification) and detection with automated alerting of unauthorized changes to the cloud environment — change management (8.32) coupled to configuration monitoring (8.9)."
+  },
+  {
+   "control_id": "10.2",
+   "iso_clauses": [
+    "8.9",
+    "8.32",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires pre-production testing of changes (8.32), creation, monitoring and remediation of cloud system baselines (8.9), and separation of infrastructure, security and application configuration roles (5.3)."
+  },
+  {
+   "control_id": "11.1",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires documented escalation, notification, containment and closure criteria agreed with the CSP and a designated SIRT with formalized roles — incident management planning and preparation (5.24) and the response procedures it enables (5.26)."
+  },
+  {
+   "control_id": "11.2",
+   "iso_clauses": [
+    "5.27",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires CSP post-incident reviews of material cloud incidents and ITSC discussion of incidents (5.27 learning from incidents) plus annual review and testing of the incident response plan (5.24)."
+  },
+  {
+   "control_id": "12.1",
+   "iso_clauses": [
+    "8.24",
+    "5.34",
+    "8.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires strong non-obsolete encryption of data at rest and in transit (8.24), specific PII protection measures and limits on disclosure to third parties or foreign authorities (5.34), and desensitization of production data before use in non-production environments (8.33)."
+  },
+  {
+   "control_id": "12.2",
+   "iso_clauses": [
+    "8.13",
+    "8.12",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires backups with ransomware protection and half-yearly restoration testing against defined RPOs (8.13), anti-exfiltration controls including content inspection and download/extraction restrictions (8.12), and classification of cloud assets by sensitivity to drive extra controls (5.12)."
+  },
+  {
+   "control_id": "13.1",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires policies for the full cryptographic material lifecycle, expert review of algorithms and key lengths, documented key/HSM ownership and location, and RE-only key generation and administration — the key management requirements of 8.24."
+  },
+  {
+   "control_id": "13.2",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires periodic key rotation to international standards, storage of keys separately from the virtual images and assets they protect, and HSM deployment for material workloads — key handling and protection under 8.24."
+  },
+  {
+   "control_id": "14.1",
+   "iso_clauses": [
+    "8.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Permits tokenization to shrink the sensitive data footprint and requires evaluation of the solution and exclusion of CSP access to it — tokenization is one of the named data masking techniques in 8.11."
+  },
+  {
+   "control_id": "15.1",
+   "iso_clauses": [
+    "8.20",
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires perimeter security, network IDS/IPS, WAF and DDoS protection at appropriate points to detect and mitigate attacks against cloud and on-premise environments — network security controls (8.20) and the security features of the network services relied on (8.21)."
+  },
+  {
+   "control_id": "15.2",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires segmentation by workload type and purpose, an isolated management network unreachable from operational segments, and routing of all internet traffic through a dedicated security segment — segregation of networks (8.22) as a network security design (8.20)."
+  },
+  {
+   "control_id": "15.3",
+   "iso_clauses": [
+    "8.21",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires VPN or dedicated connection with source/destination IP restrictions between cloud and on-premise and regular review of firewall rules and access lists after changes — security of the network services used (8.21) and ongoing network control administration (8.20)."
+  },
+  {
+   "control_id": "16.1",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires at least annual vulnerability assessment, penetration testing and scenario-based security testing of the RE's CSP-hosted systems — periodic identification of technical vulnerabilities in operational systems."
+  },
+  {
+   "control_id": "16.2",
+   "iso_clauses": [
+    "8.8",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the CSP to run annual VA/PT over the infrastructure and applications it manages and the RE to understand the scope of the results — technical vulnerability management (8.8) obtained as supplier assurance evidence (5.22)."
+  },
+  {
+   "control_id": "16.3",
+   "iso_clauses": [
+    "8.8",
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires security testing to cover cloud-unique attack scenarios (hypervisor jumping, hyper jacking, weak APIs, wrapping, side channel), meaning vulnerability testing scope (8.8) must be informed by current threat knowledge (5.7)."
+  },
+  {
+   "control_id": "16.4",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires identified cloud vulnerabilities to be risk-categorized, tracked, rectified and post-validated, with an alternate assurance route for CSP-managed layers — the evaluation and remediation half of technical vulnerability management."
+  },
+  {
+   "control_id": "16.5",
+   "iso_clauses": [
+    "8.8",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires an annual independent threat and vulnerability assessment of the CSP data centres hosting RE systems for material arrangements — recurring vulnerability identification (8.8) performed as supplier oversight (5.22)."
+  },
+  {
+   "control_id": "17.1",
+   "iso_clauses": [
+    "8.16",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires use of native cloud tooling for automated response, remediation and notification (8.16 monitoring with anomaly response) and for enforcing consistent security standards and baselines (8.9)."
+  },
+  {
+   "control_id": "17.2",
+   "iso_clauses": [
+    "8.16",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires CSP services to feed the RE's SIEM with cloud-specific correlation rules for detailed security log analysis — anomaly detection through monitoring (8.16) over collected logs (8.15)."
+  },
+  {
+   "control_id": "17.3",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires cloud activity to be monitored by the RE's SOC on a 24x7 basis — continuous monitoring of networks, systems and applications for anomalous behaviour."
+  },
+  {
+   "control_id": "18.1",
+   "iso_clauses": [
+    "8.6",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Combines two distinct duties: monitoring and reviewing cloud workload capacity utilization (8.6) and providing cloud-environment training to end-users and privileged users (6.3)."
+  },
+  {
+   "control_id": "18.2",
+   "iso_clauses": [
+    "5.5",
+    "5.27",
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires all security incidents and breaches to be reported to the regulator (5.5 contact with authorities) through defined reporting channels (6.8), followed by root-cause investigation and preventive action (5.27)."
+  },
+  {
+   "control_id": "18.3",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A pre-placement regulatory filing (CSP name, activities, contract dates, service and deployment model, one month before go-live) that exists only under SBP rules; ISO 27002 has no notification clause beyond the generic obligation to meet applicable regulatory requirements."
+  }
+ ]
+}

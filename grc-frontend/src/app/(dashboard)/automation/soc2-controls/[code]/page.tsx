@@ -11,13 +11,19 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Activity, AlertCircle, ChevronRight, FileText, Loader2, Play, Users,
+  Activity, AlertCircle, ChevronDown, ChevronRight, FileText, Loader2, Play, Users,
 } from 'lucide-react';
 import { automationApi } from '@/lib/api';
 import {
-  CodeChip, ControlStatusPill, SubTypeChip, CONTROL_STATUS,
-  type Soc2Control, type Soc2Criterion, type LinkedCheck,
+  CodeChip, ControlStatusPill, SubTypeChip, CONTROL_STATUS, FrameworkBadge,
+  type CommonControl, type LinkedCheck,
 } from '@/components/soc2/ui';
+
+// Framework slugs come from the data now (the SCF crosswalk resolves 31 of them),
+// ordered by how many requirements each one contributes.
+const fwOrder = (reqs?: CommonControl['requirements']): string[] =>
+  Object.keys(reqs || {}).filter((k) => (reqs?.[k] || []).length)
+    .sort((a, b) => ((reqs?.[b]?.length || 0) - (reqs?.[a]?.length || 0)) || a.localeCompare(b));
 
 const SOURCE_BADGE: Record<string, string> = {
   connector: 'bg-indigo-100 text-indigo-800',
@@ -90,38 +96,403 @@ function CheckRow({ chk, onRan }: { chk: LinkedCheck; onRan: () => void }) {
   );
 }
 
+
+interface ReqItem {
+  code: string;
+  reference: string;
+  title: string | null;
+  text: string | null;
+  domain: string | null;
+  resolved: boolean;
+  /** How the code was matched. `exact` is code identity; `parent`/`child` are
+   *  inferences across a granularity difference. */
+  match_mode: string;
+  confidence: number | null;
+}
+interface ReqGroup {
+  framework: string;
+  label: string;
+  version: string | null;
+  provenance: string;
+  confidence: number | null;
+  pivot_via: string | null;
+  count: number;
+  unresolved: number;
+  match_modes: string[];
+  inferred_count: number;
+  items: ReqItem[];
+}
+interface EvidenceItem {
+  source: string;
+  ref: string | null;
+  name: string | null;
+  description: string | null;
+  area: string | null;
+  filetype: string | null;
+}
+interface ConsolidatedArtifact {
+  name: string;
+  description: string | null;
+  collection_method: 'automated' | 'manual' | 'hybrid';
+  required_by: string[];
+  source_count: number;
+  filetype: string | null;
+}
+interface ControlDetail {
+  control_id: string;
+  assurance_mode?: 'automated' | 'manual' | 'hybrid';
+  implementation?: {
+    target_maturity: string | null;
+    maturity_levels: Record<string, string>;
+    solutions: Record<string, string>;
+    conformity_cadence: string | null;
+    pptdf: string | null;
+  };
+  evidence?: {
+    automated: { check_id: string; connector: string; title: string | null }[];
+    manual: EvidenceItem[];
+    automated_count: number;
+    manual_count: number;
+    from_frameworks: number;
+    consolidated?: ConsolidatedArtifact[] | null;
+    consolidated_from?: number | null;
+  };
+  requirement_groups: ReqGroup[];
+  requirement_count: number;
+  framework_count: number;
+  release: string;
+}
+
+/** How a mapping was established — the traceability claim, stated on every group. */
+function ProvenanceChip({ g }: { g: ReqGroup }) {
+  if (g.provenance === 'ai') {
+    const pct = g.confidence != null ? Math.round(g.confidence * 100) : null;
+    return (
+      <span
+        title={`Authored by us${g.pivot_via ? ` via ${g.pivot_via.replace(/_/g, ' ')}` : ''}. Not an SCF-published mapping.`}
+        className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700"
+      >
+        Authored mapping{pct != null ? ` · ${pct}%` : ''}
+      </span>
+    );
+  }
+  return (
+    <span
+      title="Resolved from the SCF crosswalk published with SCF 2026.2."
+      className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-500"
+    >
+      SCF crosswalk
+    </span>
+  );
+}
+
+/** A match made across a granularity difference rather than on the code itself.
+ *  Sound for navigation, not defensible in assurance until a reviewer confirms it. */
+function MatchModeChip({ mode }: { mode: string }) {
+  if (!mode || mode === 'exact') return null;
+  const why =
+    mode === 'parent'
+      ? 'Our code is broader than the source’s, so it inherits every mapping on the source’s sub-codes. Over-attributes.'
+      : 'Our code is narrower than the source’s, so it inherits its parent’s controls. Some may address sibling sub-requirements.';
+  return (
+    <span
+      title={`Matched by ${mode} rollup, not on the code itself. ${why}`}
+      className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-amber-700"
+    >
+      {mode} match
+    </span>
+  );
+}
+
+/** One framework's requirements. Collapsible because a control can discharge
+ *  obligations in 20+ frameworks and an always-open list is unreadable. */
+function RequirementGroup({ g, defaultOpen }: { g: ReqGroup; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const [showAll, setShowAll] = useState(false);
+  return (
+    <section className="overflow-hidden rounded-xl border border-slate-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2.5 px-4 py-3 text-left transition-colors hover:bg-slate-50"
+      >
+        <FrameworkBadge fw={g.framework} label={g.label} />
+        <span className="font-semibold text-slate-800">{g.label}</span>
+        {g.version && <span className="text-[11px] text-slate-400">{g.version}</span>}
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+          {g.count}
+        </span>
+        <span className="ml-auto flex items-center gap-2">
+          {g.unresolved > 0 && (
+            <span title={`${g.unresolved} identifier(s) had no matching text in the library`}
+              className="text-[10px] font-medium text-slate-400">{g.unresolved} without text</span>
+          )}
+          {g.inferred_count > 0 && (
+            <span title={`${g.inferred_count} of ${g.count} matched by parent/child rollup, not on the code itself`}
+              className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              {g.inferred_count === g.count ? 'all inferred' : `${g.inferred_count} inferred`}
+            </span>
+          )}
+          <ProvenanceChip g={g} />
+          <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+        </span>
+      </button>
+      {open && (
+        <ul className="divide-y divide-slate-100 border-t border-slate-100">
+          {(showAll ? g.items : g.items.slice(0, 10)).map((it) => (
+            <li key={it.code} className="grid grid-cols-[104px_1fr] gap-4 px-4 py-3.5">
+              <div className="min-w-0">
+                <CodeChip code={it.code} />
+                {it.reference && it.reference !== it.code && (
+                  <p className="mt-1 font-mono text-[10px] text-slate-400" title="The framework's own reference">
+                    {it.reference}
+                  </p>
+                )}
+                <div className="mt-1"><MatchModeChip mode={it.match_mode} /></div>
+              </div>
+              <div className="min-w-0">
+                {it.title && <p className="font-semibold text-slate-800">{it.title}</p>}
+                {it.text ? (
+                  <p className="mt-1 max-w-[68ch] text-[13px] leading-relaxed text-slate-600">{it.text}</p>
+                ) : (
+                  <p className="mt-1 text-[13px] italic text-slate-400">
+                    No requirement text for this identifier in the {g.label} library.
+                  </p>
+                )}
+                {it.domain && (
+                  <p className="mt-1.5 text-[11px] text-slate-400">{it.domain}</p>
+                )}
+              </div>
+            </li>
+          ))}
+          {!showAll && g.items.length > 10 && (
+            <li className="px-4 py-2.5">
+              <button type="button" onClick={() => setShowAll(true)}
+                className="text-xs font-semibold text-primary-700 hover:underline">
+                Show {g.items.length - 10} more
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+
+/** Implementation guidance, rendered verbatim from the catalog. */
+function ImplementationPanel({ impl }: { impl: NonNullable<ControlDetail['implementation']> }) {
+  const [showLadder, setShowLadder] = useState(false);
+  const [size, setSize] = useState<string>('medium');
+  const sizes = Object.keys(impl.solutions || {});
+  const levels = Object.entries(impl.maturity_levels || {});
+  return (
+    <Panel title="How to implement this" action={<span className="text-xs text-slate-400">Target: SCR-CMM Level 3 · Well Defined</span>}>
+      {impl.target_maturity ? (
+        <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">{impl.target_maturity}</p>
+      ) : (
+        <p className="text-sm italic text-slate-400">No maturity guidance published for this control.</p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+        {impl.pptdf && <span className="rounded bg-slate-100 px-2 py-0.5 font-medium">{impl.pptdf}</span>}
+        {impl.conformity_cadence && (
+          <span className="rounded bg-slate-100 px-2 py-0.5 font-medium">Reassess: {impl.conformity_cadence}</span>
+        )}
+      </div>
+
+      {levels.length > 0 && (
+        <div className="mt-4">
+          <button type="button" onClick={() => setShowLadder((v) => !v)}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 hover:underline">
+            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLadder ? 'rotate-180' : ''}`} />
+            {showLadder ? 'Hide' : 'Show'} the full maturity ladder ({levels.length} levels)
+          </button>
+          {showLadder && (
+            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {levels.map(([name, text]) => (
+                <li key={name} className="px-3.5 py-3">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{name}</p>
+                  <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-slate-600">{text}</p>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
+      {sizes.length > 0 && (
+        <div className="mt-5">
+          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Options for</span>
+            {sizes.map((k) => (
+              <button key={k} type="button" onClick={() => setSize(k)}
+                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize transition-colors ${
+                  size === k ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+                {k}
+              </button>
+            ))}
+          </div>
+          <p className="whitespace-pre-line rounded-lg border border-slate-200 bg-slate-50/60 px-3.5 py-3 text-[13px] leading-relaxed text-slate-600">
+            {impl.solutions[size] || 'No options published for this organisation size.'}
+          </p>
+        </div>
+      )}
+      <p className="mt-3 text-[10px] text-slate-400">
+        Guidance reproduced verbatim from the Secure Controls Framework 2026.2.
+      </p>
+    </Panel>
+  );
+}
+
+/** What to collect to evidence this control, by how it is obtained. */
+function EvidencePanel({ ev, mode }: { ev: NonNullable<ControlDetail['evidence']>; mode?: string }) {
+  const [showAll, setShowAll] = useState(false);
+  const scfFirst = [...ev.manual].sort((a, b) =>
+    Number(b.source === 'SCF evidence request list') - Number(a.source === 'SCF evidence request list'));
+  const shown = showAll ? scfFirst : scfFirst.slice(0, 10);
+  const tone = mode === 'automated' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    : mode === 'hybrid' ? 'border-sky-200 bg-sky-50 text-sky-700'
+      : 'border-slate-200 bg-slate-50 text-slate-600';
+  return (
+    <Panel title="Recommended evidence"
+      action={<span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${tone}`}>{mode || 'manual'}</span>}>
+      <section>
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          Automated · {ev.automated_count}
+        </h3>
+        {ev.automated.length ? (
+          <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {ev.automated.map((a) => (
+              <li key={a.check_id} className="flex items-center gap-2.5 px-3.5 py-2.5">
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{a.connector}</span>
+                <span className="text-[13px] text-slate-600">{a.title}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-1.5 text-[13px] text-slate-400">No collector asserts this control — evidence is produced by hand.</p>
+        )}
+      </section>
+
+      {ev.consolidated && ev.consolidated.length > 0 ? (
+        <section className="mt-5">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            What to collect · {ev.consolidated.length}
+            <span className="ml-1.5 font-normal normal-case text-slate-400">
+              merged from {ev.consolidated_from} requests across {ev.from_frameworks} frameworks
+            </span>
+          </h3>
+          <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+            {ev.consolidated.map((a) => {
+              const tone = a.collection_method === 'automated' ? 'bg-emerald-50 text-emerald-700'
+                : a.collection_method === 'hybrid' ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600';
+              return (
+                <li key={a.name} className="px-3.5 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${tone}`}>{a.collection_method}</span>
+                    <span className="font-semibold text-slate-800">{a.name}</span>
+                    {a.filetype && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{a.filetype}</span>}
+                    <span className="ml-auto text-[10px] text-slate-400" title={a.required_by.join(', ')}>
+                      required by {a.required_by.length} framework{a.required_by.length === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {a.description && <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{a.description}</p>}
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : (
+      <section className="mt-5">
+        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+          Manual · {ev.manual_count}
+          {ev.from_frameworks > 0 && (
+            <span className="ml-1.5 font-normal normal-case text-slate-400">
+              merged from {ev.from_frameworks} framework{ev.from_frameworks === 1 ? '' : 's'}
+            </span>
+          )}
+        </h3>
+        {shown.length ? (
+          <>
+            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
+              {shown.map((m, i) => (
+                <li key={`${m.ref}-${i}`} className="px-3.5 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-slate-800">{m.name}</span>
+                    {m.filetype && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{m.filetype}</span>}
+                    <span className="ml-auto text-[10px] text-slate-400">{m.source}{m.ref ? ` · ${m.ref}` : ''}</span>
+                  </div>
+                  {m.description && <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{m.description}</p>}
+                </li>
+              ))}
+            </ul>
+            {!showAll && scfFirst.length > shown.length && (
+              <button type="button" onClick={() => setShowAll(true)}
+                className="mt-2 text-xs font-semibold text-primary-700 hover:underline">
+                Show {scfFirst.length - shown.length} more
+              </button>
+            )}
+            {ev.manual_count > 25 && (
+              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+                These are every artifact the linked frameworks ask for, de-duplicated by name only.
+                Many are the same document described in different words — consolidating them into one
+                request per artifact is not done yet.
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-1.5 text-[13px] text-slate-400">No manual evidence is defined for this control.</p>
+        )}
+      </section>
+      )}
+    </Panel>
+  );
+}
+
 export default function ControlDetailPage() {
   const params = useParams();
+  const backHref = '/automation/soc2-controls';
   const code = decodeURIComponent(String(params.code || ''));
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('overview');
   const [runningAll, setRunningAll] = useState(false);
 
   const controlsQ = useQuery({
-    queryKey: ['soc2-library'],
-    queryFn: () => automationApi.listControls().then((r) => r.data as { controls: Soc2Control[] }),
-  });
-  const criteriaQ = useQuery({
-    queryKey: ['soc2-criteria'],
-    queryFn: () => automationApi.listCriteria().then((r) => r.data as { criteria: Soc2Criterion[] }),
+    queryKey: ['automation-common'],
+    queryFn: () => automationApi.listCommonControls().then((r) => r.data as { controls: CommonControl[] }),
   });
 
   const controls = controlsQ.data?.controls ?? [];
-  const control = controls.find((c) => c.control_id === code);
-  const criteriaByCode = useMemo(() => {
-    const m = new Map<string, Soc2Criterion>();
-    for (const c of criteriaQ.data?.criteria ?? []) m.set(c.code, c);
-    return m;
-  }, [criteriaQ.data]);
 
-  const mappedCriteria = useMemo(
-    () => (control?.criteria || []).map((k) => criteriaByCode.get(k)).filter(Boolean) as Soc2Criterion[],
-    [control, criteriaByCode],
+  // Requirement text lives in the framework libraries, not the crosswalk, so the
+  // detail endpoint resolves it server-side. Fetched only when the tab is opened.
+  const detailQ = useQuery({
+    queryKey: ['automation-common-detail', code],
+    enabled: (tab === 'requirements' || tab === 'overview') && !!code,
+    queryFn: () => automationApi.getCommonControl(code).then((r) => r.data as ControlDetail),
+  });
+  const reqGroupsFull = detailQ.data?.requirement_groups ?? [];
+  const control = controls.find((c) => c.control_id === code);
+
+  const allReqCodes = (c?: CommonControl) =>
+    c ? fwOrder(c.requirements).flatMap((f) => (c.requirements[f] || []).map((r) => `${f}:${r.code}`)) : [];
+
+  // Requirement mappings grouped by framework (only frameworks with mappings).
+  const reqGroups = useMemo(
+    () => (control ? fwOrder(control.requirements)
+      .map((f) => ({ fw: f, items: control.requirements[f] || [] })) : []),
+    [control],
   );
+  const totalReqs = reqGroups.reduce((n, g) => n + g.items.length, 0);
+
   const related = useMemo(() => {
     if (!control) return [];
-    const mine = new Set(control.criteria || []);
-    return controls.filter((c) => c.control_id !== control.control_id && (c.criteria || []).some((k) => mine.has(k))).slice(0, 12);
+    const mine = new Set(allReqCodes(control));
+    return controls
+      .filter((c) => c.control_id !== control.control_id && allReqCodes(c).some((k) => mine.has(k)))
+      .slice(0, 12);
   }, [control, controls]);
 
   const runTest = async () => {
@@ -131,7 +502,7 @@ export default function ControlDetailPage() {
     for (const id of ids) {
       try { await automationApi.runCheck(id); } catch { /* surfaced per-row */ }
     }
-    await qc.invalidateQueries({ queryKey: ['soc2-library'] });
+    await qc.invalidateQueries({ queryKey: ['automation-common'] });
     setRunningAll(false);
   };
 
@@ -142,7 +513,7 @@ export default function ControlDetailPage() {
     return (
       <div className="mx-auto max-w-[1200px] py-10 text-center">
         <p className="text-sm text-slate-500">Control <span className="font-mono">{code}</span> not found.</p>
-        <Link href="/automation/soc2-controls" className="mt-2 inline-block text-sm font-semibold text-primary-700">← Back to controls</Link>
+        <Link href={backHref} className="mt-2 inline-block text-sm font-semibold text-primary-700">← Back to controls</Link>
       </div>
     );
   }
@@ -157,14 +528,14 @@ export default function ControlDetailPage() {
     { id: 'overview', label: 'Overview' },
     { id: 'evidence', label: 'Evidence', count: evidence.length },
     { id: 'tests', label: 'Tests', count: control.checks?.length || 0 },
-    { id: 'requirements', label: 'Requirements', count: mappedCriteria.length },
+    { id: 'requirements', label: 'Requirements', count: totalReqs },
     { id: 'history', label: 'History' },
   ];
 
   return (
     <div className="mx-auto max-w-[1200px] px-1 py-1">
       <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-sm">
-        <Link href="/automation/soc2-controls" className="text-slate-400 hover:text-slate-700">Controls</Link>
+        <Link href={backHref} className="text-slate-400 hover:text-slate-700">Controls</Link>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
         <span className="font-semibold text-slate-700">{control.control_id}</span>
       </nav>
@@ -226,15 +597,21 @@ export default function ControlDetailPage() {
                   </>
                 )}
               </Panel>
+              {detailQ.data?.implementation && (
+                <ImplementationPanel impl={detailQ.data.implementation} />
+              )}
+              {detailQ.data?.evidence && (
+                <EvidencePanel ev={detailQ.data.evidence} mode={detailQ.data.assurance_mode} />
+              )}
               <Panel title="Automated tests">
                 {control.checks?.length ? (
                   <ul className="space-y-2">
-                    {control.checks.map((chk, i) => <CheckRow key={i} chk={chk} onRan={() => qc.invalidateQueries({ queryKey: ['soc2-library'] })} />)}
+                    {control.checks.map((chk, i) => <CheckRow key={i} chk={chk} onRan={() => qc.invalidateQueries({ queryKey: ['automation-library'] })} />)}
                   </ul>
                 ) : (
                   <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50/70 px-3.5 py-3">
                     <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                    <p className="text-sm text-slate-600">No automated test covers this control’s criteria yet — it is evidenced manually. Connect a collector on the Connections page to add live checks.</p>
+                    <p className="text-sm text-slate-600">No collector asserts this control yet. Its status is <span className="font-semibold">not assessed</span> — not satisfied. Connect a collector on the Connections page, or record the manual evidence listed above.</p>
                   </div>
                 )}
               </Panel>
@@ -245,7 +622,7 @@ export default function ControlDetailPage() {
             <Panel title="Automated tests">
               {control.checks?.length ? (
                 <ul className="space-y-2">
-                  {control.checks.map((chk, i) => <CheckRow key={i} chk={chk} onRan={() => qc.invalidateQueries({ queryKey: ['soc2-library'] })} />)}
+                  {control.checks.map((chk, i) => <CheckRow key={i} chk={chk} onRan={() => qc.invalidateQueries({ queryKey: ['automation-library'] })} />)}
                 </ul>
               ) : (
                 <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-sm text-slate-500">
@@ -256,22 +633,35 @@ export default function ControlDetailPage() {
           )}
 
           {tab === 'requirements' && (
-            <Panel title="SOC 2 requirements" action={<span className="text-xs text-slate-400">The criterion text this control is written against</span>}>
-              {mappedCriteria.length ? (
-                <ul className="divide-y divide-slate-100">
-                  {mappedCriteria.map((r) => (
-                    <li key={r.code} className="py-4 first:pt-0 last:pb-0">
-                      <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                        <CodeChip code={r.code} />
-                        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">{r.trust_services_category}</span>
-                        {r.is_always_in_scope && <span className="text-[11px] text-slate-400">always in scope</span>}
-                      </div>
-                      <p className="text-sm leading-relaxed text-slate-700">{r.name}</p>
-                    </li>
+            <Panel title="Linked requirements" action={<span className="text-xs text-slate-400">Every framework obligation this control discharges</span>}>
+              {detailQ.isLoading ? (
+                <div className="flex h-32 items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              ) : detailQ.isError ? (
+                <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-6 text-center text-sm text-rose-600">
+                  Couldn&apos;t load requirement text.
+                </div>
+              ) : reqGroupsFull.length ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500">
+                    <span className="font-semibold tabular-nums text-slate-700">{detailQ.data?.requirement_count}</span> requirements across{' '}
+                    <span className="font-semibold tabular-nums text-slate-700">{detailQ.data?.framework_count}</span> frameworks
+                    <span className="text-slate-400"> · crosswalked via SCF {detailQ.data?.release}</span>
+                  </p>
+                  {(detailQ.data?.framework_count ?? 0) > 10 && (
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+                      This control appears in <span className="font-semibold text-slate-700">{detailQ.data?.framework_count}</span> frameworks
+                      because many of them restate the same underlying obligation. A high count is crosswalk breadth,
+                      not extra assurance — authored mappings below are our own and capped at 8 per framework.
+                    </p>
+                  )}
+                  {reqGroupsFull.map((g, i) => (
+                    <RequirementGroup key={g.framework} g={g} defaultOpen={i < 2} />
                   ))}
-                </ul>
+                </div>
               ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-amber-600">Not mapped to any criterion.</div>
+                <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+                  This control is in the catalog but no framework you have selected requires it.
+                </div>
               )}
             </Panel>
           )}
@@ -324,20 +714,21 @@ export default function ControlDetailPage() {
 
           <section className="rounded-xl border border-slate-200 bg-white p-5">
             <h2 className="mb-3 text-base font-bold text-slate-900">Framework mappings</h2>
-            {mappedCriteria.length ? (
-              <ul className="space-y-2.5">
-                {mappedCriteria.map((r) => (
-                  <li key={r.code} className="flex items-start gap-2.5">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-primary-50 text-[9px] font-bold text-primary-700">SOC2</span>
-                    <span className="min-w-0">
-                      <span className="block text-sm font-semibold text-slate-700">SOC 2</span>
-                      <span className="block truncate text-[11px] text-slate-400">{r.code} · {r.name}</span>
-                    </span>
-                  </li>
+            {reqGroups.length ? (
+              <div className="space-y-3">
+                {reqGroups.map((g) => (
+                  <div key={g.fw}>
+                    <FrameworkBadge fw={g.fw} />
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {g.items.map((r) => (
+                        <span key={r.code} title={r.text || r.name} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">{r.code}</span>
+                      ))}
+                    </div>
+                  </div>
                 ))}
-              </ul>
+              </div>
             ) : (
-              <p className="text-sm text-amber-600">Not mapped to any criterion</p>
+              <p className="text-sm text-amber-600">Not mapped to any framework requirement</p>
             )}
           </section>
 

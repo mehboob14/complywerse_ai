@@ -1,0 +1,633 @@
+{
+ "framework": "sox",
+ "hop": "direct",
+ "mappings": [
+  {
+   "code": "APD-01",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-03",
+    "IAC-01"
+   ],
+   "confidence": "high",
+   "rationale": "Policy-level obligation: document, approve annually and communicate logical access policies/standards. GOV-02 is the publish-and-disseminate mechanism, GOV-03 the planned-interval review/approval. IAC-01 is used deliberately here (not as a catch-all) because the requirement is the IAM program document itself, not an operational access action.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "APD-02",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-28.1",
+    "IAC-08",
+    "IAC-21"
+   ],
+   "confidence": "high",
+   "rationale": "Composite split: formal request/registration process = IAC-07; documented data-owner/management approval before provisioning = IAC-28.1; assignment by job role = IAC-08; least privilege = IAC-21.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "APD-03",
+   "scf_ids": [
+    "IAC-07.1",
+    "HRS-08",
+    "IAC-28.1"
+   ],
+   "confidence": "high",
+   "rationale": "Role-change trigger: IAC-07.1 revokes rights no longer needed after role/duty change; HRS-08 adjusts logical/physical authorizations on reassignment or transfer; IAC-28.1 supplies the management approval for the changed permissions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "APD-04",
+   "scf_ids": [
+    "IAC-07.2",
+    "HRS-09",
+    "HRS-09.2",
+    "IAC-20.6",
+    "HRS-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Timely revocation on termination = IAC-07.2; the termination process itself = HRS-09; the expedited 24-hour involuntary path = HRS-09.2; revocation of both logical and physical authorizations (VPN/remote plus badge) = IAC-20.6; collection of issued credentials/assets = HRS-09.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "APD-05",
+   "scf_ids": [
+    "IAC-17",
+    "IAC-15.7"
+   ],
+   "confidence": "high",
+   "rationale": "Recurring attestation review of assigned privileges with reassignment/removal of unnecessary access = IAC-17. IAC-15.7 covers the parallel account-listing review that disables accounts with no associated business process or owner (terminated users still present).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "APD-06",
+   "scf_ids": [
+    "IAC-16",
+    "IAC-16.1",
+    "IAC-21.3",
+    "IAC-17",
+    "MON-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Restriction/control of privileged rights = IAC-16; documented business need plus inventory validation of each elevated user = IAC-16.1; IT-management approval of privileged assignment = IAC-21.3; quarterly privilege review = IAC-17; logging and review of actions taken under privileged accounts = MON-03.3.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "APD-07",
+   "scf_ids": [
+    "IAC-10.1",
+    "IAC-22",
+    "IAC-06",
+    "IAC-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Length/complexity/expiration settings = IAC-10.1 (complexity, length and lifespan criteria); lockout after failed attempts = IAC-22; MFA for remote access = IAC-06; MFA for privileged accounts = IAC-06.1.",
+   "uncovered_clause": "Password history / prevention of reuse of the last 12 passwords has no dedicated SCF mechanism beyond the lifespan criteria in IAC-10.1."
+  },
+  {
+   "code": "APD-08",
+   "scf_ids": [
+    "PES-02",
+    "PES-03",
+    "PES-03.3",
+    "PES-06",
+    "PES-06.3",
+    "IAC-20.6"
+   ],
+   "confidence": "high",
+   "rationale": "Badge/biometric/lock enforcement at access points = PES-03; maintained authorized-personnel list = PES-02; per-attempt logging = PES-03.3; visitor identification/monitoring = PES-06 with escort restriction = PES-06.3; revocation of physical authorization on termination or role change = IAC-20.6.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "APD-09",
+   "scf_ids": [
+    "IAC-01.3",
+    "IAC-15.5",
+    "IAC-19",
+    "IAC-10.6",
+    "IAC-10.13"
+   ],
+   "confidence": "high",
+   "rationale": "Inventory of service accounts with owners = IAC-01.3; authorization conditions for shared/group accounts = IAC-15.5; prohibition on sharing generic IDs/passwords = IAC-19; no plain-text/embedded static credentials in scripts or applications = IAC-10.6; periodic credential rotation = IAC-10.13.",
+   "uncovered_clause": "Restricting interactive login for service accounts, and the additional-logging compensating control for shared account usage, are not discharged by a specific SCF mechanism (IAC-02.1 addresses individual authentication behind a group authenticator only partly)."
+  },
+  {
+   "code": "APD-10",
+   "scf_ids": [
+    "IAC-20.2",
+    "IAC-20.3",
+    "MON-03.7",
+    "AST-28"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting direct database access to authorized DBAs = IAC-20.2; control of SQL/DBA utilities capable of overriding application controls = IAC-20.3; audit records of database activity for logged direct modifications = MON-03.7; governed DBA processes/SOPs = AST-28.",
+   "uncovered_clause": "Formal approval workflow for direct INSERT/UPDATE/DELETE on production financial tables is a data-change approval control with no direct SCF mechanism (CHG-02 governs configuration, not data, changes)."
+  },
+  {
+   "code": "CM-01",
+   "scf_ids": [
+    "CHG-01",
+    "GOV-02",
+    "GOV-03"
+   ],
+   "confidence": "high",
+   "rationale": "CHG-01 is the change management program mechanism covering all change types; GOV-02 publishes and disseminates the policy/procedure; GOV-03 supplies the annual review and approval cycle.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM-02",
+   "scf_ids": [
+    "CHG-02",
+    "CHG-02.1",
+    "CHG-03",
+    "CFG-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "Formal ticketed change control from initiation to closure = CHG-02; the requirement that no change proceeds without an approved change request = CHG-02.1; the risk/impact assessment element of the request = CHG-03; rollback plan supported by retention of previous baseline versions = CFG-02.3.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM-03",
+   "scf_ids": [
+    "CHG-02.1",
+    "CHG-02.3",
+    "CHG-08"
+   ],
+   "confidence": "high",
+   "rationale": "Documented approval prior to implementation = CHG-02.1; technical/security review participation in the change control review = CHG-02.3; CAB-style dual approval for significant or high-risk changes = CHG-08.",
+   "uncovered_clause": "Business/functional owner approval specifically for business-logic changes is only partially covered - SCF frames change approval around configuration authority rather than business ownership."
+  },
+  {
+   "code": "CM-04",
+   "scf_ids": [
+    "CHG-02.2",
+    "TDA-08",
+    "CFG-02.4",
+    "CHG-06"
+   ],
+   "confidence": "high",
+   "rationale": "Test and document proposed changes in a non-production environment before production = CHG-02.2; the segregated dev/QA environment that testing occurs in = TDA-08; test environments configured to replicate production = CFG-02.4; post-change verification that controls still operate as designed = CHG-06.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM-05",
+   "scf_ids": [
+    "CFG-01.1",
+    "HRS-12",
+    "HRS-11",
+    "CHG-04.4",
+    "CHG-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "CFG-01.1 is the exact mechanism: segregation of duties preventing developers from performing production configuration duties. HRS-12 limits and reviews developer privileges to change components in production; HRS-11 is the general SoD requirement; CHG-04.4 limits operational privileges for implementing changes (technical enforcement); CHG-04.1 is the compensating detective control - after-the-fact review of change logs for unauthorized changes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM-06",
+   "scf_ids": [
+    "CHG-07",
+    "CHG-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "CHG-07 governs the expedited emergency change procedure; CHG-07.1 requires documenting the results of emergency changes with an explanation of why the standard process was bypassed, which discharges the post-implementation documentation and review clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM-07",
+   "scf_ids": [
+    "CHG-04",
+    "CHG-04.4",
+    "CHG-04.5",
+    "CFG-09",
+    "CHG-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Restriction of who can effect changes in production = CHG-04 and CHG-04.4; migration/library tool privileges limited to those with a business need = CHG-04.5; authoritative production software repository as the deployment target = CFG-09; deployment logs reviewed to detect unauthorized migrations = CHG-04.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM-08",
+   "scf_ids": [
+    "CFG-09.3",
+    "CFG-09",
+    "TDA-14",
+    "CFG-02.3",
+    "MON-01.7",
+    "CHG-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Version-controlled development repository held separately from production = CFG-09.3 with CFG-09 as the production counterpart; developer configuration management across design/development/operation = TDA-14; tagged baseline versions retained for rollback = CFG-02.3; detection of unauthorized modification to code/config = MON-01.7 (change-detection/FIM) plus the audit-trail review in CHG-04.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM-09",
+   "scf_ids": [
+    "VPM-05",
+    "VPM-02",
+    "VPM-03",
+    "VPM-05.6",
+    "VPM-05.3",
+    "VPM-05.2"
+   ],
+   "confidence": "high",
+   "rationale": "Patching of deployed assets = VPM-05; identification/tracking/remediation of the underlying flaws = VPM-02; severity evaluation and risk ranking on vendor release = VPM-03; pre-production testing before deployment = VPM-05.6; SLA/metric tracking of time-to-remediate = VPM-05.3; verification of deployment completeness across components = VPM-05.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CO-01",
+   "scf_ids": [
+    "OPS-03",
+    "CAP-04",
+    "OPS-01.1"
+   ],
+   "confidence": "low",
+   "rationale": "Batch/job scheduling is IT service management rather than a security mechanism. OPS-03 (service delivery / business process support) is the governing mechanism for planning and supporting these operational capabilities; CAP-04 centrally monitors and alerts on the operating state and health of critical assets, which is the mechanism behind detecting job failures and abnormal terminations; OPS-01.1 documents the schedules as standard operating procedures.",
+   "uncovered_clause": "Authorization of the job schedule by the application or business owner, and documented investigation/resolution of each job failure, have no matching SCF mechanism."
+  },
+  {
+   "code": "CO-02",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-01.4",
+    "BCD-11.2",
+    "BCD-08"
+   ],
+   "confidence": "high",
+   "rationale": "Recurring backups of data, software and system images with integrity verification, explicitly tied to RTO/RPO = BCD-11; definition of RTO/RPO per critical system = BCD-01.4; secure off-site or non-collocated storage of backup copies = BCD-11.2 with the alternate storage site itself = BCD-08.",
+   "uncovered_clause": "Daily monitoring of backup completion with investigation of failures is only indirectly covered (BCD-11 requires integrity verification, not job-level completion monitoring)."
+  },
+  {
+   "code": "CO-03",
+   "scf_ids": [
+    "BCD-11.1",
+    "BCD-11.5",
+    "BCD-12.4"
+   ],
+   "confidence": "high",
+   "rationale": "Routine testing of backups verifying reliability of the process and integrity/availability of the data = BCD-11.1; the sampling-based restoration test performed as part of continuity testing = BCD-11.5; verification that restoration completes within defined time periods (RTO) = BCD-12.4.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CO-04",
+   "scf_ids": [
+    "CAP-04",
+    "CAP-01",
+    "CAP-03"
+   ],
+   "confidence": "high",
+   "rationale": "Central monitoring and alerting on the operating state and health of critical assets, including threshold alerts = CAP-04; the overarching capacity and performance management capability = CAP-01; periodic assessment that capacity will support processing requirements = CAP-03.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CO-05",
+   "scf_ids": [
+    "IRO-02",
+    "IRO-02.4",
+    "IRO-09.3",
+    "IRO-13",
+    "IRO-09.4"
+   ],
+   "confidence": "medium",
+   "rationale": "The mechanism chain matches even though SCF frames IRO around cybersecurity incidents: intake/analysis/containment/recovery handling = IRO-02; severity classification and escalation criteria = IRO-02.4; ticketed incident repository through closure with remediation actions = IRO-09.3; root cause analysis and lessons learned = IRO-13; periodic trend reporting to management = IRO-09.4.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CO-06",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-04",
+    "BCD-06",
+    "BCD-01.6"
+   ],
+   "confidence": "high",
+   "rationale": "Documented, current and accurate BC/DR plans owned by process owners = BCD-01.7; annual tabletop/simulation/failover testing = BCD-04; annual review and update of the plans = BCD-06; the communication protocol and stakeholder status reporting element = BCD-01.6.",
+   "uncovered_clause": "Documentation of test results and tracked remediation of test gaps is adjacent to BCD-05 (RCA and lessons learned) but the plan-level gap-remediation tracking is better served by IAO-05, which was not asserted here."
+  },
+  {
+   "code": "CO-07",
+   "scf_ids": [
+    "NET-05.2",
+    "AST-04",
+    "CAP-04"
+   ],
+   "confidence": "medium",
+   "rationale": "NET-05.2 is the direct mechanism for documenting each internal system connection (interface characteristics, endpoints, nature of information communicated) and authorizing it; AST-04 maintains the data flow diagrams for those transfers; CAP-04 provides the alerting on failed interface processing.",
+   "uncovered_clause": "Reconciliation controls verifying completeness and accuracy of transferred financial data (record counts, control totals) are a financial data-integrity control with no SCF mechanism."
+  },
+  {
+   "code": "PD-01",
+   "scf_ids": [
+    "PRM-07",
+    "TDA-06",
+    "PRM-05",
+    "GOV-02"
+   ],
+   "confidence": "medium",
+   "rationale": "PRM-07 governs the SDLC and ensures changes within it move through formal change control; TDA-06 requires development based on secure software development practices (the methodology itself); PRM-05 embeds security requirement definition and criticality analysis at defined SDLC decision points, discharging the 'security requirements integrated into each phase' clause; GOV-02 publishes and maintains the documented methodology.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PD-02",
+   "scf_ids": [
+    "PRM-05",
+    "TDA-02",
+    "PRM-04",
+    "PRM-07"
+   ],
+   "confidence": "medium",
+   "rationale": "Formal definition of technical/functional requirements including control and compliance requirements = PRM-05; risk-based technical and functional specifications established before build = TDA-02; stakeholder/project-level assessment and sponsor involvement = PRM-04; changes to approved requirements routed through formal change control = PRM-07.",
+   "uncovered_clause": "Formal sign-off of requirements by business owners and project sponsors before development begins is an approval gate SCF does not name explicitly."
+  },
+  {
+   "code": "PD-03",
+   "scf_ids": [
+    "TDA-05",
+    "TDA-06.5",
+    "SEA-01.5"
+   ],
+   "confidence": "medium",
+   "rationale": "Production of a design specification and security architecture by developers = TDA-05; independent review of the software design validating that requirements are met and identified risks remediated, with issues tracked = TDA-06.5; formal incorporation of secure architecture principles into design requirements = SEA-01.5.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PD-04",
+   "scf_ids": [
+    "TDA-06",
+    "TDA-09",
+    "TDA-18",
+    "TDA-19",
+    "CHG-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "Documented secure coding standards = TDA-06; multi-level security testing plan through development = TDA-09; input validation as a coding standard = TDA-18; error handling standards = TDA-19; documented testing and business acceptance before production migration = CHG-02.2.",
+   "uncovered_clause": "Formal user acceptance testing sign-off by business users as a production gate is only partly covered by CHG-02.2 (test and document before production)."
+  },
+  {
+   "code": "PD-05",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction and mechanism check both fail. Data conversion/migration reconciliation is a financial data-integrity control: pre- and post-migration reconciliation of balances, transaction counts and record completeness. SCF's nearest neighbours discharge a different mechanism - TDA-08.1 purges test data during migration to production, DCH-22 checks for redundant/obsolete/toxic/trivial data. Neither validates that converted financial data is complete and accurate, so forcing either would be a right-domain/wrong-mechanism mapping.",
+   "uncovered_clause": "Documented migration plan with data mapping and transformation rules; pre/post-migration reconciliation and balance/transaction-count integrity validation."
+  },
+  {
+   "code": "PD-06",
+   "scf_ids": [
+    "CHG-06",
+    "GOV-15.3",
+    "TDA-06.6",
+    "IAO-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Post-deployment verification that controls operate as designed = CHG-06; owner assessment that controls are implemented correctly and operating as intended = GOV-15.3; lessons learned fed back into the development methodology via design-process root cause analysis = TDA-06.6; outstanding implementation issues tracked to resolution = IAO-05.",
+   "uncovered_clause": "Validation that the deployed system meets approved business requirements and caused no unintended impact on financial reporting processes is a business-outcome review outside SCF's control mechanisms."
+  },
+  {
+   "code": "PD-07",
+   "scf_ids": [
+    "TDA-08",
+    "TDA-07",
+    "HRS-12",
+    "TDA-10"
+   ],
+   "confidence": "high",
+   "rationale": "Separate development, testing and operational environments = TDA-08; segmented development network = TDA-07; developers denied write access to production = HRS-12; approval, documentation and control of live production data in dev/test (the masking/anonymization gate) = TDA-10.",
+   "uncovered_clause": "Documentation and management of configuration differences between environments sits closest to CFG-02.4 (separate dev/test baselines), which covers baseline separation rather than difference documentation."
+  },
+  {
+   "code": "EUC-01",
+   "scf_ids": [
+    "AST-02",
+    "AST-31",
+    "RSK-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Spreadsheets, Access databases, macros and user-developed applications are technology assets: AST-02 is the inventory mechanism (accurately reflecting assets in use, with business justification), AST-31 categorizes them, and RSK-04 is the recurring risk assessment that drives the complexity/materiality risk rating and the enhanced-control tier for high-risk EUCs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "EUC-02",
+   "scf_ids": [
+    "IAC-20",
+    "IAC-21",
+    "IAC-20.1"
+   ],
+   "confidence": "medium",
+   "rationale": "File-, folder- and SharePoint-level permission restriction is logical access control enforcement conforming to least privilege = IAC-20 and IAC-21; limiting access to the financially sensitive EUC content to those whose job requires it = IAC-20.1.",
+   "uncovered_clause": "Formula/macro protection through cell or workbook protection and macro signing, and enabling version/change history on the EUC file, have no SCF mechanism at this granularity."
+  },
+  {
+   "code": "EUC-03",
+   "scf_ids": [
+    "HRS-11"
+   ],
+   "confidence": "low",
+   "rationale": "Only one clause has a genuine SCF mechanism: the independent review by someone other than the preparer is a separation-of-duties control preventing inappropriate activity without collusion (HRS-11). The rest of the requirement is business-process accuracy assurance, not a security mechanism.",
+   "uncovered_clause": "Validation of critical formulas, calculations and lookup tables on creation and after modification, documented review evidence, and annual re-validation of critical EUCs."
+  },
+  {
+   "code": "EUC-04",
+   "scf_ids": [
+    "TDA-18"
+   ],
+   "confidence": "medium",
+   "rationale": "TDA-18 (check the validity of information inputs) is the mechanism behind data validation rules, dropdown lists, range checks and detection/correction of input errors before output is relied upon.",
+   "uncovered_clause": "Reconciliation of source data to confirm all expected inputs were captured (completeness), and the preference for automated feeds over manual entry, are not discharged by an SCF control."
+  },
+  {
+   "code": "SOD-01",
+   "scf_ids": [
+    "HRS-11",
+    "HRS-12",
+    "CFG-01.1",
+    "RSK-06.2"
+   ],
+   "confidence": "high",
+   "rationale": "Definition and maintenance of a segregation of duties framework covering incompatible function combinations = HRS-11; the developer-vs-production-migrator conflict specifically = HRS-12 and CFG-01.1; mitigation of unavoidable conflicts through compensating countermeasures = RSK-06.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SOD-02",
+   "scf_ids": [
+    "HRS-11",
+    "IAC-08",
+    "IAC-20"
+   ],
+   "confidence": "medium",
+   "rationale": "Application security roles designed so incompatible business functions cannot be performed by one user = HRS-11 applied through role design; the security roles and access profiles themselves = IAC-08 (RBAC restricting access to individuals in specific roles with legitimate business need); enforcement of the resulting permissions = IAC-20.",
+   "uncovered_clause": "Role-based access analysis tooling that detects and reports specific application SoD violations (journal entry create vs approve, vendor master vs payment) has no dedicated SCF mechanism."
+  },
+  {
+   "code": "SOD-03",
+   "scf_ids": [
+    "IAC-17",
+    "HRS-11",
+    "RSK-06.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Recurring review of assigned privileges against need, with reassignment or removal = IAC-17, which is the mechanism that runs the semi-annual analysis of user assignments; the SoD conflict matrix being enforced = HRS-11; conflicts that cannot be removed are mitigated through compensating countermeasures = RSK-06.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "ELC-01",
+   "scf_ids": [
+    "GOV-01.1",
+    "GOV-01.2",
+    "GOV-05.2",
+    "IAO-05"
+   ],
+   "confidence": "high",
+   "rationale": "A steering committee of business and security executives meeting formally on a regular basis = GOV-01.1; governance oversight reporting and recommendations to those making executive decisions = GOV-01.2; the key metrics and risk indicators reviewed = GOV-05.2; monitoring the status of control deficiencies and remediation = IAO-05.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "ELC-02",
+   "scf_ids": [
+    "RSK-04",
+    "RSK-03",
+    "RSK-04.1",
+    "RSK-06"
+   ],
+   "confidence": "high",
+   "rationale": "Recurring assessment of likelihood and magnitude of harm across the in-scope estate = RSK-04; identification and documentation of internal and external risks (unauthorized access, integrity failures, availability, cyber, third-party) = RSK-03; the risk register = RSK-04.1; tracking risks through mitigation to an acceptable level = RSK-06.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "ELC-03",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-03",
+    "HRS-07"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing, maintaining and disseminating the full policy/standard/procedure set = GOV-02; approval and at-least-annual review and update = GOV-03; escalation and handling of policy violations through sanctions = HRS-07.",
+   "uncovered_clause": "Ongoing monitoring of policy compliance maps better to CPL-01.1 (non-compliance oversight), which was not asserted because the requirement is about internal policy rather than statutory obligations."
+  },
+  {
+   "code": "ELC-04",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "SAT-04"
+   ],
+   "confidence": "high",
+   "rationale": "Awareness training for all employees and contractors relevant to job function = SAT-02; specialized role-based training for IT personnel with SOX control responsibilities, delivered before access and annually = SAT-03; tracking of completion and follow-up on non-compliance = SAT-04.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "ELC-05",
+   "scf_ids": [
+    "CPL-02.1",
+    "CPL-02.2",
+    "IAO-02",
+    "IAO-05",
+    "CPL-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "An internal audit function giving management insight into governance processes = CPL-02.1; periodic audits evaluating conformity with documented policies = CPL-02.2; formal assessment of whether controls are implemented correctly and operating as intended (design and operating effectiveness) = IAO-02; risk-rated findings with remediation plans and target dates tracked = IAO-05; corrective action on identified non-conformity = CPL-02.3.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "ELC-06",
+   "scf_ids": [
+    "TPM-01.1",
+    "TPM-04.1",
+    "TPM-05.8",
+    "TPM-05",
+    "TPM-08",
+    "TPM-05.4"
+   ],
+   "confidence": "high",
+   "rationale": "Identification of ESPs that can impact the organization = TPM-01.1; risk assessment prior to acquisition/outsourcing = TPM-04.1; annual receipt and review of SOC 1/SOC 2 independent assessor attestations = TPM-05.8; contractual control and audit-right provisions = TPM-05; ongoing monitoring of vendor control effectiveness = TPM-08; complementary user entity controls are the delineation of control responsibility between the organization and the ESP = TPM-05.4 (RASCI matrix).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "ELC-07",
+   "scf_ids": [
+    "MON-03",
+    "MON-10",
+    "MON-08",
+    "MON-02",
+    "MON-01.8"
+   ],
+   "confidence": "high",
+   "rationale": "Composite split, avoiding the MON-01 umbrella: what must be captured in the event record (logins, privilege escalation, config changes, data access, admin actions) = MON-03; retention for a defined period consistent with retention requirements = MON-10; protection of logs from tampering, unauthorized access and deletion = MON-08; SIEM-based centralized collection and analysis = MON-02; ongoing event log review with escalation to incident response = MON-01.8, which also discharges the periodic manual review for systems without automated monitoring.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "FCC-01",
+   "scf_ids": [
+    "OPS-01.1",
+    "AST-01.1"
+   ],
+   "confidence": "low",
+   "rationale": "Only two clauses have SCF mechanisms: documenting the close steps, timelines and responsible parties as standard operating procedures = OPS-01.1; identifying the IT system dependencies of each close step = AST-01.1 (asset-service dependencies). The close calendar and its financial deadlines are outside SCF's control set.",
+   "uncovered_clause": "Close calendar defining deadlines and inter-process dependencies, and its annual review, are financial process documentation with no SCF mechanism."
+  },
+  {
+   "code": "FCC-02",
+   "scf_ids": [
+    "CHG-02",
+    "CHG-02.1"
+   ],
+   "confidence": "low",
+   "rationale": "The one clause SCF discharges is that configuration of automated calculations is documented and changes to it follow the change management process (CHG-02 governs technical configuration change control; CHG-02.1 prohibits changes without an approved request, which is the mechanism behind authorized approval of configurable parameters such as tax rates and depreciation methods).",
+   "uncovered_clause": "Configuring automated calculations, allocations and currency conversions in accordance with approved accounting policies, and periodic validation that automated processing produces accurate financial results, are business-logic accuracy controls with no SCF mechanism."
+  },
+  {
+   "code": "FCC-03",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Information Produced by the Entity validation is an audit-evidence reliability control specific to financial reporting assurance: verifying report parameters and selection criteria, reconciling totals to independent sources, and validating population completeness through record counts or hash totals. SCF's nearest neighbours discharge different mechanisms - CPL-13/CPL-13.1 produce evidence of the organization's own due diligence for compliance assessments, MON-06 generates event log reports for detecting anomalous activity, DCH-22 checks for redundant/obsolete data. Mapping any of these would be right-domain, wrong-mechanism.",
+   "uncovered_clause": "Validation of system-generated reports and data extracts for completeness and accuracy each time they are relied on as control evidence."
+  },
+  {
+   "code": "FCC-04",
+   "scf_ids": [
+    "HRS-11",
+    "IAC-08",
+    "IAC-20",
+    "MON-03",
+    "MON-03.2",
+    "TDA-18"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite split: preparer-vs-approver segregation enforced through application security = HRS-11 implemented via IAC-08 role design; restricting posting rights to authorized personnel = IAC-20; the complete audit trail of preparer, approver, date and amounts = MON-03 (event content) with MON-03.2 binding each action to an individual user; mandatory fields and validation rules on the entry = TDA-18.",
+   "uncovered_clause": "Management review of unusual or non-standard journal entries through system-generated exception reports is a detective financial-reporting control SCF does not provide a mechanism for."
+  },
+  {
+   "code": "FCC-05",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-17",
+    "HRS-11"
+   ],
+   "confidence": "low",
+   "rationale": "Only the access clauses have SCF mechanisms: provisioning of access to reconciliation tools through the formal registration process = IAC-07, with periodic review = IAC-17; the enforced preparer/reviewer split in the reconciliation workflow = HRS-11.",
+   "uncovered_clause": "Accurate generation of sub-ledger to general ledger reconciliation data from source systems, workflow enforcement of due dates and escalation of unresolved items, and validation of automated matching algorithm accuracy."
+  },
+  {
+   "code": "FCC-06",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-28.1",
+    "IAC-17",
+    "IAC-07.2",
+    "IAC-20.1"
+   ],
+   "confidence": "high",
+   "rationale": "This is a straight logical access control over consolidation, reporting and XBRL systems: formal request-and-approval provisioning = IAC-07 plus management approval = IAC-28.1; periodic review = IAC-17; revocation on termination or role change = IAC-07.2; limiting write access to reported financial data to those whose job requires it = IAC-20.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "FCC-07",
+   "scf_ids": [
+    "CAP-04",
+    "OPS-01.1",
+    "OPS-03"
+   ],
+   "confidence": "low",
+   "rationale": "The IT-operational half is covered: monitoring and alerting that close batch jobs execute and complete successfully = CAP-04; documented, monitored processing schedules = OPS-01.1; the service management wrapper for supporting these operational capabilities = OPS-03. The accounting-period controls are not SCF mechanisms.",
+   "uncovered_clause": "Cutoff controls preventing or detecting transactions posted to incorrect periods, period lock controls restricting posting to closed periods, and validation that all close jobs ran in the correct sequence each period."
+  }
+ ]
+}

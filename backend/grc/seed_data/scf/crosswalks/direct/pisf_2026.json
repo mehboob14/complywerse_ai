@@ -1,0 +1,1748 @@
+{
+ "framework": "pisf_2026",
+ "hop": "direct",
+ "mappings": [
+  {
+   "code": "1.6",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: the clause binds nCERT/NTISB, sectoral CERTs and the Regulator to perform oversight audits on the entity; submitting to an external oversight audit is not an obligation SCF places on the assessed organisation.",
+   "uncovered_clause": "entire requirement — obligation rests on the external oversight bodies"
+  },
+  {
+   "code": "1.7",
+   "scf_ids": [
+    "GOV-04.1",
+    "GOV-04.2",
+    "RSK-13"
+   ],
+   "confidence": "high",
+   "rationale": "Ultimate accountability of the head/board for security governance, risk and compliance is discharged by the enforced accountability structure (GOV-04.1), the authoritative chain of command that removes ambiguity over who owns risk (GOV-04.2), and executive approval of material risk decisions (RSK-13).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.8",
+   "scf_ids": [
+    "GOV-04",
+    "HRS-11"
+   ],
+   "confidence": "medium",
+   "rationale": "Establishing a dedicated security function with mission and resources is discharged by GOV-04; separation of duties (HRS-11) is the only SCF mechanism bearing on keeping that function structurally independent, and it addresses collusion rather than organisational reporting-line independence from IT/ICT.",
+   "uncovered_clause": "structural independence of the security function from the IT/ICT function"
+  },
+  {
+   "code": "1.9",
+   "scf_ids": [
+    "GOV-04",
+    "GOV-04.2",
+    "HRS-11"
+   ],
+   "confidence": "high",
+   "rationale": "Designating a named security lead with the mission to run the programme is GOV-04; the direct reporting line to the head of the organisation is the authoritative chain of command (GOV-04.2); the no-conflict-with-IT condition is separation of duties (HRS-11).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.11",
+   "scf_ids": [
+    "GOV-01.1",
+    "HRS-03",
+    "GOV-04.1",
+    "HRS-11"
+   ],
+   "confidence": "high",
+   "rationale": "The steering committee that approves the assignments is GOV-01.1, defining and documenting security roles for all personnel is HRS-03, enforcing the accountability structure those roles sit in is GOV-04.1, and the no-conflict-of-interest condition is separation of duties (HRS-11).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.12",
+   "scf_ids": [
+    "GOV-04.1",
+    "HRS-03",
+    "DCH-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A RACI over all data, systems and processes is discharged by the enforced accountability structure for TAASD risk (GOV-04.1), documented roles and responsibilities for personnel (HRS-03) and assigned, documented data stewardship for the data half (DCH-01.1); no SCF control mandates a RACI artefact for internal scope (TPM-05.4's RASCI is scoped to external service providers, so it is deliberately not used).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.13",
+   "scf_ids": [
+    "HRS-03.2",
+    "HRS-13",
+    "HRS-13.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Staffing key security posts with qualified, experienced professionals is HRS-03.2's competency requirement for security-related positions, supported by evaluating critical skills and gaps (HRS-13) and identifying the vital security staff those posts represent (HRS-13.2); the full-time (as opposed to collateral-duty) employment condition is not itself a SCF mechanism.",
+   "uncovered_clause": "the full-time employment condition for the lead and supervisory positions"
+  },
+  {
+   "code": "1.15",
+   "scf_ids": [
+    "GOV-01.2",
+    "GOV-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Regular reporting by the steering committee to top management is exactly the governance oversight reporting and recommendations to the body making executive decisions (GOV-01.2), issued by the steering committee constituted under GOV-01.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.16",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-04",
+    "BCD-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "The three limbs — all incidents reported, managed per the incident response plan, and aligned to continuity objectives — are discharged respectively by incident stakeholder reporting (IRO-10), maintaining a current IRP available to stakeholders (IRO-04) and coordinating the continuity plan with related plans (BCD-01.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.17",
+   "scf_ids": [
+    "MON-01",
+    "GOV-15.5",
+    "CPL-03.8",
+    "RSK-11"
+   ],
+   "confidence": "high",
+   "rationale": "This requirement is itself programme-level, so enterprise-wide continuous monitoring (MON-01) is the correct altitude, joined by owner-driven ongoing monitoring of assets and controls (GOV-15.5), automated continuous control monitoring that reports conformity status (CPL-03.8) and risk monitoring feeding the risk profile (RSK-11).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.18",
+   "scf_ids": [
+    "CPL-02.2",
+    "CPL-03.1",
+    "CPL-02.3",
+    "CPL-13"
+   ],
+   "confidence": "high",
+   "rationale": "Regular internal audits are CPL-02.2, external audits are the use of independent assessors (CPL-03.1), addressing audit outcomes is corrective action (CPL-02.3), and maintaining complete audit records is the production and retention of work products (CPL-13).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.19",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Defining, documenting and disseminating security policies and procedures is GOV-02; the steering-committee approval step is the formally-constituted steering committee of GOV-01.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.20",
+   "scf_ids": [
+    "GOV-09",
+    "GOV-01.4",
+    "CPL-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Aligning policy to the organisation's own security objectives is discharged by establishing control objectives (GOV-09) and justifying alignment of the programme to a recognised framework (GOV-01.4); alignment to nCERT/regulator-issued guidance is the identification and implementation of relevant statutory and regulatory controls (CPL-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.21",
+   "scf_ids": [
+    "GOV-01",
+    "GOV-14",
+    "GOV-04",
+    "GOV-03"
+   ],
+   "confidence": "medium",
+   "rationale": "A genuinely programme-level leadership obligation: formulating the strategy is the SCRP itself (GOV-01), demonstrated executive involvement in day-to-day practice is GOV-14, establishing the supporting structure with skilled people and funded resources is GOV-04, and reviewing the roadmap at planned intervals or on legal change is GOV-03.",
+   "uncovered_clause": "limb (d)'s mandate that senior management require comprehensive security training (SAT-01/SAT-02 would carry that, mapped at 3.3/3.4)"
+  },
+  {
+   "code": "1.22",
+   "scf_ids": [
+    "CHG-01",
+    "CHG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Routing all changes to systems, applications, infrastructure, configurations and controls through an approved process is the change management programme (CHG-01) operating through configuration change control (CHG-02).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.23",
+   "scf_ids": [
+    "CHG-03",
+    "CHG-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "Pre-implementation assessment of proposed changes for security and business impact is security impact analysis (CHG-03); the requirement that the security function performs it is the mandated security representative in the change control review (CHG-02.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.24",
+   "scf_ids": [
+    "CHG-04.4",
+    "CHG-04",
+    "CHG-07",
+    "CHG-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Authorisation before implementation based on defined roles is limited implementation privileges (CHG-04.4) enforced by access restriction for change (CHG-04); the emergency-change limb is governed by CHG-07 and its after-the-fact documentation requirement by CHG-07.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.25",
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining an up-to-date inventory of applicable laws, regulations, standards and contractual obligations is the identification of relevant statutory, regulatory and contractual requirements (CPL-01), documented and validated as compliance scope (CPL-01.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.26",
+   "scf_ids": [
+    "CPL-02.1",
+    "CPL-02.2",
+    "CPL-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "An independent internal audit function reporting insights to senior management is CPL-02.1; conducting the compliance assessments is periodic audits (CPL-02.2) and managing the resulting findings is corrective action (CPL-02.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.27",
+   "scf_ids": [
+    "TPM-08",
+    "TPM-04.1",
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "Assuring third-party compliance is the ongoing review and assessment of external service providers against contractual security requirements (TPM-08), the pre-engagement supplier risk assessment and approval (TPM-04.1), and obtaining independent third-party attestations of conformity (TPM-05.8).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.3",
+   "scf_ids": [
+    "SAT-01",
+    "SAT-02",
+    "SAT-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "A structured programme defining topics, schedules, resources, delivery methods and audiences is programme-level, so the workforce development and awareness programme (SAT-01) is the right altitude, delivering relevant training by job function (SAT-02) and kept current against policy, role and threat change (SAT-01.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.4",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "SAT-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Awareness for all employees and users is SAT-02; the before-access gate and annual recurrence are the timing conditions built into SAT-03; ad-hoc sessions driven by emerging threats, incidents and regulatory change are the periodic relevancy review that triggers content updates (SAT-01.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.5",
+   "scf_ids": [
+    "SAT-03",
+    "SAT-03.7",
+    "SAT-03.8"
+   ],
+   "confidence": "high",
+   "rationale": "Role-specific training for security and IT staff is SAT-03; the certification-maintenance limb is continuing professional education for security personnel (SAT-03.7) and for development/operations personnel (SAT-03.8).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.6",
+   "scf_ids": [
+    "SAT-03",
+    "SAT-03.5"
+   ],
+   "confidence": "high",
+   "rationale": "Specialised role-based training completed before system or data access is granted is SAT-03, whose delivery is expressly conditioned on authorisation of access; the privileged-role population is addressed specifically by SAT-03.5.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.7",
+   "scf_ids": [
+    "SAT-01.1",
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Deriving specialised training requirements from changes in roles, threats and policy and reviewing them periodically is SAT-01.1; the at-least-annual refresh cadence is the annual recurrence condition in SAT-03. Identification specifically via audits and incidents is not itself a distinct SCF mechanism.",
+   "uncovered_clause": "deriving training requirements from audit findings and incidents specifically"
+  },
+  {
+   "code": "3.9",
+   "scf_ids": [
+    "SAT-04"
+   ],
+   "confidence": "high",
+   "rationale": "Documenting, retaining and monitoring individual training participation records — initial, recurring and asset-specific — is precisely SAT-04, which also carries the retention obligation the clause imposes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.10",
+   "scf_ids": [
+    "SAT-04.1",
+    "SAT-02.1",
+    "SAT-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Evaluating programme effectiveness is monitoring individual training results and reporting findings to stakeholders (SAT-04.1); the simulation limb is simulated cyber-attack scenario exercises (SAT-02.1); feeding outcomes back into programme changes is the periodic relevancy review (SAT-01.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3",
+   "scf_ids": [
+    "NET-01",
+    "NET-02"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing, documenting and approving network security requirements is the governed procedures for network security controls (NET-01); the defence-in-depth qualifier is layered network defences (NET-02).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.4",
+   "scf_ids": [
+    "NET-06",
+    "NET-03",
+    "NET-14",
+    "NET-15"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite: segregation across environments and functions and isolating internet-facing systems from critical systems are network segmentation (NET-06); perimeter firewall/IDS-IPS controls are boundary protection (NET-03); need-based remote connectivity is NET-14; secure, isolated wireless is NET-15. Two of the seven lettered limbs are not carried by these controls.",
+   "uncovered_clause": "(a) physical protection of network infrastructure and (g) logging and monitoring of network activity"
+  },
+  {
+   "code": "4.5",
+   "scf_ids": [
+    "END-01",
+    "END-02"
+   ],
+   "confidence": "high",
+   "rationale": "Defining, approving and implementing protection requirements across servers, workstations, laptops and mobile devices is endpoint device management (END-01) delivering endpoint protection measures (END-02).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.6",
+   "scf_ids": [
+    "END-04",
+    "END-06.2",
+    "DCH-12",
+    "VPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "All three lettered limbs are carried: anti-malware technologies (END-04) and endpoint detection and response (END-06.2) for limb (a), restriction of removable media per data handling parameters (DCH-12) for limb (b), and software and firmware patching of deployed assets (VPM-05) for limb (c).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.7",
+   "scf_ids": [
+    "MON-01",
+    "MON-03"
+   ],
+   "confidence": "high",
+   "rationale": "This clause is the programme-level definition and approval of logging and monitoring requirements, so enterprise-wide monitoring controls (MON-01) is the right altitude, with the defined content of event logs (MON-03) as the documented requirement set.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.8",
+   "scf_ids": [
+    "MON-02",
+    "MON-10",
+    "MON-07.1",
+    "MON-08"
+   ],
+   "confidence": "medium",
+   "rationale": "Centralised aggregation and correlation via a SIEM is MON-02 (limb b), retention of logs to a defined period is MON-10 (limb c), NTP synchronisation to an authoritative time source is MON-07.1 (limb d), and protection of active and archived logs from modification or deletion is MON-08 (limb e); the logging-coverage limb has no slot left.",
+   "uncovered_clause": "(a) comprehensive event logging coverage of critical assets, remote access connections and privileged accounts (MON-03.3 / MON-01.15 would carry it)"
+  },
+  {
+   "code": "4.9",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-01"
+   ],
+   "confidence": "high",
+   "rationale": "Formally defining, approving and implementing backup and recovery requirements is the recurring backup and integrity-verification mechanism (BCD-11) operating inside the contingency planning management system (BCD-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.10",
+   "scf_ids": [
+    "BCD-01.4",
+    "BCD-11",
+    "BCD-11.1",
+    "BCD-02"
+   ],
+   "confidence": "high",
+   "rationale": "Defining and approving RPO/RTO is BCD-01.4; designing backups to satisfy those objectives is BCD-11; periodically testing that the arrangements meet them is BCD-11.1; scoping the arrangements to critical technology and information assets is BCD-02.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.11",
+   "scf_ids": [
+    "BCD-13",
+    "DCH-06",
+    "BCD-11.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Securing backup media, storage and facility is discharged by protecting backup and restoration hardware and software (BCD-13), physically controlling and securely storing media in controlled areas (DCH-06) and storing critical backup copies in a separate or fire-rated facility (BCD-11.2); the clause's separate demand for a risk assessment of the backup and restore process is not carried.",
+   "uncovered_clause": "performing a risk assessment of the backup and restore process itself"
+  },
+  {
+   "code": "4.12",
+   "scf_ids": [
+    "BCD-11.1",
+    "BCD-13.1",
+    "BCD-11.5"
+   ],
+   "confidence": "high",
+   "rationale": "Regular restoration testing against RTO/RPO is routine backup testing for reliability, integrity and availability (BCD-11.1) and sampling-based restoration tests (BCD-11.5); the assurance integrity check on restoration is restoration integrity verification (BCD-13.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.13",
+   "scf_ids": [
+    "BCD-11.10",
+    "CPL-02.2",
+    "GOV-01.2"
+   ],
+   "confidence": "low",
+   "rationale": "Ongoing oversight of backup and restore activity is only partially met: restricting and thereby controlling who may modify or delete backups (BCD-11.10) gives operational visibility, periodic audits (CPL-02.2) carry the 'regular audits should include this process' limb, and status reporting to the governing body (GOV-01.2) carries senior-management visibility; no SCF control mandates continuous monitoring of backup/restore jobs specifically.",
+   "uncovered_clause": "continuous monitoring and evaluation of backup/restore job outcomes"
+  },
+  {
+   "code": "4.14",
+   "scf_ids": [
+    "VPM-01"
+   ],
+   "confidence": "high",
+   "rationale": "Defining, documenting, approving and implementing the vulnerability and patch management lifecycle is programme-level and is exactly the vulnerability and patch management programme (VPM-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.15",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-03",
+    "VPM-02",
+    "VPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Regular vulnerability assessment is routine vulnerability scanning (VPM-06), classification by criticality is vulnerability risk ranking (VPM-03), tracking to closure is the remediation process (VPM-02), and effective patching is software and firmware patching (VPM-05).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.16",
+   "scf_ids": [
+    "VPM-05.6",
+    "VPM-05.2",
+    "VPM-04",
+    "CFG-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "Testing patches before deployment is pre-production patch testing (VPM-05.6), continuous monitoring of patch state is automated remediation status determination (VPM-05.2) supported by ongoing remediation activity (VPM-04), and the rollback strategy is retention of previous baseline configurations to support roll back (CFG-02.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3",
+   "scf_ids": [
+    "IAC-01",
+    "IAC-01.2",
+    "IAC-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "This clause is the programme-level definition of identity and access governance, so identity and access management (IAC-01) is the right altitude, with governed authenticate/authorize/audit solutions (IAC-01.2) and a current inventory of all user and service identities (IAC-01.3) delivering the accountability the clause demands.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.4",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-15",
+    "IAC-07.2"
+   ],
+   "confidence": "high",
+   "rationale": "Formal creation and de-registration of access rights is IAC-07; governing individual, group, system, service and temporary account types across their life is IAC-15; timely deprovisioning on departure is termination of employment de-provisioning (IAC-07.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.5",
+   "scf_ids": [
+    "IAC-10.1",
+    "IAC-06",
+    "IAC-13",
+    "IAC-24"
+   ],
+   "confidence": "medium",
+   "rationale": "Strong passwords are complexity, length and lifespan enforcement (IAC-10.1), multi-factor is IAC-06, adaptive methods are IAC-13, and the session-management limb is session lock on inactivity (IAC-24); the clause's monitoring and standardised-tooling limbs are not carried by these four.",
+   "uncovered_clause": "monitoring of authentication events and standardisation of authentication tooling"
+  },
+  {
+   "code": "5.6",
+   "scf_ids": [
+    "IAC-10",
+    "IAC-10.5",
+    "IAC-10.13"
+   ],
+   "confidence": "high",
+   "rationale": "Secure generation, distribution, storage and disposal of credentials is authenticator management (IAC-10), protection of authenticators in storage and transit is IAC-10.5, and rotation and revocation on defined trigger events is IAC-10.13.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.7",
+   "scf_ids": [
+    "IAC-17",
+    "IAC-07.1",
+    "IAC-07.2",
+    "IAC-20.6"
+   ],
+   "confidence": "high",
+   "rationale": "Regular review of access rights is periodic review of account privileges (IAC-17); prompt modification on role change or transfer is IAC-07.1; revocation on termination is IAC-07.2; and the revocation act itself is IAC-20.6.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.8",
+   "scf_ids": [
+    "IAC-21",
+    "IAC-08",
+    "IAC-20",
+    "IAC-28.1"
+   ],
+   "confidence": "high",
+   "rationale": "Least privilege is IAC-21, the defined access control model is role-based access control (IAC-08), technical enforcement of the authorisation is access enforcement (IAC-20), and the formal-approval-on-documented-business-need step is management approval for new or changed accounts (IAC-28.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.10",
+   "scf_ids": [
+    "IAC-16",
+    "IAC-16.1",
+    "IAC-16.4",
+    "MON-01.15"
+   ],
+   "confidence": "medium",
+   "rationale": "Governing privileged access rights is IAC-16, the classification and authorisation-validation limb is the privileged account inventory (IAC-16.1), dedicated non-shared privileged accounts are IAC-16.4, and continuous session monitoring is enhanced activity monitoring for privileged users (MON-01.15); vaulting and just-in-time elevation are not separately carried.",
+   "uncovered_clause": "secure credential vaulting and just-in-time privilege elevation"
+  },
+  {
+   "code": "5.11",
+   "scf_ids": [
+    "IAC-15.9",
+    "IAC-15.2",
+    "NET-14.6",
+    "MON-01.15"
+   ],
+   "confidence": "high",
+   "rationale": "Break-glass access is emergency-access-only accounts (IAC-15.9) with the duration limit enforced by automated removal of temporary and emergency accounts after a defined period (IAC-15.2); third-party privileged access is controlled and monitored under third-party remote access governance (NET-14.6); the logged-and-monitored limb is enhanced privileged user activity monitoring (MON-01.15).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.3",
+   "scf_ids": [
+    "PRI-01",
+    "PRI-01.4",
+    "PRI-13"
+   ],
+   "confidence": "high",
+   "rationale": "A privacy governance structure with defined roles and accountability is the data privacy programme (PRI-01), the appointment of a qualified data protection officer (PRI-01.4), and a chartered data management board with assigned roles (PRI-13).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.4",
+   "scf_ids": [
+    "PRI-04.1",
+    "PRI-03",
+    "PRI-02",
+    "PRI-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Processing only where a lawful basis exists is documenting the legal authority to process personal data (PRI-04.1), consent where required is PRI-03, and privacy notices telling data subjects the use of their data are PRI-02 with the purpose and legal-basis statement in PRI-02.1.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.5",
+   "scf_ids": [
+    "RSK-10"
+   ],
+   "confidence": "high",
+   "rationale": "Conducting privacy impact assessments on new systems and processes to identify and remediate privacy risks is precisely the data protection impact assessment mechanism (RSK-10).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.6",
+   "scf_ids": [
+    "PRI-01",
+    "PRI-04",
+    "PRI-05",
+    "PRI-05.2"
+   ],
+   "confidence": "high",
+   "rationale": "The policy principles map to mechanisms rather than words: lawful, fair, transparent processing with accountability is PRI-01, purpose limitation and data minimisation are PRI-04, storage limitation is retention and disposal (PRI-05), and accuracy and integrity are PRI-05.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.7",
+   "scf_ids": [
+    "MON-18",
+    "MON-06.1",
+    "MON-03.7"
+   ],
+   "confidence": "high",
+   "rationale": "Monitored, logged and auditable access to personal data is file activity monitoring over sensitive data repositories (MON-18), auditing of query parameters against personal data sets (MON-06.1), and database audit records sufficient to monitor database activity (MON-03.7).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.8",
+   "scf_ids": [
+    "DCH-18",
+    "PRI-05",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "A documented retention schedule is retention of media and data per statutory, regulatory and contractual obligations (DCH-18), with the personal-data leg in PRI-05; the schedule's classification dimension is data and asset classification (DCH-02).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.9",
+   "scf_ids": [
+    "DCH-02",
+    "DCH-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Classifying all organisational data by sensitivity and regulatory requirement is DCH-02; the criticality dimension applied to the systems holding it is classification to the highest level of data sensitivity stored or transmitted (DCH-02.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.10",
+   "scf_ids": [
+    "DCH-01",
+    "DCH-01.2",
+    "DCH-06",
+    "DCH-25"
+   ],
+   "confidence": "medium",
+   "rationale": "Handling, transmission and storage strictly per defined procedures is the data protection control set (DCH-01) with specific protection of sensitive and regulated data (DCH-01.2), secure media storage (DCH-06), and the legal-requirement limb for cross-border movement in governed transfer of regulated data (DCH-25).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.11",
+   "scf_ids": [
+    "IAC-20.1",
+    "IAC-08",
+    "IAC-17",
+    "DCH-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Least-privilege access to data is limiting access to sensitive data to those whose job requires it (IAC-20.1) enforced through role-based access control (IAC-08), with authorisations explicitly defined per role for regulated data (DCH-01.4) and the regular-review limb in periodic privilege review (IAC-17).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.12",
+   "scf_ids": [
+    "CRY-03",
+    "CRY-05"
+   ],
+   "confidence": "high",
+   "rationale": "Encryption of critical data during transmission is transmission confidentiality (CRY-03) and the preferred encryption in storage is encrypting data at rest (CRY-05).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.14",
+   "scf_ids": [
+    "DCH-18",
+    "DCH-21",
+    "DCH-09",
+    "PRI-05"
+   ],
+   "confidence": "high",
+   "rationale": "Retaining data only as long as necessary is DCH-18 with the personal-data leg in PRI-05; secure and permanent disposal when no longer required is information disposal (DCH-21) executed through media sanitisation commensurate with classification (DCH-09).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.15",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-11.1",
+    "BCD-11.2"
+   ],
+   "confidence": "high",
+   "rationale": "Regular backup of data is BCD-11, testing of the recovery mechanism is BCD-11.1, and differentiating handling by data classification is separate storage for critical information (BCD-11.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.16",
+   "scf_ids": [
+    "MON-01.8",
+    "MON-18",
+    "MON-16.3"
+   ],
+   "confidence": "high",
+   "rationale": "Continuous monitoring and logging of data access and processing events is ongoing event log review with escalation (MON-01.8) and file activity monitoring of sensitive data (MON-18); the detect-unauthorised-activity purpose is monitoring for unauthorized activities, accounts and connections (MON-16.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.17",
+   "scf_ids": [
+    "MON-16",
+    "MON-11",
+    "MON-11.3",
+    "MON-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Continuous detection of breaches and anomalous activity across systems and networks is behaviour analytics for anomalous activity (MON-16), monitoring for unauthorized exfiltration or disclosure (MON-11), automated indicator-of-compromise alerting (MON-11.3) and intrusion detection/prevention at network choke points (MON-01.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.18",
+   "scf_ids": [
+    "IRO-02",
+    "IRO-04.1",
+    "IRO-12"
+   ],
+   "confidence": "high",
+   "rationale": "Immediate containment on breach detection is the containment and eradication stages of incident handling (IRO-02), applied to breaches of sensitive or regulated data under IRO-04.1 and to data spills under IRO-12.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.19",
+   "scf_ids": [
+    "IRO-10.5",
+    "IRO-10.2",
+    "IRO-14"
+   ],
+   "confidence": "high",
+   "rationale": "Reporting breaches to the regulator and nCERT within fixed deadlines is serious incident reporting to relevant authorities against mandatory requirements and timelines (IRO-10.5) and timely reporting of regulated-data incidents (IRO-10.2), supported by maintained regulatory contacts (IRO-14).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.20",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-04.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Notifying affected individuals is carried by the affected-parties limb of incident stakeholder reporting (IRO-10) and by handling data breaches according to applicable law (IRO-04.1); SCF has no control specifically requiring the notice content — the risks and recommended protective measures — that this clause prescribes.",
+   "uncovered_clause": "prescribed content of the individual notification (description of risks and recommended protective measures)"
+  },
+  {
+   "code": "6.21",
+   "scf_ids": [
+    "IRO-16"
+   ],
+   "confidence": "high",
+   "rationale": "Issuing controlled and coordinated public statements about a breach is the proactive management of incident-related public relations (IRO-16).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.3",
+   "scf_ids": [
+    "IRO-01",
+    "IRO-02",
+    "IRO-04",
+    "IRO-13"
+   ],
+   "confidence": "high",
+   "rationale": "A policy and procedure covering the whole lifecycle is programme-level: incident response operations (IRO-01) with the preparation-through-recovery handling stages (IRO-02), a maintained incident response plan (IRO-04) and the lessons-learned stage (IRO-13).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.4",
+   "scf_ids": [
+    "IRO-02.4"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining a classification of incidents by severity and impact is exactly incident classification and prioritisation (IRO-02.4).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.5",
+   "scf_ids": [
+    "IRO-04",
+    "IRO-07",
+    "IRO-02"
+   ],
+   "confidence": "high",
+   "rationale": "An approved response framework ensuring consistent lifecycle handling is the maintained incident response plan (IRO-04) executed through defined handling stages (IRO-02); clear ownership and accountability is the integrated incident response team (IRO-07).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.6",
+   "scf_ids": [
+    "OPS-04",
+    "MON-02"
+   ],
+   "confidence": "low",
+   "rationale": "The obligation is to perform a requirement analysis and feasibility assessment, not to stand up capability; SCF offers only the destination controls — establishing a security operations centre (OPS-04) and acquiring a SIEM for centralised event collection (MON-02) — so these are related rather than discharging.",
+   "uncovered_clause": "the requirement analysis and feasibility assessment itself, as a decision artefact"
+  },
+  {
+   "code": "7.7",
+   "scf_ids": [
+    "IRO-06",
+    "IRO-05",
+    "IRO-05.1",
+    "IRO-07"
+   ],
+   "confidence": "high",
+   "rationale": "Mock drills are formal testing of incident response capability through realistic exercises (IRO-06) and simulated events embedded in response training (IRO-05.1); skilled teams are trained personnel in their response roles (IRO-05) organised as an integrated response team (IRO-07).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.8",
+   "scf_ids": [
+    "IRO-07",
+    "IRO-04",
+    "GOV-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing incident response roles is the integrated incident response team (IRO-07) documented in the response plan (IRO-04); the corresponding authority and dependency levels are the authoritative chain of command with clear lines of communication (GOV-04.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.9",
+   "scf_ids": [
+    "IRO-10.5",
+    "IRO-10",
+    "IRO-14"
+   ],
+   "confidence": "high",
+   "rationale": "Reporting verified incidents to sectoral CERTs, regulators and nCERT within 72 and 120 hour deadlines is serious incident reporting against mandatory requirements and timelines (IRO-10.5), delivered through timely stakeholder and regulatory-authority reporting (IRO-10) using maintained regulatory contacts (IRO-14).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.10",
+   "scf_ids": [
+    "IRO-13",
+    "IRO-04.3",
+    "IRO-09.2"
+   ],
+   "confidence": "high",
+   "rationale": "Documenting lessons learned per incident and acting on them is root cause analysis and lessons learned (IRO-13) feeding continuous response improvement (IRO-04.3); preventing recurrence is supported by recurring incident analysis (IRO-09.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.11",
+   "scf_ids": [
+    "BCD-01",
+    "BCD-01.7",
+    "GOV-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Governing the continuity programme under a designated entity is the business continuity management system (BCD-01) with the designating steering committee (GOV-01.1); departmental continuity focal persons maintaining plans are the process owners who establish and maintain BC/DR plans (BCD-01.7).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.12",
+   "scf_ids": [
+    "RSK-08",
+    "BCD-01.7",
+    "BCD-09",
+    "RSK-09"
+   ],
+   "confidence": "medium",
+   "rationale": "The annual BIA categorising critical functions and interdependencies is RSK-08; developing and implementing the plan is BCD-01.7; the backup or alternate site limb is the alternate processing site (BCD-09); supply chain resilience is the supply chain risk management plan (RSK-09).",
+   "uncovered_clause": "remote work arrangements as a continuity option (NET-14.5 would carry it)"
+  },
+  {
+   "code": "7.13",
+   "scf_ids": [
+    "BCD-01.4",
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "RTO and RPO for critical systems are established and enforced under BCD-01.4; MTTD and MTTR have no dedicated SCF control and are carried only as programme key performance indicators developed, reported and monitored under GOV-05.1.",
+   "uncovered_clause": "mean time to detect and mean time to respond as named, enforced detection/response metrics"
+  },
+  {
+   "code": "7.14",
+   "scf_ids": [
+    "BCD-01.5",
+    "BCD-01.6",
+    "BCD-12",
+    "BCD-01.7"
+   ],
+   "confidence": "high",
+   "rationale": "A documented invocation procedure is the defined criteria that must be met to initiate BC/DR plans (BCD-01.5) within the maintained plan (BCD-01.7); the communications limb is recovery operations status communication to internal and external stakeholders (BCD-01.6) and the recovery and restoration limb is secure recovery and reconstitution to a known state (BCD-12).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.15",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation to run annual recovery exercises evaluated against success criteria is discharged by the contingency-plan test/exercise mechanism that evaluates plan effectiveness and readiness, supported by the simulated-event training mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.17",
+   "scf_ids": [
+    "BCD-01.6",
+    "BCD-01.1",
+    "IRO-10"
+   ],
+   "confidence": "high",
+   "rationale": "Structured stakeholder communication during a DR event is discharged by the recovery-operations communications mechanism, with plan-coordination covering alignment to the incident management plan and incident stakeholder reporting covering the escalation routes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.3",
+   "scf_ids": [
+    "PES-01",
+    "PES-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "This is a programme-level obligation to define and document physical protection requirements, discharged by the physical/environmental protection programme mechanism and the documented physical security plan.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4",
+   "scf_ids": [
+    "PES-02",
+    "PES-03",
+    "PES-05.1",
+    "AST-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite minimum-control list: authorised-access lists cover (a), physical access enforcement at ingress/egress points covers (b) and (e), intrusion alarm/surveillance equipment covers (c), and secure disposal/re-use of components covers (f).",
+   "uncovered_clause": "(d) perimeter protection of the site boundary (fencing, bollards, special-purpose gates) and the secure storage/protection of access records"
+  },
+  {
+   "code": "8.5",
+   "scf_ids": [
+    "DCH-09",
+    "MNT-09"
+   ],
+   "confidence": "high",
+   "rationale": "Removing or securely handling storage media before a device leaves the organisation is discharged by media sanitisation prior to release out of organisational control, with off-site maintenance security covering the asset while in transfer and at the repair site.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.6",
+   "scf_ids": [
+    "PES-08",
+    "PES-08.1",
+    "PES-08.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Fire protection is discharged by the fire detection and suppression device mechanisms; the separate obligation to train all employees in fire response is not discharged by any of these facility-equipment controls.",
+   "uncovered_clause": "adequate fire-incident response training for all employees"
+  },
+  {
+   "code": "9.1",
+   "scf_ids": [
+    "PES-03",
+    "PES-04",
+    "PES-05.1",
+    "PES-06"
+   ],
+   "confidence": "high",
+   "rationale": "Data-centre physical framework is discharged by physical access enforcement, identification of rooms/facilities needing limited access, surveillance/intrusion alarm equipment, and the visitor identification and monitoring mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2",
+   "scf_ids": [
+    "NET-03",
+    "CFG-02",
+    "VPM-01",
+    "BCD-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite hosting-provider baseline: boundary protection covers the perimeter/DMZ clause (a), secure baseline configurations cover server hardening (b), the vulnerability and patch management programme covers (c), and contingency testing covers the BC/DR testing clause (d).",
+   "uncovered_clause": "the named point mechanisms within (a) - WAF, DLP and IDS/IPS deployment - and any clauses after (d) truncated from the framework text"
+  },
+  {
+   "code": "9.6",
+   "scf_ids": [
+    "CLD-13",
+    "NET-13"
+   ],
+   "confidence": "medium",
+   "rationale": "Defining and implementing security requirements for hosted email and hosting services is discharged by the mechanism specifying required controls for hosted assets/applications/services, with electronic messaging protection covering the confidentiality/integrity/availability of the mail service itself.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.7",
+   "scf_ids": [
+    "END-08",
+    "IAC-06",
+    "BCD-11",
+    "NET-20.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite email baseline: anti-phishing/spam technology covers (a), enforced multi-factor authentication covers (b), recurring verified backups cover the archiving/backup/restoration clause (c), and DMARC signature verification covers (e).",
+   "uncovered_clause": "(d) monitoring, detection and response for advanced persistent threats and targeted attacks"
+  },
+  {
+   "code": "9.8",
+   "scf_ids": [
+    "WEB-01",
+    "WEB-07"
+   ],
+   "confidence": "high",
+   "rationale": "This is the programme-level obligation to define and implement web application security requirements, discharged by the enterprise web management policy/standards mechanism and the web security standard that embeds an application security verification standard.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.9",
+   "scf_ids": [
+    "WEB-07",
+    "CRY-03",
+    "VPM-07",
+    "TDA-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite web baseline: the application security verification standard covers unauthorised-access prevention, secure design and authentication/session requirements (a, b, g); transmission confidentiality covers (c); penetration testing covers (e); and secure software development practices cover the SSDLC clause (h).",
+   "uncovered_clause": "(d) secure usage practices and user awareness, and (f) maintaining applications on up-to-date, supported and securely configured components"
+  },
+  {
+   "code": "9.11",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-08",
+    "CLD-13"
+   ],
+   "confidence": "high",
+   "rationale": "Retaining accountability through contracts, SLAs and right-to-audit clauses is discharged by the third-party contractual requirements mechanism, the recurring review of providers against those contractual requirements, and the mechanism specifying controls required of hosted services.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.12",
+   "scf_ids": [
+    "PES-01",
+    "PES-12"
+   ],
+   "confidence": "high",
+   "rationale": "The general obligation to implement and maintain environmental controls for facilities is discharged by the physical and environmental protection programme mechanism together with equipment siting that minimises damage from environmental hazards.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.13",
+   "scf_ids": [
+    "PES-07.3",
+    "PES-07",
+    "PES-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Power resilience via UPS, generators and redundant distribution is discharged by the alternate/emergency power supply mechanism, the protection of power equipment and cabling, and automatic voltage control for critical components.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.14",
+   "scf_ids": [
+    "PES-09",
+    "PES-09.1",
+    "PES-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Continuous environmental monitoring with automated alerts is discharged by the temperature/humidity monitoring mechanism and its alarm/notification extension, with automatic voltage controls covering the power-stability parameter.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.15",
+   "scf_ids": [
+    "PES-09",
+    "PES-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining HVAC-controlled conditions within recommended operating ranges is discharged by the mechanism that maintains and monitors facility temperature and humidity levels, with alarming on harmful excursions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.16",
+   "scf_ids": [
+    "PES-08.1",
+    "PES-08.3",
+    "PES-08",
+    "PES-07.4"
+   ],
+   "confidence": "high",
+   "rationale": "Early-warning detection is discharged by automatically activating fire detection devices, automatic suppression by the automatic fire suppression mechanism, ongoing inspection/testing by the maintained detection-and-suppression system mechanism, and safe evacuation by emergency lighting covering exits and evacuation routes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.17",
+   "scf_ids": [
+    "PES-07.5",
+    "PES-07.6",
+    "PES-12"
+   ],
+   "confidence": "high",
+   "rationale": "Water and flood risk is discharged by the water damage protection shutoff mechanism plus automated water detection and alerting near critical systems, and dust/vibration/facility-design hazards by equipment siting that minimises environmental damage.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.18",
+   "scf_ids": [
+    "PES-01.1",
+    "MNT-01",
+    "MNT-03.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Documenting environmental control procedures is discharged by the physical security plan documenting implemented controls and by maintenance procedure and preventive-maintenance mechanisms covering the maintenance-schedule clause.",
+   "uncovered_clause": "escalation processes, incident response actions and defined roles/responsibilities for facility management personnel"
+  },
+  {
+   "code": "10.3",
+   "scf_ids": [
+    "TDA-06",
+    "PRM-07"
+   ],
+   "confidence": "high",
+   "rationale": "The programme-level obligation to define, approve and implement SSDLC requirements is discharged by the secure software development practices mechanism and the SDLC management mechanism governing changes through formal control procedures.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.4",
+   "scf_ids": [
+    "TDA-06",
+    "TDA-20.4",
+    "TDA-13.2",
+    "TDA-08"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite SSDLC baseline: secure development practices cover clauses (a) and (b), governed approval of binaries and code for production covers (c), developer secure-coding training covers (d), and the separation of development, testing and operational environments covers (e).",
+   "uncovered_clause": "(f) maintaining secure repositories for source code, and the threat-modelling element named in (b)"
+  },
+  {
+   "code": "11.3",
+   "scf_ids": [
+    "TPM-03",
+    "RSK-09",
+    "TPM-01"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing supply chain risk policies and processes is discharged by the supply chain risk management evaluation/remediation mechanism, the documented SCRM plan, and the overarching third-party management mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.4",
+   "scf_ids": [
+    "RSK-09.1",
+    "TPM-02",
+    "TPM-04"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying, assessing and classifying supply chain risks is discharged by periodic supply chain risk assessment, third-party criticality assessment prioritising suppliers of critical services, and the mechanism mitigating risks from third-party access.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.5",
+   "scf_ids": [
+    "TDA-03.1",
+    "TPM-05",
+    "TPM-11",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "The named mitigation strategies map individually: sourcing from multiple suppliers covers diversification, third-party contractual requirements cover contractual controls, joint response/recovery planning and testing with critical suppliers covers contingency and continuity measures, and recurring assessment of providers covers supplier security audits.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.6",
+   "scf_ids": [
+    "TPM-08",
+    "TPM-09",
+    "RSK-11"
+   ],
+   "confidence": "high",
+   "rationale": "Continuous monitoring, review and remediation of supply chain risks is discharged by recurring monitoring and assessment of external service providers, the mechanism addressing identified supply-chain weaknesses, and continuous risk monitoring.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.7",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.2",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring providers of cloud, data centre, hosting and development services comply with the framework and applicable law is discharged by imposing security requirements contractually, flowing those requirements down the chain, and monitoring providers against them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.8",
+   "scf_ids": [
+    "TPM-01.1",
+    "TPM-02"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying and documenting all suppliers is discharged by the third-party inventory mechanism, and classification by criticality of what they supply by the third-party criticality assessment mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.10",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.1",
+    "HRS-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Security provisions in agreements and SLAs are discharged by the third-party contractual requirements mechanism, with compromise-notification agreements covering the incident notification timelines clause and confidentiality agreements covering the confidentiality clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.12",
+   "scf_ids": [
+    "AST-03.2",
+    "TDA-11",
+    "TDA-14.1",
+    "TDA-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "Verifying supplier source and product integrity is discharged by provenance tracking of origin and ownership, anti-tampering/counterfeit detection practices, developer-enabled software and firmware integrity verification, and the software bill of materials listing components in use.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.13",
+   "scf_ids": [
+    "TPM-05",
+    "IAO-03.2",
+    "TPM-04.4"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring suppliers to handle organisational data per approved security and privacy requirements is discharged by imposing those requirements contractually, protecting regulated data handled in performance of a contract, and governing third-party processing, storage and service locations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.14",
+   "scf_ids": [
+    "TPM-08",
+    "GOV-05.1",
+    "RSK-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Monitoring supplier compliance is discharged by recurring monitoring and assessment of providers against contractual control requirements, key performance indicator development and reporting for the KPI clause, and periodic supply chain risk assessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.15",
+   "scf_ids": [
+    "TPM-05.1",
+    "TPM-11",
+    "IRO-11.2",
+    "IRO-10.4"
+   ],
+   "confidence": "high",
+   "rationale": "Supplier incident detection, reporting and coordination is discharged by compelling providers to notify of compromises, joint response/recovery capability with critical suppliers, the direct cooperative relationship with external providers for incident response, and supply chain incident information exchange.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.16",
+   "scf_ids": [
+    "TPM-11",
+    "BCD-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring suppliers to maintain documented and tested BC/DR capability is discharged by the mechanism conducting response and recovery planning and testing with critical suppliers, and by coordinating contingency planning with external service providers.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.17",
+   "scf_ids": [
+    "TPM-05.2",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Holding suppliers accountable for their subcontractors and fourth parties is discharged by the contract flow-down mechanism that carries security requirements to sub-contractors and suppliers, backed by the third-party contractual requirements mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.18",
+   "scf_ids": [
+    "AST-10",
+    "DCH-21",
+    "CLD-01.2",
+    "TPM-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Secure off-boarding is discharged by return of organisational assets on contract termination, secure disposal/erasure of information, secure transition or archiving of data when a hosted service is decommissioned, and third-party personnel security controls for access withdrawal.",
+   "uncovered_clause": "conducting an exit audit at contract completion or termination"
+  },
+  {
+   "code": "11.19",
+   "scf_ids": [
+    "TPM-10",
+    "TPM-12.1",
+    "TPM-04.4",
+    "TPM-05.5"
+   ],
+   "confidence": "high",
+   "rationale": "Reassessment on significant supplier change is discharged by the mechanism controlling changes to supplier services, periodic review for ownership/control changes, governance of processing and service locations, and recurring revalidation of third-party scope and control assignments.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.21",
+   "scf_ids": [
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "Periodic supply chain risk management training for procurement and supplier-management personnel is discharged by the role-based training mechanism that delivers job-specific training before duties and annually thereafter.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.3",
+   "scf_ids": [
+    "CPL-02.1",
+    "CPL-02.2",
+    "IAO-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing an independent internal audit function with at-least-annual audits is discharged by the internal audit function mechanism, the periodic control audit mechanism, and assessor independence; the second sentence assigning external audit to the regulator and nCERT binds those bodies, not the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.4",
+   "scf_ids": [
+    "CPL-03",
+    "CPL-03.8"
+   ],
+   "confidence": "high",
+   "rationale": "Adopting a control self-assessment process that shifts from periodic checks to continuous assurance is discharged by the control conformity validation mechanism and its continuous control monitoring extension that reports conformity status automatically.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.5",
+   "scf_ids": [
+    "IAO-02.1",
+    "CPL-03.1",
+    "CPL-01.6"
+   ],
+   "confidence": "high",
+   "rationale": "Mandating independent, certified and qualified auditors selected against defined criteria is discharged by assessor independence, use of independent assessors at planned intervals, and the requirement that assessment personnel hold professional qualifications and subject matter expertise.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.7",
+   "scf_ids": [
+    "HRS-06.1",
+    "CPL-03.3",
+    "DCH-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "Audit confidentiality is discharged by non-disclosure agreements covering employees and third parties, granting assessors only minimum necessary logical and physical access, and data masking applied to sensitive information that is displayed or printed.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.9",
+   "scf_ids": [
+    "CPL-04",
+    "CPL-03.4",
+    "CPL-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring a documented, approved audit plan per audit is discharged by the thoughtful audit planning mechanism, the definition of acceptable assessment methods for the tools clause, and documented validation of assessment scope.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.10",
+   "scf_ids": [
+    "CPL-12",
+    "RSK-06.4",
+    "CPL-01.2",
+    "CPL-03.6"
+   ],
+   "confidence": "high",
+   "rationale": "Supplying mandatory documentation to the auditor is discharged by production of a statement of applicability, a formalised risk treatment plan, documented and validated compliance scope, and the evidence request list defined before an assessment begins.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.12",
+   "scf_ids": [
+    "IAO-02.4",
+    "CPL-13",
+    "DCH-18"
+   ],
+   "confidence": "high",
+   "rationale": "Standardised audit reporting and retention is discharged by production of a security assessment report at the conclusion of an assessment, the work-product mechanism for compliance artefacts, and retention of records per statutory and contractual obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.13",
+   "scf_ids": [
+    "CPL-02.3",
+    "IAO-05",
+    "RSK-06.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Formal audit closure and follow-up is discharged by the corrective-action mechanism for non-conformities, the deficiency tracking (POA&M) mechanism covering overdue-action escalation and risk-acceptance documentation, and the mechanism ensuring risk responses remediate audit findings.",
+   "uncovered_clause": "documentation of lessons learned from each audit"
+  },
+  {
+   "code": "12.14",
+   "scf_ids": [
+    "GOV-03",
+    "GOV-01.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Periodic review and continual improvement of the audit framework is only partly discharged by the programme-wide periodic review of policies, standards and procedures and the continual-improvement resourcing mechanism; neither is specific to the audit framework itself.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.4",
+   "scf_ids": [
+    "GOV-04.1",
+    "GOV-04",
+    "GOV-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "Placing ultimate accountability for security governance, risk and compliance on the head of the organisation is a governance-level obligation discharged by the enforced stakeholder accountability structure, assignment of programme responsibility, and the authoritative chain of command.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.5",
+   "scf_ids": [
+    "GOV-17",
+    "CHG-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Notifying the sector regulator of a material change within 30 days is partly discharged by the mechanism submitting status reporting to statutory and regulatory authorities as required, with change-notification to stakeholders covering the change-communication element; neither carries the 30-day clock for post-change regulatory notification.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.6",
+   "scf_ids": [
+    "GOV-04",
+    "GOV-04.2",
+    "HRS-11"
+   ],
+   "confidence": "high",
+   "rationale": "Designating a qualified security function lead reporting to the head of the organisation is discharged by assignment of one or more qualified individuals to centrally manage the programme and the authoritative chain of command, with separation of duties addressing the conflict-of-interest constraint against IT/ICT.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.8",
+   "scf_ids": [
+    "GOV-01.1",
+    "GOV-04",
+    "HRS-03",
+    "HRS-11"
+   ],
+   "confidence": "high",
+   "rationale": "Steering-committee definition and assignment of security roles without conflict of interest is discharged by the steering committee mechanism, assignment of programme responsibilities, definition of cybersecurity roles for all personnel, and separation of duties preventing inappropriate combinations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.9",
+   "scf_ids": [
+    "HRS-03.2",
+    "HRS-13.2"
+   ],
+   "confidence": "high",
+   "rationale": "Filling the security function lead and critical positions with qualified, experienced professionals is discharged by the competency requirement that security-related positions be staffed by individuals with the necessary skill set, supported by identification of vital security staff.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.12",
+   "scf_ids": [
+    "HRS-03",
+    "GOV-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring security roles are documented, assigned and communicated is discharged by the mechanism defining cybersecurity roles and responsibilities for all personnel and the enforced accountability structure that empowers and informs those individuals.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.13",
+   "scf_ids": [
+    "HRS-03",
+    "GOV-04.1",
+    "GOV-04.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Documented roles carrying appropriate authorisations is discharged by role definition plus the accountability structure and chain of command, but no control specifically requires formal top-management approval of the role documentation itself.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.14",
+   "scf_ids": [
+    "GOV-02",
+    "CPL-01"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing sector-specific security frameworks and policies is discharged by the mechanism establishing, maintaining and disseminating policies and standards, and by the identification and implementation of relevant statutory and regulatory controls for the sector.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.16",
+   "scf_ids": [
+    "AST-31",
+    "RSK-02",
+    "RSK-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing a severity-based criticality classification scheme for assets is discharged by the asset categorisation mechanism, risk-based security categorisation with documented results, and impact-level prioritisation across assets.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.17",
+   "scf_ids": [
+    "DCH-02",
+    "RSK-02"
+   ],
+   "confidence": "medium",
+   "rationale": "The optional CIA-based classification of assets, recognising disclosure impact, is discharged by the data and asset classification mechanism and by risk-based security categorisation that documents categorisation results and rationale.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.18",
+   "scf_ids": [
+    "GOV-15.2",
+    "RSK-02.1",
+    "BCD-02",
+    "PRM-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Realistic, criticality-driven control implementation with resource prioritisation is discharged by compelling owners to implement required controls, impact-level prioritisation, identification of assets supporting essential services, and resource allocation within business process planning; the clause requiring sector-regulator approval binds an external body.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.19",
+   "scf_ids": [
+    "IAC-16",
+    "IAC-21",
+    "CRY-05",
+    "NET-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite control list: privileged access management covers privileged access, least privilege covers criticality-scaled access control, encryption of data at rest covers encryption, and the network security control procedures cover network security.",
+   "uncovered_clause": "the obligation to regularly test the implemented controls, and the data privacy element"
+  },
+  {
+   "code": "13.20",
+   "scf_ids": [
+    "PRI-05",
+    "PRI-01",
+    "DCH-18"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting personal data and enforcing approved retention and disposal is discharged by the personal data retention and disposal mechanism, the data privacy programme governing lawful processing, and retention of data per statutory and regulatory obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.21",
+   "scf_ids": [
+    "SEA-01",
+    "SEA-01.4",
+    "PRM-05",
+    "PRM-04"
+   ],
+   "confidence": "high",
+   "rationale": "Integrating security into design and development of new or modified systems is discharged by secure engineering principles applied at specification and design, secure architecture principles, definition of technical security requirements at SDLC decision points, and security assessment within project management.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.22",
+   "scf_ids": [
+    "PES-01",
+    "PES-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining documented physical and environmental security policies and plans is discharged by the physical and environmental protection programme mechanism and the documented physical security plan summarising implemented controls, risks and threats.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.23",
+   "scf_ids": [
+    "BCD-02",
+    "BCD-02.2",
+    "SEA-01.2",
+    "RSK-08"
+   ],
+   "confidence": "high",
+   "rationale": "Focusing protection on continuity of critical services and reducing disruption likelihood and impact is discharged by identification of assets supporting essential functions, the mechanism continuing essential functions with little loss of continuity, achievement of resilience requirements in adverse situations, and business impact analysis.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.24",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-01.6",
+    "BCD-03",
+    "BCD-04"
+   ],
+   "confidence": "high",
+   "rationale": "Formal BCP and DRP documents with actions, roles, communications, training and drills are discharged by the formal BC/DR plan mechanism, recovery operations communications, contingency training of personnel in their roles, and contingency plan testing and exercises.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.25",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-12.2",
+    "BCD-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Periodic resilience and stress testing is discharged by contingency plan testing and exercises evaluating readiness, failover capability for the failover verification clause, and reduction of single points of failure in primary telecommunications for the connectivity clause.",
+   "uncovered_clause": "stress testing of power supply, generators and cooling/HVAC systems specifically, and documented review of test results to improve resilience"
+  },
+  {
+   "code": "13.26",
+   "scf_ids": [
+    "BCD-01.4",
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Approved recovery and response metrics are discharged for RTO and RPO by the mechanism operating recovery in accordance with those objectives, while MTTD and MTTR are covered only generically by the key performance indicator development, reporting and monitoring mechanism.",
+   "uncovered_clause": "enforcement of approved mean-time-to-detect and mean-time-to-respond targets for critical systems"
+  },
+  {
+   "code": "13.27",
+   "scf_ids": [
+    "BCD-01.7",
+    "RSK-08"
+   ],
+   "confidence": "medium",
+   "rationale": "Realistic, risk-based BCP/DRP is discharged by the formal BC/DR plan mechanism requiring plans accurate and representative of current operations and by business impact analysis providing the risk basis; the sector-regulator approval element binds an external body.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.28",
+   "scf_ids": [
+    "BCD-11.1",
+    "BCD-11.5",
+    "BCD-13.1",
+    "BCD-12.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Backup restoration testing is discharged by routine backup testing for reliability and integrity, sampled restoration testing, and integrity verification of restoration assets before use; failover capability partially mitigates single points of failure.",
+   "uncovered_clause": "formal identification and documentation of single points of failure across systems, infrastructure, processes and dependencies"
+  },
+  {
+   "code": "13.29",
+   "scf_ids": [
+    "RSK-09.1",
+    "TPM-04.1",
+    "TDA-01",
+    "TDA-09"
+   ],
+   "confidence": "high",
+   "rationale": "Supply chain risk assessment and secure procurement is discharged by periodic supply chain risk assessment, risk assessment prior to acquisition or outsourcing, tailored acquisition and procurement methods, and the security testing and evaluation plan applied to acquired and developed technology.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.30",
+   "scf_ids": [
+    "CPL-02.2",
+    "CPL-02.1",
+    "CPL-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing annual internal and external audit against sector-specific policies is discharged by periodic control audits, the internal audit function, and use of independent assessors at planned intervals or when the asset undergoes significant change, which covers the material-change audit trigger; external audit oversight by the regulator and nCERT binds those bodies.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.31",
+   "scf_ids": [
+    "HRS-06.1",
+    "CPL-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Audit confidentiality procedures protecting system designs, configurations and controls are discharged by required non-disclosure agreements covering third parties and by granting assessors only the minimum necessary logical and physical access to artefacts.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.32",
+   "scf_ids": [
+    "IRO-02",
+    "IRO-10",
+    "IRO-07"
+   ],
+   "confidence": "high",
+   "rationale": "A structured incident management approach spanning detection, response, reporting, recovery and coordination is discharged by the incident handling lifecycle mechanism, timely reporting to internal, client and regulatory stakeholders, and the integrated cross-function incident response team.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.33",
+   "scf_ids": [
+    "IRO-14",
+    "GOV-06",
+    "IRO-02.5",
+    "GOV-07"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining liaison with organisational, sectoral and national CERTs is discharged by maintaining incident response contacts with regulatory agencies, documented contacts with relevant authorities, coordination with approved third parties for cross-organisation incident awareness, and contacts with security community groups for knowledge sharing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.34",
+   "scf_ids": [
+    "IRO-04",
+    "IRO-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "Developing and maintaining an incident response plan detailing procedures, roles, escalation and recovery is discharged by the mechanism maintaining and making a current IRP available to stakeholders and the mechanism regularly reviewing and modifying incident response practices.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.35",
+   "scf_ids": [
+    "THR-01",
+    "IRO-02.5",
+    "MON-14.1",
+    "GOV-16"
+   ],
+   "confidence": "high",
+   "rationale": "Sharing threat intelligence, incident and breach information with sectoral CERTs is discharged by the threat intelligence programme's cross-organisation information sharing capability, coordination with approved third parties on incidents, event log sharing under cross-organisational agreements, and materiality threshold criteria supplying the escalation criteria.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.36",
+   "scf_ids": [
+    "IRO-10.5",
+    "IRO-10"
+   ],
+   "confidence": "high",
+   "rationale": "Reporting all breaches to the sectoral CERT within 72 hours is discharged by the serious incident reporting mechanism that reports to relevant authorities in accordance with mandatory reporting requirements and timelines, supported by timely reporting to regulatory authorities.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.37",
+   "scf_ids": [
+    "OPS-01.1",
+    "IRO-11.2",
+    "IRO-02.5"
+   ],
+   "confidence": "medium",
+   "rationale": "SOPs defining inter-CERT coordination are discharged by the standardised operating procedure documentation mechanism combined with the direct cooperative relationship between the incident response capability and external parties for coordination and communication.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.38",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "SAT-02.2",
+    "SAT-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Continuous awareness plus role-based training for all employees including senior officials is discharged by the general awareness training mechanism, the role-based training mechanism, social engineering recognition and reporting training, and simulated attack exercises addressing the phishing risk named.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.39",
+   "scf_ids": [
+    "GOV-07",
+    "THR-03",
+    "THR-01"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing national and international cooperation linkages to stay current on threats and best practices is discharged by contacts with security community groups and associations, threat intelligence feeds maintaining situational awareness of evolving threats, and the cross-organisation threat intelligence programme.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.5",
+   "scf_ids": [
+    "TPM-04.1",
+    "TPM-03.1",
+    "GOV-19.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Three assessable limbs on the organisation. Provider eligibility restricted to nCERT/Regulator/Sectoral-CERT registered firms is a pre-engagement vetting and approval gate (TPM-04.1); the PPRA-compliant competitive bidding requirement is a prescribed procurement method for the acquisition (TPM-03.1); and outsourcing security functions themselves - consultancy, risk assessment, audit - is bounded by GOV-19.3, which keeps oversight and assurance with the organisation. CPL-03.1/CPL-01.6 were considered for the outsourced-audit limb but speak to assessor independence and competence generally rather than to a mandated registration scheme.",
+   "uncovered_clause": null
+  }
+ ]
+}

@@ -1,0 +1,59 @@
+{
+ "framework": "soc2",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "CC6.9",
+   "scf_ids": [
+    "CRY-09"
+   ],
+   "confidence": "high",
+   "rationale": "The criterion requires managing encryption keys across generation, distribution, storage, rotation, revocation and destruction with restricted access; CRY-09 is the cryptographic key management control covering exactly that lifecycle and the confidentiality, integrity and availability of the keys.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "CC7.6",
+   "scf_ids": [
+    "MON-03",
+    "MON-08",
+    "MON-01.8"
+   ],
+   "confidence": "high",
+   "rationale": "The four points of focus are capturing security events, protecting log integrity, retaining logs and reviewing them; MON-03 defines log content sufficient to establish what occurred, MON-08 protects event logs from unauthorised modification and deletion, and MON-01.8 is the ongoing review of event logs with escalation of incidents.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "CC9.3",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-04",
+    "BCD-06"
+   ],
+   "confidence": "high",
+   "rationale": "The criterion requires developing continuity plans addressing critical processes and RTO/RPO, testing them periodically and updating them from test results and change; BCD-01.7 is the formal BC/DR plan, BCD-04 the periodic exercise that confirms effectiveness, and BCD-06 the update of plans as people, process, technology and threats change.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "A1.4",
+   "scf_ids": [
+    "CHG-05",
+    "BCD-01.6"
+   ],
+   "confidence": "medium",
+   "rationale": "The entity must warn users ahead of planned downtime and keep them updated during unplanned outages; CHG-05 ensures stakeholders are made aware of and understand the impact of proposed changes, covering planned downtime notice, and BCD-01.6 communicates recovery status and restoration progress to internal and external stakeholders during an outage — SCF has no status-page control, so the third point of focus is uncovered.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "C1.3",
+   "scf_ids": [
+    "IAC-20",
+    "IAC-17"
+   ],
+   "confidence": "high",
+   "rationale": "Access to confidential information must be restricted to individuals whose job requires it and reviewed periodically for appropriateness; IAC-20 enforces logical access permissions conforming to least privilege and IAC-17 is the periodic review that validates the need for each privilege and removes what is unnecessary.",
+   "unmappable_reason": null
+  }
+ ]
+}

@@ -1,0 +1,61 @@
+{
+ "framework": "dora",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "Article 7(1)",
+   "scf_ids": [
+    "CAP-01",
+    "TDA-17"
+   ],
+   "confidence": "medium",
+   "rationale": "ICT systems, protocols and tools must be kept updated, reliable, of sufficient capacity and technologically resilient in proportion to the scale of operations; CAP-01 is the capacity and performance management mechanism ensuring systems meet expected and anticipated demand, and TDA-17 removes or replaces unsupported technology, which is what 'maintain updated' and 'technologically resilient' oblige in practice.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 15",
+   "scf_ids": [
+    "RSK-01",
+    "PES-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Entities under the simplified regime must still hold a sound documented ICT risk management framework covering the protection of physical components and infrastructure; RSK-01 is the risk management programme aligned to enterprise risk management and PES-01 discharges the article's explicit physical and environmental protection limb.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 19(6)",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-11"
+   ],
+   "confidence": "high",
+   "rationale": "The entity must inform clients without undue delay of a major incident and the mitigations taken, and advise potentially affected clients of protective measures against a significant cyber threat; IRO-10 is the timely reporting of incidents to affected clients and third parties, and IRO-11 is the mechanism providing those users with response advice and assistance.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 23(1)",
+   "scf_ids": [
+    "IRO-10"
+   ],
+   "confidence": "medium",
+   "rationale": "The entity may voluntarily notify its competent authority of significant cyber threats it considers relevant to the financial system or its clients; IRO-10 is SCF's mechanism for timely reporting to regulatory authorities, though it is framed around incidents rather than pre-incident threats and the article is permissive rather than mandatory.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 33(1)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because the assessment duty sits with the Lead Overseer, not the financial entity being assessed.",
+   "unmappable_reason": "Article 33(1) directs the Lead Overseer to assess whether each critical ICT third-party service provider manages the risk it poses; the obligation binds an EU supervisory body and its object is the provider, not the tenant."
+  },
+  {
+   "code": "Article 35(1)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because these are supervisory investigation powers exercised by the Lead Overseer.",
+   "unmappable_reason": "Article 35(1) enumerates the Lead Overseer's powers to request information, run investigations and inspections, and issue recommendations to critical ICT third-party providers; nothing in it is an act the assessed entity performs."
+  }
+ ]
+}

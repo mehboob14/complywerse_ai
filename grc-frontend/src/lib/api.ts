@@ -3094,6 +3094,7 @@ export const regulatoryApi = {
   deleteChange: (id: number) => apiClient.delete(`/governance/regulatory-changes/changes/${id}`),
   getAssessments: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/assessments`),
   createAssessment: (changeId: number, data: Record<string, unknown>) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/assessments`, data),
+  regenerateAssessments: (changeId: number) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/assessments/regenerate`),
   getTasks: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/tasks`),
   createTask: (changeId: number, data: Record<string, unknown>) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/tasks`, data),
   updateTask: (taskId: number, data: Record<string, unknown>) => apiClient.patch(`/governance/regulatory-changes/tasks/${taskId}`, data),
@@ -4988,10 +4989,28 @@ export const compliancePluginsApi = {
 };
 
 /** SOC 2 quantitative controls + AWS automated checks (additive). */
+// Automation frameworks: SOC 2 / ISO 27001 / GDPR share one automated-check
+// engine (all run/collector/seed/connection calls hit /automation/soc2/*); only
+// the control library + requirements are per-framework (/automation/{fw}/*).
+export type AutomationFramework = 'soc2' | 'iso27001' | 'gdpr';
+
 export const automationApi = {
   seed: () => apiClient.post('/automation/soc2/seed'),
-  listControls: () => apiClient.get('/automation/soc2/controls'),
-  listCriteria: () => apiClient.get('/automation/soc2/criteria'),
+  listControls: (framework: AutomationFramework = 'soc2') =>
+    apiClient.get(`/automation/${framework}/controls`),
+  // Unified common control library — one control set, each mapped to requirements
+  // across SOC 2 / ISO 27001 / GDPR.
+  listCommonControls: () => apiClient.get('/automation/common/controls'),
+  // One control with its framework requirements resolved to real text +
+  // provenance, so a reviewer can trace any row back to its source library.
+  getCommonControl: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}`),
+  // Every requirement and what accounts for it — mapped, or dispositioned with
+  // the reason it cannot be (binds the regulator, outside the catalogue).
+  getRequirementCoverage: (framework?: string) =>
+    apiClient.get('/automation/common/coverage', { params: framework ? { framework } : undefined }),
+  listCriteria: (framework: AutomationFramework = 'soc2') =>
+    apiClient.get(`/automation/${framework}/criteria`),
   listChecks: (params?: { control_id?: string }) =>
     apiClient.get('/automation/soc2/checks', { params }),
   getCheck: (pluginId: number) => apiClient.get(`/automation/soc2/checks/${pluginId}`),
@@ -5003,8 +5022,10 @@ export const automationApi = {
       connection_id: connectionId,
       ...(controlId ? { control_id: controlId } : {}),
     }),
-  // Evidence Collectors — 39 SaaS API connectors (github/okta/slack/…)
+  // Evidence Collectors — SaaS API connectors (github/okta/slack/…)
   listCollectors: () => apiClient.get('/automation/soc2/collectors'),
+  // Full connector universe: wired connectors + Steampipe discovery catalog.
+  listCatalog: () => apiClient.get('/automation/soc2/catalog'),
   connectCollector: (provider: string, body: { token: string; domain?: string; email?: string }) =>
     apiClient.post(`/automation/soc2/collectors/${provider}/connect`, body),
   testCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/test`),

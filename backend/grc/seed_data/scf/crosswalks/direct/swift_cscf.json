@@ -1,0 +1,27 @@
+{
+ "framework": "swift_cscf",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "3.2",
+   "scf_ids": [
+    "IAC-10.1",
+    "IAC-10"
+   ],
+   "confidence": "high",
+   "rationale": "Strong password policy with complexity, periodic change and reuse prevention is required for SWIFT-related accounts; IAC-10.1 enforces complexity, length and lifespan criteria for password-based authentication and IAC-10 is the surrounding authenticator management that keeps authentication strength matched to the data being accessed.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "3.3",
+   "scf_ids": [
+    "IAC-06"
+   ],
+   "confidence": "high",
+   "rationale": "Operator access to SWIFT applications and systems must require at least two independent authentication factors, which IAC-06 discharges directly by enforcing multi-factor authentication for remote and non-console access to critical systems.",
+   "unmappable_reason": null
+  }
+ ]
+}

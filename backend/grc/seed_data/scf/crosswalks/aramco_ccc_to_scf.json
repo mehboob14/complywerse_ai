@@ -1,0 +1,337 @@
+{
+ "framework": "aramco_ccc",
+ "library": "aramco_ccc.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "1.1",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "aramco_ccc.json 1.1 requires an ISO 27001-aligned ISMS; ISO 27002 has no ISMS-establishment control (that lives in ISO 27001 clauses 4-10), so only the documented policy topic 5.1 partially carries it."
+  },
+  {
+   "control_id": "1.2",
+   "iso_clauses": [
+    "5.2",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 1.2 requires defined cybersecurity roles, accountability and a designated senior management owner — exactly 5.2 roles/responsibilities plus 5.4 management responsibility."
+  },
+  {
+   "control_id": "1.3",
+   "iso_clauses": [
+    "5.1",
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 1.3 mandates security policies AND procedures with at-least-annual review, matching 5.1 (policy set and periodic review) and 5.37 (documented operating procedures)."
+  },
+  {
+   "control_id": "1.4",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 1.4 is a personnel awareness/training programme covering policies, threats and individual responsibilities — the literal scope of 6.3."
+  },
+  {
+   "control_id": "1.5",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "aramco_ccc.json 1.5 requires periodic evidence of adherence to CCC requirements on Aramco's schedule; 5.36 covers demonstrating and reporting compliance with rules and standards, though the customer-reporting cadence is contractual and outside ISO 27002."
+  },
+  {
+   "control_id": "2.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "aramco_ccc.json 2.1 is a risk assessment process (threats, vulnerabilities, impacts, treatment plans); ISO 27002:2022 contains no risk-assessment control — that requirement sits in ISO 27001 clause 6.1.2, so mapping it to any Annex A topic would be wrong."
+  },
+  {
+   "control_id": "2.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "aramco_ccc.json 2.2 is risk treatment option selection (mitigate/transfer/accept/avoid); ISO 27002 clauses are the treatment measures themselves and contain no risk-treatment-decision control — that is ISO 27001 clause 6.1.3."
+  },
+  {
+   "control_id": "2.3",
+   "iso_clauses": [
+    "5.19",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 2.3 requires managing subcontractor/fourth-party risk and flowing security requirements down the chain — 5.19 supplier relationships plus 5.21 ICT supply chain."
+  },
+  {
+   "control_id": "3.1",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 3.1 requires an accurate hardware/software/data inventory with assigned owners, which is precisely 5.9 inventory of information and associated assets."
+  },
+  {
+   "control_id": "3.2",
+   "iso_clauses": [
+    "5.12",
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 3.2 requires classifying Aramco data to a scheme and applying per-level handling/storage rules — 5.12 classification, with 5.13 labelling as the marking half."
+  },
+  {
+   "control_id": "3.3",
+   "iso_clauses": [
+    "8.10",
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 3.3 requires unrecoverable disposal of Aramco data when no longer needed with destruction certificates — 8.10 information deletion, and 7.14 where the carrier equipment is disposed of."
+  },
+  {
+   "control_id": "4.1",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 4.1 mandates least-privilege access policy limited to legitimate business need — 5.15 access control policy, 8.3 restriction of access to information."
+  },
+  {
+   "control_id": "4.2",
+   "iso_clauses": [
+    "8.5",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 4.2 requires strong authentication with MFA for remote and privileged access — 8.5 secure authentication, with 5.17 governing the authentication secrets themselves."
+  },
+  {
+   "control_id": "4.3",
+   "iso_clauses": [
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 4.3 requires privileged accounts to be inventoried, minimised, monitored and just-in-time — the exact subject of 8.2 privileged access rights."
+  },
+  {
+   "control_id": "4.4",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 4.4 requires at-least-quarterly review of access rights with prompt revocation, which is the periodic-review requirement inside 5.18."
+  },
+  {
+   "control_id": "4.5",
+   "iso_clauses": [
+    "5.18",
+    "6.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 4.5 requires access removal within 24 hours of termination or role change — 5.18 covers removal/adjustment of rights, 6.5 the termination-of-employment obligations."
+  },
+  {
+   "control_id": "5.1",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 5.1 prescribes AES-256 at rest and TLS 1.2+ in transit, i.e. the cryptographic algorithm/strength rules of 8.24."
+  },
+  {
+   "control_id": "5.2",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 5.2 covers key generation, storage, rotation and destruction — the key-management lifecycle that 8.24 explicitly includes."
+  },
+  {
+   "control_id": "6.1",
+   "iso_clauses": [
+    "7.1",
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 6.1 requires perimeter protection of facilities plus authorised-only entry with access logging — 7.1 perimeters and 7.2 physical entry controls."
+  },
+  {
+   "control_id": "6.2",
+   "iso_clauses": [
+    "7.8",
+    "7.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 6.2 protects equipment holding Aramco data from theft and environmental threats and while in transport — 7.8 siting/protection and 7.9 assets off-premises."
+  },
+  {
+   "control_id": "6.3",
+   "iso_clauses": [
+    "7.6",
+    "7.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 6.3 defines secure work areas with clean-desk and screen-privacy measures — 7.6 working in secure areas and 7.7 clear desk/clear screen."
+  },
+  {
+   "control_id": "7.1",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.1 requires documented, tested, approved and tracked changes with rollback — the change-management control 8.32."
+  },
+  {
+   "control_id": "7.2",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.2 requires current anti-malware with real-time protection and scheduled scans — directly 8.7 protection against malware."
+  },
+  {
+   "control_id": "7.3",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.3 requires vulnerability identification by scanning and severity-based remediation — the technical vulnerability management cycle of 8.8."
+  },
+  {
+   "control_id": "7.4",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.4 sets a 30-day critical patch SLA; patching is the remediation step ISO 27002 places inside 8.8 rather than in a separate clause."
+  },
+  {
+   "control_id": "7.5",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.5 requires security event logs protected from tampering and retained 12 months plus monitoring — 8.15 logging and 8.16 monitoring activities."
+  },
+  {
+   "control_id": "7.6",
+   "iso_clauses": [
+    "8.20",
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.6 requires firewalls and intrusion detection (8.20 networks security) and network segmentation (8.22 segregation of networks) for Aramco-connected systems."
+  },
+  {
+   "control_id": "7.7",
+   "iso_clauses": [
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.7 requires regular, securely stored and restore-tested backups of Aramco data — the whole content of 8.13 information backup."
+  },
+  {
+   "control_id": "7.8",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 7.8 requires baseline secure configurations from industry standards with deviation monitoring — exactly 8.9 configuration management."
+  },
+  {
+   "control_id": "8.1",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 8.1 requires a documented incident response plan defining roles, procedures and communication — 5.24 incident management planning and preparation."
+  },
+  {
+   "control_id": "8.2",
+   "iso_clauses": [
+    "6.8",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "aramco_ccc.json 8.2 sets a 4-hour breach notification to the customer; 6.8 covers timely reporting of security events through defined channels and 5.24 the pre-agreed communication protocol, but the contractual 4-hour clock to Aramco has no ISO equivalent."
+  },
+  {
+   "control_id": "8.3",
+   "iso_clauses": [
+    "5.26",
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "aramco_ccc.json 8.3 requires root-cause and impact/compromise investigation — the analysis steps of 5.26 incident response, with 5.28 covering the forensic evidence collected during it."
+  },
+  {
+   "control_id": "8.4",
+   "iso_clauses": [
+    "5.24",
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "aramco_ccc.json 8.4 requires a formal post-closure report (timeline, impact, root cause, corrective actions); ISO 27002 puts reporting procedures in 5.24 and the corrective-action output in 5.27, though the 72-hour customer deadline is contractual."
+  },
+  {
+   "control_id": "8.5",
+   "iso_clauses": [
+    "5.26",
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "aramco_ccc.json 8.5 obliges giving Aramco's responders access to systems, logs and personnel during remediation — 5.26 response activities and 5.28 preservation/handover of evidence."
+  },
+  {
+   "control_id": "8.6",
+   "iso_clauses": [
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "aramco_ccc.json 8.6 mandates post-incident review and improvements to prevent recurrence — verbatim the intent of 5.27 learning from information security incidents."
+  }
+ ]
+}

@@ -1,0 +1,1310 @@
+{
+ "generated": "2026-09-08T05:33:28+00:00",
+ "counts": {
+  "mapped": 3703,
+  "other_party": 98,
+  "out_of_scope": 80,
+  "pending": 11
+ },
+ "total": 3892,
+ "frameworks": {
+  "adhics": {
+   "total": 162,
+   "counts": {
+    "mapped": 162,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "aramco_ccc": {
+   "total": 35,
+   "counts": {
+    "mapped": 35,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "cis_controls": {
+   "total": 153,
+   "counts": {
+    "mapped": 153,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "cobit": {
+   "total": 40,
+   "counts": {
+    "mapped": 40,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "csa_ccm_v4": {
+   "total": 197,
+   "counts": {
+    "mapped": 197,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "doh_adhie_policy": {
+   "total": 195,
+   "counts": {
+    "mapped": 101,
+    "other_party": 83,
+    "out_of_scope": 11,
+    "pending": 0
+   },
+   "requirements": {
+    "4.1.1.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds DOH as the sector regulator to author and oversee ADHIE policy instruments, not the assessed organisation, so no SCF control applies."
+    },
+    "4.1.1.2": {
+     "disposition": "other_party",
+     "rule": "regulatory-function",
+     "reason": "Obligation is DOH's regulatory enforcement of the policy over participants; the assessed entity being regulated is not the actor here."
+    },
+    "4.1.1.3": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds DOH to perform its role under its own agreement with the ADHIE Operator, an obligation of the regulator and the exchange operator rather than the assessed organisation."
+    },
+    "4.1.2.4.2": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Facility-bound, but the obligation is programme readiness against a dated launch schedule ('medical record systems are ready for integration ... as per the ADHIE Launch Schedule'). No SCF control's mechanism discharges 'be technically ready by date X'. NET-05 (ISAs) was considered and rejected as failure mode 3 - its mechanism authorises and documents an interconnection, it does not deliver integration readiness."
+    },
+    "4.1.3.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds the ADHIE exchange operator to support DOH policy development, not the assessed organisation."
+    },
+    "4.1.3.2": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Building and running the exchange's own IT infrastructure is an obligation of the ADHIE operator, not of a participating organisation."
+    },
+    "4.1.3.3": {
+     "disposition": "other_party",
+     "rule": "not-the-bound-party",
+     "reason": "The privacy and security protocols required here are the exchange operator's own; the assessed organisation is not the bound party."
+    },
+    "4.1.3.4": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "ADHICS conformity of ADHIE platform systems is the exchange operator's obligation, distinct from the participant-facing duty at 4.1.2.4.7."
+    },
+    "4.2.1.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds DOH as regulator to develop patient-participation policy instruments."
+    },
+    "4.2.1.2": {
+     "disposition": "other_party",
+     "rule": "regulatory-function",
+     "reason": "DOH is exercising regulatory authority to mandate and authorise data sharing; the clause creates the legal basis rather than imposing a control on the assessed organisation."
+    },
+    "4.2.1.3": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds DOH to enforce Applicable Law and Article 23 against facilities, an enforcement duty of the regulator."
+    },
+    "4.2.3.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds the ADHIE exchange operator to maintain its own physical, administrative and technical safeguards."
+    },
+    "4.3.2.2": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Defining user categories and access levels in the Participation Criteria is an obligation of the ADHIE exchange operator, not of a participating organisation."
+    },
+    "4.3.2.3": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Determining which Sensitive Health Information types are transacted across the exchange is the operator's rule-setting duty."
+    },
+    "4.3.2.4": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Defining what each Authorized User category may access is the exchange operator's rule-setting duty, discharged in the Participation Criteria it publishes."
+    },
+    "4.3.2.5": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Defining the permitted access purposes for each access level binds the ADHIE operator as author of the Participation Criteria."
+    },
+    "4.3.2.6": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the ADHIE Operator to build RBAC categories and access purposes into the platform. The Healthcare Facility performs no act in this clause. (Were the operator the assessed entity this would map to IAC-08 plus DCH-01.4; it is not.)"
+    },
+    "4.3.3.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds DOH as regulator to issue guidance, and is conditional ('if and when required'). Issuing sector guidance is a sovereign regulatory act no assessed organisation can implement as a control."
+    },
+    "4.3.7.1": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Standing up the exchange's automated user management system is an obligation of the ADHIE operator."
+    },
+    "4.3.7.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: the duty is to *deliver* training and binds the ADHIE Operator. Mapping this to the facility's own awareness/role-based training programme (SAT-02/SAT-03) would be failure mode 4 - the assessed organisation is the recipient here, not the obligated party."
+    },
+    "4.3.9.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator. Also an umbrella statement of intent ('industry standard measures to promote a safe and secure Health Information Exchange') with no identifiable mechanism - mapping it to a catch-all such as GOV-01 or OPS-01 would be failure mode 2."
+    },
+    "4.3.9.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to stand up and run the ADHIE Patient Portal. The data-subject access right (PRI-06) sits with the platform operator, not the participating facility, in this clause."
+    },
+    "4.3.11.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Establishing the exchange's automated user management system binds the ADHIE operator, not a participating organisation."
+    },
+    "4.3.11.2": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Enforcing the established-medical-relationship restriction inside the platform is the ADHIE operator's obligation as the party controlling the platform."
+    },
+    "4.3.11.3": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to protect data 'within the ADHIE Platform'. Additionally an unscoped catch-all ('appropriate controls for safeguarding') - no specific mechanism is stated, so any mapping would be an umbrella pick."
+    },
+    "4.3.11.4": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Regular review and audit of the ADHIE Platform binds the exchange operator over its own platform."
+    },
+    "4.3.12.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds DOH as public health authority, enumerating the permissible public-health purposes for which it may access Patient Data. This is a grant of authority to the regulator, not a control the assessed organisation implements."
+    },
+    "4.3.12.2": {
+     "disposition": "other_party",
+     "rule": "regulatory-function",
+     "reason": "Permitting uploads from Data Suppliers is an exercise of DOH's regulatory authority over the exchange, not a control on the assessed organisation."
+    },
+    "4.3.12.3": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds DOH to observe the data management and data quality responsibilities allocated to it in this policy."
+    },
+    "4.3.13.7": {
+     "disposition": "out_of_scope",
+     "rule": "not-an-obligation",
+     "reason": "Not an obligation at all - a scope carve-out stating that treatment disclosures and legally required disclosures are exempt from the preceding provision. There is nothing for any party to implement."
+    },
+    "4.3.14.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to disclose Patient Data to DOH for public health reporting. The participating facility neither makes nor authorises this disclosure."
+    },
+    "4.3.14.2": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Granting Organ Procurement Organizations access to the platform is an access-granting decision of the ADHIE exchange operator."
+    },
+    "4.3.14.3": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "The operator's own access to Patient Data for platform maintenance, testing and support binds the ADHIE operator, not the participating organisation."
+    },
+    "4.3.14.4": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Obligation binds the ADHIE operator to meet the data management and data quality responsibilities this policy allocates to it."
+    },
+    "4.3.15.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Allocation of liability to DOH for disclosures by DOH staff binds the regulator, not the assessed organisation; the parallel duty on facilities appears separately at 4.3.16.4."
+    },
+    "4.3.15.2": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "DOH auditing participants' compliance is the regulator's supervisory audit; being subject to that audit is not the assessed organisation auditing anything of its own."
+    },
+    "4.3.15.3": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Continuous improvement of the regulatory and compliance framework is DOH's rule-making function as regulator."
+    },
+    "4.3.17.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Binds the ADHIE Operator (the exchange operator) to notify participating facilities, not the assessed healthcare facility, so no control of ours discharges it."
+    },
+    "4.3.17.2": {
+     "disposition": "other_party",
+     "rule": "sits-with-other-party",
+     "reason": "Mitigation duty and the risk-analysis judgement sit with the ADHIE Operator; the assessed facility only acts if the operator directs it, so nothing binds us here."
+    },
+    "4.3.17.3": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "This clause obliges the ADHIE Operator to impose a 60-day patient-notification duty on facilities; the facility-side duty is already carried by 4.3.16.5, and this clause itself binds the exchange operator."
+    },
+    "4.3.17.4": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Requires the ADHIE Operator to author its own internal breach policies and root-cause processes; the obligation is on the exchange operator, not the assessed facility."
+    },
+    "4.3.17.5": {
+     "disposition": "out_of_scope",
+     "rule": "not-an-obligation",
+     "reason": "Allocates liability for staff disclosure to the ADHIE Operator; it is a liability statement about the exchange operator's workforce, not a control the assessed facility implements."
+    },
+    "4.3.17.6": {
+     "disposition": "other_party",
+     "rule": "attributed-to-other-party",
+     "reason": "The 5-business-day notification runs from the ADHIE Operator to the DOH regulator; neither party is the assessed facility."
+    },
+    "4.3.17.7": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Root-cause investigation and preventive planning are imposed on the ADHIE Operator; the facility's equivalent duties arise elsewhere in the policy."
+    },
+    "4.3.18.1": {
+     "disposition": "out_of_scope",
+     "rule": "definitional",
+     "reason": "Definitional carve-out from the meaning of Breach, determined by the ADHIE Operator; it creates no implementable obligation on the assessed facility."
+    },
+    "4.3.18.2": {
+     "disposition": "out_of_scope",
+     "rule": "definitional",
+     "reason": "Definitional carve-out determined by the ADHIE Operator; no control duty attaches to the assessed facility."
+    },
+    "4.3.18.3": {
+     "disposition": "out_of_scope",
+     "rule": "definitional",
+     "reason": "Definitional carve-out resting on the ADHIE Operator's good-faith determination; nothing for the assessed facility to implement or evidence."
+    },
+    "4.4.2.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Requires the ADHIE Operator to set interoperability standards, draft participant agreement clauses and monitor participants; every limb binds the exchange operator, not the assessed facility."
+    },
+    "4.4.2.2": {
+     "disposition": "other_party",
+     "rule": "attributed-to-other-party",
+     "reason": "Specifies content, messaging and transport standards the ADHIE Operator may establish for its platform; the standard-setting duty is the exchange operator's."
+    },
+    "4.4.4.2": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "A liability disclaimer, not a requirement: it allocates non-responsibility for data content and accuracy to the exchange operator. Nothing is obligated on any party, so no control can discharge it."
+    },
+    "5.1.1.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds DOH as regulator of the health system. Regulating a sector to address service gaps, malpractice or unfairness is a sovereign function, not an organisational control."
+    },
+    "5.1.1.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds DOH to hold sector-level governance measures. Mapping to a governance catch-all such as GOV-01 would be both failure mode 2 and failure mode 4."
+    },
+    "5.1.1.3": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds DOH to provide stewardship of the policy and to enact further regulatory measures through its regulatory powers. Exercisable only by the regulator."
+    },
+    "5.1.3.1": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Establishing governance arrangements with DOH and market representation to oversee the regulatory framework is an obligation on the ADHIE Operator as exchange operator."
+    },
+    "5.1.3.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator, defining its lawful basis and permitted purposes for processing PHI to build and run the ADHIE Platform. The participating facility is not the processor described."
+    },
+    "5.2.1.1": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: DOH enforcement power. Escalating and acting on determined non-compliance is a regulator's supervisory act; CPL-01.1 covers an organisation reviewing its *own* non-compliance, a different mechanism and direction."
+    },
+    "5.2.1.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: describes how DOH will exercise its regulatory powers (proportionately, targeted). Binds the regulator only."
+    },
+    "5.2.1.3": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: DOH enforcement outcome - bringing a third party's non-compliance to an end. Not discharged by the assessed organisation."
+    },
+    "5.2.1.4": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: DOH enforcement outcome (preventing recurrence of a regulated party's failure). CPL-02.3 (corrective action) was rejected - it binds the organisation remediating its own non-conformity, not a regulator preventing another party's."
+    },
+    "5.2.1.5": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: DOH's investigative process for determining non-compliance. A regulatory investigation, not an organisational control."
+    },
+    "5.2.1.6": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: DOH escalation procedure. Every enumerated measure - advice, remedial action plan, referral to the Competent Committee, reprimand, suspension notice, licensure withdrawal, legal proceedings - is a regulatory sanction exercisable only by DOH."
+    },
+    "5.2.1.7": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: DOH licensing sanction. Suspension or withdrawal of a facility's licence is an act of the regulator; the facility is the object of the sanction, not the obligated party."
+    },
+    "5.2.1.8": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: DOH administers fines and penalties pursuant to Applicable Laws. A statutory enforcement power."
+    },
+    "5.2.1.9": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: DOH administers financial incentives and reimbursement-rate amendments. A payer/regulator function with no organisational control equivalent."
+    },
+    "5.2.2.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Confers a suspension and termination right on the ADHIE Operator against its participants; it binds the exchange operator, and the assessed facility is the object of the right, not its holder."
+    },
+    "5.3.1.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Binds the DOH regulator (or its appointed vendor) to conduct periodic audits; the assessed facility is the auditee, and being audited is not the facility auditing anyone."
+    },
+    "5.3.3.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to monitor ADHIE performance via KPIs developed under the public-private partnership. GOV-05.1 (KPIs) covers an organisation measuring its own security programme - different subject and different obligated party."
+    },
+    "5.3.3.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to remedy its own underperforming KPIs as defined by the Government Oversight and Policy Task Force. Not a participant control."
+    },
+    "5.3.3.3": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Preparation of periodic performance reports for facilities is an ADHIE Operator duty; the assessed facility is the recipient, covered separately at 5.3.2.2."
+    },
+    "5.3.3.4": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Breach reporting from the ADHIE Operator to the DOH regulator binds the exchange operator, not the assessed facility."
+    },
+    "6.1.1.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds DOH to notify the ADHIE Operator when a user's access should be terminated. The assessed facility is neither notifier nor actor here. Mapping to IAC-07.2/IAC-20.6 would attribute a regulator's notification duty to the organisation."
+    },
+    "6.1.1.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Binds the DOH regulator to notify the ADHIE within five business days; neither the obligor nor the recipient is the assessed organisation."
+    },
+    "6.1.2.4": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Facility-bound but purely a programme milestone - adhere to the ADHIE Launch Schedule. No SCF mechanism discharges compliance with an onboarding date; treating it as change or project management would be keyword matching."
+    },
+    "6.1.2.5.1": {
+     "disposition": "out_of_scope",
+     "rule": "no-discharging-mechanism",
+     "reason": "Facility-bound, but the duty is operational participation - submit required Patient Data to the exchange on time per the Participation Criteria. DCH-22 and PRI-10 were considered and rejected as failure mode 3: their mechanisms check data for quality/ROTT within the organisation's own lifecycle, they do not discharge a submission obligation to an external exchange."
+    },
+    "6.1.2.5.2": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Facility-bound, but again an operational participation duty - receive incoming Data and integrate it into Participant Systems in a timely manner. SCF has no mechanism for data-exchange participation SLAs; DCH-14 protects sharing decisions rather than compelling ingest and integration."
+    },
+    "6.1.2.24": {
+     "disposition": "out_of_scope",
+     "rule": "no-discharging-mechanism",
+     "reason": "Facility-bound but contractual, not technical: a prohibition on unilaterally suspending or terminating participation, data transaction or interface without the operator's prior written consent. TPM-05.7 (break clauses) is the inverse direction - the assessed org imposing exit terms on its providers - so no mechanism discharges this."
+    },
+    "6.1.2.25": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Notifying the ADHIE Operator of any development materially impairing the facility's ability to meet its obligations has no SCF counterpart; CHG-05 is scoped to stakeholder awareness of proposed changes and TPM-05.1 runs in the opposite direction, compelling providers to notify us."
+    },
+    "6.1.3.1": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to issue, manage and update the Launch Schedule. Programme administration by the operator."
+    },
+    "6.1.3.2": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to develop and disseminate the readiness assessment tool. The facility only completes it; building the assessment instrument is the operator's duty."
+    },
+    "6.1.3.3": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Setting mandatory participation criteria and technical standards for facilities to meet is an ADHIE Operator duty; the assessed facility is the party held to those criteria, not the party setting them."
+    },
+    "6.1.3.4": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to notify health sector members of the participation requirement with reasonable advance notice. A communications duty of the operator."
+    },
+    "6.1.3.6": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Establishing and entering into participant agreements in an operator-determined format binds the ADHIE Operator; the facility's counterpart duty to contract is already at 6.1.2.2."
+    },
+    "6.1.3.8": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "Removing or disabling accounts inactive for sixty days is an obligation on the ADHIE Operator over platform accounts it administers, not on the assessed facility."
+    },
+    "6.1.3.9": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Ensuring platform access is by unique username and password binds the ADHIE Operator; the facility's mirror duty is at 6.1.2.16."
+    },
+    "6.1.3.10": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Server hardening of platform servers holding patient and user information is an ADHIE Operator obligation over infrastructure the assessed facility does not operate."
+    },
+    "6.1.3.11": {
+     "disposition": "other_party",
+     "rule": "attributed-to-other-party",
+     "reason": "The operating procedures covering hardening, malware protection, patching, capacity, audit logging and backup are imposed on the ADHIE Operator for the platform it runs."
+    },
+    "6.1.3.12": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Logging all clinical data transactions involving the platform is an ADHIE Operator duty over platform-side logging."
+    },
+    "6.1.3.13": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Making platform log files immutable and excluding full clinical records from them binds the ADHIE Operator as the platform's log custodian."
+    },
+    "6.1.3.14": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Segregating patient health data onto a firewalled logical network within the platform is an ADHIE Operator architecture obligation."
+    },
+    "6.1.3.15": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Regular review and audit of the platform with the listed minimum audit functions binds the ADHIE Operator as the platform's operator and auditor."
+    },
+    "6.1.3.16": {
+     "disposition": "other_party",
+     "rule": "duty-of-other-party",
+     "reason": "Granting a disaster relief agency scoped emergency access to the platform is an ADHIE Operator provisioning duty over platform accounts."
+    },
+    "6.1.3.17": {
+     "disposition": "other_party",
+     "rule": "attributed-to-other-party",
+     "reason": "Establishing procedures for auditing additional platform functions is discretionary on the ADHIE Operator, not on the assessed facility."
+    },
+    "6.1.3.18": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: binds the exchange operator to establish the system interoperability standards (HL7 v2.x/3.0, NCPDP SCRIPT, SNOMED clinical terminology, XML 1.0). Standard-setting for the exchange is the operator's role; nothing here obligates a participant. Also note SCF has no healthcare-messaging or clinical-terminology control - CLD-04 (API security) and CLD-08 (standardized virtualization formats) surface on the word 'interoperability' but their mechanisms are unrelated, which would be failure mode 5."
+    },
+    "6.1.4.6": {
+     "disposition": "other_party",
+     "rule": "not-the-bound-party",
+     "reason": "Reserves an audit right to the ADHIE Operator and the DOH regulator; the assessed facility is the auditee and being subject to an external audit is not a control it performs."
+    }
+   }
+  },
+  "dora": {
+   "total": 54,
+   "counts": {
+    "mapped": 52,
+    "other_party": 2,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {
+    "Article 33(1)": {
+     "disposition": "other_party",
+     "rule": "sits-with-other-party",
+     "reason": "No SCF control applies because the assessment duty sits with the Lead Overseer, not the financial entity being assessed."
+    },
+    "Article 35(1)": {
+     "disposition": "other_party",
+     "rule": "not-the-bound-party",
+     "reason": "No SCF control applies because these are supervisory investigation powers exercised by the Lead Overseer."
+    }
+   }
+  },
+  "gdpr": {
+   "total": 41,
+   "counts": {
+    "mapped": 38,
+    "other_party": 3,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {
+    "Article 77": {
+     "disposition": "other_party",
+     "rule": "not-the-bound-party",
+     "reason": "No SCF control applies because the right is exercised by the data subject against a supervisory authority, not against the assessed organisation."
+    },
+    "Article 82": {
+     "disposition": "other_party",
+     "rule": "sovereign-act",
+     "reason": "No SCF control applies because this is a civil liability and compensation regime enforced through the courts."
+    },
+    "Article 83": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "No SCF control applies because the obligation to impose effective, proportionate and dissuasive fines binds each supervisory authority."
+    }
+   }
+  },
+  "hipaa": {
+   "total": 67,
+   "counts": {
+    "mapped": 67,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "hitrust_csf": {
+   "total": 156,
+   "counts": {
+    "mapped": 156,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "iso_22301": {
+   "total": 40,
+   "counts": {
+    "mapped": 40,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "iso_27001": {
+   "total": 93,
+   "counts": {
+    "mapped": 93,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "iso_42001": {
+   "total": 70,
+   "counts": {
+    "mapped": 70,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "iso_45001": {
+   "total": 36,
+   "counts": {
+    "mapped": 0,
+    "other_party": 0,
+    "out_of_scope": 36,
+    "pending": 0
+   },
+   "requirements": {
+    "4.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "4.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "4.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "4.4": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "5.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "5.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "5.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "5.4": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "6.1.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "6.1.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "6.1.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "6.1.4": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "6.2.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "6.2.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.4.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.4.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.4.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.5.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.5.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "7.5.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "8.1.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "8.1.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "8.1.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "8.1.4": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "8.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "9.1.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "9.1.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "9.2.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "9.2.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "9.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "10.1": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "10.2": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    },
+    "10.3": {
+     "disposition": "out_of_scope",
+     "rule": "registry-blanket",
+     "reason": "ISO 45001 is an occupational health and safety management standard. It is outside the security/privacy control catalogue by design - SCF carries no crosswalk for it and no SCF control implements an OH&S obligation. Every requirement is dispositioned out_of_scope rather than left as a gap; covering it would need a separate, platform-authored OH&S control set."
+    }
+   }
+  },
+  "ksa_pdp_transfer": {
+   "total": 21,
+   "counts": {
+    "mapped": 17,
+    "other_party": 3,
+    "out_of_scope": 1,
+    "pending": 0
+   },
+   "requirements": {
+    "3.2": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: the actor throughout is the competent authority, which may amend the adequacy list and may engage foreign authorities about a country's removal. No duty attaches to a controller or processor, so no SCF control applies."
+    },
+    "3.3": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: a supervisory power reserved to the competent authority to suspend transfers to a listed country or organisation. The clause imposes nothing on the assessed organisation - any downstream duty to halt a transfer would arise from the suspension decision, not from this text."
+    },
+    "8.1": {
+     "disposition": "other_party",
+     "rule": "direction-of-obligation",
+     "reason": "Direction of obligation: the competent authority shall issue guides and guidelines. A rule-making duty on the regulator, with no organisational control behind it."
+    },
+    "9.1": {
+     "disposition": "out_of_scope",
+     "rule": "not-an-obligation",
+     "reason": "Commencement provision - the Regulation enters into force on publication. Legal boilerplate, not a control requirement of any actor."
+    }
+   }
+  },
+  "mas_trm": {
+   "total": 236,
+   "counts": {
+    "mapped": 236,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "ndmo": {
+   "total": 202,
+   "counts": {
+    "mapped": 188,
+    "other_party": 1,
+    "out_of_scope": 13,
+    "pending": 0
+   },
+   "requirements": {
+    "DCM.1.2": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "A paper-to-electronic migration roadmap, an initiative to stop creating paper documents, and budget/resourcing for those initiatives are business-transformation deliverables. SCF has no digitization or records-conversion control. PRM-03 (allocation of resources) and PRM-01.1 (strategic plan) were considered and rejected: their mechanism is resourcing/planning of the security, compliance and resilience program, not a paperless-office programme, so citing them would be right-word wrong-mechanism. DCH media controls govern protection of media, not conversion of format."
+    },
+    "RMD.1.1": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Requires a Reference and Master Data Management capability roadmap with milestones plus assigned resources and budget. GOV-10 (data governance) was the closest candidate but its mechanism is oversight of data policies/standards/procedures for sensitive/regulated data - it does not require an MDM implementation roadmap or budget, so using it would be an umbrella catch-all rather than a discharge. PRM-01.1/PRM-02 are scoped to the security programme's own plan and budget. SCF has no reference/master data management capability."
+    },
+    "RMD.2.3": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Selection of a master data hub implementation pattern (Registry / Repository / Coexistence) is a data-architecture design decision driven by RMD requirements. SEA-02 (alignment with enterprise architecture) was considered and rejected: its mechanism is developing an enterprise architecture that addresses security, compliance and resilience risk, not choosing a master-data hub topology. No SCF control governs master data architecture patterns."
+    },
+    "RMD.4.3": {
+     "disposition": "out_of_scope",
+     "rule": "no-discharging-mechanism",
+     "reason": "Instantiating the physical technical components of a Reference and Master Data Hub is a data-platform build activity. SCF's nearest structures - AST-02.3 (authoritative source/repository for approved system components) and GOV-10.1 (data catalog) - address asset-inventory de-duplication and cataloguing data holdings respectively; neither requires standing up a master data hub, so mapping either would be right domain, wrong mechanism."
+    },
+    "RMD.4.4": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Composite obligation: establish the master data model in the hub, load reference/master data objects, activate source-to-hub replication, activate hub-to-consumer synchronization, and designate the hub as the entity's Trusted Source for new systems. AST-02.3 speaks of an authoritative source and trusted source but only for approved/implemented system components in asset inventories, and GOV-10.1 only catalogues data holdings - neither operationalizes a master data hub or its replication/synchronization. No SCF control discharges this."
+    },
+    "BIA.1.2": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Ideation workshops to generate a long list of BI and analytics use cases, and shortlisting them against predefined prioritization criteria, is business value-planning. SCF's use-case language (AAT-19, TDA-21) concerns conformity of AI/products against defined use cases, not identification and prioritization of analytics opportunities. No SCF control covers this."
+    },
+    "DVR.1.1": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Identifying and documenting data revenue generation and cost saving use cases is data monetization strategy. SCF contains no data-monetization or data-product commercialization controls (PRI-17.2, the only financial-incentive control, is a privacy notice obligation about incentives offered to data subjects - a different mechanism and a different beneficiary)."
+    },
+    "DVR.1.2": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Payback period and ROI estimation per use case, plus a Data Value Realization plan with roadmap, milestones, resources and budget. This is investment appraisal and programme planning for commercial data initiatives. PRM-02 (capital planning for the security programme) and PRM-01.1 have the wrong subject matter; no SCF control requires ROI modelling of data products."
+    },
+    "DVR.2.1": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Selecting and documenting a pricing scheme model for revenue-generating data or data products under the Data Revenue Framework Regulation. SCF is a security, privacy and resilience control catalog and contains no pricing controls."
+    },
+    "DVR.2.2": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Calculating total cost of a data product (data collection cost, data development cost) is cost accounting. No SCF control has a costing mechanism; mapping to any data-handling control would be keyword matching on 'data'."
+    },
+    "DVR.2.3": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Defining the commercial charging model (subscription, consumption-based, freemium/premium, one-time fee) for a data product. Purely commercial; SCF has no equivalent mechanism."
+    },
+    "DVR.2.4": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "An administrative filing to the National Data Management Office containing product description, pricing documentation, charging model, unit price and pricing-scheme deviation justification. The obligation binds the entity, but it is an approval submission to the regulator with no security or data-protection mechanism behind it. GOV-06 (contacts with authorities) is about maintaining authority contacts for incident and compliance purposes, not commercial pricing approvals, so it would be right domain, wrong mechanism."
+    },
+    "OD.3.5": {
+     "disposition": "out_of_scope",
+     "rule": "no-discharging-mechanism",
+     "reason": "Requires published open datasets to be in standardized machine-readable formats (CSV/JSON/XML/RDF) and accompanied by usage documentation. DCH-15 (publicly accessible content) and WEB-14 (public content review) govern what may be exposed publicly and screening it for sensitive data - they say nothing about publication format or interoperability, so they do not discharge the obligation. PRI-06.6 (data portability) does require a structured machine-readable export but its mechanism serves an individual data subject transferring their own personal data to another controller, not open-data publication."
+    },
+    "FOI.3.5": {
+     "disposition": "out_of_scope",
+     "rule": "no-discharging-mechanism",
+     "reason": "Calculating and documenting a processing fee for each granted public information access request under the NDMO Data Value Realization Regulation. SCF's access-request controls (PRI-06 data subject empowerment, PRI-07.5 justification to reject requests, PRI-17.3 records of requests) cover fulfilment, refusal and recordkeeping for personal data rights - none contains a fee determination mechanism, and the requester here is any member of the public, not a data subject."
+    }
+   }
+  },
+  "nis2": {
+   "total": 30,
+   "counts": {
+    "mapped": 25,
+    "other_party": 5,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {
+    "Article 7(1)": {
+     "disposition": "other_party",
+     "rule": "obligation-of-other-party",
+     "reason": "No SCF control applies because the obligation runs to the Member State, not the assessed entity."
+    },
+    "Article 22(1)": {
+     "disposition": "other_party",
+     "rule": "not-the-bound-party",
+     "reason": "No SCF control applies because the assessment is performed by EU bodies, not by the assessed entity."
+    },
+    "Article 31(1)": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "No SCF control applies because the obligation binds the supervisory authority, not the assessed entity."
+    },
+    "Article 32(1)": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "No SCF control applies because the obligation binds the supervisory authority, not the assessed entity."
+    },
+    "Article 34(1)": {
+     "disposition": "other_party",
+     "rule": "not-the-bound-party",
+     "reason": "No SCF control applies because this is a penalty regime imposed on the entity by Member States, not an action the entity performs."
+    }
+   }
+  },
+  "nist_800_171": {
+   "total": 110,
+   "counts": {
+    "mapped": 110,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "nist_800_53": {
+   "total": 148,
+   "counts": {
+    "mapped": 148,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "nist_airmf": {
+   "total": 72,
+   "counts": {
+    "mapped": 72,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "nist_csf": {
+   "total": 106,
+   "counts": {
+    "mapped": 106,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "pci_dss": {
+   "total": 205,
+   "counts": {
+    "mapped": 205,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "pisf_2026": {
+   "total": 185,
+   "counts": {
+    "mapped": 184,
+    "other_party": 1,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {
+    "1.6": {
+     "disposition": "other_party",
+     "rule": "binds-named-party",
+     "reason": "Direction of obligation: the clause binds nCERT/NTISB, sectoral CERTs and the Regulator to perform oversight audits on the entity; submitting to an external oversight audit is not an obligation SCF places on the assessed organisation."
+    }
+   }
+  },
+  "qcb_technology_risks": {
+   "total": 516,
+   "counts": {
+    "mapped": 511,
+    "other_party": 0,
+    "out_of_scope": 5,
+    "pending": 0
+   },
+   "requirements": {
+    "8.2.13": {
+     "disposition": "out_of_scope",
+     "rule": "scoped-to-workforce",
+     "reason": "Obligation is to educate the bank's retail customers via notifications and press releases. Every SCF awareness control is scoped to the workforce - SAT-02 to employees and contractors, SAT-03.x to internal roles, SAT-03.4 to vendors. Mapping to SAT-02 would be right domain, wrong audience and wrong mechanism. PRI-01.3 concerns publishing privacy-programme contact information, not security awareness campaigns."
+    },
+    "10.7.1": {
+     "disposition": "out_of_scope",
+     "rule": "no-discharging-mechanism",
+     "reason": "Continuous fraud-risk education aimed at customers for their own protection. SCF's fraud-adjacent control (DCH-25.1) is a detection mechanism over anomalous transaction activity, not customer communication, and the SAT family is workforce-scoped. Forcing either would be a mechanism mismatch."
+    },
+    "10.9.1": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Two limbs, both outside SCF's mechanism set: board/senior-management sponsorship of a consumer-education programme and resourcing of it. GOV-01.1 and GOV-04.1 concern executive oversight and accountability for the internal security programme, so using them here would be an umbrella substitution for a specific external-education obligation."
+    },
+    "10.11.4": {
+     "disposition": "out_of_scope",
+     "rule": "scoped-to-workforce",
+     "reason": "The obligation is to educate retail customers on protecting their own personally-owned mobile devices from malware; the catalog's awareness and training mechanisms bind employees and contractors, and its mobile controls bind organization-managed devices, so no control discharges this."
+    },
+    "10.13.2": {
+     "disposition": "out_of_scope",
+     "rule": "no-discharging-mechanism",
+     "reason": "The obligation is regular awareness messaging to customers about ATM tampering indicators. AST-07 (protecting point-of-interaction devices from tampering and substitution) and AST-08 (periodic inspection for indicators of compromise) address the same threat but discharge it through the bank inspecting and hardening its own ATMs - a different mechanism from telling customers what to look for, so mapping them would be right domain, wrong mechanism."
+    }
+   }
+  },
+  "sabic_cybertrust": {
+   "total": 35,
+   "counts": {
+    "mapped": 35,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "sama_csf": {
+   "total": 71,
+   "counts": {
+    "mapped": 60,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 11
+   },
+   "requirements": {
+    "3.3.12.1": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.12.2": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.1": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.2": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.3": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.4": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.5": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.6": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.7": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.8": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    },
+    "3.3.13.9": {
+     "disposition": "pending",
+     "rule": "no-rationale",
+     "reason": ""
+    }
+   }
+  },
+  "sbp_cloud": {
+   "total": 58,
+   "counts": {
+    "mapped": 58,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "sbp_etgrmf": {
+   "total": 262,
+   "counts": {
+    "mapped": 255,
+    "other_party": 0,
+    "out_of_scope": 7,
+    "pending": 0
+   },
+   "requirements": {
+    "1.3.a": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Board approval of a business Digital Strategy whose objective is developing customer-facing digital products/services is a commercial strategy obligation, not a security, resilience or data-protection mechanism. The nearest-sounding SCF control, PRM-01.1, establishes a strategic plan and objectives for the security/compliance/resilience program specifically - mapping to it would be right-domain/wrong-mechanism, and GOV-01 / GOV-01.1 would be umbrella catch-alls. No SCF control discharges this obligation."
+    },
+    "1.3.b": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "End-to-end digitization of delivery processes is a business transformation objective set by the board. SCF process controls (e.g. PRM-06 business process definition) govern how security/resilience considerations are built into processes, not whether processes are digitized. No SCF mechanism binds an organization to digitize its delivery processes, so an empty mapping is the correct answer rather than forcing a governance catch-all."
+    },
+    "1.3.c": {
+     "disposition": "out_of_scope",
+     "rule": "different-discipline",
+     "reason": "Interoperability of customer delivery channels is a business/architecture objective. SCF's interoperability controls address different mechanisms entirely - CLD-04 is API security, CLD-08 is standardized virtualization formats with cloud providers, QTS-08 is post-quantum crypto interoperability testing - none of which discharge a board-level strategic objective on channel interoperability. Mapping to any of them would be keyword matching."
+    },
+    "4.2.2.e": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "This is a permissive discretion ('may obtain'), allowing the FI to engage external advisors for RFP/BRD/procurement formulation provided reasons are recorded. SCF has no control obliging or governing the engagement of external procurement advisors; the expertise controls that exist bind a different activity (CPL-01.6 qualifications of audit/assessment teams, AAT-16.5 domain-expert review of AI systems). Forcing either would be right-domain/wrong-mechanism, so an empty mapping is correct."
+    },
+    "4.2.2.g": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "The obligation is procurement integrity - competitive, transparent tendering for major acquisitions and documented justification for any direct (single-source) contracting. SCF governs the security and supply-chain risk dimensions of acquisition (TDA-01 procurement methods, TDA-03.1 supplier diversity for supply-chain risk, TPM-04.1 pre-acquisition risk assessment) but no SCF control's mechanism tests fairness or competitiveness of a tender, and GOV-02.1 exception management covers deviations from security standards, not sole-source procurement justification. Mapping any of these would raise coverage without discharging the obligation."
+    },
+    "4.2.7.b": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Benefit-realisation review - comparing planned versus actual project cost, benefits and completion time - is IT investment governance, not a security/resilience control. SCF's project controls bind a different mechanism: PRM-04 assesses whether security controls in a project are implemented and operating correctly, PRM-03 allocates resources, and the only cost/benefit comparison controls in the catalog (AAT-04, AAT-04.4) are scoped to AI and autonomous technologies. No SCF control requires post-implementation performance measurement of a technology project against its business case."
+    },
+    "4.2.7.c": {
+     "disposition": "out_of_scope",
+     "rule": "different-discipline",
+     "reason": "Recording, in a post-implementation evaluation report, the reasons why planned project objectives were not achieved is a project-governance record-keeping duty. SCF's lessons-learned mechanisms are event-triggered and scoped elsewhere - BCD-05 after contingency plan activation, IRO-13 after incidents - and IAO-05 tracks control deficiencies via POA&M, not unmet business objectives. There is no SCF post-implementation project review control, so the correct answer is empty."
+    }
+   }
+  },
+  "sbp_internet_banking": {
+   "total": 66,
+   "counts": {
+    "mapped": 61,
+    "other_party": 0,
+    "out_of_scope": 5,
+    "pending": 0
+   },
+   "requirements": {
+    "3": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "SCF's awareness controls are scoped to employees and contractors; no control obliges the organisation to run a threat-and-safeguard awareness programme for its retail customers, so no control defensibly discharges this."
+    },
+    "3(a)": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Explaining the respective liabilities of bank and customer is a consumer-contract disclosure obligation with no SCF equivalent; workforce roles-and-responsibilities controls address personnel, not customers."
+    },
+    "3(b)": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Disclosing terms and conditions of transfers to customers under the Payment Systems Act is a consumer-protection disclosure; SCF has no customer terms-disclosure control and the general statutory-compliance control does not discharge it."
+    },
+    "3(f)": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Annual issuance of risk-mitigation guidelines to customers has no SCF counterpart; workforce awareness-training cadence controls bind employees, not the customer base."
+    },
+    "3(g)": {
+     "disposition": "out_of_scope",
+     "rule": "no-scf-mechanism",
+     "reason": "Management review of a customer awareness programme has no SCF control; the programme-review controls review the organisation's own security programme and workforce training, a different artefact."
+    }
+   }
+  },
+  "sl_csf": {
+   "total": 79,
+   "counts": {
+    "mapped": 79,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "soc2": {
+   "total": 65,
+   "counts": {
+    "mapped": 65,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  },
+  "sox": {
+   "total": 54,
+   "counts": {
+    "mapped": 52,
+    "other_party": 0,
+    "out_of_scope": 2,
+    "pending": 0
+   },
+   "requirements": {
+    "PD-05": {
+     "disposition": "out_of_scope",
+     "rule": "different-discipline",
+     "reason": "Direction and mechanism check both fail. Data conversion/migration reconciliation is a financial data-integrity control: pre- and post-migration reconciliation of balances, transaction counts and record completeness. SCF's nearest neighbours discharge a different mechanism - TDA-08.1 purges test data during migration to production, DCH-22 checks for redundant/obsolete/toxic/trivial data. Neither validates that converted financial data is complete and accurate, so forcing either would be a right-domain/wrong-mechanism mapping."
+    },
+    "FCC-03": {
+     "disposition": "out_of_scope",
+     "rule": "different-discipline",
+     "reason": "Information Produced by the Entity validation is an audit-evidence reliability control specific to financial reporting assurance: verifying report parameters and selection criteria, reconciling totals to independent sources, and validating population completeness through record counts or hash totals. SCF's nearest neighbours discharge different mechanisms - CPL-13/CPL-13.1 produce evidence of the organization's own due diligence for compliance assessments, MON-06 generates event log reports for detecting anomalous activity, DCH-22 checks for redundant/obsolete data. Mapping any of these would be right-domain, wrong-mechanism."
+    }
+   }
+  },
+  "swift_cscf": {
+   "total": 32,
+   "counts": {
+    "mapped": 32,
+    "other_party": 0,
+    "out_of_scope": 0,
+    "pending": 0
+   },
+   "requirements": {}
+  }
+ }
+}

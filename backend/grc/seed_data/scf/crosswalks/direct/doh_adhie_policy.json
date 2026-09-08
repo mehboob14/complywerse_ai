@@ -1,0 +1,1411 @@
+{
+ "framework": "doh_adhie_policy",
+ "hop": "direct",
+ "mappings": [
+  {
+   "code": "4.1.1.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds DOH as the sector regulator to author and oversee ADHIE policy instruments, not the assessed organisation, so no SCF control applies.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation is DOH's regulatory enforcement of the policy over participants; the assessed entity being regulated is not the actor here.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.1.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds DOH to perform its role under its own agreement with the ADHIE Operator, an obligation of the regulator and the exchange operator rather than the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.2.1",
+   "scf_ids": [
+    "TPM-05"
+   ],
+   "confidence": "medium",
+   "rationale": "The facility must execute the ADHIE Operator's Participant Agreement, which is discharged by the mechanism governing contractual requirements agreed with an external service provider, though here the facility signs the operator's standard form rather than setting terms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.2.3",
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Complying with Platform Access Requirements and Participation Criteria as a precondition of access is discharged by identifying and implementing the applicable contractual/regulatory obligations and being able to demonstrate conformity with them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.2.4.4",
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.2"
+   ],
+   "confidence": "medium",
+   "rationale": "A blanket duty to comply with all DOH/ADHIE processes, protocols and requirements for exchange technology, privacy, security and use maps to identifying the applicable obligations and validating the scope of controls selected to meet them; no single control discharges every named subject area.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.2.4.6",
+   "scf_ids": [
+    "PRI-04.1",
+    "DCH-14"
+   ],
+   "confidence": "medium",
+   "rationale": "Sharing VIP Patient Data only as directed by DOH and the Participation Criteria requires documented legal authority for the sharing and a governed decision process for releasing the data; the VIP-specific handling sensitivity is not separately discharged.",
+   "uncovered_clause": "the heightened handling treatment specific to VIP Patient Data"
+  },
+  {
+   "code": "4.1.2.4.7",
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.2",
+    "CPL-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Ensuring every system and process handling ADHIE data conforms to ADHICS requires identifying that standard as an applicable obligation, scoping the in-scope assets, and validating those assets actually conform.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.3.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds the ADHIE exchange operator to support DOH policy development, not the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.3.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Building and running the exchange's own IT infrastructure is an obligation of the ADHIE operator, not of a participating organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.3.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The privacy and security protocols required here are the exchange operator's own; the assessed organisation is not the bound party.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.3.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "ADHICS conformity of ADHIE platform systems is the exchange operator's obligation, distinct from the participant-facing duty at 4.1.2.4.7.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2.1.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds DOH as regulator to develop patient-participation policy instruments.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "DOH is exercising regulatory authority to mandate and authorise data sharing; the clause creates the legal basis rather than imposing a control on the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2.1.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds DOH to enforce Applicable Law and Article 23 against facilities, an enforcement duty of the regulator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2.2.1",
+   "scf_ids": [
+    "CPL-01",
+    "PRI-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Complying with DOH's patient rights and responsibilities requirements is discharged partly by identifying and implementing those regulatory obligations and partly by the mechanism giving data subjects access to and control over their own records; the non-informational clinical patient-rights obligations are not covered.",
+   "uncovered_clause": "clinical (non-data) patient rights and responsibilities such as care, dignity and complaint rights"
+  },
+  {
+   "code": "4.2.2.2",
+   "scf_ids": [
+    "PRI-03",
+    "PRI-03.12",
+    "PRI-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Obtaining patient consent for ADHIE sharing via prescribed clauses in standard consent forms is discharged by the consent-capture mechanism, the opt-in consent mechanism for defined data actions, and the requirement that the stated purposes of processing be specified to the data subject.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2.2.3",
+   "scf_ids": [
+    "PRI-04.1",
+    "DCH-14.2"
+   ],
+   "confidence": "high",
+   "rationale": "Sharing Patient Data where consent is unavailable requires the organisation to document the legal authority permitting that sharing and to verify that the party effecting the transfer is authorised to do so.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2.2.4",
+   "scf_ids": [
+    "PRI-02",
+    "PRI-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Informing patients that ADHIE sharing forms part of their treatment is discharged by the privacy notice mechanism and by the requirement that the notice state the purposes for which the data is used.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2.3.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds the ADHIE exchange operator to maintain its own physical, administrative and technical safeguards.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.1.2",
+   "scf_ids": [
+    "HRS-06",
+    "HRS-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Holding a valid, enforceable written agreement with every Authorized User is discharged by the mechanism requiring internal and third-party users to sign access agreements, with confidentiality undertakings as the companion instrument.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.2.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining user categories and access levels in the Participation Criteria is an obligation of the ADHIE exchange operator, not of a participating organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.2.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Determining which Sensitive Health Information types are transacted across the exchange is the operator's rule-setting duty.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.2.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining what each Authorized User category may access is the exchange operator's rule-setting duty, discharged in the Participation Criteria it publishes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.2.5",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining the permitted access purposes for each access level binds the ADHIE operator as author of the Participation Criteria.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.4.1",
+   "scf_ids": [
+    "IAC-28",
+    "IAC-28.2"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring applicants for ADHIE access to present identifying materials before an account is issued is discharged by the identity-proofing mechanism and its requirement for documentary identity evidence at registration.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.6.1",
+   "scf_ids": [
+    "IAC-18",
+    "IAC-10.1"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring Authorized Users conform to the ADHIE password standard is discharged by compelling users to follow prescribed authenticator practices and by enforcing password complexity, length and lifespan criteria.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.6.2.1",
+   "scf_ids": [
+    "SAT-03",
+    "SAT-02"
+   ],
+   "confidence": "high",
+   "rationale": "Delivering on-site or web-based training so users know how to operate the platform and the policies governing its use is discharged by role-based training tied to the system being accessed, backed by the general awareness training programme.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.6.2.2",
+   "scf_ids": [
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring each Authorized User to complete training before access is granted matches the role-based training mechanism that is explicitly sequenced before access authorisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.6.2.3",
+   "scf_ids": [
+    "SAT-04",
+    "HRS-05.7",
+    "HRS-06"
+   ],
+   "confidence": "high",
+   "rationale": "A signed certification that training was received and that Participant Agreement terms will be observed is discharged by retaining individual training records, by the policy familiarisation and acknowledgement mechanism, and by the signed access agreement itself.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.6.2.4",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-04"
+   ],
+   "confidence": "high",
+   "rationale": "Annual refresher training as a condition of retaining Authorized User status, with records kept, is discharged by the recurring awareness training mechanism plus the retention and monitoring of individual training records.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.7.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Standing up the exchange's automated user management system is an obligation of the ADHIE operator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.4",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-20"
+   ],
+   "confidence": "high",
+   "rationale": "Documented procedures for granting secured access through a workstation, transaction, program or process are discharged by the formal registration and de-registration process assigning access rights and by enforcement of least-privilege logical access permissions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.6",
+   "scf_ids": [
+    "IAC-07.2",
+    "HRS-09"
+   ],
+   "confidence": "high",
+   "rationale": "Timely termination of ADHIE access when a workforce member leaves is discharged by the mechanism revoking access rights promptly on termination, coupled with the governed employment-termination process that triggers it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.7",
+   "scf_ids": [
+    "PES-01",
+    "PES-03",
+    "PES-03.4"
+   ],
+   "confidence": "high",
+   "rationale": "This is itself a programme-level duty to maintain physical and environmental security policy, so the physical protection programme control applies, with enforcement of physical access authorisations and restriction of access to critical systems and sensitive data-centre areas covering the two named sub-clauses.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.8",
+   "scf_ids": [
+    "IAC-20",
+    "HRS-05.1",
+    "PES-12"
+   ],
+   "confidence": "high",
+   "rationale": "The three sub-clauses are covered respectively by enforcing logical access permissions so only entitled users reach the platform from a workstation, by defined acceptable-use rules of behaviour for the technology, and by siting and physically protecting the equipment so only authorised users can reach it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.9",
+   "scf_ids": [
+    "CRY-03",
+    "CRY-04",
+    "NET-12"
+   ],
+   "confidence": "high",
+   "rationale": "Guarding electronic Patient Health Information in transit over a communications network is discharged by cryptographic protection of transmission confidentiality and integrity and by strong protocol requirements for traffic crossing open networks.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.10",
+   "scf_ids": [
+    "RSK-04",
+    "VPM-06",
+    "VPM-02"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing risk on individual network components and identifying vulnerabilities requiring action is a composite discharged by the recurring risk assessment mechanism, routine vulnerability scanning of the components, and the tracking of identified vulnerabilities through to remediation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.11",
+   "scf_ids": [
+    "NET-05",
+    "CRY-03",
+    "MON-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing and monitoring secure connections to the ADHIE before any exchange is discharged by formally authorising and documenting each system interconnection, encrypting the traffic it carries, and continuously monitoring inbound and outbound communications on it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.12",
+   "scf_ids": [
+    "SAT-01",
+    "GOV-02"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation is itself programme-level, to develop and maintain an awareness and training policy, so the workforce awareness programme control applies together with the mechanism for establishing, maintaining and disseminating that policy document.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.13",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "IRO-05",
+    "HRS-05.7"
+   ],
+   "confidence": "medium",
+   "rationale": "The four mandated syllabus topics are split across general awareness content for acceptable and improper use, role-based training on ADHIE access requirements, incident response training for breaches and breach notification procedures, and recurring policy familiarisation covering the sanction policy; no single control carries the whole syllabus.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.10.14",
+   "scf_ids": [
+    "SAT-03",
+    "SAT-03.3",
+    "SAT-04"
+   ],
+   "confidence": "high",
+   "rationale": "Pre-access privacy and security training for every Authorized User, with documentation, is discharged by role-based training sequenced before access authorisation, the specific requirement to train every user of systems handling regulated data, and the retention of training records.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.11.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing the exchange's automated user management system binds the ADHIE operator, not a participating organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.11.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enforcing the established-medical-relationship restriction inside the platform is the ADHIE operator's obligation as the party controlling the platform.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.11.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular review and audit of the ADHIE Platform binds the exchange operator over its own platform.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.12.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Permitting uploads from Data Suppliers is an exercise of DOH's regulatory authority over the exchange, not a control on the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.12.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds DOH to observe the data management and data quality responsibilities allocated to it in this policy.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.13.1",
+   "scf_ids": [
+    "PRI-04",
+    "PRI-05.4"
+   ],
+   "confidence": "high",
+   "rationale": "Using Patient Health Information received via the platform only for legally permitted purposes is discharged by restricting processing to the identified purpose and by the usage restrictions placed on personal data.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.13.2",
+   "scf_ids": [
+    "PRI-04",
+    "DCH-10.1",
+    "DCH-25",
+    "CLD-10"
+   ],
+   "confidence": "medium",
+   "rationale": "The permitted-use restriction to clinical treatment and operations is discharged by purpose limitation, restriction on use and distribution of regulated data, restriction on transfer of regulated data out of the country for the no-transfer-outside-UAE clause, and limits on storing regulated data with public cloud providers for the no-cloud clause.",
+   "uncovered_clause": "the prohibitions on sub-licensing and on using Patient Data to form a competing non-ADHIE health information exchange"
+  },
+  {
+   "code": "4.3.13.4",
+   "scf_ids": [
+    "PRI-01.6",
+    "DCH-01.2",
+    "GOV-02"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing controls to protect confidentiality, integrity and availability of Patient Data on the platform is a programme-level duty discharged by the logical and physical safeguarding of personal data, protection of regulated data wherever processed or stored, and the documented policies and procedures that carry those controls.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.13.6",
+   "scf_ids": [
+    "PRI-04",
+    "PRI-01.7",
+    "DCH-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Disclosing only the minimum necessary Patient Health Information is discharged by minimising what is shared to the identified purpose, limiting personal data disclosures to authorised recipients for that purpose, and restricting release of regulated data to authorised parties.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.13.8",
+   "scf_ids": [
+    "PRI-04",
+    "DCH-18.1"
+   ],
+   "confidence": "high",
+   "rationale": "Requesting only the minimum necessary Patient Health Information is discharged by purpose-limited minimisation of what is collected or received and by the mechanism minimising the regulated data taken in at all.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.13.9",
+   "scf_ids": [
+    "DCH-03.1",
+    "PRI-07"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring onward disclosure of ADHIE-accessed information is lawful and policy-compliant is discharged by restricting disclosure of regulated data to authorised parties and by limiting third-party disclosure of personal data to the purposes already identified.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.14.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Granting Organ Procurement Organizations access to the platform is an access-granting decision of the ADHIE exchange operator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.14.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The operator's own access to Patient Data for platform maintenance, testing and support binds the ADHIE operator, not the participating organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.14.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obligation binds the ADHIE operator to meet the data management and data quality responsibilities this policy allocates to it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.15.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Allocation of liability to DOH for disclosures by DOH staff binds the regulator, not the assessed organisation; the parallel duty on facilities appears separately at 4.3.16.4.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.15.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "DOH auditing participants' compliance is the regulator's supervisory audit; being subject to that audit is not the assessed organisation auditing anything of its own.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.15.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Continuous improvement of the regulatory and compliance framework is DOH's rule-making function as regulator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.16.2",
+   "scf_ids": [
+    "IRO-04.1",
+    "IRO-04",
+    "IRO-10",
+    "IRO-13"
+   ],
+   "confidence": "high",
+   "rationale": "Internal breach policies differentiated by breach type, with a notification process and root cause analysis, is a composite discharged by the breach-specific response mechanism, the maintained incident response plan, timely stakeholder notification, and formal root cause analysis with lessons learned.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.16.3",
+   "scf_ids": [
+    "IRO-05",
+    "IRO-12.2"
+   ],
+   "confidence": "high",
+   "rationale": "Training Authorized Users on breaches and breach notification is discharged by training personnel in their incident response roles and by the requirement that incident response training material cover regulated-data exposure specifically.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.16.4",
+   "scf_ids": [
+    "HRS-07",
+    "HRS-07.1",
+    "MON-11"
+   ],
+   "confidence": "medium",
+   "rationale": "Holding the facility answerable for unauthorised disclosure by its staff is a liability allocation rather than a control, but it is operationalised by sanctioning non-compliant personnel, investigating suspected misconduct, and monitoring for evidence of unauthorised disclosure of non-public information.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.16.5",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-04.1",
+    "IRO-10.2"
+   ],
+   "confidence": "high",
+   "rationale": "Obligation is for the facility to notify affected patients and regulators of a breach; IRO-10 is the stakeholder-reporting mechanism covering affected parties and regulatory authorities, IRO-04.1 the breach-handling process aligned to applicable law, IRO-10.2 timely reporting of regulated-data incidents.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.17.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Binds the ADHIE Operator (the exchange operator) to notify participating facilities, not the assessed healthcare facility, so no control of ours discharges it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.17.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mitigation duty and the risk-analysis judgement sit with the ADHIE Operator; the assessed facility only acts if the operator directs it, so nothing binds us here.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.17.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "This clause obliges the ADHIE Operator to impose a 60-day patient-notification duty on facilities; the facility-side duty is already carried by 4.3.16.5, and this clause itself binds the exchange operator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.17.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires the ADHIE Operator to author its own internal breach policies and root-cause processes; the obligation is on the exchange operator, not the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.17.5",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Allocates liability for staff disclosure to the ADHIE Operator; it is a liability statement about the exchange operator's workforce, not a control the assessed facility implements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.17.6",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The 5-business-day notification runs from the ADHIE Operator to the DOH regulator; neither party is the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.17.7",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Root-cause investigation and preventive planning are imposed on the ADHIE Operator; the facility's equivalent duties arise elsewhere in the policy.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.18.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Definitional carve-out from the meaning of Breach, determined by the ADHIE Operator; it creates no implementable obligation on the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.18.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Definitional carve-out determined by the ADHIE Operator; no control duty attaches to the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.18.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Definitional carve-out resting on the ADHIE Operator's good-faith determination; nothing for the assessed facility to implement or evidence.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.4.1.1",
+   "scf_ids": [
+    "NET-05"
+   ],
+   "confidence": "low",
+   "rationale": "The facility must build and maintain an interconnection to an external platform conforming to published interface standards; NET-05 is the nearest mechanism, governing authorised system-to-system connections and documenting interface characteristics and the nature of information exchanged, but it does not itself compel building or maintaining the interface.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.4.1.2",
+   "scf_ids": [
+    "GOV-02"
+   ],
+   "confidence": "medium",
+   "rationale": "The obligation is to author and implement a named Interoperability Policy; GOV-02 is the mechanism for establishing, maintaining and disseminating policies and standards, though it does not prescribe interoperability content.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.4.1.4",
+   "scf_ids": [
+    "END-04",
+    "END-04.1",
+    "NET-03"
+   ],
+   "confidence": "medium",
+   "rationale": "The facility must ensure its connection and data transmissions introduce no malicious or destructive code into the platform; END-04 and END-04.1 supply the detection and eradication mechanism with current signatures and NET-03 controls and monitors traffic at the external boundary where the transmission leaves the facility.",
+   "uncovered_clause": "the contractual warranty against time-bombs and logic bombs that render the platform inoperable is not discharged by any detective control"
+  },
+  {
+   "code": "4.4.2.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires the ADHIE Operator to set interoperability standards, draft participant agreement clauses and monitor participants; every limb binds the exchange operator, not the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.4.2.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Specifies content, messaging and transport standards the ADHIE Operator may establish for its platform; the standard-setting duty is the exchange operator's.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.2.2",
+   "scf_ids": [
+    "CPL-01",
+    "GOV-04.1",
+    "DCH-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "This is a genuinely programme-level accountability clause for safeguarding patient health information and complying with DOH direction, so CPL-01 for identifying and implementing the applicable statutory and regulatory controls, GOV-04.1 for the accountability structure and DCH-01.1 for assigned, documented stewardship of the data.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.3.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing governance arrangements with DOH and market representation to oversee the regulatory framework is an obligation on the ADHIE Operator as exchange operator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.2.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Confers a suspension and termination right on the ADHIE Operator against its participants; it binds the exchange operator, and the assessed facility is the object of the right, not its holder.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.1.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Binds the DOH regulator (or its appointed vendor) to conduct periodic audits; the assessed facility is the auditee, and being audited is not the facility auditing anyone.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.2.1",
+   "scf_ids": [
+    "CPL-03.3"
+   ],
+   "confidence": "medium",
+   "rationale": "The facility must grant assessors from the ADHIE Operator and DOH logical and physical access to personnel, systems and records for conformity verification, which is precisely CPL-03.3's mechanism of granting assessors minimum necessary access; the audit itself remains the external party's activity and is not mapped.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.2.2",
+   "scf_ids": [
+    "TPM-08"
+   ],
+   "confidence": "medium",
+   "rationale": "The facility must review the periodic performance reports its exchange service provider produces, which is the service-report review limb of TPM-08's monitoring and regular review of external service providers.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.2.4",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-10.2"
+   ],
+   "confidence": "high",
+   "rationale": "The facility must report platform-related breaches affecting patient health information to the DOH regulator and to the ADHIE Operator; IRO-10 covers reporting to regulatory authorities and affected third parties and IRO-10.2 the timely reporting of regulated-data incidents.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.3.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Preparation of periodic performance reports for facilities is an ADHIE Operator duty; the assessed facility is the recipient, covered separately at 5.3.2.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.3.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Breach reporting from the ADHIE Operator to the DOH regulator binds the exchange operator, not the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Binds the DOH regulator to notify the ADHIE within five business days; neither the obligor nor the recipient is the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.2",
+   "scf_ids": [
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "The facility must enter legal agreements with the ADHIE Operator and other entities carrying privacy, data-security and exchange terms, which is TPM-05's mechanism of imposing contractual security, compliance and resilience requirements on third parties.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.5.3",
+   "scf_ids": [
+    "OPS-03"
+   ],
+   "confidence": "low",
+   "rationale": "The duty is to keep the facility's exchange interface operationally available for patient data transactions; OPS-03's service-management and support mechanism is the nearest fit, and no SCF control specifically compels availability of an external exchange interface.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.6",
+   "scf_ids": [
+    "DCH-03.1",
+    "DCH-14",
+    "DCH-01.4"
+   ],
+   "confidence": "medium",
+   "rationale": "The facility must have internal policy and procedure stopping authorised users from releasing VIP patient data onto the platform outside sanctioned channels; DCH-03.1 restricts disclosure of sensitive data to authorised parties, DCH-14 governs users' information-sharing decisions and DCH-01.4 defines who may access that sensitive data class.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.7",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-08"
+   ],
+   "confidence": "high",
+   "rationale": "Appointing authorised users and placing them at the correct access level is discharged by IAC-07's formal registration process governing assignment of access rights and IAC-08's role-based enforcement of those levels.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.10",
+   "scf_ids": [
+    "HRS-06",
+    "HRS-05.1",
+    "IAC-19"
+   ],
+   "confidence": "medium",
+   "rationale": "The facility must hold signed agreements with each authorised user carrying minimum clauses; HRS-06 supplies the signed access agreement prior to access, HRS-05.1 the defined acceptable-use rules covering lawful use and permitted-purpose transactions, and IAC-19 the prohibition on disclosing passwords or authentication methods.",
+   "uncovered_clause": "6.1.2.10.5 — the contractual duty on the authorised user to report a breach to the facility within five business days is not discharged by any of these controls"
+  },
+  {
+   "code": "6.1.2.12",
+   "scf_ids": [
+    "HRS-05.7",
+    "HRS-06"
+   ],
+   "confidence": "high",
+   "rationale": "Requiring authorised users to sign a statement acknowledging their policy and agreement obligations is HRS-05.7's familiarisation-with-acknowledgement mechanism, backed by HRS-06's signed access agreement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.14",
+   "scf_ids": [
+    "IAC-28",
+    "IAC-28.2"
+   ],
+   "confidence": "high",
+   "rationale": "Uniquely identifying each authorised user by verifying and retaining a copy of the Emirates ID card is identity proofing before authenticator issuance (IAC-28) with documentary identity evidence presented to the registration authority (IAC-28.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.15",
+   "scf_ids": [
+    "IAC-10",
+    "IAC-19"
+   ],
+   "confidence": "high",
+   "rationale": "Each authorised user accessing only via their own password is IAC-10 authenticator management, and the binding not to share that password is IAC-19's prevention of credential sharing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.16",
+   "scf_ids": [
+    "IAC-09",
+    "IAC-02"
+   ],
+   "confidence": "high",
+   "rationale": "Assigning each authorised user a unique username and password is IAC-09 identifier naming and management combined with IAC-02's unique identification and authentication of organisational users.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.17",
+   "scf_ids": [
+    "IAC-10.1",
+    "IAC-09",
+    "IAC-15.5",
+    "IAC-19"
+   ],
+   "confidence": "high",
+   "rationale": "The composite password standard is split across IAC-10.1 for length, complexity and 60-day lifespan, IAC-09 for uniqueness of the user ID, IAC-15.5 for the ban on shared, generic, group and temporary accounts, and IAC-19 for the prohibition on sharing or using another's credentials.",
+   "uncovered_clause": "6.1.2.17.5 — the six-generation password reuse history is only loosely implied by IAC-10.1's lifespan criteria"
+  },
+  {
+   "code": "6.1.2.18",
+   "scf_ids": [
+    "IAC-22"
+   ],
+   "confidence": "high",
+   "rationale": "Enforcing a consecutive failed-logon limit that locks the account until release or for a defined period is exactly IAC-22's account lockout mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.19",
+   "scf_ids": [
+    "IAC-25",
+    "IAC-14"
+   ],
+   "confidence": "high",
+   "rationale": "Automatic logout after a period of user inactivity is IAC-25 session termination, and the requirement that the user re-establish access through identification and authentication is IAC-14 re-authentication.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.20",
+   "scf_ids": [
+    "IAC-09",
+    "IAC-09.1",
+    "MON-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "Assigning a unique name or number to every authorised user for identification and tracking is IAC-09 and IAC-09.1 identifier management, with MON-03.2 supplying the audit-trail linkage of system access to the individual user that makes tracking possible.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.21",
+   "scf_ids": [
+    "PES-03.2",
+    "END-12",
+    "PES-03.4"
+   ],
+   "confidence": "high",
+   "rationale": "Physical cages on data-centre servers is PES-03.2's lockable physical casing mechanism reinforced by PES-03.4's additional physical control over critical systems, and disabling or removing the ability to read or write via external ports is END-12's port and I/O device access control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.22",
+   "scf_ids": [
+    "PES-02.1",
+    "PES-06",
+    "END-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "Validating facility access by role is PES-02.1, visitor control is PES-06, and restricting access to software programs for testing and revision is END-03.2's defined and enforced access restrictions associated with changes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.23",
+   "scf_ids": [
+    "IAC-25",
+    "DCH-12",
+    "END-04",
+    "END-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "The three limbs map separately: IAC-25 terminates the electronic session after predetermined inactivity, DCH-12 restricts removable media in line with handling parameters, and END-04 with END-04.1 supplies anti-malware protection kept current.",
+   "uncovered_clause": "6.1.2.23.2 — the conditional requirement to encrypt where deemed necessary is only partly carried by DCH-12's handling parameters"
+  },
+  {
+   "code": "6.1.2.25",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Notifying the ADHIE Operator of any development materially impairing the facility's ability to meet its obligations has no SCF counterpart; CHG-05 is scoped to stakeholder awareness of proposed changes and TPM-05.1 runs in the opposite direction, compelling providers to notify us.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.26",
+   "scf_ids": [
+    "HRS-07"
+   ],
+   "confidence": "high",
+   "rationale": "Disciplining and sanctioning authorised users who fail to comply with the policy, participant agreement or applicable law is HRS-07's personnel sanctions mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.27",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-10.2",
+    "IRO-10.5"
+   ],
+   "confidence": "high",
+   "rationale": "Notifying the ADHIE and the DOH of a breach within five working days is IRO-10 stakeholder and regulator reporting, IRO-10.2 for the regulated patient data involved, and IRO-10.5 for reporting against a mandatory statutory timeline.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Setting mandatory participation criteria and technical standards for facilities to meet is an ADHIE Operator duty; the assessed facility is the party held to those criteria, not the party setting them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.6",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing and entering into participant agreements in an operator-determined format binds the ADHIE Operator; the facility's counterpart duty to contract is already at 6.1.2.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.8",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Removing or disabling accounts inactive for sixty days is an obligation on the ADHIE Operator over platform accounts it administers, not on the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.9",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ensuring platform access is by unique username and password binds the ADHIE Operator; the facility's mirror duty is at 6.1.2.16.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.10",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Server hardening of platform servers holding patient and user information is an ADHIE Operator obligation over infrastructure the assessed facility does not operate.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.11",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The operating procedures covering hardening, malware protection, patching, capacity, audit logging and backup are imposed on the ADHIE Operator for the platform it runs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.12",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Logging all clinical data transactions involving the platform is an ADHIE Operator duty over platform-side logging.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.13",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Making platform log files immutable and excluding full clinical records from them binds the ADHIE Operator as the platform's log custodian.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.14",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Segregating patient health data onto a firewalled logical network within the platform is an ADHIE Operator architecture obligation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.15",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular review and audit of the platform with the listed minimum audit functions binds the ADHIE Operator as the platform's operator and auditor.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.16",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Granting a disaster relief agency scoped emergency access to the platform is an ADHIE Operator provisioning duty over platform accounts.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.17",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing procedures for auditing additional platform functions is discretionary on the ADHIE Operator, not on the assessed facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.4.3",
+   "scf_ids": [
+    "IAC-15.9"
+   ],
+   "confidence": "low",
+   "rationale": "The duty is to capture the name of the directing healthcare professional whenever a user breaks the seal; IAC-15.9's control over emergency-access-only use is the nearest SCF mechanism but it governs emergency account establishment rather than recording a clinical authorisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.4.4",
+   "scf_ids": [
+    "IAC-15.9"
+   ],
+   "confidence": "low",
+   "rationale": "Only the clinician attestation limb touches the assessed facility and is weakly served by IAC-15.9's control over emergency access use; the requirement that the platform software retain the record binds the ADHIE Operator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.4.5",
+   "scf_ids": [
+    "IAC-21.4",
+    "IAC-15.9"
+   ],
+   "confidence": "medium",
+   "rationale": "The facility must track and document every break-the-seal occurrence and confirm the policy conditions were met, which IAC-21.4 discharges by auditing execution of the elevated function and IAC-15.9 by controlling emergency-access-only use.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.4.6",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Reserves an audit right to the ADHIE Operator and the DOH regulator; the assessed facility is the auditee and being subject to an external audit is not a control it performs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.4.7",
+   "scf_ids": [
+    "IAC-15.2",
+    "IAC-20.6"
+   ],
+   "confidence": "medium",
+   "rationale": "Break-the-seal access must end when the emergency treatment concludes; IAC-15.2 removes or disables temporary and emergency access after its defined period and IAC-20.6 revokes the underlying access authorisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1.2.2",
+   "scf_ids": [
+    "CPL-01.2"
+   ],
+   "confidence": "low",
+   "rationale": "Binds the Healthcare Facility: it must procure a written declaration from its parent/group company itemising every facility that company is responsible for. The only SCF mechanism that discharges an entity-scoping declaration is documenting and validating the organisational scope of the compliance obligation. Deliberately NOT TPM-05.6 (First-Party Declaration) - that control has the assessed org *obtaining* a declaration from its service providers, the opposite direction to declaring itself to the exchange operator.",
+   "uncovered_clause": "'in accordance with the format provided by the ADHIE Operator, and at the time required by the ADHIE Operator' - format and submission-timing prescribed by the operator is an administrative filing duty with no SCF mechanism."
+  },
+  {
+   "code": "4.1.2.4.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Facility-bound, but the obligation is programme readiness against a dated launch schedule ('medical record systems are ready for integration ... as per the ADHIE Launch Schedule'). No SCF control's mechanism discharges 'be technically ready by date X'. NET-05 (ISAs) was considered and rejected as failure mode 3 - its mechanism authorises and documents an interconnection, it does not deliver integration readiness.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.2.1",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-01.3"
+   ],
+   "confidence": "low",
+   "rationale": "Sentence subject is the exchange operator, but the clause names two acts the Healthcare Facility must perform as the precondition: complete its authorization procedures, and transmit the list of Authorized Users. Those are a formal user registration process and maintaining a current authorized-user list. Mapped only to the facility-side precondition.",
+   "uncovered_clause": "'ADHIE shall provide access' - the provisioning act itself binds the exchange operator and is unmappable to the assessed organisation."
+  },
+  {
+   "code": "4.3.2.6",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the ADHIE Operator to build RBAC categories and access purposes into the platform. The Healthcare Facility performs no act in this clause. (Were the operator the assessed entity this would map to IAC-08 plus DCH-01.4; it is not.)",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.3.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds DOH as regulator to issue guidance, and is conditional ('if and when required'). Issuing sector guidance is a sovereign regulatory act no assessed organisation can implement as a control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.5.1",
+   "scf_ids": [
+    "IAC-28",
+    "IAC-07"
+   ],
+   "confidence": "low",
+   "rationale": "The grant of privilege binds the operator, but the clause is expressly predicated on 'the Healthcare Facilities' authentication of each of its approved users' - a facility-performed identity verification before access is issued, and a formal registration process governing which users are approved. Mapped to that named facility act only.",
+   "uncovered_clause": "'ADHIE shall assume full authority for granting access privileges' - allocation of privilege-granting authority to the exchange operator."
+  },
+  {
+   "code": "4.3.7.2",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Direction of obligation: the duty is to *deliver* training and binds the ADHIE Operator. Mapping this to the facility's own awareness/role-based training programme (SAT-02/SAT-03) would be failure mode 4 - the assessed organisation is the recipient here, not the obligated party.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.9.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator. Also an umbrella statement of intent ('industry standard measures to promote a safe and secure Health Information Exchange') with no identifiable mechanism - mapping it to a catch-all such as GOV-01 or OPS-01 would be failure mode 2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.9.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to stand up and run the ADHIE Patient Portal. The data-subject access right (PRI-06) sits with the platform operator, not the participating facility, in this clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.9.3",
+   "scf_ids": [
+    "PRI-06.1",
+    "PRI-06.4"
+   ],
+   "confidence": "low",
+   "rationale": "The routing act binds the operator, but the clause identifies the source Healthcare Facility as the party that must resolve patient inquiries about the accuracy or integrity of their health information - i.e. the facility must run a correction process and a data-subject inquiry-response process. Mapped to that named facility responsibility.",
+   "uncovered_clause": "'ADHIE shall direct patients to the appropriate source Healthcare Facilities' - the referral/triage duty binds the exchange operator."
+  },
+  {
+   "code": "4.3.11.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to protect data 'within the ADHIE Platform'. Additionally an unscoped catch-all ('appropriate controls for safeguarding') - no specific mechanism is stated, so any mapping would be an umbrella pick.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.12.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds DOH as public health authority, enumerating the permissible public-health purposes for which it may access Patient Data. This is a grant of authority to the regulator, not a control the assessed organisation implements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.13.7",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Not an obligation at all - a scope carve-out stating that treatment disclosures and legally required disclosures are exempt from the preceding provision. There is nothing for any party to implement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3.14.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to disclose Patient Data to DOH for public health reporting. The participating facility neither makes nor authorises this disclosure.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.4.4.1",
+   "scf_ids": [
+    "PRI-06.1",
+    "PRI-06.3"
+   ],
+   "confidence": "low",
+   "rationale": "Routing binds the operator, but the clause specifies what the participant must provide: correction of erroneous information, and documentation of the dispute where a revision request is denied - i.e. a correction process plus an appeal/adverse-decision process for data subjects. Mapped to the participant-side duties named in the text.",
+   "uncovered_clause": "'ADHIE shall direct patients to the appropriate participants' - the referral duty itself binds the exchange operator."
+  },
+  {
+   "code": "4.4.4.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A liability disclaimer, not a requirement: it allocates non-responsibility for data content and accuracy to the exchange operator. Nothing is obligated on any party, so no control can discharge it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.1.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds DOH as regulator of the health system. Regulating a sector to address service gaps, malpractice or unfairness is a sovereign function, not an organisational control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds DOH to hold sector-level governance measures. Mapping to a governance catch-all such as GOV-01 would be both failure mode 2 and failure mode 4.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.1.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds DOH to provide stewardship of the policy and to enact further regulatory measures through its regulatory powers. Exercisable only by the regulator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1.3.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator, defining its lawful basis and permitted purposes for processing PHI to build and run the ADHIE Platform. The participating facility is not the processor described.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH enforcement power. Escalating and acting on determined non-compliance is a regulator's supervisory act; CPL-01.1 covers an organisation reviewing its *own* non-compliance, a different mechanism and direction.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: describes how DOH will exercise its regulatory powers (proportionately, targeted). Binds the regulator only.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH enforcement outcome - bringing a third party's non-compliance to an end. Not discharged by the assessed organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH enforcement outcome (preventing recurrence of a regulated party's failure). CPL-02.3 (corrective action) was rejected - it binds the organisation remediating its own non-conformity, not a regulator preventing another party's.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.5",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH's investigative process for determining non-compliance. A regulatory investigation, not an organisational control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.6",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH escalation procedure. Every enumerated measure - advice, remedial action plan, referral to the Competent Committee, reprimand, suspension notice, licensure withdrawal, legal proceedings - is a regulatory sanction exercisable only by DOH.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.7",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH licensing sanction. Suspension or withdrawal of a facility's licence is an act of the regulator; the facility is the object of the sanction, not the obligated party.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.8",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH administers fines and penalties pursuant to Applicable Laws. A statutory enforcement power.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2.1.9",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: DOH administers financial incentives and reimbursement-rate amendments. A payer/regulator function with no organisational control equivalent.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.3.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to monitor ADHIE performance via KPIs developed under the public-private partnership. GOV-05.1 (KPIs) covers an organisation measuring its own security programme - different subject and different obligated party.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3.3.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to remedy its own underperforming KPIs as defined by the Government Oversight and Policy Task Force. Not a participant control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.1.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds DOH to notify the ADHIE Operator when a user's access should be terminated. The assessed facility is neither notifier nor actor here. Mapping to IAC-07.2/IAC-20.6 would attribute a regulator's notification duty to the organisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Facility-bound but purely a programme milestone - adhere to the ADHIE Launch Schedule. No SCF mechanism discharges compliance with an onboarding date; treating it as change or project management would be keyword matching.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.5.1",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Facility-bound, but the duty is operational participation - submit required Patient Data to the exchange on time per the Participation Criteria. DCH-22 and PRI-10 were considered and rejected as failure mode 3: their mechanisms check data for quality/ROTT within the organisation's own lifecycle, they do not discharge a submission obligation to an external exchange.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.5.2",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Facility-bound, but again an operational participation duty - receive incoming Data and integrate it into Participant Systems in a timely manner. SCF has no mechanism for data-exchange participation SLAs; DCH-14 protects sharing decisions rather than compelling ingest and integration.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.2.11",
+   "scf_ids": [
+    "PRI-05.2",
+    "PRI-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Facility-bound and genuinely control-shaped: maintaining a Master Patient Index is sustaining an accurate, up-to-date, deduplicated set of patient identification data and managing its integrity across the lifecycle. Deliberately NOT IAC-09/IAC-09.1 - those govern usernames for system users, whereas the MPI indexes data subjects, which would be failure mode 3.",
+   "uncovered_clause": "'single source of identification information for all participating systems' - the cross-system identity-resolution/record-matching function of an MPI has no SCF equivalent; SCF covers PD accuracy but not master data identity resolution."
+  },
+  {
+   "code": "6.1.2.24",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Facility-bound but contractual, not technical: a prohibition on unilaterally suspending or terminating participation, data transaction or interface without the operator's prior written consent. TPM-05.7 (break clauses) is the inverse direction - the assessed org imposing exit terms on its providers - so no mechanism discharges this.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to issue, manage and update the Launch Schedule. Programme administration by the operator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to develop and disseminate the readiness assessment tool. The facility only completes it; building the assessment instrument is the operator's duty.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to notify health sector members of the participation requirement with reasonable advance notice. A communications duty of the operator.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1.3.5",
+   "scf_ids": [
+    "DCH-02",
+    "DCH-03.3"
+   ],
+   "confidence": "low",
+   "rationale": "The 'shall impose' duty binds the operator, but the substantive restriction is executed in facility systems: VIP Patient Data must be identified as a restricted category and prevented from being released to, stored on, or made accessible through the external platform except per DOH direction. That is data categorisation plus validation of data attributes prior to release to an external system.",
+   "uncovered_clause": "'except in accordance with the directions of the DOH and as set out in the Participation Criteria' - the DOH-directed exception pathway is a regulator-defined authorisation route with no SCF mechanism."
+  },
+  {
+   "code": "6.1.3.7",
+   "scf_ids": [
+    "IAC-07"
+   ],
+   "confidence": "low",
+   "rationale": "The 24-hour removal action binds the exchange operator, but the clause names the Healthcare Facility as a trigger party - it must notify for removal when a user's access should end, which is the de-registration half of a formal user provisioning/de-provisioning process. Mapped only to that facility-side trigger.",
+   "uncovered_clause": "'shall remove or block access rights ... within twenty-four (24) hours of notification' - the 24-hour revocation SLA is the exchange operator's obligation, not the assessed organisation's."
+  },
+  {
+   "code": "6.1.3.18",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: binds the exchange operator to establish the system interoperability standards (HL7 v2.x/3.0, NCPDP SCRIPT, SNOMED clinical terminology, XML 1.0). Standard-setting for the exchange is the operator's role; nothing here obligates a participant. Also note SCF has no healthcare-messaging or clinical-terminology control - CLD-04 (API security) and CLD-08 (standardized virtualization formats) surface on the word 'interoperability' but their mechanisms are unrelated, which would be failure mode 5.",
+   "uncovered_clause": null
+  }
+ ]
+}

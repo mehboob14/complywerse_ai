@@ -1,0 +1,2079 @@
+{
+ "framework": "ndmo",
+ "library": "NDMO_Data_Management_Standardsv1.5.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "DG.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "PRM-01.1",
+    "PRI-01"
+   ],
+   "confidence": "high",
+   "rationale": "An entity-wide data management and personal data protection strategy with vision, objectives, metrics and budget is exactly the data governance program (GOV-10) plus its strategic plan and objectives (PRM-01.1), with the privacy half covered by the data privacy program (PRI-01)."
+  },
+  {
+   "control_id": "DG.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-08",
+    "GOV-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Adopting the national program's guiding principles to anchor the entity's data agenda is the definition of business context/mission (GOV-08) and the derivation of control objectives from it (GOV-09)."
+  },
+  {
+   "control_id": "DG.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-01.1",
+    "PRM-03"
+   ],
+   "confidence": "medium",
+   "rationale": "A 3-year prioritized implementation roadmap with initiative sequencing is a strategic plan and objectives artifact (PRM-01.1) coupled with the allocation of resources to those initiatives (PRM-03)."
+  },
+  {
+   "control_id": "DG.1.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-01.1",
+    "GOV-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Formal approval by the Data Management Committee is steering-committee program oversight (GOV-01.1); socializing the strategy in internal workshops is the publishing/dissemination step of GOV-02."
+  },
+  {
+   "control_id": "DG.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Analyzing national, sector-regulator and internal data requirements to find policy gaps is the identification of applicable statutory/regulatory obligations (CPL-01) and the scoping of what those obligations cover (CPL-01.2)."
+  },
+  {
+   "control_id": "DG.2.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-02",
+    "GOV-10",
+    "PRI-01"
+   ],
+   "confidence": "high",
+   "rationale": "Developing and issuing entity-specific data management and personal data protection policies and guidelines is the documented-policy publication control (GOV-02) applied to the data governance (GOV-10) and privacy (PRI-01) programs."
+  },
+  {
+   "control_id": "DG.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "Mandatory training on national data laws and on every data management domain addressed to the specific data roles is general awareness training (SAT-02) plus role-based training (SAT-03)."
+  },
+  {
+   "control_id": "DG.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-04",
+    "GOV-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Standing up a Data Management Office to own the data agenda is the formal assignment of program responsibilities (GOV-04) instantiated for the data governance function (GOV-10)."
+  },
+  {
+   "control_id": "DG.4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-13",
+    "GOV-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "A Data Management Committee giving direction and oversight to the data agenda is literally SCF's Data Management Board (PRI-13) and its steering-committee oversight function (GOV-01.1)."
+  },
+  {
+   "control_id": "DG.4.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-04",
+    "GOV-04.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Appointing a Chief Data Officer with a documented job description is assigned program responsibility (GOV-04) within a defined stakeholder accountability structure (GOV-04.1); SCF names a CPO/DPO but has no CDO-specific control."
+  },
+  {
+   "control_id": "DG.4.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-04",
+    "DCH-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "The Data Governance Officer role is an assigned governance responsibility (GOV-04) whose duties are the stewardship of data assets described in DCH-01.1."
+  },
+  {
+   "control_id": "DG.4.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-04",
+    "DCH-15"
+   ],
+   "confidence": "medium",
+   "rationale": "The Open Data and Information Access Officer is an assigned role (GOV-04) accountable for the entity's publicly accessible content and information-access requests (DCH-15)."
+  },
+  {
+   "control_id": "DG.4.6",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-02.1",
+    "GOV-04"
+   ],
+   "confidence": "medium",
+   "rationale": "A Compliance Officer appointed to audit and monitor the data agenda is the internal audit function (CPL-02.1) staffed through assigned responsibility (GOV-04)."
+  },
+  {
+   "control_id": "DG.4.7",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Appointing a Personal Data Protection Officer with a documented mandate is the Data Protection Officer control (PRI-01.4) verbatim in substance."
+  },
+  {
+   "control_id": "DG.4.8",
+   "iso_clauses": [],
+   "scf_ids": [
+    "AST-03",
+    "DCH-01.1",
+    "GOV-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Business Data Executives own data for their business domain, which is asset/data ownership assignment (AST-03) exercised through the stewardship structure (DCH-01.1) and formal role assignment (GOV-04)."
+  },
+  {
+   "control_id": "DG.4.9",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Business Data Stewards appointed per domain are precisely the data stewardship role defined in DCH-01.1."
+  },
+  {
+   "control_id": "DG.4.10",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-01.1",
+    "AST-03"
+   ],
+   "confidence": "high",
+   "rationale": "IT Data Stewards are the technical counterpart of data stewardship (DCH-01.1) and carry ownership accountability for the underlying data assets (AST-03)."
+  },
+  {
+   "control_id": "DG.4.11",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01",
+    "GOV-04"
+   ],
+   "confidence": "medium",
+   "rationale": "A Legal Advisor appointed to support data-related regulatory matters is the legal capability behind statutory/regulatory compliance (CPL-01), assigned as a defined responsibility (GOV-04)."
+  },
+  {
+   "control_id": "DG.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-02",
+    "CPL-02.2",
+    "CPL-04"
+   ],
+   "confidence": "high",
+   "rationale": "Defining audit scope, audit planning/execution, findings reporting and non-compliance escalation is controls oversight (CPL-02) delivered through periodic audits (CPL-02.2) and audit activities (CPL-04)."
+  },
+  {
+   "control_id": "DG.5.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01.3",
+    "CPL-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "An audit report stating compliance per specification with supporting evidence is the ability to demonstrate conformity (CPL-01.3); the remediation recommendations with owners and target dates are corrective action (CPL-02.3)."
+  },
+  {
+   "control_id": "DG.5.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-03",
+    "CPL-03.8"
+   ],
+   "confidence": "high",
+   "rationale": "Generating and monitoring recurring compliance audit scores against the national framework is control conformity monitoring (CPL-03) trending toward continuous control monitoring (CPL-03.8)."
+  },
+  {
+   "control_id": "DG.6.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-03"
+   ],
+   "confidence": "high",
+   "rationale": "Periodic review of the data management plan with documented outcomes and recorded changes is the periodic review and update of the program (GOV-03)."
+  },
+  {
+   "control_id": "DG.6.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-17",
+    "GOV-01.2"
+   ],
+   "confidence": "medium",
+   "rationale": "An ongoing capability to communicate program activities, metrics, policy updates and compliance scores is program status reporting (GOV-17) including reporting to the governing body (GOV-01.2)."
+  },
+  {
+   "control_id": "DG.7.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05",
+    "GOV-05.1"
+   ],
+   "confidence": "high",
+   "rationale": "A defined set of data governance KPIs (role assignment, meetings held, training completion, audit score, issue cycle time) is measures of performance (GOV-05) expressed as KPIs (GOV-05.1)."
+  },
+  {
+   "control_id": "DG.7.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Defining, implementing and monitoring continuous improvement mechanisms across all domains is the commitment to continual improvements control (GOV-01.3)."
+  },
+  {
+   "control_id": "DG.8.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "CPL-13.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A register of CDO-approved governance decisions with their justifications is the decision-record layer of data governance (GOV-10) and constitutes defensible evidence of due diligence (CPL-13.1)."
+  },
+  {
+   "control_id": "DG.8.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "IAO-05"
+   ],
+   "confidence": "medium",
+   "rationale": "A historical register of reported data management issues and their resolutions is the deficiency tracking register described in IAO-05, applied to data rather than security findings."
+  },
+  {
+   "control_id": "DG.8.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-02"
+   ],
+   "confidence": "low",
+   "rationale": "Version control over data management documents is only weakly covered: SCF treats documentation issuance and maintenance under GOV-02 and has no dedicated document-versioning control."
+  },
+  {
+   "control_id": "MCM.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "PRM-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "A plan with roadmap, milestones, resources and budget to implement the entity's Data Catalog tool is the Data Catalog control (GOV-10.1) plus the strategic plan artifact that carries it (PRM-01.1)."
+  },
+  {
+   "control_id": "MCM.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "AST-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Prioritizing which data sources enter the catalog and defining their business/technical metadata is scoping the Data Catalog (GOV-10.1) and building the underlying asset inventory (AST-02)."
+  },
+  {
+   "control_id": "MCM.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "SEA-02"
+   ],
+   "confidence": "medium",
+   "rationale": "A target metadata architecture (sources, central repository, flows, model) is the architecture of the Data Catalog (GOV-10.1) developed in alignment with enterprise architecture (SEA-02)."
+  },
+  {
+   "control_id": "MCM.2.1",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [
+    "AST-01.5",
+    "DCH-01.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Approving which data sources the catalog tool may connect to is an authorized-to-connect decision (AST-01.5), and approving employee access to the tool is the definition of access authorizations over the data it exposes (DCH-01.4, ISO 5.18)."
+  },
+  {
+   "control_id": "MCM.2.2",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [
+    "DCH-01.4",
+    "IAC-20"
+   ],
+   "confidence": "medium",
+   "rationale": "Role-based catalog access groups (read-only, read-update, administrator) scoped by metadata scope is defining access authorizations (DCH-01.4) and enforcing them by role (IAC-20, ISO 5.18 provisioning of access rights)."
+  },
+  {
+   "control_id": "MCM.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Tool training targeted only at employees who discover, analyze or administer metadata is role-based training (SAT-03) rather than general awareness."
+  },
+  {
+   "control_id": "MCM.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-05",
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Naming catalog power users as coaches and running a communication plan to drive adoption is organizational knowledge sharing (SAT-05) layered on the role-based training (SAT-03) this specification repeats."
+  },
+  {
+   "control_id": "MCM.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-01.1",
+    "AST-03"
+   ],
+   "confidence": "high",
+   "rationale": "Assigning Business and IT Data Stewards to every metadata entry, kept current, is data stewardship (DCH-01.1) implemented as per-asset ownership assignment (AST-03)."
+  },
+  {
+   "control_id": "MCM.4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "AST-02"
+   ],
+   "confidence": "medium",
+   "rationale": "A workflow-driven process for registering and populating metadata is the operating procedure of the Data Catalog (GOV-10.1) and keeps the data asset inventory populated (AST-02)."
+  },
+  {
+   "control_id": "MCM.4.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "AST-31.3"
+   ],
+   "confidence": "medium",
+   "rationale": "A mandated metadata attribute structure that entities may extend is the catalog's data model (GOV-10.1) expressed as required asset attributes (AST-31.3)."
+  },
+  {
+   "control_id": "MCM.4.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "AST-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A workflow for updating metadata keeps the catalog current, which is the Data Catalog control (GOV-10.1) and the inventory-update-on-change requirement (AST-02.1)."
+  },
+  {
+   "control_id": "MCM.4.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22",
+    "PRI-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Identifying metadata quality issues, reporting them and remediating within SLAs is data quality operations (DCH-22) under a data quality management regime (PRI-10), applied to metadata."
+  },
+  {
+   "control_id": "MCM.4.6",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22.2",
+    "DCH-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Reviewing user-added tags and comments on catalog metadata is the governance of data tags (DCH-22.2) and of data protection attributes attached to assets (DCH-05)."
+  },
+  {
+   "control_id": "MCM.4.7",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "AST-03.2"
+   ],
+   "confidence": "low",
+   "rationale": "Reviewing user-assigned trust certificates is a catalog-internal trust signal (GOV-10.1) closest in intent to asserting data provenance (AST-03.2); SCF has no certification-of-metadata control."
+  },
+  {
+   "control_id": "MCM.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "AST-02",
+    "DCH-06.2"
+   ],
+   "confidence": "high",
+   "rationale": "Implementing the catalog tool explicitly as 'an inventory of the Entity's data assets' is the Data Catalog control (GOV-10.1) doubling as the asset inventory (AST-02) and sensitive data inventory (DCH-06.2)."
+  },
+  {
+   "control_id": "MCM.5.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CHG-05",
+    "GOV-10.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Automated notifications so catalog users learn of metadata changes is stakeholder notification of changes (CHG-05) implemented inside the Data Catalog (GOV-10.1)."
+  },
+  {
+   "control_id": "MCM.5.3",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [
+    "MON-02",
+    "MON-03"
+   ],
+   "confidence": "high",
+   "rationale": "Tracking catalog user logins and invoked operations and storing the resulting activity logs as artifacts is event log collection (MON-02) with defined log content (MON-03), i.e. ISO 8.15 logging."
+  },
+  {
+   "control_id": "MCM.5.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "VPM-05",
+    "VPM-04.1",
+    "TDA-17"
+   ],
+   "confidence": "medium",
+   "rationale": "Keeping the catalog tool on the latest vendor release, or documenting an analyzed rationale for not doing so, is software patching (VPM-05) on stable versions (VPM-04.1) and avoiding unsupported technology (TDA-17)."
+  },
+  {
+   "control_id": "MCM.6.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Catalog usage and adoption statistics (registered/active users, logins, queries, annotations, ratings) are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "MCM.6.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1",
+    "PRI-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Completeness, accuracy and consistency KPIs for metadata are performance indicators (GOV-05.1) measuring a data quality management program (PRI-10)."
+  },
+  {
+   "control_id": "DQ.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-10",
+    "DCH-22"
+   ],
+   "confidence": "medium",
+   "rationale": "Ranking data by importance so master data is assessed first is scoping the data quality management program (PRI-10) ahead of data quality operations (DCH-22)."
+  },
+  {
+   "control_id": "DQ.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-10",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A Data Quality Plan with roadmap, milestones, resources and budget is a data quality management program (PRI-10) carried by a strategic plan artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "DQ.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22",
+    "PRI-10"
+   ],
+   "confidence": "high",
+   "rationale": "Collecting quality requirements, defining rules, profiling data, reporting issues and building remediation plans with root cause and impact analysis is exactly data quality operations (DCH-22) under a data quality management program (PRI-10)."
+  },
+  {
+   "control_id": "DQ.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22",
+    "PRI-10"
+   ],
+   "confidence": "high",
+   "rationale": "Documenting data quality rules with owners and mapping each to completeness/uniqueness/timeliness/validity/accuracy dimensions is the rule layer of data quality operations (DCH-22) and data quality management (PRI-10)."
+  },
+  {
+   "control_id": "DQ.2.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22",
+    "PRI-10.1"
+   ],
+   "confidence": "high",
+   "rationale": "Scheduled or event-triggered execution of data quality rules with issue reporting to stewards and executives is ongoing data quality operations (DCH-22) delivered through data quality automation (PRI-10.1)."
+  },
+  {
+   "control_id": "DQ.2.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22",
+    "CPL-02.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Root cause analysis, option selection, cleansing where the source cannot be fixed, and verification that the issue closed is the corrective action cycle (CPL-02.3) applied to data quality operations (DCH-22)."
+  },
+  {
+   "control_id": "DQ.2.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22",
+    "GOV-05"
+   ],
+   "confidence": "medium",
+   "rationale": "SLAs with deadlines for remediation planning, implementation and escalation on breach are the performance targets (GOV-05) governing the data quality issue process (DCH-22)."
+  },
+  {
+   "control_id": "DQ.2.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-10.1",
+    "DCH-22"
+   ],
+   "confidence": "high",
+   "rationale": "Tooling for data profiling, rule management and issue workflow automation is data quality automation (PRI-10.1) supporting data quality operations (DCH-22)."
+  },
+  {
+   "control_id": "DQ.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1",
+    "DCH-22"
+   ],
+   "confidence": "medium",
+   "rationale": "Trending issue counts and deployed rule counts against targets is KPI measurement (GOV-05.1) of the data quality operations program (DCH-22)."
+  },
+  {
+   "control_id": "DQ.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Resolved-vs-reported counts, overdue counts and mean remediation times are process performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "DQ.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TDA-09",
+    "DCH-22"
+   ],
+   "confidence": "medium",
+   "rationale": "Mandatory data quality reviews inside the SDLC that must be remediated before promotion to production is a testing gate throughout development (TDA-09) enforcing data quality operations (DCH-22)."
+  },
+  {
+   "control_id": "DQ.4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-22",
+    "IAO-05"
+   ],
+   "confidence": "medium",
+   "rationale": "A user-facing workflow to report data quality issues to stewards is the intake side of data quality operations (DCH-22) feeding a deficiency tracking register (IAO-05)."
+  },
+  {
+   "control_id": "DQ.4.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "DCH-22"
+   ],
+   "confidence": "medium",
+   "rationale": "Publishing data quality rules and monitoring results as metadata in the catalog is populating the Data Catalog (GOV-10.1) with data quality operations output (DCH-22)."
+  },
+  {
+   "control_id": "DO.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "OPS-01",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A Data Operations Plan orchestrating data operations activities with roadmap and budget is operations management (OPS-01) driven by a strategic plan artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "DO.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CAP-03",
+    "CAP-01"
+   ],
+   "confidence": "high",
+   "rationale": "Forecasting future storage capacity from historical trends, application performance and the application roadmap, including budget estimation, is capacity planning (CAP-03) within capacity and performance management (CAP-01)."
+  },
+  {
+   "control_id": "DO.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "BCD-02",
+    "RSK-08"
+   ],
+   "confidence": "high",
+   "rationale": "Ranking information systems by business criticality and by monetary/reputational loss to set recovery order is identification of critical assets (BCD-02) driven by business impact analysis (RSK-08)."
+  },
+  {
+   "control_id": "DO.1.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TDA-01",
+    "TDA-03"
+   ],
+   "confidence": "medium",
+   "rationale": "A documented evaluation process for selecting DBMS software weighing cost, skills, scalability, reliability and the security controls the technology provides is technology acquisition (TDA-01) applied to a COTS product selection (TDA-03)."
+  },
+  {
+   "control_id": "DO.2.1",
+   "iso_clauses": [
+    "8.10"
+   ],
+   "scf_ids": [
+    "DCH-18",
+    "DCH-21",
+    "DCH-06"
+   ],
+   "confidence": "high",
+   "rationale": "A storage and retention policy setting retention periods by type/classification/legal requirement plus disposal and destruction rules is media and data retention (DCH-18) and information disposal (DCH-21/ISO 8.10), with the storage-protection clause covered by DCH-06."
+  },
+  {
+   "control_id": "DO.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CAP-04",
+    "AST-28.1",
+    "MON-03.7"
+   ],
+   "confidence": "medium",
+   "rationale": "Regular reporting of database capacity, availability, query execution times and change tracking is performance monitoring (CAP-04) of the DBMS (AST-28.1), with the change-tracking element resting on database logging (MON-03.7)."
+  },
+  {
+   "control_id": "DO.3.2",
+   "iso_clauses": [
+    "8.3"
+   ],
+   "scf_ids": [
+    "AST-28",
+    "DCH-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Role-based database access where roles are defined by the data classification standard is database administrative access control (AST-28) implementing classification-driven access authorizations (DCH-01.4), i.e. ISO 8.3 information access restriction."
+  },
+  {
+   "control_id": "DO.3.3",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [
+    "CFG-01",
+    "CFG-02",
+    "CHG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Configuration identification, change control, status accounting and configuration audits against the documented baseline is a configuration management program (CFG-01) with baselines (CFG-02) and configuration change control (CHG-02) - ISO 8.9 verbatim."
+  },
+  {
+   "control_id": "DO.3.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "VPM-05",
+    "TDA-17"
+   ],
+   "confidence": "medium",
+   "rationale": "Keeping DBMS tools on the latest vendor release or holding a documented rationale for the release strategy is software patching (VPM-05) and management of unsupported technology (TDA-17)."
+  },
+  {
+   "control_id": "DO.3.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CAP-01",
+    "CAP-04"
+   ],
+   "confidence": "medium",
+   "rationale": "SLAs fixing database availability windows, maximum transaction execution time and escalation on breach are capacity and performance management targets (CAP-01) enforced by performance monitoring (CAP-04)."
+  },
+  {
+   "control_id": "DO.4.1",
+   "iso_clauses": [
+    "8.13"
+   ],
+   "scf_ids": [
+    "BCD-11",
+    "BCD-11.1"
+   ],
+   "confidence": "high",
+   "rationale": "Defining backup frequency and scope per system, backup medium and physical location, and periodically validating backups on non-production copies is data backup (BCD-11) with restore testing for reliability and integrity (BCD-11.1)."
+  },
+  {
+   "control_id": "DO.4.2",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-01.4",
+    "BCD-12"
+   ],
+   "confidence": "high",
+   "rationale": "A DR plan with prioritized recovery order, response roles, damage-mitigation actions and per-system RPO/RTO is a BC/DR plan (BCD-01.7) with defined recovery objectives (BCD-01.4) and recovery/reconstitution activities (BCD-12) - ISO 5.30 ICT readiness."
+  },
+  {
+   "control_id": "DO.4.3",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [
+    "CHG-02",
+    "CHG-04"
+   ],
+   "confidence": "high",
+   "rationale": "Despite its title, the text requires a change-request-driven process for implementing database changes to production with defined rollback actions, which is configuration change control (CHG-02) with access restriction for change (CHG-04), ISO 8.32."
+  },
+  {
+   "control_id": "DO.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CAP-04",
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Storage utilization percentages, transaction counts and average query times are capacity performance monitoring outputs (CAP-04) reported as KPIs (GOV-05.1)."
+  },
+  {
+   "control_id": "DCM.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A plan to control the document and content lifecycle with roadmap, resources and budget is data governance applied to documents (GOV-10) via a strategic plan artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "DCM.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10"
+   ],
+   "confidence": "low",
+   "rationale": "Migrating paper records to electronic format and eliminating paper creation is a digitization initiative with no security or privacy analogue in SCF; only the generic data governance umbrella (GOV-10) touches it."
+  },
+  {
+   "control_id": "DCM.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "AST-02",
+    "GOV-10"
+   ],
+   "confidence": "low",
+   "rationale": "Producing a ranked list of documents to load into the DMS is a scoping exercise over the document inventory (AST-02) under data governance (GOV-10); SCF has no prioritization control."
+  },
+  {
+   "control_id": "DCM.1.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Identifying and ranking key processes to be implemented as DMS workflows is business process definition (PRM-06)."
+  },
+  {
+   "control_id": "DCM.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-01",
+    "DCH-02",
+    "DCH-18"
+   ],
+   "confidence": "high",
+   "rationale": "A policy covering naming conventions, assignment of classification levels, access approval, backup/recovery and retention/disposal for documents is data protection policy (DCH-01) with classification (DCH-02) and retention (DCH-18)."
+  },
+  {
+   "control_id": "DCM.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Training employees on document and content management policies and on the DMS/CMS tooling is role-based training (SAT-03)."
+  },
+  {
+   "control_id": "DCM.4.1",
+   "iso_clauses": [
+    "8.13"
+   ],
+   "scf_ids": [
+    "BCD-11"
+   ],
+   "confidence": "high",
+   "rationale": "Bringing document and content management systems into the entity's backup and recovery plan is directly the data backup control (BCD-11), ISO 8.13."
+  },
+  {
+   "control_id": "DCM.4.2",
+   "iso_clauses": [
+    "8.10"
+   ],
+   "scf_ids": [
+    "DCH-18",
+    "DCH-21",
+    "DCH-08"
+   ],
+   "confidence": "high",
+   "rationale": "Handing documents to the archival facility and physically destroying them including overwriting and secure deletion is retention (DCH-18) followed by information disposal (DCH-21) and physical media disposal (DCH-08), ISO 8.10."
+  },
+  {
+   "control_id": "DCM.4.3",
+   "iso_clauses": [
+    "8.3"
+   ],
+   "scf_ids": [
+    "DCH-01.4",
+    "DCH-03"
+   ],
+   "confidence": "high",
+   "rationale": "Role-based access to documents where the DMS/CMS access groups are defined by the data classification standard is classification-driven access authorization (DCH-01.4) enforcing media access restriction (DCH-03), ISO 8.3."
+  },
+  {
+   "control_id": "DCM.4.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1"
+   ],
+   "confidence": "high",
+   "rationale": "Publishing DMS/CMS document metadata into the entity's Data Catalog is population of the Data Catalog (GOV-10.1)."
+  },
+  {
+   "control_id": "DCM.4.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TDA-01",
+    "DCH-14.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Selecting DMS/WCMS/collaboration tooling with OCR, indexing, versioning, secured access and global search is a technology acquisition decision (TDA-01) whose search/discovery requirement is information search and retrieval (DCH-14.1)."
+  },
+  {
+   "control_id": "DCM.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Document volume, DMS user counts and percentage of paper migrated are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "DAM.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A plan to build out target data architecture capabilities is alignment with enterprise architecture (SEA-02) driven by a strategic plan and objectives artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "DAM.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "SEA-01.4"
+   ],
+   "confidence": "medium",
+   "rationale": "A policy requiring the target data architecture to be built alongside the enterprise architecture using a recognized EA framework (TOGAF/Zachman) with models kept current is enterprise architecture alignment (SEA-02) under documented architecture principles (SEA-01.4)."
+  },
+  {
+   "control_id": "DAM.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "AST-04",
+    "SEA-02",
+    "PRI-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Baselining current conceptual/logical/physical data models, key processes and visualized data flows and lineage is data flow diagramming (AST-04) within enterprise architecture (SEA-02), with the lineage element matching PRI-09."
+  },
+  {
+   "control_id": "DAM.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "AST-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Defining the future-state enterprise data model and target architecture is the target-state side of enterprise architecture alignment (SEA-02), documented as data flow and architecture diagrams (AST-04)."
+  },
+  {
+   "control_id": "DAM.3.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "IAO-05"
+   ],
+   "confidence": "medium",
+   "rationale": "A documented current-to-target architecture gap analysis feeding an initiative list is architecture alignment work (SEA-02) recorded as tracked capability deficiencies (IAO-05)."
+  },
+  {
+   "control_id": "DAM.3.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "TDA-01"
+   ],
+   "confidence": "low",
+   "rationale": "Documenting data lake requirements against a vendor-neutral big data reference architecture is an architecture and platform acquisition decision (SEA-02, TDA-01); SCF has no big-data-specific control."
+  },
+  {
+   "control_id": "DAM.3.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "CAP-01"
+   ],
+   "confidence": "low",
+   "rationale": "A data partitioning strategy for real-time and batch processing is a performance-optimization architecture choice (SEA-02) with a capacity/performance objective (CAP-01), not the security partitioning SEA-03.1 describes."
+  },
+  {
+   "control_id": "DAM.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02.1",
+    "AST-04"
+   ],
+   "confidence": "low",
+   "rationale": "Adopting a single diagramming notation such as UML for entity structures across the SDLC is standardized terminology and representation (SEA-02.1) supporting architecture diagramming (AST-04)."
+  },
+  {
+   "control_id": "DAM.4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "AST-04",
+    "PRI-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Tooling for architecture design, data modeling and data lineage capture to enable impact analysis is data flow diagramming (AST-04) plus data lineage (PRI-09)."
+  },
+  {
+   "control_id": "DAM.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CHG-01",
+    "CHG-02"
+   ],
+   "confidence": "high",
+   "rationale": "A process to review, approve and implement changes to current and target data architectures, including modifications to Statement of Architecture Work documents, is a change management program (CHG-01) with configuration change control (CHG-02)."
+  },
+  {
+   "control_id": "DAM.5.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-07",
+    "TDA-06.5"
+   ],
+   "confidence": "medium",
+   "rationale": "Mandatory architecture checkpoints in the SDLC that validate model conformance to the enterprise data model are SDLC management gates (PRM-07) implemented as design reviews (TDA-06.5)."
+  },
+  {
+   "control_id": "DAM.6.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Metrics tracking progress from current-state toward target-state data architecture are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "DAM.7.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TDA-22",
+    "TDA-04"
+   ],
+   "confidence": "medium",
+   "rationale": "A register holding architecture project documentation, reference materials and data model designs is the retention of technical documentation artifacts (TDA-22) against defined documentation requirements (TDA-04)."
+  },
+  {
+   "control_id": "DSI.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "AST-02",
+    "AST-04",
+    "PRI-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Inventorying all data sources, systems, applications and data stores and documenting high-level lineage and data models is asset inventory (AST-02) with data flow diagrams (AST-04) and lineage documentation (PRI-09)."
+  },
+  {
+   "control_id": "DSI.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "AST-04"
+   ],
+   "confidence": "medium",
+   "rationale": "A target data integration architecture with requirements, a conceptual diagram and a component list is enterprise architecture alignment (SEA-02) captured as architecture/data flow diagrams (AST-04)."
+  },
+  {
+   "control_id": "DSI.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-01.1",
+    "SEA-02"
+   ],
+   "confidence": "medium",
+   "rationale": "A Data Integration Plan sequencing implementation of the target integration architecture is a strategic plan and objectives artifact (PRM-01.1) executing the architecture (SEA-02)."
+  },
+  {
+   "control_id": "DSI.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-03.3",
+    "SAT-02"
+   ],
+   "confidence": "high",
+   "rationale": "Training staff involved in data sharing on handling practices and on the consequences of unauthorized disclosure or mishandling is training on sensitive/regulated data storage, handling and processing (SAT-03.3) within the awareness program (SAT-02)."
+  },
+  {
+   "control_id": "DSI.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-05",
+    "TDA-02"
+   ],
+   "confidence": "medium",
+   "rationale": "An Integration Requirements Document capturing scope, timeline, resources, cost and functional/non-functional requirements is requirements definition (PRM-05) at the product requirement stage (TDA-02)."
+  },
+  {
+   "control_id": "DSI.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TDA-05",
+    "AST-04"
+   ],
+   "confidence": "medium",
+   "rationale": "A solution design document with a solution overview, data flow diagram and source-to-target mapping is developer architecture and design documentation (TDA-05) expressed as DFDs (AST-04)."
+  },
+  {
+   "control_id": "DSI.3.3",
+   "iso_clauses": [
+    "8.29"
+   ],
+   "scf_ids": [
+    "TDA-09",
+    "TDA-08"
+   ],
+   "confidence": "high",
+   "rationale": "Integration and functional testing with defined test cases executed in a test environment before production release is security/acceptance testing throughout development (TDA-09) requiring separated test and production environments (TDA-08), ISO 8.29."
+  },
+  {
+   "control_id": "DSI.3.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CHG-02",
+    "TDA-09.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Post-release monitoring with defect reporting and change requests for new user requirements is ongoing monitoring of the deployed solution (TDA-09.1) feeding configuration change control (CHG-02)."
+  },
+  {
+   "control_id": "DSI.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "OPS-01.1"
+   ],
+   "confidence": "low",
+   "rationale": "A documented and followed ETL extract/transform/load procedure is a data engineering pipeline; the only SCF analogue is the requirement for standardized documented operating procedures (OPS-01.1)."
+  },
+  {
+   "control_id": "DSI.4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "OPS-01.1"
+   ],
+   "confidence": "low",
+   "rationale": "A documented ELT procedure for landing raw data in the data lake before transformation is likewise only reachable as a standardized documented operating procedure (OPS-01.1)."
+  },
+  {
+   "control_id": "DSI.5.1",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [
+    "DCH-14",
+    "DCH-14.2",
+    "DCH-25"
+   ],
+   "confidence": "high",
+   "rationale": "The nine-step external data sharing process (request, classification check, principles assessment, executive approval, sharing controls, signed agreement, then release) is information sharing (DCH-14) with explicit transfer authorization (DCH-14.2) and controlled transfer of sensitive data (DCH-25), ISO 5.14."
+  },
+  {
+   "control_id": "DSI.6.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-14"
+   ],
+   "confidence": "medium",
+   "rationale": "A public website channel that receives data sharing requests and routes them to the Data Office is the intake mechanism of the information sharing control (DCH-14)."
+  },
+  {
+   "control_id": "DSI.7.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-14.2",
+    "DCH-14"
+   ],
+   "confidence": "medium",
+   "rationale": "An internal data sharing agreement template with the sharing controls documented in it is a documented transfer authorization (DCH-14.2) governing internal information sharing (DCH-14)."
+  },
+  {
+   "control_id": "DSI.7.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-07",
+    "TPM-05",
+    "DCH-14"
+   ],
+   "confidence": "high",
+   "rationale": "An external data sharing agreement stating purpose, parties, lawful basis, duration and liability is information sharing with third parties (PRI-07) governed by third-party contract requirements (TPM-05) over shared information (DCH-14)."
+  },
+  {
+   "control_id": "DSI.7.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TPM-08",
+    "TPM-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Requiring executive and requestor signature before sharing and periodic steward-led review of all ongoing agreements against their contractual provisions is review of third-party arrangements (TPM-08) against contract requirements (TPM-05)."
+  },
+  {
+   "control_id": "DSI.8.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Transfer rate, latency, request volumes, accept/deny counts and evaluation duration are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "RMD.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A plan to build reference and master data management capability is the data governance program (GOV-10) executed through a strategic plan artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "RMD.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "AST-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Identifying master data objects, the reference data they need and the systems where they are created, read, updated and deleted is data governance (GOV-10) building on the asset/system inventory (AST-02)."
+  },
+  {
+   "control_id": "RMD.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "AST-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Categorizing reference data as internal (entity is single source of truth) or external (owned by another entity or a standards body) is an ownership determination (AST-03) within data governance (GOV-10)."
+  },
+  {
+   "control_id": "RMD.1.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "AST-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Categorizing master data objects by whether the entity owns them and is the single source of truth is data ownership assignment (AST-03) under the data governance program (GOV-10)."
+  },
+  {
+   "control_id": "RMD.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "PRI-10"
+   ],
+   "confidence": "medium",
+   "rationale": "Documented requirements for lifecycle processes and roles, golden-record matching rules, provisioning to consuming applications and data quality requirements is data governance (GOV-10) with an explicit data quality management dependency (PRI-10)."
+  },
+  {
+   "control_id": "RMD.2.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "TDA-01"
+   ],
+   "confidence": "low",
+   "rationale": "Evaluating and selecting a master data hub architecture design is an architecture decision (SEA-02) and a technology selection (TDA-01); SCF has no MDM-specific control."
+  },
+  {
+   "control_id": "RMD.2.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02"
+   ],
+   "confidence": "low",
+   "rationale": "Choosing between registry, repository and coexistence hub patterns is a pure information-architecture pattern decision, reachable only through enterprise architecture alignment (SEA-02)."
+  },
+  {
+   "control_id": "RMD.2.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SEA-02",
+    "GOV-10.1",
+    "AST-04"
+   ],
+   "confidence": "medium",
+   "rationale": "An information architecture listing reference/master data objects with metadata definitions, models, sources, matching rules and data flows is architecture documentation (SEA-02) with a catalog/metadata inventory (GOV-10.1) and data flow diagrams (AST-04)."
+  },
+  {
+   "control_id": "RMD.2.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-05",
+    "TDA-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Documented hub technical requirements covering workflows, version control, functional and API-integration capability and support for secure data exchange is requirements definition (PRM-05) including baseline security requirements for the product (TDA-02)."
+  },
+  {
+   "control_id": "RMD.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Training on identification, matching, consolidation, conflict resolution and change management for staff who manage reference and master data is role-based training (SAT-03)."
+  },
+  {
+   "control_id": "RMD.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Assigning Business and IT Data Stewards to every identified reference and master data object is the data stewardship control (DCH-01.1)."
+  },
+  {
+   "control_id": "RMD.4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "DCH-20",
+    "DCH-18"
+   ],
+   "confidence": "medium",
+   "rationale": "A process covering creation, modification and archiving of reference and master data objects is data governance lifecycle management (GOV-10) whose archiving step is archived data sets (DCH-20) under retention rules (DCH-18)."
+  },
+  {
+   "control_id": "RMD.4.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "SEA-02"
+   ],
+   "confidence": "low",
+   "rationale": "Instantiating the hub components, loading objects and activating replication/synchronization is the build-out of the designed architecture (SEA-02) under the data governance program (GOV-10); SCF has no implementation-specific control."
+  },
+  {
+   "control_id": "RMD.4.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10",
+    "DCH-22"
+   ],
+   "confidence": "medium",
+   "rationale": "Establishing the hub as the entity's trusted source that new systems must consume is authoritative-source governance (GOV-10) serving data quality operations (DCH-22); SCF's nearest named analogue, PRI-04.2 primary sources, is scoped to personal data only."
+  },
+  {
+   "control_id": "RMD.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05",
+    "DCH-22"
+   ],
+   "confidence": "low",
+   "rationale": "SLAs balancing time against cost for reference and master data changes are performance targets (GOV-05) over the data operations process (DCH-22); SCF has no internal-SLA control."
+  },
+  {
+   "control_id": "RMD.5.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Incorrect-value counts, MTTR for RMD quality issues and change request volumes are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "RMD.6.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CHG-02",
+    "CHG-01"
+   ],
+   "confidence": "medium",
+   "rationale": "A register of reference and master data change request logs and the decisions taken on them is the change record produced by configuration change control (CHG-02) under a change management program (CHG-01)."
+  },
+  {
+   "control_id": "RMD.6.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TDA-22"
+   ],
+   "confidence": "low",
+   "rationale": "Retaining Statement of Architecture Work documents for RMD initiatives is the retention of technical documentation artifacts (TDA-22); nothing in SCF addresses architecture-work registers specifically."
+  },
+  {
+   "control_id": "BIA.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-01.1",
+    "GOV-10"
+   ],
+   "confidence": "medium",
+   "rationale": "A BI and analytics plan with roadmap, milestones, resources and budget is a strategic plan and objectives artifact (PRM-01.1) inside the data governance program (GOV-10)."
+  },
+  {
+   "control_id": "BIA.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-01.1"
+   ],
+   "confidence": "low",
+   "rationale": "Ideation workshops producing a long list of analytics use cases which is then shortlisted is business portfolio prioritization; only the strategic planning control (PRM-01.1) touches it, and only loosely."
+  },
+  {
+   "control_id": "BIA.1.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-05",
+    "AST-02.8"
+   ],
+   "confidence": "low",
+   "rationale": "Detailing each use case with objective, analytics type, ROI, stakeholders, requirements, feeding data sources and technologies is requirements definition (PRM-05); documenting which data sources feed which processing is data action mapping (AST-02.8)."
+  },
+  {
+   "control_id": "BIA.1.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-07",
+    "TDA-08"
+   ],
+   "confidence": "medium",
+   "rationale": "An implementation plan running requirements, high-level design, staging and production environment preparation, development and testing is SDLC management (PRM-07) requiring separation of development, test and production environments (TDA-08)."
+  },
+  {
+   "control_id": "BIA.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Upskilling analytics staff on data preparation, model development, analytics tooling and evaluation techniques is role-based training (SAT-03)."
+  },
+  {
+   "control_id": "BIA.2.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-05",
+    "SAT-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Campaigns publicizing existing analytics assets for reuse, success stories and new tools is organizational knowledge sharing (SAT-05) building workforce capability (SAT-01)."
+  },
+  {
+   "control_id": "BIA.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "RSK-10",
+    "PRI-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Validating each use case against its intended purpose and against the privacy domain's personal data protection considerations is a data protection impact assessment (RSK-10) enforcing purpose limitation on processing (PRI-04)."
+  },
+  {
+   "control_id": "BIA.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "HRS-03",
+    "HRS-13"
+   ],
+   "confidence": "medium",
+   "rationale": "Standing up a data analytics team of data scientists, engineers and visualization engineers is definition of roles and responsibilities (HRS-03) driven by an identification of critical skills (HRS-13)."
+  },
+  {
+   "control_id": "BIA.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Counts of use cases defined, piloted, implemented, total ROI and training sessions delivered are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "BIA.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "TDA-22",
+    "CPL-13"
+   ],
+   "confidence": "low",
+   "rationale": "A read-accessible register of BI use cases, outcome reviews and process documentation is retention of technical documentation artifacts (TDA-22) as program work products (CPL-13)."
+  },
+  {
+   "control_id": "DVR.1.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Identifying data revenue-generation and cost-saving use cases under the national Data Revenue Framework is commercial data monetization; SCF has no control covering productizing or selling organizational data (PRI-20 addresses data brokers as regulated third parties, not an entity monetizing its own data), so this is an honest gap."
+  },
+  {
+   "control_id": "DVR.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRM-01.1"
+   ],
+   "confidence": "low",
+   "rationale": "Only the roadmap/resources/budget half of this specification is reachable, as a strategic plan and objectives artifact (PRM-01.1); the payback-period and ROI estimation half has no SCF equivalent."
+  },
+  {
+   "control_id": "DVR.2.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Selecting and documenting a pricing scheme model for each data product is a commercial pricing decision with no security, privacy or governance control equivalent anywhere in SCF."
+  },
+  {
+   "control_id": "DVR.2.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Calculating total cost of a data product from collection and development cost is cost accounting; SCF contains no financial costing control."
+  },
+  {
+   "control_id": "DVR.2.3",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Choosing a charging model (subscription, consumption, freemium, one-time fee) is a commercial billing decision outside the entire SCF catalog."
+  },
+  {
+   "control_id": "DVR.2.4",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Submitting a revenue generation request with pricing documentation to NDMO is a local regulatory filing specific to the KSA Data Revenue Framework; SCF has no analogue for pricing approval submissions."
+  },
+  {
+   "control_id": "DVR.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05",
+    "CHG-02"
+   ],
+   "confidence": "low",
+   "rationale": "Measuring realized ROI and payback against projections is performance measurement (GOV-05); the change-request and defect-reporting half is configuration change control (CHG-02)."
+  },
+  {
+   "control_id": "DVR.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Counts of data products developed, requests raised, revenue generated, cost saved, payback period and ROI are program key performance indicators (GOV-05.1), even though the underlying subject is commercial."
+  },
+  {
+   "control_id": "OD.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A plan coordinating which datasets get published openly is governance of publicly accessible content (DCH-15) delivered through a strategic plan artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "OD.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-05",
+    "DCH-15"
+   ],
+   "confidence": "low",
+   "rationale": "Campaigns making external users aware of the open data offered is outward promotion of publicly accessible content (DCH-15); SCF's nearest internal analogue is knowledge sharing (SAT-05)."
+  },
+  {
+   "control_id": "OD.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15"
+   ],
+   "confidence": "high",
+   "rationale": "Processes to identify publishable datasets, publish and maintain them at quality while ensuring the exclusion of any restricted data is exactly the publicly accessible content control (DCH-15)."
+  },
+  {
+   "control_id": "OD.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15",
+    "DCH-23.5",
+    "DCH-23"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing whether combining the dataset with other publicly available data could disclose personal information or create a privacy risk before publishing is statistical disclosure control (DCH-23.5) and de-identification (DCH-23) applied to publicly accessible content (DCH-15)."
+  },
+  {
+   "control_id": "OD.3.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15",
+    "DCH-27"
+   ],
+   "confidence": "medium",
+   "rationale": "Publishing identified datasets under the KSA Open Data License is release of publicly accessible content (DCH-15) subject to defined usage/licensing terms (DCH-27)."
+  },
+  {
+   "control_id": "OD.3.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-10.1",
+    "DCH-15"
+   ],
+   "confidence": "medium",
+   "rationale": "Documenting the metadata that lets a published open dataset be identified, described and searched is metadata/catalog management (GOV-10.1) applied to publicly accessible content (DCH-15)."
+  },
+  {
+   "control_id": "OD.3.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15"
+   ],
+   "confidence": "low",
+   "rationale": "Mandating machine-readable formats (CSV, JSON, XML, RDF) plus usage documentation is a publication-format standard; SCF only reaches it as a property of publicly accessible content (DCH-15) and has no format-interoperability control."
+  },
+  {
+   "control_id": "OD.3.6",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15",
+    "AST-03.2",
+    "DCH-22"
+   ],
+   "confidence": "medium",
+   "rationale": "Regularly updating published datasets, reviewing them against regulatory requirements and maintaining traceability through documented provenance and version history is maintenance of publicly accessible content (DCH-15) with provenance (AST-03.2) and data quality operations (DCH-22)."
+  },
+  {
+   "control_id": "OD.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Downloads per dataset, datasets identified, published and updated are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "OD.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15",
+    "CPL-13"
+   ],
+   "confidence": "medium",
+   "rationale": "A register of all identified open datasets with a log of activities and decisions taken is the recordkeeping side of publicly accessible content management (DCH-15), retained as program work products (CPL-13)."
+  },
+  {
+   "control_id": "FOI.1.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01"
+   ],
+   "confidence": "medium",
+   "rationale": "A plan to achieve and maintain compliance with the NDMO Freedom of Information Regulations is the identification of and planning against applicable statutory obligations (CPL-01)."
+  },
+  {
+   "control_id": "FOI.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Campaigns raising staff awareness of FOI obligations and citizens' access rights are awareness training (SAT-02) with role-targeted content for those processing FOI requests (SAT-03)."
+  },
+  {
+   "control_id": "FOI.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01",
+    "DCH-15"
+   ],
+   "confidence": "medium",
+   "rationale": "Designing a standardized request-for-information process per the FOI Regulations is operationalizing a statutory obligation (CPL-01) governing release of public information (DCH-15); SCF's PRI-06 data subject rights is deliberately not used because FOI is a public-transparency right, not a data subject right."
+  },
+  {
+   "control_id": "FOI.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-03.1",
+    "CPL-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Deciding within a statutory deadline to grant, deny, extend or redirect an access request is a controlled disclosure of information decision (DCH-03.1) discharging a statutory obligation (CPL-01)."
+  },
+  {
+   "control_id": "FOI.3.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-15"
+   ],
+   "confidence": "medium",
+   "rationale": "Proactively publishing laws, services, organizational structure, vacancies, reports and statistics on the official website is the publicly accessible content control (DCH-15)."
+  },
+  {
+   "control_id": "FOI.3.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01"
+   ],
+   "confidence": "low",
+   "rationale": "Prescribing the content of the access request form (requestor identity, national ID, description, purpose, legal basis, delivery method) is a regulator-specified form design; only the statutory compliance control (CPL-01) covers it, and only as an obligation to meet."
+  },
+  {
+   "control_id": "FOI.3.5",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Calculating a processing fee for each granted access request using an NDMO pricing scheme is fee determination; SCF contains no pricing or cost-recovery control, so this is a genuine gap."
+  },
+  {
+   "control_id": "FOI.3.6",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-02.1",
+    "CPL-02.2",
+    "CPL-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "Internal audits of FOI compliance with findings reported to the ODIA and corrective actions plus regulator notification on non-compliance is the internal audit function (CPL-02.1), periodic audits (CPL-02.2) and corrective action (CPL-02.3)."
+  },
+  {
+   "control_id": "FOI.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-13",
+    "PRI-14.1"
+   ],
+   "confidence": "medium",
+   "rationale": "A register holding FOI compliance records, access request records and publication records is retention of compliance work products (CPL-13), the request-record element being an accounting of disclosures (PRI-14.1)."
+  },
+  {
+   "control_id": "DC.1.1",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [
+    "DCH-02",
+    "PRM-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "A plan with roadmap, milestones, resources and budget to classify the entity's data is the data and asset classification control (DCH-02, ISO 5.12) carried by a strategic plan artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "DC.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Producing a ranked list of datasets and artifacts to determine classification order is the scoping step of data and asset classification (DCH-02)."
+  },
+  {
+   "control_id": "DC.2.1",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [
+    "DCH-01.2",
+    "DCH-01"
+   ],
+   "confidence": "high",
+   "rationale": "Assigning handling and protection controls to datasets by classification level so handling, processing, sharing and disposal are secure is protection of sensitive/regulated data driven by classification (DCH-01.2) under the data protection control (DCH-01)."
+  },
+  {
+   "control_id": "DC.3.1",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [
+    "DCH-06.2",
+    "AST-02",
+    "GOV-10.1"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying and inventorying all datasets and artifacts the entity owns, using the Data Catalog where implemented, is a sensitive data inventory (DCH-06.2) and asset inventory (AST-02) held in the catalog (GOV-10.1), i.e. ISO 5.9."
+  },
+  {
+   "control_id": "DC.3.2",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [
+    "DCH-02",
+    "RSK-02"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing the impact of unauthorized access across national interest, organizations, individuals and environment and deriving Top Secret / Secret / Confidential / Public levels is impact-based security categorization (RSK-02) producing the classification (DCH-02, ISO 5.12)."
+  },
+  {
+   "control_id": "DC.3.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-11",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Evaluating whether 'Low' impact data can be released as Public instead of Confidential, weighing regulatory breach against benefit of opening it, is a deliberate downward reclassification (DCH-11) of previously assigned levels (DCH-02)."
+  },
+  {
+   "control_id": "DC.3.4",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [
+    "DCH-11",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Reviewing all classified datasets to confirm the assigned level is still the most appropriate is the periodic reclassification review (DCH-11) of the classification scheme (DCH-02, ISO 5.12)."
+  },
+  {
+   "control_id": "DC.3.5",
+   "iso_clauses": [
+    "5.13"
+   ],
+   "scf_ids": [
+    "DCH-04",
+    "DCH-05",
+    "GOV-10.1"
+   ],
+   "confidence": "high",
+   "rationale": "Publishing the assigned classification level as metadata against each dataset in the catalog is marking/labelling (DCH-04, ISO 5.13) implemented as data protection attributes (DCH-05) held in the Data Catalog (GOV-10.1)."
+  },
+  {
+   "control_id": "DC.4.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Percentages of datasets classified, classified by level, low-impact treated as confidential and reviewed/approved are program key performance indicators (GOV-05.1)."
+  },
+  {
+   "control_id": "DC.5.1",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [
+    "DCH-06.2",
+    "DCH-02",
+    "GOV-10.1"
+   ],
+   "confidence": "high",
+   "rationale": "A register listing every dataset with its assigned classification level, assignment dates, classification duration and review outcomes is a sensitive data inventory (DCH-06.2, ISO 5.9) recording classification decisions (DCH-02) in the catalog (GOV-10.1)."
+  },
+  {
+   "control_id": "PDP.1.1",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [
+    "PRI-05.5",
+    "PRI-14",
+    "RSK-10"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying the types of personal data collected, where and how it is stored, its current processing and uses, and the gaps to regulatory compliance is a personal data inventory (PRI-05.5) with documented processing activities (PRI-14) and an initial privacy impact assessment (RSK-10), ISO 5.34."
+  },
+  {
+   "control_id": "PDP.1.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-01",
+    "PRM-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "A Personal Data Protection Plan addressing strategic and operational privacy requirements with roadmap, resources and budget is the data privacy program (PRI-01) instantiated through a strategic plan artifact (PRM-01.1)."
+  },
+  {
+   "control_id": "PDP.2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-08",
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "Training every employee on personal data definitions, data subject rights, entity responsibilities and notification handling is the training element of personal data control testing, training and monitoring (PRI-08) delivered as role-based training (SAT-03)."
+  },
+  {
+   "control_id": "PDP.3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "IRO-10.2",
+    "IRO-04.1",
+    "IRO-14"
+   ],
+   "confidence": "high",
+   "rationale": "Notifying the Regulatory Authority within 72 hours of determining personal data was compromised is cyber incident reporting for sensitive/regulated data (IRO-10.2) under the data breach plan (IRO-04.1) through regulator contacts (IRO-14)."
+  },
+  {
+   "control_id": "PDP.3.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "IRO-04.1",
+    "IRO-02",
+    "IRO-13"
+   ],
+   "confidence": "high",
+   "rationale": "Documented breach management procedures with roles, incident review with the regulator, immediate response, permanent corrective actions and testing of those actions is the data breach plan (IRO-04.1) executed through incident handling (IRO-02) and root cause analysis / lessons learned (IRO-13)."
+  },
+  {
+   "control_id": "PDP.4.1",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [
+    "PRI-02",
+    "PRI-03",
+    "PRI-17.1"
+   ],
+   "confidence": "high",
+   "rationale": "Providing notice and obtaining implicit or explicit consent at every collection point, publishing a reviewable privacy notice and maintaining a hyperlink to it online is the privacy notice control (PRI-02), data subject consent (PRI-03) and the conspicuous link requirement (PRI-17.1), ISO 5.34."
+  },
+  {
+   "control_id": "PDP.4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-06",
+    "PRI-06.5",
+    "PRI-06.6"
+   ],
+   "confidence": "high",
+   "rationale": "Supporting the rights to be informed, access, rectification, erasure, objection, restriction and portability with a submission and tracking mechanism is data subject empowerment (PRI-06) including right to erasure (PRI-06.5) and data portability (PRI-06.6)."
+  },
+  {
+   "control_id": "PDP.4.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "RSK-10",
+    "RSK-04"
+   ],
+   "confidence": "high",
+   "rationale": "Yearly risk assessments of every system collecting, processing, storing or transmitting personal data, with findings documented, analyzed for impact and likelihood and evaluated against regulatory obligations, is a data protection impact assessment (RSK-10) run as a formal risk assessment (RSK-04)."
+  },
+  {
+   "control_id": "PDP.4.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-02.1",
+    "CPL-02.2",
+    "PRI-08"
+   ],
+   "confidence": "high",
+   "rationale": "Internal audits of privacy compliance reported to the DPO with corrective actions and regulator notification on non-compliance is the internal audit function (CPL-02.1) running periodic audits (CPL-02.2) over privacy controls (PRI-08)."
+  },
+  {
+   "control_id": "PDP.5.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-14",
+    "PRI-05.5"
+   ],
+   "confidence": "high",
+   "rationale": "A register retaining for at least 24 months a record of any collection or processing of personal data, producible on regulator request, is documentation of data processing activities (PRI-14) backed by the personal data inventory (PRI-05.5)."
+  },
+  {
+   "control_id": "DS.1",
+   "iso_clauses": [
+    "5.1",
+    "5.2"
+   ],
+   "scf_ids": [
+    "GOV-01",
+    "GOV-04"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing a plan of tools, personnel and business processes so security meets the entity's data protection needs is the security program control (GOV-01) with assigned responsibilities (GOV-04), matching ISO 5.1 policies and 5.2 roles."
+  },
+  {
+   "control_id": "DS.2",
+   "iso_clauses": [
+    "8.27"
+   ],
+   "scf_ids": [
+    "SEA-01",
+    "SEA-02"
+   ],
+   "confidence": "high",
+   "rationale": "Fundamental system concepts and properties that provide the context and guidance for security design decisions is secure engineering principles (SEA-01) aligned to enterprise architecture (SEA-02), i.e. ISO 8.27 secure system architecture and engineering principles."
+  },
+  {
+   "control_id": "DS.3",
+   "iso_clauses": [
+    "8.25",
+    "8.29"
+   ],
+   "scf_ids": [
+    "TDA-06",
+    "TDA-09"
+   ],
+   "confidence": "high",
+   "rationale": "Minimum security provisions built into a system during development, testing and implementation is secure software development practices (TDA-06) with security testing throughout development (TDA-09), ISO 8.25 and 8.29."
+  },
+  {
+   "control_id": "DS.4",
+   "iso_clauses": [
+    "5.15",
+    "5.16",
+    "5.18"
+   ],
+   "scf_ids": [
+    "IAC-01",
+    "IAC-07",
+    "IAC-20"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing the identity of users and systems requesting access to information assets is the identity and access management program (IAC-01) with provisioning/de-provisioning (IAC-07) and access enforcement (IAC-20), covering ISO 5.15/5.16/5.18."
+  },
+  {
+   "control_id": "DS.5",
+   "iso_clauses": [
+    "5.19",
+    "5.20"
+   ],
+   "scf_ids": [
+    "TPM-01",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Reflecting information security requirements in third-party supplier engagements is third-party management (TPM-01) with contractual security requirements (TPM-05), ISO 5.19 and 5.20."
+  },
+  {
+   "control_id": "DS.6",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "A comprehensive information security training program introducing personnel to security expectations and obligations is awareness training (SAT-02) plus role-based training (SAT-03), ISO 6.3."
+  },
+  {
+   "control_id": "DS.7",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [
+    "AST-01",
+    "AST-02"
+   ],
+   "confidence": "high",
+   "rationale": "A documented and maintained inventory of information assets containing critical entity data is asset governance (AST-01) and asset inventories (AST-02), ISO 5.9."
+  },
+  {
+   "control_id": "DS.8",
+   "iso_clauses": [
+    "8.16",
+    "5.37"
+   ],
+   "scf_ids": [
+    "OPS-01",
+    "MON-01"
+   ],
+   "confidence": "high",
+   "rationale": "Operational duties to monitor, assess and protect information assets is operations security (OPS-01) delivered through continuous monitoring (MON-01), ISO 8.16 monitoring activities and 5.37 documented operating procedures."
+  },
+  {
+   "control_id": "DS.9",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [
+    "IRO-01",
+    "IRO-04"
+   ],
+   "confidence": "high",
+   "rationale": "Processes for detecting, managing, recording and analyzing security threats and breaches arising from monitoring is incident response operations (IRO-01) governed by an incident response plan (IRO-04), ISO 5.24 and 5.26."
+  },
+  {
+   "control_id": "DS.10",
+   "iso_clauses": [],
+   "scf_ids": [
+    "RSK-01",
+    "RSK-04",
+    "RSK-06"
+   ],
+   "confidence": "high",
+   "rationale": "Identification, review, response and corrective action for risks by likelihood, consequence and exposure is the risk management program (RSK-01) with risk assessment (RSK-04) and risk remediation (RSK-06); ISO 27002:2022 has no risk-management clause of its own (it sits in ISO 27001 clause 6), so iso_clauses is deliberately empty."
+  },
+  {
+   "control_id": "DS.11",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [
+    "BCD-01",
+    "BCD-01.7"
+   ],
+   "confidence": "high",
+   "rationale": "A framework preserving confidentiality, integrity and availability of data during an incident is the business continuity management system (BCD-01) with BC/DR plans (BCD-01.7), ISO 5.29 security during disruption and 5.30 ICT readiness for business continuity."
+  }
+ ]
+}

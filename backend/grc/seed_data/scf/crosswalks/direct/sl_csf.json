@@ -1,0 +1,774 @@
+{
+ "framework": "sl_csf",
+ "hop": "direct",
+ "authored_by": "workflow:scf-reauthor-pivot",
+ "note": "One-hop requirement->SCF mapping, replacing the two-hop ISO pivot (blinded 3-rater trial: 88% vs 41% defensible).",
+ "mappings": [
+  {
+   "code": "1.1",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-03",
+    "GOV-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: GOV-02 is the mechanism that establishes and disseminates the security policy, GOV-03 supplies the planned-interval review for continued relevance, and GOV-01.1 supplies the executive steering/oversight body evidencing senior management commitment and approval.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.4",
+   "scf_ids": [
+    "GOV-04",
+    "HRS-03.2",
+    "GOV-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "GOV-04 assigns qualified individuals resourced to centrally coordinate the enterprise security programme, HRS-03.2 enforces that security-related positions are staffed with the necessary skill set, and GOV-04.2 supplies the chain of command giving those representatives organisational authority.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.5",
+   "scf_ids": [
+    "HRS-03",
+    "GOV-04.1",
+    "HRS-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: HRS-03 and GOV-04.1 define and allocate security roles into an enforceable accountability structure, while HRS-06.1 discharges the separate obligation that individuals holding those responsibilities sign non-disclosure/confidentiality agreements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.6",
+   "scf_ids": [
+    "GOV-06",
+    "IRO-14"
+   ],
+   "confidence": "high",
+   "rationale": "GOV-06 identifies and documents contacts with regulators and law enforcement, and IRO-14 maintains those regulatory/law-enforcement contacts specifically for security incident communication.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.7",
+   "scf_ids": [
+    "GOV-07"
+   ],
+   "confidence": "high",
+   "rationale": "GOV-07 is the mechanism for establishing contact with security communities, forums and associations to keep current with practices and share threat information, which is exactly the obligation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.8",
+   "scf_ids": [
+    "CPL-03.1",
+    "CPL-02.1",
+    "CPL-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "CPL-03.1 uses independent assessors at planned intervals, CPL-02.1 stands up the internal audit function, and CPL-02.2 provides the periodic audit cadence over the policies, procedures and their implementation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-09",
+    "CPL-01"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: GOV-02 produces and maintains the policy document itself, GOV-09 establishes the control objectives that define its security objectives and scope, and CPL-01 identifies the statutory, regulatory and contractual requirements the policy must align to.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2",
+   "scf_ids": [
+    "GOV-03"
+   ],
+   "confidence": "high",
+   "rationale": "GOV-03 is the mechanism that reviews policies and standards at planned intervals or on significant change to confirm continuing suitability, adequacy and effectiveness, matching the clause verbatim in obligation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3",
+   "scf_ids": [
+    "GOV-04",
+    "GOV-04.2",
+    "CPL-02"
+   ],
+   "confidence": "high",
+   "rationale": "GOV-04 designates the accountable individual who centrally administers the programme, GOV-04.2 gives that officer authoritative standing, and CPL-02 provides the oversight function that drives organisation-wide adherence to the policy.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.2",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-04"
+   ],
+   "confidence": "high",
+   "rationale": "TPM-05 is the mechanism requiring security, compliance and resilience requirements to be agreed contractually with third parties, and TPM-04 scopes that to third parties with access to organisational assets, applications, services and data.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.3",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.4"
+   ],
+   "confidence": "medium",
+   "rationale": "TPM-05 puts security requirements and deliverables into the third-party agreement and TPM-05.4 allocates responsibilities across the parties via a RASCI matrix; no SCF control governs the definition of non-security service-level performance metrics.",
+   "uncovered_clause": "SLAs must define performance metrics for service delivery"
+  },
+  {
+   "code": "3.4",
+   "scf_ids": [
+    "TPM-08",
+    "TPM-09"
+   ],
+   "confidence": "high",
+   "rationale": "TPM-08 monitors, reviews and assesses external service providers against agreed contractual security requirements, and TPM-09 closes the loop by remediating third-party deficiencies the review finds.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1",
+   "scf_ids": [
+    "AST-02",
+    "AST-01",
+    "AST-03"
+   ],
+   "confidence": "high",
+   "rationale": "AST-02 performs the asset inventory itself at the required granularity, AST-01 provides the asset management programme that keeps it current, and AST-03 assigns owners so inventoried assets can be identified and recovered.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2",
+   "scf_ids": [
+    "DCH-02",
+    "DCH-04",
+    "DCH-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: DCH-02 categorises data and assets against applicable requirements, DCH-04 discharges the labelling clause by marking media with handling caveats, and DCH-01.2 supplies the resulting protection measures for classified data.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3",
+   "scf_ids": [
+    "HRS-05.1",
+    "HRS-05.3",
+    "HRS-05.7"
+   ],
+   "confidence": "high",
+   "rationale": "HRS-05.1 defines acceptable and unacceptable rules of behaviour for use of technology, HRS-05.3 sets the usage restrictions for organisational technologies, and HRS-05.7 provides the recurring familiarisation and acknowledgement by personnel with access.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1",
+   "scf_ids": [
+    "HRS-03",
+    "HRS-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "HRS-03 defines cybersecurity roles and responsibilities for all personnel and HRS-03.1 is the communication mechanism ensuring users actually understand those obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2",
+   "scf_ids": [
+    "HRS-04",
+    "HRS-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "HRS-04 screens individuals prior to authorising access, and HRS-04.1 applies heightened screening criteria to roles touching information requiring special protection, matching the sensitive-access emphasis.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3",
+   "scf_ids": [
+    "HRS-05",
+    "HRS-06"
+   ],
+   "confidence": "high",
+   "rationale": "HRS-05 sets terms of employment requiring personnel to apply the organisation's security principles, and HRS-06 requires signed access agreements binding the employee to those responsibilities before access.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.4",
+   "scf_ids": [
+    "SAT-03",
+    "HRS-03.1",
+    "HRS-05.7"
+   ],
+   "confidence": "high",
+   "rationale": "SAT-03's mechanism delivers role-based training specifically before authorising system access, which is the timing the clause requires, with HRS-03.1 and HRS-05.7 providing the briefing and acknowledgement of security roles.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.5",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "SAT-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "SAT-02 delivers recurring awareness education to all employees and contractors, SAT-03 delivers the role-based training tier, and SAT-01.1 keeps that workforce development content relevant over time.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.6",
+   "scf_ids": [
+    "HRS-07",
+    "HRS-07.2"
+   ],
+   "confidence": "high",
+   "rationale": "HRS-07 is the formal sanction mechanism applied to personnel who fail to comply with security policy, and HRS-07.2 maintains the disciplinary process so handling stays consistent.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.7",
+   "scf_ids": [
+    "HRS-09",
+    "HRS-08",
+    "HRS-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: HRS-09 governs termination of employment, HRS-08 governs the change-of-employment/transfer case the clause also names, and HRS-01.1 assigns the onboarding/transfer/offboarding responsibilities across the lifecycle.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.8",
+   "scf_ids": [
+    "AST-10",
+    "HRS-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "AST-10 ensures employees and third-party users return organisational assets on termination of employment, contract or agreement, and HRS-09.1 is the retrieval mechanism executed at termination.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1",
+   "scf_ids": [
+    "PES-01.2",
+    "PES-03",
+    "PES-12"
+   ],
+   "confidence": "high",
+   "rationale": "PES-01.2 defines zone-based physical security perimeters, PES-03 enforces access authorisations at those perimeter points, and PES-12 sites information processing equipment inside the facility to minimise exposure.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.2",
+   "scf_ids": [
+    "MNT-02",
+    "MNT-03",
+    "MNT-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: MNT-02 conducts controlled maintenance across the asset lifecycle, MNT-03 secures maintenance support arrangements within a defined recovery objective which discharges the maintenance-agreement clause for critical systems, and MNT-03.1 provides preventive maintenance for availability and integrity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.3",
+   "scf_ids": [
+    "OPS-01.1",
+    "GOV-02"
+   ],
+   "confidence": "high",
+   "rationale": "OPS-01.1 identifies and documents standardised operating procedures for day-to-day execution, and GOV-02 supplies the dissemination mechanism making them available to the users who need them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.4",
+   "scf_ids": [
+    "HRS-11",
+    "HRS-12"
+   ],
+   "confidence": "high",
+   "rationale": "HRS-11 implements separation of duties to prevent inappropriate activity without collusion, and HRS-12 addresses incompatible roles by limiting privileges to change components in production.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.5",
+   "scf_ids": [
+    "CHG-01",
+    "CHG-02",
+    "CHG-03"
+   ],
+   "confidence": "high",
+   "rationale": "CHG-01 establishes the formal change management programme, CHG-02 governs the technical change control process, and CHG-03 supplies the security impact analysis that makes security-affecting changes controlled rather than merely tracked.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.6",
+   "scf_ids": [
+    "TDA-08",
+    "TDA-08.1"
+   ],
+   "confidence": "high",
+   "rationale": "TDA-08 manages separate development, testing and operational environments to reduce unauthorised access or change to production, and TDA-08.1 governs the secure migration between them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.7",
+   "scf_ids": [
+    "CAP-01",
+    "CAP-04",
+    "CAP-03"
+   ],
+   "confidence": "high",
+   "rationale": "CAP-01 governs capacity and performance management including tuning to meet anticipated requirements, CAP-04 centrally monitors and alerts on the operating state of critical assets, and CAP-03 produces the forward capacity projections.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.1",
+   "scf_ids": [
+    "CRY-01"
+   ],
+   "confidence": "high",
+   "rationale": "The requirement is itself a policy-level obligation for the use of cryptographic controls, and CRY-01 is the corresponding mechanism for implementing cryptographic protections against known public standards.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.2",
+   "scf_ids": [
+    "CRY-09",
+    "CRY-09.4",
+    "CRY-09.3"
+   ],
+   "confidence": "high",
+   "rationale": "CRY-09 governs key management for confidentiality, integrity and availability of keys, CRY-09.4 controls key distribution during use, and CRY-09.3 handles key loss and change at end of key lifetime.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1",
+   "scf_ids": [
+    "PES-01.2",
+    "PES-03",
+    "PES-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "PES-01.2 defines the physical security zones that constitute the perimeter, with PES-03 enforcing physical access authorisations and PES-03.1 limiting and monitoring the controlled ingress and egress points around sensitive facilities.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2",
+   "scf_ids": [
+    "PES-03",
+    "PES-02",
+    "PES-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "PES-03 enforces physical access control at all entry points to secure areas, PES-02 maintains the authorised-personnel list that entry is checked against, and PES-03.1 controls the ingress and egress points themselves.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.3",
+   "scf_ids": [
+    "PES-04",
+    "PES-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "PES-04 identifies which offices, rooms and facilities require limited physical access based on what they contain and designs controls accordingly, which is exactly the sensitivity-driven design obligation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4",
+   "scf_ids": [
+    "PES-12",
+    "PES-08",
+    "PES-07.5"
+   ],
+   "confidence": "high",
+   "rationale": "PES-12 sites equipment to minimise damage from physical and environmental hazards, with PES-08 providing fire detection and suppression and PES-07.5 water damage protection as the concrete disaster and accident protections.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.5",
+   "scf_ids": [
+    "PES-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "PES-04.1 is the control governing work in secure areas, restricting those areas to authorised personnel, which is the obligation stated.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.6",
+   "scf_ids": [
+    "PES-10",
+    "PES-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "PES-10 isolates delivery and loading areas from information processing facilities to avoid unauthorised access, and PES-03.1 controls the ingress and egress points where unauthorised persons could otherwise enter.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.7",
+   "scf_ids": [
+    "PES-07",
+    "PES-07.3",
+    "BCD-10"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: PES-07 protects power equipment and cabling from disruption, PES-07.3 supplies alternate power for extended loss of the primary source, and BCD-10 addresses the telecommunications-utility limb by removing single points of failure in primary telecom services.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.8",
+   "scf_ids": [
+    "PES-12.1",
+    "PES-07.7"
+   ],
+   "confidence": "high",
+   "rationale": "PES-12.1 protects power and telecommunications cabling carrying data from interception, interference and damage, and PES-07.7 adds physically separated redundant power cabling paths against cable damage.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-15"
+   ],
+   "confidence": "high",
+   "rationale": "IAC-07 is the formal user registration and de-registration process governing assignment of access rights, with IAC-15 governing the account types that process creates and removes.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.3",
+   "scf_ids": [
+    "IAC-02",
+    "IAC-15",
+    "IAC-09"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: IAC-02 uniquely identifies and authenticates organisational users, IAC-15 governs account creation, modification and deactivation, and IAC-09 manages the identifiers those accounts are issued under.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.4",
+   "scf_ids": [
+    "IAC-10.1",
+    "IAC-10.4"
+   ],
+   "confidence": "high",
+   "rationale": "IAC-10.1 enforces password complexity, length and lifespan per policy, and IAC-10.4's automated strength-checking mechanism is precisely the interactive password quality enforcement the clause requires.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.5",
+   "scf_ids": [
+    "IAC-25",
+    "IAC-24",
+    "IAC-23"
+   ],
+   "confidence": "high",
+   "rationale": "IAC-25 automatically logs users out after an organisation-defined period of inactivity, IAC-24 locks the session on inactivity, and IAC-23 limits concurrent sessions as the additional connection restriction for higher-risk applications.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.1",
+   "scf_ids": [
+    "NET-13",
+    "WEB-01",
+    "NET-18"
+   ],
+   "confidence": "high",
+   "rationale": "Composite framework requirement: NET-13 protects electronic messaging communications, WEB-01 establishes the enterprise web/internet management policy and standards, and NET-18 enforces internet-use controls through proxy URL and DNS filtering.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.2",
+   "scf_ids": [
+    "WEB-06",
+    "HRS-11",
+    "WEB-04"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: WEB-06 provides strong customer authentication for transactions and HRS-11 discharges the separate segregation-of-duties limb, with WEB-04 supplying the surrounding controls protecting client transaction data.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.3",
+   "scf_ids": [
+    "NET-12",
+    "WEB-10",
+    "CRY-04"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation is protecting e-commerce information crossing public networks, so NET-12 applies strong cryptography over open public networks, WEB-10 forces web content delivery over TLS, and CRY-04 protects transmitted data against unauthorised modification.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.2",
+   "scf_ids": [
+    "DCH-06",
+    "DCH-03",
+    "DCH-09",
+    "DCH-08"
+   ],
+   "confidence": "high",
+   "rationale": "Lifecycle composite: DCH-06 governs secure storage of digital and non-digital media, DCH-03 restricts media access, DCH-09 sanitises media commensurate with sensitivity, and DCH-08 discharges the secure disposal clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.3",
+   "scf_ids": [
+    "IAC-20.3"
+   ],
+   "confidence": "high",
+   "rationale": "IAC-20.3 restricts and tightly controls utility programs capable of overriding system and application controls, which is the obligation stated without remainder.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "11.4",
+   "scf_ids": [
+    "IAC-24",
+    "AST-06",
+    "DCH-06"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: IAC-24 initiates session lock on inactivity for the clear-screen limb, AST-06 protects unattended end-user equipment, and DCH-06 requires papers and removable media to be physically controlled and securely stored for the clear-desk limb.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.1",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-11",
+    "HRS-15"
+   ],
+   "confidence": "high",
+   "rationale": "IRO-10 timely-reports incidents to internal stakeholders through established channels, IRO-11 provides users the reporting assistance to raise events quickly, and HRS-15 enables personnel to report without fear of reprisal.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.2",
+   "scf_ids": [
+    "HRS-15",
+    "IRO-11",
+    "SAT-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "HRS-15 is the mechanism enabling personnel to report suspected weaknesses and suspicious behaviour safely, IRO-11 gives them handling and reporting assistance, and SAT-03.2 trains them to recognise the anomalous behaviour they must note.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.3",
+   "scf_ids": [
+    "IRO-01",
+    "IRO-02",
+    "IRO-04"
+   ],
+   "confidence": "high",
+   "rationale": "The requirement is itself the programme-level incident response obligation, so IRO-01 establishes and governs the organisation-wide response capability, IRO-02 supplies the preparation-through-recovery handling procedure, and IRO-04 maintains the plan assigning management responsibilities.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.4",
+   "scf_ids": [
+    "IRO-09.3",
+    "IRO-09.2",
+    "IRO-13"
+   ],
+   "confidence": "high",
+   "rationale": "IRO-09.3's incident repository records category, severity and remediation detail enabling types, volumes and costs to be quantified, IRO-09.2 reviews for recurring incidents, and IRO-13 feeds lessons learned back as continuous improvement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "12.5",
+   "scf_ids": [
+    "IRO-08",
+    "IRO-08.1"
+   ],
+   "confidence": "high",
+   "rationale": "IRO-08 performs digital forensics and maintains chain of custody in accordance with applicable laws, which is precisely the legally-admissible evidence collection and retention obligation, with IRO-08.1 covering licensed investigators.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.1",
+   "scf_ids": [
+    "PRM-05",
+    "TDA-02",
+    "PRM-04"
+   ],
+   "confidence": "high",
+   "rationale": "PRM-05 defines technical security requirements at SDLC decision points, TDA-02 turns them into risk-based functional specifications for new or enhanced products, and PRM-04 embeds that requirement assessment into project delivery.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.2",
+   "scf_ids": [
+    "TDA-18",
+    "SEA-09",
+    "TDA-19"
+   ],
+   "confidence": "high",
+   "rationale": "TDA-18 validates information inputs against corruption, SEA-09 validates program output against expected content, and TDA-19 handles error conditions so processing faults do not corrupt or leak information.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.3",
+   "scf_ids": [
+    "CFG-09",
+    "END-03",
+    "CFG-05",
+    "CHG-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: CFG-09 maintains the authoritative production software repository, END-03 and CFG-05 prohibit installation by non-privileged or unauthorised users, and CHG-02.2 discharges the untested-software clause by requiring pre-production testing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.4",
+   "scf_ids": [
+    "MON-03",
+    "MON-10",
+    "MON-17",
+    "MON-02"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: MON-03 configures logs to contain user activity, faults and security events, MON-02 centralises their collection, MON-10 retains them for the statutory period covering the one-year floor, and MON-17 provides the regular review with analysis and triage.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.5",
+   "scf_ids": [
+    "MON-16.3",
+    "MON-01.8",
+    "MON-16"
+   ],
+   "confidence": "high",
+   "rationale": "MON-16.3 monitors specifically for unauthorised activities, accounts, connections and software, MON-01.8 provides the ongoing review and escalation, and MON-16 detects the anomalous behaviour that signals unauthorised processing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.6",
+   "scf_ids": [
+    "NET-01",
+    "NET-03",
+    "NET-06"
+   ],
+   "confidence": "high",
+   "rationale": "The clause is the network-management obligation itself, so NET-01 governs the network security control procedures, with NET-03 providing boundary protection against threats and NET-06 segmentation to contain them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.7",
+   "scf_ids": [
+    "NET-05",
+    "NET-03.2",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "NET-05 documents interface characteristics and security requirements for each system interconnection, NET-03.2 maintains the managed interface for each external telecommunication service, and TPM-05 places those requirements into the provider agreement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.8",
+   "scf_ids": [
+    "TDA-06",
+    "PRM-07",
+    "TDA-09"
+   ],
+   "confidence": "high",
+   "rationale": "TDA-06 establishes secure software development practices as the development rules, PRM-07 controls SDLC changes through formal procedures, and TDA-09 embeds security testing and flaw remediation throughout the lifecycle.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.9",
+   "scf_ids": [
+    "TDA-10",
+    "DCH-18.2",
+    "TDA-10.1"
+   ],
+   "confidence": "high",
+   "rationale": "TDA-10 approves, documents and controls the use of live data in test environments, DCH-18.2 minimises sensitive data selected for testing, and TDA-10.1 protects the integrity of test data against corruption.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.10",
+   "scf_ids": [
+    "NET-17",
+    "NET-03.5",
+    "MON-11"
+   ],
+   "confidence": "high",
+   "rationale": "NET-17 applies data loss prevention to sensitive information in storage, transit and processing, NET-03.5 prevents unauthorised exfiltration across managed interfaces, and MON-11 detects evidence of unauthorised disclosure that slipped through.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.12",
+   "scf_ids": [
+    "THR-03",
+    "VPM-06",
+    "VPM-03",
+    "VPM-02"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: THR-03 and VPM-06 obtain vulnerability information timely through intelligence feeds and routine scanning, VPM-03 evaluates exposure by risk-ranking findings, and VPM-02 ensures the resulting measures are tracked to remediation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "13.13",
+   "scf_ids": [
+    "VPM-05",
+    "VPM-02",
+    "VPM-05.3"
+   ],
+   "confidence": "high",
+   "rationale": "VPM-05 patches software and firmware across deployed hardware and software, VPM-02 tracks vulnerabilities to closure, and VPM-05.3 sets remediation timeframes so exposure is actually reduced rather than merely recorded.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "14.1",
+   "scf_ids": [
+    "BCD-01",
+    "BCD-01.7"
+   ],
+   "confidence": "medium",
+   "rationale": "BCD-01 establishes the enterprise business continuity management system and BCD-01.7 the formal BC/DR plan structure, but no SCF control specifically compels senior management approval of that framework.",
+   "uncovered_clause": "the framework must be approved by senior management"
+  },
+  {
+   "code": "14.2",
+   "scf_ids": [
+    "RSK-08",
+    "RSK-04",
+    "RSK-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "RSK-08 conducts the business impact analysis the clause names and RSK-04 the recurring risk assessment covering likelihood and magnitude of disruption, with RSK-04.3 defining the instances that trigger reassessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "14.3",
+   "scf_ids": [
+    "BCD-07",
+    "BCD-01"
+   ],
+   "confidence": "high",
+   "rationale": "BCD-07 implements alternative or compensating controls that keep security functions satisfied when the primary means is unavailable or compromised, which is exactly maintaining information security through disruption and recovery, within the BCD-01 continuity system.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "14.4",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-06",
+    "BCD-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "BCD-01.7 has process owners establish and maintain formal BC/DR plans, BCD-06 updates them for people, process, technology and data changes, and BCD-06.1 defines the components those plans must contain.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "14.5",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-06",
+    "BCD-05"
+   ],
+   "confidence": "high",
+   "rationale": "BCD-04 tests and exercises the contingency plan to evaluate effectiveness and readiness, BCD-06 maintains and revises it for organisational change, and BCD-05 drives revision from test root-cause findings.",
+   "uncovered_clause": null
+  }
+ ]
+}

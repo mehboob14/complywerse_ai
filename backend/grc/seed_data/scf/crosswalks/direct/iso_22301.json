@@ -1,0 +1,109 @@
+{
+ "framework": "iso_22301",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "8.5.1",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-06"
+   ],
+   "confidence": "high",
+   "rationale": "The organization must hold documented continuity plans that are workable, assign roles, and be reviewed and updated regularly; BCD-01.7 requires process owners to maintain formal BC/DR plans detailed and accurate enough to sustain or restore operations, and BCD-06 supplies the ongoing update of those plans as people, processes and technology change.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "8.5.2",
+   "scf_ids": [
+    "BCD-01.5",
+    "IRO-07",
+    "BCD-01.6"
+   ],
+   "confidence": "high",
+   "rationale": "The clause demands an incident response structure with activation thresholds, a coordinated response and internal/external communications; BCD-01.5 defines the criteria that must be met to initiate continuity plans, IRO-07 is the integrated cross-functional response team that operates and coordinates the response, and BCD-01.6 carries the internal and external status communications.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "8.5.3",
+   "scf_ids": [
+    "BCD-10.4",
+    "BCD-01.6"
+   ],
+   "confidence": "medium",
+   "rationale": "Warning and communication requires the means of communication to remain available during a disruption and structured communication with responders and authorities; BCD-10.4 maintains command-and-control over alternate communication channels with alternative decision makers, and BCD-01.6 delivers the structured status communication to internal and external stakeholders — the detection and incident-record limbs are covered by monitoring and incident controls not credited here.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "8.5.4",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Each plan must state purpose, activation criteria, roles, resources and interdependencies and collectively recover prioritized activities within their RTO; BCD-01.7 requires the plan content to be detailed, accurate and representative of current operations, and BCD-01.4 binds recovery operations to defined RTOs and RPOs.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "8.5.5",
+   "scf_ids": [
+    "BCD-12",
+    "BCD-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "The clause obliges documented procedures to transition from response back to normal operations and to verify systems and data are restored; BCD-12 is the secure recovery and reconstitution of assets to a known state after a disruption, and BCD-02.1 covers resuming all missions and business functions within the plan's recovery objectives.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "8.6.1",
+   "scf_ids": [
+    "BCD-04"
+   ],
+   "confidence": "high",
+   "rationale": "The exercise programme must validate the continuity arrangements over time at planned intervals and after significant change; BCD-04 is precisely the mechanism for conducting tests and exercises that evaluate the contingency plan's effectiveness and the organisation's readiness to execute it.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "8.6.2",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-04.1",
+    "BCD-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "The programme must include varied exercise types from tabletop to live rehearsal, including technology recovery tests and exercises involving external parties; BCD-04 supplies the exercise mechanism, BCD-04.1 covers coordination with internal and external parties responsible for related plans, and BCD-04.2 covers the technology-focused testing at alternate storage and processing sites.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "9.1.1",
+   "scf_ids": [
+    "GOV-05",
+    "GOV-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "The organization must decide what to monitor and measure, how and when, and evaluate BCMS performance with retained evidence; GOV-05 is the mechanism for developing, reporting and monitoring programme measures of performance and GOV-05.1 supplies the KPIs and trend analysis — SCF frames this at security-programme level rather than BCMS level, hence medium.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "9.1.2",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-06"
+   ],
+   "confidence": "medium",
+   "rationale": "BC procedures must be evaluated at planned intervals and after exercises, incidents and significant change, testing whether RTO/RPO can actually be met; BCD-04 provides the effectiveness evaluation through testing and BCD-06 forces plans to be revisited when people, process or technology change — the BIA-conformance limb sits in RSK-08 and is not credited here.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "8.6.3",
+   "scf_ids": [
+    "BCD-05",
+    "BCD-06"
+   ],
+   "confidence": "medium",
+   "rationale": "After each exercise the organization must capture lessons learned, report findings and track corrective actions to completion; BCD-05 is SCF's root cause analysis and lessons-learned mechanism for contingency plans and BCD-06 drives the resulting plan updates — SCF anchors BCD-05 to plan activation rather than to exercises, so the fit is clear but partial.",
+   "unmappable_reason": null
+  }
+ ]
+}

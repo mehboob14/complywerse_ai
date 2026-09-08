@@ -1,0 +1,380 @@
+{
+ "framework": "sabic_cybertrust",
+ "hop": "direct",
+ "authored_by": "workflow:scf-reauthor-pivot",
+ "note": "One-hop requirement->SCF mapping, replacing the two-hop ISO pivot (blinded 3-rater trial: 88% vs 41% defensible).",
+ "mappings": [
+  {
+   "code": "1.1",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-03",
+    "GOV-01"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing, maintaining and disseminating an approved security policy is discharged by the documentation-publication mechanism (GOV-02), its planned-interval review (GOV-03), and the programme-level governance control that defines the organisation's overall approach (GOV-01, legitimate here because the requirement is itself programme-level).",
+   "uncovered_clause": "explicit senior-management approval of the policy document is only implied, not a discrete SCF mechanism"
+  },
+  {
+   "code": "1.2",
+   "scf_ids": [
+    "GOV-04",
+    "GOV-04.1",
+    "GOV-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "Assigning a designated individual with the mission and resources to run the security programme is GOV-04, the enforced accountability structure for teams and individuals is GOV-04.1, and the clear authority to implement controls is the authoritative chain of command in GOV-04.2.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.3",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "SAT-04"
+   ],
+   "confidence": "high",
+   "rationale": "General awareness training for all personnel is SAT-02, the 'topics relevant to the individual's role' clause is role-based training (SAT-03), and evidencing delivery on hire and at annual refresh needs the training-records mechanism (SAT-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1",
+   "scf_ids": [
+    "AST-02",
+    "AST-03"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining an accurate inventory of hardware, software and data assets is the asset-inventory mechanism (AST-02), and the 'with assigned owners' clause is the asset-ownership-assignment mechanism (AST-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2",
+   "scf_ids": [
+    "DCH-02",
+    "DCH-04",
+    "DCH-01"
+   ],
+   "confidence": "high",
+   "rationale": "Classifying information against a defined scheme is DCH-02, labelling it so handling caveats are visible is media marking (DCH-04), and defining and implementing handling procedures per classification level is the data-protection mechanism (DCH-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3",
+   "scf_ids": [
+    "DCH-12",
+    "CRY-05.1",
+    "DCH-06",
+    "DCH-08"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: removable-media handling restrictions are DCH-12, the encryption clause is cryptographic protection of data on storage media (CRY-05.1), the tracking/custody clause is physically controlled media storage (DCH-06), and secure disposal when no longer needed is DCH-08.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1",
+   "scf_ids": [
+    "IAC-21",
+    "IAC-20",
+    "IAC-17"
+   ],
+   "confidence": "high",
+   "rationale": "Least privilege is IAC-21, enforcing access decisions on business need is access enforcement (IAC-20), and the 'reviewed regularly' clause is the periodic review of account privileges (IAC-17); the IAM umbrella was deliberately avoided.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.2",
+   "scf_ids": [
+    "IAC-02",
+    "IAC-06",
+    "IAC-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Authenticating organisational users on systems holding the data is IAC-02, the multi-factor requirement is IAC-06, and the specific MFA-for-privileged-network-access clause is IAC-06.1; remote-access MFA is carried by requirement 7.3.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.3",
+   "scf_ids": [
+    "IAC-16",
+    "IAC-16.1",
+    "IAC-21.4",
+    "MON-01.15"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: privileged access management itself is IAC-16, the 'inventoried and authorised' clause is IAC-16.1, the logging clause is auditing the execution of privileged functions (IAC-21.4), and the monitoring clause is enhanced activity monitoring of privileged users (MON-01.15).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.4",
+   "scf_ids": [
+    "IAC-07.2",
+    "IAC-07.1",
+    "IAC-20.6"
+   ],
+   "confidence": "high",
+   "rationale": "Prompt de-provisioning on termination is IAC-07.2, the role-change clause is IAC-07.1, and the actual withdrawal of standing authorisations within the stated window is revocation of access authorisations (IAC-20.6).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1",
+   "scf_ids": [
+    "CRY-05",
+    "CRY-03",
+    "CRY-01"
+   ],
+   "confidence": "high",
+   "rationale": "Data at rest is encrypted under CRY-05, data in transit under transmission confidentiality (CRY-03), and the requirement that algorithms meet current approved standards is the use-of-cryptographic-controls mechanism (CRY-01), which is appropriate here because the requirement is itself a standards-selection obligation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2",
+   "scf_ids": [
+    "CRY-09",
+    "CRY-09.4",
+    "CRY-09.3"
+   ],
+   "confidence": "high",
+   "rationale": "Key generation, storage and destruction across the lifecycle is CRY-09, the distribution clause is the control and distribution of keys (CRY-09.4), and the rotation clause is handled by key loss or change (CRY-09.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1",
+   "scf_ids": [
+    "PES-03",
+    "PES-02",
+    "PES-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting facility entry is physical access control (PES-03), the 'authorized personnel' clause is physical access authorisations (PES-02), and the entry/exit logging clause is the physical access logs mechanism (PES-03.3).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2",
+   "scf_ids": [
+    "PES-12",
+    "PES-07",
+    "PES-08",
+    "PES-07.5"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: siting equipment to minimise physical/environmental damage and unauthorised access (theft) is PES-12, power disruption is the supporting-utilities mechanism (PES-07), fire is PES-08, and flood is water damage protection (PES-07.5); temperature/humidity controls were not asserted by the text.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.3",
+   "scf_ids": [
+    "AST-09",
+    "DCH-09",
+    "DCH-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Secure disposal or destruction of equipment so data cannot be recovered is AST-09, the wipe-or-destroy media clause is system media sanitisation (DCH-09), and the certificates-of-destruction clause is the sanitisation documentation mechanism (DCH-09.1).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1",
+   "scf_ids": [
+    "CHG-02",
+    "CHG-02.2",
+    "CHG-01"
+   ],
+   "confidence": "high",
+   "rationale": "Approving changes before implementation is configuration change control (CHG-02), the documented-and-tested clause is CHG-02.2 (test in non-production and document before production), and the overall process obligation is the change management programme (CHG-01).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.2",
+   "scf_ids": [
+    "END-04",
+    "END-04.1",
+    "END-04.7"
+   ],
+   "confidence": "high",
+   "rationale": "Anti-malware deployment on systems is END-04, the 'kept current' clause is automatic signature updates (END-04.1), and 'configured for real-time protection' is the always-on protection mechanism (END-04.7).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.3",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-11.1",
+    "BCD-11.4"
+   ],
+   "confidence": "high",
+   "rationale": "Performing regular backups is BCD-11, the tested-for-recoverability clause is testing for reliability and integrity (BCD-11.1), and 'stored securely' is cryptographic protection of backup information (BCD-11.4).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.4",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-02",
+    "VPM-04"
+   ],
+   "confidence": "high",
+   "rationale": "Identification through regular scanning is VPM-06, remediation tracking to closure is VPM-02, and the ongoing-within-defined-timeframes clause is continuous vulnerability remediation activities (VPM-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.5",
+   "scf_ids": [
+    "MON-01.8",
+    "MON-08",
+    "MON-10",
+    "MON-17"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: logging and ongoing review of security events is MON-01.8, the 'logs shall be protected' clause is protection of event logs (MON-08), the retention-period clause is MON-10, and 'reviewed regularly for anomalies' is event log analysis and triage (MON-17); the MON-01 umbrella was avoided.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.1",
+   "scf_ids": [
+    "NET-06",
+    "NET-03",
+    "NET-04"
+   ],
+   "confidence": "high",
+   "rationale": "Isolating in-scope systems from untrusted networks is network segmentation (NET-06), the firewall/boundary clause is boundary protection (NET-03), and 'access controls at segment boundaries' is ACL-based data flow enforcement (NET-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.2",
+   "scf_ids": [
+    "NET-12",
+    "CRY-03"
+   ],
+   "confidence": "high",
+   "rationale": "Encrypting transfers over untrusted networks using strong protocols such as SFTP/HTTPS is safeguarding data over open networks (NET-12), reinforced by the transmission confidentiality mechanism (CRY-03).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.3",
+   "scf_ids": [
+    "NET-14",
+    "NET-14.2",
+    "IAC-06"
+   ],
+   "confidence": "high",
+   "rationale": "Controlled remote access to in-scope systems is NET-14, the VPN/encrypted-channel clause is protection of confidentiality and integrity using encryption (NET-14.2), and the mandatory multi-factor clause is IAC-06.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.4",
+   "scf_ids": [
+    "END-08",
+    "NET-20.6",
+    "SAT-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: spam filtering and phishing protection are the anti-phishing/anti-spam technology mechanism (END-08), encryption of sensitive information sent by email is NET-20.6, and the user-training clause is awareness training on recognising and reporting social engineering (SAT-02.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1",
+   "scf_ids": [
+    "IRO-04",
+    "IRO-07"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing a documented incident response plan with defined procedures and communication protocols is IRO-04, and the defined-roles clause is the integrated incident response team mechanism (IRO-07).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-02.4"
+   ],
+   "confidence": "high",
+   "rationale": "Timely reporting of incidents to affected clients and third parties within a mandated window is IRO-10 (the obligation binds the supplier here, not the customer), and the 'impact assessment' element of the notification is incident classification and prioritisation (IRO-02.4).",
+   "uncovered_clause": "the specific 24-hour clock and the containment-actions content of the notice are configuration of IRO-10, not separate SCF controls"
+  },
+  {
+   "code": "8.3",
+   "scf_ids": [
+    "IRO-09.3",
+    "IRO-09",
+    "IRO-13"
+   ],
+   "confidence": "high",
+   "rationale": "Retaining incident records with details and remediation actions is the incident tracking repository (IRO-09.3), documenting incident status through resolution (the timeline clause) is IRO-09, and the lessons-learned clause is root cause analysis and lessons learned (IRO-13).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-01",
+    "BCD-04"
+   ],
+   "confidence": "high",
+   "rationale": "Documented recovery procedures covering the services provided are the formal BC/DR plans mechanism (BCD-01.7) within the continuity management system (BCD-01), and the 'tested' clause is contingency plan testing and exercises (BCD-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.2",
+   "scf_ids": [
+    "BCD-01.4",
+    "BCD-02",
+    "BCD-12",
+    "BCD-04"
+   ],
+   "confidence": "high",
+   "rationale": "Composite: defined recovery time and point objectives are BCD-01.4, scoping to critical systems is identify critical assets (BCD-02), the recovery capability itself is secure recovery and reconstitution after disruption (BCD-12), and 'tested' is contingency plan testing (BCD-04).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.1",
+   "scf_ids": [
+    "CPL-03",
+    "CPL-02.3",
+    "CPL-02"
+   ],
+   "confidence": "high",
+   "rationale": "Regularly assessing conformity of in-scope assets against the customer's requirements is control conformity monitoring (CPL-03), the remediation-plan clause is corrective action for non-conformity (CPL-02.3), and the ongoing oversight of that assessment is the controls oversight function (CPL-02).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.2",
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Complying with applicable statutory and regulatory security and data protection obligations is CPL-01, and the 'identified and monitored' clause is the compliance-scope mechanism that enumerates which obligations apply (CPL-01.2).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.3",
+   "scf_ids": [
+    "CPL-03.3"
+   ],
+   "confidence": "medium",
+   "rationale": "The only clause an SCF control discharges is providing assessors the minimum necessary logical access to artifacts and physical access to facilities (CPL-03.3); the rest of the requirement is submission to the customer's own audit, which binds the auditing party rather than the assessed organisation and is deliberately not mapped to any third-party-audit control.",
+   "uncovered_clause": "'shall support SABIC security audits when requested' — the obligation to undergo an externally-initiated audit has no assessed-organisation control mechanism"
+  },
+  {
+   "code": "10.4",
+   "scf_ids": [
+    "TPM-05.2",
+    "TPM-05",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Flowing the same requirements down to subcontractors by contract is TPM-05.2 within third-party contract requirements (TPM-05), and the 'verified' clause is monitoring and reviewing external service providers for compliance with those contractual requirements (TPM-08).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "10.5",
+   "scf_ids": [
+    "GOV-01.3",
+    "CPL-02.3",
+    "IRO-13"
+   ],
+   "confidence": "high",
+   "rationale": "Committing resources to a formal continual-improvement process is GOV-01.3, the improvement-from-audits-and-assessments input is corrective action on identified non-conformity (CPL-02.3), and the improvement-from-incident-analysis input is root cause analysis and lessons learned (IRO-13).",
+   "uncovered_clause": null
+  }
+ ]
+}

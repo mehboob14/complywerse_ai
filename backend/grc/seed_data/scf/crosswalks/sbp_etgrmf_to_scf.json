@@ -1,0 +1,2420 @@
+{
+ "framework": "sbp_etgrmf",
+ "library": "sbp_etgrmf.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "1.1.a",
+   "iso_clauses": [
+    "5.1",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Board establishment of a governance framework defining leadership, structures and processes is the top-management approval of direction (5.1) plus the allocation of governance roles (5.2), though ETGRMF's scope is all technology, not only information security."
+  },
+  {
+   "control_id": "1.1.b",
+   "iso_clauses": [
+    "5.1",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Directing preparation of plans/policies and then monitoring compliance against them is the policy-lifecycle half of 5.1 plus the conformance-monitoring duty of 5.36."
+  },
+  {
+   "control_id": "1.1.c",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Strategic alignment, value delivery and resource management are COBIT-style governance principles; only the requirement that they be codified in a framework touches 5.1's policy set."
+  },
+  {
+   "control_id": "1.1.d",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the technology governance policies and procedures to be aligned with and subordinate to corporate governance, which is 5.1's topic-specific-policy-under-an-approved-hierarchy requirement."
+  },
+  {
+   "control_id": "1.1.e",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Encouragement to adopt international standards/best practices only loosely echoes 5.36's requirement to comply with the standards the organization has adopted; ISO 27002 has no clause about choosing external frameworks."
+  },
+  {
+   "control_id": "1.2.a",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Board approval of a written IT Strategy that must explicitly cover adoption of information security systems and practices matches 5.1's requirement for management-approved, published direction on security."
+  },
+  {
+   "control_id": "1.2.b",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "The strategic review process to keep the IT Strategy relevant parallels 5.1's periodic review at planned intervals, but the object under review is business strategy rather than a security policy."
+  },
+  {
+   "control_id": "1.3.a",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Board approval of a Digital Strategy for customer-focused digital products is a business/product-development mandate with no information security content; ISO 27002 has no equivalent."
+  },
+  {
+   "control_id": "1.3.b",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "End-to-end digitization of service delivery processes is a business transformation objective; ISO 27002:2022 contains no clause on digitization programmes."
+  },
+  {
+   "control_id": "1.3.c",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Interoperability of delivery channels is a functional/architecture objective for payment channels, not a security control; no ISO 27002 clause addresses channel interoperability."
+  },
+  {
+   "control_id": "1.4.1.a",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Board review and approval of the IT governance framework is the approval-by-management element of 5.1, applied to the governance framework rather than to a security policy specifically."
+  },
+  {
+   "control_id": "1.4.1.b",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Board approval and periodic update of IT and Digital Strategies mirrors 5.1's approve-and-review-at-planned-intervals cycle, but strategy documents are outside ISO 27002's policy scope."
+  },
+  {
+   "control_id": "1.4.1.c",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing an IT organization structure aligned to the governance framework is the organizational-allocation-of-responsibilities requirement of 5.2, broadened from security roles to the whole IT function."
+  },
+  {
+   "control_id": "1.4.1.d",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Integrating technology risk into enterprise risk management is a risk-management-process requirement; ISO 27002:2022 deliberately contains no risk assessment/treatment control (it lives in ISO 27001 clause 6)."
+  },
+  {
+   "control_id": "1.4.1.e",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Board approval of all technology policies with a mandatory review at least every three years is exactly 5.1's define-approve-publish-and-review-at-planned-intervals requirement."
+  },
+  {
+   "control_id": "1.4.1.f",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining an independent technology audit function sized to the risk profile is the organizational arrangement 5.35 requires for independent review of the security approach."
+  },
+  {
+   "control_id": "1.4.1.g",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Board assurance that people/process/technology resource gaps are funded and filled is a resourcing obligation (ISO 27001 clause 7.1); no ISO 27002 control covers resource provisioning."
+  },
+  {
+   "control_id": "1.4.1.h",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring skills for governance, service delivery, information security and risk management are sufficient and current is the competence/education side of 6.3, at board-assurance level."
+  },
+  {
+   "control_id": "1.4.1.i",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Board approval and periodic updates on major technology projects touches 5.8 only in that projects must be governed; 5.8 is specifically about embedding security requirements into project management, which this clause does not state."
+  },
+  {
+   "control_id": "1.4.2.a",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Senior management implementation of the board-approved IT and Digital Strategy corresponds only weakly to 5.1's requirement that approved direction be enacted; the subject matter is business strategy execution."
+  },
+  {
+   "control_id": "1.4.2.b",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Monitoring implementation of the governance programme and assessing its effectiveness on business lines is 5.36's periodic review that processes comply with the established policies and standards."
+  },
+  {
+   "control_id": "1.4.2.c",
+   "iso_clauses": [
+    "6.3",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Explicitly requires an effective organization-wide information security awareness programme (6.3) as well as implementation of the board-approved technology policies (5.1)."
+  },
+  {
+   "control_id": "1.4.2.d",
+   "iso_clauses": [
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Periodic briefing of the board on cyber security plan status and a summary of major threats and attacks is the analyse-and-communicate-to-relevant-stakeholders output required by 5.7 threat intelligence."
+  },
+  {
+   "control_id": "1.4.2.e",
+   "iso_clauses": [
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires documented Standard Operating Procedures to exist and be followed across all technology operations, which is verbatim the intent of 5.37 documented operating procedures."
+  },
+  {
+   "control_id": "1.4.2.f",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Capacity building of IT personnel for service delivery excellence is the education and training limb of 6.3, though its aim is operational competence rather than security awareness."
+  },
+  {
+   "control_id": "1.4.2.g",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Selecting technology solutions that meet strategic requirements within optimum resources is a procurement value-for-money criterion with no security dimension stated; ISO 27002 has no matching clause."
+  },
+  {
+   "control_id": "1.4.2.h",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Monitoring project completion and resource adequacy overlaps 5.8 only on the shared premise that projects be formally managed; 5.8's actual subject (security requirements inside projects) is absent here."
+  },
+  {
+   "control_id": "1.4.2.i",
+   "iso_clauses": [
+    "5.19",
+    "5.23",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying, measuring, monitoring and controlling risks in technology outsourcing including cloud is precisely 5.19 (supplier relationship security), 5.23 (cloud service use) and 5.22 (ongoing monitoring of supplier services)."
+  },
+  {
+   "control_id": "1.4.2.j",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing, maintaining and documenting testing of DR and business continuity plans is 5.30's ICT continuity readiness plus 5.29's requirement to plan and exercise security during disruption."
+  },
+  {
+   "control_id": "1.4.2.k",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying and closing people/process/technology resource gaps is a management resourcing duty (ISO 27001 clause 7.1); ISO 27002:2022 has no resourcing control."
+  },
+  {
+   "control_id": "1.5.1.a",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Mandating constitution of a Board IT Committee is a Pakistani regulatory governance-body requirement; it touches 5.2 only as the formal assignment of oversight responsibility to a defined body."
+  },
+  {
+   "control_id": "1.5.1.b",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "The prescribed membership (three directors, one independent, one IT-qualified) is a corporate-governance composition rule; only the underlying idea of defining who holds oversight responsibility maps to 5.2."
+  },
+  {
+   "control_id": "1.5.1.c",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Defining the committee's advisory and board-reporting remit is a statement of responsibilities and reporting lines, the subject of 5.2, albeit for technology generally rather than information security."
+  },
+  {
+   "control_id": "1.5.1.d",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Committee review of IT/Digital strategies and relevant policies before board submission is the review step in 5.1's policy approval chain."
+  },
+  {
+   "control_id": "1.5.1.e",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring risk strategies that deliver resilience against wide-scale disruption and cyber attacks corresponds to 5.29 (maintaining security through disruption) and 5.30 (ICT readiness for continuity), at governance level."
+  },
+  {
+   "control_id": "1.5.1.f",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Receiving IT Steering Committee updates to monitor board-approved projects is project oversight reporting; ISO 27002's only project clause, 5.8, concerns security within project management."
+  },
+  {
+   "control_id": "1.5.1.g",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ensuring technology procurements align with the board-approved IT strategy is a strategic-fit budget control, not supplier security (5.19/5.20 concern security requirements in supplier relationships, which this clause does not raise)."
+  },
+  {
+   "control_id": "1.5.1.h",
+   "iso_clauses": [
+    "5.6"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Permission to seek expert opinion from independent sources is the nearest analogue to 5.6's use of external specialist forums for advice, though ISO 27002 frames it as ongoing membership rather than ad-hoc consultation."
+  },
+  {
+   "control_id": "1.5.2.a",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requiring the IT Steering Committee's terms of reference to be approved by the Board IT Committee formalizes the scope of a body's responsibilities, the concern of 5.2."
+  },
+  {
+   "control_id": "1.5.2.b",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Mandating cross-functional membership including information security, risk and compliance is 5.2's allocation of security responsibility to defined role-holders within a coordinating structure."
+  },
+  {
+   "control_id": "1.5.2.c",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "The committee's advisory role to senior management on technology matters is a responsibility definition (5.2); no ISO 27002 clause covers steering-committee advisory function as such."
+  },
+  {
+   "control_id": "1.5.2.d",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Committee monitoring of technology project implementation shares only the project-governance premise with 5.8, whose actual requirement is embedding security into projects."
+  },
+  {
+   "control_id": "1.5.2.e",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ensuring IT procurement follows the business plan is a budget-alignment control with no security requirement; ISO 27002 has no procurement-planning clause."
+  },
+  {
+   "control_id": "1.5.2.f",
+   "iso_clauses": [
+    "5.23",
+    "5.22",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ensuring cloud service provider outsourcing is conducted in line with the SLA is 5.23 (cloud use processes), 5.22 (monitoring supplier service delivery against agreed levels) and 5.20 (agreement terms)."
+  },
+  {
+   "control_id": "1.5.2.g",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A catch-all duty to ensure an efficient IT operating environment supporting institutional goals states no specific safeguard; mapping it to any ISO 27002 clause would be arbitrary."
+  },
+  {
+   "control_id": "1.5.2.h",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Reviewing the adequacy of the staff training plan including information/cyber security training is directly 6.3's requirement for a planned, periodically reviewed awareness and training programme."
+  },
+  {
+   "control_id": "1.5.3.a",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requiring the IT organizational structure to be proportionate to size and business nature is a structural sizing rule; only the defined-structure aspect of 5.2 applies."
+  },
+  {
+   "control_id": "1.5.3.b",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Naming the CISO as accountable for enterprise-wide management and mitigation of information/cyber security risk is the explicit definition and allocation of information security responsibility in 5.2."
+  },
+  {
+   "control_id": "1.5.3.c",
+   "iso_clauses": [
+    "5.3",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring the CISO to be independent of the technology function to avoid conflict of interest is a conflicting-duties separation (5.3) enforced through the defined reporting line (5.2)."
+  },
+  {
+   "control_id": "1.6.a",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates a technology policy framework covering information security, operations, development and BCP, reviewed at least every three years, matching 5.1's topic-specific policy set with defined review intervals."
+  },
+  {
+   "control_id": "1.7.a",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Board-level MIS tracking exceptions from approved IT policies and implementation status is the compliance-monitoring and exception-reporting activity 5.36 requires of management."
+  },
+  {
+   "control_id": "1.7.b",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Management MIS monitoring implementation of the IT governance and risk framework is 5.36's regular review that processes conform to the established framework."
+  },
+  {
+   "control_id": "1.8.a",
+   "iso_clauses": [
+    "6.1",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring hiring to be governed by documented policy maps to 6.1 screening prior to employment, and the training half to 6.3's planned training programme."
+  },
+  {
+   "control_id": "1.8.b",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring staff hold the expertise needed to perform their jobs is the competence outcome that 6.3's education and training programme is designed to deliver."
+  },
+  {
+   "control_id": "1.8.c",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Developing training programmes for major new technologies before deployment is 6.3's requirement that training be updated for changes in systems and delivered when relevant."
+  },
+  {
+   "control_id": "1.8.d",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Encouraging staff to obtain recognized professional certifications is a continuing-education measure under 6.3, though ISO 27002 does not name certification specifically."
+  },
+  {
+   "control_id": "1.8.e",
+   "iso_clauses": [
+    "6.3",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Additional targeted security training for privileged-access and sensitive-function staff is 6.3's role-tailored training combined with 8.2's requirement that privileged users be competent before rights are granted."
+  },
+  {
+   "control_id": "2.1.a",
+   "iso_clauses": [
+    "5.9",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identification and prioritization of critical information system assets is 5.9's inventory with recorded importance, supported by 5.12's criticality-based classification."
+  },
+  {
+   "control_id": "2.1.b",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A risk identification/assessment/treatment process is the ISO 27001 clause 6.1 management-system requirement; ISO 27002:2022 contains no risk assessment control to map it onto."
+  },
+  {
+   "control_id": "2.1.c",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "'Security controls implementation' is a bare framework heading with no stated safeguard; any single ISO 27002 clause would be an arbitrary narrowing of the whole standard."
+  },
+  {
+   "control_id": "2.1.d",
+   "iso_clauses": [
+    "5.24",
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A plan to anticipate, withstand, detect and respond to cyber attacks is incident management planning and preparation (5.24), with the 'anticipate' element resting on threat intelligence (5.7)."
+  },
+  {
+   "control_id": "2.1.e",
+   "iso_clauses": [
+    "6.8",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Incident reporting as a mandatory framework component is 6.8's event reporting channels underpinned by the reporting procedures established under 5.24."
+  },
+  {
+   "control_id": "2.1.f",
+   "iso_clauses": [
+    "8.29",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Security requirements and testing as a framework component covers 8.26's specification of application security requirements and 8.29's testing of them before acceptance."
+  },
+  {
+   "control_id": "2.1.g",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Risk monitoring and reporting is a management-system performance-evaluation activity (ISO 27001 clause 9); ISO 27002's 8.16 covers technical monitoring of systems, not risk reporting, so no honest clause fits."
+  },
+  {
+   "control_id": "2.1.h",
+   "iso_clauses": [
+    "5.7",
+    "5.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Threat intelligence and industry collaboration is literally 5.7 (collect and analyse threat information) plus 5.6 (contact with special interest groups and industry forums)."
+  },
+  {
+   "control_id": "2.2.a",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Protecting critical information system assets from unauthorized access, modification, deletion or disclosure is the access-control objective of 5.15 enforced through 8.3's restriction of access to information and functions."
+  },
+  {
+   "control_id": "2.2.b",
+   "iso_clauses": [
+    "5.9",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A policy that identifies and ascertains asset criticality in order to plan protection is 5.9's inventory-with-importance plus 5.12's classification by criticality and sensitivity."
+  },
+  {
+   "control_id": "2.3.1.a",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An annual institution-wide vulnerability identification exercise across critical systems and supporting infrastructure is 8.8's requirement to obtain and evaluate information about technical vulnerabilities in systems in use."
+  },
+  {
+   "control_id": "2.3.1.b",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Producing a list of risks derived from identified threats and vulnerabilities is a risk-register output (ISO 27001 6.1.2); it touches 8.8 only where the input is technical vulnerability data."
+  },
+  {
+   "control_id": "2.3.2.a",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Quantifying the potential impact and consequences of identified risks is risk analysis under ISO 27001 clause 6.1.2; ISO 27002:2022 has no risk analysis control."
+  },
+  {
+   "control_id": "2.3.2.b",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing an impact-assessment methodology and prioritizing material security risks is risk criteria and evaluation under ISO 27001 clause 6.1.2, outside ISO 27002's control catalogue."
+  },
+  {
+   "control_id": "2.3.3.a",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing risk mitigation strategies proportionate to asset value and risk tolerance is risk treatment under ISO 27001 clause 6.1.3; ISO 27002 lists the controls to choose from but has no treatment-process clause."
+  },
+  {
+   "control_id": "2.3.3.b",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Prioritizing high-ranked threat/vulnerability pairings is a risk-treatment sequencing rule belonging to ISO 27001 clause 6.1.3, with no ISO 27002 counterpart."
+  },
+  {
+   "control_id": "2.3.3.c",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Weighing cost against effectiveness when choosing alternative controls is a risk-treatment decision criterion; ISO 27002 contains no clause on control cost-benefit analysis."
+  },
+  {
+   "control_id": "2.3.3.d",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Refraining from operating systems whose threats cannot be adequately controlled is a risk-acceptance prohibition (ISO 27001 clause 6.1.3/8.3), not a safeguard described anywhere in ISO 27002."
+  },
+  {
+   "control_id": "2.3.3.e",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Taking insurance cover for insurable risks including recovery costs is risk transfer; ISO 27002:2022 has no insurance control."
+  },
+  {
+   "control_id": "2.4.1",
+   "iso_clauses": [
+    "5.9",
+    "5.12",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Combines an information asset inventory with named owners (5.9), a sensitivity/criticality classification scheme with per-level handling rules (5.12), and secure disposal and destruction of sensitive paper and electronic media (7.10)."
+  },
+  {
+   "control_id": "2.4.2",
+   "iso_clauses": [
+    "7.1",
+    "7.2",
+    "7.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Secure areas for data centres and network rooms with security barriers (7.1), restricted and periodically reviewed entry controls (7.2), and siting/monitoring against environmental threats (7.5)."
+  },
+  {
+   "control_id": "2.4.3",
+   "iso_clauses": [
+    "5.18",
+    "8.2",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal procedures for allocating access rights (5.18), least-privilege administration of privileged system and security roles (8.2), and the rule that administrators hold no transactional authority (5.3 conflicting duties)."
+  },
+  {
+   "control_id": "2.4.4",
+   "iso_clauses": [
+    "8.5",
+    "5.10",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Authentication mechanisms selected to match information classification (8.5), mandatory user acknowledgement of an Acceptable Use Policy before system use (5.10), and prohibition on security-management staff holding conflicting duties (5.3)."
+  },
+  {
+   "control_id": "2.4.5.a",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining sets of access privileges per user group for data and programs is the access-control rule-setting of 5.15 implemented as the information and application-function restriction of 8.3."
+  },
+  {
+   "control_id": "2.4.5.b",
+   "iso_clauses": [
+    "5.32",
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Prohibiting installation of unlicensed software is 5.32's software licence compliance requirement enforced through 8.19's control over what may be installed on operational systems."
+  },
+  {
+   "control_id": "2.4.5.c",
+   "iso_clauses": [
+    "8.8",
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring installation of updated software versions is the patching and version-currency response mandated by 8.8, carried out under 8.19's controlled installation procedures."
+  },
+  {
+   "control_id": "2.4.5.d",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Secure configuration of OS, applications, databases and servers with unnecessary services and programs disabled or removed is 8.9's hardening baseline verbatim."
+  },
+  {
+   "control_id": "2.4.5.e",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Adequate documentation of all configurations and settings is 8.9's requirement that configurations be defined, recorded and maintained as a documented baseline."
+  },
+  {
+   "control_id": "2.4.5.f",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Logging of system and user activities with logs protected from manipulation is 8.15, and reviewing those logs to detect irregularities is 8.16."
+  },
+  {
+   "control_id": "2.4.6.a",
+   "iso_clauses": [
+    "8.20",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Implementing network controls proportionate to network complexity is 8.20, and the mechanism to detect policy violations and atypical network activity is 8.16's anomalous-behaviour monitoring."
+  },
+  {
+   "control_id": "2.4.6.b",
+   "iso_clauses": [
+    "8.20",
+    "8.22",
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Selecting controls per security domain by criticality, protocol and trustworthiness is 8.20's network control design, realized through domain segregation (8.22) and defined security mechanisms for network services (8.21)."
+  },
+  {
+   "control_id": "2.4.6.c",
+   "iso_clauses": [
+    "8.13",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular backup of all device configurations is 8.13's backup requirement applied to the configuration records that 8.9 requires be maintained and recoverable."
+  },
+  {
+   "control_id": "2.4.7",
+   "iso_clauses": [
+    "6.7",
+    "8.5",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Approval, authentication, device protection, logging and stronger controls such as encryption and two-factor for remote access are 6.7's remote working safeguards, 8.5's multi-factor secure authentication and 8.20's security for remote network connections."
+  },
+  {
+   "control_id": "2.4.8",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandating encryption at database, storage and network-transmission level according to data classification is exactly 8.24's classification-driven rules for the use of cryptography."
+  },
+  {
+   "control_id": "2.5",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A cyber security action plan to anticipate, withstand, detect and respond is incident management planning and preparation (5.24) with the documented response procedures of 5.26."
+  },
+  {
+   "control_id": "2.5.a",
+   "iso_clauses": [
+    "5.4",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Board and senior management engagement with a clear chain of accountability is 5.4's management responsibility to drive security and 5.2's defined accountability structure."
+  },
+  {
+   "control_id": "2.5.b",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A robust cyber security awareness programme making end users aware of protecting sensitive information and the risks of mishandling it is precisely 6.3's awareness programme."
+  },
+  {
+   "control_id": "2.5.c",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A statement that the sophistication of technical controls depends on the institution's individual situation is a proportionality principle, not a control; no ISO 27002 clause states it."
+  },
+  {
+   "control_id": "2.5.d",
+   "iso_clauses": [
+    "5.19",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Written procedures governing vendor access to sensitive data and systems is 5.19's supplier access risk process, formalized in the agreement terms 5.20 requires."
+  },
+  {
+   "control_id": "2.5.e",
+   "iso_clauses": [
+    "8.16",
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Automated solutions to monitor and proactively track all types of cyber attack is 8.16's continuous monitoring for anomalous behaviour, fed by the attack information 5.7 requires be collected."
+  },
+  {
+   "control_id": "2.5.f",
+   "iso_clauses": [
+    "8.27"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A consistent and comparable approach to selecting and specifying security controls for computer systems most nearly matches 8.27's requirement to apply standard secure engineering principles across systems; ISO 27002 has no control-selection-methodology clause."
+  },
+  {
+   "control_id": "2.5.g",
+   "iso_clauses": [
+    "5.36",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Internal assessment methods for determining security control effectiveness is 5.36's management review that controls operate as required, complementing the independent review of 5.35."
+  },
+  {
+   "control_id": "2.5.h",
+   "iso_clauses": [
+    "8.20",
+    "8.5",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The named multi-layer components map one-to-one: firewalls and network layering to 8.20, secure sign-on and dual authentication to 8.5, and real-time security event monitoring to 8.16."
+  },
+  {
+   "control_id": "2.6.a",
+   "iso_clauses": [
+    "5.25",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Senior management review of incident, log and breach MIS with escalation of significant incidents to the IT Steering Committee is the assess-and-categorize-events decision process of 5.25 acting on 8.16 monitoring output."
+  },
+  {
+   "control_id": "2.6.b",
+   "iso_clauses": [
+    "5.5",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandatory reporting of established security breaches to SBP's BPRD within 48 hours is 5.5's maintained procedure for reporting incidents to regulatory authorities, driven by the reporting arrangements of 5.24."
+  },
+  {
+   "control_id": "2.7.a",
+   "iso_clauses": [
+    "8.29",
+    "8.33",
+    "8.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A regular programme validating security effectiveness is 8.29's security testing, while the requirement that production data be masked in test environments is 8.33 test information protection implemented via 8.11 data masking."
+  },
+  {
+   "control_id": "2.7.b.i",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Performing vulnerability assessments and subsequent validation retests to confirm identified gaps were closed is 8.8's identify-evaluate-remediate-verify cycle for technical vulnerabilities."
+  },
+  {
+   "control_id": "2.7.b.ii",
+   "iso_clauses": [
+    "5.30",
+    "5.29",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Periodic scenario-based testing of response, resumption and recovery plans against extreme but plausible cyber attacks is 5.30's ICT continuity plan exercising, 5.29's disruption planning, and 5.24's testing of incident response arrangements."
+  },
+  {
+   "control_id": "2.7.b.iii",
+   "iso_clauses": [
+    "8.8",
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Periodic penetration tests, including at major software updates and deployments, are 8.8's vulnerability identification technique and 8.29's security testing before and after change acceptance."
+  },
+  {
+   "control_id": "2.7.b.iv",
+   "iso_clauses": [
+    "8.29",
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An independent QA function testing in-house developments for vulnerabilities is 8.29's independent security testing within the secure development lifecycle required by 8.25."
+  },
+  {
+   "control_id": "2.8.a",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining and periodically updating a risk register with continuous assessment and treatment of risks is ISO 27001 clause 6.1/8.2 risk-process documentation; ISO 27002:2022 has no risk register control."
+  },
+  {
+   "control_id": "2.8.b",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing IT risk reporting methodologies that highlight high-exposure systems is management-system performance reporting (ISO 27001 clause 9.1), with no corresponding ISO 27002 clause."
+  },
+  {
+   "control_id": "2.8.c",
+   "iso_clauses": [
+    "5.35",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Evaluating risk processes through testing and a risk review of controls, with results reviewed by management, corresponds to 5.35's independent review of the security approach and 5.36's compliance review of controls."
+  },
+  {
+   "control_id": "2.9.a",
+   "iso_clauses": [
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Gathering and interpreting information about cyber threats across the institution's ecosystem is 5.7's collection and analysis of threat intelligence."
+  },
+  {
+   "control_id": "2.9.b",
+   "iso_clauses": [
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Sharing threat intelligence securely with staff responsible for mitigation at strategic, tactical and operational levels is 5.7's explicit three-tier dissemination requirement."
+  },
+  {
+   "control_id": "2.9.c",
+   "iso_clauses": [
+    "5.6",
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Using an industry platform to collect and exchange timely incident information is 5.6's participation in special interest groups and industry forums, feeding the intelligence process of 5.7."
+  },
+  {
+   "control_id": "2.9.d",
+   "iso_clauses": [
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying key lessons from cyber events inside and outside the organization to improve resilience and prevention is exactly 5.27's use of incident knowledge to strengthen controls."
+  },
+  {
+   "control_id": "2.9.e",
+   "iso_clauses": [
+    "5.7",
+    "5.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Monitoring technological developments and keeping abreast of new cyber risk management processes is the strategic-level threat intelligence of 5.7 sustained through the external professional contacts of 5.6."
+  },
+  {
+   "control_id": "3.1",
+   "iso_clauses": [
+    "5.37",
+    "8.6",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "An IT service management framework of documented preventive maintenance, incident/problem, patch and capacity processes maps to 5.37 documented operating procedures, 8.6 capacity management and 8.8 patch management."
+  },
+  {
+   "control_id": "3.2.a",
+   "iso_clauses": [
+    "7.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Setting goals to be achieved by the system before organizing preventive maintenance is the planning step of 7.13's correct-maintenance-in-accordance-with-supplier-intervals requirement."
+  },
+  {
+   "control_id": "3.2.b",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Creating a list of all IT assets with full details is 5.9's inventory of assets, here compiled for maintenance rather than security purposes."
+  },
+  {
+   "control_id": "3.2.c",
+   "iso_clauses": [
+    "5.9",
+    "7.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Determining priority assets by the sensitivity of the operations they perform is 5.9's recording of asset importance, applied to prioritize the equipment maintenance of 7.13."
+  },
+  {
+   "control_id": "3.2.d",
+   "iso_clauses": [
+    "7.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prioritizing which IT assets enter the Preventive Maintenance Plan is scoping the maintenance regime that 7.13 requires for equipment supporting information availability."
+  },
+  {
+   "control_id": "3.2.e",
+   "iso_clauses": [
+    "7.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Creating a preventive maintenance schedule for prioritized assets and reviewing its results is 7.13's requirement that equipment be maintained at planned intervals with maintenance records reviewed."
+  },
+  {
+   "control_id": "3.2.f",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Capacity building of staff involved in the preventive maintenance process is role-specific training under 6.3, though aimed at operational competence rather than security awareness."
+  },
+  {
+   "control_id": "3.3.a",
+   "iso_clauses": [
+    "5.27",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Continuously developing problem and error controls is ITIL problem management; it overlaps ISO 27002 only in the corrective-action loop of 5.27 and the procedures established under 5.24."
+  },
+  {
+   "control_id": "3.3.b",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A tiered support structure with understood escalation levels resembles 5.24's requirement for defined incident-handling roles and escalation, but here it is a service-desk staffing model, not security incident response."
+  },
+  {
+   "control_id": "3.3.c",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A continual service improvement programme measured by KPIs aligned to organizational goals is a service-quality management practice; ISO 27002:2022 has no service-improvement or KPI clause."
+  },
+  {
+   "control_id": "3.3.d",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assigning clear, documented roles and responsibilities within IT in terms of desired outcomes is 5.2's definition and allocation of responsibilities, applied to the IT function."
+  },
+  {
+   "control_id": "3.3.e",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring well-defined KPIs for the problem management process is a service-performance measurement requirement with no counterpart in ISO 27002's control set."
+  },
+  {
+   "control_id": "3.3.f",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "An internal SLA with business units covering system availability, performance and capacity for growth is 8.6's requirement to define and monitor capacity against future business demand."
+  },
+  {
+   "control_id": "3.3.g",
+   "iso_clauses": [
+    "7.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Backup power supply arrangements for all IT service delivery and operations areas is exactly 7.11's protection of facilities from power failure via supporting utilities."
+  },
+  {
+   "control_id": "3.3.h",
+   "iso_clauses": [
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Regular classification and identification of problems and errors parallels 5.25's assessment and categorization of events, but ETGRMF's subject here is IT service faults generally rather than security events."
+  },
+  {
+   "control_id": "3.3.i",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Documenting problem-management roles and responsibilities in terms of desired outcomes is 5.2's requirement that responsibilities be defined and documented."
+  },
+  {
+   "control_id": "3.4",
+   "iso_clauses": [
+    "8.8",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identification, categorisation and prioritisation of security patches is the remediation half of 8.8, and the segregated-testing-then-install workflow is the change control of 8.32."
+  },
+  {
+   "control_id": "3.5.a",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Capacity planning driven by growth, mergers and new product lines is exactly 8.6's requirement to project future capacity from business demand."
+  },
+  {
+   "control_id": "3.5.b",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Monitoring CPU, storage and bandwidth utilisation is the monitoring-and-tuning limb of 8.6."
+  },
+  {
+   "control_id": "3.5.c",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "8.6 covers tying capacity projections to resource provisioning, but the staff-size, training and succession-planning elements of this control sit outside it."
+  },
+  {
+   "control_id": "3.6",
+   "iso_clauses": [
+    "7.1",
+    "7.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Building and maintaining data centre structures is the physical perimeter of 7.1 plus the environmental threat protection of 7.5; the operational-procedure half is broader than either."
+  },
+  {
+   "control_id": "3.7",
+   "iso_clauses": [
+    "5.24",
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A help desk that records and tracks incoming problem reports is the intake channel 5.24 and 6.8 require, but this control is framed as IT service support with KPIs rather than security event handling."
+  },
+  {
+   "control_id": "4.1.a",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "5.8 requires a defined project management approach with roles, checkpoints and risk assessment, matching this framework's required contents, though 5.8 scopes it to information security specifically."
+  },
+  {
+   "control_id": "4.1.b",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A PMO maintaining a central project register and reporting to the IT Steering Committee is the organisational vehicle for 5.8's project governance, but 5.8 mandates no such office."
+  },
+  {
+   "control_id": "4.1.c",
+   "iso_clauses": [
+    "8.25",
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A full life-cycle methodology from initiation through design, development, testing and maintenance is the phased development life cycle of 8.25, applied at project level per 5.8."
+  },
+  {
+   "control_id": "4.1.d",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Engaging an independent party for quality assurance review is 5.35's independent review mechanism, though applied to project delivery rather than to the information security programme."
+  },
+  {
+   "control_id": "4.2",
+   "iso_clauses": [
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring a Secure SDLC to assess and mitigate risk in software development or acquisition is the literal subject of 8.25."
+  },
+  {
+   "control_id": "4.2.1.a",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Project standards covering need assessment, risk management procedures and approval authorities correspond to 5.8's requirement that projects carry defined risk treatment and approval gates."
+  },
+  {
+   "control_id": "4.2.1.b",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring system standards to specify an application's functional, security and automated control features is 8.26's definition and specification of application security requirements."
+  },
+  {
+   "control_id": "4.2.1.c",
+   "iso_clauses": [
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Quality assurance standards covering validation of assumptions, standards adherence and product performance testing overlap 8.29's acceptance testing regime, though 8.29 is security-testing specific."
+  },
+  {
+   "control_id": "4.2.1.d",
+   "iso_clauses": [
+    "8.29",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Security and vulnerability assessment of software modules is precisely 8.29's security testing in development, feeding 8.8's technical vulnerability identification."
+  },
+  {
+   "control_id": "4.2.1.e",
+   "iso_clauses": [
+    "8.30",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Source code escrow for vendor-developed core applications is the code-availability safeguard 8.30 expects in outsourced development and a contractual term under 5.20."
+  },
+  {
+   "control_id": "4.2.2.a.i",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring a technology procurement policy governing RFP and BRD formulation is the documented supplier-engagement process 5.19 mandates, though 5.19 frames it around security risk rather than procurement mechanics."
+  },
+  {
+   "control_id": "4.2.2.a.ii",
+   "iso_clauses": [
+    "5.2",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defining roles and responsibilities of procurement stakeholders is 5.2's allocation of responsibilities applied to the supplier acquisition process governed by 5.19."
+  },
+  {
+   "control_id": "4.2.2.a.iii",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "An approval matrix for RFP and BRD is an authorisation gate inside the supplier process 5.19 requires to be defined, but 5.19 specifies no approval hierarchy."
+  },
+  {
+   "control_id": "4.2.2.b",
+   "iso_clauses": [
+    "5.19",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Vendor selection criteria, acquisition process and delivery verification are 5.19's supplier selection and 5.21's assurance over hardware and software sourced through the ICT supply chain."
+  },
+  {
+   "control_id": "4.2.2.c",
+   "iso_clauses": [
+    "5.20",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Recording functional, operational and regulatory requirements in the RFP/ITT sets the terms later fixed in supplier agreements per 5.20, and the PPRA compliance obligation is a statutory requirement under 5.31."
+  },
+  {
+   "control_id": "4.2.2.d",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Reviewing RFP and BRD comprehensiveness for alignment with IT strategy, business objectives and emerging technology trends is procurement-quality and IT-strategy governance; ISO 27002 has no clause on strategic alignment of acquisition documents."
+  },
+  {
+   "control_id": "4.2.2.e",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Optionally engaging external advisory services to draft an RFP or run a procurement, with recorded rationale, is a procurement-resourcing discretion with no ISO 27002 analogue."
+  },
+  {
+   "control_id": "4.2.2.f",
+   "iso_clauses": [
+    "5.19",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "System selection analysis verifying that requirements and contracted service levels are met and legal/regulatory obligations satisfied combines 5.19's supplier evaluation with 5.31's identification of applicable requirements."
+  },
+  {
+   "control_id": "4.2.2.g",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requiring transparent competitive tendering and justification for direct contracting is a procurement-fairness and anti-collusion obligation; ISO 27002 addresses supplier security, not tender competitiveness."
+  },
+  {
+   "control_id": "4.2.2.h",
+   "iso_clauses": [
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Placing procurement under an independent unit separates requisition from award, which is the conflict-of-interest rationale of 5.3, though 5.3 targets duties over information assets."
+  },
+  {
+   "control_id": "4.2.2.i",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A standing forum monitoring technology procurement is oversight in the spirit of 5.22, but 5.22 monitors delivered supplier services rather than the procurement process itself."
+  },
+  {
+   "control_id": "4.2.2.j",
+   "iso_clauses": [
+    "5.22",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assessing vendor deliveries against contract terms and purchase orders with departmental sign-off is 5.22's review of supplier performance against agreement, with 5.21's verification of ICT products as delivered."
+  },
+  {
+   "control_id": "4.2.3.a",
+   "iso_clauses": [
+    "8.29",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Promoting only tested and approved systems to production is 8.29's acceptance-testing gate enforced through 8.32's authorisation of changes to production."
+  },
+  {
+   "control_id": "4.2.3.b",
+   "iso_clauses": [
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring system and user acceptance testing in an environment separate from production is the literal separation of test and production environments in 8.31."
+  },
+  {
+   "control_id": "4.2.3.c",
+   "iso_clauses": [
+    "8.33",
+    "8.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Barring production data from development or acceptance testing unless desensitised and owner-approved is 8.33's selection and protection of test information, with desensitisation being 8.11's masking."
+  },
+  {
+   "control_id": "4.2.3.d",
+   "iso_clauses": [
+    "8.29",
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Performance testing of newly developed critical systems before deployment is an acceptance criterion under 8.29 and validates the capacity assumptions of 8.6, though 8.29 emphasises security testing."
+  },
+  {
+   "control_id": "4.2.3.e",
+   "iso_clauses": [
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Conducting system testing against documented test plans covering predetermined data, processing problems and business scenarios is 8.29's requirement for a defined test programme and criteria."
+  },
+  {
+   "control_id": "4.2.3.f",
+   "iso_clauses": [
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formulating and sufficiently exercising adequate UAT test scenarios is the acceptance-testing coverage requirement of 8.29."
+  },
+  {
+   "control_id": "4.2.3.g",
+   "iso_clauses": [
+    "8.29",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Confirming and recording successful test results before transferring modified programs to production is 8.29's evidenced acceptance combined with 8.32's documented change authorisation."
+  },
+  {
+   "control_id": "4.2.3.h",
+   "iso_clauses": [
+    "8.31",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Prohibiting system development personnel from accessing production systems is the developer-access restriction 8.31 names explicitly, backed by 5.3's segregation of conflicting duties."
+  },
+  {
+   "control_id": "4.2.4.a",
+   "iso_clauses": [
+    "8.4",
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A secured library or quarantine area holding programs pending migration, restricted to migration personnel, is 8.4's controlled program source library within the environment separation of 8.31."
+  },
+  {
+   "control_id": "4.2.4.b",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Procedures to verify changes and confirm no unauthorised changes were introduced during migration is 8.32's verification of change integrity before release."
+  },
+  {
+   "control_id": "4.2.4.c",
+   "iso_clauses": [
+    "8.32",
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Version controls ensuring only authorised programs reach quarantine and production is 8.32's controlled release combined with 8.4's version control over program source."
+  },
+  {
+   "control_id": "4.2.4.d",
+   "iso_clauses": [
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Archiving prior source code versions with precise date and time is the source-library archival and audit-log requirement within 8.4."
+  },
+  {
+   "control_id": "4.2.5.a",
+   "iso_clauses": [
+    "5.37",
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Procedures mandating development, testing, operational administration and user documentation is 5.37's documented operating procedures, produced as life-cycle deliverables under 8.25."
+  },
+  {
+   "control_id": "4.2.5.b",
+   "iso_clauses": [
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining defined documentation type and depth per project phase (requests, feasibility studies, plans, test plans) is the documentation discipline 5.37 requires, extended to project artefacts."
+  },
+  {
+   "control_id": "4.2.5.c",
+   "iso_clauses": [
+    "5.37",
+    "8.27"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "System documentation comprising concept narratives, data flow charts and database specifications is documented design under 5.37 and the recorded architecture 8.27 expects to be maintained."
+  },
+  {
+   "control_id": "4.2.5.d",
+   "iso_clauses": [
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Application descriptions, workflow processes and operations and user instructions are precisely the operating instructions 5.37 requires to be documented and available to users."
+  },
+  {
+   "control_id": "4.2.5.e",
+   "iso_clauses": [
+    "5.37",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assigning named officers responsible for making documentation changes to prescribed standards is 8.32's requirement that documentation be updated as part of change control, under 5.37's procedure ownership."
+  },
+  {
+   "control_id": "4.2.5.f",
+   "iso_clauses": [
+    "8.3",
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Controlling access to documentation libraries with library and version controls is 8.3's restriction of access to information and 8.4's controlled program-source library model applied to documentation."
+  },
+  {
+   "control_id": "4.2.5.g",
+   "iso_clauses": [
+    "8.3",
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Keeping system documentation complete, current and secured against unauthorised access is 5.37's currency requirement plus 8.3's access restriction on sensitive design information."
+  },
+  {
+   "control_id": "4.2.6.a",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A change management process ensuring production changes are approved, implemented and reviewed in a controlled manner restates 8.32 directly."
+  },
+  {
+   "control_id": "4.2.6.b",
+   "iso_clauses": [
+    "8.32",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Extending change control to system and security configurations, hardware patches and software updates is 8.32 applied to the configuration baselines 8.9 requires to be managed."
+  },
+  {
+   "control_id": "4.2.6.c",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Risk and impact analysis of each change against existing infrastructure, network and up/downstream systems is the impact assessment step 8.32 mandates before approval."
+  },
+  {
+   "control_id": "4.2.6.d",
+   "iso_clauses": [
+    "8.32",
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented test plans, user acceptance and signed-off test results before migrating a change is 8.32's testing requirement executed through 8.29's acceptance testing."
+  },
+  {
+   "control_id": "4.2.6.e",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring a rollback plan to revert to a former version, plus alternative recovery options where reversion is impossible, is 8.32's fallback and abort procedure."
+  },
+  {
+   "control_id": "4.2.6.f",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enabling logging of all activities performed during the migration process is 8.15's requirement to record privileged system activity for later review."
+  },
+  {
+   "control_id": "4.2.7.a",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A post-implementation review validating operational performance closes the project life cycle 5.8 governs, but 5.8 is about security requirements during a project rather than post-delivery performance validation."
+  },
+  {
+   "control_id": "4.2.7.b",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Measuring project success by comparing planned against actual cost, benefits and completion time is project financial and schedule performance measurement, entirely outside ISO 27002's scope."
+  },
+  {
+   "control_id": "4.2.7.c",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Recording reasons in an evaluation report when planned project objectives are not realised is project-benefit accountability, not an information security control."
+  },
+  {
+   "control_id": "4.2.7.d",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Presenting a post-implementation evaluation report to senior management highlighting project management deficiencies is IT project governance reporting; ISO 27002 has no clause for project outcome reporting."
+  },
+  {
+   "control_id": "4.3",
+   "iso_clauses": [
+    "5.19",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defining business requirements for functions to be outsourced is 5.19's pre-engagement supplier risk process, and mandatory compliance with BP&RD Circular No 9 is a regulatory requirement identified under 5.31."
+  },
+  {
+   "control_id": "4.4.1.a",
+   "iso_clauses": [
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Fixing the FI as ultimately responsible for data security despite using a CSP is 5.23's requirement to define the split of security responsibilities between customer and cloud provider."
+  },
+  {
+   "control_id": "4.4.1.b",
+   "iso_clauses": [
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring the FI's data to be segregated from other tenants' data held by the CSP is 5.23's multi-tenancy isolation requirement for cloud services."
+  },
+  {
+   "control_id": "4.4.1.c",
+   "iso_clauses": [
+    "5.23",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Denying the CSP any right to view or access routed or stored information, with sole access discretion retained by the FI, is a confidentiality term 5.20 requires in supplier agreements and 5.23 requires for cloud arrangements specifically."
+  },
+  {
+   "control_id": "4.4.1.d",
+   "iso_clauses": [
+    "5.22",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Contractual audit and access rights for the FI and the regulator over CSP arrangements are the right-to-audit provisions 5.20 requires in agreements and 5.22 exercises during service review."
+  },
+  {
+   "control_id": "4.4.1.e",
+   "iso_clauses": [
+    "5.22",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring the CSP to demonstrate compliance with all legal and contractual requirements is 5.22's regular review of supplier compliance evidence against the obligations identified under 5.31."
+  },
+  {
+   "control_id": "4.4.1.f",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Appropriate encryption of confidential or sensitive data plus secure management of the keys is exactly 8.24's cryptography and key management requirement."
+  },
+  {
+   "control_id": "4.4.1.g",
+   "iso_clauses": [
+    "5.20",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring all cloud arrangements to be documented in an SLA between CSP and FI is 5.20's documented supplier agreement, in the cloud context governed by 5.23."
+  },
+  {
+   "control_id": "4.4.1.h",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring an adequate plan to resume business after disruption of CSP services is 5.30's ICT continuity readiness extended to a third-party dependency under 5.29."
+  },
+  {
+   "control_id": "4.4.1.i",
+   "iso_clauses": [
+    "5.23",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented exit procedures from the cloud arrangement, embedded in the CSP agreement, is the exit strategy 5.23 explicitly requires for cloud services and a termination term under 5.20."
+  },
+  {
+   "control_id": "4.4.2.a",
+   "iso_clauses": [
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Restricting cloud use to non-core operations and business support processes is a scope limit within the topic-specific cloud usage rules 5.23 requires, though ISO leaves the risk threshold to the organisation rather than prescribing it."
+  },
+  {
+   "control_id": "4.4.2.b",
+   "iso_clauses": [
+    "5.31",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Mandating that CSPs, physical servers and data centres reside and operate in Pakistan is a data-residency legal requirement under 5.31, applied as a cloud-selection criterion under 5.23."
+  },
+  {
+   "control_id": "4.4.2.c",
+   "iso_clauses": [
+    "5.23",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prohibiting core banking applications and customer data processing from cloud outsourcing is a regulatory placement restriction under 5.31 expressed as a cloud service usage rule under 5.23."
+  },
+  {
+   "control_id": "5.1.a",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing a comprehensive business continuity plan as part of a continuity planning process is the core requirement of 5.29."
+  },
+  {
+   "control_id": "5.1.b",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Scaling the BCP to the institution's size and complexity and aligning it with business strategy is 5.29's requirement that continuity arrangements be proportionate to organisational context."
+  },
+  {
+   "control_id": "5.1.c",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Setting BCP objectives of minimising financial loss, maintaining customer service and mitigating disruption effects states the continuity objectives 5.29 requires plans to be built around."
+  },
+  {
+   "control_id": "5.1.d",
+   "iso_clauses": [
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Built-in redundancies to eliminate single points of failure that could bring down the entire network is precisely 8.14's redundancy of information processing facilities."
+  },
+  {
+   "control_id": "5.1.e",
+   "iso_clauses": [
+    "8.14",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining standby hardware, software and network components for fast recovery is 8.14's duplicated components sized to the recovery objectives 5.30 sets."
+  },
+  {
+   "control_id": "5.2.1.a",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assessing and prioritising business functions and their interdependencies through workflow analysis is the business impact analysis 5.30 requires as the basis for ICT continuity planning."
+  },
+  {
+   "control_id": "5.2.1.b",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying the potential impact of disruptions on business functions and processes is the impact-assessment step of the BIA that 5.30 mandates."
+  },
+  {
+   "control_id": "5.2.1.c",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying legal and regulatory requirements applicable to business functions and processes is the identification obligation of 5.31, here performed within the BIA."
+  },
+  {
+   "control_id": "5.2.1.d",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Estimating maximum allowable downtime and acceptable loss levels per business function is 5.30's derivation of disruption tolerance from the BIA."
+  },
+  {
+   "control_id": "5.2.1.e",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing recovery time objectives, recovery point objectives and critical path recovery is named explicitly in 5.30 as the output of the BIA."
+  },
+  {
+   "control_id": "5.2.2.a",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Stress-testing BIA assumptions against varied threat scenarios validates the continuity requirements 5.30 derives from that BIA."
+  },
+  {
+   "control_id": "5.2.2.b",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Analysing threats by their impact on the institution, customers and stakeholders is the risk-assessment input 5.30 requires before setting ICT continuity strategies."
+  },
+  {
+   "control_id": "5.2.2.c",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prioritising potential business disruptions by severity is how 5.30 sequences which services get continuity investment and the tightest recovery objectives."
+  },
+  {
+   "control_id": "5.2.2.d",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Gap analysis comparing the existing BCP against the policies and procedures needed for prioritised disruptions is 5.29's requirement to verify continuity arrangements are adequate for identified impacts."
+  },
+  {
+   "control_id": "5.2.3",
+   "iso_clauses": [
+    "5.29",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A written, enterprise-wide BCP grounded in BIA and risk assessment, board-approved at least annually and disseminated across the institution, is 5.29's documented continuity plan under 5.1's policy approval and review cycle."
+  },
+  {
+   "control_id": "5.2.4.a",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Incorporating the BIA and risk assessment into the BCP and its testing programme is 5.30's requirement that ICT continuity plans and their exercises be driven by BIA-derived objectives."
+  },
+  {
+   "control_id": "5.2.4.b",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing an enterprise-wide testing programme is 5.29's requirement that continuity plans be regularly exercised across the organisation."
+  },
+  {
+   "control_id": "5.2.4.c",
+   "iso_clauses": [
+    "5.2",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assigning roles and responsibilities for implementing the BCP testing programme is 5.2's allocation of responsibilities applied to the exercise regime 5.29 requires."
+  },
+  {
+   "control_id": "5.2.4.d",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Completing tests of the BCP at least annually is the periodic exercise-and-test frequency 5.29 requires to validate continuity arrangements."
+  },
+  {
+   "control_id": "5.2.4.e",
+   "iso_clauses": [
+    "5.4",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Evaluation of the testing programme and its results by senior management and the board is 5.4's management responsibility to oversee that continuity arrangements are effective."
+  },
+  {
+   "control_id": "5.2.4.f",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Independent-party assessment of the BCP testing programme and results is 5.35's independent review, scoped here to continuity rather than the whole security programme."
+  },
+  {
+   "control_id": "5.2.4.g",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Revising the BCP and testing programme following business changes, audit recommendations and test results is 5.29's requirement that plans be reviewed and updated after exercises and change."
+  },
+  {
+   "control_id": "5.3.1.a",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Addressing contingency scenarios spanning system faults, hardware malfunction, operating errors, security incidents and total loss of the primary data centre is 5.30's requirement to plan ICT recovery for the disruption scenarios identified."
+  },
+  {
+   "control_id": "5.3.1.b",
+   "iso_clauses": [
+    "5.30",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Evaluating the recovery plan and incident response procedures at least annually and after system or network change is 5.30's plan-maintenance duty plus 5.24's upkeep of incident response planning."
+  },
+  {
+   "control_id": "5.3.1.c",
+   "iso_clauses": [
+    "8.13",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Replication and rapid backup and recovery at individual system or application cluster level is 8.13's backup and restoration capability reinforced by 8.14's redundant processing facilities."
+  },
+  {
+   "control_id": "5.3.1.d",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Accounting for interdependencies between critical systems when drafting the recovery plan is 5.30's requirement that ICT continuity plans reflect the dependency chain needed to meet RTOs."
+  },
+  {
+   "control_id": "5.3.1.e",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining system recovery and business resumption priorities with specific RTOs and RPOs for IT systems is stated verbatim in 5.30's ICT continuity objectives."
+  },
+  {
+   "control_id": "5.3.1.f",
+   "iso_clauses": [
+    "8.14",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A geographically separated recovery site plus alternate network paths and multiple service providers is 8.14's redundancy requirement including sufficient physical separation from the primary facility."
+  },
+  {
+   "control_id": "5.3.1.g",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Selecting DR specifications according to the BIA so identified threats and recovery objectives are met is 5.30's rule that ICT readiness be dimensioned from the BIA."
+  },
+  {
+   "control_id": "5.3.2.a",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Adopting only approved, tested and rehearsed recovery measures is 5.30's requirement that ICT continuity plans be validated by exercise before being relied upon."
+  },
+  {
+   "control_id": "5.3.2.b",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Annual testing of recovery requirements and of staff's ability to execute emergency procedures is 5.30's periodic exercise of ICT continuity plans including responder competence."
+  },
+  {
+   "control_id": "5.3.2.c",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Covering both total primary-site switchover and individual component or cluster failure in DR tests is the scenario range 5.30 requires exercises to cover."
+  },
+  {
+   "control_id": "5.3.2.d",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Testing recovery dependencies between systems validates the dependency assumptions 5.30 requires ICT continuity plans to reflect."
+  },
+  {
+   "control_id": "5.3.2.e",
+   "iso_clauses": [
+    "5.30",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Annual BCP/DR drills conducted jointly with third parties tests the supplier's contribution to ICT readiness under 5.30 and is part of 5.22's ongoing review of supplier service delivery."
+  },
+  {
+   "control_id": "5.3.2.f",
+   "iso_clauses": [
+    "5.29",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Testing across people, processes and resources while ensuring recovery team and relevant staff are aware of the plans combines 5.29's whole-organisation exercise with 6.3's awareness obligation."
+  },
+  {
+   "control_id": "5.3.2.g",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Involving business users in designing and executing test cases that verify recovered systems function correctly is 5.30's requirement that recovery be validated against actual business functionality, not just system availability."
+  },
+  {
+   "control_id": "5.3.2.h",
+   "iso_clauses": [
+    "5.22",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Participating in disaster recovery tests run by service providers, including offshore systems, is 5.22's monitoring of supplier service continuity capability against the ICT readiness 5.30 demands."
+  },
+  {
+   "control_id": "5.3.2.i",
+   "iso_clauses": [
+    "5.4",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requiring business group and unit heads to sign off DR-BCP drill results is 5.4's management accountability for continuity outcomes, but 5.29 prescribes no sign-off authority."
+  },
+  {
+   "control_id": "6.1.a",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An annual IT audit plan setting goals, schedules, staffing and reporting requirements is the planned independent review of information security management that 5.35 requires."
+  },
+  {
+   "control_id": "6.1.b",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A risk assessment process determining audit scope and frequency per line of business is 5.35's requirement that independent reviews occur at planned intervals driven by significance and change."
+  },
+  {
+   "control_id": "6.1.c",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A risk-based IT audit cycle setting audit frequency is 5.35's planned-interval requirement expressed as a rotation schedule."
+  },
+  {
+   "control_id": "6.1.d",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Prescribing an audit report format is an administrative element of the independent review process 5.35 governs; 5.35 itself specifies no reporting template."
+  },
+  {
+   "control_id": "6.1.e",
+   "iso_clauses": [
+    "5.33"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A document maintenance and retention policy for IT audit findings is 5.33's protection of records against loss and unauthorised alteration, applied to audit working papers."
+  },
+  {
+   "control_id": "6.1.f",
+   "iso_clauses": [
+    "5.35",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Follow-up processes for significant IT audit findings is 5.35's requirement that review results drive corrective action, verified through 5.36's compliance checking."
+  },
+  {
+   "control_id": "6.2.a",
+   "iso_clauses": [
+    "5.35",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Identifying weaknesses, issuing recommendations and reviewing management's remediation plans is the finding-and-corrective-action loop 5.35 establishes and 5.36 monitors against policy."
+  },
+  {
+   "control_id": "6.2.b",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Reviewing the adequacy of general IT controls across strategy, operations, DR/BCP, outsourcing, information security, development and procurement is exactly the breadth of independent review 5.35 calls for over the information security approach and its controls."
+  },
+  {
+   "control_id": "6.2.c",
+   "iso_clauses": [
+    "5.22",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular comprehensive audit of the institution's CSP arrangements is 5.22's periodic review and audit of supplier service delivery, applied to the cloud services governed by 5.23."
+  },
+  {
+   "control_id": "6.2.d",
+   "iso_clauses": [
+    "8.26",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Application System Review identifying, documenting, testing and evaluating application controls for confidentiality, integrity and accuracy verifies the application security requirements 8.26 defines, through the independent review mechanism of 5.35."
+  },
+  {
+   "control_id": "6.3.a",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Reporting IT audit findings, conclusions, recommendations and any scope limitations is 5.35's requirement that independent review results be recorded and reported."
+  },
+  {
+   "control_id": "6.3.b",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Discussing the draft report with the audited area's management before finalisation is a procedural step within 5.35's review process; 5.35 does not prescribe a clearance stage."
+  },
+  {
+   "control_id": "6.3.c",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requiring the audit report to be signed, dated and distributed per the audit programme's format is administrative handling of the independent review output 5.35 requires to be recorded."
+  },
+  {
+   "control_id": "6.3.d.a",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Periodic consolidated reporting to the Audit Committee on information and cyber security is 5.35's requirement that independent review results be reported to management for action."
+  },
+  {
+   "control_id": "6.3.d.b",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Consolidated Audit Committee reporting on IT service delivery and operations conveys review results as 5.35 requires, but the subject matter is IT operational performance rather than information security."
+  },
+  {
+   "control_id": "6.3.d.c",
+   "iso_clauses": [
+    "5.22",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Periodic consolidated reporting on IT outsourcing and cloud arrangements is the escalation of 5.22's supplier service reviews to the governance body via 5.35's reporting duty."
+  },
+  {
+   "control_id": "6.3.d.d",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Consolidated Audit Committee reporting on IT project management, acquisition and development is 5.35's reporting channel applied to a delivery-governance topic rather than to security control effectiveness."
+  },
+  {
+   "control_id": "6.3.d.e",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Consolidated Audit Committee reporting on IT procurement uses 5.35's independent-review reporting route, though procurement oversight itself is outside ISO 27002's subject matter."
+  },
+  {
+   "control_id": "6.3.d.f",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Periodic consolidated reporting to the Audit Committee on performance management is IT service performance governance; ISO 27002 has no clause covering performance reporting to a board committee."
+  },
+  {
+   "control_id": "6.3.d.g",
+   "iso_clauses": [
+    "5.29",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Periodic consolidated Audit Committee reporting on BCP and DRP is how 5.29's continuity plan status and test outcomes reach governance, delivered through 5.35's review reporting."
+  },
+  {
+   "control_id": "6.4.a",
+   "iso_clauses": [
+    "5.4",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring senior management to approve a procedure ensuring timely implementation of audit recommendations is 5.4's management responsibility to drive corrective action arising from 5.35's reviews."
+  },
+  {
+   "control_id": "6.4.b",
+   "iso_clauses": [
+    "5.36",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Monitoring implementation of management's corrective actions is 5.36's verification that required remediation is actually carried out, closing the 5.35 review loop."
+  },
+  {
+   "control_id": "6.4.c",
+   "iso_clauses": [
+    "5.35",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Quarterly communication of recommendation status to the Board or Audit Committee is 5.35's requirement that review results and their resolution be reported to management."
+  }
+ ]
+}

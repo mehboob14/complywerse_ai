@@ -27,3 +27,4 @@ from ._52_ctem_scope_models import *  # noqa: F401,F403 - CTEM scopes + cycles (
 from ._53_choke_point_models import *  # noqa: F401,F403 - CTEM choke-point analysis (Phase 4)
 from ._54_itsm_ticket_link_models import *  # noqa: F401,F403 - ITSM ticket links (Phase 5)
 from ._55_ai_control_proposal_models import *  # noqa: F401,F403 - AI control proposals (P5)
+from ._56_scf_catalog_models import *  # noqa: F401,F403 - SCF canonical catalog + tenant overlay

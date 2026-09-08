@@ -1,0 +1,66 @@
+{
+ "framework": "gdpr",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "Article 6(1)",
+   "scf_ids": [
+    "PRI-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Processing is lawful only on one of six enumerated bases, so the controller must fix and record which basis applies; PRI-04.1 is the mechanism for determining and documenting the legal authority that permits the organisation to collect, process, store, share and dispose of personal data.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 22",
+   "scf_ids": [
+    "PRI-19",
+    "PRI-19.2"
+   ],
+   "confidence": "high",
+   "rationale": "Data subjects have the right not to be subject to solely automated decisions with legal or similarly significant effects; PRI-19 governs automated decision-making technology that replaces human decision-making so it conforms to applicable law, and PRI-19.2 provides the opt-out instructions through which the subject exercises the right.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 26",
+   "scf_ids": [
+    "PRI-07.2"
+   ],
+   "confidence": "high",
+   "rationale": "Joint controllers must transparently allocate their respective compliance responsibilities including data subject rights and information duties; PRI-07.2 is the control requiring the organisation to clearly define and communicate its role in processing personal data within the data processing ecosystem.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 47",
+   "scf_ids": [
+    "PRI-01.5"
+   ],
+   "confidence": "medium",
+   "rationale": "Approval sits with the supervisory authority, but the entity's side of Article 47 is having binding corporate rules that are legally binding on group members and confer enforceable rights on data subjects; PRI-01.5 is the mechanism for implementing and managing exactly those binding corporate rules.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 77",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because the right is exercised by the data subject against a supervisory authority, not against the assessed organisation.",
+   "unmappable_reason": "Article 77 creates a data subject's right to lodge a complaint with a supervisory authority; the recipient of the complaint is the regulator, and the organisation has no operative duty in the article itself."
+  },
+  {
+   "code": "Article 82",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because this is a civil liability and compensation regime enforced through the courts.",
+   "unmappable_reason": "Article 82 establishes a right to compensation for damage caused by an infringement; liability for harm is a legal consequence, not an operational control the organisation implements."
+  },
+  {
+   "code": "Article 83",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because the obligation to impose effective, proportionate and dissuasive fines binds each supervisory authority.",
+   "unmappable_reason": "Article 83 governs how supervisory authorities set administrative fines; the assessed organisation is the object of the penalty, not the actor."
+  }
+ ]
+}

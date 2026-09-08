@@ -1,0 +1,365 @@
+{
+ "framework": "aramco_ccc",
+ "hop": "direct",
+ "authored_by": "workflow:scf-reauthor-pivot",
+ "note": "One-hop requirement->SCF mapping, replacing the two-hop ISO pivot (blinded 3-rater trial: 88% vs 41% defensible).",
+ "mappings": [
+  {
+   "code": "1.1",
+   "scf_ids": [
+    "GOV-01",
+    "GOV-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation is programme-level (stand up and maintain an ISMS aligned to a recognised standard), so the programme-implementation control plus the control that compels alignment of the programme with an industry-recognised framework are the correct fit rather than any operational control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.2",
+   "scf_ids": [
+    "GOV-04",
+    "GOV-04.1",
+    "GOV-04.2"
+   ],
+   "confidence": "high",
+   "rationale": "Requires a designated senior individual accountable for information security plus a defined role/responsibility structure, which is discharged by assigning a qualified individual to centrally manage the programme, an enforced accountability structure, and a documented chain of command.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.3",
+   "scf_ids": [
+    "GOV-02",
+    "GOV-03",
+    "GOV-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Composite of authoring/disseminating policies and procedures, reviewing them at planned intervals, and enforcing them; the publication control, the periodic review-and-update control, and the exception-prohibition control together discharge development, review and enforcement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.4",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "SAT-03.6"
+   ],
+   "confidence": "high",
+   "rationale": "Requires awareness and training for all personnel with system/data access covering policies, threats and individual responsibilities, discharged by general awareness training for employees and contractors, role-based training tied to assigned duties, and training kept current to the prevailing threat environment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "1.5",
+   "scf_ids": [
+    "CPL-01.3",
+    "CPL-01.5",
+    "CPL-13"
+   ],
+   "confidence": "medium",
+   "rationale": "The organisation must be able to produce conformity evidence against a contractual control set; demonstrating conformity, generating a signed declaration of conformity, and producing compliance work products are the mechanisms it owns, but the reporting cadence itself is set unilaterally by the customer.",
+   "uncovered_clause": "Submitting the reports on a schedule defined by Saudi Aramco - the submission cadence is imposed by the customer and no SCF control governs it."
+  },
+  {
+   "code": "2.3",
+   "scf_ids": [
+    "TPM-03",
+    "TPM-05.2",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Composite of assessing subcontractor/fourth-party supply chain risk, flowing security requirements down into subcontractor contracts, and ongoing review of external service providers against those contractual requirements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.1",
+   "scf_ids": [
+    "AST-02",
+    "AST-03",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Three distinct obligations - an accurate hardware/software/data inventory, assigned asset owners, and classification of those assets - are discharged by the inventory control, the ownership-assignment control, and the data-and-asset categorisation control respectively.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.2",
+   "scf_ids": [
+    "DCH-02",
+    "DCH-04",
+    "DCH-06",
+    "DCH-09"
+   ],
+   "confidence": "high",
+   "rationale": "Requires classification against a defined scheme plus handling, storage and disposal procedures per level: categorisation sets the level, media marking conveys handling caveats, media storage governs secure storage, and sanitisation is performed commensurate with classification.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.3",
+   "scf_ids": [
+    "DCH-21",
+    "DCH-09",
+    "DCH-09.1"
+   ],
+   "confidence": "high",
+   "rationale": "Requires irrecoverable destruction of data no longer needed with destruction evidence on request, discharged by secure information disposal/erasure, sanitisation to a strength matching sensitivity, and the supervision/tracking/verification documentation that constitutes the destruction record.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.1",
+   "scf_ids": [
+    "IAC-21",
+    "IAC-20",
+    "IAC-08"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation is least-privilege access limited to legitimate business need; the least-privilege control, the access-enforcement control that conforms permissions to least privilege, and role-based access restricted to roles with legitimate business need are the operative mechanisms rather than the IAM programme umbrella.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.2",
+   "scf_ids": [
+    "IAC-06",
+    "IAC-06.1",
+    "IAC-10"
+   ],
+   "confidence": "high",
+   "rationale": "MFA is required specifically for remote access and for privileged accounts, discharged by the MFA enforcement control for remote/non-console access, the MFA control for network access to privileged accounts, and authenticator management that ties authentication strength to data classification.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4.3",
+   "scf_ids": [
+    "IAC-16",
+    "IAC-16.1",
+    "IAC-17",
+    "MON-03.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Privileged access restriction, a validated privileged account inventory, periodic privilege review to minimise standing entitlements, and logging/review of elevated-privilege actions cover inventory, minimisation and monitoring, but the just-in-time elevation clause has no matching SCF mechanism.",
+   "uncovered_clause": "Just-in-time (time-bound, on-demand) privileged access provisioning."
+  },
+  {
+   "code": "4.5",
+   "scf_ids": [
+    "IAC-07.2",
+    "IAC-07.1",
+    "HRS-09"
+   ],
+   "confidence": "high",
+   "rationale": "Requires timely revocation on both termination and role change, discharged by revocation upon termination of employment or contract, revocation following changes in role and duties, and the governed termination process that triggers them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1",
+   "scf_ids": [
+    "CRY-05",
+    "CRY-03",
+    "CRY-01.5"
+   ],
+   "confidence": "high",
+   "rationale": "Encryption at rest and in transit are two distinct obligations discharged by the data-at-rest and transmission-confidentiality cryptographic controls, while the named algorithm/protocol floors (AES-256, TLS 1.2+) are sustained by the control that inventories and reviews deployed cipher suites and protocols for continued viability.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.2",
+   "scf_ids": [
+    "CRY-09",
+    "CRY-09.1",
+    "CRY-09.2",
+    "CRY-09.4"
+   ],
+   "confidence": "high",
+   "rationale": "Key generation, secure storage, rotation and destruction are covered by the key management control protecting key confidentiality/integrity/availability plus the symmetric and asymmetric key production-and-management controls and the secure key distribution control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.1",
+   "scf_ids": [
+    "PES-03",
+    "PES-02",
+    "PES-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Physical access to facilities housing in-scope systems must be restricted and logged, discharged by enforcement of physical access authorisations at all access points, the maintained list of personnel authorised for access, and log generation for each access attempt at controlled ingress/egress points.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.2",
+   "scf_ids": [
+    "PES-12",
+    "AST-06",
+    "AST-11",
+    "DCH-07"
+   ],
+   "confidence": "high",
+   "rationale": "Composite of protecting equipment from unauthorised access and environmental hazards (siting and protection), securing it when unattended (unattended end-user equipment protections), and controlling it in transit (authorised tracking of assets leaving facilities and protection of media during transport).",
+   "uncovered_clause": null
+  },
+  {
+   "code": "6.3",
+   "scf_ids": [
+    "PES-04",
+    "PES-04.1",
+    "DCH-06.1",
+    "AST-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Secure work areas with restricted access are discharged by identifying rooms requiring limited physical access and permitting only authorised personnel into secure areas, with securing sensitive media and protecting unattended equipment covering part of the desk/screen exposure risk.",
+   "uncovered_clause": "An explicit clear-desk policy and screen privacy (visual shielding) measures - no SCF control mechanises either."
+  },
+  {
+   "code": "7.1",
+   "scf_ids": [
+    "CHG-02",
+    "CHG-02.1",
+    "CHG-02.2",
+    "CFG-02.3"
+   ],
+   "confidence": "high",
+   "rationale": "Documented, tested, approved, tracked changes with rollback are discharged by the configuration change control process, the prohibition on changes absent an approved request, testing and documenting in a non-production environment before production, and retention of previous baseline versions to support roll back.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.2",
+   "scf_ids": [
+    "END-04",
+    "END-04.1",
+    "END-04.7"
+   ],
+   "confidence": "high",
+   "rationale": "Anti-malware on all systems that is current and real-time is discharged by the antimalware detection/eradication control, automated signature definition updates that keep it current, and the always-on protection control ensuring continuous real-time operation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.3",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-02",
+    "VPM-03"
+   ],
+   "confidence": "high",
+   "rationale": "Vulnerabilities must be found by scanning and remediated according to severity, discharged by routine vulnerability scanning, the identify/track/remediate remediation process, and risk ranking of newly discovered vulnerabilities that drives severity-based prioritisation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.4",
+   "scf_ids": [
+    "VPM-05",
+    "VPM-05.7",
+    "VPM-05.3"
+   ],
+   "confidence": "high",
+   "rationale": "Requires currency of security patches with a defined window for critical patches and faster handling of emergencies, discharged by the software/firmware patching control, out-of-cycle patching for time-sensitive remediations, and time-to-remediate benchmark tracking that evidences the window is met.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.5",
+   "scf_ids": [
+    "MON-03",
+    "MON-08",
+    "MON-10",
+    "MON-01.8"
+   ],
+   "confidence": "high",
+   "rationale": "Four distinct clauses - capture security events, protect logs from tampering, retain for a defined period, and monitor - map to event log content requirements, protection of logs from modification/deletion, event log retention, and ongoing event log review with escalation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.6",
+   "scf_ids": [
+    "NET-03",
+    "NET-04.1",
+    "NET-06",
+    "NET-08"
+   ],
+   "confidence": "high",
+   "rationale": "Names three mechanisms explicitly: boundary control with deny-by-default firewall rulesets, network segmentation isolating in-scope assets, and network intrusion detection/prevention on the network.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.7",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-11.1",
+    "BCD-11.2"
+   ],
+   "confidence": "high",
+   "rationale": "Regular backups, secure storage, and recoverability testing are discharged by the recurring backup and integrity-verification control, routine testing of backup reliability and restorability, and storage of backup copies in a separate, non-collocated facility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "7.8",
+   "scf_ids": [
+    "CFG-02",
+    "CFG-02.7",
+    "CFG-06.1"
+   ],
+   "confidence": "high",
+   "rationale": "Baselines built on industry hardening standards plus monitoring of deviations are discharged by the secure baseline configuration control, the risk-assessed approval or denial of configuration deviations, and automated identification of unauthorised deviations from the approved baseline.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1",
+   "scf_ids": [
+    "IRO-04",
+    "IRO-02",
+    "IRO-07"
+   ],
+   "confidence": "high",
+   "rationale": "A maintained incident response plan available to stakeholders, the defined handling procedures it must contain (preparation through recovery), and the constituted response team that fixes roles and communication lines discharge the plan/roles/procedures obligation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.2",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-10.2"
+   ],
+   "confidence": "high",
+   "rationale": "The obligation binds the organisation to notify an affected client within a fixed detection-to-notification window; timely incident reporting to affected clients and third parties, and timely reporting of sensitive/regulated data incidents, are the matching mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.3",
+   "scf_ids": [
+    "IRO-02",
+    "IRO-08",
+    "IRO-13",
+    "IRO-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Investigation to establish root cause, scope and whether data was compromised is discharged by the analysis phase of incident handling, forensics with chain-of-custody integrity, root cause analysis, and the data-breach control addressing unauthorised disclosure determinations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.4",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-09.3",
+    "IRO-09"
+   ],
+   "confidence": "high",
+   "rationale": "A detailed post-closure report to the client is discharged by incident reporting to affected clients, the incident tracking repository that documents details, remediation actions through closure and a summary, and status documentation and reporting through resolution.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.5",
+   "scf_ids": [
+    "IRO-02.5"
+   ],
+   "confidence": "medium",
+   "rationale": "Coordination with approved third parties for cross-organisational incident awareness and joint response is the only mechanism that matches cooperating with an external incident response team; the specific grant of access is not mechanised.",
+   "uncovered_clause": "Providing the customer's incident response team with access to systems, logs and personnel on request."
+  },
+  {
+   "code": "8.6",
+   "scf_ids": [
+    "IRO-13",
+    "IRO-04.2",
+    "IRO-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Post-incident review and implementation of improvements to prevent recurrence is discharged by the lessons-learned/root-cause control that reduces likelihood of future incidents, the plan update control that folds lessons learned back into practice, and the continuous incident response improvement control.",
+   "uncovered_clause": null
+  }
+ ]
+}

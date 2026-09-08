@@ -1,0 +1,436 @@
+{
+ "framework": "ndmo",
+ "hop": "direct",
+ "mappings": [
+  {
+   "code": "MCM.5.3",
+   "scf_ids": [
+    "MON-03",
+    "MON-03.2",
+    "MON-10"
+   ],
+   "confidence": "high",
+   "rationale": "Logging of Data Catalog logins and invoked operations is discharged by the event-log content mechanism (event type, time, source, outcome, user identity) plus binding of system access to an individual user, and the log-retention mechanism covers keeping the tracking logs as artifacts.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DO.2.1",
+   "scf_ids": [
+    "DCH-18",
+    "DCH-21",
+    "BCD-11.2",
+    "BCD-12"
+   ],
+   "confidence": "medium",
+   "rationale": "The four policy clauses map to distinct mechanisms: retention periods to media/data retention, disposal and destruction rules to secure information disposal, disaster-resistant storage conditions to off-site/fire-rated backup storage, and response to accidental permanent loss to secure recovery and reconstitution to a known state.",
+   "uncovered_clause": "No single SCF control requires these four topics to be consolidated into one documented storage and retention policy; only the underlying mechanisms are covered."
+  },
+  {
+   "code": "DO.3.2",
+   "scf_ids": [
+    "IAC-08",
+    "IAC-07",
+    "DCH-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Granting database access through defined roles is discharged by role-based access enforcement, the formal registration/de-registration process that governs assignment of access rights, and the mechanism that explicitly defines role authorizations for sensitive or regulated data in line with classification.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DO.3.3",
+   "scf_ids": [
+    "CFG-02",
+    "CHG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Configuration identification and documentation of database system attributes is discharged by developing and maintaining documented secure baseline configurations, and configuration change control of those documented settings is discharged by the technical configuration change control mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DO.4.1",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-11.2",
+    "BCD-11.1"
+   ],
+   "confidence": "high",
+   "rationale": "Backup frequency and scope per information system is discharged by the recurring data backup mechanism, backup location and storage medium by the requirement to hold backup copies in a separate non-collocated facility, and periodic validation of backup completion by routine backup testing for reliability and integrity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DO.4.2",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-01.4",
+    "BCD-02",
+    "BCD-01.5"
+   ],
+   "confidence": "high",
+   "rationale": "The disaster recovery plan clauses map to formal BC/DR plan maintenance, the RPO/RTO mechanism for the recovery-point definitions, identification of critical assets for the prioritised system recovery order, and recovery operations criteria for activation, roles and damage-mitigation actions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DO.4.3",
+   "scf_ids": [
+    "CHG-02",
+    "CHG-02.1",
+    "CFG-02.3",
+    "BCD-01.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Controlled implementation of database changes to production is discharged by the technical change control mechanism gated on an approved change request, reversal of faulty changes by retention of previous configuration versions to support roll back, and the residual RTO clause carried in this requirement's text by the RTO/RPO recovery mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DCM.4.1",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-02"
+   ],
+   "confidence": "high",
+   "rationale": "Bringing document and content management systems inside the backup and recovery plan is discharged by the recurring data backup mechanism together with identification and documentation of the critical assets and data that the plan must cover.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DCM.4.2",
+   "scf_ids": [
+    "DCH-18",
+    "DCH-20",
+    "DCH-08",
+    "DCH-09"
+   ],
+   "confidence": "high",
+   "rationale": "Document retention is discharged by media and data retention, handover to the archival facility by protection of archived data sets, and physical destruction with overwriting and secure deletion by formal physical media disposal procedures plus media sanitization commensurate with classification.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DCM.4.3",
+   "scf_ids": [
+    "IAC-08",
+    "IAC-07",
+    "DCH-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Role-based access to documents in the DMS/CMS is discharged by role-based access enforcement and the formal access-rights registration process, with access groups derived from classification covered by explicitly defining role authorizations for sensitive or regulated data.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DSI.3.3",
+   "scf_ids": [
+    "CHG-02.2",
+    "TDA-08",
+    "TDA-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Testing the integration solution before production release is discharged by the mechanism requiring proposed changes to be tested and documented in a non-production environment first, supported by maintained separate test environments and a documented test-and-evaluation plan with recorded results.",
+   "uncovered_clause": "Functional/non-functional and data-flow correctness (data quality) testing as an engineering discipline has no dedicated SCF control; only the pre-production test-and-document gate is covered."
+  },
+  {
+   "code": "DC.1.1",
+   "scf_ids": [
+    "GOV-10",
+    "PRM-01.1",
+    "PRM-03"
+   ],
+   "confidence": "medium",
+   "rationale": "This is a programme-level plan obligation: data governance oversight of classification policies and procedures, a strategic plan with objectives for the roadmap and milestones, and allocation of resources within business process planning for the required resources and budget.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DC.2.1",
+   "scf_ids": [
+    "DCH-01.2",
+    "DCH-01.4",
+    "DCH-03.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Assigning handling and protection controls per classification is discharged by protecting sensitive or regulated data wherever processed or stored, defining access authorizations for it, and restricting its disclosure to authorized parties with a need to know.",
+   "uncovered_clause": "Classification-driven disposal controls are only covered generically; no listed control ties disposal strength specifically to the assigned classification level here."
+  },
+  {
+   "code": "DC.3.1",
+   "scf_ids": [
+    "GOV-10.1",
+    "AST-02",
+    "DCH-24"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying and inventorying all datasets and artifacts is discharged by cataloging data holdings in a structured format documenting each significant data asset, the asset inventory mechanism that covers data as well as technology assets, and documenting where information resides.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DC.3.2",
+   "scf_ids": [
+    "RSK-02",
+    "RSK-02.1",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing potential damage from unauthorized access and deriving a classification level is discharged by risk-based security categorization with documented rationale and owner approval, impact-level prioritization for selecting the High/Medium/Low impact grade, and categorization of data against applicable regulatory obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DC.3.4",
+   "scf_ids": [
+    "DCH-11",
+    "RSK-02"
+   ],
+   "confidence": "high",
+   "rationale": "Reviewing assigned classification levels for continued appropriateness is discharged by the data reclassification mechanism and by the categorization decision being reviewed and approved by the asset owner.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DC.3.5",
+   "scf_ids": [
+    "DCH-05",
+    "GOV-10.1",
+    "DCH-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Publishing assigned classification levels as catalog metadata is discharged by binding data protection attributes to information as it is stored and processed, by the data catalog that records each data asset's documented attributes, and by marking so that handling caveats are visible to personnel.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DC.5.1",
+   "scf_ids": [
+    "GOV-10.1",
+    "RSK-02",
+    "DCH-11"
+   ],
+   "confidence": "medium",
+   "rationale": "The classification register is discharged by the structured data catalog listing identified data assets, by documented categorization results with rationale and owner approval for assigned levels and assignment dates, and by the reclassification mechanism for the recorded review outcomes.",
+   "uncovered_clause": "Recording classification duration and explicit review dates as register fields is not required by any single SCF control."
+  },
+  {
+   "code": "PDP.1.1",
+   "scf_ids": [
+    "PRI-05.5",
+    "PRI-14",
+    "RSK-10",
+    "PRI-05.7"
+   ],
+   "confidence": "high",
+   "rationale": "The initial personal data assessment maps to maintaining an inventory of the systems that collect, store and process personal data (storage location and method), documenting personal data processing activities (current processing and uses), a Data Protection Impact Assessment to surface privacy risks and compliance gaps, and defining categories of sensitive personal data for the types-collected clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PDP.4.1",
+   "scf_ids": [
+    "PRI-02",
+    "PRI-03",
+    "PRI-17.1"
+   ],
+   "confidence": "high",
+   "rationale": "Providing a reviewable privacy notice before collection is discharged by the data privacy notice mechanism, obtaining the data subject's choice and approval by the data subject consent mechanism including a means to decline, and the internet hyperlink obligation by the conspicuous link to the privacy notice on consumer-facing sites and apps.",
+   "uncovered_clause": "Making the privacy notice available to the National Data Management Office (a filing to the regulator) has no SCF control."
+  },
+  {
+   "code": "DS.1",
+   "scf_ids": [
+    "GOV-01",
+    "GOV-02",
+    "PRM-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "This domain statement is itself programme-level, so the governance programme, the published policies/standards/procedures that direct tools and business processes, and the strategic plan with objectives are the appropriate programme-level controls.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.2",
+   "scf_ids": [
+    "SEA-01.4",
+    "SEA-02",
+    "SEA-03"
+   ],
+   "confidence": "medium",
+   "rationale": "Security architecture concepts guiding design decisions map to secure architecture principles, alignment of those decisions with enterprise architecture, and the defense-in-depth architecture mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.3",
+   "scf_ids": [
+    "SEA-01",
+    "TDA-02",
+    "TDA-09"
+   ],
+   "confidence": "medium",
+   "rationale": "Building minimum security provisions into systems during development, testing and implementation maps to applying secure engineering practices across specification through modification, defining minimum product security requirements, and a documented security test and evaluation process with flaw remediation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.4",
+   "scf_ids": [
+    "IAC-01",
+    "IAC-02",
+    "IAC-04"
+   ],
+   "confidence": "medium",
+   "rationale": "This domain-level identity statement covers both users and requesting systems, so the identity and access management programme plus identification and authentication for organizational users and for devices are the matching programme-level controls.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.5",
+   "scf_ids": [
+    "TPM-01",
+    "TPM-05",
+    "TPM-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Reflecting information security requirements in supplier engagements is discharged by the third-party management programme, third-party contract requirements that carry the security obligations, and third-party risk assessment and approval before engagement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.6",
+   "scf_ids": [
+    "SAT-01",
+    "SAT-02",
+    "SAT-03"
+   ],
+   "confidence": "high",
+   "rationale": "A comprehensive security training programme conveying the Entity's expectations to personnel is discharged by the workforce development programme, general awareness training for employees and contractors, and role-based training tailored to job function.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.7",
+   "scf_ids": [
+    "AST-02",
+    "AST-01",
+    "BCD-02"
+   ],
+   "confidence": "high",
+   "rationale": "A documented and maintained inventory of information assets holding critical data is discharged by the asset inventory mechanism covering technology assets and data, the asset management programme that keeps it current, and the identification and documentation of critical assets and data supporting essential functions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.8",
+   "scf_ids": [
+    "OPS-01",
+    "OPS-01.1",
+    "MON-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Operational duties to monitor, assess and protect information assets are discharged at domain level by the operations security programme, standardized operating procedures for those duties, and the continuous monitoring mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.9",
+   "scf_ids": [
+    "IRO-01",
+    "IRO-02",
+    "IRO-04"
+   ],
+   "confidence": "high",
+   "rationale": "Detecting, managing, recording and analyzing security threats and breaches is discharged by the organization-wide incident response capability, the incident handling mechanism, and the documented incident response plan.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DS.11",
+   "scf_ids": [
+    "BCD-01",
+    "BCD-01.7",
+    "BCD-11"
+   ],
+   "confidence": "high",
+   "rationale": "Preserving confidentiality, integrity and availability of data during an incident is discharged by the business continuity management system, formal BC/DR plans maintained by process owners, and the data backup mechanism that underpins availability.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "DCM.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A paper-to-electronic migration roadmap, an initiative to stop creating paper documents, and budget/resourcing for those initiatives are business-transformation deliverables. SCF has no digitization or records-conversion control. PRM-03 (allocation of resources) and PRM-01.1 (strategic plan) were considered and rejected: their mechanism is resourcing/planning of the security, compliance and resilience program, not a paperless-office programme, so citing them would be right-word wrong-mechanism. DCH media controls govern protection of media, not conversion of format.",
+   "uncovered_clause": "Entire control: paper-to-electronic migration roadmap and milestones (1), paper-elimination initiative roadmap (2), and assignment of resources/budget for paperless management (3)."
+  },
+  {
+   "code": "RMD.1.1",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires a Reference and Master Data Management capability roadmap with milestones plus assigned resources and budget. GOV-10 (data governance) was the closest candidate but its mechanism is oversight of data policies/standards/procedures for sensitive/regulated data - it does not require an MDM implementation roadmap or budget, so using it would be an umbrella catch-all rather than a discharge. PRM-01.1/PRM-02 are scoped to the security programme's own plan and budget. SCF has no reference/master data management capability.",
+   "uncovered_clause": "RMD implementation roadmap with activities and milestones (1) and assignment of resources/budget (2)."
+  },
+  {
+   "code": "RMD.2.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Selection of a master data hub implementation pattern (Registry / Repository / Coexistence) is a data-architecture design decision driven by RMD requirements. SEA-02 (alignment with enterprise architecture) was considered and rejected: its mechanism is developing an enterprise architecture that addresses security, compliance and resilience risk, not choosing a master-data hub topology. No SCF control governs master data architecture patterns.",
+   "uncovered_clause": "Determination of the Data Hub implementation pattern for Master Data Objects."
+  },
+  {
+   "code": "RMD.4.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Instantiating the physical technical components of a Reference and Master Data Hub is a data-platform build activity. SCF's nearest structures - AST-02.3 (authoritative source/repository for approved system components) and GOV-10.1 (data catalog) - address asset-inventory de-duplication and cataloguing data holdings respectively; neither requires standing up a master data hub, so mapping either would be right domain, wrong mechanism.",
+   "uncovered_clause": "Instantiation of the physical Data Hub technical architecture components meeting the target RMD information architecture."
+  },
+  {
+   "code": "RMD.4.4",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Composite obligation: establish the master data model in the hub, load reference/master data objects, activate source-to-hub replication, activate hub-to-consumer synchronization, and designate the hub as the entity's Trusted Source for new systems. AST-02.3 speaks of an authoritative source and trusted source but only for approved/implemented system components in asset inventories, and GOV-10.1 only catalogues data holdings - neither operationalizes a master data hub or its replication/synchronization. No SCF control discharges this.",
+   "uncovered_clause": "All five clauses: master data model in hub (2), loading of objects (3), source-to-hub replication (4), hub-to-application synchronization (5), and Trusted Source designation for new systems."
+  },
+  {
+   "code": "BIA.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ideation workshops to generate a long list of BI and analytics use cases, and shortlisting them against predefined prioritization criteria, is business value-planning. SCF's use-case language (AAT-19, TDA-21) concerns conformity of AI/products against defined use cases, not identification and prioritization of analytics opportunities. No SCF control covers this.",
+   "uncovered_clause": "Identification of BI/analytics use cases via workshops (1) and their prioritization against predefined criteria (2)."
+  },
+  {
+   "code": "DVR.1.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying and documenting data revenue generation and cost saving use cases is data monetization strategy. SCF contains no data-monetization or data-product commercialization controls (PRI-17.2, the only financial-incentive control, is a privacy notice obligation about incentives offered to data subjects - a different mechanism and a different beneficiary).",
+   "uncovered_clause": "Documentation of data revenue generation use cases (1) and cost saving use cases (2)."
+  },
+  {
+   "code": "DVR.1.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Payback period and ROI estimation per use case, plus a Data Value Realization plan with roadmap, milestones, resources and budget. This is investment appraisal and programme planning for commercial data initiatives. PRM-02 (capital planning for the security programme) and PRM-01.1 have the wrong subject matter; no SCF control requires ROI modelling of data products.",
+   "uncovered_clause": "Payback/ROI estimation per use case; DVR roadmap and milestones (1); resource and budget assignment (2)."
+  },
+  {
+   "code": "DVR.2.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Selecting and documenting a pricing scheme model for revenue-generating data or data products under the Data Revenue Framework Regulation. SCF is a security, privacy and resilience control catalog and contains no pricing controls.",
+   "uncovered_clause": "Selection and documentation of the Pricing Scheme Model per data product."
+  },
+  {
+   "code": "DVR.2.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Calculating total cost of a data product (data collection cost, data development cost) is cost accounting. No SCF control has a costing mechanism; mapping to any data-handling control would be keyword matching on 'data'.",
+   "uncovered_clause": "Total cost calculation including data collection cost (1) and data development cost (2)."
+  },
+  {
+   "code": "DVR.2.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining the commercial charging model (subscription, consumption-based, freemium/premium, one-time fee) for a data product. Purely commercial; SCF has no equivalent mechanism.",
+   "uncovered_clause": "Definition and documentation of the adopted Charging Model."
+  },
+  {
+   "code": "DVR.2.4",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An administrative filing to the National Data Management Office containing product description, pricing documentation, charging model, unit price and pricing-scheme deviation justification. The obligation binds the entity, but it is an approval submission to the regulator with no security or data-protection mechanism behind it. GOV-06 (contacts with authorities) is about maintaining authority contacts for incident and compliance purposes, not commercial pricing approvals, so it would be right domain, wrong mechanism.",
+   "uncovered_clause": "Submission of the revenue generation request and its five required contents."
+  },
+  {
+   "code": "OD.3.5",
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires published open datasets to be in standardized machine-readable formats (CSV/JSON/XML/RDF) and accompanied by usage documentation. DCH-15 (publicly accessible content) and WEB-14 (public content review) govern what may be exposed publicly and screening it for sensitive data - they say nothing about publication format or interoperability, so they do not discharge the obligation. PRI-06.6 (data portability) does require a structured machine-readable export but its mechanism serves an individual data subject transferring their own personal data to another controller, not open-data publication.",
+   "uncovered_clause": "Use of standardized machine-readable publication formats and accompanying dataset usage documentation."
+  },
+  {
+   "code": "FOI.3.5",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Calculating and documenting a processing fee for each granted public information access request under the NDMO Data Value Realization Regulation. SCF's access-request controls (PRI-06 data subject empowerment, PRI-07.5 justification to reject requests, PRI-17.3 records of requests) cover fulfilment, refusal and recordkeeping for personal data rights - none contains a fee determination mechanism, and the requester here is any member of the public, not a data subject.",
+   "uncovered_clause": "Calculation and documentation of the processing fee per granted access request using the mandated pricing scheme."
+  }
+ ]
+}

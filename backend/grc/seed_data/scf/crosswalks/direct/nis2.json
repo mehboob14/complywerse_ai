@@ -1,0 +1,115 @@
+{
+ "framework": "nis2",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "Article 20(1)",
+   "scf_ids": [
+    "RSK-13",
+    "GOV-01.2",
+    "GOV-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "The management body must approve the Article 21 risk-management measures and oversee their implementation on pain of personal liability; RSK-13 is the mechanism obtaining executive leadership approval for material risk decisions, GOV-01.2 supplies the governance reporting those decision-makers need, and GOV-01.1 is the standing oversight body through which implementation is supervised.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 20(2)",
+   "scf_ids": [
+    "SAT-03",
+    "SAT-02"
+   ],
+   "confidence": "high",
+   "rationale": "Management body members must be trained to identify risk and assess cybersecurity practice, with equivalent recurring training encouraged for staff; SAT-03 delivers role-based training tied to assigned duties, which is what a board-level cyber competency obligation is, and SAT-02 covers the regular workforce-wide awareness training the second sentence addresses.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 26(1)",
+   "scf_ids": [
+    "GOV-17"
+   ],
+   "confidence": "low",
+   "rationale": "The entity must file registration data (name, sector, establishments, contacts, IP ranges) with the competent authority and update it within two weeks; GOV-17 is the only SCF mechanism for making required submissions to statutory or regulatory authorities, but it models security-programme status reporting rather than entity registration, so it discharges the filing habit and not the specific data set.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 7(1)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because the obligation runs to the Member State, not the assessed entity.",
+   "unmappable_reason": "Article 7(1) requires each Member State to adopt a national cybersecurity strategy; it binds the government, and the 'entities should align' gloss is commentary rather than an enforceable duty on the organisation being assessed."
+  },
+  {
+   "code": "Article 29(1)",
+   "scf_ids": [
+    "THR-01",
+    "GOV-07"
+   ],
+   "confidence": "medium",
+   "rationale": "Entities are encouraged to exchange threat information, IoCs, TTPs and alerts with peers under trustworthy arrangements; THR-01 is the threat intelligence programme that explicitly includes a cross-organisation information-sharing capability, and GOV-07 establishes the contacts with security groups and associations through which such exchange happens — confidence is medium because the article is voluntary rather than mandatory.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 21(2)(b)(f)",
+   "scf_ids": [
+    "MON-02",
+    "MON-03",
+    "MON-08"
+   ],
+   "confidence": "high",
+   "rationale": "The requirement is to capture security-relevant events, centralise collection, protect log integrity, retain and review logs for incident handling and effectiveness assessment; MON-02 provides the centralised collection, MON-03 defines the event content sufficient for investigation, and MON-08 protects the logs from unauthorised modification or deletion.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 22(1)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because the assessment is performed by EU bodies, not by the assessed entity.",
+   "unmappable_reason": "Article 22(1) empowers the Cooperation Group, the Commission and ENISA to run coordinated supply-chain risk assessments; the entity's role is to respond when asked, which is a duty owed to a regulator rather than an internal control SCF models."
+  },
+  {
+   "code": "Article 24(1)",
+   "scf_ids": [
+    "TPM-05.8",
+    "TDA-21"
+   ],
+   "confidence": "medium",
+   "rationale": "Where a Member State requires it, the entity must use ICT products and services certified under an EU scheme, whether procured or self-developed; TPM-05.8 is the mechanism for obtaining independent third-party attestation of a provider's conformity and TDA-21 governs conformity of the organisation's own developed products to statutory requirements for their market — neither names the EU schemes, hence medium.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "Article 31(1)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because the obligation binds the supervisory authority, not the assessed entity.",
+   "unmappable_reason": "Article 31(1) directs Member States to ensure competent authorities supervise essential entities through inspections, audits and information requests; it is a description of the regulator's toolkit, not a control the organisation implements."
+  },
+  {
+   "code": "Article 32(1)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because the obligation binds the supervisory authority, not the assessed entity.",
+   "unmappable_reason": "Article 32(1) sets the ex-post supervisory model competent authorities apply to important entities; the duty to supervise, and the discretion to act on evidence of non-compliance, sits with the regulator."
+  },
+  {
+   "code": "Article 34(1)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "No SCF control applies because this is a penalty regime imposed on the entity by Member States, not an action the entity performs.",
+   "unmappable_reason": "Article 34(1) sets maximum administrative fines for essential entities; a fine ceiling is a consequence of non-compliance rather than a control obligation, and the underlying duties it enforces are Articles 21 and 23."
+  },
+  {
+   "code": "Article 21(2)(a)(b)",
+   "scf_ids": [
+    "CHG-01",
+    "CHG-03",
+    "CHG-07"
+   ],
+   "confidence": "high",
+   "rationale": "The requirement is a formal change workflow for all hardware, software, configuration and process changes with impact assessment, approval, testing and review plus defined emergency procedures; CHG-01 is the change management programme, CHG-03 is the security impact analysis performed before implementation, and CHG-07 governs the emergency-change path the requirement separately demands.",
+   "unmappable_reason": null
+  }
+ ]
+}

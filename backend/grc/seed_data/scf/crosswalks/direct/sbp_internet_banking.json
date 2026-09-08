@@ -1,0 +1,618 @@
+{
+ "framework": "sbp_internet_banking",
+ "hop": "direct",
+ "authored_by": "workflow:scf-reauthor-pivot",
+ "note": "One-hop requirement->SCF mapping, replacing the two-hop ISO pivot (blinded 3-rater trial: 88% vs 41% defensible).",
+ "mappings": [
+  {
+   "code": "2",
+   "scf_ids": [
+    "GOV-01",
+    "GOV-02",
+    "GOV-03"
+   ],
+   "confidence": "high",
+   "rationale": "Genuinely programme-level: the bank must establish, publish and periodically review a security framework, which is exactly the SCRP establishment, documentation-publication and periodic-review mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2(b)",
+   "scf_ids": [
+    "CRY-05",
+    "CRY-03",
+    "DCH-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Confidentiality of customer data in the three named states is discharged by encryption at rest, transmission confidentiality, and protection of sensitive data wherever it is processed.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2(c)",
+   "scf_ids": [
+    "BCD-01",
+    "CAP-01",
+    "BCD-12.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Availability and prompt user access rest on contingency planning, capacity/performance management for responsiveness, and failover capability; 'operational effectiveness' is an outcome no single control discharges.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2(d)",
+   "scf_ids": [
+    "OPS-01.1",
+    "MON-09",
+    "MON-03.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Accountability is met by documented standard operating procedures plus non-repudiation and audit trails that bind each transaction to an identified actor.",
+   "uncovered_clause": "the policy-issuance limb ('designing SOPs, policies and controls') beyond documented SOPs"
+  },
+  {
+   "code": "2(e)",
+   "scf_ids": [
+    "MON-16",
+    "MON-16.3",
+    "MON-01.12"
+   ],
+   "confidence": "medium",
+   "rationale": "Proactive detection of unauthorised access is discharged by anomalous-behaviour monitoring, unauthorised-activity monitoring and automated alerting to responders.",
+   "uncovered_clause": "identification of potential fraudulent transactions - SCF has no payment-transaction fraud-detection control"
+  },
+  {
+   "code": "2.1(b)",
+   "scf_ids": [
+    "AST-02",
+    "DCH-24"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying the information and information systems to be protected is discharged by technology asset inventories and documenting where information resides.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1(c)",
+   "scf_ids": [
+    "RSK-02",
+    "DCH-02",
+    "RSK-02.1"
+   ],
+   "confidence": "high",
+   "rationale": "Ranking sensitive systems, payment data and applications high/medium/low is risk-based security categorisation plus data and asset classification, with impact-level prioritisation supplying the ordering.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1(d)",
+   "scf_ids": [
+    "RSK-04",
+    "RSK-03",
+    "THR-10"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing potential threats and vulnerabilities to systems and payment data is the recurring risk assessment, risk identification and threat analysis mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1(f)",
+   "scf_ids": [
+    "IAO-02",
+    "GOV-15.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Evaluating whether existing controls actually work against each identified threat is a formal control assessment, with owners compelled to assess the controls under their control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1(g)",
+   "scf_ids": [
+    "TPM-04.1",
+    "TPM-05",
+    "TPM-02"
+   ],
+   "confidence": "high",
+   "rationale": "Addressing service providers' security and contractual responsibilities within the risk assessment is discharged by pre-outsourcing risk assessment, contractual security requirements and supplier criticality assessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.1(i)",
+   "scf_ids": [
+    "CPL-01",
+    "RSK-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Assessing legal-environment risk under named statutory sections requires identifying the applicable statutory obligations and running a risk assessment over them; SCF has no control specific to burden-of-proof or bank-liability exposure.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2",
+   "scf_ids": [
+    "GOV-09",
+    "GOV-15.1",
+    "GOV-15.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Deriving a risk-commensurate control set and defining a minimum baseline is control-objective definition followed by control selection and implementation; the named access-control families are re-authored on the 2.2.2 children.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.1",
+   "scf_ids": [
+    "WEB-06",
+    "IAC-06",
+    "IAC-28",
+    "IAC-22"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite header for customer authentication: strong customer authentication, MFA, identity proofing at enrolment and account lockout cover the enumerated limbs.",
+   "uncovered_clause": "session controls and the periodic authentication risk assessment - discharged at 2.2.1(d) and 2.2.1(e)"
+  },
+  {
+   "code": "2.2.1(a)",
+   "scf_ids": [
+    "IAC-28",
+    "IAC-28.2",
+    "IAC-28.3",
+    "IAC-07"
+   ],
+   "confidence": "high",
+   "rationale": "Enrolment after due verification is identity proofing supported by presentation and validation/verification of identity evidence within a formal user registration process.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.1(b)",
+   "scf_ids": [
+    "IAC-06",
+    "WEB-06",
+    "IAC-10.7"
+   ],
+   "confidence": "high",
+   "rationale": "Two-factor authentication of internet banking customers is MFA enforcement and strong customer authentication, with hardware token quality covering the dongle/one-time-token second factor.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.1(c)",
+   "scf_ids": [
+    "WEB-06",
+    "IAC-14"
+   ],
+   "confidence": "medium",
+   "rationale": "Additional layered security for high-value transactions is met by strong customer authentication and by forcing re-authentication under defined circumstances (the step-up trigger).",
+   "uncovered_clause": "tiering the control strength by transaction value - SCF has no value-threshold transaction control"
+  },
+  {
+   "code": "2.2.1(d)",
+   "scf_ids": [
+    "IAC-22",
+    "IAC-10.1",
+    "IAC-25",
+    "IAC-14"
+   ],
+   "confidence": "high",
+   "rationale": "The four named limbs map one-for-one: lockout on consecutive failed logins, password lifespan/complexity, automatic logout after inactivity, and forced re-authentication on defined criteria.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.1(e)",
+   "scf_ids": [
+    "RSK-07",
+    "RSK-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Periodic re-assessment of authentication controls on functionality, environment, customer and breach triggers is the risk assessment update mechanism plus defining the instances that require a reassessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(a)",
+   "scf_ids": [
+    "IAC-21",
+    "IAC-17",
+    "IAC-28.1",
+    "IAC-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Job-commensurate rights under least privilege, periodic privilege review, management authorisation of changes, and revocation on role change cover all four limbs of the access rights clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(b)",
+   "scf_ids": [
+    "IAC-16",
+    "MON-01.15",
+    "IAC-21.4"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting, monitoring and auditing privileged OS access is privileged account management, enhanced monitoring of privileged users, and auditing the execution of privileged functions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(c)",
+   "scf_ids": [
+    "NET-14",
+    "NET-14.2",
+    "IAC-06",
+    "NET-14.1"
+   ],
+   "confidence": "high",
+   "rationale": "Approved-and-reviewed remote access methods, cryptographic protection of the session, MFA for remote access, and automated monitoring of remote sessions discharge the approval, encryption, strong-authentication and audit limbs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(d)",
+   "scf_ids": [
+    "PES-03",
+    "PES-05",
+    "PES-03.3"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting, monitoring and logging physical access to systems and data sites is physical access control, physical access monitoring, and per-attempt access logging.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(e)",
+   "scf_ids": [
+    "NET-02",
+    "NET-06"
+   ],
+   "confidence": "high",
+   "rationale": "Securing networks through multiple layers of controls is the layered network defence mechanism, with segmentation providing the distinct layers.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(f)",
+   "scf_ids": [
+    "NET-03",
+    "NET-04.1",
+    "NET-06"
+   ],
+   "confidence": "high",
+   "rationale": "Firewalls placed between security domains to control traffic are boundary protection with default-deny access control lists across segmented domains; deployment policy keyed to risk classification is the segmentation design decision.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(g)",
+   "scf_ids": [
+    "NET-08",
+    "MON-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Deploying IDS/IPS between security domains per risk classification is network intrusion detection/prevention placed on key network segments and choke points.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(h)",
+   "scf_ids": [
+    "THR-09",
+    "THR-10",
+    "IRO-04"
+   ],
+   "confidence": "medium",
+   "rationale": "The identity-theft programme's three limbs are met by cataloguing applicable theft/fraud threats, analysing their likelihood and impact, and holding a response plan; SCF has no dedicated identity-theft prevention programme control.",
+   "uncovered_clause": "the 'identification of information to be protected' limb - carried at 2.1(b)"
+  },
+  {
+   "code": "2.2.2(i)",
+   "scf_ids": [
+    "CRY-03",
+    "CRY-05",
+    "CRY-06"
+   ],
+   "confidence": "high",
+   "rationale": "Encrypting data communication, storage and access maps to transmission confidentiality, encryption at rest, and cryptographic protection of non-console administrative access.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(j)",
+   "scf_ids": [
+    "MON-09",
+    "MON-03.2",
+    "MON-02.7"
+   ],
+   "confidence": "high",
+   "rationale": "Statutory traceability of executed transactions is discharged by non-repudiation, audit trails linking access to individual users, and a time-correlated organisation-wide audit trail.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.2(k)",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "HRS-03.2",
+    "HRS-05.7"
+   ],
+   "confidence": "high",
+   "rationale": "Awareness training on risks and controls, role-relevant training, qualified staffing for security roles, and recurring policy familiarisation cover the knowledge, training and policy-update limbs.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-05.2",
+    "GOV-19.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Binding service providers contractually to these regulations while retaining the bank's own accountability is contractual security requirements with flow-down, plus the limitation that outsourcing does not transfer oversight responsibility.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3(a)",
+   "scf_ids": [
+    "HRS-06.1",
+    "TPM-05",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Non-disclosure clauses are confidentiality agreements covering third parties; the right-to-audit clause and its exercise are contractual security requirements and recurring review of external service providers against them.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3(b)",
+   "scf_ids": [
+    "TPM-05",
+    "DCH-13.3",
+    "TPM-08"
+   ],
+   "confidence": "medium",
+   "rationale": "Compelling service providers to prevent loss, theft or leakage of customer data is contractual security requirements plus the requirement to protect sensitive data processed on external services, verified by recurring provider review.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3(c)",
+   "scf_ids": [
+    "NET-14.6",
+    "MON-16.2",
+    "TPM-08",
+    "DCH-13.3"
+   ],
+   "confidence": "high",
+   "rationale": "Request-based, monitored and logged provider access is third-party remote access governance and monitoring of third-party personnel activity; periodic audit is provider review, and the no-unauthorised-storage limb is the external-service data protection requirement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3(d)",
+   "scf_ids": [
+    "BCD-01.2",
+    "TPM-11",
+    "BCD-09",
+    "SEA-07.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite: provider DR plans aligned to the bank are contingency coordination with external providers and joint response/recovery planning; alternate processing sites cover the site-tier limb and technology lifecycle management covers the IT asset lifecycle documentation limb.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3(d)(i)",
+   "scf_ids": [
+    "BCD-01.2",
+    "TPM-11"
+   ],
+   "confidence": "high",
+   "rationale": "A provider DR plan aligned to the bank's business requirements is exactly coordination of internal contingency plans with external service provider plans, with recovery planning conducted jointly with critical suppliers.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.2.3(d)(ii)",
+   "scf_ids": [
+    "BCD-09",
+    "BCD-08"
+   ],
+   "confidence": "medium",
+   "rationale": "The cold/warm/hot site requirement is discharged by establishing alternate processing and storage sites; SCF classifies sites by capability and separation rather than by the named tier taxonomy.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3",
+   "scf_ids": [
+    "CPL-03",
+    "GOV-15.5",
+    "MON-01.16"
+   ],
+   "confidence": "high",
+   "rationale": "A formally approved control-monitoring mechanism is control conformity monitoring and owner-driven ongoing control monitoring, and the required analysis of monitoring-method effectiveness is the assess-and-prioritise-monitoring-requirements mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3(a)",
+   "scf_ids": [
+    "MON-02",
+    "MON-01.6",
+    "MON-03.3",
+    "MON-01.7"
+   ],
+   "confidence": "high",
+   "rationale": "Collecting and analysing host and network security-event data is centralised log collection with host-based detection; privileged access to sensitive systems is privileged-function logging and configuration changes are caught by change-detection/file integrity monitoring.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3(b)",
+   "scf_ids": [
+    "MON-01.1",
+    "IRO-07",
+    "IRO-02"
+   ],
+   "confidence": "high",
+   "rationale": "Proactive IDS/IPS monitoring plus a nominated rapid response team is IDS/IPS deployment, an integrated incident response team, and the incident handling lifecycle for responding to breaches.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3(c)",
+   "scf_ids": [
+    "MON-06",
+    "MON-01.8",
+    "GOV-02"
+   ],
+   "confidence": "medium",
+   "rationale": "A documented, senior-management-approved monitoring and reporting mechanism for authentication controls is event-log report generation and ongoing log review, formalised through the publication of approved procedures.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3(d)",
+   "scf_ids": [
+    "BCD-12.4",
+    "BCD-01.4",
+    "BCD-12"
+   ],
+   "confidence": "high",
+   "rationale": "Documented restoration procedures and the time required are restore-within-defined-period, recovery time objectives, and secure recovery and reconstitution to a known state.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3(e)",
+   "scf_ids": [
+    "CPL-03.2",
+    "VPM-07",
+    "CPL-03.1",
+    "CPL-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "The three named testing methods map directly: functional self-review of controls, penetration testing, independent assessors, and periodic control audits.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3(f)",
+   "scf_ids": [
+    "CFG-02.8",
+    "MON-16.3",
+    "CPL-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying unauthorised configuration changes and treating them as incidents, monitoring for unauthorised activities, and documenting and reviewing instances of non-compliance cover the policy-violation and risk-condition listing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "2.3(g)",
+   "scf_ids": [
+    "MON-01.8",
+    "MON-17",
+    "MON-10"
+   ],
+   "confidence": "high",
+   "rationale": "Regular periodic review of logs and audit trails is ongoing event log review with analysis and triage, and the ten-year retention obligation is event log retention set to statutory requirements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "SCF's awareness controls are scoped to employees and contractors; no control obliges the organisation to run a threat-and-safeguard awareness programme for its retail customers, so no control defensibly discharges this.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3(a)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Explaining the respective liabilities of bank and customer is a consumer-contract disclosure obligation with no SCF equivalent; workforce roles-and-responsibilities controls address personnel, not customers.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3(b)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Disclosing terms and conditions of transfers to customers under the Payment Systems Act is a consumer-protection disclosure; SCF has no customer terms-disclosure control and the general statutory-compliance control does not discharge it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3(c)",
+   "scf_ids": [
+    "IRO-11"
+   ],
+   "confidence": "medium",
+   "rationale": "Publishing help desk contact details for credential loss, fraud and identity theft is the mechanism providing users of the service with advice, assistance and a channel for reporting suspected incidents.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3(d)",
+   "scf_ids": [
+    "IAC-14"
+   ],
+   "confidence": "low",
+   "rationale": "Re-authentication is the underlying control whose procedure must be explained, but SCF has no mechanism for communicating that procedure to customers.",
+   "uncovered_clause": "the communication-to-customers limb"
+  },
+  {
+   "code": "3(f)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Annual issuance of risk-mitigation guidelines to customers has no SCF counterpart; workforce awareness-training cadence controls bind employees, not the customer base.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3(g)",
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Management review of a customer awareness programme has no SCF control; the programme-review controls review the organisation's own security programme and workforce training, a different artefact.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "4",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-10.5",
+    "IRO-09.3"
+   ],
+   "confidence": "high",
+   "rationale": "Quarterly reporting of established breaches to the regulator is timely incident reporting to regulatory authorities and serious-incident reporting, drawing on the incident repository that records impact and remediation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5",
+   "scf_ids": [
+    "CPL-01",
+    "CPL-01.2"
+   ],
+   "confidence": "medium",
+   "rationale": "Being subject to the wider body of SBP law and circulars is the mechanism for identifying and implementing relevant statutory and regulatory controls and documenting the compliance scope they define.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5(a)",
+   "scf_ids": [
+    "TPM-01",
+    "CPL-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Compliance with the outsourcing guidelines is discharged by the third-party management programme operating under identified statutory and regulatory obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5(b)",
+   "scf_ids": [
+    "CPL-01"
+   ],
+   "confidence": "low",
+   "rationale": "A pointer to a separate IT security circular; the only defensible mechanism is identifying and implementing the controls that circular imposes, without a specific SCF counterpart.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5(c)",
+   "scf_ids": [
+    "CPL-02.2",
+    "BCD-12.2",
+    "CPL-01"
+   ],
+   "confidence": "medium",
+   "rationale": "Compliance with the IS audit and system switchover guidelines is periodic control audits plus failover capability for switchover, under identified statutory obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5(d)",
+   "scf_ids": [
+    "BCD-01",
+    "BCD-01.7"
+   ],
+   "confidence": "medium",
+   "rationale": "Compliance with the business continuity planning guidelines is discharged by the business continuity management system and maintained BC/DR plans.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "ANNEX-I",
+   "scf_ids": [
+    "IRO-09.3",
+    "IRO-13",
+    "IRO-10"
+   ],
+   "confidence": "high",
+   "rationale": "The quarterly return's data elements (nature, cause, impact, remedial action) are produced by the incident tracking repository and root cause analysis, and submitted through incident reporting to the regulator.",
+   "uncovered_clause": null
+  }
+ ]
+}

@@ -278,6 +278,15 @@ def ensure_static_control_library_baseline(db: Session, tenant_id: int) -> dict:
     """Create the local static normalized-control baseline if none exists."""
     if _baseline_exists(db, tenant_id):
         return {"seeded": False, "reason": "baseline_exists"}
+    # A tenant on the SCF control plane already HAS its canonical library. Without
+    # this guard, startup would build a second, competing 2,332-row baseline that
+    # outranks the SCF run (is_baseline DESC) and silently swaps the library out
+    # from under the tenant on the next restart.
+    if db.query(NormalizationRun.id).filter(
+        NormalizationRun.tenant_id == tenant_id,
+        NormalizationRun.label.like("SCF %"),
+    ).first() is not None:
+        return {"seeded": False, "reason": "scf_control_plane_active"}
     if db.query(ParsedFrameworkControl.id).first() is None:
         return {"seeded": False, "reason": "no_framework_controls"}
 

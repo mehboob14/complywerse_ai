@@ -1,0 +1,67 @@
+{
+ "framework": "ksa_pdp_transfer",
+ "hop": "direct",
+ "mappings": [
+  {
+   "code": "4.1",
+   "scf_ids": [
+    "DCH-25",
+    "PRI-01.5",
+    "PRI-07.1",
+    "TPM-05.8"
+   ],
+   "confidence": "medium",
+   "rationale": "Composite safeguard requirement for exempted cross-border transfers: DCH-25 governs the restriction of regulated data transfers to third countries generally, PRI-01.5 is the binding-corporate/common-rules instrument (clause B), PRI-07.1 is the mechanism for embedding data-protection clauses in contracts with recipients (clause A, standard contractual clauses), and TPM-05.8 approximates clause C by obtaining independent third-party assessor attestation of a recipient's conformity.",
+   "uncovered_clause": "Clause C, 'certificate of accreditation' — SCF has no control for relying on a privacy certification issued by an accredited certification body; TPM-05.8 (independent 3PAO attestation) is the nearest mechanism and is only a partial substitute."
+  },
+  {
+   "code": "4.3",
+   "scf_ids": [
+    "DCH-25",
+    "PRI-07.1",
+    "TPM-05"
+   ],
+   "confidence": "medium",
+   "rationale": "The obligation is to embed standard personal-data protection provisions into the inter-body agreement or MoU that authorises the transfer: PRI-07.1 and TPM-05 are the mechanisms for writing data-protection and compliance requirements into agreements with the receiving party, and DCH-25 governs the cross-border transfer itself; confidence is medium because both contract controls are framed around contractor/supplier agreements rather than public-body memoranda of understanding.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "5.1",
+   "scf_ids": [
+    "DCH-25",
+    "TPM-05.2"
+   ],
+   "confidence": "medium",
+   "rationale": "This is an applicability clause extending the Law to onward transfers by an offshore recipient; operationally it is discharged by DCH-25 continuing to govern data leaving the Kingdom and by TPM-05.2 flowing the same protection requirements down to the recipient's sub-processors and onward recipients, so the mapping is partial by nature — a scoping provision has no single discrete control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.2",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: the actor throughout is the competent authority, which may amend the adequacy list and may engage foreign authorities about a country's removal. No duty attaches to a controller or processor, so no SCF control applies.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "3.3",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: a supervisory power reserved to the competent authority to suspend transfers to a listed country or organisation. The clause imposes nothing on the assessed organisation - any downstream duty to halt a transfer would arise from the suspension decision, not from this text.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "8.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Direction of obligation: the competent authority shall issue guides and guidelines. A rule-making duty on the regulator, with no organisational control behind it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "9.1",
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Commencement provision - the Regulation enters into force on publication. Legal boilerplate, not a control requirement of any actor.",
+   "uncovered_clause": null
+  }
+ ]
+}

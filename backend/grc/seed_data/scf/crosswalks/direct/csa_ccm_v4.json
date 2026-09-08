@@ -1,0 +1,18 @@
+{
+ "framework": "csa_ccm_v4",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "IAM-16",
+   "scf_ids": [
+    "IAC-20",
+    "IAC-08"
+   ],
+   "confidence": "high",
+   "rationale": "The control requires authorization mechanisms that actually enforce access decisions; IAC-20 is the enforcement of logical access permissions conforming to least privilege and IAC-08 the role-based model through which those authorization decisions are expressed.",
+   "unmappable_reason": null
+  }
+ ]
+}

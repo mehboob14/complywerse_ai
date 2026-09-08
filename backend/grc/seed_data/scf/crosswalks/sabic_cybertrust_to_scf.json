@@ -1,0 +1,342 @@
+{
+ "framework": "sabic_cybertrust",
+ "library": "sabic_cybertrust.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "1.1",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 1.1 requires a management-approved information security policy communicated to staff and external parties — the exact wording of 5.1."
+  },
+  {
+   "control_id": "1.2",
+   "iso_clauses": [
+    "5.2",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 1.2 assigns security roles with a designated accountable individual holding authority — 5.2 roles and responsibilities plus 5.4 management responsibilities."
+  },
+  {
+   "control_id": "1.3",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 1.3 requires role-relevant awareness training on hire and annually thereafter — 6.3 awareness, education and training."
+  },
+  {
+   "control_id": "1.4",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "sabic_cybertrust.json 1.4 is an annual/change-triggered risk assessment; ISO 27002:2022 has no risk-assessment control, this obligation belongs to ISO 27001 clause 6.1.2, so an honest gap beats a forced mapping."
+  },
+  {
+   "control_id": "2.1",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 2.1 requires an inventory of hardware, software and data assets with assigned owners — 5.9 inventory of information and other associated assets."
+  },
+  {
+   "control_id": "2.2",
+   "iso_clauses": [
+    "5.12",
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 2.2 requires classifying AND labelling SABIC information with per-level handling procedures — 5.12 classification and 5.13 labelling."
+  },
+  {
+   "control_id": "2.3",
+   "iso_clauses": [
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 2.3 governs removable media handling — encryption, tracking and secure disposal — which is the full lifecycle scope of 7.10 storage media."
+  },
+  {
+   "control_id": "3.1",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 3.1 requires a least-privilege, business-need access policy with regular review — 5.15 access control rules and 8.3 information access restriction."
+  },
+  {
+   "control_id": "3.2",
+   "iso_clauses": [
+    "8.5",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 3.2 requires strong authentication with MFA for remote and privileged users — 8.5 secure authentication, 5.17 authentication information handling."
+  },
+  {
+   "control_id": "3.3",
+   "iso_clauses": [
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 3.3 requires privileged accounts inventoried, tightly controlled and their activity monitored — the definition of 8.2 privileged access rights."
+  },
+  {
+   "control_id": "3.4",
+   "iso_clauses": [
+    "5.18",
+    "6.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 3.4 requires access revocation within 24 hours of leaving or changing role — 5.18 removal/adjustment of access rights, 6.5 post-termination obligations."
+  },
+  {
+   "control_id": "4.1",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 4.1 prescribes approved algorithms (AES-256, TLS 1.2+) for data at rest and in transit — the cryptography-use rules of 8.24."
+  },
+  {
+   "control_id": "4.2",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 4.2 covers key generation, distribution, storage, rotation and destruction — the key management lifecycle explicitly inside 8.24."
+  },
+  {
+   "control_id": "5.1",
+   "iso_clauses": [
+    "7.2",
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 5.1 restricts facility access to authorised personnel with entry/exit logging — 7.2 physical entry controls, protecting the perimeter defined in 7.1."
+  },
+  {
+   "control_id": "5.2",
+   "iso_clauses": [
+    "7.5",
+    "7.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 5.2 names theft, fire, flood and power disruption — 7.5 protection against physical and environmental threats, with power covered by 7.11 supporting utilities."
+  },
+  {
+   "control_id": "5.3",
+   "iso_clauses": [
+    "7.14",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 5.3 requires equipment media to be wiped or physically destroyed with destruction certificates — 7.14 secure disposal or re-use of equipment, 7.10 for the media itself."
+  },
+  {
+   "control_id": "6.1",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 6.1 requires changes documented, tested and approved before implementation — the change-management control 8.32."
+  },
+  {
+   "control_id": "6.2",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 6.2 requires current anti-malware configured for real-time protection — directly 8.7 protection against malware."
+  },
+  {
+   "control_id": "6.3",
+   "iso_clauses": [
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 6.3 requires regular, securely stored, restore-tested backups — the exact scope of 8.13 information backup."
+  },
+  {
+   "control_id": "6.4",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 6.4 requires regular scanning and remediation within defined timeframes — 8.8 management of technical vulnerabilities."
+  },
+  {
+   "control_id": "6.5",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 6.5 requires protected, retained security event logs that are reviewed for anomalies — 8.15 logging and 8.16 monitoring activities."
+  },
+  {
+   "control_id": "7.1",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 7.1 isolates SABIC-data systems from untrusted networks (8.22 segregation of networks) using firewalls and boundary access controls (8.20 networks security)."
+  },
+  {
+   "control_id": "7.2",
+   "iso_clauses": [
+    "5.14",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 7.2 requires secure protocols (SFTP, HTTPS) for exchanging SABIC information over untrusted networks — 5.14 information transfer rules realised through 8.24 cryptography."
+  },
+  {
+   "control_id": "7.3",
+   "iso_clauses": [
+    "6.7",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "sabic_cybertrust.json 7.3 requires VPN-or-equivalent encrypted remote access with MFA — 6.7 remote working security measures plus the MFA requirement of 8.5."
+  },
+  {
+   "control_id": "7.4",
+   "iso_clauses": [
+    "5.14",
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "sabic_cybertrust.json 7.4 mixes encrypted messaging of sensitive information (5.14 covers electronic messaging transfer) with spam and phishing filtering, which ISO 27002 treats under 8.7 malware protection."
+  },
+  {
+   "control_id": "8.1",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 8.1 requires an incident response plan defining roles, procedures and communication protocols — 5.24 incident management planning and preparation."
+  },
+  {
+   "control_id": "8.2",
+   "iso_clauses": [
+    "6.8",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "sabic_cybertrust.json 8.2 sets 24-hour notification to SABIC with impact and containment details — 6.8 timely event reporting and the 5.24 communication protocol, though the customer-specific deadline is contractual."
+  },
+  {
+   "control_id": "8.3",
+   "iso_clauses": [
+    "5.28",
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "sabic_cybertrust.json 8.3 requires retained incident records (timeline, actions) — 5.28 collection and retention of incident evidence — including lessons learned, which is 5.27."
+  },
+  {
+   "control_id": "9.1",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 9.1 requires documented and tested continuity of SABIC-related services — 5.29 information security during disruption, with 5.30 for the ICT readiness half."
+  },
+  {
+   "control_id": "9.2",
+   "iso_clauses": [
+    "5.30",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 9.2 requires DR capability with defined and tested RTO/RPO — 5.30 ICT readiness for business continuity, supported by 8.14 redundancy of processing facilities."
+  },
+  {
+   "control_id": "10.1",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 10.1 requires regular self-assessment against the CyberTrust rules with remediation plans — 5.36 compliance with policies, rules and standards."
+  },
+  {
+   "control_id": "10.2",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 10.2 requires identifying and monitoring applicable legal and data-protection requirements — 5.31 legal, statutory, regulatory and contractual requirements."
+  },
+  {
+   "control_id": "10.3",
+   "iso_clauses": [
+    "5.35",
+    "8.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "sabic_cybertrust.json 10.3 obliges supporting customer-run security audits with access to facilities, systems and documentation — 5.35 independent review of information security, with 8.34 governing how those audit accesses are controlled."
+  },
+  {
+   "control_id": "10.4",
+   "iso_clauses": [
+    "5.20",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "sabic_cybertrust.json 10.4 requires CyberTrust obligations to be contractually imposed on subcontractors and verified — 5.20 supplier agreements and 5.22 monitoring and review of supplier services."
+  },
+  {
+   "control_id": "10.5",
+   "iso_clauses": [
+    "5.27",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "sabic_cybertrust.json 10.5 drives improvement from incident analysis (5.27) and audits/assessments (5.35); ISO 27002 has no standalone continual-improvement control, that sits in ISO 27001 clause 10."
+  }
+ ]
+}

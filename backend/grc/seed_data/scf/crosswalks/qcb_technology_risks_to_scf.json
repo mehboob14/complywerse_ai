@@ -1,0 +1,4949 @@
+{
+ "framework": "qcb_technology_risks",
+ "library": "qcb_technology_risks.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "1.1.1",
+   "iso_clauses": [
+    "5.1",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing a cyber security function is the allocation of security roles/responsibilities in 5.2, and board approval of the framework is the management-approved policy set required by 5.1."
+  },
+  {
+   "control_id": "1.1.2",
+   "iso_clauses": [
+    "5.1",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Annual senior-management review of control adequacy against emerging threats is the planned-interval policy review of 5.1 plus the management compliance review of 5.36."
+  },
+  {
+   "control_id": "1.1.3",
+   "iso_clauses": [
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Board oversight and demand for security measures aligns with management responsibility in 5.4; the risk-appetite and board-composition parts have no ISO 27002 counterpart (they sit in ISO 27001 clauses 5 and 6)."
+  },
+  {
+   "control_id": "1.1.4",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Board approval of a cyber security policy to safeguard information assets is exactly the approved information security policy required by 5.1."
+  },
+  {
+   "control_id": "1.1.5",
+   "iso_clauses": [
+    "5.1",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Strategy approval overlaps with the policy direction in 5.1 and management commitment in 5.4, but budget and contingency funding are ISO 27001 clause 7.1 resourcing, absent from 27002."
+  },
+  {
+   "control_id": "1.1.6",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Standing up a security function with defined representation from IT, risk, HR, BCM and legal is the definition and allocation of information security roles in 5.2."
+  },
+  {
+   "control_id": "1.1.7",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "5.1 requires the policy and topic-specific policies be reviewed at planned intervals — this control fixes that interval at annual for policies, standards and procedures."
+  },
+  {
+   "control_id": "1.2.1",
+   "iso_clauses": [
+    "5.1",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing IT policies/standards/procedures is 5.1, and forming IT Strategy/Steering/risk committees with board oversight is the role-and-responsibility allocation of 5.2."
+  },
+  {
+   "control_id": "1.2.2",
+   "iso_clauses": [
+    "5.2",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A standing information security organization that designs, operates and improves the security programme is the organizational role assignment of 5.2 operating on the policy set of 5.1."
+  },
+  {
+   "control_id": "1.2.3",
+   "iso_clauses": [
+    "5.1",
+    "5.2",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The listed programme contents map piecewise: policy development to 5.1, assignment of roles and accountability to 5.2, and classification plus ownership of information assets to 5.12."
+  },
+  {
+   "control_id": "1.2.4",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A board-approved policy documenting the approach to cyber threats and acceptable risk levels is the approved, published information security policy of 5.1."
+  },
+  {
+   "control_id": "1.2.5",
+   "iso_clauses": [
+    "5.3",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The control explicitly requires segregation of duties between the Information Security Group and the IT division that implements systems — the conflicting-duties separation of 5.3, with the function itself defined per 5.2."
+  },
+  {
+   "control_id": "1.2.6",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Sizing the Information Security Group to the bank's activities touches the role-allocation intent of 5.2, but adequacy of staffing is ISO 27001 clause 7.1 resourcing rather than a 27002 control."
+  },
+  {
+   "control_id": "1.2.7",
+   "iso_clauses": [
+    "5.2",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Appointing a CISO is the named-role assignment of 5.2, and forbidding a reporting line into the CIO/CTO who implements IT is the conflicting-duties separation of 5.3."
+  },
+  {
+   "control_id": "1.2.8",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Constituting a cross-executive security forum facilitated by the CISO is an allocation of information security responsibilities at governance level under 5.2."
+  },
+  {
+   "control_id": "1.2.9",
+   "iso_clauses": [
+    "5.2",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The committee's mandate (approving standards and procedures, reviewing incidents and plans) is a defined security responsibility under 5.2 exercised over the policy framework of 5.1."
+  },
+  {
+   "control_id": "1.2.10",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Only the role-definition aspect of 5.2 is touched; staff numbers, skill levels and tooling adequacy are ISO 27001 clause 7 competence/resource requirements with no 27002 clause."
+  },
+  {
+   "control_id": "1.2.11",
+   "iso_clauses": [
+    "5.2",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The enumerated CISO duties are a documented role definition per 5.2, and the explicit duty to regularly review system audit trails and logs is the log-review expectation of 8.15."
+  },
+  {
+   "control_id": "1.3.1",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Developing indicators to measure cyber resilience preparedness is only loosely the compliance-monitoring intent of 5.36; security performance measurement proper is ISO 27001 clause 9.1, outside 27002."
+  },
+  {
+   "control_id": "1.3.2",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring the indicators be verified by independent compliance checks or audits carried out by qualified professionals is precisely the independent review of information security in 5.35."
+  },
+  {
+   "control_id": "1.3.3",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Semi-annual board monitoring of security indicators with remedial action plans resembles the review-and-correct loop of 5.36, but management reporting of security performance belongs to ISO 27001 clauses 9.1/9.3."
+  },
+  {
+   "control_id": "2.1.1",
+   "iso_clauses": [
+    "6.2",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "HR policies that document information security responsibilities for employees, contractors and third parties are the employment terms and conditions of 6.2 carrying the responsibilities defined under 5.2."
+  },
+  {
+   "control_id": "2.1.2",
+   "iso_clauses": [
+    "6.2",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Embedding information security responsibilities in job descriptions and monitoring them through employment is the contractual statement of responsibilities in 6.2 and the role allocation of 5.2."
+  },
+  {
+   "control_id": "2.1.3",
+   "iso_clauses": [
+    "5.1",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "5.1 requires policies be communicated to and acknowledged by personnel, and ensuring employees are aware of and comply with their obligations is the awareness requirement of 6.3."
+  },
+  {
+   "control_id": "2.1.4",
+   "iso_clauses": [
+    "6.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A defined, enforced and communicated disciplinary process for security violations is verbatim the subject of 6.4."
+  },
+  {
+   "control_id": "2.1.5",
+   "iso_clauses": [
+    "6.2",
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Signing employment terms and conditions on joining or role change is 6.2, and the confidentiality/non-disclosure agreement requirement is 6.6."
+  },
+  {
+   "control_id": "2.1.6",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Handling personnel PII in line with the applicable Information Privacy and Protection Law is the identification and meeting of PII protection requirements in 5.34."
+  },
+  {
+   "control_id": "2.1.7",
+   "iso_clauses": [
+    "7.2",
+    "7.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Visitor logging with date/time/purpose, badging and authorization of entry is 7.2 physical entry; mandatory escort while inside secure areas is the working-in-secure-areas rule of 7.6."
+  },
+  {
+   "control_id": "2.1.8",
+   "iso_clauses": [
+    "5.11",
+    "5.18",
+    "6.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The three limbs map one-to-one: return of physical and logical assets is 5.11, amendment/removal of access on change or exit is 5.18, and the termination-triggered obligations are 6.5."
+  },
+  {
+   "control_id": "2.1.9",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting user rights to the minimum needed for the job is the need-to-know/need-to-use basis of 5.15 enforced as the information access restriction of 8.3."
+  },
+  {
+   "control_id": "2.1.10",
+   "iso_clauses": [
+    "5.10",
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Preventing employees, vendors and visitors from misusing or corrupting information is the acceptable-use rule set of 5.10, and preventing unauthorized disclosure is the leakage-prevention control of 8.12."
+  },
+  {
+   "control_id": "2.1.11",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "This requires insider-threat exposures be considered within the risk assessment process; scoping of risk identification is ISO 27001 clause 6.1.2 and ISO 27002:2022 contains no insider-risk-assessment control to map to."
+  },
+  {
+   "control_id": "2.2.1",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing and funding a security awareness programme is the awareness/education/training programme required by 6.3."
+  },
+  {
+   "control_id": "2.2.2",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "6.3 requires awareness content be updated for new threats and organizational change; this control fixes that review at annual."
+  },
+  {
+   "control_id": "2.2.3",
+   "iso_clauses": [
+    "6.3",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The prescribed curriculum is the awareness content of 6.3, and its explicit acceptable-usage-of-information-processing-systems component is the acceptable use rules of 5.10."
+  },
+  {
+   "control_id": "2.2.4",
+   "iso_clauses": [
+    "6.3",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Making training material available to staff and long-term contractors supports 6.3, and making IT security policies, standards and procedures available is the communication requirement of 5.1."
+  },
+  {
+   "control_id": "2.2.5",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Training tailored to job function, role and skills for employees, contractors and third parties is the role-relevant training requirement of 6.3."
+  },
+  {
+   "control_id": "2.2.6",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Induction training plus annual refresher including social-engineering recognition is the awareness programme cadence and content prescribed by 6.3."
+  },
+  {
+   "control_id": "2.2.7",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Post-training effectiveness assessment, attendance/acknowledgement records and awareness sessions for senior management are the evaluation and coverage elements of 6.3."
+  },
+  {
+   "control_id": "2.2.8",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "6.3 extends awareness to relevant interested parties, which covers the vendor, service provider and partner audience here; the customer-education element goes beyond 27002's personnel-focused scope."
+  },
+  {
+   "control_id": "2.2.9",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Annual mandatory completion, monitoring of completion and refreshing content for latest attack techniques are the programme mechanics of 6.3."
+  },
+  {
+   "control_id": "3.1.1",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A governance programme established specifically to address legal and compliance requirements for cyber security is the identification and documented approach to legal/statutory/regulatory requirements in 5.31."
+  },
+  {
+   "control_id": "3.1.2",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Complying with current and future amended laws and regulations is exactly the up-to-date legal and regulatory requirements obligation of 5.31."
+  },
+  {
+   "control_id": "3.1.3",
+   "iso_clauses": [
+    "5.35",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An at-least-annual audit of information systems covering infrastructure, people and processes is the independent review of 5.35, and closing non-conformances within timelines is the corrective action of 5.36."
+  },
+  {
+   "control_id": "3.1.4",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "5.35 requires independent review also when significant changes occur; this control makes reassessment mandatory when a change or new finding invalidates the prior assessment."
+  },
+  {
+   "control_id": "3.1.5",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Full audit coverage of infrastructure, people and processes is the scope requirement of 5.35; the QCB exemption submission is a local regulatory process with no 27002 equivalent."
+  },
+  {
+   "control_id": "3.1.6",
+   "iso_clauses": [
+    "5.31",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing a legal function to advise on cyber-law risk is the organizational mechanism for meeting 5.31 legal requirements, with the structure and staffing being role allocation under 5.2."
+  },
+  {
+   "control_id": "3.1.7",
+   "iso_clauses": [
+    "5.31",
+    "5.32",
+    "5.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The enumerated legal instruments map directly: identification of applicable legislation to 5.31, intellectual property rights to 5.32, and protection of records to 5.33."
+  },
+  {
+   "control_id": "3.1.8",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "PCI-DSS and PA-DSS are contractual/industry requirements the bank must identify and satisfy, which is the contractual-requirements limb of 5.31 rather than any specific 27002 technical clause."
+  },
+  {
+   "control_id": "3.1.9",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An audit charter fixing mandate, authority, accountability and reporting for the IS audit function is the defined and managed independent review process of 5.35."
+  },
+  {
+   "control_id": "3.1.10",
+   "iso_clauses": [
+    "5.35",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A structured, risk-based audit programme evaluating internal controls is 5.35's planned independent review; evaluating compliance with policies concerning IT risk is 5.36."
+  },
+  {
+   "control_id": "3.1.11",
+   "iso_clauses": [
+    "5.35",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Preserving the independence and objectivity of the audit function is the core requirement of 5.35, and barring auditors from reviewing operations they previously ran is the conflicting-duties rule of 5.3."
+  },
+  {
+   "control_id": "3.1.12",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Setting risk-commensurate audit cycle frequencies with no open-ended cycles is the planned-interval scheduling required for the independent reviews of 5.35."
+  },
+  {
+   "control_id": "3.1.13",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Annual assessment of legal exposure from data breaches and consequent litigation is an evaluation of the legal and contractual obligations identified under 5.31, though the board approval step is governance outside 27002."
+  },
+  {
+   "control_id": "3.1.14",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Including application control audits with a data-integrity focus in the internal audit plan is scope content for the independent review programme of 5.35."
+  },
+  {
+   "control_id": "3.1.15",
+   "iso_clauses": [
+    "5.35",
+    "8.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "An adopted audit methodology covering scoping, sampling and reporting supports the independent reviews of 5.35, and the prescribed use of computer-assisted audit techniques against live systems is governed by 8.34."
+  },
+  {
+   "control_id": "4.1.1",
+   "iso_clauses": [
+    "5.19",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A procurement policy setting vendor selection criteria is the supplier relationship policy of 5.19, and its contractual cyber security requirements are the agreement content of 5.20."
+  },
+  {
+   "control_id": "4.1.2",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Pre-engagement assessment of vendor reliability and technology risk with due-diligence criteria is the supplier risk evaluation and selection process required by 5.19."
+  },
+  {
+   "control_id": "4.1.3",
+   "iso_clauses": [
+    "5.20",
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandated contract clauses on cyber security, right to audit, obligations, liabilities and referenced standards are the agreement content of 5.20; the confidentiality clause is 6.6."
+  },
+  {
+   "control_id": "4.1.4",
+   "iso_clauses": [
+    "5.20",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring the bank's own security controls to flow down to contracted vendors through third-party agreements is the security-requirements propagation of 5.20 and the ICT supply chain requirement of 5.21."
+  },
+  {
+   "control_id": "4.1.5",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Annual independent vendor audits or evaluated vendor self-assessments are the regular monitoring, review and audit of supplier service delivery required by 5.22."
+  },
+  {
+   "control_id": "4.1.6",
+   "iso_clauses": [
+    "8.9",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Hardening vendor devices against hardening guidelines to strip default and insecure settings is the secure configuration baseline of 8.9, applied to supplied equipment per 5.21."
+  },
+  {
+   "control_id": "5.1.1",
+   "iso_clauses": [
+    "5.9",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Only the framework's asset identification and classification elements have 27002 counterparts (5.9, 5.12); the risk identification, treatment-plan and monitoring machinery is ISO 27001 clause 6 and has no clause in the 27002 control catalogue."
+  },
+  {
+   "control_id": "5.1.2",
+   "iso_clauses": [
+    "5.36",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Periodically testing that implemented controls still achieve the intended risk mitigation is the compliance and effectiveness review of 5.36, verified independently under 5.35."
+  },
+  {
+   "control_id": "5.1.3",
+   "iso_clauses": [
+    "5.9",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "An Information Asset Protection Policy that identifies asset criticality to derive protective controls is the asset inventory/ownership requirement of 5.9 driven by the classification scheme of 5.12."
+  },
+  {
+   "control_id": "5.1.4",
+   "iso_clauses": [
+    "5.9",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A maintained detailed inventory of information, applications, infrastructure and facilities is 5.9, and classifying each asset by sensitivity/business criticality is 5.12."
+  },
+  {
+   "control_id": "5.1.5",
+   "iso_clauses": [
+    "5.9",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The mandated record fields — asset identification, location, owner and designated custodian — are the inventory attributes of 5.9, with the security/risk classification field coming from 5.12."
+  },
+  {
+   "control_id": "5.2.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Defining a risk assessment methodology and process for identifying threats and vulnerabilities is ISO/IEC 27001 clause 6.1.2; ISO 27002:2022 is a control catalogue and contains no risk-assessment-process clause to map it to."
+  },
+  {
+   "control_id": "5.2.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Analysis and quantification of potential impact and consequences is the impact-analysis step of ISO 27001 clause 6.1.2(d); no ISO 27002 control states this."
+  },
+  {
+   "control_id": "5.2.3",
+   "iso_clauses": [
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Building a threat and vulnerability matrix to prioritize risks partially matches 5.7's requirement to analyse threat information, but the prioritization matrix itself is a risk-assessment artefact from ISO 27001 clause 6.1.2."
+  },
+  {
+   "control_id": "5.2.4",
+   "iso_clauses": [
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining and monitoring a register of security threats such as DoS, sabotage and malware is the collection and ongoing analysis of threat information required by 5.7."
+  },
+  {
+   "control_id": "5.2.5",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Defining risk appetite is establishing risk acceptance criteria under ISO/IEC 27001 clause 6.1.2(a); ISO 27002:2022 has no corresponding control."
+  },
+  {
+   "control_id": "5.2.6",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "The avoid/transfer/mitigate/accept treatment plan with senior-management vetting of residual risk is ISO/IEC 27001 clause 6.1.3 and 8.3; ISO 27002 contains no risk-treatment clause."
+  },
+  {
+   "control_id": "5.2.7",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Integrating risk assessment into business processes and re-running it on business change echoes 5.8's requirement to embed information security into projects and process changes, but the triggering-on-change requirement is ISO 27001 clause 8.2."
+  },
+  {
+   "control_id": "5.3.1",
+   "iso_clauses": [
+    "5.36",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A procedure confirming implemented controls remain effective under changed conditions is the periodic compliance/effectiveness review of 5.36, corroborated by the independent review of 5.35."
+  },
+  {
+   "control_id": "5.3.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Maintaining and periodically reviewing a risk register for monitoring and reporting is ISO/IEC 27001 clause 6/8 documented risk information; ISO 27002:2022 defines no risk-register control."
+  },
+  {
+   "control_id": "5.3.3",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A risk matrix ranking systems and processes by exposure for reporting purposes is a risk-analysis output under ISO 27001 clause 6.1.2, with no ISO 27002 control expressing it."
+  },
+  {
+   "control_id": "5.3.4",
+   "iso_clauses": [
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Consuming internal and external threat intelligence feeds to drive mitigation of new risks is precisely the threat intelligence control 5.7."
+  },
+  {
+   "control_id": "6.1.1",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Formulating BCM policy, procedures and plans to a recognised continuity standard is the maintaining-security-during-disruption requirement of 5.29 together with the ICT continuity planning of 5.30; the QCB circular citation is jurisdiction-specific."
+  },
+  {
+   "control_id": "6.1.2",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "An emergency response plan with command centre and communications procedures is part of the disruption-response planning of 5.29; the physical evacuation element is life-safety, outside 27002."
+  },
+  {
+   "control_id": "6.1.3",
+   "iso_clauses": [
+    "5.24",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Identifying natural and man-made (including cyber) threat scenarios and putting incident management procedures in place is the incident planning and preparation of 5.24 feeding the disruption planning of 5.29."
+  },
+  {
+   "control_id": "6.1.4",
+   "iso_clauses": [
+    "5.30",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The designated BCM head's duties — BIA, plan maintenance and annual testing — are the ICT continuity planning and testing activities of 5.30, assigned as a named responsibility under 5.2."
+  },
+  {
+   "control_id": "6.1.5",
+   "iso_clauses": [
+    "5.2",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A standing cross-functional BCM committee owning plan review, training and invocation is a defined responsibility allocation under 5.2 supporting the continuity plan maintenance of 5.30."
+  },
+  {
+   "control_id": "6.1.6",
+   "iso_clauses": [
+    "5.24",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Forming incident response, IT, damage assessment and logistics teams across sites is the establishment of incident-handling roles and structures required by 5.24 and 5.2."
+  },
+  {
+   "control_id": "6.1.7",
+   "iso_clauses": [
+    "5.5",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A crisis communication strategy naming regulators among key stakeholders is the maintained contact with authorities of 5.5, exercised as part of the disruption arrangements of 5.29."
+  },
+  {
+   "control_id": "6.1.8",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "5.30 requires ICT continuity plans be tested at planned intervals; this control fixes annual testing and adds external audit of the results, with the continuity objective coming from 5.29."
+  },
+  {
+   "control_id": "6.1.9",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Table-top, simulation, technical recovery, component and DR-site testing are the exercise and test regime that 5.30 requires for ICT readiness."
+  },
+  {
+   "control_id": "6.1.10",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Submitting an approved BCP copy and results summary to QCB annually is a supervisory filing obligation specific to the Qatari regulator; ISO 27002 contains no regulator-submission control."
+  },
+  {
+   "control_id": "6.1.11",
+   "iso_clauses": [
+    "5.30",
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Documented recovery procedures for critical systems including data and information flows are the ICT continuity plans of 5.30; the recovery mechanisms for the data itself rest on the backup control 8.13."
+  },
+  {
+   "control_id": "6.1.12",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring DR capability to meet defined recovery time objectives and be tested jointly with vendors is the RTO-driven ICT readiness of 5.30 within the disruption-resilience requirement of 5.29."
+  },
+  {
+   "control_id": "6.1.13",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A Cyber Crisis Management Plan covering detection, response, recovery and containment is the documented incident response planning of 5.24 executed per the response procedures of 5.26."
+  },
+  {
+   "control_id": "6.1.14",
+   "iso_clauses": [
+    "8.7",
+    "8.8",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Preventive measures against ransomware, malware and phishing are 8.7; readiness for zero-day and exploit-based attacks is the technical vulnerability management of 8.8; the respond/recover/contain limb is 5.26."
+  },
+  {
+   "control_id": "6.1.15",
+   "iso_clauses": [
+    "8.16",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Promptly detecting cyber intrusions is the anomalous-behaviour monitoring and detection of 8.16, and responding, recovering and containing the fallout is 5.26."
+  },
+  {
+   "control_id": "6.1.16",
+   "iso_clauses": [
+    "6.7",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting work-from-home arrangements is the remote working control 6.7, and allowing highly privileged users to connect only with prior approval on an as-needed basis is the privileged access restriction of 8.2."
+  },
+  {
+   "control_id": "7.1.1",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Building a reporting framework and filing an annual compliance report with QCB is a supervisory obligation; it touches 5.31 only as documenting the approach to meeting a regulatory requirement."
+  },
+  {
+   "control_id": "7.1.2",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Identifying material control gaps and initiating documented remedial action plans is the non-compliance identification and corrective action loop of 5.36; the board sign-off and QCB submission are jurisdiction-specific."
+  },
+  {
+   "control_id": "7.1.3",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "This states the regulator's own prerogative to audit the bank at any time rather than a control the bank implements; ISO 27002 has no clause expressing a supervisor's inspection right."
+  },
+  {
+   "control_id": "7.2.1",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring documented business justification and board approval for any exception to a mandatory requirement is the handling of deviations from required standards under 5.36."
+  },
+  {
+   "control_id": "8.1.1",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A change management policy covering planned, minor and emergency changes with documented rollback procedures and prior impact assessment is the change management control 8.32."
+  },
+  {
+   "control_id": "8.1.2",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Classifying changes so that appropriate resources and approvals are applied is part of the documented change control procedure of 8.32."
+  },
+  {
+   "control_id": "8.1.3",
+   "iso_clauses": [
+    "8.32",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A cross-functional change committee including Information Security and Risk representation is the authorization and review body implied by 8.32, staffed via the responsibility allocation of 5.2."
+  },
+  {
+   "control_id": "8.1.4",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Assessing whether a change impacts the security posture and running risk analysis to keep residual risk acceptable is the security-impact assessment step of 8.32."
+  },
+  {
+   "control_id": "8.1.5",
+   "iso_clauses": [
+    "8.29",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented test plans and User Acceptance Testing with explicit user sign-off before production migration is the acceptance testing of 8.29 within the change procedure of 8.32."
+  },
+  {
+   "control_id": "8.1.6",
+   "iso_clauses": [
+    "5.3",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Barring the change requester from also implementing the change is the separation of conflicting duties in 5.3, applied to the change process governed by 8.32."
+  },
+  {
+   "control_id": "8.1.7",
+   "iso_clauses": [
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining physically and logically separate development, testing, staging and production environments is exactly control 8.31."
+  },
+  {
+   "control_id": "8.1.8",
+   "iso_clauses": [
+    "8.32",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Replicating an implemented production change into the DR environment is a change-procedure step under 8.32 that keeps the ICT continuity capability of 5.30 accurate."
+  },
+  {
+   "control_id": "8.1.9",
+   "iso_clauses": [
+    "8.32",
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Updating all related process and system documentation after a change is the documentation-maintenance step of 8.32, keeping the operating procedures of 5.37 current."
+  },
+  {
+   "control_id": "8.1.10",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Post-implementation verification that the change met its objective with no unexpected side effects is the verification step required by 8.32."
+  },
+  {
+   "control_id": "8.1.11",
+   "iso_clauses": [
+    "8.15",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Enabling a logging facility to record activities performed during the change process is 8.15, and the semi-annual review of the change process and classification structure is improvement of the 8.32 procedure."
+  },
+  {
+   "control_id": "8.2.1",
+   "iso_clauses": [
+    "5.24",
+    "5.25",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The framework's three limbs map directly: documented policy, procedures and roles to 5.24, evaluation of whether an event is a security incident to 5.25, and the response procedures to 5.26."
+  },
+  {
+   "control_id": "8.2.2",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying dedicated incident-handling resources with documented roles for recording, analysing, remediating and monitoring incidents is the incident management preparation of 5.24."
+  },
+  {
+   "control_id": "8.2.3",
+   "iso_clauses": [
+    "5.24",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Appointing an accountable owner of the incident management programme and single point of contact for security communications is the responsibility assignment required by 5.24 and 5.2."
+  },
+  {
+   "control_id": "8.2.4",
+   "iso_clauses": [
+    "5.26",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Resolving all incidents within defined timeframes and monitoring them through to closure is the response and tracking requirement of 5.26 operating under the framework of 5.24."
+  },
+  {
+   "control_id": "8.2.5",
+   "iso_clauses": [
+    "5.25",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Classifying and prioritizing incidents by severity via a designated response team is the assessment and categorization decision of 5.25, with the severity-matched escalation and resolution procedures of 5.26."
+  },
+  {
+   "control_id": "8.2.6",
+   "iso_clauses": [
+    "5.27",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Root cause and impact analysis of major incidents leading to corrective and preventive measures is the learning-from-incidents control 5.27, following the response actions of 5.26."
+  },
+  {
+   "control_id": "8.2.7",
+   "iso_clauses": [
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Collecting, retaining and presenting incident evidence to conform to the rules of evidence in the relevant jurisdiction is verbatim the collection of evidence control 5.28."
+  },
+  {
+   "control_id": "8.2.8",
+   "iso_clauses": [
+    "5.5",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A defined plan for reporting incidents externally to QCB and the Ministry of Interior is the maintained contact with authorities of 5.5, embedded in the incident communication planning of 5.24."
+  },
+  {
+   "control_id": "8.2.9",
+   "iso_clauses": [
+    "6.8",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Training all users to report incidents is the event-reporting channel awareness of 6.8, delivered through the security awareness programme of 6.3."
+  },
+  {
+   "control_id": "8.2.10",
+   "iso_clauses": [
+    "5.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A one-hour mandatory notification of critical incidents to QCB and government authorities is a jurisdictional reporting deadline layered on the contact-with-authorities requirement of 5.5."
+  },
+  {
+   "control_id": "8.2.11",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "5.24 requires incident response plans be exercised and tested; this control fixes annual simulation testing against ransomware, extortion, DDoS and severity-1 scenarios."
+  },
+  {
+   "control_id": "8.2.12",
+   "iso_clauses": [
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Compiling incident information and evaluating lessons learned to improve incident handling is exactly the learning-from-information-security-incidents control 5.27."
+  },
+  {
+   "control_id": "8.2.13",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Raising customer security awareness via notifications and press releases only loosely resembles 6.3, whose scope is personnel and relevant interested parties rather than the retail customer base."
+  },
+  {
+   "control_id": "8.2.14",
+   "iso_clauses": [
+    "5.5",
+    "5.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Keeping the regulator and Ministry of Interior informed of large-scale incidents is 5.5, and sharing incident information so sector-wide risk can be reduced is the special-interest-group information exchange of 5.6."
+  },
+  {
+   "control_id": "8.2.15",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Adopting ITIL is a service-management framework recommendation with no ISO 27002 equivalent; it relates only insofar as it is being used to improve the incident management process required by 5.24."
+  },
+  {
+   "control_id": "8.3.1",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A defined patch management process covering sourcing and validating patches, identifying applicable vulnerabilities and handling failed deployments is the management of technical vulnerabilities control 8.8."
+  },
+  {
+   "control_id": "8.3.2",
+   "iso_clauses": [
+    "8.8",
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Keeping operating systems, network devices, security software and remote access machines patched is 8.8, and controlling how those updates are installed on operational systems is 8.19."
+  },
+  {
+   "control_id": "8.3.3",
+   "iso_clauses": [
+    "8.8",
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Expedited emergency patching for publicly reported vulnerabilities is the timely-action requirement of 8.8, driven by continuous monitoring of vendor and OEM advisories as a threat information source under 5.7."
+  },
+  {
+   "control_id": "8.3.4",
+   "iso_clauses": [
+    "8.8",
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "8.8 requires patches be tested and evaluated before installation, and doing that testing in a separate test environment before production is the environment separation of 8.31."
+  },
+  {
+   "control_id": "8.3.5",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Applying compensating measures such as disabling services or adding access controls when no patch exists is the alternative-mitigation option explicitly provided for in 8.8."
+  },
+  {
+   "control_id": "8.3.6",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Measuring patching delay against an organizational baseline is the timeline definition and effectiveness monitoring expected of the vulnerability management process in 8.8."
+  },
+  {
+   "control_id": "8.4.1",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a defined policy covering logging of access/changes and continuous monitoring, and naming the assets in scope — the combined subject matter of 8.15 Logging and 8.16 Monitoring Activities."
+  },
+  {
+   "control_id": "8.4.2",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Continuous monitoring of applications, network devices and servers with allocated responsibility is precisely 8.16's requirement to monitor networks, systems and applications for anomalous behaviour."
+  },
+  {
+   "control_id": "8.4.3",
+   "iso_clauses": [
+    "8.16",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Scaling monitoring to asset criticality is 8.16's risk-based scoping; the mandated 4-eye principle over the monitoring process itself is a segregation-of-duties requirement (5.3)."
+  },
+  {
+   "control_id": "8.4.4",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enabling logs on all systems handling critical information plus restricting log access and monitoring log integrity is exactly 8.15's log-generation and log-protection requirement."
+  },
+  {
+   "control_id": "8.4.5",
+   "iso_clauses": [
+    "8.16",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A 24x7 SOC is the organisational vehicle for 8.16 continuous monitoring plus the standing incident-response capability 5.24 requires; the onsite/in-Qatar residency condition has no ISO equivalent."
+  },
+  {
+   "control_id": "8.4.6",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires audit trails of administrator and elevated-privilege activity (8.15) and their review when an alert or incident occurs (8.16 anomaly follow-up)."
+  },
+  {
+   "control_id": "8.4.7",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Sets minimum log retention (180 days) and the mandatory log record fields (timestamp, command, IP, authentication) — 8.15's retention and log-content guidance."
+  },
+  {
+   "control_id": "8.4.8",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Semi-annual review of user accounts to disable or remove those no longer required is 5.18's periodic review and removal of access rights."
+  },
+  {
+   "control_id": "8.4.9",
+   "iso_clauses": [
+    "8.16",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A SIEM aggregating and correlating disparate sources to alert on suspicious events is the tooling 8.16 anticipates, built on centrally collected logs (8.15)."
+  },
+  {
+   "control_id": "8.4.10",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An enterprise log repository for aggregation and retention of logs is 8.15's requirement for centralised, protected log storage."
+  },
+  {
+   "control_id": "8.4.11",
+   "iso_clauses": [
+    "5.22",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Where monitoring is outsourced to an MSSP the bank must extract incident detail from and act on the provider's advice — supplier service oversight (5.22) feeding its own incident response (5.26)."
+  },
+  {
+   "control_id": "8.4.12",
+   "iso_clauses": [
+    "5.34",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Logs containing personal information must carry privacy protections under the applicable privacy law — 5.34 PII protection applied to the log data 8.15 generates."
+  },
+  {
+   "control_id": "8.4.13",
+   "iso_clauses": [
+    "5.31",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Constrains monitoring and logging activity to what regulatory and legal frameworks permit, which is 5.31's requirement to identify legal obligations bearing on infosec practices."
+  },
+  {
+   "control_id": "8.4.14",
+   "iso_clauses": [
+    "8.15",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires security logs to be classified by criticality (5.12) and access-controlled against tampering, which is 8.15's log-protection clause."
+  },
+  {
+   "control_id": "8.4.15",
+   "iso_clauses": [
+    "8.16",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Exceptions raised by monitoring must be recorded and driven through the incident management process — the handoff 8.16 defines into 5.26 incident response."
+  },
+  {
+   "control_id": "8.4.16",
+   "iso_clauses": [
+    "8.20",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Intrusion detection and prevention devices protecting against network intrusion are named network security controls (8.20) serving monitoring (8.16)."
+  },
+  {
+   "control_id": "8.5.1",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A capacity management policy with utilisation thresholds, a capacity plan and forecasting of future resource requirements is the literal content of 8.6 Capacity Management."
+  },
+  {
+   "control_id": "8.5.2",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Continuous monitoring of system performance against agreed targets is 8.6's requirement to monitor and tune resource use."
+  },
+  {
+   "control_id": "8.5.3",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires capacity plans to allow for sudden transaction surges — 8.6's projection of future capacity demand including peak conditions."
+  },
+  {
+   "control_id": "8.5.4",
+   "iso_clauses": [
+    "8.6",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assessing each change for its effect on capacity and service performance links the change impact assessment of 8.32 to the capacity forecasting of 8.6."
+  },
+  {
+   "control_id": "8.5.5",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Instrumenting systems to capture CPU, memory and network utilisation to forecast upgrades is 8.6's resource-monitoring and tuning requirement."
+  },
+  {
+   "control_id": "8.5.6",
+   "iso_clauses": [
+    "8.6",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Extends capacity planning to backup and DR facilities, so the standby processing capacity required by 8.14 redundancy is sized under 8.6."
+  },
+  {
+   "control_id": "8.6.1",
+   "iso_clauses": [
+    "5.27",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Problem management here means root-cause analysis of incidents and preventing recurrence (5.27), with permanent fixes delivered through change and release management (8.32); ISO has no standalone problem-management clause."
+  },
+  {
+   "control_id": "8.6.2",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assigning roles and responsibilities and requiring problems to be classified, prioritised and resolved within defined service levels mirrors 5.24's preparation requirement for defined roles and graded response procedures."
+  },
+  {
+   "control_id": "8.6.3",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A helpdesk as the front-line contact point that relays problems to the responsible IT function corresponds only loosely to 5.24's requirement for an established point of contact for reporting; ISO frames it around security events, not general IT support."
+  },
+  {
+   "control_id": "8.6.4",
+   "iso_clauses": [
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying root cause, finding permanent solutions and preventing recurrence of incidents is verbatim the objective of 5.27 Learning From Information Security Incidents."
+  },
+  {
+   "control_id": "8.6.5",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Recommends adopting the ITIL service-management framework to improve problem management — a choice of IT service-management methodology, not an information security control; ISO 27002 mandates no framework and has no clause on ITSM adoption."
+  },
+  {
+   "control_id": "8.7.1",
+   "iso_clauses": [
+    "8.13",
+    "5.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defines backup frequency, media, access privileges and classification (8.13) and extends to archiving of business records in line with local retention law (5.33)."
+  },
+  {
+   "control_id": "8.7.2",
+   "iso_clauses": [
+    "8.13",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Offsite tape/disk backup and offsite replication is 8.13's backup requirement; the real-time replicated high-availability option is 8.14 redundancy of processing facilities."
+  },
+  {
+   "control_id": "8.7.3",
+   "iso_clauses": [
+    "8.24",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Encrypting backup tapes and disks before transport offsite is cryptographic protection (8.24) of storage media in transit (7.10)."
+  },
+  {
+   "control_id": "8.7.4",
+   "iso_clauses": [
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Semi-annual testing and validation that backup media can actually restore is 8.13's explicit requirement to test restoration regularly."
+  },
+  {
+   "control_id": "8.8.1",
+   "iso_clauses": [
+    "7.14",
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A refresh policy spanning acquisition, refresh cycles and decommissioning/disposal touches 7.14 secure disposal or re-use of equipment and the asset lifecycle tracking of 5.9; ISO has no clause on technology refresh cycles as such."
+  },
+  {
+   "control_id": "8.8.2",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An up-to-date inventory of software and hardware components in production and DR, with warranty and support contract detail, is 5.9's inventory of assets and associated ownership data."
+  },
+  {
+   "control_id": "8.8.3",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Replacing or upgrading outdated and unsupported systems specifically because they increase security exposure is vulnerability management (8.8) applied to unsupported software."
+  },
+  {
+   "control_id": "8.8.4",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Tracking EOL/EOS dates, phasing out unsupported devices and risk-assessing continued use with compensating controls is 8.8's handling of vulnerabilities that cannot be patched."
+  },
+  {
+   "control_id": "8.8.5",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Extends the hardware and software inventory to UAT, test, staging, store and stock holdings — 5.9's requirement that the asset inventory be complete, not just production."
+  },
+  {
+   "control_id": "8.9.1",
+   "iso_clauses": [
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A management-approved, periodically reviewed cloud policy stating which applications and data may be hosted in cloud and the provider risks involved is the core of 5.23 Information Security for Use of Cloud Services."
+  },
+  {
+   "control_id": "8.9.2",
+   "iso_clauses": [
+    "5.23",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enumerates mandatory clauses in the cloud contract (exit and migration, data leakage, provider access, third-party/government access notification) — supplier agreement content (5.20) specialised for cloud (5.23)."
+  },
+  {
+   "control_id": "8.9.3",
+   "iso_clauses": [
+    "5.23",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the policy to weigh the geography and jurisdiction where cloud-hosted data physically resides, combining 5.23's cloud risk assessment with 5.31's jurisdictional/legal obligation analysis."
+  },
+  {
+   "control_id": "8.9.4",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obtaining periodic security compliance reports on the cloud instance and the provider overall is 5.22's regular monitoring and review of supplier service delivery."
+  },
+  {
+   "control_id": "8.9.5",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring ISAE-type independent assurance reports over the service organisation's controls is the third-party attestation route 5.22 allows for reviewing supplier services."
+  },
+  {
+   "control_id": "8.9.6",
+   "iso_clauses": [
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "States that using cloud does not transfer accountability for the risks (leakage, interception, unauthorised access, availability, legal) — 5.23's principle that the customer retains responsibility for cloud-hosted information."
+  },
+  {
+   "control_id": "8.9.7",
+   "iso_clauses": [
+    "5.19",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Demands documentary evidence of the provider's security domains before contracting — pre-contract supplier security due diligence (5.19) in the cloud context (5.23)."
+  },
+  {
+   "control_id": "8.9.8",
+   "iso_clauses": [
+    "5.23",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Bars critical data from non-controlled cloud environments and prefers a bank-controlled private cloud, a placement rule driven by data classification (5.12) applied to cloud selection (5.23)."
+  },
+  {
+   "control_id": "8.9.9",
+   "iso_clauses": [
+    "5.20",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires the cloud contract itself to carry the key security controls limiting the identified risks — 5.20's requirement that security obligations be embedded in supplier agreements."
+  },
+  {
+   "control_id": "8.9.10",
+   "iso_clauses": [
+    "5.19",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Directs due diligence at cloud-specific attributes (sovereignty, multi-tenancy, recoverability, offshoring), which is 5.23's cloud risk assessment feeding 5.19 supplier selection."
+  },
+  {
+   "control_id": "8.9.11",
+   "iso_clauses": [
+    "5.23",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires contractual right to penetration test the provider-supplied VM image and application instance — a right-to-test term under the cloud agreement (5.23) serving vulnerability identification (8.8)."
+  },
+  {
+   "control_id": "8.9.12",
+   "iso_clauses": [
+    "8.10",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Contractual power and means to destroy data in the provider's systems and backups on termination is 8.10 information deletion enforced through the cloud exit terms of 5.23."
+  },
+  {
+   "control_id": "8.9.13",
+   "iso_clauses": [
+    "5.23",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Extends the contractual right to test and audit to the provider's L3 switch serving the bank's instances — cloud agreement audit rights (5.23) applied to network vulnerability testing (8.8)."
+  },
+  {
+   "control_id": "8.9.14",
+   "iso_clauses": [
+    "5.30",
+    "5.23"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Verifying, before contract, that the provider can recover outsourced systems within the stated RTO is 5.30's ICT continuity readiness assessed against a cloud/outsourced provider (5.23)."
+  },
+  {
+   "control_id": "8.10.1.1",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates a defined access control policy and procedures covering identification, authentication and authorisation of users — the topic-specific policy required by 5.15."
+  },
+  {
+   "control_id": "8.10.1.2",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Grounds access rules in RBAC, least privilege and need-to-know/need-to-have, which is 5.15's policy basis realised as 8.3 restriction of information access."
+  },
+  {
+   "control_id": "8.10.1.3",
+   "iso_clauses": [
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires segregation of duties to remove conflicts of interest and systems capable of enforcing the 4-eye principle through role-based privileges — the substance of 5.3."
+  },
+  {
+   "control_id": "8.10.1.4",
+   "iso_clauses": [
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Job rotation and cross-training to reduce dependency and fraud opportunity is a compensating measure named under 5.3 where full duty separation is impractical."
+  },
+  {
+   "control_id": "8.10.1.5",
+   "iso_clauses": [
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented handling of lost, stolen or compromised passwords, mandatory change and user identification before replacement is 5.17's management of authentication information including compromise response."
+  },
+  {
+   "control_id": "8.10.1.6",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Periodic audit of accounts to confirm access reflects promotions, transfers and terminations is 5.18's review and adjustment of access rights on role change."
+  },
+  {
+   "control_id": "8.10.1.7",
+   "iso_clauses": [
+    "5.18",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Grants create/update/delete/transmit rights from an owner-defined access control matrix — 5.18 provisioning of rights authorised by the asset owner, enforced as 8.3 access restriction."
+  },
+  {
+   "control_id": "8.10.1.8",
+   "iso_clauses": [
+    "5.3",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Divides responsibility over sensitive security tasks so no individual has full control, using least privilege and 4-eye — 5.3 segregation applied to privileged security functions (8.2)."
+  },
+  {
+   "control_id": "8.10.1.9",
+   "iso_clauses": [
+    "8.20",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Controls logical access to the network and deploys NAC so only authorised devices connect — 8.20's control of connections to the network under the access policy of 5.15."
+  },
+  {
+   "control_id": "8.10.1.10",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Login banners that define acceptable usage of the system and warn of monitoring and legal consequences are the delivery mechanism for the acceptable use rules of 5.10."
+  },
+  {
+   "control_id": "8.10.1.11",
+   "iso_clauses": [
+    "5.15",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires controls against bypass of the access control system with formal approval for authorised bypass (5.15), and treats unauthorised circumvention attempts as security incidents to be handled under incident response (5.26)."
+  },
+  {
+   "control_id": "8.10.1.12",
+   "iso_clauses": [
+    "5.3",
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Forbidding any one person concurrent access to production and backup systems is a segregation-of-duties boundary (5.3) protecting backup and recovery resources (8.13)."
+  },
+  {
+   "control_id": "8.10.2.1",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Unique identifiers for every employee, contractor, third party and temporary user so actions are accountable and traceable is the core requirement of 5.16 Identity Management."
+  },
+  {
+   "control_id": "8.10.2.2",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Discourages anonymous, guest and shared accounts for non-repudiation reasons and requires tight technical/procedural control where unavoidable — 5.16's treatment of shared identities."
+  },
+  {
+   "control_id": "8.10.2.3",
+   "iso_clauses": [
+    "8.9",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Renaming built-in accounts such as root/admin and changing vendor default passwords is secure baseline configuration (8.9) plus the default-credential rule in 5.17."
+  },
+  {
+   "control_id": "8.10.2.4",
+   "iso_clauses": [
+    "8.15",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires all user and privileged account activity to be logged and retained for historical purposes — 8.15 logging with the privileged-use recording emphasis of 8.2."
+  },
+  {
+   "control_id": "8.10.2.5",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Where unique IDs are technically impossible, shared IDs must still be attributable to a named authorised user by time and location — 5.16's accountability requirement for shared identities."
+  },
+  {
+   "control_id": "8.10.2.6",
+   "iso_clauses": [
+    "5.16",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Restricts identity issuance and privilege grants to employees, contractors and third parties only, with formal exception approval — 5.16 identity registration bounded by 5.18 authorised provisioning."
+  },
+  {
+   "control_id": "8.10.2.7",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires an appropriate authentication mechanism and multifactor authentication where system sensitivity warrants it — 8.5 Secure Authentication including risk-based MFA."
+  },
+  {
+   "control_id": "8.10.2.8",
+   "iso_clauses": [
+    "5.18",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Derives create/read/update/delete/transmit rights from an access control matrix set by information owners — 5.18 owner-authorised access rights realised as 8.3 access restriction (duplicates 8.10.1.7)."
+  },
+  {
+   "control_id": "8.10.2.9",
+   "iso_clauses": [
+    "8.5",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protects authentication data in use against replay, man-in-the-middle and session hijacking — 8.5's requirement that authentication exchanges resist interception and reuse, protecting the secrets governed by 5.17."
+  },
+  {
+   "control_id": "8.10.2.10",
+   "iso_clauses": [
+    "5.17",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defines a password policy enforcing strong, complex passwords with a reset procedure and consideration of two-factor — 5.17 management of authentication information delivered through 8.5 secure log-on."
+  },
+  {
+   "control_id": "8.10.2.11",
+   "iso_clauses": [
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Sets password maximum age of 60 days, minimum age of 1 day and forced change at logon after expiry or reset — parameterised password lifecycle rules under 5.17."
+  },
+  {
+   "control_id": "8.10.2.12",
+   "iso_clauses": [
+    "7.7",
+    "8.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates screen lock configuration on systems and devices — 7.7 Clear Desk and Clear Screen enforced on user endpoint devices (8.1)."
+  },
+  {
+   "control_id": "8.10.2.13",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Account suspension after at most three failed authentication attempts with a 30-minute lockout to defeat brute forcing is 8.5's limit on failed log-on attempts."
+  },
+  {
+   "control_id": "8.10.2.14",
+   "iso_clauses": [
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires helpdesk password reset only after positive confirmation and verification of the requesting user — 5.17's identity verification before issuing replacement authentication information."
+  },
+  {
+   "control_id": "8.10.2.15",
+   "iso_clauses": [
+    "5.18",
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Suspends accounts dormant beyond 60 days and deletes those no longer needed — 5.18 removal of access rights and 5.16 deregistration of redundant identities."
+  },
+  {
+   "control_id": "8.10.2.16",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires audit trails of successful and failed logins for accounts handling highly classified information and their review on alert — 8.15's logging of access events and log review."
+  },
+  {
+   "control_id": "8.10.3.1",
+   "iso_clauses": [
+    "5.15",
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documents standard operating procedures stating which data type each user or group may access, in what timeframe and by which method (internal, external, VPN) — access rules per 5.15 captured as documented procedures (5.37)."
+  },
+  {
+   "control_id": "8.10.3.2",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defines the formal approval process for granting system access, which is 5.18's requirement for authorisation from the asset owner before provisioning."
+  },
+  {
+   "control_id": "8.10.3.3",
+   "iso_clauses": [
+    "6.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires system users to be vetted against the personnel security requirements before access — background verification under 6.1 Screening."
+  },
+  {
+   "control_id": "8.10.3.4",
+   "iso_clauses": [
+    "6.3",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Users must be trained on their responsibilities, security awareness and acceptable usage before access is granted — 6.3 awareness training delivering the acceptable use rules of 5.10."
+  },
+  {
+   "control_id": "8.10.4.1",
+   "iso_clauses": [
+    "8.15",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "System management logs must record privileged-account actions including startup/shutdown, maintenance, backup, recovery and out-of-hours activity — 8.15 logging specialised to the privileged-use record 8.2 requires."
+  },
+  {
+   "control_id": "8.10.4.2",
+   "iso_clauses": [
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Administrators must hold a separate non-privileged account for routine work, with privileged activity supervised, logged and periodically reviewed — 8.2's separate-identity and review requirements."
+  },
+  {
+   "control_id": "8.10.4.3",
+   "iso_clauses": [
+    "8.2",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Additions, changes and deletions of privileged accounts require notification to and approval by the director and ISO — 8.2's formal authorisation process for privileged access rights (5.18)."
+  },
+  {
+   "control_id": "8.10.4.4",
+   "iso_clauses": [
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining an ISO-owned master list of privileged users and their access boundaries is 8.2's requirement to record and maintain the allocation of privileged access rights."
+  },
+  {
+   "control_id": "8.10.4.5",
+   "iso_clauses": [
+    "8.2",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Bars privileged users from reaching the logs recording their own actions and forbids sharing privileged accounts — 8.2 privileged access constraints protecting log integrity under 8.15."
+  },
+  {
+   "control_id": "8.10.5.1",
+   "iso_clauses": [
+    "6.7",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Remote access is withheld unless business-justified and approved by the department head and security team after risk consideration — 6.7's authorisation-based approach to remote working under the access policy of 5.15."
+  },
+  {
+   "control_id": "8.10.5.2",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Two-factor authentication for remote access to critical systems is 8.5's requirement for stronger authentication proportionate to risk and access channel."
+  },
+  {
+   "control_id": "8.10.5.3",
+   "iso_clauses": [
+    "8.24",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Remote sessions must be encrypted end to end from initiation through termination including the credentials — cryptographic protection (8.24) of the remote working channel (6.7)."
+  },
+  {
+   "control_id": "8.10.5.4",
+   "iso_clauses": [
+    "8.1",
+    "6.7",
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Blocks remote connection unless the endpoint carries a personal firewall and anti-malware — endpoint protection (8.1) and malware defence (8.7) as preconditions for remote working (6.7)."
+  },
+  {
+   "control_id": "8.10.5.5",
+   "iso_clauses": [
+    "8.8",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Keeping security software on remote access systems patched and current is 8.8 technical vulnerability remediation applied to the remote working estate (6.7)."
+  },
+  {
+   "control_id": "8.10.5.6",
+   "iso_clauses": [
+    "8.22",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prohibits split-tunneling and dual-homing on remote access systems, which exist to stop a remote host bridging the corporate network to an untrusted one — network segregation (8.22) enforced at the remote working endpoint (6.7)."
+  },
+  {
+   "control_id": "8.11.1.1",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Makes users responsible for the information assets issued to them and requires handling in line with the acceptable usage policy — the user obligation established by 5.10."
+  },
+  {
+   "control_id": "8.11.1.2",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Users must be made aware that bank resources including internet access are for business purposes and personal use is prohibited — 5.10's rules on permitted use of assets."
+  },
+  {
+   "control_id": "8.11.1.3",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a defined acceptable usage policy covering information assets, internet and email — the topic-specific policy 5.10 calls for."
+  },
+  {
+   "control_id": "8.11.1.4",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A catch-all statement that controls must protect information systems 'against all types of cyber-attacks' with no stated objective, asset scope or measure; it restates the purpose of the whole standard rather than any one clause, so assigning specific clauses would be arbitrary."
+  },
+  {
+   "control_id": "8.11.1.5",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A defined policy governing staff use of social media and forums is an acceptable-use rule for a communication channel, which is 5.10's scope."
+  },
+  {
+   "control_id": "8.11.1.6",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires users, contractors and third parties to be educated on acceptable asset, internet and email usage through security awareness courses — 6.3 awareness, education and training."
+  },
+  {
+   "control_id": "8.11.1.7",
+   "iso_clauses": [
+    "5.10",
+    "8.23"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prohibits sending mail from public webmail services on bank systems — an acceptable-use prohibition (5.10) typically enforced by blocking those sites at the web gateway (8.23)."
+  },
+  {
+   "control_id": "8.11.1.8",
+   "iso_clauses": [
+    "6.6",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires signed non-disclosure and confidentiality agreements plus a risk assessment before classified data is exchanged with external parties — 6.6 NDAs governing the information transfer rules of 5.14."
+  },
+  {
+   "control_id": "8.11.1.9",
+   "iso_clauses": [
+    "8.23",
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Blocks access to unauthorised websites (8.23 web filtering) and prevents download and installation of unauthorised software on workstations (8.19)."
+  },
+  {
+   "control_id": "8.11.1.10",
+   "iso_clauses": [
+    "8.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Routing all web access through secure proxies and filtering gateways is exactly the mechanism 8.23 Web Filtering prescribes."
+  },
+  {
+   "control_id": "8.11.1.11",
+   "iso_clauses": [
+    "8.7",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Email gateways filtering viruses, phishing and spam are malware and malicious-content defences (8.7) applied to the electronic messaging channel governed by 5.14."
+  },
+  {
+   "control_id": "8.11.1.12",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Prescribes the specific hygiene behaviours to teach users (log off, no unknown software, report spam and suspicious attachments, resist social engineering) — the content of 6.3 awareness training."
+  },
+  {
+   "control_id": "8.11.1.13",
+   "iso_clauses": [
+    "5.10",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Restricts use of bank email on public forums and non-work sites (5.10 acceptable use) and requires emails to carry the correct classification (5.12)."
+  },
+  {
+   "control_id": "9.1.1.1",
+   "iso_clauses": [
+    "8.20",
+    "8.27"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining high- and low-level network and security architecture diagrams reviewed quarterly or on significant change is 8.20's requirement to document network architecture, and the architecture record 8.27 relies on."
+  },
+  {
+   "control_id": "9.1.1.2",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A detailed inventory of network devices, servers and workstations maintained under asset management guidelines is 5.9 Inventory of Information and Other Associated Assets."
+  },
+  {
+   "control_id": "9.1.1.3",
+   "iso_clauses": [
+    "8.22",
+    "8.27",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires defence-in-depth layering and secure-by-design networks with physical and VLAN segregation — 8.22 network segregation built on 8.27 secure architecture principles and 8.20 network security measures."
+  },
+  {
+   "control_id": "9.1.1.4",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining audit trails of daily activity on critical devices (8.15) and reviewing them when an alert or incident occurs (8.16)."
+  },
+  {
+   "control_id": "9.1.1.5",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Semi-annual vulnerability assessment and penetration testing of infrastructure and network devices is 8.8's requirement to identify technical vulnerabilities on a defined cycle."
+  },
+  {
+   "control_id": "9.1.1.6",
+   "iso_clauses": [
+    "8.9",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Disabling or removing built-in root/administrator accounts and replacing default passwords per the password policy is secure baseline configuration (8.9) plus 5.17's default-credential rule."
+  },
+  {
+   "control_id": "9.1.1.7",
+   "iso_clauses": [
+    "8.21",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires documented risk analysis for each application granted network access and termination of unnecessary or unidentified connections to critical networks — 8.21 security of network services and 8.20 control of network connections."
+  },
+  {
+   "control_id": "9.1.1.8",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining minimum security baselines for hardening servers, VMs, firewalls, routers and switches from vendor and industry benchmarks, reviewed biannually, is 8.9 Configuration Management."
+  },
+  {
+   "control_id": "9.1.1.9",
+   "iso_clauses": [
+    "8.15",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Administrator access to network and infrastructure must be monitored and reviewed under the logging guidelines — 8.15 logging of privileged access with the 8.2 review obligation."
+  },
+  {
+   "control_id": "9.1.1.10",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting log access to prevent modification or deletion and requiring logs to be reviewed and backed up is 8.15's log protection and review requirement."
+  },
+  {
+   "control_id": "9.1.1.11",
+   "iso_clauses": [
+    "8.32",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a security assessment before additions or changes to network devices so the change introduces no vulnerability elsewhere — 8.32 change impact assessment applied to network security (8.20)."
+  },
+  {
+   "control_id": "9.1.1.12",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates strong application-level (AES, TLS) and network-level encryption for data in transit and in processing — 8.24 Use of Cryptography including algorithm selection."
+  },
+  {
+   "control_id": "9.1.2.1",
+   "iso_clauses": [
+    "7.12",
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Separate cabling, routing and distribution for systems handling highly confidential information is physical cabling security (7.12) achieving physical network segregation (8.22)."
+  },
+  {
+   "control_id": "9.1.2.2",
+   "iso_clauses": [
+    "7.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A cable register recording identification number, classification, source, destination and floor plan, inspected annually for inconsistencies, is 7.12's cable marking and inspection guidance."
+  },
+  {
+   "control_id": "9.1.2.3",
+   "iso_clauses": [
+    "7.6",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Disabling remote initiation of conferencing equipment prevents covert listening in meeting rooms — 7.6's restriction on recording and audio equipment in secure areas, enforced as a device configuration setting (8.9)."
+  },
+  {
+   "control_id": "9.1.2.4",
+   "iso_clauses": [
+    "8.24",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "End-to-end encryption on fax devices and fax-enabled MFDs to prevent sniffing is cryptographic protection (8.24) of a transfer channel covered by 5.14 Information Transfer."
+  },
+  {
+   "control_id": "9.1.2.5",
+   "iso_clauses": [
+    "7.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Encasing cables in conduit to protect them from tampering, sabotage and accidental damage is the literal requirement of 7.12 Cabling Security."
+  },
+  {
+   "control_id": "9.1.2.6",
+   "iso_clauses": [
+    "8.14",
+    "7.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Provisioning redundant communication pathways so connectivity survives sabotage or damage is 8.14 redundancy applied to the cabling and telecom routes of 7.12."
+  },
+  {
+   "control_id": "9.1.2.7",
+   "iso_clauses": [
+    "7.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Forbidding conduit labelling in public or visitor areas that discloses purpose is 7.12's guidance on avoiding identification of cabling that would aid an attacker."
+  },
+  {
+   "control_id": "9.1.3.1",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Confining administrative and network control traffic to a dedicated management VLAN and disabling VLAN 1 is 8.22 segregation of networks implemented as a network security measure (8.20)."
+  },
+  {
+   "control_id": "9.1.3.2",
+   "iso_clauses": [
+    "8.21",
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prioritised QoS for control traffic and a separate STP instance for the management VLAN are service-level and resilience attributes of the network service (8.21) on the segregated management domain (8.22)."
+  },
+  {
+   "control_id": "9.1.3.3",
+   "iso_clauses": [
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Pruning VLANs on trunk interfaces to prevent VLAN hopping/piggybacking keeps the segregation boundary effective — 8.22 Segregation of Networks."
+  },
+  {
+   "control_id": "9.1.3.4",
+   "iso_clauses": [
+    "8.22",
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Segregating VoIP traffic logically or physically to prevent attacks on the voice network (8.22) with dedicated QoS to guarantee the voice service (8.21)."
+  },
+  {
+   "control_id": "9.1.4.1",
+   "iso_clauses": [
+    "8.9",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defines a minimum hardening baseline for multifunctional devices (8.9 secure configuration) and requires users be educated on their proper use (6.3)."
+  },
+  {
+   "control_id": "9.1.4.2",
+   "iso_clauses": [
+    "8.1",
+    "8.15",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "MFDs are networked endpoint equipment; the requirement bundles endpoint device configuration (8.1), enabling audit functions (8.15) and enabling encryption (8.24), none of which ISO addresses as a printer-specific control."
+  },
+  {
+   "control_id": "9.1.4.3",
+   "iso_clauses": [
+    "7.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting MFD hardware against theft is exactly 7.8's siting and protection of equipment against physical loss."
+  },
+  {
+   "control_id": "9.1.4.4",
+   "iso_clauses": [
+    "8.8",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Reviewing MFD firmware versions is vulnerability exposure checking (8.8) against an approved configuration baseline (8.9); QCB frames it as a recommendation only."
+  },
+  {
+   "control_id": "9.1.5.1",
+   "iso_clauses": [
+    "8.21",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "DNSSEC zone signing and authenticated zone transfers are a security mechanism applied to a network service (8.21) implemented through digital signatures (8.24)."
+  },
+  {
+   "control_id": "9.1.5.2",
+   "iso_clauses": [
+    "8.7",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The stated purpose of the DNS firewall is blocking malware callbacks to C&C and botnet infrastructure — malware protection (8.7) delivered as a network control (8.20)."
+  },
+  {
+   "control_id": "9.1.5.3",
+   "iso_clauses": [
+    "8.22",
+    "8.20",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Splitting internal from external name servers and placing public DNS in a DMZ is network segregation (8.22) with hardened gateway controls (8.20), plus a redundancy requirement (8.14)."
+  },
+  {
+   "control_id": "9.1.6.1",
+   "iso_clauses": [
+    "8.23",
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Content filtering gateways that scan internet downloads and perform DPI is precisely 8.23 web filtering, serving malware detection on downloaded files (8.7)."
+  },
+  {
+   "control_id": "9.1.6.2",
+   "iso_clauses": [
+    "8.20",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Default-deny rulesets on internet gateways is a network security control (8.20) enforced through a hardening baseline for routers/firewalls/L3 switches (8.9)."
+  },
+  {
+   "control_id": "9.1.6.3",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Capability to observe internal and external traffic to establish and understand patterns is the network-behaviour baselining explicitly named in 8.16."
+  },
+  {
+   "control_id": "9.1.7.1",
+   "iso_clauses": [
+    "5.14",
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "SPF validation of bounce traffic protects electronic messaging against spoofing — ISO covers electronic messaging under 5.14 and the mail service's security mechanisms under 8.21, with no SPF-specific clause."
+  },
+  {
+   "control_id": "9.1.7.2",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "5.14 explicitly addresses electronic messaging rules including distribution lists, automatic replies and legally binding disclaimers on outgoing mail."
+  },
+  {
+   "control_id": "9.1.7.3",
+   "iso_clauses": [
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Redundant mail servers for high availability is the duplicated processing facility requirement of 8.14."
+  },
+  {
+   "control_id": "9.1.7.4",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Hardening the email server to the bank's baseline is configuration management of a system against a defined secure configuration (8.9)."
+  },
+  {
+   "control_id": "9.1.7.5",
+   "iso_clauses": [
+    "8.7",
+    "8.24",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Anti-spam gateway and content scanning is malware/unwanted-code protection (8.7), TLS on the mail server is cryptographic protection in transit (8.24), both applied to messaging (5.14)."
+  },
+  {
+   "control_id": "9.1.8.1",
+   "iso_clauses": [
+    "8.20",
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "WLAN authentication and transmission security plus registered APs is 8.20; requiring the WLAN to be logically and physically isolated from bank infrastructure is network segregation (8.22)."
+  },
+  {
+   "control_id": "9.1.8.2",
+   "iso_clauses": [
+    "8.24",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Banning WEP and mandating current wireless encryption is an algorithm-strength requirement (8.24); EAP/TLS and PEAP for clients is the secure authentication mechanism (8.5)."
+  },
+  {
+   "control_id": "9.1.8.3",
+   "iso_clauses": [
+    "8.24",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Dynamic key exchange with an encrypted VPN over wireless is cryptographic key/protocol selection (8.24) applied to protect data traversing a network (8.20)."
+  },
+  {
+   "control_id": "9.1.8.4",
+   "iso_clauses": [
+    "5.9",
+    "8.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining an inventory of APs, repeaters and wireless-capable endpoints is 5.9; barring unapproved personal devices from the network is endpoint device control (8.1). The key/SSID rotation on loss has no distinct ISO clause."
+  },
+  {
+   "control_id": "9.1.8.5",
+   "iso_clauses": [
+    "8.8",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Scanning for rogue/misconfigured wireless devices and subjecting the wireless estate to quarterly pentests is technical vulnerability identification and remediation (8.8) on network infrastructure (8.20)."
+  },
+  {
+   "control_id": "9.1.8.6",
+   "iso_clauses": [
+    "8.9",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Changing default SSIDs, keys and SNMP strings at installation and hiding the SSID is hardening to a secure configuration baseline (8.9) for network equipment (8.20)."
+  },
+  {
+   "control_id": "9.1.8.7",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Placing a firewall between the wireless access point and the internal network is textbook network segregation (8.22) with default-deny filtering rules (8.20)."
+  },
+  {
+   "control_id": "9.1.9.1",
+   "iso_clauses": [
+    "8.9",
+    "8.17"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The requirement is hardening the NTP server to baseline (8.9); its subject matter is the time service governed by 8.17."
+  },
+  {
+   "control_id": "9.1.9.2",
+   "iso_clauses": [
+    "8.17",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Authenticated NTP and refusing unauthenticated requests protects the reference time source (8.17) by requiring authentication of the peer (8.5)."
+  },
+  {
+   "control_id": "9.1.9.3",
+   "iso_clauses": [
+    "8.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Synchronising all devices to an NTP server that itself tracks an agreed national/atomic reference, with drift testing, is exactly the single approved reference time source of 8.17."
+  },
+  {
+   "control_id": "9.1.10.1",
+   "iso_clauses": [
+    "5.18",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Monthly reconciliation and revocation of VPN accounts lacking business justification is periodic review of access rights (5.18); the remote-access context is 6.7."
+  },
+  {
+   "control_id": "9.1.10.2",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandating a token as first factor plus a directory/RADIUS/TACACS+ factor before the tunnel establishes is the multi-factor secure authentication requirement of 8.5."
+  },
+  {
+   "control_id": "9.1.10.3",
+   "iso_clauses": [
+    "6.7",
+    "8.12",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prohibiting split tunnelling forces remote traffic through inspected paths — a remote working restriction (6.7) whose named compensating controls are DLP agents and endpoint proxies (8.12) on the network path (8.20)."
+  },
+  {
+   "control_id": "9.1.10.4",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented, organisation-wide cryptographic standards and parameters for VPN encryption is the cryptographic policy content required by 8.24."
+  },
+  {
+   "control_id": "9.1.10.5",
+   "iso_clauses": [
+    "8.1",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Posture-checking that remote machines carry current patches and anti-malware before admission is endpoint device protection (8.1) applied to remote working equipment (6.7)."
+  },
+  {
+   "control_id": "9.1.10.6",
+   "iso_clauses": [
+    "8.5",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Session inactivity timeout forcing re-authentication is the session time-out element of secure authentication (8.5), aimed at unattended remote sessions (6.7)."
+  },
+  {
+   "control_id": "9.1.10.7",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Recording VPN access events and monitoring them maps directly to event logging (8.15) and the monitoring of that log data (8.16)."
+  },
+  {
+   "control_id": "9.1.10.8",
+   "iso_clauses": [
+    "8.20",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Keeping modems physically disabled unless an authorised request is open removes an uncontrolled network entry path (8.20) and is enforced as a device configuration state (8.9)."
+  },
+  {
+   "control_id": "9.1.10.9",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Terminating VPN concentrators in a DMZ behind firewall and IPS is placement of remote-access termination in a segregated network zone (8.22) with perimeter controls (8.20)."
+  },
+  {
+   "control_id": "9.1.11.1",
+   "iso_clauses": [
+    "8.21",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assessing and accepting the risk of trusted interconnections, including cascaded links into untrusted domains, is the connection-agreement and trust-level analysis in 8.21 for network services (8.20)."
+  },
+  {
+   "control_id": "9.1.11.2",
+   "iso_clauses": [
+    "7.10",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Using a trusted courier and protecting media against hazards while in transit is the media-in-transit provision of 7.10, under physical information transfer (5.14)."
+  },
+  {
+   "control_id": "9.1.11.3",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting information exchanged over electronic channels against unauthorised access or service interruption is the core of 5.14 electronic transfer."
+  },
+  {
+   "control_id": "9.1.11.4",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "ISO 27002 has no media-relations control; the only overlap is 5.24's requirement to pre-assign communication roles and approved external messaging as part of incident preparation."
+  },
+  {
+   "control_id": "9.1.11.5",
+   "iso_clauses": [
+    "5.14",
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Signed transfer agreements specifying responsibilities, courier identification, liabilities and technical standards is the transfer-agreement content of 5.14; the mandatory vendor NDA is 6.6."
+  },
+  {
+   "control_id": "9.1.12.1",
+   "iso_clauses": [
+    "5.3",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Four-eyes/dual control over administrative access to gateways carrying confidential data is segregation of duties (5.3) applied to privileged accounts (8.2)."
+  },
+  {
+   "control_id": "9.1.12.2",
+   "iso_clauses": [
+    "8.9",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The enumerated hardening parameters (approved firmware, secure practice configuration, default-deny) define a secure configuration baseline (8.9) for network gateways (8.20)."
+  },
+  {
+   "control_id": "9.1.12.3",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Feeding gateway logs into a real-time monitoring solution to detect intrusions is logging (8.15) plus monitoring for anomalous network behaviour (8.16)."
+  },
+  {
+   "control_id": "9.1.12.4",
+   "iso_clauses": [
+    "5.7",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "IP reputation feeds and advanced threat management are consumption of external threat intelligence (5.7) applied to gateway monitoring (8.16); QCB states it only as a recommendation."
+  },
+  {
+   "control_id": "9.1.13.1",
+   "iso_clauses": [
+    "8.27",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Only partially expressible in ISO 27002: assessing virtualization's effect on the existing infrastructure touches secure architecture principles (8.27) and the legal/regulatory angle touches 5.31, but the risk-assessment activity itself is an ISO 27001 clause 6 requirement."
+  },
+  {
+   "control_id": "9.1.13.2",
+   "iso_clauses": [
+    "8.9",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Hardening hypervisors, VMs and admin systems to baseline with peripherals disabled by default is 8.9; per-VM role-based least privilege for administrative access is 8.2."
+  },
+  {
+   "control_id": "9.1.13.3",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Preventing unauthorised access to the virtual environment through physical and logical means is the access control policy (5.15) enforced as restriction of access to the systems holding the information (8.3)."
+  },
+  {
+   "control_id": "9.1.13.4",
+   "iso_clauses": [
+    "8.32",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring change management approval before altering the virtual environment is 8.32, and patching VMs to the patch policy is remediation of technical vulnerabilities (8.8)."
+  },
+  {
+   "control_id": "9.1.13.5",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enabling, monitoring and retaining VM logs is directly the event logging and log storage requirement of 8.15."
+  },
+  {
+   "control_id": "9.1.14.1",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Changing default passwords, connection strings and SNMP communities at database installation is establishing the secure configuration baseline required by 8.9."
+  },
+  {
+   "control_id": "9.1.14.2",
+   "iso_clauses": [
+    "8.3",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Least privilege and RBAC over data held in the database is information access restriction (8.3); classifying that stored information is 5.12."
+  },
+  {
+   "control_id": "9.1.14.3",
+   "iso_clauses": [
+    "8.3",
+    "8.18"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Preventing bypass of database access controls by restricting direct access to the underlying files (via views and kernel functions) is information access restriction (8.3) against tools capable of overriding controls (8.18)."
+  },
+  {
+   "control_id": "9.1.14.4",
+   "iso_clauses": [
+    "5.16",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring individual rather than shared OS accounts for DBA staff is unique identity management (5.16) for privileged administrative access (8.2)."
+  },
+  {
+   "control_id": "9.1.14.5",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Logging database access, archiving to a central log server under a retention policy and periodic review by DBAs and security is 8.15 with the review element of 8.16."
+  },
+  {
+   "control_id": "9.1.14.6",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Encrypting databases holding confidential data with documented key management procedures is squarely the use-of-cryptography and key-management control 8.24."
+  },
+  {
+   "control_id": "9.1.14.7",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining timely database security patch levels is the remediation timeline requirement of 8.8."
+  },
+  {
+   "control_id": "9.2.1.1",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining a classification scheme by sensitivity and impact with named tiers (restricted/private/public) that drives safeguard selection is exactly 5.12."
+  },
+  {
+   "control_id": "9.2.1.2",
+   "iso_clauses": [
+    "5.13",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring drafts and damaged-label assets to be treated as 'confidential by default' is a labelling rule (5.13) resolving unassigned classification (5.12)."
+  },
+  {
+   "control_id": "9.2.1.3",
+   "iso_clauses": [
+    "5.13",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A default 'private' marking for anything not created for public release is a labelling convention (5.13) implementing the classification scheme (5.12)."
+  },
+  {
+   "control_id": "9.2.1.4",
+   "iso_clauses": [
+    "5.12",
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assigning business process owners responsibility for identifying and classifying the data their process holds is the owner-driven classification of 5.12 combined with asset identification and ownership in 5.9."
+  },
+  {
+   "control_id": "9.2.1.5",
+   "iso_clauses": [
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Marking classified information for identification according to its C-I-A rating is the labelling procedure required by 5.13."
+  },
+  {
+   "control_id": "9.2.1.6",
+   "iso_clauses": [
+    "6.3",
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Making staff and partners aware of labelling and need-to-know and its security implications is awareness and training (6.3) on the labelling scheme (5.13)."
+  },
+  {
+   "control_id": "9.2.1.7",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring network diagrams, configurations, PII and directory data to be stored encrypted is cryptographic protection of stored information (8.24)."
+  },
+  {
+   "control_id": "9.2.1.8",
+   "iso_clauses": [
+    "5.15",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Releasing information only on need-to-know via a request-and-approval route is the access control policy (5.15) operated through formal provisioning of access rights (5.18)."
+  },
+  {
+   "control_id": "9.2.2.1",
+   "iso_clauses": [
+    "5.24",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defined handling and reporting procedures for incidents involving theft or leakage of customer data is incident management planning (5.24) specialised to privacy/PII breaches (5.34)."
+  },
+  {
+   "control_id": "9.2.2.2",
+   "iso_clauses": [
+    "8.24",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enciphering sensitive data sent to external parties using strong standard algorithms is cryptographic protection (8.24) of an information transfer to a third party (5.14)."
+  },
+  {
+   "control_id": "9.2.2.3",
+   "iso_clauses": [
+    "8.16",
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Detecting suspicious access, modification or transfer of data is anomaly detection through monitoring (8.16) serving leakage detection (8.12)."
+  },
+  {
+   "control_id": "9.2.2.4",
+   "iso_clauses": [
+    "8.12",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Endpoint DLP to stop unauthorised copying of customer data onto portable media is 8.12, with the removable media risk itself covered by 7.10."
+  },
+  {
+   "control_id": "9.2.2.5",
+   "iso_clauses": [
+    "7.10",
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Disabling removable-media ports and confining media reading to an isolated environment is the removable media restriction of 7.10 as a leakage prevention measure (8.12)."
+  },
+  {
+   "control_id": "9.2.2.6",
+   "iso_clauses": [
+    "5.20",
+    "5.22",
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Binding outsourcing providers that hold or access customer data to the bank's data security and leakage controls via contract is 5.20, monitoring and validating their compliance is 5.22, and the required NDA is 6.6."
+  },
+  {
+   "control_id": "9.2.3.1",
+   "iso_clauses": [
+    "8.32",
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002 has no data-migration control; a documented migration plan and methodology verifying completeness and integrity is closest to planned, verified change to systems (8.32) captured as a documented procedure (5.37)."
+  },
+  {
+   "control_id": "9.2.3.2",
+   "iso_clauses": [
+    "5.37",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Documenting pre- and post-migration activities with named responsibilities and timelines is a documented operating procedure (5.37) governing a planned change (8.32)."
+  },
+  {
+   "control_id": "9.2.3.3",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Explicit user/application-owner sign-off at each migration stage and at completion is the authorisation and acceptance step of the change management process (8.32)."
+  },
+  {
+   "control_id": "9.2.3.4",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Retaining audit trails documenting the conversion including data mappings and transformations is an event/activity record requirement satisfied by 8.15 logging."
+  },
+  {
+   "control_id": "9.2.4.1",
+   "iso_clauses": [
+    "5.33",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining access rights that prevent unauthorised access to archived privileged records is protection of records (5.33) through controlled access rights (5.18)."
+  },
+  {
+   "control_id": "9.2.4.2",
+   "iso_clauses": [
+    "8.13",
+    "5.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Backup, archival and recovery procedures that preserve integrity and confidentiality, backed by file/data integrity tooling, is the backup control 8.13 protecting stored records (5.33)."
+  },
+  {
+   "control_id": "9.2.4.3",
+   "iso_clauses": [
+    "5.33",
+    "5.31",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Setting retention periods driven by regulation, with a 15-year floor for financial transaction records and alignment to the Data Privacy Protection Law, is record retention (5.33) driven by legal requirements (5.31) including PII handling (5.34)."
+  },
+  {
+   "control_id": "9.3.1",
+   "iso_clauses": [
+    "8.1",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An MDM solution containerising and encrypting only the corporate portion of a personal device is the BYOD separation and encryption provision of 8.1, implemented with cryptography (8.24)."
+  },
+  {
+   "control_id": "9.3.2",
+   "iso_clauses": [
+    "8.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring a defined BYOD policy for personal devices used in the bank's environment is the topic-specific user endpoint device policy of 8.1."
+  },
+  {
+   "control_id": "9.3.3",
+   "iso_clauses": [
+    "8.1",
+    "7.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Encryption, password protection and supervision requirements for personal devices is 8.1; keeping devices under supervision and restricting them from high-risk areas is off-premises asset protection (7.9)."
+  },
+  {
+   "control_id": "9.4.1.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Genuine gap: per-asset threat/vulnerability risk assessment against business, compliance and contractual impact is an ISMS risk-assessment requirement (ISO 27001 clause 6.1.2), not a control in the ISO 27002 catalogue — mapping it to 8.8 would misrepresent a governance process as technical vulnerability management."
+  },
+  {
+   "control_id": "9.4.1.2",
+   "iso_clauses": [
+    "5.36",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "An annual gap analysis judging whether existing controls and recovery plans remain adequate is closest to periodic verification of compliance with the security standards (5.36) and periodic review of the security approach (5.35), though ISO frames neither as an annual risk assessment."
+  },
+  {
+   "control_id": "9.4.1.3",
+   "iso_clauses": [
+    "5.9",
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Only two program elements have ISO 27002 counterparts: asset identification and valuation (5.9) and the threat assessment input (5.7); control-effectiveness evaluation and cost-benefit analysis belong to the ISMS process, not 27002."
+  },
+  {
+   "control_id": "9.4.1.4",
+   "iso_clauses": [
+    "5.36",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A formal process for reviewing, approving and remediating non-compliance with IT control policies is the deviation-handling element of 5.36, with senior management required to establish and own the function (5.4)."
+  },
+  {
+   "control_id": "9.4.1.5",
+   "iso_clauses": [
+    "5.31",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Of the listed risk categories only the regulatory compliance assessment maps cleanly — identifying applicable regulatory requirements (5.31) and assessing compliance against them (5.36); the strategic/design failure taxonomy has no ISO 27002 equivalent."
+  },
+  {
+   "control_id": "9.4.2.1",
+   "iso_clauses": [
+    "8.26",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A WAF enforces security requirements on application traffic (8.26) as a filtering control on the network path to the application (8.20); ISO names no specific WAF product control."
+  },
+  {
+   "control_id": "9.4.2.2",
+   "iso_clauses": [
+    "8.29",
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Security testing of web and mobile applications pre- and post-implementation and after major changes, with findings tracked to closure, is 8.29 applied across the development lifecycle (8.25)."
+  },
+  {
+   "control_id": "9.4.2.3",
+   "iso_clauses": [
+    "8.8",
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Twice-yearly vulnerability assessments and penetration testing of the application estate is 8.8, and the code review element is security testing in development and acceptance (8.29)."
+  },
+  {
+   "control_id": "9.4.2.4",
+   "iso_clauses": [
+    "8.28",
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Secure development guidelines built on OWASP, CERT and MITRE CWE is the secure coding standard of 8.28 embedded in the secure development lifecycle (8.25)."
+  },
+  {
+   "control_id": "9.4.2.5",
+   "iso_clauses": [
+    "8.24",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting web application data at rest, in motion and in use per the cryptographic section is 8.24 expressed as an application security requirement (8.26)."
+  },
+  {
+   "control_id": "9.4.3.1",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Automated plus manual vulnerability assessment at least twice yearly with comparison against prior scans to confirm remediation is precisely 8.8."
+  },
+  {
+   "control_id": "9.4.3.2",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Preparing a remediation action plan for identified vulnerabilities and escalating it to senior management is the evaluation and remediation-tracking step of 8.8."
+  },
+  {
+   "control_id": "9.4.3.3",
+   "iso_clauses": [
+    "8.8",
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandating at least two penetration testing exercises annually is the penetration testing element explicitly named in 8.8, overlapping security testing practice (8.29)."
+  },
+  {
+   "control_id": "9.4.3.4",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Re-reviewing previously accepted vulnerability risks semi-annually against newly available patches or changed conditions is the ongoing evaluation of unremediated vulnerabilities in 8.8."
+  },
+  {
+   "control_id": "9.4.4.1",
+   "iso_clauses": [
+    "5.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Subscribing to services that watch new domain registrations for deceptive lookalikes is collection and analysis of external threat information about attacks targeting the bank (5.7)."
+  },
+  {
+   "control_id": "9.4.4.2",
+   "iso_clauses": [
+    "8.9",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "SPF, DKIM and digital signing on mail and DNS servers is anti-phishing hardening to a defined baseline (8.9) implemented through digital signatures (8.24)."
+  },
+  {
+   "control_id": "9.4.4.3",
+   "iso_clauses": [
+    "6.8",
+    "5.5",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Providing customers a mailbox to submit suspicious emails is an event reporting channel (6.8), notifying QCB of every phishing discovery is mandatory reporting to the regulator (5.5), and customer education is awareness activity (6.3) extended beyond staff."
+  },
+  {
+   "control_id": "9.4.4.4",
+   "iso_clauses": [
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Preserving phishing attack evidence so it remains usable for subsequent prosecution is exactly the forensic evidence collection and preservation control 5.28."
+  },
+  {
+   "control_id": "9.4.5.1",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Controls to detect and mitigate malware at host, network and user level is the layered malware protection required by 8.7."
+  },
+  {
+   "control_id": "9.4.5.2",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Keeping anti-malware engines and signatures current is the regular-update provision of 8.7."
+  },
+  {
+   "control_id": "9.4.5.3",
+   "iso_clauses": [
+    "8.7",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Disabling auto-run and forcing an automatic scan when removable media is inserted is the malware scanning of media required by 8.7, applied to storage media handling (7.10)."
+  },
+  {
+   "control_id": "9.4.5.4",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Filtering attachments at the email gateway is the malicious-content scanning of incoming mail explicitly contemplated by 8.7."
+  },
+  {
+   "control_id": "9.4.5.5",
+   "iso_clauses": [
+    "8.16",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Daily review of firewall, IPS/IDS, DNS and proxy logs for indicators of compromise is continuous monitoring (8.16) of the collected event logs (8.15)."
+  },
+  {
+   "control_id": "9.4.6.1",
+   "iso_clauses": [
+    "8.14",
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Identifying single points of failure and bottlenecks exploitable by DDoS via network design analysis targets redundancy of processing facilities (8.14) and headroom against resource exhaustion (8.6)."
+  },
+  {
+   "control_id": "9.4.6.2",
+   "iso_clauses": [
+    "8.21",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Weighting application-layer and volumetric DDoS protection when selecting an ISP is defining security requirements for a network service (8.21) as part of supplier selection (5.19)."
+  },
+  {
+   "control_id": "9.4.6.3",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A DDoS-specific response framework that is periodically validated is incident response planning and preparation with exercise (5.24) governing the response itself (5.26)."
+  },
+  {
+   "control_id": "9.4.7.1",
+   "iso_clauses": [
+    "8.20",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring IPS coverage internally as well as at the perimeter is a network security control (8.20) whose function is detecting and blocking anomalous activity (8.16)."
+  },
+  {
+   "control_id": "9.4.7.2",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Monitoring servers, network and endpoints for suspicious activity with detection, alerting and blocking is the monitoring, alerting and response requirement of 8.16."
+  },
+  {
+   "control_id": "9.4.7.3",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing a normal network traffic baseline and prioritising deviations from it is the baseline-and-anomaly method 8.16 prescribes."
+  },
+  {
+   "control_id": "9.4.7.4",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring the incident response framework to contain a cyber-breach response plan detailing how intrusions are countered is incident response planning (5.24) and the documented response procedure (5.26)."
+  },
+  {
+   "control_id": "9.4.7.5",
+   "iso_clauses": [
+    "5.26",
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Investigating the extent of infiltration, impact and exploited vulnerabilities after an intrusion is the response and analysis activity of 5.26 following event assessment and categorisation (5.25)."
+  },
+  {
+   "control_id": "9.5.1",
+   "iso_clauses": [
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Zoning physical space by security requirement, with each zone's requirements set by risk assessment at design time, is the definition of physical security perimeters in 7.1."
+  },
+  {
+   "control_id": "9.5.2",
+   "iso_clauses": [
+    "7.5",
+    "7.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Controls for fire, smoke, temperature, water and dust affecting processing facilities is 7.5, and the requirement to monitor those conditions is 7.4."
+  },
+  {
+   "control_id": "9.5.3",
+   "iso_clauses": [
+    "7.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "UPS and backup generators protecting equipment from power failure and supply interference is exactly the supporting utilities control 7.11."
+  },
+  {
+   "control_id": "9.5.4",
+   "iso_clauses": [
+    "7.1",
+    "7.2",
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Security barriers around data centres and PIN facilities is 7.1, restricted and periodically reviewed entry is 7.2, and unmarked buildings that conceal the presence of processing facilities is the inconspicuousness requirement of 7.3."
+  },
+  {
+   "control_id": "9.5.5",
+   "iso_clauses": [
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring vendors, contractors and guests visiting premises to follow the physical access process is the visitor entry control of 7.2."
+  },
+  {
+   "control_id": "9.5.6",
+   "iso_clauses": [
+    "7.6",
+    "7.3",
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A site security plan with SOPs for secure areas covering access-system administration, key management, user enrolment and staff clearances is working in secure areas (7.6) and securing facilities (7.3), documented as operating procedures (5.37)."
+  },
+  {
+   "control_id": "9.5.7",
+   "iso_clauses": [
+    "7.4",
+    "7.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Detecting compromise of environmental controls and access alarms with log review is physical security monitoring (7.4); the power and telecom availability alerting is the utility monitoring of 7.11."
+  },
+  {
+   "control_id": "9.6.1.1",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A defined cryptographic policy selecting only well-established, publicly scrutinised or authority-approved algorithms is the algorithm-selection requirement of 8.24."
+  },
+  {
+   "control_id": "9.6.1.2",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Key management standards covering generation, dual control and split knowledge, storage, distribution, backup, revocation and destruction is the full key lifecycle prescribed in 8.24."
+  },
+  {
+   "control_id": "9.6.1.3",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Using encryption to protect confidential information in transit, at rest and in use, with criticality-driven selection of cryptographic controls, is 8.24's risk-based application of cryptography."
+  },
+  {
+   "control_id": "9.6.1.4",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The enumerated practices — TLS for web traffic, secure file transfer, hashing, disk encryption, symmetric/asymmetric keys, HSMs — are all implementation techniques within 8.24."
+  },
+  {
+   "control_id": "9.6.1.5",
+   "iso_clauses": [
+    "5.17",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting passwords against disclosure at rest and in transit is management of authentication information (5.17), and encrypting privileged passwords with offsite backup copies is cryptographic protection with key/secret recovery (8.24)."
+  },
+  {
+   "control_id": "9.6.1.6",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandating an HSM for key management and cryptographic processing to guarantee proper randomisation is the secure key storage and cryptographic module provision of 8.24."
+  },
+  {
+   "control_id": "9.6.1.7",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Using state-licensed digital certificates with online revocation checking is certificate lifecycle and validity management, which 8.24 covers as part of key management."
+  },
+  {
+   "control_id": "9.7.1.1",
+   "iso_clauses": [
+    "8.25",
+    "8.28"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formulating S-SDLC guidelines based on OWASP, CERT and MITRE CWE to produce secure web applications and services is the secure development lifecycle rules of 8.25 with secure coding standards (8.28)."
+  },
+  {
+   "control_id": "9.7.1.2",
+   "iso_clauses": [
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Isolating test and development environments from production with access limited to users having a business need is exactly 8.31."
+  },
+  {
+   "control_id": "9.7.1.3",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring internally developed and procured applications to be classified under the National Information Classification Policy applies the classification scheme of 5.12 to application assets rather than to information directly."
+  },
+  {
+   "control_id": "9.7.1.4",
+   "iso_clauses": [
+    "8.28",
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Source code review to find flaws from coding issues, poor practice or deliberate malicious insertion is the code review element of secure coding (8.28) performed as development-stage security testing (8.29)."
+  },
+  {
+   "control_id": "9.7.1.5",
+   "iso_clauses": [
+    "8.30",
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Acquiring the source code of custom critical applications or otherwise placing it in escrow is the source-code ownership and escrow provision of 8.30 for outsourced development, with custody governed by 8.4."
+  },
+  {
+   "control_id": "9.7.1.6",
+   "iso_clauses": [
+    "8.26",
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing functional, technical and assurance security requirements as part of system requirements specification is the requirements-identification control 8.26 within the development lifecycle (8.25)."
+  },
+  {
+   "control_id": "9.7.2.1",
+   "iso_clauses": [
+    "8.29",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Reviewing applications to establish whether they attempt outbound external connections is acceptance-stage security testing of application behaviour (8.29) against defined application security requirements (8.26)."
+  },
+  {
+   "control_id": "9.7.2.2",
+   "iso_clauses": [
+    "8.13",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires integrity verification of backup copies (including on a replica) and safe storage of the integrity baseline, which is the verification/testing element of ISO backup practice plus detective checking for unauthorised modification."
+  },
+  {
+   "control_id": "9.7.2.3",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Placing internet-facing web/mail/file/IPT servers in a DMZ is exactly the network segregation of public-facing services from internal domains."
+  },
+  {
+   "control_id": "9.7.2.4",
+   "iso_clauses": [
+    "8.32",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Changes found without authorisation records must be driven through the security incident procedure, joining change-control failure detection to incident response."
+  },
+  {
+   "control_id": "9.7.3.1",
+   "iso_clauses": [
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "End-user macros/scripts running in office software are user-installed code on operational systems; ISO covers their control but not the criticality assessment this control asks for."
+  },
+  {
+   "control_id": "9.7.3.2",
+   "iso_clauses": [
+    "8.29",
+    "8.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Mandates review and testing of user-developed macros/scripts before use, i.e. acceptance testing and coding standards applied to end-user-developed code."
+  },
+  {
+   "control_id": "9.8.1.1",
+   "iso_clauses": [
+    "7.10",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Media are classified according to the information they hold and protected accordingly, which is storage media handling driven by information classification."
+  },
+  {
+   "control_id": "9.8.1.2",
+   "iso_clauses": [
+    "5.13",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented, uniformly applied and visually identifiable classification marking of media is the labelling clause applied to physical media."
+  },
+  {
+   "control_id": "9.8.2.1",
+   "iso_clauses": [
+    "7.14",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defines sanitization procedures and periodically tests the sanitization tools, the effectiveness-verification part of secure disposal or re-use."
+  },
+  {
+   "control_id": "9.8.2.2",
+   "iso_clauses": [
+    "7.13",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricts repair and maintenance of classified media to authorised personnel, the maintenance-personnel authorisation requirement."
+  },
+  {
+   "control_id": "9.8.2.3",
+   "iso_clauses": [
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented destruction and disposal procedures for media are the procedural requirement of secure disposal."
+  },
+  {
+   "control_id": "9.8.2.4",
+   "iso_clauses": [
+    "7.14",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Degaussing and physical destruction (smashing, drilling) are the named destruction techniques for media that cannot be reused."
+  },
+  {
+   "control_id": "9.8.2.5",
+   "iso_clauses": [
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Staff supervision and due diligence over the destruction act is the assurance step of secure disposal."
+  },
+  {
+   "control_id": "9.8.2.6",
+   "iso_clauses": [
+    "7.14",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires disposal of media and media waste to be inconspicuous to defeat dumpster diving, an aggregation/retrieval risk addressed under secure disposal."
+  },
+  {
+   "control_id": "9.8.2.7",
+   "iso_clauses": [
+    "7.14",
+    "8.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Complete sanitization of classified information, including from faulty media, before disposal is disposal plus irreversible deletion of the information held."
+  },
+  {
+   "control_id": "9.8.2.8",
+   "iso_clauses": [
+    "5.20",
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires acceptable disposal procedures to be written into contracts with third-party disposal firms, a supplier-agreement security clause."
+  },
+  {
+   "control_id": "9.9.1.1",
+   "iso_clauses": [
+    "7.1",
+    "7.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Data centre must be physically secured against internal and external threats and resilient, combining defined security perimeters with protection from physical and environmental threats."
+  },
+  {
+   "control_id": "9.9.1.2",
+   "iso_clauses": [
+    "7.5",
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Threat and vulnerability risk assessment of the data centre perimeter, surrounding environment and buildings is the assessment step required before selecting physical/environmental protections."
+  },
+  {
+   "control_id": "9.9.1.3",
+   "iso_clauses": [
+    "7.11",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Assessing redundancy and fault tolerance of power, air conditioning, fire suppression and data communications is directly the supporting-utilities clause, with redundancy of processing facilities."
+  },
+  {
+   "control_id": "9.9.1.4",
+   "iso_clauses": [
+    "7.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Fire protection and suppression systems are a named safeguard against physical and environmental threats such as fire."
+  },
+  {
+   "control_id": "9.9.1.5",
+   "iso_clauses": [
+    "7.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "UPS, battery arrays and diesel generators at each data centre are exactly the uninterrupted power provision under supporting utilities."
+  },
+  {
+   "control_id": "9.9.2.1",
+   "iso_clauses": [
+    "7.2",
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting data centre entry to authorised staff is physical entry control over a secure facility."
+  },
+  {
+   "control_id": "9.9.2.2",
+   "iso_clauses": [
+    "7.2",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Immediate revocation of physical access rights once no longer needed is the removal-on-change element of physical entry control and access rights management."
+  },
+  {
+   "control_id": "9.9.2.3",
+   "iso_clauses": [
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Approval, notification and permanent escort of vendor visitors to the data centre is the visitor-handling requirement of physical entry."
+  },
+  {
+   "control_id": "9.9.2.4",
+   "iso_clauses": [
+    "7.1",
+    "7.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Securing and monitoring the DC perimeter, building, facility and equipment room combines security perimeters with continuous physical security monitoring."
+  },
+  {
+   "control_id": "9.9.2.5",
+   "iso_clauses": [
+    "7.1",
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A generic requirement for physical, human and procedural controls; it names no specific measure, so it only broadly restates perimeter and entry controls."
+  },
+  {
+   "control_id": "9.9.2.6",
+   "iso_clauses": [
+    "7.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Deploying surveillance and security systems to monitor and record activity inside the data centre is continuous physical security monitoring with recording."
+  },
+  {
+   "control_id": "9.9.2.7",
+   "iso_clauses": [
+    "7.8",
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prevents unauthorised physical reach to systems, multi-function devices, racks and tapes, i.e. siting/protecting equipment inside secured rooms."
+  },
+  {
+   "control_id": "9.10.1.1",
+   "iso_clauses": [
+    "5.19",
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Board and senior management must own governance, compliance and risk of outsourced processes and set the framework, which is the management-driven supplier relationship process."
+  },
+  {
+   "control_id": "9.10.1.2",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prior QCB approval before signing outsourcing agreements is a jurisdiction-specific regulatory obligation; ISO only covers identifying and meeting such statutory requirements, not the approval itself."
+  },
+  {
+   "control_id": "9.10.1.3",
+   "iso_clauses": [
+    "5.19",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Risk assessment and due diligence on service providers plus up-front clarification of data jurisdiction and applicable law is supplier-risk identification with a legal/regulatory determination."
+  },
+  {
+   "control_id": "9.10.1.4",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formalising outsourced work in a contract of service is the requirement to establish agreements with suppliers."
+  },
+  {
+   "control_id": "9.10.1.5",
+   "iso_clauses": [
+    "5.21",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring approval for significant subcontracting by the primary provider is the ICT supply chain clause on managing sub-suppliers via the agreement."
+  },
+  {
+   "control_id": "9.10.1.6",
+   "iso_clauses": [
+    "5.20",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Right-to-audit clauses for internal/external auditors and the regulator are an audit provision in the supplier agreement enabling supplier service review."
+  },
+  {
+   "control_id": "9.10.1.7",
+   "iso_clauses": [
+    "5.22",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obtaining ISAE assurance reports on the provider's controls is the independent-assurance route to reviewing supplier service delivery."
+  },
+  {
+   "control_id": "9.10.1.8",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Continuous monitoring and review of third-party reports plus SLA audits is precisely monitoring, review and change management of supplier services."
+  },
+  {
+   "control_id": "9.10.1.9",
+   "iso_clauses": [
+    "8.24",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires end-to-end encryption or protection of remote third-party access channels, i.e. cryptographic protection of transferred information."
+  },
+  {
+   "control_id": "9.10.1.10",
+   "iso_clauses": [
+    "8.30",
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Third-party developers must follow the bank's change management for source code and work only in a test environment, combining supervised outsourced development with dev/test/prod separation."
+  },
+  {
+   "control_id": "9.10.1.11",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Retaining in-house skills as a contingency against outsourcing dependency is a supplier concentration-risk mitigation; ISO addresses supplier risk management but not internal skills retention."
+  },
+  {
+   "control_id": "9.10.1.12",
+   "iso_clauses": [
+    "8.30",
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Contractual guarantee of access to source code developed by the third party is an outsourced-development agreement term governing source code access."
+  },
+  {
+   "control_id": "9.10.1.13",
+   "iso_clauses": [
+    "5.20",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Contractually obliging the provider to report security posture and incidents is an incident-reporting clause in the supplier agreement."
+  },
+  {
+   "control_id": "9.10.1.14",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the provider's site to keep operating during exceptional events such as extended communication loss, i.e. supplier-side continuity and ICT readiness."
+  },
+  {
+   "control_id": "9.10.1.15",
+   "iso_clauses": [
+    "5.18",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A Qatar-specific prohibition on foreign intermediaries and representative offices holding any access to local IT systems; only expressible generically as denial of access rights, the restriction itself is regulatory."
+  },
+  {
+   "control_id": "9.10.1.16",
+   "iso_clauses": [
+    "5.20",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires the provider to implement policies and controls at least as stringent as the bank's own, the flow-down of security requirements into supplier agreements."
+  },
+  {
+   "control_id": "9.10.1.17",
+   "iso_clauses": [
+    "5.20",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "NIAP baseline controls must be embedded in the third-party service agreement and extended to subcontractors, i.e. security requirements in agreements propagated through the ICT supply chain."
+  },
+  {
+   "control_id": "9.10.2.1",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Pre-onboarding due diligence on a data centre or technology provider's viability, capability, track record and finances is supplier selection risk assessment."
+  },
+  {
+   "control_id": "9.10.2.2",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Mandatory physical hosting of applications and data inside Qatar is a data-residency legal requirement; ISO covers identifying and complying with such statutory constraints but has no residency clause."
+  },
+  {
+   "control_id": "9.10.2.3",
+   "iso_clauses": [
+    "5.22",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Third parties are subject to the bank's change management and monitoring, and service quality to customers must not degrade, i.e. monitoring and change management of supplier services."
+  },
+  {
+   "control_id": "9.10.2.4",
+   "iso_clauses": [
+    "5.19",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Multi-jurisdiction outsourcing risk assessment, periodic review and an exit strategy are supplier-relationship risk controls with a legal/regulatory jurisdiction determination."
+  },
+  {
+   "control_id": "9.10.2.5",
+   "iso_clauses": [
+    "5.20",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Contracts must not obstruct bank or regulator audits and impediments must be escalated to QCB, an audit-rights clause in supplier agreements tied to a regulatory duty."
+  },
+  {
+   "control_id": "9.10.2.6",
+   "iso_clauses": [
+    "5.21",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Approval requirement for significant subcontracting by the data centre/technology provider is control over the ICT supply chain via the agreement."
+  },
+  {
+   "control_id": "9.10.2.7",
+   "iso_clauses": [
+    "5.20",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enumerates mandatory agreement content (service levels, availability, compliance, audit, security, contingency, DR, backup), which is the specification of security requirements in supplier agreements."
+  },
+  {
+   "control_id": "9.10.2.8",
+   "iso_clauses": [
+    "5.30",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires the provider to build, document and test a DR contingency framework so operations continue during outages, i.e. ICT readiness for business continuity imposed on a supplier."
+  },
+  {
+   "control_id": "9.10.2.9",
+   "iso_clauses": [
+    "5.30",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Periodic review, update and testing of the DR plan against worst-case scenarios, with alternate providers and exit management, is ICT continuity plan maintenance and testing."
+  },
+  {
+   "control_id": "9.10.2.10",
+   "iso_clauses": [
+    "5.22",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Periodic monitoring and review of the provider's security controls, supported by expert reports, is regular review of supplier service delivery."
+  },
+  {
+   "control_id": "9.10.2.11",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prior regulator approval before contracting service providers is a Qatar supervisory requirement; ISO only requires identifying and satisfying applicable regulatory obligations."
+  },
+  {
+   "control_id": "10.1.1",
+   "iso_clauses": [
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Policies and controls to stop employees committing fraud correspond to ISO's segregation of duties, whose stated purpose is reducing opportunity for fraud or misuse; the wider anti-fraud programme is outside ISO scope."
+  },
+  {
+   "control_id": "10.1.2",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "An enterprise anti-fraud internal control framework with periodic gap reviews; ISO's nearest analogue is periodic checking that controls operate as intended, but fraud control frameworks are not an ISO 27002 subject."
+  },
+  {
+   "control_id": "10.1.3",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Establishing a senior fraud review group meeting quarterly and reporting to the board is a governance body assignment; ISO only defines roles and responsibilities for information security, not fraud committees."
+  },
+  {
+   "control_id": "10.1.4",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Systems monitoring transactions for suspicious activity are anomaly-detection monitoring, though ISO's clause targets system/network behaviour rather than financial transactions."
+  },
+  {
+   "control_id": "10.1.5",
+   "iso_clauses": [
+    "5.3",
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Card production must be physically separated from PIN generation and card data held in an area limited to authorised staff, combining duty separation with securing a restricted facility."
+  },
+  {
+   "control_id": "10.2.1",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Real-time monitoring of online/ATM/POS transactions to detect suspicious activity is continuous anomaly monitoring applied to payment traffic rather than to IT assets."
+  },
+  {
+   "control_id": "10.2.2",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Velocity checks against prior transactions and defined action on raised alarms are detection rules plus alert response, the reaction element of monitoring activities."
+  },
+  {
+   "control_id": "10.2.3",
+   "iso_clauses": [
+    "5.5",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandatory reporting of fraud, embezzlement, hacking, fake sites and forged cards to the MOI hotline and QCB is contact with authorities under a legal obligation."
+  },
+  {
+   "control_id": "10.2.4",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Tailorable rule-based detection with online authorisation decisioning and query capability, integrated with the acquiring system, is transaction-layer monitoring and alerting."
+  },
+  {
+   "control_id": "10.3.1",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Fraud vulnerability assessments across branch/internet/ATM/phone channels borrow the vulnerability-assessment discipline, but ISO's clause concerns technical vulnerabilities in systems, not channel fraud exposure."
+  },
+  {
+   "control_id": "10.3.2",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Analysing new products and processes for vulnerabilities before launch is the requirement to address security in projects and new initiatives from the outset."
+  },
+  {
+   "control_id": "10.3.3",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Setting fraud loss limits and triggering a business review at 90 percent of the limit is quantitative financial risk appetite management; ISO 27002 contains no clause on loss thresholds."
+  },
+  {
+   "control_id": "10.3.4",
+   "iso_clauses": [
+    "5.17",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting cards, cheque books and internet passwords while couriered to customers is secure distribution of authentication information and protected physical transfer."
+  },
+  {
+   "control_id": "10.3.5",
+   "iso_clauses": [
+    "8.5",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Transaction passwords, two-factor authentication, multi-channel payee registration, transaction limits and alerts are secure authentication features built into a public-facing application service."
+  },
+  {
+   "control_id": "10.3.6",
+   "iso_clauses": [
+    "8.3",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Limiting information and transaction validation to employees who need to know is need-to-know information access restriction under the access control policy."
+  },
+  {
+   "control_id": "10.3.7",
+   "iso_clauses": [
+    "6.1",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Due diligence before enrolling employees maps to background screening and vendor due diligence to supplier assessment; the customer KYC element has no ISO 27002 equivalent."
+  },
+  {
+   "control_id": "10.3.8",
+   "iso_clauses": [
+    "5.2",
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires a dedicated team accountable for physical infrastructure security, an allocation of defined security responsibility for the physical perimeter."
+  },
+  {
+   "control_id": "10.3.10",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Continuous review of systems and controls to close gaps in the anti-fraud internal control framework resembles periodic compliance checking, but the framework itself is fraud governance rather than infosec."
+  },
+  {
+   "control_id": "10.3.9",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Regular fraud awareness for staff and customers is awareness and education activity, though ISO's clause is aimed at personnel and interested parties rather than a customer base."
+  },
+  {
+   "control_id": "10.4.1",
+   "iso_clauses": [
+    "6.8",
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defined channels for reporting suspicious transactions and behaviour, with detailed investigation of what is reported, mirrors event reporting followed by assessment and decision."
+  },
+  {
+   "control_id": "10.4.2",
+   "iso_clauses": [
+    "6.8",
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Publicised whistle-blowing and dispute/suspicion reporting mechanisms with thorough investigation are reporting channels feeding event assessment."
+  },
+  {
+   "control_id": "10.4.3",
+   "iso_clauses": [
+    "6.8",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A dedicated email address, phone line and trained response team for fraud reports is establishing an identified point of contact for reporting, a preparedness measure."
+  },
+  {
+   "control_id": "10.5.1",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Continuous training to build the fraud risk team's skills is competence-building education, though scoped to fraud investigation rather than information security."
+  },
+  {
+   "control_id": "10.5.2",
+   "iso_clauses": [
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring the investigating team to report to the relevant internal authority and drive the case to closure is the response and closure discipline of incident handling."
+  },
+  {
+   "control_id": "10.5.3",
+   "iso_clauses": [
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Adopting computer forensics, forensic accounting and large-volume data analysis tooling is the forensic identification, collection and analysis of evidence."
+  },
+  {
+   "control_id": "10.6.1",
+   "iso_clauses": [
+    "5.5",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Mandatory reporting of merchant-acquiring fraud to QCB is a regulator notification duty, expressed in ISO only as maintaining contact with authorities."
+  },
+  {
+   "control_id": "10.6.2",
+   "iso_clauses": [
+    "5.5"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Allocates reporting duty to the acquirer in a shared ATM network and requires issuer cooperation on recovery; this is a payment-scheme operational rule with only a loose tie to authority reporting."
+  },
+  {
+   "control_id": "10.6.3",
+   "iso_clauses": [
+    "5.5",
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Obliges the bank to hand data and documents to police even when not the victim, i.e. cooperation with law enforcement and provision of evidence."
+  },
+  {
+   "control_id": "10.7.1",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Ongoing fraud risk awareness aimed at customers; ISO's awareness clause extends to relevant interested parties but is written for personnel, so the fit is thematic only."
+  },
+  {
+   "control_id": "10.8.1",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Fraud prevention training delivered to employees through various forums is a structured staff awareness and education programme."
+  },
+  {
+   "control_id": "10.9.1",
+   "iso_clauses": [
+    "5.4",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Board and senior management commitment and resourcing for consumer education is management support for an awareness programme, but the audience is customers rather than personnel."
+  },
+  {
+   "control_id": "10.9.2",
+   "iso_clauses": [
+    "6.3",
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining customer cyber-security awareness and encouraging phishing reporting with remedial action combines awareness education with a security event reporting channel."
+  },
+  {
+   "control_id": "10.9.3",
+   "iso_clauses": [
+    "6.3",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ongoing multi-method customer education, including on the risk of sharing login credentials, is awareness delivery reinforcing the duty not to disclose authentication information."
+  },
+  {
+   "control_id": "10.10.1",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a defined security strategy covering confidentiality, integrity and availability of data and systems, which is the top-level information security policy."
+  },
+  {
+   "control_id": "10.10.2",
+   "iso_clauses": [
+    "8.24",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Evaluating internet-system security needs and adopting only well-scrutinised or officially approved encryption algorithms is the cryptographic algorithm selection requirement."
+  },
+  {
+   "control_id": "10.10.3",
+   "iso_clauses": [
+    "8.5",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Two-factor transaction-signing to authorise online banking transactions is strong authentication protecting an application service transaction."
+  },
+  {
+   "control_id": "10.10.4",
+   "iso_clauses": [
+    "8.5",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Risk-based token mechanisms to authorise institutional and corporate transactions are secure authentication techniques chosen by risk of the application service."
+  },
+  {
+   "control_id": "10.10.5",
+   "iso_clauses": [
+    "8.26",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assuring customers that website login and transactions are protected and authenticated is the requirement to protect and give assurance over transactions in public-network application services."
+  },
+  {
+   "control_id": "10.10.6",
+   "iso_clauses": [
+    "5.15",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Combines logical and physical access restriction to authorised staff with processing and transmission integrity controls over systems and data."
+  },
+  {
+   "control_id": "10.10.7",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A monitoring system alerting on abnormal activity, transmission errors and unusual transactions with a defined action plan is anomaly monitoring with alert follow-up."
+  },
+  {
+   "control_id": "10.10.8",
+   "iso_clauses": [
+    "8.8",
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Vulnerability assessment and penetration testing of the online banking system against MITM/man-in-the-browser attacks is technical vulnerability identification through security testing."
+  },
+  {
+   "control_id": "10.10.9",
+   "iso_clauses": [
+    "8.6",
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Tracking and planning capacity while maintaining high availability of online and supporting systems against DoS/DDoS is capacity management supported by redundancy."
+  },
+  {
+   "control_id": "10.11.1",
+   "iso_clauses": [
+    "8.26",
+    "8.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Generic mandate for security measures on mobile online services and payments, i.e. security requirements for an application service consumed on user endpoint devices."
+  },
+  {
+   "control_id": "10.11.2",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Risk assessment of mobile fraud scenarios feeding countermeasures is the requirement-derivation step for securing a mobile payment application service."
+  },
+  {
+   "control_id": "10.11.3",
+   "iso_clauses": [
+    "8.1",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Protecting sensitive information used by mobile online services and payments addresses information held or processed on user endpoint devices, typically by encryption."
+  },
+  {
+   "control_id": "10.11.4",
+   "iso_clauses": [
+    "6.3",
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Educating customers on protecting their own devices from viruses and malicious software is awareness delivery specifically about malware protection."
+  },
+  {
+   "control_id": "10.11.5",
+   "iso_clauses": [
+    "8.5",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandatory 3D Secure cardholder authentication with a dedicated enrolment process is a secure authentication mechanism for a payment application service."
+  },
+  {
+   "control_id": "10.12.1",
+   "iso_clauses": [
+    "5.31",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Compliance with externally imposed card-scheme standards (PCI-DSS, PA-DSS, PCI-PTS/PIN) is meeting contractual and industry requirements and demonstrating conformance."
+  },
+  {
+   "control_id": "10.12.2",
+   "iso_clauses": [
+    "5.31",
+    "5.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Annual reporting of PCI compliance status to the regulator is evidencing compliance with mandated requirements to a supervisory authority."
+  },
+  {
+   "control_id": "10.12.3",
+   "iso_clauses": [
+    "8.5",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "EMV chip storage of card data with DDA/CDA card authentication is a cryptographic strong-authentication mechanism for online and offline transactions."
+  },
+  {
+   "control_id": "10.12.4",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Bare requirement that magnetic stripes be protected; the only ISO analogue is cryptographic protection of the stored card data, and the control gives no implementation detail."
+  },
+  {
+   "control_id": "10.12.5",
+   "iso_clauses": [
+    "8.5",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "PIN verification must be performed online by the issuer rather than a third-party processor, with regular security reviews of provider infrastructure, joining authentication design with supplier service review."
+  },
+  {
+   "control_id": "10.12.6",
+   "iso_clauses": [
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Undifferentiated requirement for security controls on payment card systems and networks; only maps generically to securing networks and the systems on them."
+  },
+  {
+   "control_id": "10.12.7",
+   "iso_clauses": [
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Activating a mailed payment card only on the customer's explicit instruction is verified activation of an issued credential before it becomes usable."
+  },
+  {
+   "control_id": "10.12.8",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "OTP-based two-factor authentication for card-not-present internet transactions is a secure authentication requirement."
+  },
+  {
+   "control_id": "10.12.9",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Alerting cardholders when transactions exceed customer-set thresholds is threshold-based alerting, but the recipient is the customer rather than a security function."
+  },
+  {
+   "control_id": "10.12.10",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Behavioural scoring and correlation to identify fraudulent activity is anomaly-based detection with event correlation, applied to card transactions."
+  },
+  {
+   "control_id": "10.12.11",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Investigating transactions deviating from the cardholder's normal pattern and confirming with the cardholder before completion is anomaly alert triage and verification."
+  },
+  {
+   "control_id": "10.13.1",
+   "iso_clauses": [
+    "7.4",
+    "7.8",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Anti-skimming detection, tamper-resistant encrypting PIN pads, specified CCTV coverage and escorted, logged vendor access to ATM internals combine physical monitoring, equipment protection and PIN encryption."
+  },
+  {
+   "control_id": "10.13.2",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Regular messages teaching customers to inspect ATMs for skimmers and added fixtures is targeted awareness communication to service users."
+  },
+  {
+   "control_id": "10.13.3",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires an explicit contractual prohibition on merchants storing swiped card data in clear text, a security clause imposed through the merchant agreement."
+  },
+  {
+   "control_id": "10.13.4",
+   "iso_clauses": [
+    "8.24",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "POS terminals must be tamper-evident and encrypt PIN entry and payment data end to end using TDES/AES per PCI-PED/PTS, i.e. mandated cryptographic controls from an external standard."
+  },
+  {
+   "control_id": "10.13.5",
+   "iso_clauses": [
+    "8.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Card details must not appear on merchant or customer receipts and must be encoded, which is masking of sensitive data in output."
+  },
+  {
+   "control_id": "10.14.1",
+   "iso_clauses": [
+    "5.33",
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Cheques carrying account numbers, names and signatures must be held in a secure area, i.e. protection of records against unauthorised access using a secured facility."
+  },
+  {
+   "control_id": "10.14.2",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Digitally signed cheques must be secured with cryptographic techniques per the bank's cryptography rules, a direct use-of-cryptography requirement."
+  },
+  {
+   "control_id": "10.14.3",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "KYC-aligned identification and registration of new customers is the identity proofing and registration step of the identity lifecycle, applied to customers rather than system users."
+  },
+  {
+   "control_id": "10.15.1",
+   "iso_clauses": [
+    "8.14",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Core banking servers and infrastructure must be reliable and resilient and follow network management guidelines, i.e. redundancy of processing facilities on securely managed networks."
+  },
+  {
+   "control_id": "10.15.2",
+   "iso_clauses": [
+    "8.26",
+    "8.27"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Core banking applications and databases must be secured per software and data security guidelines, i.e. application security requirements built on secure engineering principles."
+  },
+  {
+   "control_id": "10.15.3",
+   "iso_clauses": [
+    "8.8",
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Vulnerability assessment and penetration testing of applications linked to core banking and its database is technical vulnerability management via security testing."
+  },
+  {
+   "control_id": "10.15.4",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Core banking must follow the cryptographic and key management guidelines, which is the use-of-cryptography clause including key lifecycle management."
+  },
+  {
+   "control_id": "10.15.5",
+   "iso_clauses": [
+    "8.15",
+    "8.24",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Bundles archiving of security events for later analysis and Qatari retention law, encryption of sensitive core database records, and RBAC-restricted access for identified personnel."
+  }
+ ]
+}

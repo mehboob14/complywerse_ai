@@ -1,0 +1,55 @@
+{
+ "framework": "mas_trm",
+ "hop": "direct",
+ "authored_by": "workflow:scf-requirement-gap-closure",
+ "note": "One-hop requirement->SCF mapping. provenance=ai, confidence<1.0.",
+ "mappings": [
+  {
+   "code": "14.3.1",
+   "scf_ids": [
+    "MON-16",
+    "MON-01.11"
+   ],
+   "confidence": "medium",
+   "rationale": "The FI must detect and block suspicious or fraudulent transactions in real time; SCF has no payment-fraud control, so MON-16's user and entity behaviour analytics supplies the real-time anomaly detection and MON-01.11 supplies the automated pre-determined corrective action that constitutes the blocking — coverage of the transaction-fraud specifics is partial.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "14.3.2",
+   "scf_ids": [
+    "MON-17",
+    "IRO-02"
+   ],
+   "confidence": "medium",
+   "rationale": "A process must exist to investigate suspicious transactions and drive them to resolution; MON-17 requires event log review to include analysis and triage integrated with the incident response process, and IRO-02 provides the analysis, containment and eradication handling that closes the issue — both are security-incident framed rather than fraud-case framed.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "14.3.3",
+   "scf_ids": [
+    "IRO-10"
+   ],
+   "confidence": "low",
+   "rationale": "The FI must notify customers of suspicious activity or transfers above a defined threshold; IRO-10 is the only SCF mechanism for timely notification to affected clients, but it is triggered by security incidents rather than by transaction thresholds, so it discharges the notification channel and not the trigger.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "14.4.2",
+   "scf_ids": [
+    "THR-03.1"
+   ],
+   "confidence": "medium",
+   "rationale": "The FI must alert customers to new cyber threats on a timely basis; THR-03.1 is the mechanism that turns external threat intelligence into organisation-specific security alerts and advisories for dissemination, which is the production and issuance side of the customer alert.",
+   "unmappable_reason": null
+  },
+  {
+   "code": "14.4.3",
+   "scf_ids": [
+    "IRO-11"
+   ],
+   "confidence": "medium",
+   "rationale": "The FI must advise customers how to detect unauthorised transactions and report suspected fraud; IRO-11 is the mechanism providing incident response advice and assistance to users for handling and reporting actual and potential incidents, which is the same duty applied to the customer population.",
+   "unmappable_reason": null
+  }
+ ]
+}

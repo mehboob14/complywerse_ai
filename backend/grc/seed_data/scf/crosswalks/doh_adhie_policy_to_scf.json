@@ -1,0 +1,1815 @@
+{
+ "framework": "doh_adhie_policy",
+ "library": "doh_adhie_policy.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "4.1.1.1",
+   "iso_clauses": [
+    "5.1",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "DOH issuing and overseeing ADHIE policies/standards in line with Federal and Abu Dhabi law is policy establishment (5.1) driven by statutory requirements (5.31), though here at regulator rather than single-organization level."
+  },
+  {
+   "control_id": "4.1.1.2",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Verifying that participants adhere to the issued ADHIE policies, standards and guidelines is exactly the compliance-with-policies-and-standards activity of 5.36."
+  },
+  {
+   "control_id": "4.1.1.3",
+   "iso_clauses": [
+    "5.19",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "DOH discharges its role through a contracted ADHIE Operator that designs, builds and runs the platform, i.e. an outsourced ICT service relationship governed by supplier agreement terms."
+  },
+  {
+   "control_id": "4.1.2.1",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The mandatory Participant Agreement in the Operator's prescribed format is the contractual instrument through which ADHIE security participation obligations are imposed on the facility."
+  },
+  {
+   "control_id": "4.1.2.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A corporate declaration itemising which facilities a parent/group company is responsible for is a contractual registration formality with no information-security content in ISO 27002."
+  },
+  {
+   "control_id": "4.1.2.3",
+   "iso_clauses": [
+    "5.31",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Meeting the ADHIE Platform Access Requirements and Participation Criteria is compliance with externally imposed contractual/regulatory conditions of connection, not an internal technical control."
+  },
+  {
+   "control_id": "4.1.2.4.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Accurate recording of clinical data in medical record systems is a data-quality/clinical-documentation obligation; ISO 27002 has no data-accuracy clause (integrity there means protection from unauthorized alteration, not correctness of entry)."
+  },
+  {
+   "control_id": "4.1.2.4.2",
+   "iso_clauses": [
+    "5.8"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Preparing medical record systems for ADHIE integration by the Launch Schedule is an onboarding project activity; only the project-management clause touches it, and the requirement itself is a deadline, not a security measure."
+  },
+  {
+   "control_id": "4.1.2.4.3",
+   "iso_clauses": [
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Implementing and supporting the hardware/software interfaces that connect the facility to the exchange concerns provisioning and maintaining the network service connection, but the clause is stated as a cost/provisioning duty rather than a security requirement."
+  },
+  {
+   "control_id": "4.1.2.4.4",
+   "iso_clauses": [
+    "5.36",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Blanket obligation to comply with DOH/ADHIE processes, protocols and privacy-security requirements is compliance verification against externally set rules."
+  },
+  {
+   "control_id": "4.1.2.4.5",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Supplying and making all Person Patient Data available to the ADHIE Platform is an inter-organization transfer of information governed by transfer rules and agreements."
+  },
+  {
+   "control_id": "4.1.2.4.6",
+   "iso_clauses": [
+    "5.14",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Sharing VIP Patient Data under DOH direction is a transfer of a specially designated (more sensitive) information category, so it touches transfer rules and classification only obliquely."
+  },
+  {
+   "control_id": "4.1.2.4.7",
+   "iso_clauses": [
+    "5.36",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring all systems and processes handling ADHIE data to be ADHICS-compliant is conformance to a mandated external security standard."
+  },
+  {
+   "control_id": "4.1.3.1",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The Operator's role in developing and implementing ADHIE participation policies, standards and guidelines is policy development and maintenance."
+  },
+  {
+   "control_id": "4.1.3.2",
+   "iso_clauses": [
+    "8.27"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Establishing and maintaining the ADHIE IT infrastructure, systems and processes implies engineering and running the platform; ISO's nearest clause is secure architecture/engineering, but the requirement as written states no security property."
+  },
+  {
+   "control_id": "4.1.3.3",
+   "iso_clauses": [
+    "5.1",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining physical, administrative and technological privacy and security protocols compliant with law is the documented policy set plus the PII-protection obligation over health data."
+  },
+  {
+   "control_id": "4.1.3.4",
+   "iso_clauses": [
+    "5.36",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ADHICS conformance for all ADHIE systems and processes is compliance with a mandated external security standard and its regulatory basis."
+  },
+  {
+   "control_id": "4.2.1.1",
+   "iso_clauses": [
+    "5.1",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Development and oversight of further participation policies under Federal and Emirate law is policy establishment driven by statutory requirements."
+  },
+  {
+   "control_id": "4.2.1.2",
+   "iso_clauses": [
+    "5.34",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandating patient consent for sharing health data, and legally authorizing sharing where consent is unavailable, is squarely the lawful-basis and consent aspect of protecting PII."
+  },
+  {
+   "control_id": "4.2.1.3",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Explicitly ensures compliance with a named statute (Article 23 of the Implementing Regulation of Abu Dhabi Law No. 23 of 2005) mandating data sharing — an identified legal requirement."
+  },
+  {
+   "control_id": "4.2.2.1",
+   "iso_clauses": [
+    "5.31",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Compliance with DOH regulatory requirements on patient rights and responsibilities is an identified regulatory obligation concerning the rights of the individuals whose PII is processed."
+  },
+  {
+   "control_id": "4.2.2.2",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Embedding ADHIE sharing consent clauses into standard patient consent forms is the consent mechanism for processing and disclosing personally identifiable health information."
+  },
+  {
+   "control_id": "4.2.2.3",
+   "iso_clauses": [
+    "5.31",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Sharing data where consent is unavailable rests on the DOH legal mandate as the alternative lawful basis for disclosing PII."
+  },
+  {
+   "control_id": "4.2.2.4",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Informing patients that their health information is shared with ADHIE as part of treatment is the transparency/notice element of PII protection."
+  },
+  {
+   "control_id": "4.2.3.1",
+   "iso_clauses": [
+    "5.1",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Operator's physical, administrative and technological privacy and security protocols compliant with law are its documented policy set covering PII."
+  },
+  {
+   "control_id": "4.3.1.1",
+   "iso_clauses": [
+    "5.15",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Granting each Authorized User a level of access appropriate to their business purpose is need-to-know access control and access-rights provisioning."
+  },
+  {
+   "control_id": "4.3.1.2",
+   "iso_clauses": [
+    "6.2",
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring valid enforceable written agreements with every Authorized User binds individuals to confidentiality and use terms before access, as with employment terms and NDAs."
+  },
+  {
+   "control_id": "4.3.1.3",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Directly requires development, maintenance and implementation of access control policies and procedures, the stated purpose of 5.15."
+  },
+  {
+   "control_id": "4.3.2.1",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Access is provisioned by the Operator only after the facility confirms authorization and submits its Authorized User list — a formal access-rights provisioning gate."
+  },
+  {
+   "control_id": "4.3.2.2",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining user categories and access levels so an end user reaches protected resources only when permitted is the access-control rule set plus restriction of access to information."
+  },
+  {
+   "control_id": "4.3.2.3",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Determining which types of Sensitive Health Information are transacted defines sensitivity categories for the exchanged data, i.e. classification."
+  },
+  {
+   "control_id": "4.3.2.4",
+   "iso_clauses": [
+    "8.3",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Specifying which information types, including Sensitive Health Information, each user category may access is information access restriction expressed through role rights."
+  },
+  {
+   "control_id": "4.3.2.5",
+   "iso_clauses": [
+    "5.10",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defining the permitted purposes of access at each level sets acceptable-use limits on the information reachable through the platform."
+  },
+  {
+   "control_id": "4.3.2.6",
+   "iso_clauses": [
+    "5.18",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Explicit adoption of role-based access standards to define user categories, purposes and accessible information is role-based provisioning of access rights."
+  },
+  {
+   "control_id": "4.3.3.1",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "DOH guidance on identity authentication governs how user identities are established and verified for the exchange."
+  },
+  {
+   "control_id": "4.3.4.1",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Initial identity-proofing requiring applicants to submit identifying materials before platform access is the identity-management registration step."
+  },
+  {
+   "control_id": "4.3.5.1",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The Operator holding sole authority to grant access privileges on the strength of facility-side authentication is centralized access-rights granting."
+  },
+  {
+   "control_id": "4.3.6.1",
+   "iso_clauses": [
+    "5.17",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enforcing the ADHIE password standard for Authorized Users is management of authentication information and secure authentication to the platform."
+  },
+  {
+   "control_id": "4.3.6.2.1",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "On-site or web-based training so users know platform operation and the governing policies is information security awareness and education."
+  },
+  {
+   "control_id": "4.3.6.2.2",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandating completion of training before access is granted is the pre-access awareness/training requirement."
+  },
+  {
+   "control_id": "4.3.6.2.3",
+   "iso_clauses": [
+    "6.3",
+    "6.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A signed certification that training was received and Participant Agreement terms will be honoured evidences training completion and binds the user to those terms."
+  },
+  {
+   "control_id": "4.3.6.2.4",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Annual refresher training as a condition of retaining Authorized User status, with retained records, is the periodic-update element of awareness training."
+  },
+  {
+   "control_id": "4.3.7.1",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An automated user management system following standard user-management practice is the full identity lifecycle (registration, change, removal) of 5.16."
+  },
+  {
+   "control_id": "4.3.7.2",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Operator-delivered initial training to participating facilities is security/operational education, though directed at partner organizations rather than own personnel."
+  },
+  {
+   "control_id": "4.3.8.1",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Educating patients or their representatives about the terms on which their health information may be shared is the notice/transparency duty toward PII subjects."
+  },
+  {
+   "control_id": "4.3.8.2",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Enabling patients to access their own data implements the data-subject access right within PII protection."
+  },
+  {
+   "control_id": "4.3.9.1",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A general duty to take industry-standard measures for a safe and secure exchange touches secure information transfer, but is too broad to align with any single clause."
+  },
+  {
+   "control_id": "4.3.9.2",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Providing patients a portal to reach their health information operationalizes data-subject access to their own PII."
+  },
+  {
+   "control_id": "4.3.9.3",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Routing patient accuracy or integrity queries back to the source facility supports the correction/rectification path for PII, which ISO 27002 covers only thinly."
+  },
+  {
+   "control_id": "4.3.10.1",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A blanket confidentiality, integrity and availability duty over all PHI received, held or transmitted is the overarching protection obligation for personally identifiable health data."
+  },
+  {
+   "control_id": "4.3.10.2",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Protecting PHI from reasonably anticipated threats and hazards is a risk-based objective; ISO 27002 places risk assessment outside its control set, so only the PII-protection clause is close."
+  },
+  {
+   "control_id": "4.3.10.3",
+   "iso_clauses": [
+    "5.34",
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Preventing uses or disclosures of PHI not permitted by law is unauthorized-disclosure prevention over personal data, the objective of leakage prevention."
+  },
+  {
+   "control_id": "4.3.10.4",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Policies and procedures for granting secured access via workstation, transaction, program or process are the access-control rules and information access restriction mechanisms."
+  },
+  {
+   "control_id": "4.3.10.5",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing, documenting, reviewing and modifying a user's rights of access is verbatim the provisioning-and-review lifecycle of access rights."
+  },
+  {
+   "control_id": "4.3.10.6",
+   "iso_clauses": [
+    "5.18",
+    "6.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Timely revocation of ADHIE access when a workforce member's employment ends is access-rights removal on termination."
+  },
+  {
+   "control_id": "4.3.10.7",
+   "iso_clauses": [
+    "7.1",
+    "7.2",
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Safeguarding facilities housing electronic systems against unauthorized physical entry, tampering and theft, and restricting data-centre access, is perimeter, entry and secure-room control."
+  },
+  {
+   "control_id": "4.3.10.8",
+   "iso_clauses": [
+    "8.1",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting workstation access to rights-holders, specifying appropriate use, and physically safeguarding workstations is endpoint device protection plus acceptable-use rules."
+  },
+  {
+   "control_id": "4.3.10.9",
+   "iso_clauses": [
+    "8.20",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Security measures guarding ePHI in transit over electronic communications networks are network security controls protecting information transfer."
+  },
+  {
+   "control_id": "4.3.10.10",
+   "iso_clauses": [
+    "8.8",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Assessing individual network components and identifying vulnerabilities requiring action is technical vulnerability identification applied to network infrastructure."
+  },
+  {
+   "control_id": "4.3.10.11",
+   "iso_clauses": [
+    "8.21",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing and monitoring secure connections for transferring PHI before any data exchange is security of network services underpinning the transfer."
+  },
+  {
+   "control_id": "4.3.10.12",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring a documented awareness and training policy for proper use and security of the platform is the awareness-programme requirement."
+  },
+  {
+   "control_id": "4.3.10.13",
+   "iso_clauses": [
+    "6.3",
+    "6.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Prescribes minimum training curriculum (access requirements, acceptable/improper use, breach notification) and the sanction policy for non-compliance, i.e. awareness content plus the disciplinary process."
+  },
+  {
+   "control_id": "4.3.10.14",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented privacy and security training delivered to each Authorized User before access is granted is pre-access awareness training with retained evidence."
+  },
+  {
+   "control_id": "4.3.11.1",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Automated user management following standard practice is the identity lifecycle management control (duplicate of 4.3.7.1)."
+  },
+  {
+   "control_id": "4.3.11.2",
+   "iso_clauses": [
+    "8.3",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Limiting a user to records of patients with whom they have an established medical relationship is need-to-know restriction of access to information."
+  },
+  {
+   "control_id": "4.3.11.3",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A general duty to employ appropriate safeguarding controls for patient and user information names no specific measure, so only the umbrella PII-protection clause fits."
+  },
+  {
+   "control_id": "4.3.11.4",
+   "iso_clauses": [
+    "8.16",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Regular review and audit of the platform for proper use and security is ongoing monitoring of activity plus periodic independent review."
+  },
+  {
+   "control_id": "4.3.12.1",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Legally authorized secondary use of patient data for public health surveillance sets a purpose limitation on PII; the disease-surveillance function itself sits outside ISO 27002."
+  },
+  {
+   "control_id": "4.3.12.2",
+   "iso_clauses": [
+    "8.3",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Permitting upload only on condition that ADHIE makes the data accessible to no party beyond the stated exceptions is a restriction on who may access the stored personal data."
+  },
+  {
+   "control_id": "4.3.12.3",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "DOH's own adherence to the policy's data management and data quality requirements is compliance with the established rules."
+  },
+  {
+   "control_id": "4.3.13.1",
+   "iso_clauses": [
+    "5.10",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Using PHI obtained from the platform only for legally permitted purposes is the acceptable-use rule for received information and purpose limitation over PII."
+  },
+  {
+   "control_id": "4.3.13.2",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enumerates permitted uses (treatment, operations, patient lookup) and prohibited uses (commercial exploitation, third-party distribution, access by uninvolved professionals) — an acceptable-use rule set."
+  },
+  {
+   "control_id": "4.3.13.3",
+   "iso_clauses": [
+    "8.12",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Taking all necessary steps to prevent misuse or disclosure of PHI is prevention of unauthorized disclosure of personal data."
+  },
+  {
+   "control_id": "4.3.13.4",
+   "iso_clauses": [
+    "5.1",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing documented privacy and security controls to protect confidentiality, availability and integrity of exchanged patient data is the policy framework covering PII."
+  },
+  {
+   "control_id": "4.3.13.5",
+   "iso_clauses": [
+    "5.14",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Internal policies setting the conditions and documentation required before disclosing PHI are the rules and pre-conditions governing transfer of that information."
+  },
+  {
+   "control_id": "4.3.13.6",
+   "iso_clauses": [
+    "5.34",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Disclosing only the minimum necessary PHI is data minimization on disclosure, enforced by restricting what information is made available."
+  },
+  {
+   "control_id": "4.3.13.7",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "This is a scope exemption stating that treatment and legally required disclosures fall outside the minimum-necessary rule; it imposes no control, so there is nothing to map."
+  },
+  {
+   "control_id": "4.3.13.8",
+   "iso_clauses": [
+    "5.34",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requesting only the minimum PHI necessary for the intended purpose is data minimization applied on the requesting side of access."
+  },
+  {
+   "control_id": "4.3.13.9",
+   "iso_clauses": [
+    "5.36",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring onward disclosure of ADHIE-accessed information complies with the Policies and Applicable Law is compliance checking against policy and legal requirements."
+  },
+  {
+   "control_id": "4.3.14.1",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Disclosing patient data to DOH for public health reporting is a defined lawful onward disclosure of PII; the epidemiological reporting purpose has no ISO 27002 equivalent."
+  },
+  {
+   "control_id": "4.3.14.2",
+   "iso_clauses": [
+    "5.15",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Granting Organ Procurement Organizations platform access solely for donation and transplantation is purpose-bound access authorization for an external party."
+  },
+  {
+   "control_id": "4.3.14.3",
+   "iso_clauses": [
+    "8.2",
+    "8.33"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Operator staff reaching live patient data for maintenance, testing and troubleshooting is privileged support access and use of operational data in testing, though the clause grants the access rather than constraining it."
+  },
+  {
+   "control_id": "4.3.14.4",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The Operator's adherence to the policy's data management and data quality requirements is compliance with the established rules."
+  },
+  {
+   "control_id": "4.3.15.1",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Holding DOH accountable for unauthorized disclosures by its staff allocates organizational responsibility for information security outcomes; it is a liability statement, not a control measure."
+  },
+  {
+   "control_id": "4.3.15.2",
+   "iso_clauses": [
+    "5.36",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "DOH auditing compliance with the relevant policies and procedures is the review of adherence to policies, rules and standards."
+  },
+  {
+   "control_id": "4.3.15.3",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Continuous improvement of the regulatory and compliance frameworks is the periodic review and update of the governing policy set."
+  },
+  {
+   "control_id": "4.3.16.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Obtaining insurance to indemnify the financial consequences of a breach is a risk-transfer/financial arrangement; ISO 27002 contains no insurance or risk-financing control."
+  },
+  {
+   "control_id": "4.3.16.2",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented internal breach procedures differentiated by breach type, with a notification process and root cause analysis, is incident management planning and response."
+  },
+  {
+   "control_id": "4.3.16.3",
+   "iso_clauses": [
+    "6.3",
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Training Authorized Users on breaches and breach notification is awareness training specifically on reporting security events."
+  },
+  {
+   "control_id": "4.3.16.4",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Facility liability for unauthorized disclosures by its staff assigns organizational responsibility rather than prescribing a security measure."
+  },
+  {
+   "control_id": "4.3.16.5",
+   "iso_clauses": [
+    "5.5",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Notifying affected patients and applicable regulatory agencies of a breach is the authority-notification and communication step of incident response; patient notification itself has no direct ISO clause."
+  },
+  {
+   "control_id": "4.3.17.1",
+   "iso_clauses": [
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Notifying the facilities whose patient data was affected once details are known is the stakeholder-communication element of responding to a security incident."
+  },
+  {
+   "control_id": "4.3.17.2",
+   "iso_clauses": [
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mitigating, to the extent practicable, the harmful effects of a known breach in line with internal risk analysis is containment and mitigation during incident response."
+  },
+  {
+   "control_id": "4.3.17.3",
+   "iso_clauses": [
+    "5.26",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring patient and regulator notification no later than 60 days from discovery is the notification timeline of incident response applied to a personal-data breach."
+  },
+  {
+   "control_id": "4.3.17.4",
+   "iso_clauses": [
+    "5.24",
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented breach procedures that include root-cause investigation processes are incident management planning plus learning from incidents."
+  },
+  {
+   "control_id": "4.3.17.5",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Operator liability for unauthorized disclosures by its staff allocates responsibility; it prescribes no security measure."
+  },
+  {
+   "control_id": "4.3.17.6",
+   "iso_clauses": [
+    "5.5",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Reporting any determined breach to the regulator DOH within 5 Business Days is the mandated contact with authorities during incident response."
+  },
+  {
+   "control_id": "4.3.17.7",
+   "iso_clauses": [
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Investigating breach root causes and establishing preventive plans and actions is exactly using knowledge from incidents to reduce recurrence."
+  },
+  {
+   "control_id": "4.3.18.1",
+   "iso_clauses": [
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defining that a good-faith unintentional access by an authorized workforce member, promptly remedied and not further disclosed, is not a Breach is the criteria for assessing an event and deciding whether it is a reportable incident."
+  },
+  {
+   "control_id": "4.3.18.2",
+   "iso_clauses": [
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Excluding inadvertent disclosure between two persons already authorized to access PHI sets the classification criteria used when deciding whether an event qualifies as an incident."
+  },
+  {
+   "control_id": "4.3.18.3",
+   "iso_clauses": [
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defines a criterion (good-faith belief of non-retention) used to decide whether a disclosure event is classified as a reportable Breach, which is the categorisation decision ISO 5.25 requires for security events."
+  },
+  {
+   "control_id": "4.4.1.1",
+   "iso_clauses": [
+    "5.14",
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Mandates building and maintaining an electronic interface to a defined interface standard so patient data can be transferred between participants, matching 5.14's transfer rules and 8.21's security requirements for connection services."
+  },
+  {
+   "control_id": "4.4.1.2",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires each facility to author and implement a documented Interoperability Policy aligned to higher-level criteria, which is the topic-specific policy definition and approval activity of 5.1."
+  },
+  {
+   "control_id": "4.4.1.3",
+   "iso_clauses": [
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Only requires that network connectivity to the ADHIE data centres exists; it touches 8.21 network-service provisioning but states no security requirement for that connection."
+  },
+  {
+   "control_id": "4.4.1.4",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Explicitly forbids introducing malware, viruses, worms or Trojan horses through the connection or data transmissions, which is exactly 8.7's protection against malicious code."
+  },
+  {
+   "control_id": "4.4.2.1",
+   "iso_clauses": [
+    "5.20",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires a Participant Agreement section defining each party's roles and obligations (5.20) plus ongoing monitoring of the exchange and corrective action when terms are not met (5.22)."
+  },
+  {
+   "control_id": "4.4.2.2",
+   "iso_clauses": [
+    "5.14",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Sets messaging and transport standards including private-network use and message packaging/network protocols, covering 5.14 transfer rules and 8.20 securing the network carrying them."
+  },
+  {
+   "control_id": "4.4.3.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Assigns sole accountability for the accuracy/quality of clinical data content; ISO 27002 has no data-quality or record-accuracy clause and treating this as a roles clause would misstate its intent."
+  },
+  {
+   "control_id": "4.4.3.2",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Its real-time validation and feedback-loop sub-requirement touches 8.26's application input-validation requirement, but standardised data-entry fields, patient feedback and error correction are data-quality obligations with no ISO 27002 analogue."
+  },
+  {
+   "control_id": "4.4.4.1",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Implements the data-subject route for challenging accuracy of one's own health information and having corrections or disputes recorded, part of 5.34's PII rights handling."
+  },
+  {
+   "control_id": "4.4.4.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A liability disclaimer stating ADHIE is not responsible for transmitted data content or accuracy; it imposes no control activity and ISO 27002 has no liability-allocation clause."
+  },
+  {
+   "control_id": "5.1.1.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Describes the regulator's own statutory mandate to regulate the health system and close service gaps; it is a governmental power, not an information-security control any organisation implements."
+  },
+  {
+   "control_id": "5.1.1.2",
+   "iso_clauses": [
+    "5.1",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires DOH-level governance measures specifically for the safety of patient information in health information exchange, combining 5.1 policy governance with 5.34 protection of health PII."
+  },
+  {
+   "control_id": "5.1.1.3",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "DOH must use its regulatory powers to ensure the requirements of this Policy are actually met, which is 5.36's ongoing verification that rules and standards are complied with."
+  },
+  {
+   "control_id": "5.1.2.1",
+   "iso_clauses": [
+    "5.31",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Obliges facilities to satisfy requirements imposed by DOH and the operator for patient-data privacy, i.e. identify applicable regulatory/contractual requirements (5.31) and demonstrate compliance with them (5.36)."
+  },
+  {
+   "control_id": "5.1.2.2",
+   "iso_clauses": [
+    "5.2",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Places named accountability on the facility for safeguarding Patient Health Information (5.2 allocation of security responsibilities) over PII of a health nature (5.34)."
+  },
+  {
+   "control_id": "5.1.3.1",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires a standing governance body with defined DOH and market representation to oversee the ADHIE regulatory framework, which is the definition and allocation of oversight responsibilities in 5.2."
+  },
+  {
+   "control_id": "5.1.3.2",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Limits ADHIE's receipt, use and processing of Patient Health Information to defined platform development, operation and maintenance purposes, matching 5.34's purpose-limited processing of PII."
+  },
+  {
+   "control_id": "5.2.1.1",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires escalation and enforcement action once non-compliance with the Policy is determined, which is the corrective-action half of 5.36's compliance verification."
+  },
+  {
+   "control_id": "5.2.1.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A statement of regulatory discretion in how DOH targets its powers; it defines no control activity and has no counterpart in ISO 27002."
+  },
+  {
+   "control_id": "5.2.1.3",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires that any identified failure to comply with the Policy be brought to an end, i.e. the remediation of non-conformities that 5.36 calls for."
+  },
+  {
+   "control_id": "5.2.1.4",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requires preventing recurrence of compliance failures; 5.36 covers corrective action after non-conformity but does not specifically address recurrence prevention as this control does."
+  },
+  {
+   "control_id": "5.2.1.5",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishes an investigative process to determine whether non-compliance has occurred, which is the review/assessment step 5.36 requires before compliance conclusions are drawn."
+  },
+  {
+   "control_id": "5.2.1.6",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defines a graduated escalation ladder (advice, remedial plan, reprimand, suspension, licence withdrawal) applied after a compliance investigation, i.e. 5.36's corrective response scaled to the level of non-compliance."
+  },
+  {
+   "control_id": "5.2.1.7",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Licence suspension or withdrawal for missing the ADHIE Launch Schedule is a programme-rollout enforcement measure; the underlying obligation is a deployment deadline, not a security requirement in ISO 27002."
+  },
+  {
+   "control_id": "5.2.1.8",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Administration of statutory fines and penalties is a regulator's legal sanction power; ISO 27002 has no clause for imposing financial penalties on regulated entities."
+  },
+  {
+   "control_id": "5.2.1.9",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Financial incentives and reimbursement-rate amendments are health-financing levers entirely outside the scope of information security controls."
+  },
+  {
+   "control_id": "5.2.2.1",
+   "iso_clauses": [
+    "5.18",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Reserves the right to immediately suspend or terminate a participant's access to the platform when agreement or licensing conditions fail, combining 5.18 revocation of access rights with 5.20 enforcement of agreed terms."
+  },
+  {
+   "control_id": "5.3.1.1",
+   "iso_clauses": [
+    "5.35",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Periodic audits of facilities by DOH or an appointed third party are independent reviews (5.35) performed to verify compliance with the Policy and applicable law (5.36)."
+  },
+  {
+   "control_id": "5.3.2.1",
+   "iso_clauses": [
+    "5.35",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires facilities and their subcontractors to grant auditors access to systems, records and personnel so compliance can be verified, supporting independent review (5.35) and review of subcontracted service arrangements (5.22)."
+  },
+  {
+   "control_id": "5.3.2.2",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires facilities to review the periodic service performance reports produced by the ADHIE Operator, which is 5.22's regular review of service-provider reporting."
+  },
+  {
+   "control_id": "5.3.2.3",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires adherence to the Policy's terms with sanctions applied for breach, the compliance-with-rules-and-standards obligation of 5.36."
+  },
+  {
+   "control_id": "5.3.2.4",
+   "iso_clauses": [
+    "6.8",
+    "5.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires facilities to report platform-related Breaches affecting PHI security to the ADHIE Operator and to the regulator, combining 6.8 event reporting with 5.5 contact with authorities."
+  },
+  {
+   "control_id": "5.3.3.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Monitoring overall ADHIE performance through partnership KPIs is service-performance management (ISO 20000 territory); ISO 27002's 8.16 covers security monitoring, not business KPI tracking."
+  },
+  {
+   "control_id": "5.3.3.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Remediating underperforming business KPIs defined by an oversight task force is service-level performance management with no information-security counterpart in ISO 27002."
+  },
+  {
+   "control_id": "5.3.3.3",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "The operator's production of periodic performance reports is the supply side of the service reporting that 5.22 expects recipients to review; ISO frames the obligation on the customer, not the provider."
+  },
+  {
+   "control_id": "5.3.3.4",
+   "iso_clauses": [
+    "5.5",
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Obliges ADHIE to report Breaches affecting Patient Health Information security to DOH, the regulatory-authority contact channel of 5.5 and the event-reporting duty of 6.8."
+  },
+  {
+   "control_id": "6.1.1.1",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires immediate notification that an Authorized User's access rights must be terminated or blocked, the trigger step in 5.18's timely revocation of access rights."
+  },
+  {
+   "control_id": "6.1.1.2",
+   "iso_clauses": [
+    "6.8",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Sets a five-business-day maximum for DOH to notify ADHIE of a determined Breach, a defined reporting channel and timescale as required by 6.8 and planned under 5.24."
+  },
+  {
+   "control_id": "6.1.2.1",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Binds the facility contractually through its DOH licensing agreement to adhere to operator policies, i.e. the identification and honouring of contractual requirements under 5.31."
+  },
+  {
+   "control_id": "6.1.2.2",
+   "iso_clauses": [
+    "5.20",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires legal agreements with the ADHIE Operator and other entities specifically to secure patient privacy and data security, which is 5.20's embedding of security requirements in agreements within a 5.19 relationship."
+  },
+  {
+   "control_id": "6.1.2.3",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requires developing and maintaining a Participant System conforming to published interface standards; only the standards-conformance requirement for the application touches 8.26, and the readiness-assessment element is programme onboarding."
+  },
+  {
+   "control_id": "6.1.2.4",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Adherence to the ADHIE Launch Schedule is a national rollout deadline; ISO 27002 has no clause about meeting a programme onboarding timetable."
+  },
+  {
+   "control_id": "6.1.2.5.1",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Obliges timely submission of required Patient Data to the exchange; it concerns participation in transfer rather than securing it, so it only loosely touches 5.14's transfer arrangements."
+  },
+  {
+   "control_id": "6.1.2.5.2",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Obliges timely receipt and integration of incoming exchange data into the Participant System, a transfer-arrangement duty that 5.14 covers only in respect of its security aspects."
+  },
+  {
+   "control_id": "6.1.2.5.3",
+   "iso_clauses": [
+    "8.14"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requires the exchange interface to remain available per the Participation Criteria; 8.14 covers availability of processing facilities but through redundancy rather than a contractual uptime duty."
+  },
+  {
+   "control_id": "6.1.2.6",
+   "iso_clauses": [
+    "5.12",
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires internal policies preventing Authorized Users from supplying VIP Patient Data to the platform, a special handling rule for a distinguished data category (5.12) enforced as an outbound disclosure restriction (8.12)."
+  },
+  {
+   "control_id": "6.1.2.7",
+   "iso_clauses": [
+    "5.18",
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Appointing Authorized Users and assigning them to appropriate Access Levels is directly the provisioning of access rights per role (5.18) on registered identities (5.16)."
+  },
+  {
+   "control_id": "6.1.2.8",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires submitting a maintained list of Authorized Users in an approved format to the operator, part of 5.16's registration and record-keeping of identities across the life cycle."
+  },
+  {
+   "control_id": "6.1.2.9",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires notification within 48 hours whenever an Authorized User is added or removed on termination of employment, which is 5.18's provisioning and revocation of access on employment change."
+  },
+  {
+   "control_id": "6.1.2.10",
+   "iso_clauses": [
+    "6.2",
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires enforceable written agreements with each Authorized User imposing legal compliance, permitted-purpose-only use of patient data and breach reporting, i.e. 6.2 contractual security terms including 6.6 confidentiality undertakings."
+  },
+  {
+   "control_id": "6.1.2.11",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A Master Patient Index is a patient-record identity-resolution artefact for clinical data matching; ISO 5.16 governs identities used to obtain system access, not patient demographic indexing, so no clause genuinely fits."
+  },
+  {
+   "control_id": "6.1.2.12",
+   "iso_clauses": [
+    "6.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires each Authorized User to sign a statement acknowledging their obligations under the Policy and Participant Agreement, exactly 6.2's signed acceptance of security responsibilities."
+  },
+  {
+   "control_id": "6.1.2.13",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires giving Authorized Users a written statement of their access rights, an explicit implementation step named in 5.18's access-rights provisioning guidance."
+  },
+  {
+   "control_id": "6.1.2.14",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires unique identification of every Authorized User through verification of their Emirates ID with a copy retained, which is 5.16's identity proofing before an identity is issued."
+  },
+  {
+   "control_id": "6.1.2.15",
+   "iso_clauses": [
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires access only via a password unique to each user and binds users not to share it, matching 5.17's allocation and non-disclosure rules for secret authentication information."
+  },
+  {
+   "control_id": "6.1.2.16",
+   "iso_clauses": [
+    "5.16",
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires assignment of a unique user name (5.16 unique identity per person) with a password (5.17 allocation of authentication information) to obtain platform access."
+  },
+  {
+   "control_id": "6.1.2.17",
+   "iso_clauses": [
+    "5.17",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Prescribes concrete password rules — minimum eight characters, three character classes, 60-day lifetime, six-password history, no shared or generic IDs — which are 5.17's authentication-information quality rules enforced by 8.5 secure log-on."
+  },
+  {
+   "control_id": "6.1.2.18",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enforces a consecutive failed-logon limit with account lockout until release or for a specified period before re-authentication, a named secure log-on procedure requirement in 8.5."
+  },
+  {
+   "control_id": "6.1.2.19",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires automatic logout after user inactivity with re-authentication needed to resume, which is 8.5's inactivity session-termination requirement."
+  },
+  {
+   "control_id": "6.1.2.20",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a unique name or number for every Authorized User so identity can be tracked and actions attributed, the unique-identity requirement of 5.16."
+  },
+  {
+   "control_id": "6.1.2.21",
+   "iso_clauses": [
+    "7.8",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires physical cages around data-centre servers to block external ports (7.8 protection of sited equipment) and disabling the ability to insert, read or write removable devices (7.10 storage media controls)."
+  },
+  {
+   "control_id": "6.1.2.22",
+   "iso_clauses": [
+    "7.2",
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires role-based validation of physical entry to facilities including visitor control (7.2) and control of access to software programs for testing and revision (8.4)."
+  },
+  {
+   "control_id": "6.1.2.23",
+   "iso_clauses": [
+    "8.5",
+    "7.10",
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Its three sub-requirements map one-to-one: session termination after inactivity (8.5), inhibiting removable media with encryption where needed (7.10), and maintaining up-to-date anti-malware protection (8.7)."
+  },
+  {
+   "control_id": "6.1.2.24",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Prohibits unilateral suspension or termination of participation without operator consent; it is a continuity term of the participation agreement rather than a security requirement 5.20 would normally specify."
+  },
+  {
+   "control_id": "6.1.2.25",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requires notifying the operator of developments materially affecting the facility's ability to meet its obligations; 5.22 covers change notification in service relationships but from the customer's monitoring perspective."
+  },
+  {
+   "control_id": "6.1.2.26",
+   "iso_clauses": [
+    "6.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires the facility to discipline and sanction Authorized Users who fail to comply with the Policy or Participant Agreement, which is 6.4's formalised disciplinary process for security violations."
+  },
+  {
+   "control_id": "6.1.2.27",
+   "iso_clauses": [
+    "6.8",
+    "5.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Sets a five-working-day deadline for notifying ADHIE and DOH once a Breach is determined, combining 6.8's defined reporting channel with 5.5's contact with regulatory authorities."
+  },
+  {
+   "control_id": "6.1.2.28",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires all internal policies and procedures created or updated because of this Policy to conform to the Participation Criteria, which is 5.1's requirement that topic-specific policies align with higher-level direction."
+  },
+  {
+   "control_id": "6.1.3.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Issuing and updating the Launch Schedule that tells facilities when to join is national programme scheduling; ISO 27002 has no onboarding-timetable clause."
+  },
+  {
+   "control_id": "6.1.3.2",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A readiness assessment tool completed by prospective participants resembles 5.19's pre-engagement assessment of a party before connecting it, though the tool here covers operational readiness broadly rather than security risk specifically."
+  },
+  {
+   "control_id": "6.1.3.3",
+   "iso_clauses": [
+    "5.20",
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires mandatory Participation Criteria and technical standards that facilities must meet under the Participant Agreement, which is 5.20's requirements imposed through agreements within a 5.19 relationship."
+  },
+  {
+   "control_id": "6.1.3.4",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Giving health sector members advance notice of when they must join the exchange is programme communication and onboarding lead time, with no ISO 27002 counterpart."
+  },
+  {
+   "control_id": "6.1.3.5",
+   "iso_clauses": [
+    "8.3",
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires measures that keep VIP Patient Data from being exchanged, stored on the platform or made accessible to Authorized Users, i.e. restricting access to a data category (8.3) and preventing its disclosure into the platform (8.12)."
+  },
+  {
+   "control_id": "6.1.3.6",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires ADHIE to establish and execute Participant Agreements with each facility in a prescribed format, the formal agreement vehicle that 5.20 requires security requirements to be carried in."
+  },
+  {
+   "control_id": "6.1.3.7",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires removal or blocking of an Authorized User's access rights within 24 hours of a removal notification, a hard timescale for 5.18's revocation of access rights."
+  },
+  {
+   "control_id": "6.1.3.8",
+   "iso_clauses": [
+    "5.18",
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires disabling or removing accounts inactive for 60 days or more, which is 5.18's periodic review and removal of no-longer-needed access on identities managed under 5.16."
+  },
+  {
+   "control_id": "6.1.3.9",
+   "iso_clauses": [
+    "5.17",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires platform access only via a unique username and password, the authentication-information allocation of 5.17 enforced through 8.5 secure authentication."
+  },
+  {
+   "control_id": "6.1.3.10",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires all servers holding patient and user information to meet or exceed industry server-hardening standards, which is 8.9's establishment and enforcement of secure configuration baselines."
+  },
+  {
+   "control_id": "6.1.3.11",
+   "iso_clauses": [
+    "5.37",
+    "8.9",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires documented operating procedures (5.37) spanning minimum secure configuration and hardening (8.9) and ongoing patching (8.8); its malware, capacity, logging and backup sub-items also fall under 8.7, 8.6, 8.15 and 8.13 but exceed the three-clause cap."
+  },
+  {
+   "control_id": "6.1.3.12",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires logging every clinical data transaction on the platform expressly so periodic auditing is possible, which is 8.15's production and retention of event logs."
+  },
+  {
+   "control_id": "6.1.3.13",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires log files to be immutable once written and to exclude the full clinical record, matching 8.15's protection of logs against alteration and against becoming a target themselves."
+  },
+  {
+   "control_id": "6.1.3.14",
+   "iso_clauses": [
+    "8.22",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires Patient Health Data groups to sit on a separate logical network (8.22) fronted by a firewall configured to block unauthorised traffic and flows (8.20)."
+  },
+  {
+   "control_id": "6.1.3.15",
+   "iso_clauses": [
+    "8.16",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates regular audit of the platform with named minimum functions — administrator activity review, IDS activity-log review and follow-up on suspicious activity (8.16) — carried out as a periodic review of safeguards (5.35)."
+  },
+  {
+   "control_id": "6.1.3.16",
+   "iso_clauses": [
+    "8.3",
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Grants a Disaster Relief Agency a strictly limited data set (demographics, facility, admission dates, not the nature of care) for the duration of an Emergency Event only, combining 8.3's need-to-know restriction with 5.29's arrangements for operating during disruption."
+  },
+  {
+   "control_id": "6.1.3.17",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Provides for additional discretionary audit procedures over IDS activity logs, administrator authorisations and physical data-centre access, an extension of 8.16's monitoring and anomaly review."
+  },
+  {
+   "control_id": "6.1.3.18",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Only the messaging, packaging and transport half of these standards touches 5.14's rules for electronic information transfer; the semantic content standards (HL7 RIM, SNOMED, controlled vocabularies) are clinical data standards with no ISO 27002 analogue."
+  },
+  {
+   "control_id": "6.1.4",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishes who may obtain emergency 'break the seal' access to patient data and under what condition, which is 5.15's rule-setting for who may access what, including emergency provisions."
+  },
+  {
+   "control_id": "6.1.4.1",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defines the substantive precondition (a qualified condition plus immediate need for medical attention) that authorises emergency access, an access rule of the kind 5.15 requires to be defined."
+  },
+  {
+   "control_id": "6.1.4.2",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Adds a materiality judgement about the information before emergency access is exercised; it refines the 5.15 access rule but is a clinical judgement criterion rather than a technical access control."
+  },
+  {
+   "control_id": "6.1.4.3",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the delegated user to record the name of the Healthcare Professional who directed the break-the-seal access, an attribution record of the type 8.15 requires for security-relevant events."
+  },
+  {
+   "control_id": "6.1.4.4",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires an attestation that the emergency conditions were met and requires the platform to maintain a record of that access, which is 8.15's recording of user activity and exceptions."
+  },
+  {
+   "control_id": "6.1.4.5",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires facilities to track and document every break-the-seal occurrence (8.15) and to assure the policy conditions were satisfied, i.e. review those exceptional-access events (8.16)."
+  },
+  {
+   "control_id": "6.1.4.6",
+   "iso_clauses": [
+    "8.16",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Reserves ongoing audit of all break-the-seal occurrences by the operator and regulator, combining 8.16's review of anomalous access with 5.35's independent review."
+  },
+  {
+   "control_id": "6.1.4.7",
+   "iso_clauses": [
+    "5.18",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires emergency access to Patient Health Information to terminate when the emergency treatment ends, which is 5.18's removal of access once no longer needed applied to the time-bounded elevated rights governed by 8.2."
+  }
+ ]
+}

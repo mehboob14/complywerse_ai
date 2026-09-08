@@ -1,0 +1,1445 @@
+{
+ "framework": "hitrust_csf",
+ "library": "hitrust_csf.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "00.a",
+   "iso_clauses": [
+    "5.1",
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "The ISMP requirement is an ISMS-establishment obligation; 5.1 covers the documented, management-approved policy set that constitutes it and 5.35 covers the Level 3 requirement for independent audits of the program's continuing suitability, but the PDCA management-system framing itself sits in ISO 27001 rather than 27002."
+  },
+  {
+   "control_id": "01.a",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Both require a documented access control policy established and reviewed on the basis of business and information security requirements."
+  },
+  {
+   "control_id": "01.b",
+   "iso_clauses": [
+    "5.16",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal user registration/de-registration is exactly 5.16's full identity life cycle, and the granting and revoking of access it drives is 5.18's provisioning and removal of access rights."
+  },
+  {
+   "control_id": "01.c",
+   "iso_clauses": [
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting and controlling the allocation and use of privileges is the literal subject of 8.2 Privileged Access Rights."
+  },
+  {
+   "control_id": "01.d",
+   "iso_clauses": [
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal management process for issuing, distributing and revoking passwords is 5.17's allocation and management of authentication information."
+  },
+  {
+   "control_id": "01.f",
+   "iso_clauses": [
+    "5.17",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "User obligations for password selection and secrecy are the user-responsibility half of 5.17, and making users aware of those obligations is delivered through 6.3 awareness training."
+  },
+  {
+   "control_id": "01.g",
+   "iso_clauses": [
+    "7.7",
+    "8.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting unattended equipment (session lock, log-off, screen lock) is the clear-screen half of 7.7, applied to the endpoints 8.1 governs."
+  },
+  {
+   "control_id": "01.h",
+   "iso_clauses": [
+    "7.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Same control on both sides: a clear desk policy for papers and removable media plus a clear screen policy for information processing facilities."
+  },
+  {
+   "control_id": "01.j",
+   "iso_clauses": [
+    "8.5",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Strong/multi-factor authentication for remote users is 8.5 Secure Authentication, and the remote-connection context it protects is 6.7 Remote Working."
+  },
+  {
+   "control_id": "01.k",
+   "iso_clauses": [
+    "5.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Automatic equipment identification authenticates a device rather than a person; ISO 27002:2022 dropped the standalone 2005 control and now treats device identities inside 5.16's identity life cycle, so the overlap is real but partial."
+  },
+  {
+   "control_id": "01.l",
+   "iso_clauses": [
+    "8.20",
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Controlling physical and logical access to diagnostic and configuration ports is handled in 27002:2022 as network port hardening under 8.20 and as enforced secure configuration (disabling unused ports/services) under 8.9; there is no dedicated diagnostic-port clause."
+  },
+  {
+   "control_id": "01.m",
+   "iso_clauses": [
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Segregating groups of information services, users and systems onto separate networks is precisely 8.22 Segregation of Networks."
+  },
+  {
+   "control_id": "01.n",
+   "iso_clauses": [
+    "8.20",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting users' ability to connect on shared and boundary-crossing networks is enforced by 8.20 network security controls, in line with the access control policy of 5.15."
+  },
+  {
+   "control_id": "01.o",
+   "iso_clauses": [
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Routing controls that stop information flows breaching application access policy were folded into 8.20 Networks Security in the 2022 revision; no separate routing-control clause survives."
+  },
+  {
+   "control_id": "01.i",
+   "iso_clauses": [
+    "8.21",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Providing users only the network services they are specifically authorized to use is the authorization requirement of 8.21, exercised through the access control policy in 5.15."
+  },
+  {
+   "control_id": "01.p",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Secure log-on procedures (limited feedback, failed-attempt handling, no system detail before authentication) are the substance of 8.5 Secure Authentication."
+  },
+  {
+   "control_id": "01.q",
+   "iso_clauses": [
+    "5.16",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A unique user ID per person is 5.16's identity uniqueness requirement, and substantiating the claimed identity by an authentication technique is 8.5."
+  },
+  {
+   "control_id": "01.r",
+   "iso_clauses": [
+    "5.17",
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An interactive password management system enforcing quality passwords is 5.17 (authentication information management) implemented through 8.5's secure authentication system requirements."
+  },
+  {
+   "control_id": "01.s",
+   "iso_clauses": [
+    "8.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting utility programs capable of overriding system and application controls is verbatim 8.18 Use of Privileged Utility Programs."
+  },
+  {
+   "control_id": "01.t",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Terminating inactive sessions after a defined period is guidance inside 8.5 Secure Authentication; ISO 27002:2022 has no standalone session time-out control."
+  },
+  {
+   "control_id": "01.u",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Connection-time windows for high-risk applications survive in 27002:2022 only as an example restriction under 8.5/5.15; the dedicated 2005 control was retired, so this is a thematic link only."
+  },
+  {
+   "control_id": "01.v",
+   "iso_clauses": [
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting access to information and application system functions per the access control policy is exactly 8.3 Information Access Restriction."
+  },
+  {
+   "control_id": "01.w",
+   "iso_clauses": [
+    "8.22",
+    "8.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A dedicated isolated computing environment for sensitive systems is network/system isolation under 8.22, and designing that isolation into the system is 8.27's secure architecture principles."
+  },
+  {
+   "control_id": "01.x",
+   "iso_clauses": [
+    "8.1",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A policy and protective measures for mobile computing and communication devices is 8.1 User Endpoint Devices, with 6.7 covering the off-premises use context."
+  },
+  {
+   "control_id": "01.y",
+   "iso_clauses": [
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Teleworking policy, plans and procedures are the entire subject of 6.7 Remote Working."
+  },
+  {
+   "control_id": "02.a",
+   "iso_clauses": [
+    "5.2",
+    "6.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining and documenting security roles and responsibilities for staff and third-party users is 5.2, and embedding them in the employment relationship is 6.2."
+  },
+  {
+   "control_id": "02.b",
+   "iso_clauses": [
+    "6.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Background verification of candidates, contractors and third-party users proportional to business requirements is verbatim 6.1 Screening."
+  },
+  {
+   "control_id": "02.c",
+   "iso_clauses": [
+    "6.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Signed employment terms stating information security responsibilities is exactly 6.2 Terms and Conditions of Employment."
+  },
+  {
+   "control_id": "02.d",
+   "iso_clauses": [
+    "5.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Management requiring personnel to apply security per established policies and procedures is verbatim 5.4 Management Responsibilities."
+  },
+  {
+   "control_id": "02.e",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Awareness training and regular policy updates for employees, contractors and third-party users relevant to job function is verbatim 6.3."
+  },
+  {
+   "control_id": "02.f",
+   "iso_clauses": [
+    "6.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A formal disciplinary process for security policy violations is verbatim 6.4 Disciplinary Process."
+  },
+  {
+   "control_id": "02.g",
+   "iso_clauses": [
+    "6.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining and assigning responsibilities for termination or change of employment is 6.5 Responsibilities After Termination or Change of Employment."
+  },
+  {
+   "control_id": "02.h",
+   "iso_clauses": [
+    "5.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Return of all organizational assets on termination of employment, contract or agreement is verbatim 5.11 Return of Assets."
+  },
+  {
+   "control_id": "02.i",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Removal on termination and adjustment on role change of access rights is the revocation half of 5.18 Access Rights."
+  },
+  {
+   "control_id": "03.a",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Establishing and maintaining a risk management program is an ISMS management-system requirement (ISO 27001 clause 6.1) — ISO 27002:2022 is a control catalogue and contains no risk-management-program control, so mapping it anywhere would be a fabrication."
+  },
+  {
+   "control_id": "03.b",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Performing risk assessments to identify and quantify risk corresponds to ISO 27001 clauses 6.1.2 and 8.2, not to any control in the ISO 27002:2022 catalogue; 8.8 covers only technical-vulnerability evaluation, which is a narrower and different activity."
+  },
+  {
+   "control_id": "03.c",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Risk mitigation/treatment to an acceptable level is ISO 27001 clause 6.1.3 (risk treatment plan and Statement of Applicability); ISO 27002:2022 supplies the treatment options but has no control that requires the treatment decision itself."
+  },
+  {
+   "control_id": "03.d",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Continual re-evaluation and reassessment of risk is ISO 27001 clauses 8.2 and 9.3 (periodic risk assessment and management review); no ISO 27002:2022 control expresses this obligation."
+  },
+  {
+   "control_id": "04.a",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Management-approved, published and communicated information security policy documents are verbatim the first half of 5.1 Policies for Information Security."
+  },
+  {
+   "control_id": "04.b",
+   "iso_clauses": [
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Review of the security policy at planned intervals or on significant change is verbatim the second half of 5.1."
+  },
+  {
+   "control_id": "05.a",
+   "iso_clauses": [
+    "5.4",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Active management support through clear direction and explicit assignment of security responsibilities is 5.4, expressed through the approved policy framework of 5.1."
+  },
+  {
+   "control_id": "05.b",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Coordination of security activities by representatives from different parts of the organization is the cross-functional role-allocation requirement inside 5.2."
+  },
+  {
+   "control_id": "05.c",
+   "iso_clauses": [
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Clear definition of all information security responsibilities is verbatim 5.2 Information Security Roles and Responsibilities."
+  },
+  {
+   "control_id": "05.d",
+   "iso_clauses": [
+    "5.8",
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A management authorization process before new information assets and facilities enter service maps to 5.8's requirement to address security when introducing new systems, with the resulting asset recorded under 5.9; ISO 27002:2022 retired the standalone 2005 authorization control."
+  },
+  {
+   "control_id": "05.e",
+   "iso_clauses": [
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying and regularly reviewing confidentiality/non-disclosure agreement requirements is verbatim 6.6."
+  },
+  {
+   "control_id": "05.f",
+   "iso_clauses": [
+    "5.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining appropriate contacts with relevant authorities is verbatim 5.5 Contact with Authorities."
+  },
+  {
+   "control_id": "05.g",
+   "iso_clauses": [
+    "5.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining contacts with special interest groups and specialist security forums is verbatim 5.6."
+  },
+  {
+   "control_id": "05.h",
+   "iso_clauses": [
+    "5.35"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Independent review of the security approach, control objectives, policies and processes at planned intervals is verbatim 5.35 Independent Review of Information Security."
+  },
+  {
+   "control_id": "05.i",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying risks from business processes involving external parties and implementing controls before granting access is the core of 5.19 Information Security in Supplier Relationships."
+  },
+  {
+   "control_id": "05.j",
+   "iso_clauses": [
+    "5.20",
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002:2022 has no customer-specific clause; addressing security requirements before customers access information maps to the agreement-terms requirement of 5.20 and the authorization requirement of 5.15."
+  },
+  {
+   "control_id": "05.k",
+   "iso_clauses": [
+    "5.20",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring third-party agreements to cover all relevant security requirements is verbatim 5.20, with 5.21 covering the ICT product/service supply-chain terms the control extends to."
+  },
+  {
+   "control_id": "06.a",
+   "iso_clauses": [
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Explicitly defining, documenting and keeping current all statutory, regulatory and contractual requirements per system is verbatim 5.31."
+  },
+  {
+   "control_id": "06.b",
+   "iso_clauses": [
+    "5.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Procedures ensuring compliance with IPR legislation and proprietary software licence terms is verbatim 5.32 Intellectual Property Rights."
+  },
+  {
+   "control_id": "06.c",
+   "iso_clauses": [
+    "5.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting important records from loss, destruction and falsification per statutory and business retention requirements is verbatim 5.33 Protection of Records."
+  },
+  {
+   "control_id": "06.d",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ensuring data protection and privacy of covered information as required by legislation is verbatim 5.34 Privacy and Protection of PII."
+  },
+  {
+   "control_id": "06.e",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Deterring users from using information assets for unauthorized purposes is the acceptable-use and misuse-deterrence requirement of 5.10."
+  },
+  {
+   "control_id": "06.f",
+   "iso_clauses": [
+    "8.24",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Use of cryptographic controls in compliance with agreements, laws and regulations combines 8.24's cryptography rules with 5.31's legal-requirement identification (export/import and key-escrow law); neither clause alone carries the crypto-regulation angle."
+  },
+  {
+   "control_id": "06.g",
+   "iso_clauses": [
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Managers verifying that security procedures in their area achieve compliance with policies and standards is verbatim 5.36 Compliance with Policies, Rules and Standards."
+  },
+  {
+   "control_id": "06.h",
+   "iso_clauses": [
+    "5.36",
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular technical compliance checking of systems against security implementation standards is the technical-review half of 5.36, executed through the scanning and testing activity described in 8.8."
+  },
+  {
+   "control_id": "06.i",
+   "iso_clauses": [
+    "8.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Planning and agreeing audit activities on operational systems to minimize business disruption is verbatim 8.34 Protection of Information Systems During Audit Testing."
+  },
+  {
+   "control_id": "06.j",
+   "iso_clauses": [
+    "8.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting access to audit tools to prevent misuse or compromise is the audit-tool safeguarding requirement inside 8.34."
+  },
+  {
+   "control_id": "07.a",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying all assets and drawing up and maintaining an inventory is verbatim 5.9 Inventory of Information and Other Associated Assets."
+  },
+  {
+   "control_id": "07.b",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Assigning a designated owner to every information asset is the ownership requirement folded into 5.9 in the 2022 revision."
+  },
+  {
+   "control_id": "07.c",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying, documenting and implementing rules for acceptable use of information and associated assets is verbatim 5.10."
+  },
+  {
+   "control_id": "07.d",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Classifying information by value, legal requirements, sensitivity and criticality is verbatim 5.12 Classification of Information."
+  },
+  {
+   "control_id": "07.e",
+   "iso_clauses": [
+    "5.13",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Procedures for information labelling in line with the adopted classification scheme is verbatim 5.13; the handling half of the control is covered by 5.10."
+  },
+  {
+   "control_id": "08.a",
+   "iso_clauses": [
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Using security perimeters (walls, controlled entry gates, manned reception) to protect areas containing information assets is verbatim 7.1."
+  },
+  {
+   "control_id": "08.b",
+   "iso_clauses": [
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting secure areas by entry controls so only authorized personnel gain access is verbatim 7.2 Physical Entry."
+  },
+  {
+   "control_id": "08.c",
+   "iso_clauses": [
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Designing and applying physical security for offices, rooms and facilities is verbatim 7.3."
+  },
+  {
+   "control_id": "08.d",
+   "iso_clauses": [
+    "7.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Physical protection against fire, flood, earthquake, explosion, civil unrest and other natural or man-made disasters is verbatim 7.5."
+  },
+  {
+   "control_id": "08.e",
+   "iso_clauses": [
+    "7.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Physical protection and guidelines for working in secure areas is verbatim 7.6."
+  },
+  {
+   "control_id": "08.f",
+   "iso_clauses": [
+    "7.2",
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "ISO 27002:2022 merged the 2005 delivery-and-loading-area control into 7.2 Physical Entry, whose guidance explicitly covers isolating delivery areas from information processing facilities, with the perimeter itself under 7.1."
+  },
+  {
+   "control_id": "08.g",
+   "iso_clauses": [
+    "7.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Siting or protecting equipment to reduce environmental risk and unauthorized-access opportunity is verbatim 7.8 Equipment Siting and Protection."
+  },
+  {
+   "control_id": "08.h",
+   "iso_clauses": [
+    "7.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting equipment from power failures and other supporting-utility disruptions is verbatim 7.11 Supporting Utilities."
+  },
+  {
+   "control_id": "08.i",
+   "iso_clauses": [
+    "7.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting power and telecommunications cabling from interception or damage is verbatim 7.12 Cabling Security."
+  },
+  {
+   "control_id": "08.j",
+   "iso_clauses": [
+    "7.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Correct maintenance of equipment to ensure continued availability and integrity is verbatim 7.13 Equipment Maintenance."
+  },
+  {
+   "control_id": "08.k",
+   "iso_clauses": [
+    "7.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Applying security to off-site equipment accounting for the risks of working outside the premises is verbatim 7.9 Security of Assets Off-Premises."
+  },
+  {
+   "control_id": "08.l",
+   "iso_clauses": [
+    "7.14",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Verifying that covered information and licensed software is removed or securely overwritten before disposal or re-use is verbatim 7.14, applied to the storage media governed by 7.10."
+  },
+  {
+   "control_id": "08.m",
+   "iso_clauses": [
+    "7.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "ISO 27002:2022 merged the 2005 removal-of-assets control into 7.9, whose guidance requires prior authorization before equipment, information or software is taken off site."
+  },
+  {
+   "control_id": "09.a",
+   "iso_clauses": [
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented, maintained operating procedures made available to those who need them is verbatim 5.37 Documented Operating Procedures."
+  },
+  {
+   "control_id": "09.b",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Controlling and archiving changes to information assets and processing systems is verbatim 8.32 Change Management."
+  },
+  {
+   "control_id": "09.c",
+   "iso_clauses": [
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enforcing separation of duties to reduce opportunity for unauthorized or unintentional modification or misuse is verbatim 5.3 Segregation of Duties."
+  },
+  {
+   "control_id": "09.d",
+   "iso_clauses": [
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Separating and controlling development, test and operational environments is verbatim 8.31."
+  },
+  {
+   "control_id": "09.e",
+   "iso_clauses": [
+    "5.22",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ensuring the third party actually implements, operates and maintains the controls, service definitions and delivery levels in the agreement is the delivery-assurance half of 5.22, against the terms set in 5.20."
+  },
+  {
+   "control_id": "09.f",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Regular monitoring, review and audit of third-party services, reports and records is verbatim the monitoring and review half of 5.22."
+  },
+  {
+   "control_id": "09.g",
+   "iso_clauses": [
+    "5.22",
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Managing changes to third-party service provision weighing business criticality is verbatim the change-management half of 5.22, aligned with the organization's own change control in 8.32."
+  },
+  {
+   "control_id": "09.h",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Planning and managing adequate capacity and resources to deliver required system performance is verbatim 8.6 Capacity Management."
+  },
+  {
+   "control_id": "09.i",
+   "iso_clauses": [
+    "8.29",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing acceptance criteria and testing systems, upgrades and new versions before acceptance is verbatim 8.29 Security Testing in Development and Acceptance, with the criteria themselves drawn from 8.26."
+  },
+  {
+   "control_id": "09.j",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Detection, prevention and recovery controls against malicious code plus user awareness is verbatim 8.7 Protection Against Malware."
+  },
+  {
+   "control_id": "09.k",
+   "iso_clauses": [
+    "8.7",
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002:2022 retired the standalone mobile-code control and absorbed it into 8.7's malware guidance; authorizing mobile code before installation and use also overlaps 8.19's control over what software may run on operational systems."
+  },
+  {
+   "control_id": "09.l",
+   "iso_clauses": [
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Taking and regularly testing back-up copies of information and software is verbatim 8.13 Information Backup."
+  },
+  {
+   "control_id": "09.m",
+   "iso_clauses": [
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Managing and controlling networks to protect systems and applications including information in transit is verbatim 8.20 Networks Security."
+  },
+  {
+   "control_id": "09.n",
+   "iso_clauses": [
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying security features, service levels and management requirements of network services and including them in the network services agreement, in-house or outsourced, is verbatim 8.21."
+  },
+  {
+   "control_id": "09.o",
+   "iso_clauses": [
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documented formal procedures for managing removable media is the acquisition-to-disposal life cycle in 7.10 Storage Media."
+  },
+  {
+   "control_id": "09.p",
+   "iso_clauses": [
+    "7.10",
+    "8.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Secure disposal of media no longer required by documented formal procedures is the disposal requirement of 7.10, with 8.10 covering the deletion of the information the media holds."
+  },
+  {
+   "control_id": "09.q",
+   "iso_clauses": [
+    "5.10",
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002:2022 folded the 2005 handling-of-assets control into 5.10; procedures for handling and storing information to prevent disclosure or misuse follow the classification and labelling scheme of 5.13, but no dedicated handling-procedures clause survives."
+  },
+  {
+   "control_id": "09.r",
+   "iso_clauses": [
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002:2022 dropped the standalone system-documentation control; protecting system documentation from unauthorized access is now an instance of 8.3's restriction of access to information per the access control policy."
+  },
+  {
+   "control_id": "09.s",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal exchange policies, procedures and controls protecting information transferred over all communication mediums is verbatim 5.14 Information Transfer."
+  },
+  {
+   "control_id": "09.t",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Agreements for the exchange of information and software with external parties is the transfer-agreements requirement explicitly inside 5.14."
+  },
+  {
+   "control_id": "09.u",
+   "iso_clauses": [
+    "7.10",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting media in physical transit beyond organizational boundaries is the physical-media transfer requirement of 5.14, applied to the media governed by 7.10."
+  },
+  {
+   "control_id": "09.v",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting information involved in electronic messaging is the electronic-transfer requirement explicitly inside 5.14."
+  },
+  {
+   "control_id": "09.w",
+   "iso_clauses": [
+    "5.14",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002:2022 retired the 2005 interconnected-business-systems control; protecting information shared across interconnected systems now falls under 5.14's transfer rules and 8.20's controls on the connections carrying it."
+  },
+  {
+   "control_id": "09.x",
+   "iso_clauses": [
+    "8.26",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002:2022 folded electronic-commerce controls into 8.26, whose guidance explicitly addresses transaction protection over public networks against fraud, dispute and unauthorized disclosure, backed by the cryptography of 8.24."
+  },
+  {
+   "control_id": "09.y",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "8.26 explicitly requires application security requirements covering incomplete transmission, mis-routing, unauthorized message alteration, duplication and replay in transactional services — the same list this control states."
+  },
+  {
+   "control_id": "09.z",
+   "iso_clauses": [
+    "8.26",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "ISO 27002:2022 absorbed the 2005 publicly-available-information control into 8.26's application security requirements for publicly accessible systems; integrity of published information is an availability/integrity requirement there rather than its own clause."
+  },
+  {
+   "control_id": "09.aa",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Producing and retaining audit logs of user activities, exceptions and security events for future investigation is verbatim 8.15 Logging."
+  },
+  {
+   "control_id": "09.ab",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Procedures for monitoring use of information processing systems to check control use and effectiveness is verbatim 8.16 Monitoring Activities."
+  },
+  {
+   "control_id": "09.ac",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting logging facilities and log information against tampering and unauthorized access is an explicit requirement inside 8.15."
+  },
+  {
+   "control_id": "09.ad",
+   "iso_clauses": [
+    "8.15",
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Logging and regularly reviewing system administrator and operator activity is the privileged-user logging requirement of 8.15, and reviewing it is part of the oversight 8.2 demands for privileged access."
+  },
+  {
+   "control_id": "09.ae",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Fault logging survives in 27002:2022 as fault/error log content under 8.15 and as the anomaly analysis and remediation trigger under 8.16; there is no standalone fault-logging clause."
+  },
+  {
+   "control_id": "09.af",
+   "iso_clauses": [
+    "8.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Synchronizing clocks of all relevant systems to an agreed accurate time source to support event correlation is verbatim 8.17 Clock Synchronization."
+  },
+  {
+   "control_id": "10.a",
+   "iso_clauses": [
+    "8.26",
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Specifying security control requirements in the business requirements for new or enhanced systems, whether developed or purchased, is verbatim 8.26, positioned at the requirements stage of the 8.25 life cycle."
+  },
+  {
+   "control_id": "10.b",
+   "iso_clauses": [
+    "8.26",
+    "8.28"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Validating data input to applications and databases is an explicit application security requirement under 8.26 and an input-validation secure coding practice under 8.28."
+  },
+  {
+   "control_id": "10.c",
+   "iso_clauses": [
+    "8.28",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Validation checks detecting corruption from processing errors or deliberate acts are internal-processing integrity checks — 27002:2022 covers them as secure coding practice (8.28) and as an application integrity requirement (8.26) rather than a dedicated clause."
+  },
+  {
+   "control_id": "10.d",
+   "iso_clauses": [
+    "8.24",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Message authenticity and integrity is achieved through the cryptographic mechanisms of 8.24 (MACs, digital signatures) specified as an application requirement under 8.26; ISO 27002:2022 has no standalone message-integrity control."
+  },
+  {
+   "control_id": "10.e",
+   "iso_clauses": [
+    "8.26",
+    "8.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Output validation to confirm processing of stored information is correct is an application security requirement under 8.26 and an output-handling secure coding practice under 8.28; the 2005 standalone control was retired."
+  },
+  {
+   "control_id": "10.f",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A documented policy on the use of cryptographic controls supported by formal procedures is verbatim the policy requirement of 8.24 Use of Cryptography."
+  },
+  {
+   "control_id": "10.g",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Key management supporting the organization's use of cryptographic techniques is the key life-cycle requirement explicitly inside 8.24."
+  },
+  {
+   "control_id": "10.h",
+   "iso_clauses": [
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Procedures controlling the installation of software on operational systems is verbatim 8.19 Installation of Software on Operational Systems."
+  },
+  {
+   "control_id": "10.i",
+   "iso_clauses": [
+    "8.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Careful selection, protection and control of test data in non-production environments is verbatim 8.33 Test Information."
+  },
+  {
+   "control_id": "10.j",
+   "iso_clauses": [
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting access to program source code is verbatim 8.4 Access to Source Code."
+  },
+  {
+   "control_id": "10.k",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal change control procedures governing implementation of changes, patches, service packs and updates is verbatim 8.32 Change Management."
+  },
+  {
+   "control_id": "10.l",
+   "iso_clauses": [
+    "8.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Supervising and monitoring outsourced software development is verbatim 8.30 Outsourced Development."
+  },
+  {
+   "control_id": "10.m",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obtaining timely technical vulnerability information, evaluating exposure and taking measures to address the risk is verbatim 8.8 Management of Technical Vulnerabilities."
+  },
+  {
+   "control_id": "11.a",
+   "iso_clauses": [
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Reporting information security events through appropriate channels as quickly as possible is verbatim 6.8 Information Security Event Reporting."
+  },
+  {
+   "control_id": "11.b",
+   "iso_clauses": [
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "ISO 27002:2022 merged the 2005 security-weakness reporting control into 6.8, which requires personnel to report observed or suspected weaknesses as well as events."
+  },
+  {
+   "control_id": "11.c",
+   "iso_clauses": [
+    "5.24",
+    "5.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing management responsibilities and procedures for quick, effective and orderly incident response is verbatim 5.24 Incident Management Planning and Preparation, executed through 5.26 Response to Incidents."
+  },
+  {
+   "control_id": "11.d",
+   "iso_clauses": [
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mechanisms to quantify and monitor the types, volumes and costs of incidents so lessons feed back into controls is verbatim 5.27 Learning from Information Security Incidents."
+  },
+  {
+   "control_id": "11.e",
+   "iso_clauses": [
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Collecting, retaining and presenting evidence admissible in civil or criminal proceedings after an incident is verbatim 5.28 Collection of Evidence."
+  },
+  {
+   "control_id": "12.a",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A managed program and process for business continuity that addresses information security requirements is verbatim 5.29 Information Security During Disruption, with 5.30 covering its ICT readiness component."
+  },
+  {
+   "control_id": "12.b",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Identifying interruption events with probability, impact and information security consequences is the business impact analysis that feeds 5.29's continuity planning and 5.30's RTO/RPO derivation; ISO 27002 states the planning obligation but not the BIA as its own control."
+  },
+  {
+   "control_id": "12.c",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing and implementing plans to maintain or restore operations and information availability at required levels and timescales after failure is verbatim 5.29 and the ICT-recovery capability of 5.30."
+  },
+  {
+   "control_id": "12.d",
+   "iso_clauses": [
+    "5.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A single consistent framework of continuity plans that addresses information security requirements and sets testing and maintenance priorities is the planning-structure requirement of 5.29."
+  },
+  {
+   "control_id": "12.e",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Testing and updating continuity plans at least annually to confirm they remain current and effective is the exercise-and-review requirement stated in both 5.29 and 5.30."
+  },
+  {
+   "control_id": "13.a",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Providing data subjects notice of uses and disclosures of their PII and of controller duties is a core PII-protection obligation, which 5.34 requires the organization to identify and meet under applicable privacy legislation."
+  },
+  {
+   "control_id": "13.b",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Openness about PII-handling policies and practices is a privacy principle that 5.34 requires be satisfied per applicable law, but 27002:2022 delegates the substantive transparency requirements to ISO 27701 rather than stating them."
+  },
+  {
+   "control_id": "13.c",
+   "iso_clauses": [
+    "5.34",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Recording disclosures of PII to third parties is a privacy-accountability obligation under 5.34, operationalized through the logging capability of 8.15; ISO 27002 has no disclosure-accounting control of its own."
+  },
+  {
+   "control_id": "13.d",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Obtaining meaningful, informed, freely given consent is a lawful-basis requirement that 5.34 pulls in by reference to applicable privacy legislation, without ISO 27002 specifying the consent mechanics."
+  },
+  {
+   "control_id": "13.e",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Offering data subjects choice to refuse, withdraw consent or object to processing is a data-subject-rights obligation covered only by 5.34's general requirement to meet applicable PII legislation."
+  },
+  {
+   "control_id": "13.f",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Data subject access to review and challenge accuracy of their PII is a statutory access right that 5.34 requires be identified and satisfied; no other ISO 27002 clause addresses subject access."
+  },
+  {
+   "control_id": "13.g",
+   "iso_clauses": [
+    "5.34",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring processing purposes comply with law and rest on a permissible legal ground is 5.34's PII-legislation compliance requirement, backed by 5.31's obligation to identify applicable legal requirements."
+  },
+  {
+   "control_id": "13.h",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Specifying collection purposes at or before collection and limiting subsequent use is a privacy principle 5.34 incorporates by reference to applicable legislation, not an infosec control ISO 27002 defines."
+  },
+  {
+   "control_id": "13.i",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Limiting PII collection to what law permits and the specified purpose strictly requires is a collection-limitation principle covered only through 5.34's general PII-protection obligation."
+  },
+  {
+   "control_id": "13.j",
+   "iso_clauses": [
+    "5.34",
+    "8.11"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Minimizing PII processed and limiting disclosure to the fewest parties is a 5.34 privacy obligation; 8.11 provides the technical means (masking, pseudonymization) ISO 27002 offers for reducing exposed PII."
+  },
+  {
+   "control_id": "13.k",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Limiting use and disclosure of PII to specific explicit legitimate purposes is a use-limitation principle that ISO 27002 addresses only through 5.34's requirement to comply with applicable PII law."
+  },
+  {
+   "control_id": "13.l",
+   "iso_clauses": [
+    "5.34",
+    "5.33",
+    "8.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Retaining PII no longer than necessary combines 5.34's privacy obligation with 5.33's retention-schedule requirement for records and 8.10's requirement to delete information when no longer required."
+  },
+  {
+   "control_id": "13.m",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Ensuring PII is accurate, complete, up-to-date, adequate and relevant is a data-quality obligation from privacy law (GDPR Art. 5(1)(d)); ISO 27002:2022 protects information integrity against unauthorized modification but contains no control requiring the substantive correctness of data content, so any mapping would misstate the requirement."
+  },
+  {
+   "control_id": "13.n",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Propagating amendments, corrections and removals to processors and third-party recipients is a data-subject-redress obligation with no ISO 27002 analogue beyond 5.34's blanket requirement to meet applicable PII legislation."
+  },
+  {
+   "control_id": "13.o",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Internal complaint handling and redress procedures for data subjects is a privacy-law process obligation (a customer-facing grievance mechanism); ISO 27002:2022 contains no complaint-management control, and 5.34 is a pointer to ISO 27701 rather than a substantive match, so an empty mapping is the honest result."
+  },
+  {
+   "control_id": "13.p",
+   "iso_clauses": [
+    "5.34",
+    "5.2"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing governance for PII processing means assigning a privacy function and accountability, which maps to 5.2's definition of security roles and responsibilities applied to the PII duties 5.34 requires."
+  },
+  {
+   "control_id": "13.q",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing and performing privacy impact assessments is a PII-specific obligation ISO 27002 covers only through 5.34's requirement to identify and meet applicable privacy legislation; the general risk-assessment process sits in ISO 27001, not 27002."
+  },
+  {
+   "control_id": "13.r",
+   "iso_clauses": [
+    "5.20",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Contractually requiring third-party recipients to provide equivalent PII protection is exactly 5.20's requirement to address information security in supplier agreements, applied to the PII duties of 5.34."
+  },
+  {
+   "control_id": "13.s",
+   "iso_clauses": [
+    "5.36",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Monitoring and auditing PII protection controls and internal policy effectiveness is 5.36's compliance-verification activity scoped to the privacy policy set that 5.34 requires."
+  },
+  {
+   "control_id": "13.t",
+   "iso_clauses": [
+    "6.3",
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Providing training and awareness on PII protection to personnel with access to PII is 6.3's awareness and training control with privacy as the subject matter required by 5.34."
+  },
+  {
+   "control_id": "13.u",
+   "iso_clauses": [
+    "5.34"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Developing, disseminating and updating PII protection reports is an accountability/reporting duty to management and regulators; ISO 27002:2022 has no equivalent reporting control, so only 5.34's general privacy-compliance obligation relates, and weakly."
+  }
+ ]
+}

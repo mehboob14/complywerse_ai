@@ -1,0 +1,226 @@
+{
+ "framework": "ksa_pdp_transfer",
+ "library": "Regulation on_Personal_Data_Transfer_Outside_KSA.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "2.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-25",
+    "PRI-04.1",
+    "PRI-04"
+   ],
+   "confidence": "medium",
+   "rationale": "Article 2 enumerates the additional lawful purposes (central processing, service/benefit to the data subject, scientific research) that permit an outbound transfer, which is the legal-authority-and-purpose determination in PRI-04.1/PRI-04 applied to the third-country transfer governed by DCH-25."
+  },
+  {
+   "control_id": "3.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-25",
+    "CPL-01"
+   ],
+   "confidence": "low",
+   "rationale": "The publication and four-yearly re-evaluation of the adequacy list is a duty of SDAIA, not of a controller; the only organizational hook is the controller's obligation to identify this statutory requirement (CPL-01) and restrict outbound transfers to listed destinations (DCH-25)."
+  },
+  {
+   "control_id": "3.2",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Purely an internal administrative power of the competent authority to amend its own adequacy list and to negotiate with foreign supervisory authorities about de-listing — it imposes no obligation on any controller, so there is no SCF control and no ISO 27002 clause that corresponds."
+  },
+  {
+   "control_id": "3.3",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-25"
+   ],
+   "confidence": "low",
+   "rationale": "The article grants the authority a suspension power; the only controller-side consequence is that transfers to a suspended destination must stop, which falls under DCH-25's restriction and governance of transfers to third countries."
+  },
+  {
+   "control_id": "3.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-19",
+    "DCH-25"
+   ],
+   "confidence": "low",
+   "rationale": "Extending adequacy evaluation below national level to cities, special economic zones and global trade centers means a controller must know the sub-national geography where data actually resides, which is exactly DCH-19's inventory of geographic data location feeding the DCH-25 transfer decision."
+  },
+  {
+   "control_id": "4.1",
+   "iso_clauses": [
+    "5.14",
+    "5.20"
+   ],
+   "scf_ids": [
+    "PRI-01.5",
+    "PRI-07.1",
+    "DCH-25"
+   ],
+   "confidence": "high",
+   "rationale": "The three named appropriate safeguards map one-to-one: \"binding common rules\" is PRI-01.5 Binding Corporate Rules, \"standard contractual clauses\" is PRI-07.1 data privacy requirements in contracts, and ISO 5.20/5.14 cover addressing information security in supplier agreements and rules for transferring information to external parties."
+  },
+  {
+   "control_id": "4.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "DCH-25",
+    "PRI-07.1"
+   ],
+   "confidence": "medium",
+   "rationale": "This is the chapeau establishing that exemption from Article 29(2)(b)/(c) does not exempt the transfer itself, which is DCH-25's core proposition that third-country transfers remain restricted and governed, with contractual safeguards (PRI-07.1) still required."
+  },
+  {
+   "control_id": "4.3",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [
+    "PRI-07.1",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "The requirement to embed standard personal-data-protection provisions into inter-governmental agreements and MOUs is literally the contract-requirements obligation in PRI-07.1 and TPM-05, and ISO 5.20 covers stating security requirements inside the agreement itself."
+  },
+  {
+   "control_id": "4.4",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-07.1",
+    "TPM-05.8",
+    "DCH-25"
+   ],
+   "confidence": "medium",
+   "rationale": "Non-recurring limited transfers require either standard contractual clauses (PRI-07.1) or a recipient holding a certificate from a licensed body, which is the independent third-party attestation model in TPM-05.8, with the sensitive-data carve-out governed by DCH-25."
+  },
+  {
+   "control_id": "4.5",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-01.5",
+    "PRI-07.1",
+    "TPM-05.8"
+   ],
+   "confidence": "high",
+   "rationale": "Intra-group central-operations transfers requiring the controller and its affiliates to adopt binding common rules is a direct restatement of PRI-01.5 Binding Corporate Rules, with the SCC and licensed-certificate alternatives covered by PRI-07.1 and TPM-05.8."
+  },
+  {
+   "control_id": "4.6",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-07",
+    "TPM-05.8",
+    "PRI-05.7"
+   ],
+   "confidence": "medium",
+   "rationale": "Transfer to provide a service or benefit without violating the data subject's expectations is PRI-07's rule that PD is disclosed to third parties only for the notified purpose; the licensed-body certificate is TPM-05.8 and the sensitive-data prohibition is the special handling of sensitive PD categories in PRI-05.7."
+  },
+  {
+   "control_id": "4.7",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-04",
+    "PRI-05.1",
+    "PRI-07.1"
+   ],
+   "confidence": "medium",
+   "rationale": "The research exemption's binding constraint is that the transfer be limited to the minimum data required, which is PRI-04's minimization to the identified purpose, coupled with PRI-05.1 on limiting PD used for research and PRI-07.1 for the required contractual clauses."
+  },
+  {
+   "control_id": "4.8",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-06.4",
+    "PRI-01",
+    "PRI-07.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Requiring safeguards to preserve the data subject's right to complain to the authority and seek compensation maps to PRI-06.4's process for handling data subject complaints, operating within the lawful-processing program of PRI-01 and enforced through the contractual safeguards of PRI-07.1."
+  },
+  {
+   "control_id": "4.9",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01"
+   ],
+   "confidence": "low",
+   "rationale": "The biennial review and amendment of the safeguard set is a regulator activity; the only controller obligation implied is CPL-01's ongoing identification and implementation of the currently applicable statutory and contractual requirements as they are amended."
+  },
+  {
+   "control_id": "5.1",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [
+    "TPM-05.2",
+    "DCH-25",
+    "PRI-07.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Applying the Law to onward transfers by the foreign recipient is the flow-down of protection requirements to sub-recipients captured by TPM-05.2 and ISO 5.20, with the onward transfer itself remaining a governed third-country transfer under DCH-25."
+  },
+  {
+   "control_id": "6.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "CPL-01.1",
+    "DCH-25"
+   ],
+   "confidence": "medium",
+   "rationale": "Loss of the exemption is triggered by the controller failing to implement safeguards or the authority judging them inadequate — a determination of non-compliance with a statutory obligation, which is CPL-01.1's documented review of non-compliance instances driving remediation."
+  },
+  {
+   "control_id": "6.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "PRI-07.3",
+    "PRI-03.10",
+    "DCH-25"
+   ],
+   "confidence": "medium",
+   "rationale": "The dual duty to stop the transfer and notify the foreign recipients matches PRI-03.10's cessation of sharing PD and PRI-07.3's obligation to inform third parties of a change affecting PD already shared with them."
+  },
+  {
+   "control_id": "7.1",
+   "iso_clauses": [],
+   "scf_ids": [
+    "RSK-10",
+    "RSK-04.3",
+    "DCH-25"
+   ],
+   "confidence": "high",
+   "rationale": "Article 7(1) mandates a pre-transfer privacy risk assessment and names the two triggering cases, which is precisely RSK-10's Data Protection Impact Assessment combined with RSK-04.3's definition of the instances that compel a risk assessment."
+  },
+  {
+   "control_id": "7.2",
+   "iso_clauses": [],
+   "scf_ids": [
+    "RSK-10",
+    "RSK-04.2",
+    "PRI-04"
+   ],
+   "confidence": "high",
+   "rationale": "The six prescribed assessment elements (legal basis, nature and geographic scope, safeguard adequacy, data minimization, material/moral impact and likelihood, mitigating controls) are the required content of a DPIA under RSK-10 executed via the methodology of RSK-04.2, with element (D) being PRI-04 minimization."
+  },
+  {
+   "control_id": "8.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "An undertaking by SDAIA to publish supplementary guides and guidelines — it creates no obligation, process or evidence for a controller, so there is nothing in SCF or ISO 27002 to map it to."
+  },
+  {
+   "control_id": "9.1",
+   "iso_clauses": [],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "A commencement clause fixing entry into force on publication in the Official Gazette; it is a legal effectivity provision with no control content whatsoever."
+  }
+ ]
+}

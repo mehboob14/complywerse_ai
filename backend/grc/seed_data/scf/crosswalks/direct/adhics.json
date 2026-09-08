@@ -1,0 +1,1629 @@
+{
+ "framework": "adhics",
+ "hop": "direct",
+ "authored_by": "workflow:scf-reauthor-pivot",
+ "note": "One-hop requirement->SCF mapping, replacing the two-hop ISO pivot (blinded 3-rater trial: 88% vs 41% defensible).",
+ "mappings": [
+  {
+   "code": "HR 1.1",
+   "scf_ids": [
+    "HRS-01",
+    "HRS-01.1",
+    "HRS-06.1",
+    "HRS-07"
+   ],
+   "confidence": "high",
+   "rationale": "Programme-level HR security policy spanning hire-to-exit is discharged by the personnel security control programme plus the onboarding/transfer/offboarding governance mechanism, with the NDA/confidentiality-agreement and personnel-sanction mechanisms covering the non-disclosure and disciplinary clauses.",
+   "uncovered_clause": "none material; return-of-assets sub-clause is discharged in detail at HR 4.2"
+  },
+  {
+   "code": "HR 2.1",
+   "scf_ids": [
+    "HRS-04",
+    "HRS-04.1",
+    "HRS-10"
+   ],
+   "confidence": "high",
+   "rationale": "Pre-authorization personnel screening is the direct mechanism, with the special-protection-role screening criteria control supplying the role/classification/critical-area criteria and third-party personnel governance extending screening to contractors and third-party users.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "HR 2.2",
+   "scf_ids": [
+    "HRS-05",
+    "HRS-06",
+    "HRS-05.7"
+   ],
+   "confidence": "high",
+   "rationale": "Terms of employment carrying security responsibilities, signed access agreements for internal and third-party users, and recurring policy familiarization with recorded acknowledgement together discharge the drafting, signing, briefing and record-keeping obligations.",
+   "uncovered_clause": "retention of signed terms per entity retention schedule is not separately controlled"
+  },
+  {
+   "code": "HR 3.1",
+   "scf_ids": [
+    "HRS-05.7",
+    "HRS-05.1",
+    "HRS-11"
+   ],
+   "confidence": "high",
+   "rationale": "Policy familiarization with acknowledgement covers the briefing and signed acceptable-use precondition to access, rules of behavior define acceptable use of technology, and separation of duties discharges the conflict-of-interest clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "HR 3.2",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-01.1",
+    "SAT-04"
+   ],
+   "confidence": "high",
+   "rationale": "Awareness and training delivery to employees and contractors, periodic review of training content for changed threats/policies, and documented retention and monitoring of individual training activity discharge the programme, content-refresh and record obligations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "HR 3.3",
+   "scf_ids": [
+    "HRS-13",
+    "HRS-13.1"
+   ],
+   "confidence": "high",
+   "rationale": "The requirement to assess security skill and competency gaps and then run development programmes maps exactly onto the critical-skills-gap identification control and its remediation extension.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "HR 3.4",
+   "scf_ids": [
+    "SAT-02",
+    "SAT-03",
+    "SAT-03.6"
+   ],
+   "confidence": "medium",
+   "rationale": "Scheduled awareness campaigns for general and targeted user groups map to the general awareness training control plus role-based training, with the current-threat-environment control covering the 'present current risks around the work and industry' clause.",
+   "uncovered_clause": "incentive programmes for user participation, and use of incident learnings as campaign content, have no SCF mechanism"
+  },
+  {
+   "code": "HR 3.5",
+   "scf_ids": [
+    "HRS-07",
+    "HRS-05.1"
+   ],
+   "confidence": "high",
+   "rationale": "Sanctioning personnel who fail to comply with security policy is the disciplinary mechanism, and the rules-of-behavior control carries the requirement that consequences be defined and made known to users.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "HR 4.1",
+   "scf_ids": [
+    "HRS-09",
+    "HRS-08",
+    "HRS-09.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Governance of employment termination and of access adjustment on reassignment covers the termination/change-of-employment responsibilities, and automated employment-status notification to IAM roles is the internal communication protocol on exit.",
+   "uncovered_clause": "knowledge transfer and responsibility handover on exit is not covered by any SCF control"
+  },
+  {
+   "code": "HR 4.2",
+   "scf_ids": [
+    "AST-10",
+    "HRS-09.1",
+    "HRS-09.3"
+   ],
+   "confidence": "high",
+   "rationale": "Return of all organizational assets on termination is discharged by the asset-return and asset-collection mechanisms, and formal notification/acknowledgement of binding post-employment data-protection obligations covers the declaration that no information remains in the leaver's possession.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 1.1",
+   "scf_ids": [
+    "AST-01",
+    "DCH-02",
+    "DCH-18",
+    "AST-16"
+   ],
+   "confidence": "high",
+   "rationale": "A programme-level asset management policy is properly mapped to the ITAM governance control, with the classification-scheme, data-retention and BYOD-programme mechanisms discharging the specific policy contents the clause enumerates.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 1.2",
+   "scf_ids": [
+    "EMB-01",
+    "EMB-02",
+    "AST-30"
+   ],
+   "confidence": "medium",
+   "rationale": "Medical devices are embedded/IoT technology, so the embedded technology security programme and IoT risk-management controls carry the access-role, authentication and handling-procedure demands, with the decommissioning control discharging end-of-life disposal.",
+   "uncovered_clause": "maintaining a risk log specific to medical devices and equipment"
+  },
+  {
+   "code": "AM 2.1",
+   "scf_ids": [
+    "AST-02",
+    "AST-02.1",
+    "AST-01.1",
+    "AST-02.9"
+   ],
+   "confidence": "high",
+   "rationale": "An accurate, periodically-updated information asset inventory is the asset inventory control plus its update-on-install/removal extension, while the required service-to-information-to-device-to-application dependency chain is discharged by the asset-service dependency and CMDB mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 2.2",
+   "scf_ids": [
+    "AST-03",
+    "AST-03.1",
+    "DCH-01.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Assigning and tracking asset ownership at a role level is the ownership-assignment control with its accountability-information extension, and the owner's authorization of access is discharged by the control that has owners explicitly define access authorizations for sensitive data.",
+   "uncovered_clause": "the owner's duty to periodically review control adequacy and effectiveness for assets under their ownership"
+  },
+  {
+   "code": "AM 2.3",
+   "scf_ids": [
+    "HRS-05.1",
+    "HRS-05.3",
+    "HRS-05.7"
+   ],
+   "confidence": "high",
+   "rationale": "Acceptable-use rules for information assets are discharged by the rules-of-behavior and technology-use-restriction mechanisms, with policy familiarization and acknowledgement producing the required records of user acceptance.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 2.4",
+   "scf_ids": [
+    "AST-16",
+    "MDM-06",
+    "MDM-01"
+   ],
+   "confidence": "high",
+   "rationale": "BYOD risk is discharged by the BYOD programme control, with the personally-owned mobile device and centralized mobile device management mechanisms supplying the usage agreements and the technology enforcement over personal devices touching health information.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 3.1",
+   "scf_ids": [
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Classifying every information asset into a defined four-tier scheme is exactly the data and asset classification control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 3.2",
+   "scf_ids": [
+    "DCH-02"
+   ],
+   "confidence": "medium",
+   "rationale": "The obligation only qualifies the classification criteria — that information value and financial-impact tolerance must feed the classification decision — so it attaches to the classification control itself; SCF has no separate information-valuation mechanism.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 3.3",
+   "scf_ids": [
+    "DCH-02",
+    "DCH-02.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Requiring the needed level of protection to drive classification maps to the classification control and its rule that assets be classified to the highest sensitivity level of data they hold.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 3.4",
+   "scf_ids": [
+    "DCH-11"
+   ],
+   "confidence": "high",
+   "rationale": "Reassessing and changing classification when information value, environment or protection level changes is precisely the data reclassification control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 3.5",
+   "scf_ids": [
+    "DCH-02",
+    "DCH-14"
+   ],
+   "confidence": "low",
+   "rationale": "SCF has no mechanism for interpreting an external party's classification scheme on receipt; the closest are the organization's own classification control and the information-sharing control that helps users decide how received data must be protected.",
+   "uncovered_clause": "the interpretation/translation process for third-party classification schemes is essentially uncovered"
+  },
+  {
+   "code": "AM 3.6",
+   "scf_ids": [
+    "DCH-24.1",
+    "DCH-06.3",
+    "DCH-04.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Automated classification is discharged by the automated tooling that identifies data by classification type, the periodic scanning of unstructured sources for sensitive data, and automated marking of files against the classification scheme.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 3.7",
+   "scf_ids": [
+    "DCH-04",
+    "DCH-04.1"
+   ],
+   "confidence": "high",
+   "rationale": "Labelling information assets in physical and digital form consistently with the classification scheme is the media marking control plus its automated file/media marking extension.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 4.1",
+   "scf_ids": [
+    "DCH-01.2",
+    "DCH-01.4",
+    "DCH-06",
+    "PES-12.2"
+   ],
+   "confidence": "high",
+   "rationale": "Classification-driven handling procedures are discharged across the lifecycle stages named: protection of sensitive data wherever processed or stored, explicit definition of access authorizations for the access-granting stage, controlled media storage, and restricted access to printers for the printing stage.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 4.2",
+   "scf_ids": [
+    "DCH-01.2",
+    "SAT-03.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Enforcing adoption of handling procedures rests on the control that protects sensitive data wherever it is handled, backed by the mechanism requiring every user of sensitive-data systems to be formally trained in data handling requirements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 4.3",
+   "scf_ids": [
+    "DCH-12",
+    "DCH-06",
+    "DCH-07",
+    "DCH-08"
+   ],
+   "confidence": "high",
+   "rationale": "Removable media lifecycle management maps to removable media restriction (setup/use), controlled media storage, protected media transportation covering the movement clause, and secure physical media disposal at end of life.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 4.4",
+   "scf_ids": [
+    "DCH-10",
+    "DCH-12",
+    "AST-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Controlling access to and use of removable media is discharged by the media-use restriction and removable media controls, with management approval for media leaving the facility covering the authorization clause.",
+   "uncovered_clause": "formal management acceptance of and accountability for the residual risk of authorizing removable media"
+  },
+  {
+   "code": "AM 4.5",
+   "scf_ids": [
+    "EMB-01",
+    "AST-31"
+   ],
+   "confidence": "medium",
+   "rationale": "Establishing management procedures per category of medical device is discharged by the embedded technology security programme together with the asset categorization control that produces the device categories the procedures are written against.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 4.7",
+   "scf_ids": [
+    "CRY-05",
+    "CRY-03",
+    "BCD-11"
+   ],
+   "confidence": "medium",
+   "rationale": "Encryption of health information stored on medical devices is the data-at-rest control, encryption of inter-device communication is the transmission confidentiality control, and moving copies of valuable health data to secure storage is the recurring data backup control.",
+   "uncovered_clause": "defining minimum essential operator qualifications for handling medical devices"
+  },
+  {
+   "code": "AM 4.8",
+   "scf_ids": [
+    "NET-15.2",
+    "AST-14.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Preferring wired links and avoiding wireless for medical devices maps to disabling unnecessary embedded wireless capability in components and to preventing wireless/Bluetooth device use in sensitive areas.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 4.9",
+   "scf_ids": [
+    "DCH-12",
+    "DCH-06.4",
+    "IAC-10.12"
+   ],
+   "confidence": "high",
+   "rationale": "Whitelisting removable media is the removable media restriction control, the required content encryption is the mechanism rendering stored sensitive data unreadable, and biometric access provisioning is the biometric authentication control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 4.10",
+   "scf_ids": [
+    "AST-11",
+    "PES-10",
+    "DCH-07"
+   ],
+   "confidence": "high",
+   "rationale": "Authorizing, controlling and recording the removal and movement of assets is the asset removal control that tracks technology entering and exiting facilities, supported by the delivery/removal isolation control and by protected media transportation for information in transit.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 5.1",
+   "scf_ids": [
+    "DCH-21",
+    "DCH-18"
+   ],
+   "confidence": "high",
+   "rationale": "Disposing of assets once no longer required is the information disposal control, and the retention control supplies the regulatory and legal-hold determination of when 'no longer required' is reached.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 5.2",
+   "scf_ids": [
+    "DCH-09",
+    "AST-09"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring destroyed data cannot be recovered is discharged by media sanitization at a strength commensurate with sensitivity and by secure disposal/destruction of equipment specifically to prevent information recovery.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 5.3",
+   "scf_ids": [
+    "DCH-08",
+    "DCH-21"
+   ],
+   "confidence": "high",
+   "rationale": "Destroying digital and physical media once no longer required is the physical media disposal control together with the information disposal/erasure control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 5.4",
+   "scf_ids": [
+    "AST-09",
+    "DCH-09"
+   ],
+   "confidence": "high",
+   "rationale": "Procedures for secure disposal or reuse of media, equipment and systems holding classified information map to the secure disposal/destruction/re-use control and to media sanitization prior to release for reuse.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 5.5",
+   "scf_ids": [
+    "DCH-18",
+    "DCH-09.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Verifying retention requirements before disposal rests on the media and data retention control for the requirement itself, with the sanitization documentation control providing the pre-disposal verification step.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AM 5.6",
+   "scf_ids": [
+    "DCH-09.1",
+    "DCH-09.5"
+   ],
+   "confidence": "medium",
+   "rationale": "Management authorization prior to disposal is approximated by the control that supervises, tracks and verifies sanitization and disposal actions plus the dual-authorization requirement for destruction of sensitive media.",
+   "uncovered_clause": "a general management pre-authorization gate for all disposals, not only sensitive-media destruction"
+  },
+  {
+   "code": "AM 5.7",
+   "scf_ids": [
+    "DCH-09.1",
+    "DCH-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining disposal records with owner, media type, classification, method, authorization and removal evidence is the sanitization documentation control, complemented by the requirement that sensitive media records carry sufficient detail.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 1.1",
+   "scf_ids": [
+    "PES-01",
+    "PES-01.1",
+    "GOV-02",
+    "HRS-05.7"
+   ],
+   "confidence": "high",
+   "rationale": "A programme-level physical and environmental security policy is discharged by the physical/environmental protection programme and documented physical security plan, with policy publication/dissemination and recurring familiarization with acknowledgement covering the issue-and-acknowledge clauses.",
+   "uncovered_clause": "secure storage of hazardous or combustible materials has no dedicated SCF mechanism"
+  },
+  {
+   "code": "PE 1.2",
+   "scf_ids": [
+    "PES-01",
+    "GOV-02"
+   ],
+   "confidence": "medium",
+   "rationale": "Establishing supporting procedures and guidelines maps to the physical/environmental control programme, which is the procedure-development mechanism, and to the control that maintains and disseminates standards and procedures.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 1.3",
+   "scf_ids": [
+    "PES-12",
+    "MNT-09",
+    "AST-30"
+   ],
+   "confidence": "medium",
+   "rationale": "Placement and physical-access demands for equipment and medical devices are the equipment siting control, while data-loss exposure during off-site activity and decommissioning is covered by the off-site maintenance and decommissioning controls.",
+   "uncovered_clause": "binding manufacturer environmental recommendations into the policy is not separately controlled"
+  },
+  {
+   "code": "PE 2.1",
+   "scf_ids": [
+    "PES-01.2",
+    "PES-04",
+    "PES-03"
+   ],
+   "confidence": "high",
+   "rationale": "Defining security perimeters and secure areas is the zone-based physical security control plus the control that identifies systems and operating environments requiring limited physical access, with physical access control enforcing the countermeasures at those perimeters.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 2.2",
+   "scf_ids": [
+    "PES-04",
+    "PES-04.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Allocating private areas for discussing patient information is discharged by designating rooms and facilities requiring limited physical access and restricting those secure areas to authorized personnel.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 2.3",
+   "scf_ids": [
+    "PES-02",
+    "PES-03",
+    "PES-03.3",
+    "PES-05.1"
+   ],
+   "confidence": "high",
+   "rationale": "The maintained list of authorized personnel, enforcement of physical access authorization at every ingress/egress point, per-attempt access logging, and monitored intrusion alarms and surveillance equipment discharge the authorization, authentication, record and CCTV clauses respectively.",
+   "uncovered_clause": "visible ID badges and escorting of contractors sit under separate visitor-control mechanisms not included here"
+  },
+  {
+   "code": "PE 2.4",
+   "scf_ids": [
+    "PES-19",
+    "PES-02",
+    "PES-05.1"
+   ],
+   "confidence": "medium",
+   "rationale": "The physical key inventory clause is the physical access device inventory control, reconciliation of authorized users is the maintained authorized-personnel list, and quarterly review of surveillance footage attaches to the intrusion alarm and surveillance monitoring control.",
+   "uncovered_clause": "nominating a named owner for each secure area"
+  },
+  {
+   "code": "PE 2.5",
+   "scf_ids": [
+    "PES-04",
+    "PES-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Securing offices and meeting rooms and demarcating public areas from key work areas is the physical security of offices/rooms/facilities control implemented through zone-based physical security.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 2.6",
+   "scf_ids": [
+    "PES-12",
+    "BCD-11.2",
+    "PES-07.3"
+   ],
+   "confidence": "high",
+   "rationale": "Protection against natural and environmental hazards is the equipment siting control, protecting fall-back equipment and backup media is the separate-facility backup storage control, and battery backup for key systems is the emergency power control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 2.7",
+   "scf_ids": [
+    "RSK-04",
+    "PES-01.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Aligning physical countermeasures with risk-assessment outcomes is discharged by the recurring risk assessment control feeding the physical security plan, which documents the implemented controls against applicable risks and threats.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 2.8",
+   "scf_ids": [
+    "PES-04.1",
+    "END-14.1",
+    "AST-12"
+   ],
+   "confidence": "high",
+   "rationale": "Guidelines for working in secure areas map to the working-in-secure-areas control, with disabling/removal of collaborative computing devices and restriction of personally-owned devices inside facilities discharging the control over mobile, portable and surveillance devices.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 2.9",
+   "scf_ids": [
+    "SAT-03.3",
+    "HRS-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Educating personnel not to discuss patient information in public areas is formal data-handling training for users of sensitive data, reinforced by the control communicating user responsibilities for maintaining a secure working environment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 2.10",
+   "scf_ids": [
+    "PES-10",
+    "AST-11",
+    "PES-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Segregating delivery and loading areas from processing facilities is the delivery-and-removal isolation control, registering incoming and outgoing materials is the asset entry/exit tracking control, and secure holding of undelivered items is the temporary storage control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 3.1",
+   "scf_ids": [
+    "PES-12"
+   ],
+   "confidence": "high",
+   "rationale": "Siting equipment and medical devices to minimize physical and environmental hazard damage and unauthorized access is exactly the equipment siting and protection control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 3.2",
+   "scf_ids": [
+    "PES-07",
+    "PES-07.3",
+    "PES-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting equipment from supporting-utility failure is the supporting utilities control, with uninterrupted power supplied by the alternate/emergency power and automatic voltage control mechanisms.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 3.3",
+   "scf_ids": [
+    "MNT-02",
+    "MNT-03.1",
+    "MNT-01",
+    "AST-30"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining supporting equipment for continued availability is discharged by controlled maintenance throughout the asset lifecycle, preventive maintenance on critical assets, the maintenance procedure control covering supplier recommendations and schedules, and the decommissioning control for the end-of-life clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 3.4",
+   "scf_ids": [
+    "PES-12.1"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting power, telecommunications and data cabling from tampering and mutual interference is precisely the transmission medium security control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 3.5",
+   "scf_ids": [
+    "MNT-09",
+    "AST-11",
+    "DCH-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Securing equipment while off-site is the off-site maintenance control that secures assets during physical transfer and storage, movement records are the asset entry/exit tracking control, and chain-of-custody logs are the media transport custodian control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 3.6",
+   "scf_ids": [
+    "AST-06",
+    "IAC-24"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting unattended equipment against tampering and unauthorized access is the unattended end-user equipment control, with session lock after inactivity preventing unauthorized activity on unattended systems.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "PE 3.7",
+   "scf_ids": [
+    "IAC-24",
+    "AST-06",
+    "DCH-06.1",
+    "HRS-05.7"
+   ],
+   "confidence": "medium",
+   "rationale": "SCF has no named clear-desk/clear-screen control; the clear-screen half is session lock plus unattended equipment protection, the clear-desk half is physically securing all media containing sensitive information, and the read-and-acknowledge clause is policy familiarization with acknowledgement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 2.1",
+   "scf_ids": [
+    "IAC-07",
+    "IAC-07.2",
+    "IAC-19",
+    "IAC-01.3"
+   ],
+   "confidence": "high",
+   "rationale": "A formal registration and de-registration process is the user provisioning/de-provisioning control, revocation on exit is the termination-of-employment access revocation control, prohibition of shared and group accounts is the credential-sharing prevention control, and the required list of authorized persons is the user and service account inventory.",
+   "uncovered_clause": "revalidation of access on role change is a separate mechanism (change of roles and duties) not included in the four returned"
+  },
+  {
+   "code": "AC 2.2",
+   "scf_ids": [
+    "IAC-16",
+    "IAC-16.4",
+    "IAC-06.1",
+    "IAC-21.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Restricting and controlling privilege allocation is privileged access management, the ban on using privileged accounts for day-to-day work is the dedicated privileged account control, mandatory MFA on administrative access is the MFA-for-privileged-network-access control, and logging/auditing admin activity is the privileged function auditing control.",
+   "uncovered_clause": "prohibition on hardcoding service account credentials in application code or scripts"
+  },
+  {
+   "code": "AC 2.3",
+   "scf_ids": [
+    "IAC-10",
+    "IAC-10.1",
+    "IAC-10.8",
+    "IAC-10.5"
+   ],
+   "confidence": "high",
+   "rationale": "Secure allocation, use and management of credentials is authenticator management, the character-complexity, recycling and history rules are the password complexity/length/lifespan control, changing default passwords is the default authenticator control, and hashed/encrypted storage is the protection-of-authenticators control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 3.1",
+   "scf_ids": [
+    "MDM-01",
+    "MDM-03",
+    "DCH-03",
+    "DCH-06.4"
+   ],
+   "confidence": "high",
+   "rationale": "The mandated mobile device management process is centralized MDM, device and media encryption is full-device/container encryption backed by the control rendering stored sensitive data unreadable, and authenticated access to media holding confidential data is the media access restriction control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 3.2",
+   "scf_ids": [
+    "NET-14.5",
+    "PES-11",
+    "AST-02",
+    "AST-15.1"
+   ],
+   "confidence": "high",
+   "rationale": "Governing access from teleworking sites is the telecommuting/work-from-anywhere control with alternate work site physical controls, the required inventory of teleworking assets is the asset inventory control, and random audits of teleworking equipment are the technology asset inspection control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 5.1",
+   "scf_ids": [
+    "NET-04",
+    "IAC-20",
+    "NET-03.1"
+   ],
+   "confidence": "medium",
+   "rationale": "Restricting network and network-service access to what a user is specifically authorized for is enforced by ACL-based data flow enforcement and least-privilege logical access enforcement, with the connection-limiting control constraining external network access.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 5.2",
+   "scf_ids": [
+    "NET-14",
+    "NET-14.2",
+    "IAC-06"
+   ],
+   "confidence": "high",
+   "rationale": "Authenticating remote users is discharged by the approved remote access control, cryptographic protection of remote sessions for the secure-channel clause, and MFA for remote network access for the multifactor clause.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 5.3",
+   "scf_ids": [
+    "IAC-04",
+    "AST-02.2",
+    "AST-32",
+    "AST-02.5"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying every device on the network is device identification and authentication supported by automated network asset discovery, and the automated detection of unauthorized equipment is the unauthorized-component detection control together with network access control that disables unauthorized devices.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 5.4",
+   "scf_ids": [
+    "MNT-05",
+    "MNT-05.1",
+    "CFG-03",
+    "IAC-20.4"
+   ],
+   "confidence": "high",
+   "rationale": "Controlling remote diagnostic and configuration access is the remote maintenance authorization control with its session-auditing extension for the logging clause, least functionality restricts and disables the diagnostic ports, services and utilities, and the dedicated administrative machine control enforces access only from authorized workstations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 5.5",
+   "scf_ids": [
+    "NET-06",
+    "NET-03.1",
+    "IAC-20"
+   ],
+   "confidence": "medium",
+   "rationale": "Restricting user access to shared and isolated networks is network segmentation isolating assets from other network resources, with connection limiting and least-privilege access enforcement gating who may reach shared resources.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 5.6",
+   "scf_ids": [
+    "NET-04",
+    "NET-03",
+    "NET-05.1",
+    "NET-08.1"
+   ],
+   "confidence": "high",
+   "rationale": "Routing rules built on source/destination address and port are ACL-based data flow enforcement, external connection management through perimeter devices is boundary protection plus the prohibition on connecting sensitive systems externally without a boundary protection device, and segregating internal from publicly accessible systems is the DMZ control.",
+   "uncovered_clause": "routing-protocol protections against manipulation of routing tables have no dedicated SCF control"
+  },
+  {
+   "code": "AC 5.7",
+   "scf_ids": [
+    "NET-15",
+    "NET-15.1",
+    "NET-02.2",
+    "NET-15.4"
+   ],
+   "confidence": "high",
+   "rationale": "Securing wireless access is the wireless networking control governing authorized usage and authorization, with wireless authentication and encryption, a segregated managed guest network for the public/guest clause, and confinement of wireless to organization-controlled boundaries.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 6.1",
+   "scf_ids": [
+    "IAC-02",
+    "IAC-24",
+    "IAC-25",
+    "SEA-18"
+   ],
+   "confidence": "high",
+   "rationale": "Secure log-on is discharged by authenticated identification of organizational users, automated workstation locking after inactivity by session lock, automatic termination of inactive sessions by session termination, and the acknowledged security terms at log-on by the system use notification banner control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 6.2",
+   "scf_ids": [
+    "IAC-09",
+    "IAC-02",
+    "MON-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "Granting each user a unique identifier is identifier management with authenticated identification of organizational users, and logging all user activity against that identifier is the audit trail control linking system access to individual users.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 6.3",
+   "scf_ids": [
+    "IAC-20.3",
+    "CFG-03.3",
+    "IAC-21.4"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting utility programs capable of overriding system and application controls is the privileged utility program control, application allow/deny listing identifies which utilities may execute, and auditing execution of privileged functions discharges the monitoring clause.",
+   "uncovered_clause": "maintaining an inventory of who has access to system utilities and tools"
+  },
+  {
+   "code": "AC 7.1",
+   "scf_ids": [
+    "IAC-20",
+    "IAC-08",
+    "IAC-20.1"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting access to information and application functions on need-to-know is least-privilege access enforcement, the role-based access mandate is the RBAC control, and excluding support and cleaning staff from health data is the control limiting sensitive data access to individuals whose job requires it.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 7.2",
+   "scf_ids": [
+    "NET-03.7",
+    "NET-06.3"
+   ],
+   "confidence": "high",
+   "rationale": "Obligation to run sensitive systems in a dedicated environment is discharged by boundary-protection isolation of critical assets and by segmentation of a sensitive-data enclave/secure zone.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "AC 7.3",
+   "scf_ids": [
+    "DCH-15",
+    "WEB-14"
+   ],
+   "confidence": "high",
+   "rationale": "The duty to control what is published publicly and to periodically re-verify that non-public and health data has not leaked to the public domain is discharged by publicly-accessible-content control plus routine review-and-removal of sensitive data found on public systems.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 1.1",
+   "scf_ids": [
+    "OPS-01",
+    "GOV-02"
+   ],
+   "confidence": "high",
+   "rationale": "This requirement is itself programme-level - issue and maintain an operations management policy - so the operations-security programme control plus the policy establishment/dissemination mechanism are the correct altitude, not the individual SoD/change/capacity controls the policy references.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 2.1",
+   "scf_ids": [
+    "CFG-02",
+    "CFG-02.1",
+    "CFG-02.9"
+   ],
+   "confidence": "high",
+   "rationale": "Developing and enforcing baseline configuration settings for IT products, applications and medical devices is discharged by secure baseline configurations, their scheduled review/update, and baseline tailoring to vendor recommendations and risk.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 2.2",
+   "scf_ids": [
+    "OPS-01.1",
+    "GOV-02",
+    "AST-04"
+   ],
+   "confidence": "high",
+   "rationale": "Documenting operating procedures for support/operations/maintenance maps to standardized operating procedures, dissemination and upkeep of that documentation, and the requirement that system documentation carry current diagrams maps to maintained architecture/data-flow diagrams.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 2.3",
+   "scf_ids": [
+    "CHG-02",
+    "CHG-02.2",
+    "CHG-03",
+    "CHG-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Configuration change control covers identification, recording and formal approval of changes; test/validate/document covers planning and testing; security impact analysis covers impact assessment; stakeholder notification covers communication of change.",
+   "uncovered_clause": "Roll-back plan for unsuccessful changes and post-implementation assessment have no discharging SCF mechanism among the selected controls."
+  },
+  {
+   "code": "OM 2.4",
+   "scf_ids": [
+    "TDA-08.1",
+    "GOV-15.4",
+    "CHG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Controlling movement of systems from development/project state to production is discharged by secure migration practices that purge dev/test data and accounts, by owner authorization for production use, and by routing the transition through configuration change control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 2.5",
+   "scf_ids": [
+    "HRS-11",
+    "HRS-12"
+   ],
+   "confidence": "medium",
+   "rationale": "Identifying and separating conflicting roles is discharged by separation of duties and by avoiding incompatible development/production roles.",
+   "uncovered_clause": "The fallback obligation to implement alternative or compensating controls where conflicting roles cannot be split to different individuals is not separately discharged."
+  },
+  {
+   "code": "OM 2.6",
+   "scf_ids": [
+    "TDA-08",
+    "TDA-08.1",
+    "TDA-10"
+   ],
+   "confidence": "high",
+   "rationale": "Separating development, test, staging and operational environments maps to environment separation, to secure migration practices governing transfers between them, and to approval/control over use of live production data in test.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 3.1",
+   "scf_ids": [
+    "CAP-01",
+    "CAP-03",
+    "CAP-04"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying current and future capacity requirements, monitoring capacity and setting thresholds is discharged by capacity and performance management, capacity planning, and performance monitoring.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 3.2",
+   "scf_ids": [
+    "TDA-09",
+    "GOV-15.4",
+    "TDA-08"
+   ],
+   "confidence": "high",
+   "rationale": "Acceptance criteria plus documented test results before production use maps to security testing and evaluation during development, to obtaining owner authorization before a system enters production, and the prohibition on testing in production maps to environment separation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 4.1",
+   "scf_ids": [
+    "END-04",
+    "END-04.1",
+    "END-04.7",
+    "DCH-12"
+   ],
+   "confidence": "high",
+   "rationale": "Anti-malware on servers, workstations and portable devices with current signatures, real-time protection and removable-media scanning is discharged by malicious code protection, automatic signature updates, always-on protection and removable media security.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 4.2",
+   "scf_ids": [
+    "NET-18",
+    "NET-20",
+    "END-08"
+   ],
+   "confidence": "high",
+   "rationale": "Gateway-level malware defence for web and email traffic, including blocking malicious or prohibited-category sites, is discharged by DNS/content filtering, email content protections and phishing/spam protection.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 5.1",
+   "scf_ids": [
+    "BCD-11",
+    "BCD-11.1",
+    "BCD-01.4"
+   ],
+   "confidence": "high",
+   "rationale": "Maintaining backups of essential information and software, testing restoration, and defining recovery point/time requirements is discharged by data backups, backup reliability/integrity testing, and RTO/RPO definition.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 5.2",
+   "scf_ids": [
+    "DCH-18",
+    "DCH-20",
+    "DCH-21"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing retention requirements by law and entity demand, preserving archived data, and destroying data past retention is discharged by media and data retention, protection of archived data sets, and secure information disposal.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 6.1",
+   "scf_ids": [
+    "MON-01",
+    "MON-01.16"
+   ],
+   "confidence": "high",
+   "rationale": "This requirement is itself programme-level - establish what is monitored, at what frequency and by what method - so continuous monitoring plus the mechanism that assesses and prioritises monitoring requirements by asset criticality and data sensitivity are the correct altitude.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 6.2",
+   "scf_ids": [
+    "MON-03",
+    "MON-03.3",
+    "MON-10",
+    "MON-17"
+   ],
+   "confidence": "high",
+   "rationale": "Enabling audit logs of administrator, operator and user activity with defined minimum content, log-review frequency and retention periods is discharged by event log content, privileged function logging, log retention, and log analysis and triage.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 6.3",
+   "scf_ids": [
+    "MON-02",
+    "MON-08.2",
+    "MON-10",
+    "MON-06"
+   ],
+   "confidence": "high",
+   "rationale": "Preserving logs centrally, restricting who administers the log platform to staff without operational system roles, retaining per legal demand and building use cases/dashboards is discharged by centralized log collection, log access limited to a subset of privileged users, log retention, and monitoring reporting.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 6.4",
+   "scf_ids": [
+    "MON-07.1",
+    "SEA-20",
+    "MON-07"
+   ],
+   "confidence": "high",
+   "rationale": "Synchronizing clocks of all systems and connected medical devices to an agreed time source and periodically verifying synchronization is discharged by synchronization with an authoritative time source, clock synchronization technology, and consistent time stamps.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 6.5",
+   "scf_ids": [
+    "VPM-05",
+    "VPM-05.6",
+    "VPM-05.7",
+    "VPM-05.3"
+   ],
+   "confidence": "high",
+   "rationale": "Formal patching of systems, devices and firmware with distinct standard/urgent/critical criteria, staged pre-deployment testing and timeliness tracking is discharged by software and firmware patching, pre-deployment patch testing, out-of-cycle patching, and time-to-remediate metrics.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 6.6",
+   "scf_ids": [
+    "NET-17",
+    "MON-11",
+    "MON-11.1"
+   ],
+   "confidence": "high",
+   "rationale": "Monitoring processing systems to prevent information leakage and implementing DLP measures is discharged by data loss prevention, monitoring for unauthorized disclosure of non-public information, and traffic analysis for covert exfiltration.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 7.1",
+   "scf_ids": [
+    "VPM-06",
+    "VPM-07",
+    "VPM-07.1"
+   ],
+   "confidence": "high",
+   "rationale": "Scheduled penetration testing, vulnerability assessment and web security assessment across systems, networks and applications is discharged by vulnerability scanning, penetration testing, and the use of an independent penetration agent or team.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "OM 7.2",
+   "scf_ids": [
+    "TPM-05",
+    "IAO-03.2",
+    "DCH-13.3"
+   ],
+   "confidence": "medium",
+   "rationale": "Constraining assessor handling of entity system and assessment information is partly discharged by third-party contract requirements, contractual protection of sensitive data supplied to a contractor, and protection of sensitive data residing on external assets.",
+   "uncovered_clause": "The specific obligation that all entity and assessment-outcome information be erased from the assessor's assets and environment after the engagement ends has no discharging SCF mechanism."
+  },
+  {
+   "code": "CM 1.1",
+   "scf_ids": [
+    "GOV-02",
+    "NET-01"
+   ],
+   "confidence": "medium",
+   "rationale": "The requirement is to issue and maintain a communications policy, discharged by the mechanism that establishes, maintains and disseminates policies, with network security controls covering the policy's communication-infrastructure protection demand; the individual exchange-agreement and messaging controls sit in the child requirements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 2.2",
+   "scf_ids": [
+    "NET-11",
+    "CRY-03",
+    "CRY-09.4"
+   ],
+   "confidence": "high",
+   "rationale": "Delivering username and password over two different channels and sharing encryption keys over a channel separate from the ciphertext is discharged by out-of-band channels, transmission confidentiality for the encrypted payload, and controlled distribution of cryptographic keys.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 2.4",
+   "scf_ids": [
+    "TPM-05",
+    "HRS-06.1",
+    "IAO-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "Agreements with external parties before information and software exchange, carrying security requirements, defined roles and non-disclosure terms, is discharged by third-party contract requirements, confidentiality agreements, and contractual protection obligations for sensitive/regulated data such as PHI and PII.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 2.5",
+   "scf_ids": [
+    "TPM-05.2",
+    "SAT-03.4",
+    "TPM-08"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring external parties are aware of and actually implement the agreed security requirements is discharged by contract flow-down of those requirements, vendor security training, and review of third parties for compliance with contracted controls.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 2.6",
+   "scf_ids": [
+    "DCH-07",
+    "DCH-07.1",
+    "DCH-07.2",
+    "DCH-02"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting classified physical media in transit against disclosure, loss and modification, with tracking and trusted couriers, is discharged by media transportation controls, designated custodians, encryption of data on storage media, and data/asset classification.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 3.1",
+   "scf_ids": [
+    "WEB-04",
+    "NET-12",
+    "TPM-05"
+   ],
+   "confidence": "medium",
+   "rationale": "Protecting e-commerce services traversing public networks is partly discharged by controls for client-facing internet services, strong cryptography over open public networks, and contractual security requirements with service providers and partners.",
+   "uncovered_clause": "Maintaining an inventory of electronic commerce services with provider and beneficiary detail, and the fraud/contract-dispute protections, have no discharging SCF mechanism."
+  },
+  {
+   "code": "CM 3.2",
+   "scf_ids": [
+    "CRY-03",
+    "CRY-04",
+    "NET-09"
+   ],
+   "confidence": "high",
+   "rationale": "Protecting online transactions against incomplete transmission, alteration, disclosure and message replay or duplication is discharged by transmission confidentiality, transmission integrity, and session integrity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 3.3",
+   "scf_ids": [
+    "DCH-15",
+    "WEB-14",
+    "WEB-13"
+   ],
+   "confidence": "high",
+   "rationale": "Sanitizing and approving information before publication and protecting published information against unauthorized modification is discharged by control of publicly-accessible content, routine review of that content, and website change detection.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 4.1",
+   "scf_ids": [
+    "NET-05",
+    "NET-05.1",
+    "DCH-14"
+   ],
+   "confidence": "high",
+   "rationale": "Securing and controlling connectivity to information-sharing platforms is discharged by interconnection security agreements documenting each interface and its requirements, authorization of external system connections, and the process governing information-sharing decisions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 4.2",
+   "scf_ids": [
+    "CLD-10",
+    "DCH-26",
+    "CLD-09",
+    "DCH-25"
+   ],
+   "confidence": "high",
+   "rationale": "Prohibiting health information in cloud services, keeping it inside the UAE and barring onward sharing with third parties is discharged by limiting sensitive data in public cloud providers, data localization, geolocation control of cloud processing and storage, and restriction of sensitive data transfer to third countries or external organizations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 5.1",
+   "scf_ids": [
+    "NET-01",
+    "AST-04",
+    "NET-02"
+   ],
+   "confidence": "high",
+   "rationale": "Documenting all network components and interconnections with current diagrams, identifying network threats, and implementing mitigating controls is discharged by network security controls, maintained network and data-flow diagrams, and layered network defenses.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 5.2",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-08",
+    "NET-03.2"
+   ],
+   "confidence": "high",
+   "rationale": "Embedding per-service security requirements and service levels in network services agreements and reviewing compliance is discharged by third-party contract requirements, review of provider compliance against those contractual requirements, and controls over external telecommunications services.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 5.3",
+   "scf_ids": [
+    "NET-06",
+    "NET-06.2",
+    "NET-06.3"
+   ],
+   "confidence": "high",
+   "rationale": "Segregating networks by criticality with defined security zones and controlled data-flow paths is discharged by network segmentation, VLAN separation, and sensitive/regulated data enclaves with restricted inbound and outbound connectivity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "CM 5.4",
+   "scf_ids": [
+    "NET-15",
+    "NET-15.4",
+    "CRY-07",
+    "NET-02.2"
+   ],
+   "confidence": "high",
+   "rationale": "Site survey to contain stray signal, strong wireless authentication and encryption, trusted-device-only access, and separated guest access are discharged by wireless networking controls, wireless boundary controls, wireless access authentication and encryption, and guest network separation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "HI 1.1",
+   "scf_ids": [
+    "GOV-02",
+    "DCH-01.2",
+    "HRS-06.1",
+    "HRS-07"
+   ],
+   "confidence": "high",
+   "rationale": "Issuing a health information protection policy that sets access and ownership rules, imposes non-disclosure during and after employment, and references disciplinary process is discharged by policy establishment and dissemination, sensitive/regulated data protection, confidentiality agreements, and personnel sanctions.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "HI 2.1",
+   "scf_ids": [
+    "SAT-03.3",
+    "DCH-01.4",
+    "DCH-01.2",
+    "AST-06"
+   ],
+   "confidence": "high",
+   "rationale": "Orienting all staff and contractors before granting access to healthcare information, defining access criteria for it, protecting it wherever processed, and enforcing clear-desk practice in handling areas is discharged by mandatory data-handling training for users of sensitive data, explicit access authorizations for sensitive data, sensitive data protection, and protection of unattended end-user equipment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "TP 2.1",
+   "scf_ids": [
+    "TPM-05",
+    "TPM-04",
+    "TPM-05.4"
+   ],
+   "confidence": "high",
+   "rationale": "Including per-service security requirements, minimum baselines and service levels in third-party service agreements with defined responsibilities is discharged by third-party contract requirements, governance of third-party services, and the RASCI responsibility matrix.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "TP 2.2",
+   "scf_ids": [
+    "TPM-08",
+    "TPM-11",
+    "TPM-07"
+   ],
+   "confidence": "high",
+   "rationale": "Monitoring third-party compliance with agreed security requirements, reviewing their reports, managing incidents arising from their access, and monitoring information exchanged with them is discharged by review of third-party services, third-party incident response and recovery capabilities, and monitoring for third-party information disclosure.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "TP 2.3",
+   "scf_ids": [
+    "TPM-10",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Managing changes to third-party service provisions through a formal process embedded in the agreement is discharged by the mechanism for managing changes to third-party services, with contract requirements carrying the agreed change parameters.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 1.1",
+   "scf_ids": [
+    "TDA-01",
+    "GOV-02",
+    "SEA-01"
+   ],
+   "confidence": "high",
+   "rationale": "This requirement is itself programme-level - issue an acquisition, development and maintenance policy - so the technology development and acquisition programme, policy establishment and dissemination, and secure engineering principles are the correct altitude.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 2.1",
+   "scf_ids": [
+    "TDA-02",
+    "TDA-06",
+    "TDA-09"
+   ],
+   "confidence": "high",
+   "rationale": "Analysing and implementing approved security requirements for new or enhanced systems, aligned to secure coding and validated by testing, is discharged by minimum viable product security requirements, secure software development practices, and security testing throughout development.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 2.2",
+   "scf_ids": [
+    "TDA-13.2",
+    "SAT-03",
+    "SAT-04"
+   ],
+   "confidence": "high",
+   "rationale": "Providing developers baseline and feature-specific training before they work on development, with acknowledgement, is discharged by developer training, role-based security training, and training records.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 3.1",
+   "scf_ids": [
+    "TDA-18",
+    "WEB-09"
+   ],
+   "confidence": "high",
+   "rationale": "Defining validation rules for data entering applications and dropping input identified as incorrect is discharged by input data validation and web application validation and sanitization.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 3.2",
+   "scf_ids": [
+    "SEA-01.3",
+    "TDA-06"
+   ],
+   "confidence": "medium",
+   "rationale": "Building validation checks into applications to detect corruption from processing errors or deliberate acts is only partly discharged by resilience capabilities providing resistance to unintentional software errors and intentional attack, and by secure software development practices.",
+   "uncovered_clause": "Requiring developers to evidence compliance with minimum internal-processing validation requirements, and revalidating those checks across the application lifecycle, have no dedicated SCF mechanism."
+  },
+  {
+   "code": "SA 3.3",
+   "scf_ids": [
+    "CRY-04",
+    "CRY-13",
+    "MON-09"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring authenticity and integrity of messages transmitted between systems is discharged by transmission integrity, cryptographic hashing, and non-repudiation.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 3.4",
+   "scf_ids": [
+    "SEA-09"
+   ],
+   "confidence": "high",
+   "rationale": "Validating application output against defined criteria to confirm it is correct and appropriate is discharged by information output filtering that checks output consistency against expected content.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 3.5",
+   "scf_ids": [
+    "SEA-01.2",
+    "SEA-07.3"
+   ],
+   "confidence": "low",
+   "rationale": "Designing distributed and mobile applications to tolerate communication failure is only loosely related to achieving resilience requirements in adverse situations and fail-safe procedures on failure conditions.",
+   "uncovered_clause": "Offline operation and handling of duplicate or out-of-sequence response messages have no discharging SCF mechanism."
+  },
+  {
+   "code": "SA 4.1",
+   "scf_ids": [
+    "CRY-09",
+    "CRY-09.3",
+    "CRY-09.4"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing key generation and use, revocation, repair of damaged keys, key strength and storage standards, and protection of private keys is discharged by cryptographic key management, handling of key loss or change, and control and distribution of keys.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 5.1",
+   "scf_ids": [
+    "END-03",
+    "CFG-05.2",
+    "TDA-20.2",
+    "CHG-02"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting software installation on operational systems to authorized resources, retaining copies of installed and prior versions, and routing installations through change approval is discharged by prohibition of installation without privileged status, restriction of roles permitted to install software, archiving of software releases, and configuration change control.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 5.2",
+   "scf_ids": [
+    "TDA-10",
+    "TDA-10.1",
+    "DCH-18.2"
+   ],
+   "confidence": "high",
+   "rationale": "Using sample data for testing, authorizing and recording any use of production data, barring PII as test data and erasing it after testing is discharged by approval, documentation and control of live data in test environments, test data integrity, and limiting sensitive/regulated data in testing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 5.3",
+   "scf_ids": [
+    "TDA-20",
+    "CFG-09.3"
+   ],
+   "confidence": "high",
+   "rationale": "Restricting access to program source code on a need basis is discharged by access controls over program source code and by the authoritative development repository held separate from production.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 7.1",
+   "scf_ids": [
+    "TPM-03",
+    "TPM-03.1",
+    "TPM-05",
+    "TPM-03.2"
+   ],
+   "confidence": "medium",
+   "rationale": "A supply chain security strategy with acquisition policy, contractual right-to-audit and non-disclosure terms, and limits on what is shared with suppliers is discharged by supply chain risk management, acquisition strategies and methods, third-party contract requirements, and limiting potential harm from suppliers.",
+   "uncovered_clause": "Defining system acceptance criteria for all new purchases sits with system acceptance rather than any of the selected supply-chain controls."
+  },
+  {
+   "code": "SA 7.2",
+   "scf_ids": [
+    "TPM-04.1",
+    "TPM-08",
+    "TPM-02"
+   ],
+   "confidence": "high",
+   "rationale": "Evaluating suppliers before contract award and periodically reviewing their compliance with agreement terms is discharged by third-party risk assessments and approvals, review of third-party services against contractual requirements, and third-party criticality assessment.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 7.4",
+   "scf_ids": [
+    "TPM-03",
+    "TPM-03.2",
+    "TPM-05"
+   ],
+   "confidence": "high",
+   "rationale": "Evaluating risks to systems and support operations from the supply chain and agreeing control measures in supplier contracts is discharged by supply chain risk management, mechanisms limiting potential supplier harm, and third-party contract requirements.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 7.5",
+   "scf_ids": [
+    "TDA-11",
+    "TDA-14.1",
+    "TDA-01.2"
+   ],
+   "confidence": "high",
+   "rationale": "Ensuring delivered systems, devices and software are genuine and unaltered - no back doors or covert channels - is discharged by product tampering and counterfeiting detection, developer-enabled software and firmware integrity verification, and integrity mechanisms for software/firmware updates.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 7.6",
+   "scf_ids": [
+    "TPM-03.3",
+    "TPM-09",
+    "TPM-01.1"
+   ],
+   "confidence": "high",
+   "rationale": "Identifying supply chain elements and their interdependencies, addressing issues found, and assessing them regularly is discharged by processes to address supply chain weaknesses, third-party deficiency remediation, and third-party inventories.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SA 7.7",
+   "scf_ids": [
+    "TPM-03.4",
+    "BCD-15",
+    "TDA-03.1"
+   ],
+   "confidence": "high",
+   "rationale": "Contingency for the supply of critical components, stockpiling spares and using multiple suppliers is discharged by the adequate-supply spare parts strategy, maintaining reserve hardware against supply chain disruption, and supplier diversity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 1.1",
+   "scf_ids": [
+    "IRO-01",
+    "GOV-02"
+   ],
+   "confidence": "high",
+   "rationale": "This requirement is itself programme-level - issue and maintain an incident management policy with roles and management demands - so the incident response operations programme plus policy establishment and dissemination are the correct altitude.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 2.1",
+   "scf_ids": [
+    "IRO-04",
+    "IRO-02",
+    "IRO-10"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing tested procedures for before, during and after an incident with planned communication to affected stakeholders and authorities, under management approval, is discharged by the incident response plan, incident handling, and incident stakeholder reporting.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 2.2",
+   "scf_ids": [
+    "IRO-07",
+    "IRO-14"
+   ],
+   "confidence": "medium",
+   "rationale": "Standing up a CSIRT with defined authority, roles and response protocols is discharged by the integrated security incident response team, and the duty to coordinate severe incidents with the health sector regulator is discharged by maintaining regulatory incident response contacts.",
+   "uncovered_clause": "Allocating adequate funding for CSIRT operations has no discharging SCF mechanism."
+  },
+  {
+   "code": "IM 2.3",
+   "scf_ids": [
+    "IRO-02.4"
+   ],
+   "confidence": "high",
+   "rationale": "Assessing and classifying incidents against a classification scheme with severity-specific workflows is discharged by incident classification and prioritization.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 2.4",
+   "scf_ids": [
+    "IRO-06",
+    "IRO-04.3"
+   ],
+   "confidence": "high",
+   "rationale": "Testing incident response capability against expected outcomes and modifying procedures to close identified gaps is discharged by incident response testing and continuous incident response improvement.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 2.5",
+   "scf_ids": [
+    "IRO-08",
+    "IRO-09.3",
+    "IRO-08.1"
+   ],
+   "confidence": "high",
+   "rationale": "Collecting and preserving incident evidence with chain of custody, evidence safety, defined roles and personnel competency is discharged by chain of custody and forensics, the incident tracking repository documenting incident detail and remediation, and use of licensed forensic investigators.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 2.6",
+   "scf_ids": [
+    "IRO-13",
+    "IRO-04.3",
+    "SAT-05"
+   ],
+   "confidence": "high",
+   "rationale": "Retaining and sharing lessons from past incidents and building a diagnosis and response knowledge base is discharged by root cause analysis and lessons learned, continuous incident response improvement, and security knowledge sharing.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 3.1",
+   "scf_ids": [
+    "THR-01",
+    "THR-03",
+    "IRO-09",
+    "GOV-07"
+   ],
+   "confidence": "high",
+   "rationale": "Building situational awareness by joining information-sharing communities and consuming cybersecurity information relevant to the entity's systems and risk environment is discharged by the threat intelligence programme, threat intelligence feeds, situational awareness for incidents, and contacts with groups and associations.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 3.2",
+   "scf_ids": [
+    "IRO-10",
+    "IRO-11",
+    "HRS-15"
+   ],
+   "confidence": "high",
+   "rationale": "Establishing formal reporting channels and points of contact for security events, with staff and third-party awareness of the duty to report, is discharged by incident stakeholder reporting, incident reporting assistance to users, and the requirement for personnel to report suspicious activity.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "IM 3.3",
+   "scf_ids": [
+    "THR-06",
+    "THR-06.1",
+    "HRS-15"
+   ],
+   "confidence": "high",
+   "rationale": "Providing a formal channel for internal and external parties to report suspected security weaknesses without exploiting them is discharged by the vulnerability disclosure programme, published security disclosure contact information, and personnel reporting of suspicious findings.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SC 1.1",
+   "scf_ids": [
+    "BCD-01",
+    "GOV-02"
+   ],
+   "confidence": "high",
+   "rationale": "This requirement is itself programme-level - issue a continuity planning policy with roles and management expectations - so the business continuity management system plus policy establishment and dissemination are the correct altitude.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SC 2.1",
+   "scf_ids": [
+    "BCD-01.7",
+    "BCD-02",
+    "BCD-01.4",
+    "BCD-01.6"
+   ],
+   "confidence": "high",
+   "rationale": "Developing continuity plans that identify the systems and processes supporting critical services, assign roles with contact details, define call-tree and escalation, and align to organizational BC/DR is discharged by BC/DR plan development, identification of critical assets, RTO/RPO definition, and recovery operations communications.",
+   "uncovered_clause": null
+  },
+  {
+   "code": "SC 2.2",
+   "scf_ids": [
+    "BCD-01.5",
+    "BCD-09.4"
+   ],
+   "confidence": "medium",
+   "rationale": "Ensuring plan capabilities are established and available at activation is partly discharged by defined criteria for initiating BC/DR plans and by preparing the alternate processing site so it can carry essential functions.",
+   "uncovered_clause": "Verifying that every capability named across the plans - not only alternate processing - is actually provisioned and available for use is not fully discharged."
+  },
+  {
+   "code": "SC 2.3",
+   "scf_ids": [
+    "BCD-04",
+    "BCD-05",
+    "BCD-06"
+   ],
+   "confidence": "high",
+   "rationale": "Scheduling and running continuity plan tests, documenting outcomes and lessons learned, and updating plans on change or assessment findings is discharged by contingency plan testing and exercises, contingency plan root cause analysis and lessons learned, and ongoing contingency planning driven by people/process/technology change.",
+   "uncovered_clause": null
+  }
+ ]
+}

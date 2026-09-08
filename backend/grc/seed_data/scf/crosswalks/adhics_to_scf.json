@@ -1,0 +1,1534 @@
+{
+ "framework": "adhics",
+ "library": "adhics.json",
+ "pivot": "iso_27002_2022",
+ "authored_by": "workflow:scf-regional-bridge",
+ "note": "Our mapping of our framework text onto SCF identifiers. provenance=ai, confidence<1.0 — label it in the UI.",
+ "mappings": [
+  {
+   "control_id": "HR 1.1",
+   "iso_clauses": [
+    "5.1",
+    "6.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires a topic-specific HR security policy whose mandated contents (screening, roles, acceptable use, training, asset return, NDA, disciplinary reference) are exactly the employment-contract security obligations of 6.2, issued as a policy per 5.1."
+  },
+  {
+   "control_id": "HR 2.1",
+   "iso_clauses": [
+    "6.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Background verification of employees, contractors and third-party users with criteria driven by role, information classification and access to critical areas is verbatim the screening requirement of 6.1."
+  },
+  {
+   "control_id": "HR 2.2",
+   "iso_clauses": [
+    "6.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Terms and conditions of employment stating the security responsibilities of both entity and personnel, read/signed by employees, contractors and third parties, is the direct subject of 6.2."
+  },
+  {
+   "control_id": "HR 3.1",
+   "iso_clauses": [
+    "5.4",
+    "5.10",
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Three distinct obligations: management ensuring personnel apply security per policy (5.4), an acceptable usage policy signed before access is granted (5.10), and consideration of segregation of duties to prevent misuse of position (5.3)."
+  },
+  {
+   "control_id": "HR 3.2",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formally launched and managed awareness and training programme for employees, contractors and third parties, with effectiveness evaluation and records, is precisely 6.3."
+  },
+  {
+   "control_id": "HR 3.3",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Assessing information security skill and competency gaps and running development programmes is the education/competence limb of 6.3."
+  },
+  {
+   "control_id": "HR 3.4",
+   "iso_clauses": [
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Scheduled awareness campaigns for general and targeted user groups, using current risk and incident learnings as content, is the awareness-campaign delivery mechanism 6.3 calls for."
+  },
+  {
+   "control_id": "HR 3.5",
+   "iso_clauses": [
+    "6.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A communicated and enforced disciplinary process for personnel who commit security breaches, with records of breaches and management action, is the whole of 6.4."
+  },
+  {
+   "control_id": "HR 4.1",
+   "iso_clauses": [
+    "6.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining who is responsible for security at employment termination or role change, including exit communication and knowledge handover, is the responsibilities-after-termination requirement of 6.5."
+  },
+  {
+   "control_id": "HR 4.2",
+   "iso_clauses": [
+    "5.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Recovery of all organizational assets on termination with signed acknowledgement that no information remains in the leaver's possession is the return-of-assets clause 5.11."
+  },
+  {
+   "control_id": "HR 4.3",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Revoking system, application, information and secure-area access on termination of employment or contract is the removal limb of the access-rights lifecycle in 5.18."
+  },
+  {
+   "control_id": "HR 4.4",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "On internal transfer, revoking privileges tied to the old role and reassigning access consistent with the new role on fresh authorization is the modification limb of 5.18."
+  },
+  {
+   "control_id": "AM 1.1",
+   "iso_clauses": [
+    "5.9",
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "The asset management policy mandates ownership assignment, accountability and recording of asset properties (5.9) and mandates the four-level AD classification scheme plus retention (5.12)."
+  },
+  {
+   "control_id": "AM 1.2",
+   "iso_clauses": [
+    "5.9",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defines which roles may access, use and maintain medical devices and requires per-device handling procedures and a risk log — asset ownership/recording (5.9) plus rules for permitted use (5.10); ISO 27002 has no medical-device-specific clause, so the fit is partial."
+  },
+  {
+   "control_id": "AM 2.1",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying, recording and periodically updating all information assets in an inventory that captures inter-asset dependencies is exactly the inventory requirement of 5.9."
+  },
+  {
+   "control_id": "AM 2.2",
+   "iso_clauses": [
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Assigning a named owner per asset who defines controls, reviews their adequacy and authorizes access is the asset-ownership limb explicitly stated in 5.9."
+  },
+  {
+   "control_id": "AM 2.3",
+   "iso_clauses": [
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Establishing, communicating and obtaining signed acknowledgement of rules for acceptable use of information assets is the direct subject of 5.10."
+  },
+  {
+   "control_id": "AM 2.4",
+   "iso_clauses": [
+    "8.1",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "BYOD risk addressed through role-based usage agreements and technical controls before personal devices may access or store PHI is the personally-owned-device provision of 8.1, governed by acceptable-use rules (5.10)."
+  },
+  {
+   "control_id": "AM 3.1",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Classifying every information asset into the Public/Restricted/Confidential/Secret scheme is the classification requirement of 5.12."
+  },
+  {
+   "control_id": "AM 3.2",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring the value of the information and the entity's tolerance of financial impact to drive how restrictive the classification is, is the value-and-impact criterion 5.12 says classification must be based on."
+  },
+  {
+   "control_id": "AM 3.3",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Determining classification from the level of protection an asset essentially needs is a criterion for the 5.12 classification decision, though ADHICS states it as a standalone one-line rule."
+  },
+  {
+   "control_id": "AM 3.4",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Reassessing and changing classification when information value, environment or protection level changes is the periodic-review limb of 5.12."
+  },
+  {
+   "control_id": "AM 3.5",
+   "iso_clauses": [
+    "5.12",
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Interpreting another organization's classification scheme on received information maps to 5.12's requirement to align schemes across organizations and to 5.13's handling of labels applied by others."
+  },
+  {
+   "control_id": "AM 3.6",
+   "iso_clauses": [
+    "5.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Setting criteria for automated classification and deploying tooling to apply the scheme is an implementation method for 5.12, not a separate ISO control."
+  },
+  {
+   "control_id": "AM 3.7",
+   "iso_clauses": [
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Labelling information assets in physical and digital form consistently with the classification scheme is precisely 5.13."
+  },
+  {
+   "control_id": "AM 4.1",
+   "iso_clauses": [
+    "5.10",
+    "5.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Handling procedures specifying security requirements for access, processing, storage, sharing and printing per classification are the classification-driven handling rules folded into 5.10, keyed off the labels of 5.13."
+  },
+  {
+   "control_id": "AM 4.2",
+   "iso_clauses": [
+    "5.36",
+    "5.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring the handling procedures are actually adopted and applied is an enforcement/compliance-verification obligation (5.36) over the asset-handling rules of 5.10."
+  },
+  {
+   "control_id": "AM 4.3",
+   "iso_clauses": [
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Removable media management procedures covering setup, distribution, utilization, disposal and protection during movement is the storage-media lifecycle clause 7.10."
+  },
+  {
+   "control_id": "AM 4.4",
+   "iso_clauses": [
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring management authorization and formal risk acceptance before removable media may be used is the authorization limb of 7.10."
+  },
+  {
+   "control_id": "AM 4.5",
+   "iso_clauses": [
+    "5.37",
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Documented management procedures per category of medical device are operating procedures (5.37) for a class of inventoried asset (5.9); ISO has no clinical-equipment clause so this is a structural rather than substantive match."
+  },
+  {
+   "control_id": "AM 4.6",
+   "iso_clauses": [
+    "5.15",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Allocating medical-device access and privileges only to defined roles holding required qualifications is role-based access provisioning under 5.15 and privilege allocation under 5.18."
+  },
+  {
+   "control_id": "AM 4.7",
+   "iso_clauses": [
+    "8.24",
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Mandates encryption of patient information stored on medical devices and of communications between them (8.24), plus moving copies of valuable health data to secure storage against loss (8.13)."
+  },
+  {
+   "control_id": "AM 4.8",
+   "iso_clauses": [
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring wired connectivity for medical devices and avoiding wireless is a network-security design constraint on how devices are connected, covered generically by 8.20."
+  },
+  {
+   "control_id": "AM 4.9",
+   "iso_clauses": [
+    "7.10",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Whitelisting permitted removable media devices is a storage-media control (7.10), with mandated content encryption falling under 8.24."
+  },
+  {
+   "control_id": "AM 4.10",
+   "iso_clauses": [
+    "7.9",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Authorizing and recording the removal, movement and transfer of equipment, devices and media off site is the off-premises asset protection of 7.9 and the media-movement limb of 7.10."
+  },
+  {
+   "control_id": "AM 5.1",
+   "iso_clauses": [
+    "8.10",
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Disposing of information assets once no longer required by the entity, regulation or legal hold is information deletion (8.10) and, where the asset is equipment, secure disposal (7.14)."
+  },
+  {
+   "control_id": "AM 5.2",
+   "iso_clauses": [
+    "8.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring a control process that guarantees destroyed data cannot be recovered is the irreversible-deletion requirement of 8.10."
+  },
+  {
+   "control_id": "AM 5.3",
+   "iso_clauses": [
+    "7.10",
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Destroying both digital and physical media once no longer required is the media-disposal limb of 7.10 and the secure-disposal requirement of 7.14."
+  },
+  {
+   "control_id": "AM 5.4",
+   "iso_clauses": [
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Procedures for secure disposal or re-use of media, equipment and systems ensuring classified data and licensed software are removed beyond recovery first is verbatim 7.14."
+  },
+  {
+   "control_id": "AM 5.5",
+   "iso_clauses": [
+    "5.33",
+    "8.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Verifying that retention obligations for the contained data are satisfied before disposal is a records-retention check (5.33) gating the deletion action (8.10)."
+  },
+  {
+   "control_id": "AM 5.6",
+   "iso_clauses": [
+    "7.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring management authorization before any disposal is the approval step within the secure disposal process of 7.14."
+  },
+  {
+   "control_id": "AM 5.7",
+   "iso_clauses": [
+    "7.14",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Maintaining disposal records naming owner, media type, classification, method, authorizer and removal evidence is the documented-disposal-record expectation under 7.14 for storage media handled per 7.10."
+  },
+  {
+   "control_id": "PE 1.1",
+   "iso_clauses": [
+    "5.1",
+    "7.5"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "A topic-specific physical and environmental security policy (5.1) whose stated substance is protection from internal/external and environmental threats including hazardous and combustible material storage (7.5)."
+  },
+  {
+   "control_id": "PE 1.2",
+   "iso_clauses": [
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Establishing supporting procedures and guidelines to implement the physical security policy is the documented-operating-procedures requirement of 5.37."
+  },
+  {
+   "control_id": "PE 1.3",
+   "iso_clauses": [
+    "7.8",
+    "7.13"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires the policy to address placement and physical access of equipment and medical devices (7.8) and the risk of data loss during maintenance, decommissioning and authorized off-site activity (7.13)."
+  },
+  {
+   "control_id": "PE 2.1",
+   "iso_clauses": [
+    "7.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining security perimeters around facilities based on the information and systems contained within, and identifying secure areas, is the direct subject of 7.1."
+  },
+  {
+   "control_id": "PE 2.2",
+   "iso_clauses": [
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Allocating secure private areas in which authorized staff may discuss personal health information is the securing-of-rooms-and-facilities requirement of 7.3 applied to conversation privacy."
+  },
+  {
+   "control_id": "PE 2.3",
+   "iso_clauses": [
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Authorized-personnel lists, authentication at entry, access records, visible badges, door locking/alarms and escorting of contractors are the physical entry controls of 7.2."
+  },
+  {
+   "control_id": "PE 2.4",
+   "iso_clauses": [
+    "7.4",
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requires nominated owners to review secure-area access logs and surveillance footage quarterly (7.4) and to reconcile the authorized-user and physical key inventories (7.2)."
+  },
+  {
+   "control_id": "PE 2.5",
+   "iso_clauses": [
+    "7.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Equipping offices and meeting rooms with physical security, demarcating public from key work areas and avoiding signage that reveals activities is exactly 7.3."
+  },
+  {
+   "control_id": "PE 2.6",
+   "iso_clauses": [
+    "7.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Designing physical protection against natural disasters, environmental threats, external attack and accidents, including protecting fall-back equipment and backup media, is 7.5."
+  },
+  {
+   "control_id": "PE 2.7",
+   "iso_clauses": [
+    "7.5",
+    "5.36"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requires physical and environmental countermeasures to remain aligned with risk-assessment outcomes (7.5) and with regulatory mandates, which is a compliance-verification duty under 5.36."
+  },
+  {
+   "control_id": "PE 2.8",
+   "iso_clauses": [
+    "7.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Guidelines for working in secure areas, supervision of activities there and control of mobile and recording devices brought in is verbatim 7.6."
+  },
+  {
+   "control_id": "PE 2.9",
+   "iso_clauses": [
+    "7.6",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring everyone entering secure areas knows and accepts the rules (7.6) is delivered through staff education, including not discussing PHI in public areas (6.3)."
+  },
+  {
+   "control_id": "PE 2.10",
+   "iso_clauses": [
+    "7.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Segregated delivery and loading areas with entry/exit controls and inspection and registration of incoming material is the delivery-and-loading-area provision explicitly inside 7.2."
+  },
+  {
+   "control_id": "PE 3.1",
+   "iso_clauses": [
+    "7.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Siting equipment and medical devices so they are protected from unauthorized access and environmental risk conditions is the whole of 7.8."
+  },
+  {
+   "control_id": "PE 3.2",
+   "iso_clauses": [
+    "7.11"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting equipment from disruption caused by supporting-utility failure and ensuring uninterrupted power to processing systems is verbatim 7.11."
+  },
+  {
+   "control_id": "PE 3.3",
+   "iso_clauses": [
+    "7.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Maintaining equipment per supplier recommendations on a documented schedule with up-to-date maintenance records is the equipment-maintenance clause 7.13."
+  },
+  {
+   "control_id": "PE 3.4",
+   "iso_clauses": [
+    "7.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting power, telecommunication and data cabling against tampering and segregating power from data cabling to avoid interference is verbatim 7.12."
+  },
+  {
+   "control_id": "PE 3.5",
+   "iso_clauses": [
+    "7.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Applying security measures and chain-of-custody logging to equipment, medical devices and processing systems while off-site is the off-premises asset clause 7.9."
+  },
+  {
+   "control_id": "PE 3.6",
+   "iso_clauses": [
+    "7.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Defining user responsibilities and controls for equipment left unattended is the unattended-equipment requirement that ISO 27002:2022 folded into the clear desk and clear screen clause 7.7."
+  },
+  {
+   "control_id": "PE 3.7",
+   "iso_clauses": [
+    "7.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An enforced clear desk and clear screen policy covering paper, removable media and processing systems, acknowledged by all staff, is the direct subject of 7.7."
+  },
+  {
+   "control_id": "AC 1.1",
+   "iso_clauses": [
+    "5.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An access control policy establishing need-to-know and role-based access criteria across information, applications, technology and medical devices is the topic-specific access control clause 5.15."
+  },
+  {
+   "control_id": "AC 2.1",
+   "iso_clauses": [
+    "5.16",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal user registration/de-registration with a unique account per individual and no shared or group accounts is identity management (5.16); revocation at exit and revalidation at role change is 5.18."
+  },
+  {
+   "control_id": "AC 2.2",
+   "iso_clauses": [
+    "8.2"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting allocation of administrative privileges, separating privileged accounts from day-to-day accounts and barring normal accounts from service or privileged use is verbatim 8.2."
+  },
+  {
+   "control_id": "AC 2.3",
+   "iso_clauses": [
+    "5.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Secure allocation, use and management of passwords — changing defaults, hashed storage, out-of-band initial delivery, complexity rules — is the authentication-information clause 5.17."
+  },
+  {
+   "control_id": "AC 3.1",
+   "iso_clauses": [
+    "8.1",
+    "7.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Authenticating access to mobile and portable devices and enforcing password/encryption on them is 8.1; the same requirement applied to removable media carrying confidential data is 7.10."
+  },
+  {
+   "control_id": "AC 3.2",
+   "iso_clauses": [
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Controlling authentication and authorization for equipment and facilities at teleworking sites, including telemedicine delivery, is the remote-working clause 6.7."
+  },
+  {
+   "control_id": "AC 4.1",
+   "iso_clauses": [
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "At-least-annual review of granted user access and privileges by defined reviewers, with an up-to-date inventory of access, is the periodic-review limb of 5.18."
+  },
+  {
+   "control_id": "AC 5.1",
+   "iso_clauses": [
+    "5.15",
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Granting access to networks and network services only for the specific need the user is authorized for is the access-control principle of 5.15 applied to the network layer governed by 8.20."
+  },
+  {
+   "control_id": "AC 5.2",
+   "iso_clauses": [
+    "8.5",
+    "6.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring remote logins over secure channels with multifactor authentication is the secure-authentication clause 8.5 applied to the remote-access scenario of 6.7."
+  },
+  {
+   "control_id": "AC 5.3",
+   "iso_clauses": [
+    "8.16",
+    "5.9"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Automated detection of unauthorized equipment on the network is a monitoring activity (8.16) reconciled against the recorded asset inventory (5.9)."
+  },
+  {
+   "control_id": "AC 5.4",
+   "iso_clauses": [
+    "8.9",
+    "8.18"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Whitelisting diagnostic ports and services and disabling those not required is configuration hardening (8.9); restricting and logging use of troubleshooting and diagnostic utilities is 8.18."
+  },
+  {
+   "control_id": "AC 5.5",
+   "iso_clauses": [
+    "8.20",
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Restricting user connection to shared versus isolated networks per the access control policy is the network-connection control that ISO 27002:2022 folded into networks security (8.20) and network segregation (8.22)."
+  },
+  {
+   "control_id": "AC 5.6",
+   "iso_clauses": [
+    "8.20",
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Routing rules enforcing source/destination and port checks with anti-manipulation protection so traffic follows controlled paths is the routing-control requirement absorbed into 8.20, and its zoning effect into 8.22."
+  },
+  {
+   "control_id": "AC 5.7",
+   "iso_clauses": [
+    "8.20",
+    "8.22",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Secure wireless configuration and authorization (8.20), isolation of guest and public wireless from the internal network (8.22) and strong cryptographic authentication of wireless connections (8.24)."
+  },
+  {
+   "control_id": "AC 6.1",
+   "iso_clauses": [
+    "8.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Secure log-on and log-off procedures with authenticated access, inactivity locking, idle session timeout and automatic session termination is verbatim the secure-authentication clause 8.5."
+  },
+  {
+   "control_id": "AC 6.2",
+   "iso_clauses": [
+    "5.16",
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Issuing each user a unique identifier is the core of identity management (5.16); requiring all user activity to be logged against that identifier is 8.15."
+  },
+  {
+   "control_id": "AC 6.3",
+   "iso_clauses": [
+    "8.18"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting, authorizing, inventorying and monitoring the use of utility programs capable of overriding system and application controls is verbatim 8.18."
+  },
+  {
+   "control_id": "AC 7.1",
+   "iso_clauses": [
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting access to information and application system functions on need-to-know with role-based enforcement, explicitly excluding ancillary staff from healthcare data, is the information-access-restriction clause 8.3."
+  },
+  {
+   "control_id": "AC 7.2",
+   "iso_clauses": [
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Isolating sensitive systems in a dedicated environment is the sensitive-system-isolation requirement that ISO 27002:2022 absorbed into segregation of networks (8.22)."
+  },
+  {
+   "control_id": "AC 7.3",
+   "iso_clauses": [
+    "8.12",
+    "8.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Preventing accidental or deliberate exposure of non-public information to the public domain, with periodic validation that none has leaked, is a leakage-prevention control (8.12) enforcing the access restriction of 8.3."
+  },
+  {
+   "control_id": "OM 1.1",
+   "iso_clauses": [
+    "5.37",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "An operations management policy (5.1) whose enumerated substance — SoD, configuration, change control, baselines, standard operating procedures, capacity, acceptance, malware — is the documented-operating-procedures regime of 5.37."
+  },
+  {
+   "control_id": "OM 2.1",
+   "iso_clauses": [
+    "8.9"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing and enforcing baseline and recommended secure configuration settings for IT products, applications and medical devices is verbatim configuration management (8.9)."
+  },
+  {
+   "control_id": "OM 2.2",
+   "iso_clauses": [
+    "5.37"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documenting, disseminating and keeping current the operating procedures for all support and maintenance activities, including up-to-date system diagrams, is the direct subject of 5.37."
+  },
+  {
+   "control_id": "OM 2.3",
+   "iso_clauses": [
+    "8.32"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A Change Advisory Board and a formal change process covering recording, testing, impact assessment, approval, communication, rollback and post-implementation review is verbatim 8.32."
+  },
+  {
+   "control_id": "OM 2.4",
+   "iso_clauses": [
+    "8.32",
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Requiring movement of systems from development or project state into production to pass through the authorization and change process is 8.32 governing the environment boundary of 8.31."
+  },
+  {
+   "control_id": "OM 2.5",
+   "iso_clauses": [
+    "5.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying conflicting roles, assigning them to different individuals and applying compensating controls where that is impossible is verbatim segregation of duties (5.3)."
+  },
+  {
+   "control_id": "OM 2.6",
+   "iso_clauses": [
+    "8.31"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Separating development, test, staging and operational environments with controlled transfer between them and a bar on using live data in test is verbatim 8.31."
+  },
+  {
+   "control_id": "OM 3.1",
+   "iso_clauses": [
+    "8.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Documenting current and future capacity needs, monitoring and measuring capacity, and setting thresholds with an escalation matrix is verbatim capacity management (8.6)."
+  },
+  {
+   "control_id": "OM 3.2",
+   "iso_clauses": [
+    "8.29"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Acceptance criteria for new systems, changes, upgrades and releases with documented test cases and results required before production use is the acceptance-testing clause 8.29."
+  },
+  {
+   "control_id": "OM 4.1",
+   "iso_clauses": [
+    "8.7"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Anti-malware protection across networks, servers, workstations and mobile devices with current signatures, real-time protection, scheduled scans and removable-media scanning is verbatim 8.7."
+  },
+  {
+   "control_id": "OM 4.2",
+   "iso_clauses": [
+    "8.7",
+    "8.23"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Gateway-level malware detection for web and email traffic is 8.7; technology that blocks access to malicious or prohibited-category websites is web filtering (8.23)."
+  },
+  {
+   "control_id": "OM 5.1",
+   "iso_clauses": [
+    "8.13"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Backup process identifying critical data, owners, RPO/RTO, frequency and methods, with restoration testing, is verbatim the information backup clause 8.13."
+  },
+  {
+   "control_id": "OM 5.2",
+   "iso_clauses": [
+    "5.33",
+    "8.10"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Archival criteria and retention periods set by law and regulation with preservation of archived data is records protection (5.33); destroying data past its retention timeline is 8.10."
+  },
+  {
+   "control_id": "OM 6.1",
+   "iso_clauses": [
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Monitoring procedures defining what is monitored (system use, changes, unauthorized activity, exceptions, access), at what frequency and by what method is verbatim monitoring activities (8.16)."
+  },
+  {
+   "control_id": "OM 6.2",
+   "iso_clauses": [
+    "8.15"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Enabling audit logs of administrator, operator and user activity, exceptions and security events, with defined minimum log content, review frequency and retention, is verbatim 8.15."
+  },
+  {
+   "control_id": "OM 6.3",
+   "iso_clauses": [
+    "8.15",
+    "8.16"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Centralized log preservation with access control, retention and administration by staff independent of system operations is the log-protection limb of 8.15; the required use cases and dashboards are 8.16."
+  },
+  {
+   "control_id": "OM 6.4",
+   "iso_clauses": [
+    "8.17"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Synchronizing all information system clocks (including medical devices) to an agreed time source with a standardized format and regular verification is verbatim 8.17."
+  },
+  {
+   "control_id": "OM 6.5",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal patching procedure with criteria for standard, urgent and critical patches, prompt application of critical security patches and pilot testing before mass deployment is the remediation limb of 8.8."
+  },
+  {
+   "control_id": "OM 6.6",
+   "iso_clauses": [
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Monitoring processing systems for leakage opportunities and implementing DLP measures is verbatim the data leakage prevention clause 8.12."
+  },
+  {
+   "control_id": "OM 7.1",
+   "iso_clauses": [
+    "8.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Scheduled penetration testing, vulnerability assessment and web security assessment across systems, networks and applications is the identification limb of technical vulnerability management (8.8)."
+  },
+  {
+   "control_id": "OM 7.2",
+   "iso_clauses": [
+    "8.34",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Restricting what system and network information assessors may hold and requiring erasure of assessment outputs from third-party assets after engagement protects systems during audit testing (8.34) and must be written into the assessor agreement (5.20)."
+  },
+  {
+   "control_id": "CM 1.1",
+   "iso_clauses": [
+    "5.14",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A communications policy (5.1) whose substance is protection of information in transit and in exchange, exchange agreements, electronic and physical transfer modes — the information transfer clause 5.14."
+  },
+  {
+   "control_id": "CM 2.1",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal information exchange and transfer procedures with control measures based on classification and value, plus technical standards for packaging health information, is verbatim 5.14."
+  },
+  {
+   "control_id": "CM 2.2",
+   "iso_clauses": [
+    "5.14",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting critical information in transit is 5.14; the specified mechanism — encrypt before transfer and deliver the key over a different channel — is the cryptography clause 8.24."
+  },
+  {
+   "control_id": "CM 2.3",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting information exchanged within the entity, between entities and across sharing communities, including interoperability standards for system-to-system transfer, is the information transfer clause 5.14."
+  },
+  {
+   "control_id": "CM 2.4",
+   "iso_clauses": [
+    "5.14",
+    "6.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Formal transfer agreements with external parties setting roles, responsibilities and security requirements before exchange begins is the transfer-agreement limb of 5.14; the required non-disclosure terms are 6.6."
+  },
+  {
+   "control_id": "CM 2.5",
+   "iso_clauses": [
+    "5.20",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring external parties are aware of and have effectively implemented the agreed security requirements is the agreement-content and assurance obligation of 5.20 applied to the transfer arrangements of 5.14."
+  },
+  {
+   "control_id": "CM 2.6",
+   "iso_clauses": [
+    "7.10",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting classified physical media in transit against disclosure, loss and modification, with tracking and trusted couriers, is the media-in-transit provision of 7.10 within the transfer regime of 5.14."
+  },
+  {
+   "control_id": "CM 2.7",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Categorising electronic messaging channels, setting per-channel controls and requiring messages go only to authorized recipients is the electronic-messaging limb of information transfer (5.14)."
+  },
+  {
+   "control_id": "CM 2.8",
+   "iso_clauses": [
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Identifying interconnection and integration points between business information systems and protecting the information crossing them is the business-information-system transfer provision absorbed into 5.14."
+  },
+  {
+   "control_id": "CM 3.1",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Protecting e-commerce services traversing public networks against fraud, contract dispute and unauthorized disclosure or modification is the transactional-application security requirement enumerated in 8.26."
+  },
+  {
+   "control_id": "CM 3.2",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting online transactions against incomplete transmission, misrouting, message alteration, disclosure and replay or duplication is the transactional-services provision stated in 8.26."
+  },
+  {
+   "control_id": "CM 3.3",
+   "iso_clauses": [
+    "8.26",
+    "8.12"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Sanitising and approving information before publication and keeping publicly accessible systems available and unmodified is the publicly-available-application provision of 8.26, backstopped by leakage prevention (8.12)."
+  },
+  {
+   "control_id": "CM 4.1",
+   "iso_clauses": [
+    "8.21",
+    "5.14"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Inventorying information-sharing platforms and defining security requirements for connecting to or releasing information into them is a network-service security requirement (8.21) governing an information transfer arrangement (5.14)."
+  },
+  {
+   "control_id": "CM 4.2",
+   "iso_clauses": [
+    "5.23",
+    "5.31"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Prohibiting cloud storage or processing of health information and requiring disconnection of cloud-integrated systems is a cloud-service security decision (5.23); the bar on transmitting health data outside the UAE is a statutory data-residency obligation under 5.31, which ISO states generically without any geographic constraint."
+  },
+  {
+   "control_id": "CM 4.3",
+   "iso_clauses": [
+    "5.15",
+    "5.18"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Strictly controlling access to national health information exchange platforms with periodic revalidation of who needs it is the access-control policy of 5.15 enforced through the access-rights review of 5.18."
+  },
+  {
+   "control_id": "CM 5.1",
+   "iso_clauses": [
+    "8.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Managing, documenting and protecting all networks and supporting infrastructure, with current diagrams and controls chosen against identified network threats, is verbatim networks security (8.20)."
+  },
+  {
+   "control_id": "CM 5.2",
+   "iso_clauses": [
+    "8.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Identifying security requirements, service levels and management requirements for each network service and including them in network service agreements is verbatim 8.21."
+  },
+  {
+   "control_id": "CM 5.3",
+   "iso_clauses": [
+    "8.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Segregating physical, logical and wireless networks into security zones by criticality with per-zone requirements and periodic adequacy review is verbatim segregation of networks (8.22)."
+  },
+  {
+   "control_id": "CM 5.4",
+   "iso_clauses": [
+    "8.20",
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Site surveys to contain stray signal, trusted-device-only access and guest isolation are wireless network security under 8.20; the mandated strong authentication and cryptographic methods on access points are 8.24."
+  },
+  {
+   "control_id": "HI 1.1",
+   "iso_clauses": [
+    "5.34",
+    "5.1"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A health information protection policy (5.1) setting access criteria, data ownership, sharing rules, confidentiality obligations and legal sanctions for patient data is the privacy and PII protection clause 5.34."
+  },
+  {
+   "control_id": "HI 2.1",
+   "iso_clauses": [
+    "5.34",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Protecting healthcare information in the entity's custody through enforced access criteria and stricter clear-desk practice in PHI-handling areas is 5.34; the mandatory pre-access orientation on PHI protection and sanctions is 6.3."
+  },
+  {
+   "control_id": "TP 1.1",
+   "iso_clauses": [
+    "5.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A third party security policy framing secure management of supplier services, security objectives and supplier briefing to reduce third-party risk is verbatim information security in supplier relationships (5.19)."
+  },
+  {
+   "control_id": "TP 2.1",
+   "iso_clauses": [
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Embedding per-service security requirements, minimum baselines and service levels into third-party service agreements is verbatim addressing information security within supplier agreements (5.20)."
+  },
+  {
+   "control_id": "TP 2.2",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Monitoring supplier compliance with agreed security requirements and having qualified staff review supplier reports and records is the monitoring and review limb of 5.22."
+  },
+  {
+   "control_id": "TP 2.3",
+   "iso_clauses": [
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Managing changes to third-party service provisions through a formal process written into the agreement is the change-management limb of 5.22."
+  },
+  {
+   "control_id": "SA 1.1",
+   "iso_clauses": [
+    "8.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A policy establishing secure development and maintenance practices and the selection of the development model across internal and external stakeholders is the secure development life cycle clause 8.25."
+  },
+  {
+   "control_id": "SA 2.1",
+   "iso_clauses": [
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Analysing, specifying and approving security requirements for new systems and enhancements, addressing identified risk elements, is verbatim application security requirements (8.26)."
+  },
+  {
+   "control_id": "SA 2.2",
+   "iso_clauses": [
+    "8.28",
+    "6.3"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Requiring developers to receive baseline and security-feature-specific training before joining development work is the developer-competence expectation of secure coding (8.28), delivered through the training regime of 6.3."
+  },
+  {
+   "control_id": "SA 3.1",
+   "iso_clauses": [
+    "8.26",
+    "8.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defining validation rules for application input and dropping data identified as incorrect is the input-validation requirement ISO 27002:2022 absorbed into application security requirements (8.26) and secure coding practice (8.28)."
+  },
+  {
+   "control_id": "SA 3.2",
+   "iso_clauses": [
+    "8.26",
+    "8.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Embedding validation checks that detect corruption of information from processing errors or deliberate acts is the internal-processing control ISO 27002:2022 merged into 8.26 and 8.28."
+  },
+  {
+   "control_id": "SA 3.3",
+   "iso_clauses": [
+    "8.24",
+    "8.26"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Ensuring authenticity and integrity of messages exchanged between applications is normally delivered by the cryptographic mechanisms of 8.24, specified as an application requirement under 8.26."
+  },
+  {
+   "control_id": "SA 3.4",
+   "iso_clauses": [
+    "8.26",
+    "8.28"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Defining rules and parameters to validate application output as correct and appropriate is the output-validation control ISO 27002:2022 folded into 8.26 and 8.28."
+  },
+  {
+   "control_id": "SA 3.5",
+   "iso_clauses": [
+    "8.26",
+    "8.27"
+   ],
+   "scf_ids": [],
+   "confidence": "low",
+   "rationale": "Requiring distributed and mobile applications to tolerate communication failure and handle duplicate or out-of-sequence responses is a resilience design requirement — related to the application requirements of 8.26 and the engineering principles of 8.27, but ISO has no direct equivalent."
+  },
+  {
+   "control_id": "SA 4.1",
+   "iso_clauses": [
+    "8.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Key generation, revocation, recovery, strength standards, storage and protection of secret and private keys is the key-management limb explicitly inside 8.24."
+  },
+  {
+   "control_id": "SA 5.1",
+   "iso_clauses": [
+    "8.19"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting software installation on operational systems to authorized staff, retaining previous versions and routing installs through change approval is verbatim 8.19."
+  },
+  {
+   "control_id": "SA 5.2",
+   "iso_clauses": [
+    "8.33"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Using sample datasets rather than production data, authorizing and recording any use of real data, barring PII as test data and erasing it afterwards is verbatim test information (8.33)."
+  },
+  {
+   "control_id": "SA 5.3",
+   "iso_clauses": [
+    "8.4"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Restricting access to program source code strictly on need and per the access control policy is verbatim access to source code (8.4)."
+  },
+  {
+   "control_id": "SA 6.1",
+   "iso_clauses": [
+    "8.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Supervising outsourced software development and contractually binding the developer to secure coding policy, quality assurance and entity/regulatory requirements is verbatim outsourced development (8.30)."
+  },
+  {
+   "control_id": "SA 7.1",
+   "iso_clauses": [
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A strategy against supply chain threats to systems and medical devices — acquisition policy, limits on sharing architecture with suppliers, acceptance criteria, right-to-audit clauses — is verbatim ICT supply chain security (5.21)."
+  },
+  {
+   "control_id": "SA 7.2",
+   "iso_clauses": [
+    "5.19",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A defined evaluation process for suppliers before contracting is the supplier-selection limb of 5.19; periodic review of supplier compliance with agreement terms is 5.22."
+  },
+  {
+   "control_id": "SA 7.3",
+   "iso_clauses": [
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Limiting what is shared with suppliers, sharing only over secure channels and diversifying suppliers for critical products to deny adversaries a supply-chain foothold are supply chain risk measures under 5.21."
+  },
+  {
+   "control_id": "SA 7.4",
+   "iso_clauses": [
+    "5.21",
+    "5.20"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Evaluating risk to systems, medical devices and support operations from the supply chain (5.21) and agreeing the resulting control measures in supplier contracts (5.20)."
+  },
+  {
+   "control_id": "SA 7.5",
+   "iso_clauses": [
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Verifying that delivered systems, components and medical devices are genuine and that software has not been altered to insert back doors or covert channels is the component-authenticity and anti-tamper provision of 5.21."
+  },
+  {
+   "control_id": "SA 7.6",
+   "iso_clauses": [
+    "5.21",
+    "5.22"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Documenting supply chain elements and their interdependencies and addressing identified issues is 5.21; the regular assessments and audits of those elements are the supplier-service review of 5.22."
+  },
+  {
+   "control_id": "SA 7.7",
+   "iso_clauses": [
+    "5.30",
+    "5.21"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Contingency plans, stockpiled spares and multiple suppliers for critical components exist to keep ICT available through disruption (5.30) and are a supply-chain continuity measure under 5.21."
+  },
+  {
+   "control_id": "IM 1.1",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "An incident management policy establishing roles, responsibilities and a sustainable process for identifying and resolving incidents is verbatim incident management planning and preparation (5.24)."
+  },
+  {
+   "control_id": "IM 2.1",
+   "iso_clauses": [
+    "5.26",
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Tested procedures for handling incidents before, during and after occurrence with stakeholder and authority communication planned is the response clause 5.26, prepared under 5.24."
+  },
+  {
+   "control_id": "IM 2.2",
+   "iso_clauses": [
+    "5.24",
+    "5.5"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Standing up a CSIRT with defined authority, competent named role-holders, communication protocols and funding is the preparation clause 5.24; the required coordination with the Abu Dhabi health sector regulator is contact with authorities (5.5)."
+  },
+  {
+   "control_id": "IM 2.3",
+   "iso_clauses": [
+    "5.25"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Assessing and classifying security incidents against a defined severity scheme with per-class handling workflows is verbatim assessment and decision on information security events (5.25)."
+  },
+  {
+   "control_id": "IM 2.4",
+   "iso_clauses": [
+    "5.24"
+   ],
+   "scf_ids": [],
+   "confidence": "medium",
+   "rationale": "Testing incident response capability against expected outcomes and closing identified gaps is the plan-exercise expectation within incident management preparation (5.24)."
+  },
+  {
+   "control_id": "IM 2.5",
+   "iso_clauses": [
+    "5.28"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Procedures for identifying, collecting and preserving incident evidence addressing chain of custody, safety, personnel competency and documentation is verbatim collection of evidence (5.28)."
+  },
+  {
+   "control_id": "IM 2.6",
+   "iso_clauses": [
+    "5.27"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Institutionalising lessons learned from past incidents into a knowledge base to reduce recurrence is verbatim learning from information security incidents (5.27)."
+  },
+  {
+   "control_id": "IM 3.1",
+   "iso_clauses": [
+    "5.7",
+    "5.6"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Obtaining cybersecurity information from multiple sources and contextualising it to the entity's systems and processes is threat intelligence (5.7); participation in the information sharing community is contact with special interest groups (5.6)."
+  },
+  {
+   "control_id": "IM 3.2",
+   "iso_clauses": [
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A formal reporting channel with designated points of contact and staff and third-party awareness of the duty to report security events is verbatim information security event reporting (6.8)."
+  },
+  {
+   "control_id": "IM 3.3",
+   "iso_clauses": [
+    "6.8"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Reporting observed or suspected security weaknesses through a formal channel and prohibiting users from exploiting them is the weakness-reporting limb of 6.8."
+  },
+  {
+   "control_id": "SC 1.1",
+   "iso_clauses": [
+    "5.29",
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "A continuity planning policy for scenarios threatening availability of systems supporting critical services sets management expectations for maintaining security during disruption (5.29) and ICT continuity readiness (5.30)."
+  },
+  {
+   "control_id": "SC 2.1",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Developing ICT continuity plans that identify the systems supporting critical services, assign roles and align with organizational BC/DR planning is verbatim ICT readiness for business continuity (5.30)."
+  },
+  {
+   "control_id": "SC 2.2",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Ensuring the capabilities the continuity plans depend on are actually established and available at activation is the implementation limb of 5.30."
+  },
+  {
+   "control_id": "SC 2.3",
+   "iso_clauses": [
+    "5.30"
+   ],
+   "scf_ids": [],
+   "confidence": "high",
+   "rationale": "Scheduled testing of ICT continuity plans for adequacy and resource readiness, documenting outcomes and updating plans after change or lessons learned, is the test-and-maintain limb of 5.30."
+  }
+ ]
+}

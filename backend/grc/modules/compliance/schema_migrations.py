@@ -826,6 +826,22 @@ _COLUMN_ADDS = [
     # CTEM Phase 2 follow-up: soft retraction for rule-driven link removal.
     ("grc_control_effectiveness_evidence", "retracted_at", "TIMESTAMP",
      "ix_grc_ctrl_eff_retracted_at"),
+    # Regulatory change AI assessments: persist the extracted source document so
+    # assessments can be regenerated at full fidelity, and flag AI-generated rows
+    # so regenerate can replace them while preserving manually-added ones.
+    ("grc_regulatory_changes", "source_text", "TEXT", None),
+    ("grc_regulatory_impact_assessments", "is_ai_generated", "BOOLEAN DEFAULT FALSE", None),
+    ("grc_regulatory_implementation_tasks", "is_ai_generated", "BOOLEAN DEFAULT FALSE", None),
+    # SCF control plane. The bridge: one NormalizedControl row per SCF control
+    # carries its scf_id, so every table already FK'd to grc_normalized_controls
+    # (evidence, exceptions, assessments, work items) keeps working unchanged and
+    # nothing else in the platform has to learn the word "SCF".
+    ("grc_normalized_controls", "scf_id", "VARCHAR(16)", "ix_grc_normalized_controls_scf_id"),
+    # Collection health, kept distinct from control failure: a revoked scope or an
+    # expired secret must surface as "not collected in 90 days", never as a
+    # deficient control.
+    ("grc_integration_connections", "last_success_at", "TIMESTAMP", None),
+    ("grc_integration_connections", "last_error", "TEXT", None),
 ]
 
 
