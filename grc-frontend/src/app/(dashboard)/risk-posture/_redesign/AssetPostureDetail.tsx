@@ -66,7 +66,7 @@ type Internal = {
   data_quality: number;
   known_dimensions: string[];
   components: {
-    cis: { score: number; known: boolean; passed: number; failed: number; total: number; pass_rate: number | null; errored?: number; never_scanned?: number };
+    cis: { score: number; known: boolean; passed: number; failed: number; total: number; pass_rate: number | null; errored?: number; skipped?: number; never_scanned?: number };
     vuln: { score: number; known: boolean; active_count: number; total_linked: number; by_severity: Record<string, number>; raw_points?: number; effective_risk?: { per_vuln: PerVuln[] } };
     cia: { score: number; known: boolean; confidentiality: number | null; integrity: number | null; availability: number | null; missing: boolean; auto_derived?: boolean };
     ctrl: { score: number; known: boolean; coverage_pct: number; linked_count: number; target: number };
@@ -464,7 +464,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   const evidence = (k: 'vuln' | 'cis' | 'cia' | 'ctrl' | 'risk'): string => {
     switch (k) {
       case 'vuln': return `${comp.vuln.active_count} active${comp.vuln.total_linked > comp.vuln.active_count ? ` of ${comp.vuln.total_linked}` : ''} · ${comp.vuln.by_severity?.critical ?? 0} crit / ${comp.vuln.by_severity?.high ?? 0} high / ${comp.vuln.by_severity?.medium ?? 0} med${kev ? ` · ${kev} KEV` : ''}${comp.vuln.raw_points != null ? ` · ${comp.vuln.raw_points} severity-weighted pts` : ''}`;
-      case 'cis': return comp.cis.total === 0 ? 'no CIS rules in the library yet' : comp.cis.pass_rate != null ? `${comp.cis.pass_rate}% pass · ${comp.cis.passed}/${comp.cis.total} rules · ${comp.cis.failed} fail${comp.cis.errored ? ` · ${comp.cis.errored} errored` : ''}${comp.cis.never_scanned ? ` · ${comp.cis.never_scanned} never-scanned` : ''}` : 'not scanned yet';
+      case 'cis': return comp.cis.total === 0 ? 'no CIS rules in the library yet' : comp.cis.pass_rate != null ? `${comp.cis.pass_rate}% pass · ${comp.cis.passed}/${comp.cis.total} rules · ${comp.cis.failed} fail${comp.cis.errored ? ` · ${comp.cis.errored} errored` : ''}${comp.cis.skipped ? ` · ${comp.cis.skipped} n/a` : ''}${comp.cis.never_scanned ? ` · ${comp.cis.never_scanned} never-scanned` : ''}` : 'not scanned yet';
       case 'cia': return comp.cia.auto_derived ? 'auto · derived Medium from criticality (unconfirmed) — set explicit C/I/A to confirm' : `C${comp.cia.confidentiality ?? '–'} · I${comp.cia.integrity ?? '–'} · A${comp.cia.availability ?? '–'} · criticality ${asset.criticality || '—'}`;
       case 'ctrl': return `${comp.ctrl.coverage_pct}% covered · ${comp.ctrl.linked_count} of ${comp.ctrl.target} controls linked`;
       case 'risk': return `${comp.risk.active_count} active${comp.risk.total_linked > comp.risk.active_count ? ` of ${comp.risk.total_linked} linked` : ''}`;

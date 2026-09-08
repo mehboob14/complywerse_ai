@@ -277,31 +277,36 @@ def _cis_gap_self(db: Session, tenant_id: int, asset_id: int) -> Dict[str, Any]:
     # (passed + failed + errored + never_scanned == total) instead of silently going
     # missing, and folded into the coverage gap below so they aren't dropped from the
     # score.
-    errored = len(latest) - passed - failed
+    errored = sum(1 for s in latest.values() if s == "error")
+    # skipped / running / pending etc. are NOT pass, fail, or a hard error — they
+    # are not-applicable (oscap "notapplicable" for rules that don't apply to this
+    # host, e.g. desktop rules on a headless server) or not-yet-evaluated. They
+    # must drop out entirely, NOT be lumped into `errored`. The old
+    # `errored = len(latest) - passed - failed` counted 60 skipped + 10 orphaned
+    # "running" rows as errors ("70 errored" when only 2 rules truly errored).
+    skipped = len(latest) - passed - failed - errored
     never_scanned = total - len(latest)
     scanned = passed + failed
     # Pass rate = passed / evaluated (passed+failed) — the standard CIS score,
-    # excluding never-scanned/errored/not-applicable. Same basis the CIS card
-    # uses, so the number is identical on both pages.
+    # excluding never-scanned/errored/not-applicable. Same basis as the CIS card.
     pass_rate = round(passed / scanned * 100, 1) if scanned else None
     if scanned == 0:
-        # Rules exist and runs exist, but every one errored — nothing passed and
-        # nothing failed. `score = 0.0` is the BEST possible gap, so an entirely
-        # broken scan scored as a flawless asset, at full dimension weight, while
-        # the card above it showed a 0% pass rate. Nothing was measured here, so
-        # the coverage penalty is total: this is maximum uncertainty, not
-        # maximum health.
+        # Rules exist and runs exist, but every one errored / was n/a — nothing
+        # passed and nothing failed. score = 0.0 would read as a flawless asset
+        # at full weight; instead treat it as maximum uncertainty.
         score = 1.0
     else:
         scanned_gap = failed / scanned
-        # never_scanned AND errored are both "not effectively measured" — treat both
-        # as coverage gap (uncertainty), rather than ignoring the errored ones.
-        coverage_penalty = (never_scanned + errored) / total
+        # Coverage gap = rules we couldn't measure (errored + never-run) over the
+        # measurable universe. Not-applicable (skipped) rules are excluded — they
+        # can't be hardened, so they neither help nor hurt.
+        measurable = passed + failed + errored + never_scanned
+        coverage_penalty = (never_scanned + errored) / measurable if measurable else 0.0
         score = 0.8 * scanned_gap + 0.2 * coverage_penalty
 
     return {
         "score": round(score, 4), "known": True,
-        "passed": passed, "failed": failed, "errored": errored,
+        "passed": passed, "failed": failed, "errored": errored, "skipped": skipped,
         "never_scanned": never_scanned, "total": total, "pass_rate": pass_rate,
     }
 

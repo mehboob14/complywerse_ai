@@ -435,17 +435,23 @@ export default function CompliancePanel({ asset }: { asset: any }) {
     return out;
   }, [runs]);
   const scanStats = useMemo(() => {
-    const passed = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'passed').length;
-    const failed = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
-    const errored = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'error').length;
-    const scanned = latestByPlugin.length;
+    // Scope to the asset's APPLICABLE rules (the scanner's eligible set) so the
+    // card counts the same rules the risk posture does — not stale runs left on
+    // non-applicable / manual rules by old broken scans. Falls back to all runs
+    // until the applicable list loads.
+    const applicableIds = new Set<number>(((previewQuery.data as any)?.applicable?.plugin_ids as number[]) || []);
+    const rows = applicableIds.size ? latestByPlugin.filter((r) => applicableIds.has(r.plugin_id)) : latestByPlugin;
+    const passed = rows.filter((r) => (r.status || '').toLowerCase() === 'passed').length;
+    const failed = rows.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
+    const errored = rows.filter((r) => (r.status || '').toLowerCase() === 'error').length;
+    const scanned = rows.length;
     // CIS score = passed / evaluated (passed+failed). Not-applicable (skipped)
     // and errored rules drop out of the denominator — same basis as the risk
     // posture, so the % is identical on both pages.
     const evaluated = passed + failed;
     const passRate = evaluated ? Math.round((passed / evaluated) * 100) : 0;
     return { passed, failed, errored, scanned, passRate };
-  }, [latestByPlugin]);
+  }, [latestByPlugin, previewQuery.data]);
 
   // One session per Scan-all invocation — runs within 5 min of each other.
   const sessions = useMemo(() => {

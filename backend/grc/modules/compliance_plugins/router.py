@@ -1163,6 +1163,11 @@ def match_preview(
         },
         "applicable": {
             "count": len(stage2_kept),
+            # IDs of the applicable (scan-eligible) rules, so the compliance card
+            # can scope its pass/fail rollup to the SAME set the scanner + risk
+            # posture use — otherwise it counts stale runs left on non-applicable
+            # / manual rules by old broken scans and disagrees with the posture.
+            "plugin_ids": [p.id for p in stage2_kept],
             "examples": _sample(stage2_kept, n=5),
         },
     }
