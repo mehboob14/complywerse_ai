@@ -242,10 +242,18 @@ def _aggregate_status(statuses: List[str]) -> str:
         return "not_run"
     if any(s == "failed" for s in statuses):
         return "failed"
+    # above a passing sibling: if one collector could not collect, part of this
+    # control is unasserted, and "passing" would overstate what we know
+    if any(s == "collection_failed" for s in statuses):
+        return "collection_failed"
     if any(s == "error" for s in statuses):
         return "error"
     if any(s in ("running", "pending") for s in statuses):
         return "running"
+    # ranked above passed deliberately: a control with one stale assertion is not
+    # a passing control, it is a control we can no longer vouch for in full
+    if any(s == "expired" for s in statuses):
+        return "expired"
     if all(s == "passed" for s in statuses):
         return "passed"
     if any(s == "passed" for s in statuses):
@@ -323,7 +331,25 @@ def _checks_for_control(db: Session, control_codes: List[str]) -> List[Dict[str,
     return out
 
 
-def _status_from_run(run, check_ids: set, control_codes: List[str]) -> str:
+# SCF publishes a reassessment cadence per control. A result older than its own
+# window has stopped being evidence: the token may have been revoked, the bucket
+# reopened, the reviewer left. Defaulting to Annual is the loosest of SCF's three
+# windows, so an unspecified cadence never expires a result early.
+_CADENCE_DAYS = {"Quarterly": 90, "Semi-Annual": 180, "Annual": 365}
+# A collector that has not collected in a quarter is not a working collector,
+# whatever its last verdict said.
+COLLECTION_STALE_DAYS = 90
+
+
+def _is_stale(run, cadence: Optional[str]) -> bool:
+    at = getattr(run, "started_at", None)
+    if at is None:
+        return False
+    return (datetime.utcnow() - at).days > _CADENCE_DAYS.get(cadence or "", 365)
+
+
+def _status_from_run(run, check_ids: set, control_codes: List[str],
+                     cadence: Optional[str] = None) -> str:
     """The status of ONE control from ONE run, using only that control's findings.
 
     The run-level status is the connector's verdict across every check it ran, so
@@ -332,6 +358,11 @@ def _status_from_run(run, check_ids: set, control_codes: List[str]) -> str:
     own codes — otherwise a single personal GitHub account without 2FA marks dozens
     of unrelated controls, including key management and network segmentation, failed.
     """
+    # The collector could not collect — a revoked scope, an expired secret, a
+    # provider outage. That says nothing about the control, and reporting it as a
+    # control failure is how a broken integration reads as a broken environment.
+    if getattr(run, "status", None) == "error":
+        return "collection_failed"
     raw = getattr(run, "raw_output", None) or {}
     findings = raw.get("findings") or []
     wanted = set(control_codes or [])
@@ -341,6 +372,11 @@ def _status_from_run(run, check_ids: set, control_codes: List[str]) -> str:
     ]
     if not mine:
         return "not_run"
+    # A verdict older than the control's reassessment window is not a verdict any
+    # more. Reporting it green is how a check that passed 400 days ago on a
+    # since-revoked token keeps a control looking assured.
+    if _is_stale(run, cadence):
+        return "expired"
     statuses = {f.get("status") for f in mine}
     if "fail" in statuses:
         return "failed"
@@ -351,7 +387,8 @@ def _status_from_run(run, check_ids: set, control_codes: List[str]) -> str:
     return "not_run"
 
 
-def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str]):
+def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str],
+                       cadence: Optional[str] = None):
     """(checks payload, per-control statuses) for a control, scoped to its own codes."""
     bound = _checks_for_control(db, control_codes)
     if not bound:
@@ -362,7 +399,7 @@ def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str]):
         pl = b["plugin"]
         run = latest.get(pl.id)
         ids = {c.get("id") for c in b["checks"]}
-        st = _status_from_run(run, ids, control_codes) if run else "not_run"
+        st = _status_from_run(run, ids, control_codes, cadence) if run else "not_run"
         statuses.append(st)
         linked.append({
             "plugin_key": pl.plugin_key, "id": pl.id, "title": pl.title,
@@ -815,7 +852,8 @@ def list_common_controls(
     rows = (
         db.query(SCFControl.scf_id, SCFControl.name, SCFControl.domain_name,
                  SCFControl.domain_identifier, SCFControl.pptdf, SCFControl.weight,
-                 SCFControl.is_material, SCFControl.ao_count, SCFControl.sort_key)
+                 SCFControl.is_material, SCFControl.ao_count, SCFControl.sort_key,
+                 SCFControl.conformity_cadence)
         .filter(SCFControl.release_id == release.id)
         .order_by(SCFControl.sort_key)
         .all()
@@ -823,12 +861,12 @@ def list_common_controls(
 
     out: List[Dict[str, Any]] = []
     categories: set = set()
-    for scf_id, name, domain, dom_id, pptdf, weight, material, ao_count, _sk in rows:
+    for scf_id, name, domain, dom_id, pptdf, weight, material, ao_count, _sk, cad in rows:
         if domain:
             categories.add(domain)
         req = {k: v for k, v in (reqs.get(scf_id) or {}).items() if v}
         soc2_codes = [r["code"] for r in req.get("soc2", [])]
-        linked, statuses = _linked_checks_for(db, tenant_id, soc2_codes)
+        linked, statuses = _linked_checks_for(db, tenant_id, soc2_codes, cad)
         out.append({
             "control_id": scf_id,
             "canonical_key": scf_id,
@@ -1062,6 +1100,7 @@ def common_controls_overview(
             soc2_of[scf_id].append(code)
 
     # ── automation: what a check can currently assert ─────────────────────────
+    cadence_of = {c.scf_id: c.conformity_cadence for c in controls}
     idx = _check_index(db)
     plugin_ids = {p.id for lst in idx.values() for p, _ in lst}
     latest = _latest_runs_by_plugin(db, tenant_id, sorted(plugin_ids))
@@ -1075,9 +1114,60 @@ def common_controls_overview(
         if not bound:
             continue
         checks_per_control[scf_id] = len(bound)
-        sts = [_status_from_run(latest[pid], cids, codes) if latest.get(pid) else "not_run"
+        cad = cadence_of.get(scf_id)
+        sts = [_status_from_run(latest[pid], cids, codes, cad) if latest.get(pid) else "not_run"
                for pid, (_, cids) in bound.items()]
         status_of[scf_id] = _aggregate_status(sts)
+
+    now = datetime.utcnow()
+
+    # ── collection health: a broken collector is not a broken control ─────────
+    # A run that FAILED still collected — its checks came back negative. Only an
+    # errored run means we could not look, so those are the only ones excluded
+    # from "last successful collection".
+    last_ok: Dict[int, datetime] = {}
+    if plugin_ids:
+        last_ok = dict(
+            db.query(CompliancePluginRun.plugin_id, func.max(CompliancePluginRun.started_at))
+            .filter(CompliancePluginRun.tenant_id == tenant_id,
+                    CompliancePluginRun.plugin_id.in_(sorted(plugin_ids)),
+                    CompliancePluginRun.status.in_(("passed", "failed")))
+            .group_by(CompliancePluginRun.plugin_id).all())
+    plugin_meta = {p.id: p for lst in idx.values() for p, _ in lst}
+    controls_per_plugin: Counter = Counter()
+    for scf_id, codes in soc2_of.items():
+        for pid in {p.id for code in codes for p, _ in idx.get(code, [])}:
+            controls_per_plugin[pid] += 1
+
+    collection: List[Dict[str, Any]] = []
+    coll_counts: Counter = Counter()
+    for pid, p in sorted(plugin_meta.items(), key=lambda kv: kv[1].plugin_key or ""):
+        run = latest.get(pid)
+        ok_at = last_ok.get(pid)
+        days = (now - ok_at).days if ok_at else None
+        if run is None:
+            state = "never_run"
+        elif run.status == "error" or ok_at is None:
+            state = "failing"
+        elif days is not None and days > COLLECTION_STALE_DAYS:
+            state = "stale"
+        else:
+            state = "healthy"
+        coll_counts[state] += 1
+        if state == "never_run":       # 74 of 75 unconfigured checks is not a worklist
+            continue
+        collection.append({
+            "plugin_key": p.plugin_key, "title": p.title,
+            "provider": (p.check_definition or {}).get("provider"),
+            "state": state,
+            "last_success_at": ok_at.isoformat() if ok_at else None,
+            "days_since_success": days,
+            "last_attempt_at": run.started_at.isoformat() if run and run.started_at else None,
+            "error": (run.error_message or run.result_summary) if run and state == "failing" else None,
+            "controls_affected": controls_per_plugin.get(pid, 0),
+        })
+    collection.sort(key=lambda c: ({"failing": 0, "stale": 1, "healthy": 2}[c["state"]],
+                                   -c["controls_affected"]))
 
     # ── evidence: the consolidated sets, including D2's catalogue deliverables ─
     ev = _consolidated_evidence()
@@ -1095,7 +1185,6 @@ def common_controls_overview(
     scf_of_norm = {nid: sid for nid, sid in
                    db.query(NormalizedControl.id, NormalizedControl.scf_id)
                    .filter(NormalizedControl.scf_id.isnot(None)).all()}
-    now = datetime.utcnow()
     assurance = {k: 0 for k in ("tracked", "assigned", "implemented", "tested", "effective",
                                 "partially_effective", "ineffective", "overdue",
                                 "evidence_pending")}
@@ -1218,6 +1307,11 @@ def common_controls_overview(
             "last_run_at": last_run.isoformat() if last_run else None,
             "posture": dict(posture),
         },
+        # Deliberately its own block, not folded into posture: a connector that
+        # cannot authenticate tells you nothing about the control, and the two
+        # belong on separate lines of the same screen.
+        "collection": {"connectors": collection, "counts": dict(coll_counts),
+                       "stale_after_days": COLLECTION_STALE_DAYS},
         "frameworks": frameworks,
         "crosswalk": {"rows": sum(mapping_modes.values()), "by_match_mode": dict(mapping_modes),
                       "reviewed": reviewed},
@@ -1777,7 +1871,7 @@ def get_common_control(
     )]
 
     soc2_codes = [i["code"] for g in req_groups if g["framework"] == "soc2" for i in g["items"]]
-    linked, statuses = _linked_checks_for(db, tenant_id, soc2_codes)
+    linked, statuses = _linked_checks_for(db, tenant_id, soc2_codes, ctl.conformity_cadence)
 
     return {
         "control_id": ctl.scf_id,

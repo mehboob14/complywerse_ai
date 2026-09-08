@@ -90,6 +90,10 @@ export const CONTROL_STATUS: Record<string, { label: string; cls: string; dot: s
   failed: { label: 'Failing', cls: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' },
   partial: { label: 'Partial', cls: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
   error: { label: 'Error', cls: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500' },
+  // Deliberately not rose: neither of these says the control is failing. One says
+  // the result is too old to rely on, the other that we could not look at all.
+  expired: { label: 'Expired', cls: 'bg-orange-50 text-orange-700 border-orange-200', dot: 'bg-orange-500' },
+  collection_failed: { label: 'Not collected', cls: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
   running: { label: 'Running', cls: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
   not_run: { label: 'Not run', cls: 'bg-violet-50 text-violet-700 border-violet-200', dot: 'bg-violet-500' },
   manual: { label: 'Manual', cls: 'bg-slate-100 text-slate-500 border-slate-200', dot: 'bg-slate-400' },
@@ -143,6 +147,72 @@ export interface Soc2Criterion {
   description?: string | null;
   category: string;
   requirement_key: string;
-  trust_services_category: string;
+  trust_services_category?: string | null; // SOC 2 only; absent for ISO/GDPR
   is_always_in_scope: boolean;
+}
+
+// The automation frameworks whose control libraries share one check engine.
+export const AUTOMATION_FRAMEWORKS = [
+  { key: 'soc2', label: 'SOC 2', short: 'SOC2' },
+  { key: 'iso27001', label: 'ISO 27001', short: 'ISO' },
+  { key: 'gdpr', label: 'GDPR', short: 'GDPR' },
+] as const;
+export type AutomationFrameworkKey = (typeof AUTOMATION_FRAMEWORKS)[number]['key'];
+
+// Solid framework badge (categorical colour per framework) for the common library.
+const FRAMEWORK_COLOR: Record<string, string> = {
+  soc2: '#0f766e', iso27001: '#2563eb', gdpr: '#7c3aed',
+};
+const FRAMEWORK_LABEL: Record<string, { short: string; label: string }> = {
+  soc2: { short: 'SOC 2', label: 'SOC 2' },
+  iso27001: { short: 'ISO 27001', label: 'ISO/IEC 27001:2022' },
+  gdpr: { short: 'GDPR', label: 'GDPR' },
+};
+// Any framework slug the SCF crosswalk resolves to gets a stable colour, so a
+// newly seeded framework is visually distinct without touching this file.
+const BADGE_PALETTE = [
+  '#0f766e', '#2563eb', '#7c3aed', '#b45309', '#be123c', '#0369a1',
+  '#4d7c0f', '#9333ea', '#c2410c', '#0891b2', '#a16207', '#7e22ce',
+];
+function paletteFor(fw: string): string {
+  let h = 0;
+  for (let i = 0; i < fw.length; i++) h = (h * 31 + fw.charCodeAt(i)) >>> 0;
+  return BADGE_PALETTE[h % BADGE_PALETTE.length];
+}
+function prettyFw(fw: string): string {
+  return fw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+export function FrameworkBadge({ fw, label }: { fw: string; label?: string }) {
+  const m = FRAMEWORK_LABEL[fw] || { short: label || prettyFw(fw), label: label || prettyFw(fw) };
+  return (
+    <span
+      style={{ backgroundColor: FRAMEWORK_COLOR[fw] || paletteFor(fw) }}
+      className="inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-bold text-white"
+      title={m.label}
+    >
+      {m.short}
+    </span>
+  );
+}
+
+// Common control library shapes (mirror /automation/common/controls).
+export interface FrameworkReq { code: string; name: string; text?: string }
+export interface CommonControl {
+  control_id: string;
+  canonical_key: string;
+  title: string;
+  description: string;
+  guidance?: string | null;
+  category: string;
+  domain?: string;
+  importance?: string;
+  sub_type?: string | null;
+  frameworks: string[];
+  // framework slug -> the requirements this control discharges there
+  requirements: Record<string, FrameworkReq[]>;
+  requirement_count: number;
+  checks_count: number;
+  overall_status: string;
+  checks: LinkedCheck[];
 }

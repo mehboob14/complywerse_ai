@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
   Activity, AlertTriangle, BarChart3, CheckCircle2, ClipboardList, FileText,
-  Layers, Loader2, ShieldCheck, Users,
+  Layers, Loader2, Plug, ShieldCheck, Users,
 } from 'lucide-react';
 import { automationApi } from '@/lib/api';
 import { CONTROL_STATUS, FrameworkBadge } from '@/components/soc2/ui';
@@ -43,6 +43,16 @@ interface Overview {
   automation: {
     controls_with_checks: number; checks_bound: number; plugins_enabled: number;
     plugins_run: number; last_run_at: string | null; posture: Record<string, number>;
+  };
+  collection: {
+    connectors: {
+      plugin_key: string; title: string | null; provider: string | null;
+      state: 'healthy' | 'stale' | 'failing' | 'never_run';
+      last_success_at: string | null; days_since_success: number | null;
+      last_attempt_at: string | null; error: string | null; controls_affected: number;
+    }[];
+    counts: Record<string, number>;
+    stale_after_days: number;
   };
   frameworks: FrameworkRow[];
   crosswalk: { rows: number; by_match_mode: Record<string, number>; reviewed: number };
@@ -122,7 +132,14 @@ function NotTracked({ system, cta }: { system: string; cta?: { href: string; lab
 
 const POSTURE_CLS: Record<string, string> = {
   passed: 'bg-emerald-500', failed: 'bg-rose-500', partial: 'bg-amber-500',
-  error: 'bg-orange-500', not_run: 'bg-slate-300', manual: 'bg-slate-200',
+  error: 'bg-amber-400', expired: 'bg-orange-500', collection_failed: 'bg-purple-500',
+  not_run: 'bg-slate-300', manual: 'bg-slate-200',
+};
+const COLLECTION_CLS: Record<string, string> = {
+  healthy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  stale: 'bg-amber-50 text-amber-700 border-amber-200',
+  failing: 'bg-purple-50 text-purple-700 border-purple-200',
+  never_run: 'bg-slate-50 text-slate-500 border-slate-200',
 };
 
 export default function AutomationOverviewPage() {
@@ -242,6 +259,52 @@ export default function AutomationOverviewPage() {
           )}
         </Panel>
       </div>
+
+      <Panel
+        icon={Plug}
+        title="Collection health"
+        hint={`stale after ${data.collection.stale_after_days} days`}
+        action={
+          <Link href="/automation/checks" className="text-xs font-medium text-blue-700 hover:underline">
+            Checks →
+          </Link>
+        }
+      >
+        <div className="flex flex-wrap gap-2">
+          {(['healthy', 'stale', 'failing', 'never_run'] as const).map((s) => (
+            <span key={s} className={`rounded border px-2 py-0.5 text-xs font-medium ${COLLECTION_CLS[s]}`}>
+              {n(data.collection.counts[s] || 0)} {s.replace('_', ' ')}
+            </span>
+          ))}
+        </div>
+        {data.collection.connectors.length === 0 ? (
+          <p className="mt-3 text-[12px] text-slate-500">No connector has run yet.</p>
+        ) : (
+          <ul className="mt-3 divide-y divide-slate-100 rounded border border-slate-200">
+            {data.collection.connectors.map((c) => (
+              <li key={c.plugin_key} className="flex flex-wrap items-center gap-2 px-3 py-2 text-sm">
+                <span className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${COLLECTION_CLS[c.state]}`}>
+                  {c.state.replace('_', ' ')}
+                </span>
+                <span className="font-medium text-slate-800">{c.provider || c.title || c.plugin_key}</span>
+                <span className="text-[11px] text-slate-400">
+                  {c.days_since_success != null
+                    ? `collected ${c.days_since_success}d ago`
+                    : 'never collected successfully'}
+                </span>
+                {c.error && <span className="text-[11px] text-purple-700">{c.error}</span>}
+                <span className="ml-auto text-[11px] tabular-nums text-slate-500">
+                  {n(c.controls_affected)} control{c.controls_affected === 1 ? '' : 's'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="mt-3 border-t border-slate-100 pt-3 text-[12px] leading-relaxed text-slate-500">
+          A connector that cannot authenticate says nothing about the control it feeds, so it is counted here
+          rather than as a failure above. Controls it touches read <em>Not collected</em>, never <em>Failing</em>.
+        </p>
+      </Panel>
 
       <Panel icon={Layers} title="By domain" hint={`${lib.domains} SCF domains`}>
         <div className="overflow-x-auto">

@@ -19,7 +19,7 @@ import {
 } from '@/components/soc2/ui';
 
 const SUB_TYPES = ['Automated', 'Hybrid', 'Manual'];
-const STATUS_OPTS = ['passed', 'failed', 'partial', 'not_run', 'manual'];
+const STATUS_OPTS = ['passed', 'failed', 'partial', 'expired', 'collection_failed', 'not_run', 'manual'];
 // Order the crosswalk rows: the frameworks with the most requirements first, so
 // the densest mapping is what the eye lands on. Driven by the data, not a list.
 const fwOrder = (reqs: CommonControl['requirements']): string[] =>
