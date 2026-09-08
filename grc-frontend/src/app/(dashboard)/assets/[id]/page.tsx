@@ -744,7 +744,8 @@ export default function AssetDetailPage() {
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
     ...(!outsideOnly ? [{ id: 'compliance' as TabType, label: 'Compliance', icon: Cpu }] : []),
     { id: 'trajectory', label: 'Trajectory', icon: Network },
-    { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
+    // Criticality Assessments tab hidden until wired to real data (was demo/seed). Panel code kept.
+    // { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
 
   // Live data mapped into the shape the delivered AssetOverview design consumes.
@@ -777,7 +778,8 @@ export default function AssetDetailPage() {
     })),
     actions: [
       ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
-      { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
+      // "Assess risk" opened the now-hidden Criticality Assessments tab — hidden with it.
+      // { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
       ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
       ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
       { label: 'CIS scans', onClick: () => router.push(`/compliance-plugins/asset/${assetId}`) },
