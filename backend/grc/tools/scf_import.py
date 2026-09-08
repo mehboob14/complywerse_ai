@@ -25,10 +25,23 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import text
-from sqlalchemy.orm import Session
-
 SCF_DIR = Path(__file__).resolve().parents[1] / "seed_data" / "scf"
+
+# grc.db reads MASTER_DATABASE_URL / TENANT_DB_URL_TEMPLATE at import time and
+# falls back to postgres:postgres@localhost when they are absent. Under systemd
+# the service gets them from its unit; a human running this by hand does not, so
+# the tool would connect as the default superuser and fail authentication against
+# a real deployment. Load the .env first, exactly as evidence_consolidation does,
+# and do it BEFORE grc.db is imported — after that the URLs are already bound.
+try:
+    from dotenv import load_dotenv
+
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+except ImportError:  # dotenv is optional; a pre-exported environment still works
+    pass
+
+from sqlalchemy import text  # noqa: E402
+from sqlalchemy.orm import Session  # noqa: E402
 
 # A resolver row is exactly as strong as the way its code matched. `exact` is code
 # identity and earns full confidence. `parent` (our APO01 inheriting every mapping
@@ -47,11 +60,26 @@ def _load(name: str) -> Any:
     return json.loads(p.read_text(encoding="utf-8"))
 
 
+# Exactly the files the import reads. It used to hash every file in the
+# directory, which meant anything left beside them — a retired csv, a scratch
+# script — changed the checksum and invalidated every tenant's import without
+# a single catalog byte having moved. bridge.csv.gz is optional (retired in
+# 2026.2) and simply contributes nothing when absent.
+_INPUTS = (
+    "manifest.json", "controls.json", "domains.json", "objectives.json",
+    "sources.json", "erl.json", "cmm_levels.json", "crosswalk_registry.json",
+    "mappings.csv.gz", "resolved.csv.gz", "bridge.csv.gz", "direct.csv.gz",
+)
+
+
 def artifact_checksum() -> str:
     h = hashlib.sha256()
-    for name in sorted(p.name for p in SCF_DIR.glob("*") if p.is_file()):
+    for name in _INPUTS:
+        p = SCF_DIR / name
+        if not p.is_file():
+            continue
         h.update(name.encode())
-        h.update((SCF_DIR / name).read_bytes())
+        h.update(p.read_bytes())
     return h.hexdigest()[:64]
 
 
@@ -94,6 +122,21 @@ def import_tenant(slug: str, tenant_id: int, force: bool = False) -> Dict[str, A
                 return {"slug": slug, "skipped": "already imported", "release_id": existing.id}
             if existing.import_status == "importing":
                 return {"slug": slug, "skipped": "import in flight — use --force to reset"}
+            # Present but not a match: the seed artifacts moved under an already
+            # imported release, or a previous run died mid-import. Falling through
+            # here used to hit the unique index on `version` and surface a raw
+            # IntegrityError, which reads like a bug rather than the decision it
+            # actually is — the caller has to choose to replace the catalog.
+            return {
+                "slug": slug,
+                "skipped": (
+                    f"release {version} already present with import_status="
+                    f"'{existing.import_status}' and a different checksum "
+                    f"({existing.import_checksum[:12]}… on record, {checksum[:12]}… on disk) "
+                    "— the seed artifacts changed since it was imported. "
+                    "Re-run with --force to replace it."
+                ),
+            }
         if existing and force:
             db.execute(text("DELETE FROM grc_scf_release WHERE id = :i"), {"i": existing.id})
             # The bridge run's NormalizedControls are FK'd from several tables, and
