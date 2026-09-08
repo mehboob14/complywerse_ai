@@ -180,7 +180,10 @@ export default function ConnectionsPage() {
       setSyncResult({
         id: syncingId,
         data: {
-          status: c.last_sync_status === 'success' ? 'completed' : 'failed',
+          // Only an explicit 'failed' is a failure. Anything else that has
+          // reported back (success, partial, …) is a completion — never blanket-
+          // map unknown/other statuses to "failed".
+          status: c.last_sync_status === 'failed' ? 'failed' : 'completed',
           ...(c.last_sync_stats || {}),
         },
       });
@@ -195,10 +198,13 @@ export default function ConnectionsPage() {
     const t = setTimeout(() => {
       setSyncResult({
         id: syncingId,
-        data: { status: 'failed', error: 'Still running after 5 min — refresh to check the latest status.' },
+        // NOT a failure — a large scanner sync (Nessus pulling every plugin) runs
+        // well past this window. Stop the spinner and report it as still running;
+        // the backend keeps going and records the real result.
+        data: { status: 'running', error: 'Still running — a large scanner sync can take 10–20 min. Refresh to see the final result.' },
       });
       setSyncingId(null);
-    }, 5 * 60 * 1000);
+    }, 20 * 60 * 1000);
     return () => clearTimeout(t);
   }, [syncingId]);
 
@@ -706,11 +712,13 @@ export default function ConnectionsPage() {
                   )}
 
                   {syncResult?.id === conn.id && syncingId !== conn.id && (
-                    <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>
+                    <div className={`p-3 rounded-lg text-sm ${syncResult.data?.status === 'completed' ? 'bg-emerald-50 text-emerald-700' : syncResult.data?.status === 'running' ? 'bg-amber-50 text-amber-800' : 'bg-rose-50 text-rose-700'}`}>
                       {syncResult.data?.status === 'completed' ? (
                         <>Sync complete · Assets: +{syncResult.data?.assets_new || 0} new, {syncResult.data?.assets_updated || 0} updated · Vulns: +{syncResult.data?.vulns_new || 0} new, {syncResult.data?.vulns_updated || 0} updated, {syncResult.data?.vulns_closed || 0} closed
                         {syncResult.data?.vulns_reopened > 0 ? `, ${syncResult.data.vulns_reopened} reopened` : ''}
                         {syncResult.data?.errors_count > 0 ? ` · ${syncResult.data.errors_count} errors` : ''}</>
+                      ) : syncResult.data?.status === 'running' ? (
+                        <>Sync still running{syncResult.data?.error ? ` · ${syncResult.data.error}` : ''}</>
                       ) : (
                         <>Sync failed{syncResult.data?.error ? ` · ${syncResult.data.error}` : ''}</>
                       )}
