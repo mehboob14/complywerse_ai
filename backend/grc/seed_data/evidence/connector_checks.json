@@ -1,0 +1,6514 @@
+{
+ "github": {
+  "resources": [
+   {
+    "name": "orgs",
+    "path": "/user/orgs",
+    "method": "GET",
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "login": "login",
+     "name": "login"
+    }
+   },
+   {
+    "name": "org_detail",
+    "path": "/orgs/{org}",
+    "method": "GET",
+    "for_each": {
+     "resource": "orgs",
+     "vars": {
+      "org": "login"
+     },
+     "label_field": "login"
+    },
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "login": "login",
+     "two_factor_required": "bool:two_factor_requirement_enabled"
+    }
+   },
+   {
+    "name": "members_no_2fa",
+    "path": "/orgs/{org}/members?filter=2fa_disabled",
+    "method": "GET",
+    "for_each": {
+     "resource": "orgs",
+     "vars": {
+      "org": "login"
+     },
+     "label_field": "login"
+    },
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "login": "login"
+    }
+   },
+   {
+    "name": "repos",
+    "path": "/user/repos",
+    "method": "GET",
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "full_name": "full_name",
+     "name": "name",
+     "visibility": "visibility",
+     "private": "bool:private",
+     "archived": "bool:archived",
+     "default_branch": "default_branch"
+    }
+   },
+   {
+    "name": "default_branch_protection",
+    "path": "/repos/{full_name}/branches/{branch}",
+    "method": "GET",
+    "for_each": {
+     "resource": "repos",
+     "vars": {
+      "full_name": "full_name",
+      "branch": "default_branch"
+     },
+     "label_field": "full_name"
+    },
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "protected": "bool:protected"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "github.org_2fa_required",
+    "resource": "org_detail",
+    "kind": "all_true",
+    "field": "two_factor_required",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organizations require two-factor authentication",
+    "item_name": "login",
+    "fail_msg": "Organization does not enforce mandatory 2FA for all members"
+   },
+   {
+    "id": "github.members_all_have_2fa",
+    "resource": "members_no_2fa",
+    "kind": "max_count",
+    "max": 0,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No organization members without two-factor authentication",
+    "item_name": "login",
+    "fail_msg": "Member has two-factor authentication disabled"
+   },
+   {
+    "id": "github.repos_not_public",
+    "resource": "repos",
+    "kind": "none_match",
+    "field": "visibility",
+    "op": "eq",
+    "value": "public",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No repositories are publicly exposed",
+    "item_name": "full_name",
+    "fail_msg": "Repository is publicly visible"
+   },
+   {
+    "id": "github.default_branch_protected",
+    "resource": "default_branch_protection",
+    "kind": "all_true",
+    "field": "protected",
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Default branch protection is enabled on all repositories",
+    "item_name": "name",
+    "fail_msg": "Default branch has no branch protection rule"
+   }
+  ]
+ },
+ "gitlab": {
+  "resources": [
+   {
+    "name": "projects",
+    "path": "/projects?membership=true",
+    "method": "GET",
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "id": "id",
+     "name": "path_with_namespace",
+     "visibility": "visibility"
+    }
+   },
+   {
+    "name": "groups",
+    "path": "/groups?min_access_level=40",
+    "method": "GET",
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "name": "full_path",
+     "two_factor_required": "require_two_factor_authentication",
+     "visibility": "visibility"
+    }
+   },
+   {
+    "name": "protected_branches",
+    "path": "/projects/{projectId}/protected_branches",
+    "method": "GET",
+    "for_each": {
+     "resource": "projects",
+     "vars": {
+      "projectId": "id"
+     },
+     "label_field": "name"
+    },
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 100
+    },
+    "fields": {
+     "name": "name",
+     "force_push": "allow_force_push"
+    }
+   },
+   {
+    "name": "personal_access_tokens",
+    "path": "/personal_access_tokens",
+    "method": "GET",
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "revoked": "revoked",
+     "has_expiry": "bool:expires_at"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "gitlab.no_public_projects",
+    "resource": "projects",
+    "kind": "none_match",
+    "field": "visibility",
+    "op": "eq",
+    "value": "public",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No repositories are publicly visible",
+    "item_name": "name",
+    "fail_msg": "Project visibility is public, exposing source code to anyone on the internet"
+   },
+   {
+    "id": "gitlab.groups_enforce_2fa",
+    "resource": "groups",
+    "kind": "all_true",
+    "field": "two_factor_required",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Groups enforce two-factor authentication",
+    "item_name": "name",
+    "fail_msg": "Group does not require members to enable two-factor authentication"
+   },
+   {
+    "id": "gitlab.groups_not_public",
+    "resource": "groups",
+    "kind": "none_match",
+    "field": "visibility",
+    "op": "eq",
+    "value": "public",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No groups are publicly visible",
+    "item_name": "name",
+    "fail_msg": "Group visibility is public, exposing group membership and projects"
+   },
+   {
+    "id": "gitlab.protected_branches_no_force_push",
+    "resource": "protected_branches",
+    "kind": "all_false",
+    "field": "force_push",
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Protected branches disallow force push",
+    "item_name": "name",
+    "fail_msg": "Protected branch allows force push, permitting history rewrites that bypass change controls"
+   },
+   {
+    "id": "gitlab.pat_expiry_set",
+    "resource": "personal_access_tokens",
+    "kind": "all_true",
+    "field": "has_expiry",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Active personal access tokens have an expiry date",
+    "item_name": "name",
+    "skip_if_field_true": "revoked",
+    "fail_msg": "Personal access token has no expiration date, creating a long-lived credential risk"
+   }
+  ]
+ },
+ "bitbucket": {
+  "resources": [
+   {
+    "name": "repos",
+    "path": "/repositories?role=member",
+    "method": "GET",
+    "items": [
+     "values"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "pagelen",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "full_name": "full_name",
+     "name": "name",
+     "private": "is_private"
+    }
+   },
+   {
+    "name": "branch_restrictions",
+    "path": "/repositories/{full_name}/branch-restrictions",
+    "method": "GET",
+    "items": [
+     "values"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "pagelen",
+     "size": 100,
+     "limit": 200
+    },
+    "for_each": {
+     "resource": "repos",
+     "vars": {
+      "full_name": "full_name"
+     },
+     "label_field": "full_name"
+    },
+    "fields": {
+     "kind": "kind",
+     "pattern": "pattern",
+     "branch_match_kind": "branch_match_kind"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "bitbucket.repos_private",
+    "resource": "repos",
+    "kind": "all_true",
+    "field": "private",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Repositories are private, not publicly exposed",
+    "item_name": "full_name",
+    "fail_msg": "Repository is publicly visible"
+   },
+   {
+    "id": "bitbucket.branch_protection_configured",
+    "resource": "branch_restrictions",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Branch restrictions are configured on repositories",
+    "item_name": "pattern",
+    "fail_msg": "No branch restrictions found across accessible repositories"
+   }
+  ]
+ },
+ "okta": {
+  "resources": [
+   {
+    "name": "password_policies",
+    "path": "/policies?type=PASSWORD",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "status": "status",
+     "min_length": "settings.password.complexity.minLength",
+     "lockout_max": "settings.password.lockout.maxAttempts"
+    }
+   },
+   {
+    "name": "mfa_policies",
+    "path": "/policies?type=MFA_ENROLL",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "status": "status"
+    }
+   },
+   {
+    "name": "apps",
+    "path": "/apps",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "label": "label",
+     "status": "status",
+     "sign_on_mode": "signOnMode"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "okta.password_min_length",
+    "resource": "password_policies",
+    "kind": "all_match",
+    "field": "min_length",
+    "op": "gt",
+    "value": 7,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Password policy enforces minimum length (>= 8)",
+    "item_name": "name",
+    "fail_msg": "A password policy allows passwords shorter than 8 characters"
+   },
+   {
+    "id": "okta.password_lockout_enabled",
+    "resource": "password_policies",
+    "kind": "all_match",
+    "field": "lockout_max",
+    "op": "gt",
+    "value": 0,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Account lockout enabled after failed attempts",
+    "item_name": "name",
+    "fail_msg": "A password policy has no account lockout configured (maxAttempts = 0)"
+   },
+   {
+    "id": "okta.mfa_enrollment_policy",
+    "resource": "mfa_policies",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "MFA enrollment policy is configured",
+    "item_name": "name",
+    "fail_msg": "No MFA enrollment policy found in the org"
+   },
+   {
+    "id": "okta.app_inventory",
+    "resource": "apps",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Integrated application inventory",
+    "item_name": "label",
+    "fail_msg": "No integrated applications returned"
+   }
+  ]
+ },
+ "google_workspace": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/admin/directory/v1/users?customer=my_customer&maxResults=50",
+    "method": "GET",
+    "items": [
+     "users"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "primaryEmail",
+     "twoStepEnrolled": "bool:isEnrolledIn2Sv",
+     "admin": "bool:isAdmin",
+     "notAdmin": "!isAdmin",
+     "suspended": "bool:suspended"
+    }
+   },
+   {
+    "name": "domains",
+    "path": "/admin/directory/v1/customer/my_customer/domains",
+    "method": "GET",
+    "items": [
+     "domains"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "domain": "domainName",
+     "verified": "bool:verified"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "google_workspace.users_2sv_enrolled",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "twoStepEnrolled",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All active users enrolled in 2-step verification",
+    "item_name": "email",
+    "skip_if_field_true": "suspended",
+    "fail_msg": "User is not enrolled in 2-step verification (MFA)"
+   },
+   {
+    "id": "google_workspace.super_admins_2sv",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "twoStepEnrolled",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All super administrators have 2-step verification",
+    "item_name": "email",
+    "skip_if_field_true": "notAdmin",
+    "fail_msg": "Super administrator account is not protected by 2-step verification"
+   },
+   {
+    "id": "google_workspace.super_admin_count",
+    "resource": "users",
+    "kind": "max_count",
+    "field": "admin",
+    "op": "eq",
+    "value": true,
+    "max": 5,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Number of super administrators is limited (least privilege)",
+    "item_name": "email",
+    "fail_msg": "Too many accounts hold super administrator privileges"
+   },
+   {
+    "id": "google_workspace.domains_verified",
+    "resource": "domains",
+    "kind": "all_true",
+    "field": "verified",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All Workspace domains are verified (owned system boundary)",
+    "item_name": "domain",
+    "fail_msg": "Domain ownership is not verified"
+   }
+  ]
+ },
+ "microsoft_365": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/users?$select=displayName,userPrincipalName,accountEnabled&$top=100",
+    "method": "GET",
+    "items": [
+     "value"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "displayName",
+     "upn": "userPrincipalName",
+     "enabled": "bool:accountEnabled"
+    }
+   },
+   {
+    "name": "mfa_registration",
+    "path": "/reports/authenticationMethods/userRegistrationDetails",
+    "method": "GET",
+    "items": [
+     "value"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "upn": "userPrincipalName",
+     "name": "userDisplayName",
+     "mfa_registered": "bool:isMfaRegistered",
+     "not_admin": "!isAdmin"
+    }
+   },
+   {
+    "name": "conditional_access",
+    "path": "/identity/conditionalAccess/policies",
+    "method": "GET",
+    "items": [
+     "value"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "displayName",
+     "state": "state"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "microsoft_365.mfa_registered",
+    "resource": "mfa_registration",
+    "kind": "all_true",
+    "field": "mfa_registered",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All users are registered for multi-factor authentication",
+    "item_name": "upn",
+    "fail_msg": "This user has not registered any MFA method in Microsoft Entra ID."
+   },
+   {
+    "id": "microsoft_365.admin_mfa_registered",
+    "resource": "mfa_registration",
+    "kind": "all_true",
+    "field": "mfa_registered",
+    "skip_if_field_true": "not_admin",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "All admin (privileged) accounts are registered for MFA",
+    "item_name": "upn",
+    "fail_msg": "This privileged/admin account has not registered any MFA method."
+   },
+   {
+    "id": "microsoft_365.conditional_access_configured",
+    "resource": "conditional_access",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "At least one Conditional Access policy is configured",
+    "item_name": "name",
+    "fail_msg": "No Conditional Access policies exist to enforce access conditions (MFA, device, location)."
+   },
+   {
+    "id": "microsoft_365.user_inventory",
+    "resource": "users",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Microsoft 365 / Entra ID user inventory",
+    "item_name": "upn",
+    "fail_msg": "Unable to enumerate directory users."
+   }
+  ]
+ },
+ "clerk": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/users",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "offset",
+     "param": "offset",
+     "size_param": "limit",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "id": "id",
+     "two_factor_enabled": "two_factor_enabled",
+     "totp_enabled": "totp_enabled",
+     "banned": "banned",
+     "locked": "locked"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "clerk.users.mfa_enabled",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "two_factor_enabled",
+    "controls": [
+     "CC6.1",
+     "CC6.2"
+    ],
+    "title": "All users have two-factor authentication enabled",
+    "item_name": "id",
+    "skip_if_field_true": "banned",
+    "fail_msg": "User has no second authentication factor (2FA disabled)"
+   },
+   {
+    "id": "clerk.users.totp_configured",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "totp_enabled",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Users have an authenticator-app (TOTP) factor configured",
+    "item_name": "id",
+    "skip_if_field_true": "banned",
+    "fail_msg": "User has no TOTP authenticator factor configured"
+   }
+  ]
+ },
+ "tailscale": {
+  "resources": [
+   {
+    "name": "devices",
+    "path": "/tailnet/-/devices",
+    "method": "GET",
+    "items": [
+     "devices"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "hostname": "hostname",
+     "os": "os",
+     "user": "user",
+     "key_expiry_disabled": "keyExpiryDisabled",
+     "update_available": "updateAvailable",
+     "authorized": "authorized",
+     "external": "isExternal"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "tailscale.key_expiry_enabled",
+    "resource": "devices",
+    "kind": "all_false",
+    "field": "key_expiry_disabled",
+    "op": "truthy",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Device key expiry is enforced (node keys are not set to never expire)",
+    "item_name": "name",
+    "skip_if_field_true": "external",
+    "fail_msg": "Device has key expiry disabled - its node key never rotates or expires"
+   },
+   {
+    "id": "tailscale.device_authorized",
+    "resource": "devices",
+    "kind": "all_true",
+    "field": "authorized",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Only authorized devices are admitted to the tailnet",
+    "item_name": "name",
+    "skip_if_field_true": "external",
+    "fail_msg": "Device is present on the tailnet but not authorized"
+   },
+   {
+    "id": "tailscale.clients_up_to_date",
+    "resource": "devices",
+    "kind": "all_false",
+    "field": "update_available",
+    "op": "truthy",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "Tailscale clients are up to date",
+    "item_name": "name",
+    "skip_if_field_true": "external",
+    "fail_msg": "Client update available - device is running an outdated Tailscale version"
+   },
+   {
+    "id": "tailscale.device_inventory",
+    "resource": "devices",
+    "kind": "present",
+    "field": "name",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Tailnet device inventory is enumerable",
+    "item_name": "name",
+    "fail_msg": "No devices returned from the tailnet"
+   }
+  ]
+ },
+ "one_password": {
+  "resources": [
+   {
+    "name": "signinattempts",
+    "path": "/api/v2/signinattempts",
+    "method": "POST",
+    "body": {
+     "limit": 100,
+     "start_time": "2020-01-01T00:00:00Z"
+    },
+    "items": [
+     "items"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "user": "target_user.name"
+    }
+   },
+   {
+    "name": "auditevents",
+    "path": "/api/v2/auditevents",
+    "method": "POST",
+    "body": {
+     "limit": 100,
+     "start_time": "2020-01-01T00:00:00Z"
+    },
+    "items": [
+     "items"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "action": "action"
+    }
+   },
+   {
+    "name": "itemusages",
+    "path": "/api/v2/itemusages",
+    "method": "POST",
+    "body": {
+     "limit": 100,
+     "start_time": "2020-01-01T00:00:00Z"
+    },
+    "items": [
+     "items"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "user": "user.name"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "one_password.signin_attempts_monitored",
+    "resource": "signinattempts",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Sign-in attempts are logged for authentication monitoring",
+    "item_name": "user",
+    "fail_msg": "No sign-in attempt events were returned; authentication telemetry (success/failed/MFA/SSO attempts) may not be flowing to the Events API."
+   },
+   {
+    "id": "one_password.audit_events_monitored",
+    "resource": "auditevents",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "Administrative actions are captured in the audit log",
+    "item_name": "action",
+    "fail_msg": "No audit events were returned; changes to users, groups, and vaults may not be recorded for review."
+   },
+   {
+    "id": "one_password.item_access_audited",
+    "resource": "itemusages",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Access to stored secrets is audited (item usage events)",
+    "item_name": "user",
+    "fail_msg": "No item-usage events were returned; access to vaulted credentials/secrets may not be audited."
+   }
+  ]
+ },
+ "cloudflare": {
+  "resources": [
+   {
+    "name": "accounts",
+    "path": "/accounts",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 50,
+     "limit": 200
+    },
+    "fields": {
+     "id": "id",
+     "name": "name"
+    }
+   },
+   {
+    "name": "members",
+    "path": "/accounts/{account_id}/members",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 50,
+     "limit": 200
+    },
+    "for_each": {
+     "resource": "accounts",
+     "vars": {
+      "account_id": "id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "email": "email",
+     "mfa": "bool:user.two_factor_authentication_enabled",
+     "status": "status"
+    }
+   },
+   {
+    "name": "zones",
+    "path": "/zones",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 50,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "status": "status",
+     "id": "id"
+    }
+   },
+   {
+    "name": "tokens",
+    "path": "/user/tokens",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 50,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "status": "status",
+     "expires_on": "expires_on"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "cloudflare.member_2fa_enabled",
+    "resource": "members",
+    "kind": "all_true",
+    "field": "mfa",
+    "controls": [
+     "CC6.1",
+     "CC6.2"
+    ],
+    "title": "Two-factor authentication enabled for all account members",
+    "item_name": "email",
+    "fail_msg": "Cloudflare account member does not have two-factor authentication enabled"
+   },
+   {
+    "id": "cloudflare.no_expired_tokens",
+    "resource": "tokens",
+    "kind": "none_match",
+    "field": "status",
+    "op": "eq",
+    "value": "expired",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No expired API tokens left in place",
+    "item_name": "name",
+    "fail_msg": "Expired API token still present and should be revoked/cleaned up"
+   },
+   {
+    "id": "cloudflare.zones_inventory",
+    "resource": "zones",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Cloudflare zones inventory",
+    "item_name": "name",
+    "fail_msg": "No Cloudflare zones returned"
+   }
+  ]
+ },
+ "vercel": {
+  "resources": [
+   {
+    "name": "projects",
+    "path": "/v10/projects",
+    "method": "GET",
+    "items": [
+     "projects"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "git_fork_protection": "bool:gitForkProtection",
+     "firewall_enabled": "bool:security.firewallEnabled"
+    }
+   },
+   {
+    "name": "teams",
+    "path": "/v2/teams",
+    "method": "GET",
+    "items": [
+     "teams"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "team_id": "id",
+     "name": "name",
+     "slug": "slug",
+     "saml_enforced": "bool:saml.enforced"
+    }
+   },
+   {
+    "name": "team_members",
+    "path": "/v3/teams/{teamId}/members",
+    "method": "GET",
+    "items": [
+     "members"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "teams",
+     "vars": {
+      "teamId": "team_id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "username": "username",
+     "email": "email",
+     "role": "role",
+     "confirmed": "bool:confirmed"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "vercel.project_firewall_enabled",
+    "resource": "projects",
+    "kind": "all_true",
+    "field": "firewall_enabled",
+    "op": "truthy",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Vercel Firewall (WAF) is enabled on every project",
+    "item_name": "name",
+    "fail_msg": "Project has the Vercel Firewall disabled, leaving deployments without WAF protection against external threats."
+   },
+   {
+    "id": "vercel.project_fork_deploy_protection",
+    "resource": "projects",
+    "kind": "all_true",
+    "field": "git_fork_protection",
+    "op": "truthy",
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Git fork PRs require team-member authorization before they deploy",
+    "item_name": "name",
+    "fail_msg": "Fork protection is off: pull requests from forks can trigger deployments without authorization."
+   },
+   {
+    "id": "vercel.team_saml_enforced",
+    "resource": "teams",
+    "kind": "all_true",
+    "field": "saml_enforced",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "SAML SSO login is enforced for every team",
+    "item_name": "name",
+    "fail_msg": "Team does not enforce SAML SSO, so members can authenticate outside the identity provider."
+   },
+   {
+    "id": "vercel.team_members_confirmed",
+    "resource": "team_members",
+    "kind": "all_true",
+    "field": "confirmed",
+    "op": "truthy",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "All team members were confirmed (authorized) by an owner",
+    "item_name": "username",
+    "fail_msg": "Member has access that was never confirmed by a team owner."
+   },
+   {
+    "id": "vercel.team_owner_count",
+    "resource": "team_members",
+    "kind": "max_count",
+    "field": "role",
+    "op": "eq",
+    "value": "OWNER",
+    "max": 3,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "No more than 3 team owners (least privilege)",
+    "item_name": "username",
+    "fail_msg": "Too many members hold the OWNER role; owners have full administrative control."
+   }
+  ]
+ },
+ "netlify": {
+  "resources": [
+   {
+    "name": "sites",
+    "path": "/sites",
+    "method": "GET",
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "custom_domain": "custom_domain",
+     "ssl": "bool:ssl",
+     "force_ssl": "bool:force_ssl"
+    }
+   },
+   {
+    "name": "accounts",
+    "path": "/accounts",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "slug": "slug",
+     "name": "name"
+    }
+   },
+   {
+    "name": "members",
+    "path": "/{slug}/members",
+    "method": "GET",
+    "for_each": {
+     "resource": "accounts",
+     "vars": {
+      "slug": "slug"
+     },
+     "label_field": "name"
+    },
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "full_name": "full_name",
+     "email": "email",
+     "role": "role"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "netlify.sites-ssl-provisioned",
+    "resource": "sites",
+    "kind": "all_true",
+    "field": "ssl",
+    "op": "truthy",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "All Netlify sites have SSL/TLS certificates provisioned",
+    "item_name": "name",
+    "fail_msg": "Site has no SSL certificate provisioned, so it can be served over plain HTTP"
+   },
+   {
+    "id": "netlify.sites-force-https",
+    "resource": "sites",
+    "kind": "all_true",
+    "field": "force_ssl",
+    "op": "truthy",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "All Netlify sites force HTTPS (redirect HTTP to HTTPS)",
+    "item_name": "name",
+    "fail_msg": "Site does not force HTTPS; traffic can be served over unencrypted HTTP"
+   },
+   {
+    "id": "netlify.owner-count-limited",
+    "resource": "members",
+    "kind": "max_count",
+    "field": "role",
+    "op": "eq",
+    "value": "Owner",
+    "max": 3,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Netlify account has a limited number of Owners (least privilege)",
+    "item_name": "email",
+    "fail_msg": "Too many members hold the Owner role; privileged access should be minimized"
+   },
+   {
+    "id": "netlify.members-inventory",
+    "resource": "members",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Netlify account members inventory (for access review)",
+    "item_name": "email",
+    "fail_msg": "Unable to enumerate account members for access review"
+   }
+  ]
+ },
+ "heroku": {
+  "resources": [
+   {
+    "name": "account",
+    "path": "/account",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "mfa": "two_factor_authentication",
+     "email": "email",
+     "id": "id",
+     "federated": "federated"
+    }
+   },
+   {
+    "name": "apps",
+    "path": "/apps",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "id": "id",
+     "acm": "acm",
+     "maintenance": "maintenance",
+     "region": "region.name",
+     "web_url": "web_url"
+    }
+   },
+   {
+    "name": "teams",
+    "path": "/teams",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "id": "id"
+    }
+   },
+   {
+    "name": "team_members",
+    "path": "/teams/{team_id}/members",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "teams",
+     "vars": {
+      "team_id": "id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "email": "email",
+     "role": "role",
+     "federated": "federated",
+     "mfa": "two_factor_authentication",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "heroku.account_mfa_enabled",
+    "resource": "account",
+    "kind": "all_true",
+    "field": "mfa",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Heroku account has multi-factor authentication enabled",
+    "item_name": "email",
+    "fail_msg": "Account two-factor authentication is disabled"
+   },
+   {
+    "id": "heroku.apps_inventory",
+    "resource": "apps",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Heroku application inventory",
+    "item_name": "name",
+    "fail_msg": "No applications returned"
+   },
+   {
+    "id": "heroku.team_members_mfa",
+    "resource": "team_members",
+    "kind": "all_true",
+    "field": "mfa",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "All team members have two-factor authentication enabled",
+    "item_name": "email",
+    "fail_msg": "Team member does not have two-factor authentication enabled"
+   },
+   {
+    "id": "heroku.team_admin_count",
+    "resource": "team_members",
+    "kind": "max_count",
+    "field": "role",
+    "op": "eq",
+    "value": "admin",
+    "max": 5,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Team admin role count is limited (least privilege)",
+    "item_name": "email",
+    "fail_msg": "Too many members hold the admin role on this team"
+   },
+   {
+    "id": "heroku.team_members_sso_federated",
+    "resource": "team_members",
+    "kind": "all_true",
+    "field": "federated",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Team members are managed via federated SSO",
+    "item_name": "email",
+    "fail_msg": "Member is not federated (not managed through SSO)"
+   }
+  ]
+ },
+ "render": {
+  "resources": [
+   {
+    "name": "services",
+    "path": "/services?limit=100",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "service.name",
+     "type": "service.type",
+     "suspended": "service.suspended",
+     "notify": "service.notifyOnFail",
+     "auto_deploy": "service.autoDeploy",
+     "health_check": "service.serviceDetails.healthCheckPath",
+     "url": "service.serviceDetails.url"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "render.service_inventory",
+    "resource": "services",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Render service inventory",
+    "item_name": "name",
+    "fail_msg": "No services returned by the Render API"
+   },
+   {
+    "id": "render.notify_on_deploy_failure",
+    "resource": "services",
+    "kind": "none_match",
+    "field": "notify",
+    "op": "eq",
+    "value": "ignore",
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Services alert on deploy failure",
+    "item_name": "name",
+    "fail_msg": "Service has deploy-failure notifications set to ignore, so failed deploys are not surfaced"
+   },
+   {
+    "id": "render.services_not_suspended",
+    "resource": "services",
+    "kind": "none_match",
+    "field": "suspended",
+    "op": "eq",
+    "value": "suspended",
+    "controls": [
+     "A1.1"
+    ],
+    "title": "No services unexpectedly suspended",
+    "item_name": "name",
+    "fail_msg": "Service is suspended and may be unavailable"
+   },
+   {
+    "id": "render.auto_deploy_change_control",
+    "resource": "services",
+    "kind": "none_match",
+    "field": "auto_deploy",
+    "op": "eq",
+    "value": "yes",
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Auto-deploy on push is governed",
+    "item_name": "name",
+    "fail_msg": "Service auto-deploys on every push, so code reaches production without a manual change gate"
+   }
+  ]
+ },
+ "supabase": {
+  "resources": [
+   {
+    "name": "projects",
+    "path": "/projects",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "ref": "ref",
+     "name": "name",
+     "status": "status"
+    }
+   },
+   {
+    "name": "ssl_enforcement",
+    "path": "/projects/{ref}/ssl-enforcement",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "projects",
+     "vars": {
+      "ref": "ref"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "enforced": "bool:currentConfig.database"
+    }
+   },
+   {
+    "name": "network_restrictions",
+    "path": "/projects/{ref}/network-restrictions",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "projects",
+     "vars": {
+      "ref": "ref"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "entitlement": "entitlement",
+     "allowed_cidrs": "config.dbAllowedCidrs",
+     "allowed_cidrs_v6": "config.dbAllowedCidrsV6"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "supabase.projects.inventory",
+    "resource": "projects",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Supabase project inventory",
+    "item_name": "name",
+    "fail_msg": "No Supabase projects returned by the Management API"
+   },
+   {
+    "id": "supabase.ssl.enforced",
+    "resource": "ssl_enforcement",
+    "kind": "all_true",
+    "field": "enforced",
+    "controls": [
+     "CC6.6",
+     "CC6.7"
+    ],
+    "title": "Database enforces SSL/TLS connections",
+    "item_name": "name",
+    "fail_msg": "Project database does not enforce SSL, allowing unencrypted client connections"
+   },
+   {
+    "id": "supabase.network.no_open_ipv4",
+    "resource": "network_restrictions",
+    "kind": "none_match",
+    "field": "allowed_cidrs",
+    "op": "contains",
+    "value": "0.0.0.0/0",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Database network access is IP-restricted (not open to the internet)",
+    "item_name": "name",
+    "fail_msg": "Project database allows connections from 0.0.0.0/0 (any IPv4 address)"
+   }
+  ]
+ },
+ "neon": {
+  "resources": [
+   {
+    "name": "projects",
+    "path": "/projects",
+    "method": "GET",
+    "items": [
+     "projects"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "pid": "id",
+     "pg_version": "pg_version",
+     "ip_allowlist_count": "len:settings.allowed_ips.ips",
+     "block_public": "bool:settings.block_public_connections",
+     "history_retention": "history_retention_seconds"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "neon.project_ip_allowlist",
+    "resource": "projects",
+    "kind": "all_true",
+    "field": "ip_allowlist_count",
+    "op": "truthy",
+    "controls": [
+     "CC6.6",
+     "CC6.1"
+    ],
+    "title": "Project restricts database access with an IP allow list",
+    "item_name": "name",
+    "fail_msg": "No IP allow list configured; the project is reachable from any source IP"
+   },
+   {
+    "id": "neon.project_public_connections_blocked",
+    "resource": "projects",
+    "kind": "all_true",
+    "field": "block_public",
+    "op": "truthy",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Public internet connections are blocked",
+    "item_name": "name",
+    "skip_if_field_true": "ip_allowlist_count",
+    "fail_msg": "block_public_connections is off and no IP allow list restricts access"
+   },
+   {
+    "id": "neon.project_history_retention",
+    "resource": "projects",
+    "kind": "all_true",
+    "field": "history_retention",
+    "op": "truthy",
+    "controls": [
+     "A1.2"
+    ],
+    "title": "Point-in-time recovery retention is enabled",
+    "item_name": "name",
+    "fail_msg": "history_retention_seconds is 0; no PITR/backup window is retained"
+   },
+   {
+    "id": "neon.projects_present",
+    "resource": "projects",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Neon project inventory is enumerable",
+    "item_name": "name",
+    "fail_msg": "No projects returned"
+   }
+  ]
+ },
+ "qovery": {
+  "resources": [
+   {
+    "name": "organization",
+    "path": "/organization",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "plan": "plan",
+     "owner": "owner",
+     "admin_emails": "admin_emails",
+     "admin_count": "len:admin_emails"
+    }
+   },
+   {
+    "name": "member",
+    "path": "/organization/{organizationId}/member",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "organization",
+     "vars": {
+      "organizationId": "id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "email": "email",
+     "role": "role",
+     "role_name": "role_name",
+     "has_role": "bool:role_name",
+     "last_activity": "last_activity_at"
+    }
+   },
+   {
+    "name": "api_token",
+    "path": "/organization/{organizationId}/apiToken",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "organization",
+     "vars": {
+      "organizationId": "id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "role_name": "role_name",
+     "scoped": "bool:role_name"
+    }
+   },
+   {
+    "name": "available_role",
+    "path": "/organization/{organizationId}/availableRole",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "organization",
+     "vars": {
+      "organizationId": "id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "qovery.member_inventory",
+    "resource": "member",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization members inventory",
+    "item_name": "email",
+    "fail_msg": "Member account has access to the Qovery organization"
+   },
+   {
+    "id": "qovery.member_role_assigned",
+    "resource": "member",
+    "kind": "all_true",
+    "field": "has_role",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Every member is assigned a defined access role",
+    "item_name": "email",
+    "fail_msg": "Member has no role assigned (RBAC/least-privilege not enforced)"
+   },
+   {
+    "id": "qovery.api_token_scoped",
+    "resource": "api_token",
+    "kind": "all_true",
+    "field": "scoped",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization API tokens are bound to a role",
+    "item_name": "name",
+    "fail_msg": "API token is not scoped to a role"
+   },
+   {
+    "id": "qovery.org_admin_contact",
+    "resource": "organization",
+    "kind": "all_true",
+    "field": "admin_count",
+    "controls": [
+     "CC7.3"
+    ],
+    "title": "Organization has an admin/security contact configured",
+    "item_name": "name",
+    "fail_msg": "No admin_emails configured for the organization"
+   },
+   {
+    "id": "qovery.rbac_roles_defined",
+    "resource": "available_role",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "RBAC roles are defined for the organization",
+    "item_name": "name",
+    "fail_msg": "No access roles available for role-based assignment"
+   }
+  ]
+ },
+ "digitalocean": {
+  "resources": [
+   {
+    "name": "droplets",
+    "path": "/droplets",
+    "method": "GET",
+    "items": [
+     "droplets"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "features": "features",
+     "region": "region.slug"
+    }
+   },
+   {
+    "name": "firewalls",
+    "path": "/firewalls",
+    "method": "GET",
+    "items": [
+     "firewalls"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "status": "status"
+    }
+   },
+   {
+    "name": "monitoring_alerts",
+    "path": "/monitoring/alerts",
+    "method": "GET",
+    "items": [
+     "policies"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "description": "description",
+     "type": "type",
+     "enabled": "bool:enabled"
+    }
+   },
+   {
+    "name": "databases",
+    "path": "/databases",
+    "method": "GET",
+    "items": [
+     "databases"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "engine": "engine",
+     "ssl": "bool:connection.ssl",
+     "in_vpc": "bool:private_network_uuid"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "digitalocean.firewalls_present",
+    "resource": "firewalls",
+    "kind": "min_count",
+    "field": "name",
+    "min": 1,
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Cloud firewalls restrict network access",
+    "item_name": "name",
+    "fail_msg": "No cloud firewalls are configured, so Droplet network access is not restricted at the perimeter"
+   },
+   {
+    "id": "digitalocean.monitoring_alerts_present",
+    "resource": "monitoring_alerts",
+    "kind": "min_count",
+    "field": "description",
+    "min": 1,
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "Monitoring alert policies exist",
+    "item_name": "description",
+    "fail_msg": "No monitoring alert policies are configured to detect anomalous infrastructure conditions"
+   },
+   {
+    "id": "digitalocean.monitoring_alerts_enabled",
+    "resource": "monitoring_alerts",
+    "kind": "all_true",
+    "field": "enabled",
+    "op": "truthy",
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Monitoring alert policies are enabled",
+    "item_name": "description",
+    "fail_msg": "Alert policy is disabled and will not notify on threshold breaches"
+   },
+   {
+    "id": "digitalocean.db_tls_enabled",
+    "resource": "databases",
+    "kind": "all_true",
+    "field": "ssl",
+    "op": "truthy",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Managed databases require TLS connections",
+    "item_name": "name",
+    "fail_msg": "Database cluster does not enforce SSL/TLS for client connections"
+   },
+   {
+    "id": "digitalocean.db_in_vpc",
+    "resource": "databases",
+    "kind": "all_true",
+    "field": "in_vpc",
+    "op": "truthy",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Managed databases are attached to a VPC",
+    "item_name": "name",
+    "fail_msg": "Database cluster is not placed in a private VPC network"
+   },
+   {
+    "id": "digitalocean.droplet_backups_enabled",
+    "resource": "droplets",
+    "kind": "all_match",
+    "field": "features",
+    "op": "contains",
+    "value": "backups",
+    "controls": [
+     "A1.2"
+    ],
+    "title": "Droplets have automated backups enabled",
+    "item_name": "name",
+    "fail_msg": "Droplet does not have automated backups enabled"
+   }
+  ]
+ },
+ "datadog": {
+  "resources": [
+   {
+    "name": "monitors",
+    "path": "/monitor",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "type": "type",
+     "id": "id",
+     "notify_no_data": "options.notify_no_data"
+    }
+   },
+   {
+    "name": "log_indexes",
+    "path": "/logs/config/indexes",
+    "method": "GET",
+    "items": [
+     "indexes"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "retention_days": "num_retention_days"
+    }
+   },
+   {
+    "name": "slos",
+    "path": "/slo",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "type": "type",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "datadog.monitors_configured",
+    "resource": "monitors",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "At least one monitor is configured for system health alerting",
+    "item_name": "name",
+    "fail_msg": "No monitors configured in Datadog — system and security anomalies are not being actively monitored or alerted on."
+   },
+   {
+    "id": "datadog.log_index_configured",
+    "resource": "log_indexes",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "A log index is configured for centralized logging",
+    "item_name": "name",
+    "fail_msg": "No log indexes configured — logs are not being retained for monitoring and investigation."
+   },
+   {
+    "id": "datadog.log_retention_adequate",
+    "resource": "log_indexes",
+    "kind": "all_match",
+    "field": "retention_days",
+    "op": "gt",
+    "value": 7,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Log indexes retain data for more than 7 days",
+    "item_name": "name",
+    "fail_msg": "Log index retains data for 7 days or fewer, limiting the audit/forensic history available for security investigations."
+   },
+   {
+    "id": "datadog.slos_defined",
+    "resource": "slos",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "A1.1"
+    ],
+    "title": "Service Level Objectives are defined to track availability",
+    "item_name": "name",
+    "fail_msg": "No SLOs defined — availability targets are not being formally measured or tracked."
+   }
+  ]
+ },
+ "sentry": {
+  "resources": [
+   {
+    "name": "organizations",
+    "path": "/organizations/",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "slug": "slug",
+     "name": "name",
+     "require2fa": "require2FA",
+     "require_email_verification": "requireEmailVerification"
+    }
+   },
+   {
+    "name": "projects",
+    "path": "/projects/",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "slug": "slug",
+     "name": "name",
+     "is_public": "isPublic",
+     "platform": "platform",
+     "org": "organization.slug"
+    }
+   },
+   {
+    "name": "members",
+    "path": "/organizations/{org}/members/",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "organizations",
+     "vars": {
+      "org": "slug"
+     },
+     "label_field": "slug"
+    },
+    "fields": {
+     "email": "email",
+     "role": "orgRole",
+     "pending": "pending",
+     "has2fa": "user.has2fa",
+     "invite_status": "inviteStatus"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "sentry.org_require_2fa",
+    "resource": "organizations",
+    "kind": "all_true",
+    "field": "require2fa",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organizations enforce two-factor authentication",
+    "item_name": "slug",
+    "fail_msg": "Organization does not require 2FA for members"
+   },
+   {
+    "id": "sentry.member_2fa_enabled",
+    "resource": "members",
+    "kind": "all_true",
+    "field": "has2fa",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization members have 2FA enabled",
+    "item_name": "email",
+    "skip_if_field_true": "pending",
+    "fail_msg": "Member has not enabled two-factor authentication"
+   },
+   {
+    "id": "sentry.projects_not_public",
+    "resource": "projects",
+    "kind": "none_match",
+    "field": "is_public",
+    "op": "eq",
+    "value": true,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No projects are publicly exposed",
+    "item_name": "slug",
+    "fail_msg": "Project is publicly visible to unauthenticated users"
+   },
+   {
+    "id": "sentry.error_monitoring_configured",
+    "resource": "projects",
+    "kind": "min_count",
+    "field": "slug",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Error monitoring projects are configured",
+    "item_name": "slug",
+    "fail_msg": "No Sentry projects configured for error/performance monitoring"
+   }
+  ]
+ },
+ "grafana": {
+  "resources": [
+   {
+    "name": "dashboards",
+    "path": "/api/search?type=dash-db&limit=50",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "title": "title",
+     "uid": "uid",
+     "type": "type"
+    }
+   },
+   {
+    "name": "org_users",
+    "path": "/api/org/users",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "email",
+     "login": "login",
+     "role": "role"
+    }
+   },
+   {
+    "name": "service_accounts",
+    "path": "/api/serviceaccounts/search",
+    "method": "GET",
+    "items": [
+     "serviceAccounts"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "perpage",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "login": "login",
+     "role": "role",
+     "disabled": "isDisabled",
+     "tokens": "tokens"
+    }
+   },
+   {
+    "name": "datasources",
+    "path": "/api/datasources",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "type": "type",
+     "tls_skip_verify": "jsonData.tlsSkipVerify",
+     "basic_auth": "basicAuth"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "grafana.dashboards_present",
+    "resource": "dashboards",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Monitoring dashboards are configured in Grafana",
+    "item_name": "title",
+    "fail_msg": "No Grafana dashboards found; monitoring visibility cannot be evidenced"
+   },
+   {
+    "id": "grafana.org_admins_limited",
+    "resource": "org_users",
+    "kind": "max_count",
+    "field": "role",
+    "op": "eq",
+    "value": "Admin",
+    "max": 5,
+    "controls": [
+     "CC6.1",
+     "CC6.3"
+    ],
+    "title": "Org Admin role is limited to a small number of users",
+    "item_name": "email",
+    "fail_msg": "Too many users hold the Grafana Org Admin role (least privilege)"
+   },
+   {
+    "id": "grafana.service_accounts_not_admin",
+    "resource": "service_accounts",
+    "kind": "none_match",
+    "field": "role",
+    "op": "eq",
+    "value": "Admin",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Service accounts do not hold the Admin role",
+    "item_name": "name",
+    "fail_msg": "Service account is granted the Admin role instead of least-privilege access"
+   },
+   {
+    "id": "grafana.datasource_tls_verify",
+    "resource": "datasources",
+    "kind": "none_match",
+    "field": "tls_skip_verify",
+    "op": "eq",
+    "value": true,
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Data sources do not skip TLS certificate verification",
+    "item_name": "name",
+    "fail_msg": "Data source has TLS certificate verification disabled (tlsSkipVerify=true)"
+   }
+  ]
+ },
+ "signoz": {
+  "resources": [
+   {
+    "name": "dashboards",
+    "path": "/api/v2/dashboards",
+    "method": "GET",
+    "items": [
+     "data",
+     "dashboards"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "title": "name",
+     "id": "id"
+    }
+   },
+   {
+    "name": "rules",
+    "path": "/api/v2/rules",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "alert": "alert",
+     "state": "state",
+     "disabled": "disabled",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "signoz.alert_rules_present",
+    "resource": "rules",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "At least one alert rule is configured",
+    "item_name": "alert",
+    "fail_msg": "No SigNoz alert rules are configured, so anomalies would go undetected"
+   },
+   {
+    "id": "signoz.no_disabled_alert_rules",
+    "resource": "rules",
+    "kind": "all_false",
+    "field": "disabled",
+    "op": "truthy",
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "No alert rule is disabled",
+    "item_name": "alert",
+    "fail_msg": "This alert rule is disabled and will not fire on anomalous conditions"
+   },
+   {
+    "id": "signoz.dashboards_present",
+    "resource": "dashboards",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "At least one monitoring dashboard exists",
+    "item_name": "title",
+    "fail_msg": "No observability dashboards are configured for system monitoring"
+   }
+  ]
+ },
+ "posthog": {
+  "resources": [
+   {
+    "name": "organizations",
+    "path": "/api/organizations/",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "enforce_2fa": "bool:enforce_2fa"
+    }
+   },
+   {
+    "name": "members",
+    "path": "/api/organizations/@current/members/",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "user_email": "user.email",
+     "user_name": "user.first_name",
+     "mfa_enabled": "bool:is_2fa_enabled",
+     "email_verified": "bool:user.is_email_verified",
+     "level": "level",
+     "has_social_auth": "bool:has_social_auth"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "posthog.members-2fa-enabled",
+    "resource": "members",
+    "kind": "all_true",
+    "field": "mfa_enabled",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All organization members have two-factor authentication enabled",
+    "item_name": "user_email",
+    "fail_msg": "Member has no 2FA enabled on their PostHog account"
+   },
+   {
+    "id": "posthog.org-enforce-2fa",
+    "resource": "organizations",
+    "kind": "all_true",
+    "field": "enforce_2fa",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization enforces two-factor authentication for all members",
+    "item_name": "name",
+    "fail_msg": "Organization does not enforce 2FA (enforce_2fa is off)"
+   },
+   {
+    "id": "posthog.members-email-verified",
+    "resource": "members",
+    "kind": "all_true",
+    "field": "email_verified",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All organization members have a verified email address",
+    "item_name": "user_email",
+    "fail_msg": "Member email address is not verified"
+   }
+  ]
+ },
+ "better_stack": {
+  "resources": [
+   {
+    "name": "monitors",
+    "path": "/api/v2/monitors",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 250,
+     "limit": 250
+    },
+    "fields": {
+     "name": "attributes.pronounceable_name",
+     "url": "attributes.url",
+     "monitor_type": "attributes.monitor_type",
+     "status": "attributes.status",
+     "paused": "bool:attributes.paused_at",
+     "verify_ssl": "bool:attributes.verify_ssl",
+     "policy_id": "attributes.policy_id"
+    }
+   },
+   {
+    "name": "policies",
+    "path": "/api/v3/policies",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 250,
+     "limit": 250
+    },
+    "fields": {
+     "name": "attributes.name",
+     "repeat_count": "attributes.repeat_count",
+     "steps": "len:attributes.steps"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "better_stack.monitors_present",
+    "resource": "monitors",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "A1.1"
+    ],
+    "title": "Uptime monitoring is configured",
+    "item_name": "name",
+    "fail_msg": "No uptime monitors are configured, so system availability is not being monitored."
+   },
+   {
+    "id": "better_stack.monitors_not_paused",
+    "resource": "monitors",
+    "kind": "all_false",
+    "field": "paused",
+    "op": "truthy",
+    "controls": [
+     "A1.1"
+    ],
+    "title": "All uptime monitors are active (not paused)",
+    "item_name": "name",
+    "fail_msg": "A monitor is paused, leaving that endpoint's availability unmonitored."
+   },
+   {
+    "id": "better_stack.monitors_verify_ssl",
+    "resource": "monitors",
+    "kind": "all_true",
+    "field": "verify_ssl",
+    "op": "truthy",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "HTTP monitors verify SSL/TLS certificates",
+    "item_name": "name",
+    "fail_msg": "A monitor does not verify the SSL certificate of its target endpoint, so cert expiry or downgrade would go undetected."
+   },
+   {
+    "id": "better_stack.escalation_policy_present",
+    "resource": "policies",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.4"
+    ],
+    "title": "An incident escalation / on-call policy is configured",
+    "item_name": "name",
+    "fail_msg": "No escalation policy exists, so incidents may not be routed to on-call responders."
+   }
+  ]
+ },
+ "pagerduty": {
+  "resources": [
+   {
+    "name": "escalation_policies",
+    "path": "/escalation_policies?limit=100",
+    "method": "GET",
+    "items": [
+     "escalation_policies"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "rule_count": "len:escalation_rules"
+    }
+   },
+   {
+    "name": "services",
+    "path": "/services?limit=100",
+    "method": "GET",
+    "items": [
+     "services"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "has_escalation_policy": "bool:escalation_policy"
+    }
+   },
+   {
+    "name": "oncalls",
+    "path": "/oncalls?limit=100",
+    "method": "GET",
+    "items": [
+     "oncalls"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "policy": "escalation_policy.summary",
+     "user": "user.summary"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "pagerduty.escalation_policies_exist",
+    "resource": "escalation_policies",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.4"
+    ],
+    "title": "Incident escalation policies are configured",
+    "item_name": "name",
+    "fail_msg": "No escalation policies found; incidents have no defined escalation path"
+   },
+   {
+    "id": "pagerduty.escalation_policy_has_rules",
+    "resource": "escalation_policies",
+    "kind": "all_true",
+    "field": "rule_count",
+    "controls": [
+     "CC7.4"
+    ],
+    "title": "Every escalation policy has at least one escalation rule",
+    "item_name": "name",
+    "fail_msg": "Escalation policy has no escalation rules, so incidents will not be routed to a responder"
+   },
+   {
+    "id": "pagerduty.services_have_escalation_policy",
+    "resource": "services",
+    "kind": "all_true",
+    "field": "has_escalation_policy",
+    "controls": [
+     "CC7.4"
+    ],
+    "title": "Every service is attached to an escalation policy",
+    "item_name": "name",
+    "fail_msg": "Service has no escalation policy; incidents on it will not escalate to anyone"
+   },
+   {
+    "id": "pagerduty.oncall_coverage_active",
+    "resource": "oncalls",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.4"
+    ],
+    "title": "On-call coverage is active",
+    "item_name": "policy",
+    "fail_msg": "No active on-call responders found across escalation policies"
+   }
+  ]
+ },
+ "notion": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/users",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "type": "type",
+     "is_bot": "bool:bot",
+     "email": "person.email",
+     "email_verified": "bool:person.email_verified"
+    }
+   },
+   {
+    "name": "pages",
+    "path": "/search",
+    "method": "POST",
+    "body": {
+     "filter": {
+      "property": "object",
+      "value": "page"
+     },
+     "page_size": 100
+    },
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "url": "url",
+     "public_url": "public_url",
+     "archived": "bool:archived"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "notion.users_inventory",
+    "resource": "users",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Notion workspace users inventory",
+    "item_name": "name",
+    "fail_msg": "Could not enumerate Notion workspace users"
+   },
+   {
+    "id": "notion.member_email_verified",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "email_verified",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All member accounts have a verified email",
+    "item_name": "name",
+    "skip_if_field_true": "is_bot",
+    "fail_msg": "Member account has an unverified email address"
+   },
+   {
+    "id": "notion.no_public_pages",
+    "resource": "pages",
+    "kind": "none_match",
+    "field": "public_url",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No pages are published publicly to the web",
+    "item_name": "url",
+    "fail_msg": "Page is published to the public web (public_url set)"
+   }
+  ]
+ },
+ "linear": {
+  "resources": [
+   {
+    "name": "organization",
+    "path": "/graphql",
+    "method": "POST",
+    "body": {
+     "query": "query { organization { id name samlEnabled scimEnabled allowedAuthServices } }"
+    },
+    "items": [
+     "data",
+     "organization"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "samlEnabled": "bool:samlEnabled",
+     "scimEnabled": "bool:scimEnabled",
+     "authServicesCount": "len:allowedAuthServices"
+    }
+   },
+   {
+    "name": "users",
+    "path": "/graphql",
+    "method": "POST",
+    "body": {
+     "query": "query { users(first: 250) { nodes { id name email admin active guest } } }"
+    },
+    "items": [
+     "data",
+     "users",
+     "nodes"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "email": "email",
+     "admin": "bool:admin",
+     "active": "bool:active",
+     "guest": "bool:guest"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "linear.saml_sso_enabled",
+    "resource": "organization",
+    "kind": "all_true",
+    "field": "samlEnabled",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "SAML single sign-on is enabled for the workspace",
+    "item_name": "name",
+    "fail_msg": "SAML SSO is not enabled; members can authenticate without the central identity provider"
+   },
+   {
+    "id": "linear.scim_provisioning_enabled",
+    "resource": "organization",
+    "kind": "all_true",
+    "field": "scimEnabled",
+    "op": "truthy",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "SCIM provisioning is enabled for automated de-provisioning",
+    "item_name": "name",
+    "fail_msg": "SCIM is not enabled; account provisioning and de-provisioning is not automated from the identity provider"
+   },
+   {
+    "id": "linear.auth_services_restricted",
+    "resource": "organization",
+    "kind": "all_match",
+    "field": "authServicesCount",
+    "op": "gt",
+    "value": 0,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Allowed authentication methods are explicitly restricted",
+    "item_name": "name",
+    "fail_msg": "No allowed auth services are configured (empty list means all methods permitted); the workspace does not restrict which login methods members may use"
+   },
+   {
+    "id": "linear.admin_least_privilege",
+    "resource": "users",
+    "kind": "max_count",
+    "field": "admin",
+    "op": "eq",
+    "value": true,
+    "max": 3,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Workspace admin accounts are limited (least privilege)",
+    "item_name": "email",
+    "fail_msg": "More than 3 members hold workspace admin rights, indicating broad privileged access"
+   },
+   {
+    "id": "linear.no_external_guests",
+    "resource": "users",
+    "kind": "none_match",
+    "field": "guest",
+    "op": "eq",
+    "value": true,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No external guest accounts have access to the workspace",
+    "item_name": "email",
+    "fail_msg": "Guest (external) member accounts exist and can access workspace data"
+   }
+  ]
+ },
+ "asana": {
+  "resources": [
+   {
+    "name": "workspaces",
+    "path": "/workspaces?opt_fields=name,is_organization,email_domains&limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "gid": "gid",
+     "is_organization": "bool:is_organization",
+     "domain_count": "len:email_domains"
+    }
+   },
+   {
+    "name": "workspace_memberships",
+    "path": "/workspaces/{workspace_gid}/workspace_memberships?opt_fields=is_admin,is_guest,is_active,is_view_only,user.name&limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "workspaces",
+     "vars": {
+      "workspace_gid": "gid"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "member": "user.name",
+     "is_admin": "bool:is_admin",
+     "is_guest": "bool:is_guest",
+     "is_active": "bool:is_active",
+     "is_view_only": "bool:is_view_only"
+    }
+   },
+   {
+    "name": "users",
+    "path": "/users?opt_fields=name,email&limit=50",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "email": "email"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "asana.workspace_is_organization",
+    "resource": "workspaces",
+    "kind": "all_true",
+    "field": "is_organization",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Workspaces are email-domain-controlled Organizations",
+    "item_name": "name",
+    "fail_msg": "Workspace is not an Organization, so membership is not restricted to verified email domains and anyone can be invited by email"
+   },
+   {
+    "id": "asana.no_guest_members",
+    "resource": "workspace_memberships",
+    "kind": "all_false",
+    "field": "is_guest",
+    "op": "truthy",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "No external guest accounts have workspace access",
+    "item_name": "member",
+    "fail_msg": "External guest member has access to the workspace"
+   },
+   {
+    "id": "asana.members_active",
+    "resource": "workspace_memberships",
+    "kind": "all_true",
+    "field": "is_active",
+    "op": "truthy",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "All workspace memberships are active (no stale/deprovisioned access)",
+    "item_name": "member",
+    "fail_msg": "Inactive membership record still present; access was not fully removed"
+   },
+   {
+    "id": "asana.member_inventory",
+    "resource": "users",
+    "kind": "present",
+    "field": "email",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Workspace user/identity inventory for access review",
+    "item_name": "name",
+    "fail_msg": "User inventory unavailable"
+   }
+  ]
+ },
+ "jira": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/users/search?maxResults=1000",
+    "method": "GET",
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "displayName": "displayName",
+     "email": "emailAddress",
+     "active": "bool:active",
+     "accountType": "accountType",
+     "accountId": "accountId"
+    }
+   },
+   {
+    "name": "audit_records",
+    "path": "/auditing/record?limit=1000",
+    "method": "GET",
+    "items": [
+     "records"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "summary": "summary",
+     "category": "category",
+     "created": "created",
+     "author": "authorKey"
+    }
+   },
+   {
+    "name": "permission_schemes",
+    "path": "/permissionscheme",
+    "method": "GET",
+    "items": [
+     "permissionSchemes"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name"
+    }
+   },
+   {
+    "name": "permission_grants",
+    "path": "/permissionscheme/{schemeId}/permission",
+    "method": "GET",
+    "items": [
+     "permissions"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "permission_schemes",
+     "vars": {
+      "schemeId": "id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "holder_type": "holder.type",
+     "holder_param": "holder.parameter",
+     "permission": "permission"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "jira.user_inventory",
+    "resource": "users",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Jira user inventory",
+    "item_name": "displayName"
+   },
+   {
+    "id": "jira.audit_logging_active",
+    "resource": "audit_records",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Jira audit logging is active and recording events",
+    "item_name": "summary",
+    "fail_msg": "No audit records returned; Jira audit logging may be disabled or inaccessible to this token"
+   },
+   {
+    "id": "jira.no_anonymous_permission_grants",
+    "resource": "permission_grants",
+    "kind": "none_match",
+    "field": "holder_type",
+    "op": "eq",
+    "value": "anyone",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No anonymous (public) access granted in Jira permission schemes",
+    "item_name": "permission",
+    "fail_msg": "A permission scheme grants access to holder type 'anyone', exposing Jira to anonymous/public users"
+   }
+  ]
+ },
+ "clickup": {
+  "resources": [
+   {
+    "name": "workspace",
+    "path": "/team",
+    "method": "GET",
+    "items": [
+     "teams"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "member_count": "len:members"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "clickup.workspace_inventory",
+    "resource": "workspace",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Workspaces accessible by the API credential (access-scope inventory)",
+    "item_name": "name",
+    "fail_msg": "workspace could not be inventoried"
+   }
+  ]
+ },
+ "monday": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/v2",
+    "method": "POST",
+    "body": {
+     "query": "query { users (limit: 500) { id name email is_admin is_guest is_view_only is_pending enabled status } }"
+    },
+    "items": [
+     "data",
+     "users"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "email": "email",
+     "admin": "bool:is_admin",
+     "guest": "bool:is_guest",
+     "view_only": "bool:is_view_only",
+     "pending": "bool:is_pending",
+     "enabled": "bool:enabled",
+     "status": "status"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "monday.admin_count_bounded",
+    "resource": "users",
+    "kind": "max_count",
+    "field": "admin",
+    "op": "truthy",
+    "max": 5,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Full admins kept to a least-privilege minimum",
+    "item_name": "email",
+    "fail_msg": "More than 5 users hold full account-admin rights"
+   },
+   {
+    "id": "monday.no_lingering_pending_invites",
+    "resource": "users",
+    "kind": "none_match",
+    "field": "pending",
+    "op": "truthy",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "No lingering pending/unaccepted user invites",
+    "item_name": "email",
+    "fail_msg": "User invite is still pending and should be reviewed or revoked"
+   },
+   {
+    "id": "monday.user_inventory",
+    "resource": "users",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Account user access inventory",
+    "item_name": "email",
+    "fail_msg": "Unable to enumerate account users"
+   }
+  ]
+ },
+ "slack": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/users.list?limit=100",
+    "method": "GET",
+    "items": [
+     "members"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "real_name": "real_name",
+     "email": "profile.email",
+     "is_bot": "is_bot",
+     "deleted": "deleted",
+     "is_admin": "is_admin",
+     "is_owner": "is_owner",
+     "is_restricted": "is_restricted",
+     "is_ultra_restricted": "is_ultra_restricted",
+     "has_2fa": "has_2fa"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "slack.users_mfa",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "has_2fa",
+    "op": "truthy",
+    "controls": [
+     "CC6.1",
+     "CC6.2"
+    ],
+    "title": "All workspace members have two-factor authentication enabled",
+    "item_name": "name",
+    "skip_if_field_true": "is_bot",
+    "fail_msg": "Member does not have two-factor authentication enabled"
+   },
+   {
+    "id": "slack.user_inventory",
+    "resource": "users",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Workspace user access inventory",
+    "item_name": "name",
+    "fail_msg": "Unable to enumerate workspace users"
+   }
+  ]
+ },
+ "zendesk": {
+  "resources": [
+   {
+    "name": "staff",
+    "path": "/users.json?role[]=admin&role[]=agent",
+    "method": "GET",
+    "items": [
+     "users"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "email": "email",
+     "name": "name",
+     "role": "role",
+     "mfa": "bool:two_factor_auth_enabled",
+     "verified": "bool:verified",
+     "suspended": "bool:suspended",
+     "active": "bool:active",
+     "restricted": "bool:restricted_agent"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "zendesk.staff_2fa_enabled",
+    "resource": "staff",
+    "kind": "all_true",
+    "field": "mfa",
+    "controls": [
+     "CC6.1",
+     "CC6.2"
+    ],
+    "title": "All agents and admins have two-factor authentication enabled",
+    "item_name": "email",
+    "skip_if_field_true": "suspended",
+    "fail_msg": "An active agent/admin does not have 2FA enabled"
+   },
+   {
+    "id": "zendesk.admin_count_limited",
+    "resource": "staff",
+    "kind": "max_count",
+    "field": "role",
+    "op": "eq",
+    "value": "admin",
+    "max": 5,
+    "controls": [
+     "CC6.1",
+     "CC6.3"
+    ],
+    "title": "Number of Zendesk admins is limited (least privilege)",
+    "item_name": "email",
+    "fail_msg": "More admin accounts exist than the least-privilege threshold"
+   },
+   {
+    "id": "zendesk.staff_identity_verified",
+    "resource": "staff",
+    "kind": "all_true",
+    "field": "verified",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All agent and admin identities are verified",
+    "item_name": "email",
+    "skip_if_field_true": "suspended",
+    "fail_msg": "An active agent/admin has no verified identity"
+   }
+  ]
+ },
+ "intercom": {
+  "resources": [
+   {
+    "name": "admins",
+    "path": "/admins",
+    "method": "GET",
+    "items": [
+     "admins"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "email",
+     "name": "name",
+     "job_title": "job_title",
+     "admin_id": "id",
+     "has_inbox_seat": "bool:has_inbox_seat",
+     "away_mode_enabled": "bool:away_mode_enabled",
+     "team_count": "len:team_ids"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "intercom.admin-inventory",
+    "resource": "admins",
+    "kind": "present",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "Intercom teammate (admin) access inventory",
+    "item_name": "email",
+    "fail_msg": "Teammate has workspace access and must be reviewed as an authorized user."
+   }
+  ]
+ },
+ "hubspot": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/settings/v3/users",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "email",
+     "superAdmin": "bool:superAdmin",
+     "notSuperAdmin": "!superAdmin",
+     "roleId": "roleId",
+     "primaryTeamId": "primaryTeamId"
+    }
+   },
+   {
+    "name": "roles",
+    "path": "/settings/v3/users/roles",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "hubspot.limited_super_admins",
+    "resource": "users",
+    "kind": "max_count",
+    "field": "superAdmin",
+    "op": "truthy",
+    "max": 4,
+    "skip_if_field_true": "notSuperAdmin",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "HubSpot Super Admin accounts are limited (least privilege)",
+    "item_name": "email",
+    "fail_msg": "More than 4 users hold Super Admin; reduce standing privileged access"
+   },
+   {
+    "id": "hubspot.user_inventory",
+    "resource": "users",
+    "kind": "present",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "HubSpot user access is inventoried for periodic access review",
+    "item_name": "email",
+    "fail_msg": "Could not enumerate HubSpot users for access review"
+   },
+   {
+    "id": "hubspot.rbac_roles_defined",
+    "resource": "roles",
+    "kind": "present",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "HubSpot role-based access roles are defined (RBAC)",
+    "item_name": "name",
+    "fail_msg": "No HubSpot roles returned; role-based access control not evidenced"
+   }
+  ]
+ },
+ "sendgrid": {
+  "resources": [
+   {
+    "name": "teammates",
+    "path": "/teammates",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "username": "username",
+     "email": "email",
+     "user_type": "user_type",
+     "is_admin": "bool:is_admin"
+    }
+   },
+   {
+    "name": "api_keys",
+    "path": "/api_keys",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "id": "api_key_id"
+    }
+   },
+   {
+    "name": "sso_integrations",
+    "path": "/sso/integrations",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "enabled": "bool:enabled",
+     "id": "id"
+    }
+   },
+   {
+    "name": "ip_whitelist",
+    "path": "/access_settings/whitelist",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "ip": "ip",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "sendgrid.teammate_inventory",
+    "resource": "teammates",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Teammate accounts inventoried for access review",
+    "item_name": "email",
+    "fail_msg": "Could not enumerate SendGrid teammate accounts for least-privilege review."
+   },
+   {
+    "id": "sendgrid.api_key_inventory",
+    "resource": "api_keys",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "API keys inventoried for credential review",
+    "item_name": "name",
+    "fail_msg": "Could not enumerate SendGrid API keys for credential hygiene review."
+   },
+   {
+    "id": "sendgrid.sso_configured",
+    "resource": "sso_integrations",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "SAML SSO integration is configured",
+    "item_name": "name",
+    "fail_msg": "No SAML SSO integration is configured; teammates can authenticate without centralized identity/MFA."
+   },
+   {
+    "id": "sendgrid.sso_enabled",
+    "resource": "sso_integrations",
+    "kind": "all_true",
+    "field": "enabled",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Configured SSO integrations are enabled",
+    "item_name": "name",
+    "fail_msg": "A configured SSO integration is disabled, allowing bypass of centralized authentication."
+   },
+   {
+    "id": "sendgrid.ip_allowlist_enforced",
+    "resource": "ip_whitelist",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "IP access management allowlist restricts account access",
+    "item_name": "ip",
+    "fail_msg": "No IP allowlist entries configured; the account/API is reachable from any source IP."
+   }
+  ]
+ },
+ "resend": {
+  "resources": [
+   {
+    "name": "domains",
+    "path": "/domains",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "status": "status",
+     "region": "region",
+     "sending": "capabilities.sending",
+     "receiving": "capabilities.receiving"
+    }
+   },
+   {
+    "name": "api_keys",
+    "path": "/api-keys",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "created": "created_at",
+     "last_used": "last_used_at"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "resend.domains_verified",
+    "resource": "domains",
+    "kind": "all_match",
+    "field": "status",
+    "op": "eq",
+    "value": "verified",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "All sending domains are verified (SPF/DKIM/DMARC configured)",
+    "item_name": "name",
+    "fail_msg": "Domain is not verified, so email authentication (SPF/DKIM/DMARC) DNS records are not confirmed in place"
+   },
+   {
+    "id": "resend.domains_inventory",
+    "resource": "domains",
+    "kind": "present",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Sending domain inventory",
+    "item_name": "name",
+    "fail_msg": "No sending domains configured"
+   },
+   {
+    "id": "resend.api_keys_inventory",
+    "resource": "api_keys",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "API key inventory for access review",
+    "item_name": "name",
+    "fail_msg": "Unable to enumerate API keys for access review"
+   }
+  ]
+ },
+ "openai": {
+  "resources": [
+   {
+    "name": "org_users",
+    "path": "/organization/users?limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "email",
+     "name": "name",
+     "role": "role",
+     "id": "id"
+    }
+   },
+   {
+    "name": "org_invites",
+    "path": "/organization/invites?limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "email",
+     "role": "role",
+     "status": "status",
+     "id": "id"
+    }
+   },
+   {
+    "name": "admin_api_keys",
+    "path": "/organization/admin_api_keys?limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "id": "id",
+     "last_used_at": "last_used_at"
+    }
+   },
+   {
+    "name": "org_projects",
+    "path": "/organization/projects?limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "status": "status",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "openai.org_members_inventory",
+    "resource": "org_users",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization members enumerated for access review",
+    "item_name": "email"
+   },
+   {
+    "id": "openai.no_stale_pending_invites",
+    "resource": "org_invites",
+    "kind": "none_match",
+    "field": "status",
+    "op": "eq",
+    "value": "pending",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "No pending organization invitations awaiting acceptance",
+    "item_name": "email",
+    "fail_msg": "Pending invitation not yet accepted - confirm it is still authorized or revoke."
+   },
+   {
+    "id": "openai.admin_api_key_sprawl",
+    "resource": "admin_api_keys",
+    "kind": "max_count",
+    "max": 5,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization-level admin API keys kept to a minimum",
+    "item_name": "name",
+    "fail_msg": "Too many org-level admin API keys - these grant full org control; prune unused keys."
+   },
+   {
+    "id": "openai.projects_inventory",
+    "resource": "org_projects",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Projects enumerated for access/workload scoping",
+    "item_name": "name"
+   }
+  ]
+ },
+ "anthropic": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/organizations/users",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "email": "email",
+     "name": "name",
+     "role": "role",
+     "added_at": "added_at"
+    }
+   },
+   {
+    "name": "api_keys",
+    "path": "/organizations/api_keys",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "status": "status",
+     "created_at": "created_at",
+     "expires_at": "expires_at",
+     "never_expires": "!expires_at",
+     "scope_type": "scope.type",
+     "workspace_id": "scope.workspace_id"
+    }
+   },
+   {
+    "name": "workspaces",
+    "path": "/organizations/workspaces",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "created_at": "created_at",
+     "archived_at": "archived_at"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "anthropic.org_members_inventory",
+    "resource": "users",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization members and roles are inventoried",
+    "item_name": "email",
+    "fail_msg": "Could not enumerate organization members"
+   },
+   {
+    "id": "anthropic.api_keys_have_expiry",
+    "resource": "api_keys",
+    "kind": "none_match",
+    "field": "never_expires",
+    "op": "truthy",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Every organization API key has an expiration set",
+    "item_name": "name",
+    "fail_msg": "API key has no expiration date (never expires), defeating key rotation"
+   },
+   {
+    "id": "anthropic.api_keys_inventory",
+    "resource": "api_keys",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Organization API keys are inventoried with status",
+    "item_name": "name",
+    "fail_msg": "Could not enumerate organization API keys"
+   },
+   {
+    "id": "anthropic.workspaces_inventory",
+    "resource": "workspaces",
+    "kind": "present",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Workspaces are inventoried for environment segregation",
+    "item_name": "name",
+    "fail_msg": "Could not enumerate organization workspaces"
+   }
+  ]
+ },
+ "auth0": {
+  "resources": [
+   {
+    "name": "db_connection",
+    "path": "/connections?strategy=auth0",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 50,
+     "start": 0,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "bf": "options.brute_force_protection"
+    }
+   },
+   {
+    "name": "client",
+    "path": "/clients",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "per_page",
+     "size": 50,
+     "start": 0,
+     "limit": 200
+    },
+    "fields": {
+     "name": "name",
+     "grant_types": "grant_types",
+     "app_type": "app_type"
+    }
+   },
+   {
+    "name": "log_stream",
+    "path": "/log-streams",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "status": "status"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "auth0.db_brute_force",
+    "resource": "db_connection",
+    "kind": "all_true",
+    "field": "bf",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Brute-force protection enabled on database connections",
+    "item_name": "name",
+    "fail_msg": "Brute-force protection is disabled on this database connection"
+   },
+   {
+    "id": "auth0.no_password_grant",
+    "resource": "client",
+    "kind": "none_match",
+    "field": "grant_types",
+    "op": "contains",
+    "value": "password",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No application uses the resource-owner-password (ROPG) grant",
+    "item_name": "name",
+    "fail_msg": "Application allows the password (ROPG) grant, which sends raw credentials to the app"
+   },
+   {
+    "id": "auth0.no_implicit_grant",
+    "resource": "client",
+    "kind": "none_match",
+    "field": "grant_types",
+    "op": "contains",
+    "value": "implicit",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No application uses the implicit OAuth flow",
+    "item_name": "name",
+    "fail_msg": "Application allows the deprecated implicit grant"
+   },
+   {
+    "id": "auth0.log_stream_configured",
+    "resource": "log_stream",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Tenant logs streamed to external monitoring"
+   }
+  ]
+ },
+ "jumpcloud": {
+  "resources": [
+   {
+    "name": "systemusers",
+    "path": "/systemusers?limit=100",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "username": "username",
+     "email": "email",
+     "mfa_configured": "mfa.configured",
+     "suspended": "suspended",
+     "activated": "activated",
+     "account_locked": "account_locked",
+     "password_expired": "password_expired",
+     "password_never_expires": "password_never_expires",
+     "sudo": "sudo"
+    }
+   },
+   {
+    "name": "systems",
+    "path": "/systems?limit=100",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "hostname": "hostname",
+     "os": "os",
+     "fde_active": "fde.active",
+     "allow_ssh_root": "allowSshRootLogin",
+     "allow_ssh_password": "allowSshPasswordAuthentication",
+     "allow_mfa": "allowMultiFactorAuthentication"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "jumpcloud.users_mfa",
+    "resource": "systemusers",
+    "kind": "all_true",
+    "field": "mfa_configured",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All active users have MFA configured",
+    "item_name": "username",
+    "skip_if_field_true": "suspended",
+    "fail_msg": "User has no MFA configured"
+   },
+   {
+    "id": "jumpcloud.password_expiry_enforced",
+    "resource": "systemusers",
+    "kind": "all_false",
+    "field": "password_never_expires",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No users have passwords set to never expire",
+    "item_name": "username",
+    "fail_msg": "User password is set to never expire"
+   },
+   {
+    "id": "jumpcloud.systems_fde",
+    "resource": "systems",
+    "kind": "all_true",
+    "field": "fde_active",
+    "op": "truthy",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "All managed systems have full-disk encryption active",
+    "item_name": "hostname",
+    "fail_msg": "System does not have full-disk encryption active"
+   },
+   {
+    "id": "jumpcloud.no_ssh_root_login",
+    "resource": "systems",
+    "kind": "all_false",
+    "field": "allow_ssh_root",
+    "op": "truthy",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "No managed systems allow SSH root login",
+    "item_name": "hostname",
+    "fail_msg": "System allows direct SSH root login"
+   },
+   {
+    "id": "jumpcloud.no_ssh_password_auth",
+    "resource": "systems",
+    "kind": "all_false",
+    "field": "allow_ssh_password",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No managed systems allow SSH password authentication",
+    "item_name": "hostname",
+    "fail_msg": "System allows SSH password authentication"
+   }
+  ]
+ },
+ "onelogin": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/users",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "email": "email",
+     "username": "username",
+     "status": "status",
+     "state": "state",
+     "last_login": "last_login"
+    }
+   },
+   {
+    "name": "roles",
+    "path": "/roles",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name"
+    }
+   },
+   {
+    "name": "apps",
+    "path": "/apps",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "auth_method": "auth_method",
+     "visible": "visible"
+    }
+   },
+   {
+    "name": "user_mfa",
+    "path": "/mfa/users/{user_id}/devices",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "users",
+     "vars": {
+      "user_id": "id"
+     }
+    },
+    "fields": {
+     "device_id": "device_id",
+     "auth_factor": "auth_factor_name",
+     "default": "default"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "onelogin.mfa_factors_enrolled",
+    "resource": "user_mfa",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "MFA authentication factors are enrolled for users",
+    "item_name": "device_id",
+    "fail_msg": "No enrolled MFA authentication factors found"
+   },
+   {
+    "id": "onelogin.roles_defined",
+    "resource": "roles",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Role-based access control roles are defined",
+    "item_name": "name",
+    "fail_msg": "No roles defined for role-based access assignment"
+   },
+   {
+    "id": "onelogin.no_unactivated_users",
+    "resource": "users",
+    "kind": "none_match",
+    "field": "status",
+    "op": "eq",
+    "value": 0,
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "No user accounts stuck in unactivated provisioning state",
+    "item_name": "email",
+    "fail_msg": "User account is unactivated (incomplete provisioning / possible orphan)"
+   }
+  ]
+ },
+ "sentinelone": {
+  "resources": [
+   {
+    "name": "agents",
+    "path": "/agents",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.computerName",
+     "active": "raw.isActive",
+     "encrypted": "raw.encryptedApplications",
+     "firewall": "raw.firewallEnabled",
+     "uptodate": "raw.isUpToDate",
+     "version": "raw.agentVersion"
+    }
+   },
+   {
+    "name": "users",
+    "path": "/users",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "raw.email",
+     "mfa": "raw.twoFaEnabled"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "sentinelone.agents-active",
+    "resource": "agents",
+    "kind": "all_true",
+    "field": "active",
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "All SentinelOne agents are active and reporting",
+    "item_name": "name",
+    "fail_msg": "Endpoint has an inactive SentinelOne agent (no EDR telemetry/protection)."
+   },
+   {
+    "id": "sentinelone.disk-encryption",
+    "resource": "agents",
+    "kind": "all_true",
+    "field": "encrypted",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "All endpoints report disk encryption enabled",
+    "item_name": "name",
+    "fail_msg": "Endpoint reports disk encryption is not enabled (data-at-rest not protected)."
+   },
+   {
+    "id": "sentinelone.firewall-enabled",
+    "resource": "agents",
+    "kind": "all_true",
+    "field": "firewall",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "All endpoints have the SentinelOne firewall enabled",
+    "item_name": "name",
+    "fail_msg": "Endpoint has the host firewall disabled (boundary protection missing)."
+   },
+   {
+    "id": "sentinelone.agent-up-to-date",
+    "resource": "agents",
+    "kind": "all_true",
+    "field": "uptodate",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "All SentinelOne agents are up to date",
+    "item_name": "name",
+    "fail_msg": "Endpoint is running an out-of-date SentinelOne agent version."
+   },
+   {
+    "id": "sentinelone.console-mfa",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "mfa",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All SentinelOne console users have 2FA enabled",
+    "item_name": "email",
+    "fail_msg": "Console user does not have two-factor authentication enabled."
+   }
+  ]
+ },
+ "snyk": {
+  "resources": [
+   {
+    "name": "orgs",
+    "path": "/rest/orgs?version=2024-10-15&limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "attributes.name",
+     "slug": "attributes.slug"
+    }
+   },
+   {
+    "name": "projects",
+    "path": "/rest/orgs/{org_id}/projects?version=2024-10-15&limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "orgs",
+     "vars": {
+      "org_id": "id"
+     }
+    },
+    "fields": {
+     "name": "attributes.name",
+     "status": "attributes.status",
+     "origin": "attributes.origin",
+     "type": "attributes.type"
+    }
+   },
+   {
+    "name": "issues",
+    "path": "/rest/orgs/{org_id}/issues?version=2024-10-15&status=open&limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "orgs",
+     "vars": {
+      "org_id": "id"
+     }
+    },
+    "fields": {
+     "sev": "attributes.effective_severity_level",
+     "status": "attributes.status",
+     "ignored": "attributes.ignored",
+     "title": "attributes.title"
+    }
+   },
+   {
+    "name": "sast_settings",
+    "path": "/rest/orgs/{org_id}/settings/sast?version=2024-10-15",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "orgs",
+     "vars": {
+      "org_id": "id"
+     }
+    },
+    "fields": {
+     "sast_enabled": "attributes.sast_enabled",
+     "org": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "snyk.projects_monitored",
+    "resource": "projects",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "Projects are onboarded to Snyk for vulnerability scanning",
+    "fail_msg": "No Snyk projects found; code is not being scanned for known vulnerabilities"
+   },
+   {
+    "id": "snyk.no_open_critical_issues",
+    "resource": "issues",
+    "kind": "none_match",
+    "field": "sev",
+    "op": "eq",
+    "value": "critical",
+    "skip_if_field_true": "ignored",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "No open, un-ignored critical-severity vulnerabilities",
+    "item_name": "title",
+    "fail_msg": "Open critical-severity vulnerability detected by Snyk (not risk-accepted)"
+   },
+   {
+    "id": "snyk.no_open_high_issues",
+    "resource": "issues",
+    "kind": "none_match",
+    "field": "sev",
+    "op": "eq",
+    "value": "high",
+    "skip_if_field_true": "ignored",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "No open, un-ignored high-severity vulnerabilities",
+    "item_name": "title",
+    "fail_msg": "Open high-severity vulnerability detected by Snyk (not risk-accepted)"
+   },
+   {
+    "id": "snyk.sast_enabled",
+    "resource": "sast_settings",
+    "kind": "all_true",
+    "field": "sast_enabled",
+    "op": "truthy",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "Snyk Code (SAST) scanning is enabled per organization",
+    "item_name": "org",
+    "fail_msg": "SAST scanning is disabled for a Snyk organization"
+   }
+  ]
+ },
+ "tenable": {
+  "resources": [
+   {
+    "name": "scanners",
+    "path": "/scanners",
+    "method": "GET",
+    "items": [
+     "scanners"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.name",
+     "status": "raw.status",
+     "type": "raw.type",
+     "uuid": "raw.uuid"
+    }
+   },
+   {
+    "name": "scans",
+    "path": "/scans",
+    "method": "GET",
+    "items": [
+     "scans"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.name",
+     "status": "raw.status",
+     "enabled": "raw.enabled",
+     "id": "raw.id"
+    }
+   },
+   {
+    "name": "users",
+    "path": "/users",
+    "method": "GET",
+    "items": [
+     "users"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "username": "raw.username",
+     "enabled": "raw.enabled",
+     "permissions": "raw.permissions",
+     "fails": "raw.login_fail_count"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "tenable.scanners_present",
+    "resource": "scanners",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "At least one vulnerability scanner is provisioned",
+    "fail_msg": "No Tenable scanners are provisioned; vulnerability scanning infrastructure is not in place."
+   },
+   {
+    "id": "tenable.scanners_online",
+    "resource": "scanners",
+    "kind": "all_match",
+    "field": "status",
+    "op": "eq",
+    "value": "on",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "All configured scanners are online",
+    "item_name": "name",
+    "fail_msg": "One or more scanners are offline, reducing vulnerability scanning coverage."
+   },
+   {
+    "id": "tenable.scans_configured",
+    "resource": "scans",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "Vulnerability scans are configured",
+    "fail_msg": "No scans are configured; the environment is not being scanned for vulnerabilities."
+   },
+   {
+    "id": "tenable.no_login_lockout_pending",
+    "resource": "users",
+    "kind": "none_match",
+    "field": "fails",
+    "op": "gt",
+    "value": 5,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "No user accounts show excessive failed login attempts",
+    "item_name": "username",
+    "fail_msg": "A user account has an unusually high failed-login count, indicating possible brute-force activity."
+   }
+  ]
+ },
+ "sonarcloud": {
+  "resources": [
+   {
+    "name": "orgs",
+    "path": "/organizations/search?member=true",
+    "method": "GET",
+    "items": [
+     "organizations"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "p",
+     "size_param": "ps",
+     "size": 100,
+     "limit": 200
+    },
+    "fields": {
+     "key": "key",
+     "name": "name"
+    }
+   },
+   {
+    "name": "quality_gates",
+    "path": "/qualitygates/list?organization={org}",
+    "method": "GET",
+    "for_each": {
+     "resource": "orgs",
+     "vars": {
+      "org": "key"
+     }
+    },
+    "items": [
+     "qualitygates"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "is_default": "isDefault",
+     "is_builtin": "isBuiltIn",
+     "cayc": "caycStatus"
+    }
+   },
+   {
+    "name": "projects",
+    "path": "/projects/search?organization={org}",
+    "method": "GET",
+    "for_each": {
+     "resource": "orgs",
+     "vars": {
+      "org": "key"
+     }
+    },
+    "items": [
+     "components"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "p",
+     "size_param": "ps",
+     "size": 100,
+     "limit": 300
+    },
+    "fields": {
+     "key": "key",
+     "name": "name",
+     "visibility": "visibility",
+     "analyzed": "lastAnalysisDate"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "sonarcloud.no_public_projects",
+    "resource": "projects",
+    "kind": "none_match",
+    "field": "visibility",
+    "op": "eq",
+    "value": "public",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No public projects",
+    "item_name": "name",
+    "fail_msg": "Project is publicly visible (source code exposed to anyone)"
+   },
+   {
+    "id": "sonarcloud.projects_analyzed",
+    "resource": "projects",
+    "kind": "all_true",
+    "field": "analyzed",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "All projects have been scanned",
+    "item_name": "name",
+    "fail_msg": "Project has never been analyzed — no static/security scan on record"
+   },
+   {
+    "id": "sonarcloud.quality_gate_configured",
+    "resource": "quality_gates",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Quality gate(s) configured to gate code changes"
+   },
+   {
+    "id": "sonarcloud.quality_gate_cayc_compliant",
+    "resource": "quality_gates",
+    "kind": "none_match",
+    "field": "cayc",
+    "op": "eq",
+    "value": "non-compliant",
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Quality gates are Clean-as-You-Code compliant",
+    "item_name": "name",
+    "fail_msg": "Quality gate does not enforce Clean-as-You-Code conditions on new code"
+   }
+  ]
+ },
+ "semgrep": {
+  "resources": [
+   {
+    "name": "deployments",
+    "path": "/deployments",
+    "method": "GET",
+    "items": [
+     "deployments"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "slug": "slug",
+     "name": "name",
+     "id": "id"
+    }
+   },
+   {
+    "name": "projects",
+    "path": "/deployments/{slug}/projects",
+    "method": "GET",
+    "for_each": {
+     "resource": "deployments",
+     "vars": {
+      "slug": "slug"
+     }
+    },
+    "items": [
+     "projects"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "page_size",
+     "size": 100,
+     "start": 0,
+     "limit": 300
+    },
+    "fields": {
+     "name": "name",
+     "url": "url",
+     "last_scan": "latest_scan_at",
+     "branch": "primary_branch"
+    }
+   },
+   {
+    "name": "open_findings",
+    "path": "/deployments/{slug}/findings?status=open",
+    "method": "GET",
+    "for_each": {
+     "resource": "deployments",
+     "vars": {
+      "slug": "slug"
+     }
+    },
+    "items": [
+     "findings"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "page_size",
+     "size": 100,
+     "start": 0,
+     "limit": 500
+    },
+    "fields": {
+     "severity": "severity",
+     "confidence": "confidence",
+     "state": "state",
+     "rule": "rule_name",
+     "repo": "repository.name"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "semgrep.reachable",
+    "resource": "deployments",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Semgrep API reachable and a deployment is accessible",
+    "fail_msg": "No Semgrep deployment returned for this API token"
+   },
+   {
+    "id": "semgrep.projects_monitored",
+    "resource": "projects",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "At least one repository is onboarded to Semgrep scanning",
+    "fail_msg": "No projects are being scanned by Semgrep"
+   },
+   {
+    "id": "semgrep.projects_scanned",
+    "resource": "projects",
+    "kind": "all_true",
+    "field": "last_scan",
+    "op": "truthy",
+    "controls": [
+     "CC7.1",
+     "CC8.1"
+    ],
+    "title": "Every onboarded project has completed at least one scan",
+    "item_name": "name",
+    "fail_msg": "Project has never been scanned by Semgrep"
+   },
+   {
+    "id": "semgrep.no_open_high",
+    "resource": "open_findings",
+    "kind": "none_match",
+    "field": "severity",
+    "op": "in",
+    "value": [
+     "high",
+     "critical"
+    ],
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "No open high or critical Semgrep findings",
+    "item_name": "rule",
+    "fail_msg": "Open high/critical severity finding is unremediated"
+   }
+  ]
+ },
+ "servicenow": {
+  "resources": [
+   {
+    "name": "changes",
+    "path": "/table/change_request?sysparm_limit=200&sysparm_query=close_codeISNOTEMPTY&sysparm_fields=number,approval,state,close_code,sys_id",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "number": "raw.number",
+     "approval": "raw.approval",
+     "state": "raw.state",
+     "close_code": "raw.close_code"
+    }
+   },
+   {
+    "name": "incidents",
+    "path": "/table/incident?sysparm_limit=200&sysparm_fields=number,state,priority,sys_id",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "number": "raw.number",
+     "state": "raw.state",
+     "priority": "raw.priority"
+    }
+   },
+   {
+    "name": "audit",
+    "path": "/table/sys_audit?sysparm_limit=5&sysparm_fields=sys_id,tablename,fieldname,sys_created_on",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "raw.sys_id",
+     "table": "raw.tablename"
+    }
+   },
+   {
+    "name": "admin_roles",
+    "path": "/table/sys_user_has_role?sysparm_limit=200&sysparm_query=role.name=admin^user.active=true&sysparm_fields=user,role,sys_id",
+    "method": "GET",
+    "items": [
+     "result"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "user": "raw.user",
+     "role": "raw.role"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "servicenow.change_approved",
+    "resource": "changes",
+    "kind": "all_match",
+    "field": "approval",
+    "op": "eq",
+    "value": "approved",
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Closed change requests were approved before implementation",
+    "item_name": "number",
+    "fail_msg": "Change request was closed without an approved approval state"
+   },
+   {
+    "id": "servicenow.incident_response",
+    "resource": "incidents",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.3"
+    ],
+    "title": "Incident management process is in active use",
+    "fail_msg": "No incident records found in ServiceNow"
+   },
+   {
+    "id": "servicenow.audit_logging",
+    "resource": "audit",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "System audit logging records field-level changes",
+    "fail_msg": "No sys_audit records found; audit logging may be disabled"
+   },
+   {
+    "id": "servicenow.admin_least_privilege",
+    "resource": "admin_roles",
+    "kind": "max_count",
+    "max": 20,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Active admin role assignments are kept limited",
+    "item_name": "user",
+    "fail_msg": "Excessive number of active users hold the admin role"
+   }
+  ]
+ },
+ "opsgenie": {
+  "resources": [
+   {
+    "name": "users",
+    "path": "/users?limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "username": "raw.username",
+     "role": "raw.role.name",
+     "blocked": "raw.blocked",
+     "verified": "raw.verified"
+    }
+   },
+   {
+    "name": "schedules",
+    "path": "/schedules",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.name",
+     "enabled": "raw.enabled"
+    }
+   },
+   {
+    "name": "escalations",
+    "path": "/escalations",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.name"
+    }
+   },
+   {
+    "name": "integrations",
+    "path": "/integrations",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.name",
+     "type": "raw.type",
+     "enabled": "raw.enabled"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "opsgenie.schedule_exists",
+    "resource": "schedules",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.4"
+    ],
+    "title": "At least one on-call schedule is configured",
+    "fail_msg": "No Opsgenie on-call schedule exists; incident coverage cannot be assured."
+   },
+   {
+    "id": "opsgenie.schedules_enabled",
+    "resource": "schedules",
+    "kind": "all_true",
+    "field": "enabled",
+    "controls": [
+     "CC7.4"
+    ],
+    "title": "On-call schedules are enabled",
+    "item_name": "name",
+    "fail_msg": "On-call schedule is disabled, leaving on-call rotation coverage gaps."
+   },
+   {
+    "id": "opsgenie.escalation_exists",
+    "resource": "escalations",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.3"
+    ],
+    "title": "At least one escalation policy is configured",
+    "fail_msg": "No escalation policy exists; unacknowledged incidents may not be escalated."
+   },
+   {
+    "id": "opsgenie.integration_exists",
+    "resource": "integrations",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Alert integrations are configured for monitoring",
+    "fail_msg": "No alerting integration is configured; monitoring signals may not reach on-call."
+   },
+   {
+    "id": "opsgenie.users_verified",
+    "resource": "users",
+    "kind": "all_true",
+    "field": "verified",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "Opsgenie user accounts are verified",
+    "item_name": "username",
+    "fail_msg": "User account is unverified, indicating an incomplete access-provisioning step."
+   }
+  ]
+ },
+ "databricks": {
+  "resources": [
+   {
+    "name": "tokens",
+    "path": "/2.0/token-management/tokens",
+    "method": "GET",
+    "items": [
+     "token_infos"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "token_id": "token_id",
+     "owner": "created_by_username",
+     "expiry_ms": "expiry_time",
+     "comment": "comment"
+    }
+   },
+   {
+    "name": "clusters",
+    "path": "/2.1/clusters/list",
+    "method": "GET",
+    "items": [
+     "clusters"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "cluster_id": "cluster_id",
+     "name": "cluster_name",
+     "autoterm": "autotermination_minutes",
+     "security_mode": "data_security_mode"
+    }
+   },
+   {
+    "name": "ip_access_lists",
+    "path": "/2.0/ip-access-lists",
+    "method": "GET",
+    "items": [
+     "ip_access_lists"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "list_id": "list_id",
+     "label": "label",
+     "type": "list_type",
+     "enabled": "enabled"
+    }
+   },
+   {
+    "name": "users",
+    "path": "/2.0/preview/scim/v2/Users",
+    "method": "GET",
+    "items": [
+     "Resources"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "user": "userName",
+     "active": "active"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "databricks.pat_expiry_set",
+    "resource": "tokens",
+    "kind": "all_match",
+    "field": "expiry_ms",
+    "op": "gt",
+    "value": 0,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Personal access tokens have an expiration date",
+    "item_name": "comment",
+    "fail_msg": "Token has no expiry (expiry_time=-1); enforce a maximum token lifetime."
+   },
+   {
+    "id": "databricks.cluster_autoterminate",
+    "resource": "clusters",
+    "kind": "all_match",
+    "field": "autoterm",
+    "op": "gt",
+    "value": 0,
+    "controls": [
+     "A1.1"
+    ],
+    "title": "Clusters auto-terminate when idle",
+    "item_name": "name",
+    "fail_msg": "Cluster has autotermination disabled (autotermination_minutes=0); idle compute stays running."
+   },
+   {
+    "id": "databricks.cluster_access_mode",
+    "resource": "clusters",
+    "kind": "all_match",
+    "field": "security_mode",
+    "op": "not_in",
+    "value": [
+     "NONE"
+    ],
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Clusters enforce an access/isolation security mode",
+    "item_name": "name",
+    "fail_msg": "Cluster uses data_security_mode=NONE (no user isolation); use a single-user or standard/isolation access mode for Unity Catalog access control."
+   },
+   {
+    "id": "databricks.ip_access_list_enabled",
+    "resource": "ip_access_lists",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Workspace network access is restricted by IP access lists",
+    "fail_msg": "No IP access lists configured; workspace is reachable from any network."
+   }
+  ]
+ },
+ "airtable": {
+  "resources": [
+   {
+    "name": "whoami",
+    "path": "/meta/whoami",
+    "method": "GET",
+    "items": [
+     "."
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "user_id": "id"
+    }
+   },
+   {
+    "name": "bases",
+    "path": "/meta/bases",
+    "method": "GET",
+    "items": [
+     "bases"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name",
+     "perm": "permissionLevel"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "airtable.whoami",
+    "resource": "whoami",
+    "kind": "present",
+    "field": "user_id",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "API token resolves to a scoped user identity",
+    "fail_msg": "whoami did not return a user id; token is not a valid user-scoped PAT"
+   },
+   {
+    "id": "airtable.bases_inventory",
+    "resource": "bases",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Airtable base inventory is enumerable for access review",
+    "fail_msg": "No bases returned; cannot inventory data stores for access review"
+   },
+   {
+    "id": "airtable.token_no_create",
+    "resource": "bases",
+    "kind": "none_match",
+    "field": "perm",
+    "op": "eq",
+    "value": "create",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Service token is not over-permissioned (no base-create rights)",
+    "item_name": "name",
+    "fail_msg": "Token holds create-level permission on a base; evidence-collection service account should be least-privilege (read/comment)"
+   },
+   {
+    "id": "airtable.token_no_dead_grants",
+    "resource": "bases",
+    "kind": "none_match",
+    "field": "perm",
+    "op": "eq",
+    "value": "none",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "No stale zero-access base grants on the token",
+    "item_name": "name",
+    "fail_msg": "Token is granted a base at 'none' permission level, indicating a stale or misconfigured access grant"
+   }
+  ]
+ },
+ "calendly": {
+  "resources": [
+   {
+    "name": "me",
+    "path": "/users/me",
+    "method": "GET",
+    "items": [
+     "resource"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "org": "current_organization",
+     "user": "uri",
+     "email": "email"
+    }
+   },
+   {
+    "name": "members",
+    "path": "/organization_memberships?organization={org}&count=100",
+    "method": "GET",
+    "items": [
+     "collection"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "me",
+     "vars": {
+      "org": "org"
+     }
+    },
+    "fields": {
+     "role": "role",
+     "email": "user.email",
+     "name": "user.name",
+     "updated_at": "updated_at"
+    }
+   },
+   {
+    "name": "webhooks",
+    "path": "/webhook_subscriptions?organization={org}&scope=organization&count=100",
+    "method": "GET",
+    "items": [
+     "collection"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "me",
+     "vars": {
+      "org": "org"
+     }
+    },
+    "fields": {
+     "state": "state",
+     "url": "callback_url",
+     "n_events": "len:events"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "calendly.members_inventory",
+    "resource": "members",
+    "kind": "present",
+    "controls": [
+     "CC6.1",
+     "CC6.3"
+    ],
+    "title": "Organization members enumerated for access review",
+    "item_name": "email"
+   },
+   {
+    "id": "calendly.members_present",
+    "resource": "members",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "At least one organization membership is provisioned"
+   },
+   {
+    "id": "calendly.webhooks_active",
+    "resource": "webhooks",
+    "kind": "all_match",
+    "field": "state",
+    "op": "eq",
+    "value": "active",
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "All webhook subscriptions are active",
+    "item_name": "url",
+    "fail_msg": "Webhook subscription is not active — event delivery/monitoring is disabled"
+   },
+   {
+    "id": "calendly.webhooks_present",
+    "resource": "webhooks",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "At least one webhook subscription is configured for event monitoring"
+   }
+  ]
+ },
+ "confluence": {
+  "resources": [
+   {
+    "name": "spaces",
+    "path": "/space",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "key": "key",
+     "name": "name",
+     "type": "type",
+     "status": "status"
+    }
+   },
+   {
+    "name": "groups",
+    "path": "/group",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "id": "id",
+     "type": "type"
+    }
+   },
+   {
+    "name": "group_members",
+    "path": "/group/{groupId}/membersByGroupId",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "groups",
+     "vars": {
+      "groupId": "id"
+     }
+    },
+    "fields": {
+     "account": "accountId",
+     "display": "displayName"
+    }
+   },
+   {
+    "name": "audit",
+    "path": "/audit",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "category": "category",
+     "summary": "summary",
+     "author": "author.displayName",
+     "sysAdmin": "sysAdmin"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "confluence.audit_log_active",
+    "resource": "audit",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Audit logging is enabled and recording events",
+    "fail_msg": "No audit log records returned; verify Confluence audit logging is enabled and being retained (requires site-admin token)."
+   },
+   {
+    "id": "confluence.access_via_groups",
+    "resource": "groups",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "User access is managed through defined groups",
+    "fail_msg": "No groups found; access should be provisioned via groups rather than individual user grants."
+   },
+   {
+    "id": "confluence.groups_have_members",
+    "resource": "group_members",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Group memberships are enumerable for periodic access review",
+    "fail_msg": "No group members enumerated; group membership must be reviewable to support periodic access reviews."
+   }
+  ]
+ },
+ "dropbox": {
+  "resources": [
+   {
+    "name": "members",
+    "path": "/team/members/list_v2",
+    "method": "POST",
+    "body": {
+     "limit": 1000,
+     "include_removed": false
+    },
+    "items": [
+     "members"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "email": "profile.email",
+     "name": "profile.name.display_name",
+     "tmid": "profile.team_member_id",
+     "verified": "profile.email_verified"
+    }
+   },
+   {
+    "name": "member_devices",
+    "path": "/team/devices/list_members_devices",
+    "method": "POST",
+    "body": {
+     "include_web_sessions": true,
+     "include_desktop_clients": true,
+     "include_mobile_clients": true
+    },
+    "items": [
+     "devices"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "tmid": "team_member_id",
+     "n_web": "len:web_sessions",
+     "n_desktop": "len:desktop_clients",
+     "n_mobile": "len:mobile_clients"
+    }
+   },
+   {
+    "name": "linked_apps",
+    "path": "/team/linked_apps/list_members_linked_apps",
+    "method": "POST",
+    "body": {},
+    "items": [
+     "apps"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "tmid": "team_member_id",
+     "n_apps": "len:linked_api_apps"
+    }
+   },
+   {
+    "name": "groups",
+    "path": "/team/groups/list",
+    "method": "POST",
+    "body": {
+     "limit": 1000
+    },
+    "items": [
+     "groups"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "group_name",
+     "gid": "group_id",
+     "members": "member_count"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "dropbox.members_email_verified",
+    "resource": "members",
+    "kind": "all_true",
+    "field": "verified",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All team members have a verified email",
+    "item_name": "email",
+    "fail_msg": "Team member email is not verified"
+   },
+   {
+    "id": "dropbox.linked_apps_not_excessive",
+    "resource": "linked_apps",
+    "kind": "none_match",
+    "field": "n_apps",
+    "op": "gt",
+    "value": 20,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "No member links an excessive number of third-party apps",
+    "item_name": "tmid",
+    "fail_msg": "Member has more than 20 linked third-party OAuth apps (review access)"
+   },
+   {
+    "id": "dropbox.member_device_inventory",
+    "resource": "member_devices",
+    "kind": "present",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Member device/session inventory collected for access review",
+    "item_name": "tmid"
+   },
+   {
+    "id": "dropbox.groups_inventory",
+    "resource": "groups",
+    "kind": "present",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Team access groups inventory collected",
+    "item_name": "name"
+   }
+  ]
+ },
+ "bamboohr": {
+  "resources": [
+   {
+    "name": "employee",
+    "path": "/employees/directory",
+    "method": "GET",
+    "items": [
+     "employees"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "displayName",
+     "email": "workEmail",
+     "dept": "department",
+     "title": "jobTitle",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "bamboohr.roster_present",
+    "resource": "employee",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Authoritative employee roster available for provisioning/deprovisioning"
+   },
+   {
+    "id": "bamboohr.work_email",
+    "resource": "employee",
+    "kind": "all_match",
+    "field": "email",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Every active employee has a work email on record",
+    "item_name": "name",
+    "fail_msg": "Employee has no work email recorded — corporate identity not established"
+   },
+   {
+    "id": "bamboohr.department_assigned",
+    "resource": "employee",
+    "kind": "all_match",
+    "field": "dept",
+    "op": "truthy",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Every active employee is assigned to a department",
+    "item_name": "name",
+    "fail_msg": "Employee has no department — role/least-privilege basis missing"
+   },
+   {
+    "id": "bamboohr.job_title",
+    "resource": "employee",
+    "kind": "all_match",
+    "field": "title",
+    "op": "truthy",
+    "controls": [
+     "CC1.4"
+    ],
+    "title": "Every active employee has a defined job title/role",
+    "item_name": "name",
+    "fail_msg": "Employee has no job title — role accountability undefined"
+   }
+  ]
+ },
+ "rippling": {
+  "resources": [
+   {
+    "name": "companies",
+    "path": "/companies",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.name",
+     "id": "raw.id"
+    }
+   },
+   {
+    "name": "workers",
+    "path": "/workers",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "wid": "raw.id",
+     "status": "raw.status",
+     "manager": "raw.manager",
+     "dept": "raw.department",
+     "emp_type": "raw.employment_type",
+     "terminated": "raw.termination_details",
+     "not_terminated": "!raw.termination_details"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "rippling.terminated_deprovisioned",
+    "resource": "workers",
+    "kind": "all_match",
+    "field": "status",
+    "op": "ne",
+    "value": "ACTIVE",
+    "controls": [
+     "CC6.2",
+     "CC6.3"
+    ],
+    "title": "Terminated workers are no longer marked ACTIVE (deprovisioning trigger)",
+    "item_name": "wid",
+    "skip_if_field_true": "not_terminated",
+    "fail_msg": "Worker has termination details but is still ACTIVE, so downstream app access may not be deprovisioned"
+   },
+   {
+    "id": "rippling.active_has_manager",
+    "resource": "workers",
+    "kind": "all_match",
+    "field": "manager",
+    "op": "truthy",
+    "controls": [
+     "CC1.3"
+    ],
+    "title": "Active workers have an assigned manager (reporting line / access-review ownership)",
+    "item_name": "wid",
+    "skip_if_field_true": "terminated",
+    "fail_msg": "Active worker has no manager assigned, so access-review accountability is unclear"
+   },
+   {
+    "id": "rippling.worker_records_present",
+    "resource": "workers",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "HR system returns worker records (authoritative source for identity/access provisioning)",
+    "fail_msg": "No worker records returned from Rippling"
+   }
+  ]
+ },
+ "kandji": {
+  "resources": [
+   {
+    "name": "devices",
+    "path": "/devices",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "device_id": "device_id",
+     "name": "device_name",
+     "platform": "platform",
+     "os_version": "os_version",
+     "mdm": "mdm_enabled",
+     "agent": "agent_installed",
+     "missing": "is_missing"
+    }
+   },
+   {
+    "name": "device_details",
+    "path": "/devices/{device_id}/details",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "devices",
+     "vars": {
+      "device_id": "device_id"
+     }
+    },
+    "fields": {
+     "name": "general.device_name",
+     "filevault": "filevault.filevault_enabled"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "kandji.mdm_enabled",
+    "resource": "devices",
+    "kind": "all_true",
+    "field": "mdm",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All enrolled devices are MDM-managed",
+    "item_name": "name",
+    "fail_msg": "Device is not MDM-enabled"
+   },
+   {
+    "id": "kandji.agent_installed",
+    "resource": "devices",
+    "kind": "all_true",
+    "field": "agent",
+    "controls": [
+     "CC7.1"
+    ],
+    "title": "Kandji endpoint agent installed on all devices",
+    "item_name": "name",
+    "fail_msg": "Kandji agent not installed on device"
+   },
+   {
+    "id": "kandji.no_missing_devices",
+    "resource": "devices",
+    "kind": "all_false",
+    "field": "missing",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No devices flagged as missing",
+    "item_name": "name",
+    "fail_msg": "Device is flagged missing"
+   },
+   {
+    "id": "kandji.filevault_enabled",
+    "resource": "device_details",
+    "kind": "all_true",
+    "field": "filevault",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "FileVault disk encryption enabled on all devices",
+    "item_name": "name",
+    "fail_msg": "FileVault encryption not enabled"
+   }
+  ]
+ },
+ "jamf": {
+  "resources": [
+   {
+    "name": "computers",
+    "path": "/api/v1/computers-inventory?section=GENERAL&section=SECURITY&section=DISK_ENCRYPTION",
+    "method": "GET",
+    "items": [
+     "results"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page",
+     "size_param": "page-size",
+     "size": 100,
+     "limit": 500
+    },
+    "fields": {
+     "name": "raw.general.name",
+     "last_contact": "raw.general.lastContactTime",
+     "fv_enabled": "raw.diskEncryption.fileVault2Enabled",
+     "gatekeeper": "raw.security.gatekeeperStatus",
+     "sip": "raw.security.sipStatus",
+     "firewall": "raw.security.firewallEnabled"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "jamf.filevault_enabled",
+    "resource": "computers",
+    "kind": "all_true",
+    "field": "fv_enabled",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "FileVault disk encryption enabled on all managed Macs",
+    "item_name": "name",
+    "fail_msg": "Device has FileVault disk encryption disabled or not reported"
+   },
+   {
+    "id": "jamf.gatekeeper_enabled",
+    "resource": "computers",
+    "kind": "none_match",
+    "field": "gatekeeper",
+    "op": "eq",
+    "value": "DISABLED",
+    "controls": [
+     "CC6.8"
+    ],
+    "title": "Gatekeeper enforced on all managed Macs",
+    "item_name": "name",
+    "fail_msg": "Device has Gatekeeper disabled (allows unsigned app execution)"
+   },
+   {
+    "id": "jamf.sip_enabled",
+    "resource": "computers",
+    "kind": "all_match",
+    "field": "sip",
+    "op": "eq",
+    "value": "ENABLED",
+    "controls": [
+     "CC6.8"
+    ],
+    "title": "System Integrity Protection enabled on all managed Macs",
+    "item_name": "name",
+    "fail_msg": "Device has System Integrity Protection not enabled"
+   },
+   {
+    "id": "jamf.firewall_enabled",
+    "resource": "computers",
+    "kind": "all_true",
+    "field": "firewall",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Application firewall enabled on all managed Macs",
+    "item_name": "name",
+    "fail_msg": "Device has the application firewall disabled"
+   }
+  ]
+ },
+ "fastly": {
+  "resources": [
+   {
+    "name": "tokens",
+    "path": "/tokens",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "scope": "scope",
+     "expires": "expires_at",
+     "last_used": "last_used_at"
+    }
+   },
+   {
+    "name": "tls_activations",
+    "path": "/tls/activations",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "fastly.tokens.expiry",
+    "resource": "tokens",
+    "kind": "all_match",
+    "field": "expires",
+    "op": "truthy",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "API tokens have an expiration date",
+    "item_name": "id",
+    "fail_msg": "Token has no expiration set (non-expiring credential)"
+   },
+   {
+    "id": "fastly.tokens.least_privilege",
+    "resource": "tokens",
+    "kind": "none_match",
+    "field": "scope",
+    "op": "contains",
+    "value": "global",
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "No API token uses the broad global scope",
+    "item_name": "id",
+    "fail_msg": "Token granted full global scope instead of least-privilege read scope"
+   },
+   {
+    "id": "fastly.tls.enabled",
+    "resource": "tls_activations",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "TLS is activated for at least one domain",
+    "fail_msg": "No TLS activations found; encryption in transit not evidenced"
+   }
+  ]
+ },
+ "twilio": {
+  "resources": [
+   {
+    "name": "accounts",
+    "path": "/Accounts.json",
+    "method": "GET",
+    "items": [
+     "accounts"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "Page",
+     "size_param": "PageSize",
+     "size": 1000,
+     "limit": 1000
+    },
+    "fields": {
+     "sid": "sid",
+     "name": "friendly_name"
+    }
+   },
+   {
+    "name": "keys",
+    "path": "/Accounts/{accountSid}/Keys.json",
+    "method": "GET",
+    "items": [
+     "keys"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "Page",
+     "size_param": "PageSize",
+     "size": 1000,
+     "limit": 1000
+    },
+    "for_each": {
+     "resource": "accounts",
+     "vars": {
+      "accountSid": "sid"
+     }
+    },
+    "fields": {
+     "sid": "sid",
+     "named": "friendly_name",
+     "created": "date_created",
+     "updated": "date_updated"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "twilio.keys_present",
+    "resource": "keys",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Scoped API keys are provisioned",
+    "fail_msg": "No Twilio API keys found; access relies solely on the root Auth Token. Create scoped API keys."
+   },
+   {
+    "id": "twilio.keys_named",
+    "resource": "keys",
+    "kind": "all_true",
+    "field": "named",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All API keys have a friendly name",
+    "item_name": "sid",
+    "fail_msg": "One or more API keys have no friendly name, reducing accountability and traceability of credentials."
+   }
+  ]
+ },
+ "stripe": {
+  "resources": [
+   {
+    "name": "webhook_endpoints",
+    "path": "/webhook_endpoints?limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "url": "url",
+     "status": "status",
+     "id": "id"
+    }
+   },
+   {
+    "name": "events",
+    "path": "/events?limit=100",
+    "method": "GET",
+    "items": [
+     "data"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "type": "type",
+     "id": "id"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "stripe.webhooks_https",
+    "resource": "webhook_endpoints",
+    "kind": "all_match",
+    "field": "url",
+    "op": "contains",
+    "value": "https://",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Webhook endpoints deliver events over HTTPS",
+    "item_name": "url",
+    "fail_msg": "Webhook endpoint URL is not HTTPS - event data transmitted unencrypted"
+   },
+   {
+    "id": "stripe.webhooks_enabled",
+    "resource": "webhook_endpoints",
+    "kind": "all_match",
+    "field": "status",
+    "op": "eq",
+    "value": "enabled",
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Webhook endpoints are enabled for event monitoring",
+    "item_name": "url",
+    "fail_msg": "Webhook endpoint is disabled - system events are not being delivered/monitored"
+   },
+   {
+    "id": "stripe.event_log_present",
+    "resource": "events",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "Account event/audit log is populated and queryable",
+    "item_name": "type",
+    "fail_msg": "No events returned - activity audit trail unavailable"
+   }
+  ]
+ },
+ "azure_devops": {
+  "resources": [
+   {
+    "name": "projects",
+    "path": "/_apis/projects?api-version=7.1",
+    "method": "GET",
+    "items": [
+     "value"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "state": "state",
+     "visibility": "visibility",
+     "id": "id"
+    }
+   },
+   {
+    "name": "repositories",
+    "path": "/_apis/git/repositories?api-version=7.1",
+    "method": "GET",
+    "items": [
+     "value"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "default_branch": "defaultBranch",
+     "disabled": "isDisabled",
+     "project": "project.name",
+     "id": "id"
+    }
+   },
+   {
+    "name": "policies",
+    "path": "/{project}/_apis/policy/configurations?api-version=7.1",
+    "method": "GET",
+    "items": [
+     "value"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "projects",
+     "vars": {
+      "project": "id"
+     }
+    },
+    "fields": {
+     "enabled": "isEnabled",
+     "blocking": "isBlocking",
+     "deleted": "isDeleted",
+     "type_name": "type.displayName"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "azure_devops.projects_not_public",
+    "resource": "projects",
+    "kind": "none_match",
+    "field": "visibility",
+    "op": "eq",
+    "value": "public",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "No Azure DevOps projects are publicly visible",
+    "item_name": "name",
+    "fail_msg": "Project is set to public visibility, exposing source and metadata to anyone"
+   },
+   {
+    "id": "azure_devops.branch_policies_present",
+    "resource": "policies",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "Branch/repository policies are configured",
+    "fail_msg": "No policy configurations found; branches are not protected by change-control policies"
+   },
+   {
+    "id": "azure_devops.branch_policies_enabled",
+    "resource": "policies",
+    "kind": "all_true",
+    "field": "enabled",
+    "controls": [
+     "CC8.1"
+    ],
+    "title": "All configured branch policies are enabled",
+    "item_name": "type_name",
+    "skip_if_field_true": "deleted",
+    "fail_msg": "A configured branch policy is disabled and not enforcing change control"
+   }
+  ]
+ },
+ "zoom": {
+  "resources": [
+   {
+    "name": "user",
+    "path": "/users",
+    "method": "GET",
+    "items": [
+     "users"
+    ],
+    "paginate": {
+     "style": "page",
+     "param": "page_number",
+     "size_param": "page_size",
+     "size": 300,
+     "limit": 300
+    },
+    "fields": {
+     "email": "email",
+     "verified": "verified",
+     "status": "status",
+     "type": "type",
+     "role_id": "role_id"
+    }
+   },
+   {
+    "name": "role",
+    "path": "/roles",
+    "method": "GET",
+    "items": [
+     "roles"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "name",
+     "id": "id",
+     "total_members": "total_members"
+    }
+   },
+   {
+    "name": "managed_domain",
+    "path": "/accounts/me/managed_domains",
+    "method": "GET",
+    "items": [
+     "domains"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "domain": "domain",
+     "status": "status"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "zoom.users_email_verified",
+    "resource": "user",
+    "kind": "all_true",
+    "field": "verified",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "All user emails verified",
+    "item_name": "email",
+    "fail_msg": "User email not verified"
+   },
+   {
+    "id": "zoom.users_no_pending",
+    "resource": "user",
+    "kind": "none_match",
+    "field": "status",
+    "op": "eq",
+    "value": "pending",
+    "controls": [
+     "CC6.2"
+    ],
+    "title": "No pending (un-provisioned) accounts",
+    "item_name": "email",
+    "fail_msg": "Account still in pending state"
+   },
+   {
+    "id": "zoom.roles_defined",
+    "resource": "role",
+    "kind": "min_count",
+    "min": 2,
+    "controls": [
+     "CC6.3"
+    ],
+    "title": "Multiple RBAC roles defined for least privilege"
+   },
+   {
+    "id": "zoom.managed_domains_verified",
+    "resource": "managed_domain",
+    "kind": "all_match",
+    "field": "status",
+    "op": "eq",
+    "value": "verified",
+    "controls": [
+     "CC6.1"
+    ],
+    "title": "Managed login domains verified",
+    "item_name": "domain",
+    "fail_msg": "Managed domain not verified"
+   }
+  ]
+ },
+ "mailgun": {
+  "resources": [
+   {
+    "name": "domains",
+    "path": "/v4/domains?limit=1000",
+    "method": "GET",
+    "items": [
+     "items"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "name": "raw.name",
+     "state": "raw.state",
+     "disabled": "raw.is_disabled",
+     "require_tls": "raw.require_tls",
+     "skip_verification": "raw.skip_verification",
+     "spam_action": "raw.spam_action"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "mailgun.tls_required",
+    "resource": "domains",
+    "kind": "all_true",
+    "field": "require_tls",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Sending domains require TLS for message delivery",
+    "item_name": "name",
+    "fail_msg": "Domain does not enforce TLS-only delivery (require_tls is false)"
+   },
+   {
+    "id": "mailgun.tls_verify",
+    "resource": "domains",
+    "kind": "all_false",
+    "field": "skip_verification",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "TLS certificate/hostname verification is enforced on delivery",
+    "item_name": "name",
+    "fail_msg": "Domain skips TLS certificate/hostname verification (skip_verification is true)"
+   },
+   {
+    "id": "mailgun.domain_active",
+    "resource": "domains",
+    "kind": "all_match",
+    "field": "state",
+    "op": "eq",
+    "value": "active",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Sending domains are verified/active (DNS ownership proven)",
+    "item_name": "name",
+    "fail_msg": "Domain is not in active state; unverified domains can be spoofed"
+   },
+   {
+    "id": "mailgun.spam_filtering",
+    "resource": "domains",
+    "kind": "none_match",
+    "field": "spam_action",
+    "op": "eq",
+    "value": "disabled",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Inbound spam filtering is enabled on domains",
+    "item_name": "name",
+    "fail_msg": "Domain has spam filtering disabled (spam_action is disabled)"
+   }
+  ]
+ },
+ "postmark": {
+  "resources": [
+   {
+    "name": "webhook",
+    "path": "/webhooks",
+    "method": "GET",
+    "items": [
+     "Webhooks"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "url": "Url",
+     "has_auth": "HttpAuth",
+     "status": "Status",
+     "stream": "MessageStream"
+    }
+   }
+  ],
+  "checks": [
+   {
+    "id": "postmark.webhook_https",
+    "resource": "webhook",
+    "kind": "all_match",
+    "field": "url",
+    "op": "contains",
+    "value": "https://",
+    "controls": [
+     "CC6.7"
+    ],
+    "title": "Webhook endpoints use HTTPS",
+    "item_name": "url",
+    "fail_msg": "Webhook URL is not HTTPS — event data sent in cleartext"
+   },
+   {
+    "id": "postmark.webhook_auth",
+    "resource": "webhook",
+    "kind": "all_true",
+    "field": "has_auth",
+    "op": "truthy",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "Webhooks require HTTP Basic auth",
+    "item_name": "url",
+    "fail_msg": "Webhook has no HTTP Basic auth configured — callback endpoint is unauthenticated"
+   },
+   {
+    "id": "postmark.webhook_monitoring",
+    "resource": "webhook",
+    "kind": "min_count",
+    "min": 1,
+    "controls": [
+     "CC7.2"
+    ],
+    "title": "At least one delivery/bounce webhook configured for event monitoring",
+    "fail_msg": "No webhooks configured — delivery/bounce events are not being monitored"
+   }
+  ]
+ }
+}

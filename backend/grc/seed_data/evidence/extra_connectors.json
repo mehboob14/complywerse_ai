@@ -1,0 +1,295 @@
+{
+ "auth0": {
+  "base": "https://{domain}/api/v2",
+  "verify": "/clients?per_page=1",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Auth0",
+  "category": "identity",
+  "needs_domain": true
+ },
+ "jumpcloud": {
+  "base": "https://console.jumpcloud.com/api",
+  "verify": "/systemusers?limit=1",
+  "auth": "header:x-api-key",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "JumpCloud",
+  "category": "identity"
+ },
+ "onelogin": {
+  "base": "https://{domain}/api/2",
+  "verify": "/users?limit=1",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "OneLogin",
+  "category": "identity",
+  "needs_domain": true
+ },
+ "sentinelone": {
+  "base": "https://{domain}/web/api/v2.1",
+  "verify": "/system/info",
+  "auth": "raw",
+  "controls": [
+   "CC6.1",
+   "CC6.6",
+   "CC6.7",
+   "CC7.1",
+   "CC7.2"
+  ],
+  "label": "SentinelOne",
+  "category": "security",
+  "needs_domain": true
+ },
+ "snyk": {
+  "base": "https://api.snyk.io",
+  "verify": "/rest/orgs?version=2024-10-15",
+  "auth": "raw",
+  "controls": [
+   "CC7.1"
+  ],
+  "label": "Snyk",
+  "category": "security"
+ },
+ "tenable": {
+  "base": "https://cloud.tenable.com",
+  "verify": "/session",
+  "auth": "header:X-ApiKeys",
+  "controls": [
+   "CC7.1"
+  ],
+  "label": "Tenable Vulnerability Management",
+  "category": "security"
+ },
+ "sonarcloud": {
+  "base": "https://sonarcloud.io/api",
+  "verify": "/authentication/validate",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1",
+   "CC7.1",
+   "CC8.1"
+  ],
+  "label": "SonarCloud",
+  "category": "security"
+ },
+ "semgrep": {
+  "base": "https://semgrep.dev/api/v1",
+  "verify": "/deployments",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1",
+   "CC7.1",
+   "CC8.1"
+  ],
+  "label": "Semgrep",
+  "category": "security"
+ },
+ "servicenow": {
+  "base": "https://{domain}/api/now",
+  "verify": "/table/sys_user?sysparm_limit=1",
+  "auth": "basic",
+  "controls": [
+   "CC8.1",
+   "CC7.2",
+   "CC7.3",
+   "CC6.1"
+  ],
+  "label": "ServiceNow",
+  "category": "itsm",
+  "needs_domain": true,
+  "needs_email": true
+ },
+ "opsgenie": {
+  "base": "https://api.opsgenie.com/v2",
+  "verify": "/users?limit=1",
+  "auth": "raw",
+  "controls": [
+   "CC7.3",
+   "CC7.4"
+  ],
+  "label": "Opsgenie",
+  "category": "incident"
+ },
+ "databricks": {
+  "base": "https://{domain}/api",
+  "verify": "/2.0/preview/scim/v2/Me",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Databricks",
+  "category": "data",
+  "needs_domain": true
+ },
+ "airtable": {
+  "base": "https://api.airtable.com/v0",
+  "verify": "/meta/whoami",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Airtable",
+  "category": "productivity"
+ },
+ "calendly": {
+  "base": "https://api.calendly.com",
+  "verify": "/users/me",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Calendly",
+  "category": "productivity"
+ },
+ "confluence": {
+  "base": "https://{domain}/wiki/rest/api",
+  "verify": "/user/current",
+  "auth": "basic",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Confluence",
+  "category": "productivity",
+  "needs_domain": true,
+  "needs_email": true
+ },
+ "dropbox": {
+  "base": "https://api.dropboxapi.com/2",
+  "verify": "/team/get_info",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1",
+   "CC6.3"
+  ],
+  "label": "Dropbox",
+  "category": "cloud",
+  "method": "POST"
+ },
+ "bamboohr": {
+  "base": "https://api.bamboohr.com/api/gateway.php/{domain}/v1",
+  "verify": "/employees/directory",
+  "auth": "basic",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "BambooHR",
+  "category": "hr",
+  "needs_domain": true,
+  "needs_email": true
+ },
+ "rippling": {
+  "base": "https://rest.ripplingapis.com",
+  "verify": "/companies",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Rippling",
+  "category": "hr"
+ },
+ "kandji": {
+  "base": "https://{domain}/api/v1",
+  "verify": "/devices?limit=1",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Kandji",
+  "category": "mdm",
+  "needs_domain": true
+ },
+ "jamf": {
+  "base": "https://{domain}",
+  "verify": "/api/v1/auth",
+  "auth": "bearer",
+  "controls": [
+   "CC6.7"
+  ],
+  "label": "Jamf Pro",
+  "category": "mdm",
+  "needs_domain": true
+ },
+ "fastly": {
+  "base": "https://api.fastly.com",
+  "verify": "/tokens/self",
+  "auth": "header:Fastly-Key",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Fastly",
+  "category": "cloud"
+ },
+ "twilio": {
+  "base": "https://api.twilio.com/2010-04-01",
+  "verify": "/Accounts.json",
+  "auth": "basic",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Twilio",
+  "category": "comms",
+  "needs_email": true
+ },
+ "stripe": {
+  "base": "https://api.stripe.com/v1",
+  "verify": "/account",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Stripe",
+  "category": "payments"
+ },
+ "azure_devops": {
+  "base": "https://dev.azure.com/{domain}",
+  "verify": "/_apis/projects?api-version=7.1",
+  "auth": "basic",
+  "controls": [
+   "CC6.1",
+   "CC8.1"
+  ],
+  "label": "Azure DevOps",
+  "category": "scm",
+  "needs_domain": true
+ },
+ "zoom": {
+  "base": "https://api.zoom.us/v2",
+  "verify": "/users/me",
+  "auth": "bearer",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Zoom",
+  "category": "comms"
+ },
+ "mailgun": {
+  "base": "https://api.mailgun.net",
+  "verify": "/v4/domains?limit=1",
+  "auth": "basic",
+  "controls": [
+   "CC6.1"
+  ],
+  "label": "Mailgun",
+  "category": "email",
+  "needs_email": true
+ },
+ "postmark": {
+  "base": "https://api.postmarkapp.com",
+  "verify": "/server",
+  "auth": "header:X-Postmark-Server-Token",
+  "controls": [
+   "CC6.6"
+  ],
+  "label": "Postmark",
+  "category": "email",
+  "headers": {
+   "Accept": "application/json"
+  }
+ }
+}

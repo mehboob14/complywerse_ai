@@ -1,0 +1,502 @@
+[
+ {
+  "template_code": "BCP-01",
+  "requirement_key": "ISO27001:A.5.29"
+ },
+ {
+  "template_code": "BCP-01",
+  "requirement_key": "ISO27001:A.5.33"
+ },
+ {
+  "template_code": "BCP-01",
+  "requirement_key": "ISO27001:A.8.13"
+ },
+ {
+  "template_code": "BCP-02",
+  "requirement_key": "ISO27001:A.5.29"
+ },
+ {
+  "template_code": "BCP-02",
+  "requirement_key": "ISO27001:A.8.14"
+ },
+ {
+  "template_code": "BCP-03",
+  "requirement_key": "ISO27001:A.5.3"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "ISO27001:A.5.19"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "ISO27001:A.5.20"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "ISO27001:A.5.21"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "ISO27001:A.5.22"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "ISO27001:A.7.14"
+ },
+ {
+  "template_code": "BCP-05",
+  "requirement_key": "ISO27001:A.5.20"
+ },
+ {
+  "template_code": "BCP-06",
+  "requirement_key": "ISO27001:A.6.6"
+ },
+ {
+  "template_code": "COM-01",
+  "requirement_key": "ISO27001:7.4"
+ },
+ {
+  "template_code": "COM-02",
+  "requirement_key": "ISO27001:A.8.27"
+ },
+ {
+  "template_code": "COM-02",
+  "requirement_key": "ISO27001:A.8.7"
+ },
+ {
+  "template_code": "COM-03",
+  "requirement_key": "ISO27001:A.8.27"
+ },
+ {
+  "template_code": "COM-03",
+  "requirement_key": "ISO27001:A.8.7"
+ },
+ {
+  "template_code": "COM-04",
+  "requirement_key": "ISO27001:A.5.14"
+ },
+ {
+  "template_code": "COM-04",
+  "requirement_key": "ISO27001:A.5.19"
+ },
+ {
+  "template_code": "COM-05",
+  "requirement_key": "ISO27001:A.5.6"
+ },
+ {
+  "template_code": "COM-06",
+  "requirement_key": "ISO27001:A.5.14"
+ },
+ {
+  "template_code": "COM-08",
+  "requirement_key": "ISO27001:4.3"
+ },
+ {
+  "template_code": "DAT-01",
+  "requirement_key": "ISO27001:A.5.12"
+ },
+ {
+  "template_code": "DAT-01",
+  "requirement_key": "ISO27001:A.5.13"
+ },
+ {
+  "template_code": "DAT-02",
+  "requirement_key": "ISO27001:A.8.11"
+ },
+ {
+  "template_code": "DAT-02",
+  "requirement_key": "ISO27001:A.8.20"
+ },
+ {
+  "template_code": "DAT-03",
+  "requirement_key": "ISO27001:A.8.11"
+ },
+ {
+  "template_code": "DAT-04",
+  "requirement_key": "ISO27001:A.5.29"
+ },
+ {
+  "template_code": "DEV-01",
+  "requirement_key": "ISO27001:A.8.25"
+ },
+ {
+  "template_code": "DEV-01",
+  "requirement_key": "ISO27001:A.8.9"
+ },
+ {
+  "template_code": "DEV-02",
+  "requirement_key": "ISO27001:A.5.7"
+ },
+ {
+  "template_code": "DEV-02",
+  "requirement_key": "ISO27001:A.8.8"
+ },
+ {
+  "template_code": "DEV-03",
+  "requirement_key": "ISO27001:A.8.31"
+ },
+ {
+  "template_code": "DEV-04",
+  "requirement_key": "ISO27001:A.8.32"
+ },
+ {
+  "template_code": "DEV-04",
+  "requirement_key": "ISO27001:A.8.33"
+ },
+ {
+  "template_code": "DEV-05",
+  "requirement_key": "ISO27001:A.8.15"
+ },
+ {
+  "template_code": "DEV-05",
+  "requirement_key": "ISO27001:A.8.4"
+ },
+ {
+  "template_code": "DEV-05",
+  "requirement_key": "ISO27001:A.8.9"
+ },
+ {
+  "template_code": "DEV-06",
+  "requirement_key": "ISO27001:A.5.3"
+ },
+ {
+  "template_code": "DEV-07",
+  "requirement_key": "ISO27001:A.8.4"
+ },
+ {
+  "template_code": "DEV-08",
+  "requirement_key": "ISO27001:A.5.7"
+ },
+ {
+  "template_code": "DEV-08",
+  "requirement_key": "ISO27001:A.8.20"
+ },
+ {
+  "template_code": "DEV-08",
+  "requirement_key": "ISO27001:A.8.29"
+ },
+ {
+  "template_code": "DEV-08",
+  "requirement_key": "ISO27001:A.8.8"
+ },
+ {
+  "template_code": "END-01",
+  "requirement_key": "ISO27001:A.8.19"
+ },
+ {
+  "template_code": "END-02",
+  "requirement_key": "ISO27001:A.5.9"
+ },
+ {
+  "template_code": "END-02",
+  "requirement_key": "ISO27001:A.7.9"
+ },
+ {
+  "template_code": "END-03",
+  "requirement_key": "ISO27001:A.7.10"
+ },
+ {
+  "template_code": "END-04",
+  "requirement_key": "ISO27001:A.7.7"
+ },
+ {
+  "template_code": "END-04",
+  "requirement_key": "ISO27001:A.7.8"
+ },
+ {
+  "template_code": "END-04",
+  "requirement_key": "ISO27001:A.8.1"
+ },
+ {
+  "template_code": "END-05",
+  "requirement_key": "ISO27001:A.6.7"
+ },
+ {
+  "template_code": "END-05",
+  "requirement_key": "ISO27001:A.8.22"
+ },
+ {
+  "template_code": "GRC-01",
+  "requirement_key": "ISO27001:9.1"
+ },
+ {
+  "template_code": "GRC-02",
+  "requirement_key": "ISO27001:5.2"
+ },
+ {
+  "template_code": "GRC-02",
+  "requirement_key": "ISO27001:6.2"
+ },
+ {
+  "template_code": "GRC-03",
+  "requirement_key": "ISO27001:4.3"
+ },
+ {
+  "template_code": "GRC-04",
+  "requirement_key": "ISO27001:4.1"
+ },
+ {
+  "template_code": "GRC-05",
+  "requirement_key": "ISO27001:6.1.1"
+ },
+ {
+  "template_code": "GRC-05",
+  "requirement_key": "ISO27001:8.3"
+ },
+ {
+  "template_code": "GRC-06",
+  "requirement_key": "ISO27001:8.1"
+ },
+ {
+  "template_code": "GRC-06",
+  "requirement_key": "ISO27001:A.5.33"
+ },
+ {
+  "template_code": "GRC-07",
+  "requirement_key": "ISO27001:6.1.3"
+ },
+ {
+  "template_code": "GRC-08",
+  "requirement_key": "ISO27001:5.2"
+ },
+ {
+  "template_code": "GRC-10",
+  "requirement_key": "ISO27001:4.3"
+ },
+ {
+  "template_code": "GRC-11",
+  "requirement_key": "ISO27001:4.2"
+ },
+ {
+  "template_code": "GRC-12",
+  "requirement_key": "ISO27001:A.7.5"
+ },
+ {
+  "template_code": "GRC-13",
+  "requirement_key": "ISO27001:A.5.31"
+ },
+ {
+  "template_code": "GRC-14",
+  "requirement_key": "ISO27001:6.1.1"
+ },
+ {
+  "template_code": "GRC-15",
+  "requirement_key": "ISO27001:10.1"
+ },
+ {
+  "template_code": "GRC-17",
+  "requirement_key": "ISO27001:10.2"
+ },
+ {
+  "template_code": "HR-01",
+  "requirement_key": "ISO27001:5.3"
+ },
+ {
+  "template_code": "HR-01",
+  "requirement_key": "ISO27001:A.5.2"
+ },
+ {
+  "template_code": "HR-02",
+  "requirement_key": "ISO27001:5.1"
+ },
+ {
+  "template_code": "HR-03",
+  "requirement_key": "ISO27001:A.5.32"
+ },
+ {
+  "template_code": "HR-03",
+  "requirement_key": "ISO27001:A.5.34"
+ },
+ {
+  "template_code": "HR-03",
+  "requirement_key": "ISO27001:A.6.2"
+ },
+ {
+  "template_code": "HR-04",
+  "requirement_key": "ISO27001:A.5.9"
+ },
+ {
+  "template_code": "HR-05",
+  "requirement_key": "ISO27001:A.6.1"
+ },
+ {
+  "template_code": "HR-07",
+  "requirement_key": "ISO27001:A.5.11"
+ },
+ {
+  "template_code": "HR-07",
+  "requirement_key": "ISO27001:A.5.15"
+ },
+ {
+  "template_code": "HR-07",
+  "requirement_key": "ISO27001:A.6.5"
+ },
+ {
+  "template_code": "HR-08",
+  "requirement_key": "ISO27001:7.3"
+ },
+ {
+  "template_code": "IAM-01",
+  "requirement_key": "ISO27001:A.5.18"
+ },
+ {
+  "template_code": "IAM-01",
+  "requirement_key": "ISO27001:A.5.33"
+ },
+ {
+  "template_code": "IAM-02",
+  "requirement_key": "ISO27001:A.5.17"
+ },
+ {
+  "template_code": "IAM-02",
+  "requirement_key": "ISO27001:A.8.5"
+ },
+ {
+  "template_code": "IAM-03",
+  "requirement_key": "ISO27001:A.5.16"
+ },
+ {
+  "template_code": "IAM-03",
+  "requirement_key": "ISO27001:A.5.17"
+ },
+ {
+  "template_code": "IAM-04",
+  "requirement_key": "ISO27001:A.8.9"
+ },
+ {
+  "template_code": "IAM-05",
+  "requirement_key": "ISO27001:A.5.17"
+ },
+ {
+  "template_code": "IAM-05",
+  "requirement_key": "ISO27001:A.8.5"
+ },
+ {
+  "template_code": "IAM-06",
+  "requirement_key": "ISO27001:A.8.2"
+ },
+ {
+  "template_code": "IAM-06",
+  "requirement_key": "ISO27001:A.8.4"
+ },
+ {
+  "template_code": "IAM-07",
+  "requirement_key": "ISO27001:A.5.17"
+ },
+ {
+  "template_code": "IAM-07",
+  "requirement_key": "ISO27001:A.8.2"
+ },
+ {
+  "template_code": "LOG-01",
+  "requirement_key": "ISO27001:9.1"
+ },
+ {
+  "template_code": "LOG-01",
+  "requirement_key": "ISO27001:A.8.15"
+ },
+ {
+  "template_code": "LOG-02",
+  "requirement_key": "ISO27001:A.5.5"
+ },
+ {
+  "template_code": "LOG-03",
+  "requirement_key": "ISO27001:A.8.15"
+ },
+ {
+  "template_code": "LOG-04",
+  "requirement_key": "ISO27001:A.8.15"
+ },
+ {
+  "template_code": "LOG-05",
+  "requirement_key": "ISO27001:A.5.24"
+ },
+ {
+  "template_code": "LOG-05",
+  "requirement_key": "ISO27001:A.5.25"
+ },
+ {
+  "template_code": "LOG-05",
+  "requirement_key": "ISO27001:A.5.28"
+ },
+ {
+  "template_code": "LOG-06",
+  "requirement_key": "ISO27001:A.8.17"
+ },
+ {
+  "template_code": "NET-01",
+  "requirement_key": "ISO27001:A.5.15"
+ },
+ {
+  "template_code": "NET-01",
+  "requirement_key": "ISO27001:A.5.16"
+ },
+ {
+  "template_code": "NET-01",
+  "requirement_key": "ISO27001:A.5.18"
+ },
+ {
+  "template_code": "NET-02",
+  "requirement_key": "ISO27001:A.8.6"
+ },
+ {
+  "template_code": "NET-03",
+  "requirement_key": "ISO27001:A.8.32"
+ },
+ {
+  "template_code": "NET-03",
+  "requirement_key": "ISO27001:A.8.9"
+ },
+ {
+  "template_code": "NET-04",
+  "requirement_key": "ISO27001:A.8.20"
+ },
+ {
+  "template_code": "NET-04",
+  "requirement_key": "ISO27001:A.8.9"
+ },
+ {
+  "template_code": "NET-05",
+  "requirement_key": "ISO27001:A.5.35"
+ },
+ {
+  "template_code": "NET-05",
+  "requirement_key": "ISO27001:A.8.29"
+ },
+ {
+  "template_code": "NET-06",
+  "requirement_key": "ISO27001:A.8.8"
+ },
+ {
+  "template_code": "NET-07",
+  "requirement_key": "ISO27001:A.8.9"
+ },
+ {
+  "template_code": "PHY-01",
+  "requirement_key": "ISO27001:A.7.1"
+ },
+ {
+  "template_code": "PHY-01",
+  "requirement_key": "ISO27001:A.7.4"
+ },
+ {
+  "template_code": "PHY-01",
+  "requirement_key": "ISO27001:A.7.9"
+ },
+ {
+  "template_code": "PHY-02",
+  "requirement_key": "ISO27001:A.7.2"
+ },
+ {
+  "template_code": "PHY-02",
+  "requirement_key": "ISO27001:A.7.6"
+ },
+ {
+  "template_code": "PHY-03",
+  "requirement_key": "ISO27001:A.7.4"
+ },
+ {
+  "template_code": "PHY-04",
+  "requirement_key": "ISO27001:A.7.2"
+ }
+]

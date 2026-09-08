@@ -1,0 +1,986 @@
+[
+ {
+  "code": "4.1",
+  "name": "Understanding the organization and its context",
+  "description": "Context of the organization",
+  "category": "Context of the organization",
+  "requirement_key": "ISO27001:4.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "4.2",
+  "name": "Understanding the needs of interested parties",
+  "description": "Context of the organization",
+  "category": "Context of the organization",
+  "requirement_key": "ISO27001:4.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "4.3",
+  "name": "Determining the scope of the information security management system",
+  "description": "Context of the organization",
+  "category": "Context of the organization",
+  "requirement_key": "ISO27001:4.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "4.4",
+  "name": "Information security management system",
+  "description": "Context of the organization",
+  "category": "Context of the organization",
+  "requirement_key": "ISO27001:4.4",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "5.1",
+  "name": "Leadership and commitment",
+  "description": "Leadership",
+  "category": "Leadership",
+  "requirement_key": "ISO27001:5.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "5.2",
+  "name": "Policy",
+  "description": "Leadership",
+  "category": "Leadership",
+  "requirement_key": "ISO27001:5.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "5.3",
+  "name": "Organizational roles, responsibilities and authorities",
+  "description": "Leadership",
+  "category": "Leadership",
+  "requirement_key": "ISO27001:5.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "6.1.1",
+  "name": "General actions to address risks and opportunities",
+  "description": "Planning",
+  "category": "Planning",
+  "requirement_key": "ISO27001:6.1.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "6.1.2",
+  "name": "Information security risk assessment",
+  "description": "Planning",
+  "category": "Planning",
+  "requirement_key": "ISO27001:6.1.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "6.1.3",
+  "name": "Information security risk treatment",
+  "description": "Planning",
+  "category": "Planning",
+  "requirement_key": "ISO27001:6.1.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "6.2",
+  "name": "Information security objective and planning to achieve them",
+  "description": "Planning",
+  "category": "Planning",
+  "requirement_key": "ISO27001:6.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "6.3",
+  "name": "Planning of Changes",
+  "description": "Planning",
+  "category": "Planning",
+  "requirement_key": "ISO27001:6.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "7.1",
+  "name": "Resources",
+  "description": "Support",
+  "category": "Support",
+  "requirement_key": "ISO27001:7.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "7.2",
+  "name": "Competence",
+  "description": "Support",
+  "category": "Support",
+  "requirement_key": "ISO27001:7.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "7.3",
+  "name": "Awareness",
+  "description": "Support",
+  "category": "Support",
+  "requirement_key": "ISO27001:7.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "7.4",
+  "name": "Communication",
+  "description": "Support",
+  "category": "Support",
+  "requirement_key": "ISO27001:7.4",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "7.5.1",
+  "name": "Documented information",
+  "description": "Support",
+  "category": "Support",
+  "requirement_key": "ISO27001:7.5.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "7.5.2",
+  "name": "Creating and Updating",
+  "description": "Support",
+  "category": "Support",
+  "requirement_key": "ISO27001:7.5.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "7.5.3",
+  "name": "Control of documented information",
+  "description": "Support",
+  "category": "Support",
+  "requirement_key": "ISO27001:7.5.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "8.1",
+  "name": "Operation planning and control",
+  "description": "Operation",
+  "category": "Operation",
+  "requirement_key": "ISO27001:8.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "8.2",
+  "name": "Information security risk assessment",
+  "description": "Operation",
+  "category": "Operation",
+  "requirement_key": "ISO27001:8.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "8.3",
+  "name": "Information security risk treatment",
+  "description": "Operation",
+  "category": "Operation",
+  "requirement_key": "ISO27001:8.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "9.1",
+  "name": "Monitoring, measurement, analysis, and evaluation",
+  "description": "Performance evaluation",
+  "category": "Performance evaluation",
+  "requirement_key": "ISO27001:9.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "9.2.1",
+  "name": "Internal Audit - General",
+  "description": "Performance evaluation",
+  "category": "Performance evaluation",
+  "requirement_key": "ISO27001:9.2.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "9.2.2",
+  "name": "Internal Audit Program",
+  "description": "Performance evaluation",
+  "category": "Performance evaluation",
+  "requirement_key": "ISO27001:9.2.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "9.3.1",
+  "name": "Management review - General",
+  "description": "Performance evaluation",
+  "category": "Performance evaluation",
+  "requirement_key": "ISO27001:9.3.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "9.3.2",
+  "name": "Management review inputs",
+  "description": "Performance evaluation",
+  "category": "Performance evaluation",
+  "requirement_key": "ISO27001:9.3.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "9.3.3",
+  "name": "Management review results",
+  "description": "Performance evaluation",
+  "category": "Performance evaluation",
+  "requirement_key": "ISO27001:9.3.3",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "10.1",
+  "name": "Continual Improvement",
+  "description": "Improvement",
+  "category": "Improvement",
+  "requirement_key": "ISO27001:10.1",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "10.2",
+  "name": "Nonconformity and corrective action",
+  "description": "Improvement",
+  "category": "Improvement",
+  "requirement_key": "ISO27001:10.2",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "A.5.1",
+  "name": "Policies for information security",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.1",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.2",
+  "name": "Information security roles and responsibilities",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.2",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.3",
+  "name": "Segregation of duties",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.3",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.4",
+  "name": "Management responsibilities",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.4",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.5",
+  "name": "Contact with authorities",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.5",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.6",
+  "name": "Contact with special interest groups",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.6",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.7",
+  "name": "Threat Intelligence",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.7",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.8",
+  "name": "Information security in project management",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.8",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.9",
+  "name": "Inventory of information and other associated assets",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.9",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.10",
+  "name": "Acceptable use of information and other associated assets",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.10",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.11",
+  "name": "Return of assets",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.11",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.12",
+  "name": "Classification of information",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.12",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.13",
+  "name": "Labelling of information",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.13",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.14",
+  "name": "Information transfer",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.14",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.15",
+  "name": "Access control",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.15",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.16",
+  "name": "Identity management",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.16",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.17",
+  "name": "Authentication information",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.17",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.18",
+  "name": "Access rights",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.18",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.19",
+  "name": "Information security in supplier relationships",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.19",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.20",
+  "name": "Addressing information security within supplier agreements",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.20",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.21",
+  "name": "Managing information security in the ICT supply chain",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.21",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.22",
+  "name": "Monitoring, review and change management of supplier services",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.22",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.23",
+  "name": "Information security for use of cloud services",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.23",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.24",
+  "name": "Information security incident management planning and preparation",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.24",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.25",
+  "name": "Assessment and decision on information security events",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.25",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.26",
+  "name": "Response to information security incidents",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.26",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.27",
+  "name": "Learning from information security incidents",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.27",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.28",
+  "name": "Collection of evidence",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.28",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.29",
+  "name": "Information security during disruption",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.29",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.30",
+  "name": "ICT readiness for business continuity",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.30",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.31",
+  "name": "Legal, statutory, regulatory and contractual requirements",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.31",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.32",
+  "name": "Intellectual property rights",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.32",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.33",
+  "name": "Protection of records",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.33",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.34",
+  "name": "Privacy and protection of PII",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.34",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.35",
+  "name": "Independent review of information security",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.35",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.36",
+  "name": "Compliance with policies, rules and standards for information security",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.36",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.5.37",
+  "name": "Documented operating procedures",
+  "description": "Organizational",
+  "category": "A.5 Organizational controls",
+  "requirement_key": "ISO27001:A.5.37",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.1",
+  "name": "Screening",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.1",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.2",
+  "name": "Terms and conditions of employment",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.2",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.3",
+  "name": "Information security awareness, education and training",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.3",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.4",
+  "name": "Disciplinary process",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.4",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.5",
+  "name": "Responsibilities after termination or change of employment",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.5",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.6",
+  "name": "Confidentiality or non-disclosure agreements",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.6",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.7",
+  "name": "Remote working",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.7",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.6.8",
+  "name": "Information security event reporting",
+  "description": "People",
+  "category": "A.6 People controls",
+  "requirement_key": "ISO27001:A.6.8",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.1",
+  "name": "Physical security perimeters",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.1",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.2",
+  "name": "Physical entry",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.2",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.3",
+  "name": "Securing offices, rooms and facilities",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.3",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.4",
+  "name": "Physical security monitoring",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.4",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.5",
+  "name": "Protecting against physical and environmental threats",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.5",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.6",
+  "name": "Working in secure areas",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.6",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.7",
+  "name": "Clear desk and clear screen",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.7",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.8",
+  "name": "Equipment siting and protection",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.8",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.9",
+  "name": "Security of assets off-premises",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.9",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.10",
+  "name": "Storage media",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.10",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.11",
+  "name": "Supporting utilities",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.11",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.12",
+  "name": "Cabling security",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.12",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.13",
+  "name": "Equipment maintenance",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.13",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.7.14",
+  "name": "Secure disposal or re-use of equipment",
+  "description": "Physical",
+  "category": "A.7 Physical controls",
+  "requirement_key": "ISO27001:A.7.14",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.1",
+  "name": "User endpoint devices",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.1",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.2",
+  "name": "Privileged access rights",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.2",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.3",
+  "name": "Information access restriction",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.3",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.4",
+  "name": "Access to source code",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.4",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.5",
+  "name": "Secure authentication",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.5",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.6",
+  "name": "Capacity management",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.6",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.7",
+  "name": "Protection against malware",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.7",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.8",
+  "name": "Management of technical vulnerabilities",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.8",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.9",
+  "name": "Configuration management",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.9",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.10",
+  "name": "Information deletion",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.10",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.11",
+  "name": "Data masking",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.11",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.12",
+  "name": "Data leakage prevention",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.12",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.13",
+  "name": "Information backup",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.13",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.14",
+  "name": "Redundancy of information processing facilities",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.14",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.15",
+  "name": "Logging",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.15",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.16",
+  "name": "Monitoring activities",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.16",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.17",
+  "name": "Clock synchronization",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.17",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.18",
+  "name": "Use of privileged utility programs",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.18",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.19",
+  "name": "Installation of software on operational systems",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.19",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.20",
+  "name": "Networks security",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.20",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.21",
+  "name": "Security of network services",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.21",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.22",
+  "name": "Segregation of networks",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.22",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.23",
+  "name": "Web filtering",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.23",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.24",
+  "name": "Use of cryptography",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.24",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.25",
+  "name": "Secure development life cycle",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.25",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.26",
+  "name": "Application security requirements",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.26",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.27",
+  "name": "Secure system architecture and engineering principles",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.27",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.28",
+  "name": "Secure coding",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.28",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.29",
+  "name": "Security testing in development and acceptance",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.29",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.30",
+  "name": "Outsourced development",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.30",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.31",
+  "name": "Separation of development, test and production environments",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.31",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.32",
+  "name": "Change management",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.32",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.33",
+  "name": "Test information",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.33",
+  "is_always_in_scope": false
+ },
+ {
+  "code": "A.8.34",
+  "name": "Protection of information systems during audit testing",
+  "description": "Technological",
+  "category": "A.8 Technological controls",
+  "requirement_key": "ISO27001:A.8.34",
+  "is_always_in_scope": false
+ }
+]

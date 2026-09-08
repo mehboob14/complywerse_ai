@@ -1,0 +1,782 @@
+[
+ {
+  "canonical_key": "automated-backup",
+  "code": "BCP-01",
+  "name": "Automated backup",
+  "description": "Automated backups ensure that your data—one of your company’s most important assets—is regularly and securely saved, reducing the risk of data loss. The back-up keeps it safe and available, while the automated and regular aspect allows for a restoration just before any disruption, minimizing loss.",
+  "implementation_guidance": "Automated backups ensure that your data—one of your company’s most important assets—is regularly and securely saved, reducing the risk of data loss. The back-up keeps it safe and available, while the automated and regular aspect allows for a restoration just before any disruption, minimizing loss.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Business continuity & third-party management"
+ },
+ {
+  "canonical_key": "create-test-your-disaster-recovery-plan",
+  "code": "BCP-02",
+  "name": "Create & test your disaster recovery plan",
+  "description": "Disasters might seem far-fetched, but data loss, service outages, and misconfigurations can happen. Whether it's a simple human error or a regional outage, a disaster recovery plan helps your team recover fast and maintain customer trust.",
+  "implementation_guidance": "Disasters might seem far-fetched, but data loss, service outages, and misconfigurations can happen. Whether it's a simple human error or a regional outage, a disaster recovery plan helps your team recover fast and maintain customer trust.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Business continuity & third-party management"
+ },
+ {
+  "canonical_key": "define-bcdr-objectives",
+  "code": "BCP-03",
+  "name": "Define BCDR objectives",
+  "description": "Defining precise BCDR objectives ensures you can effectively prepare for disruptions, clearly measure downtime thresholds, and communicate recovery expectations to stakeholders and third-party providers, reducing confusion and minimizing the impact of potential disasters.",
+  "implementation_guidance": "Defining precise BCDR objectives ensures you can effectively prepare for disruptions, clearly measure downtime thresholds, and communicate recovery expectations to stakeholders and third-party providers, reducing confusion and minimizing the impact of potential disasters.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Business continuity & third-party management"
+ },
+ {
+  "canonical_key": "evaluate-your-vendors",
+  "code": "BCP-04",
+  "name": "Evaluate your vendors",
+  "description": "Create an inventory of your vendors, evaluate their risk level and review them regularly",
+  "implementation_guidance": "Create an inventory of your vendors, evaluate their risk level and review them regularly",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Business continuity & third-party management"
+ },
+ {
+  "canonical_key": "insert-security-clause-in-third-party-contracts",
+  "code": "BCP-05",
+  "name": "Insert security clause in third-party contracts",
+  "description": "Strong contractual language ensures third parties protect your data with the same rigor you do, lowering supply-chain risk and establishing clear accountability.",
+  "implementation_guidance": "Strong contractual language ensures third parties protect your data with the same rigor you do, lowering supply-chain risk and establishing clear accountability.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Business continuity & third-party management"
+ },
+ {
+  "canonical_key": "require-signed-nda-with-critical-third-parties",
+  "code": "BCP-06",
+  "name": "Require signed NDA with critical third parties",
+  "description": "NDAs formalize confidentiality expectations and legal protections, minimizing the risk of data leakage or misuse by external entities who handle or access proprietary information.",
+  "implementation_guidance": "NDAs formalize confidentiality expectations and legal protections, minimizing the risk of data leakage or misuse by external entities who handle or access proprietary information.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Business continuity & third-party management"
+ },
+ {
+  "canonical_key": "create-a-security-communication-plan",
+  "code": "COM-01",
+  "name": "Create a security communication plan",
+  "description": "A defined communication plan ensures that the right individuals (employees, stakeholders, authorities) receive timely and accurate updates, preventing confusion and facilitating effective coordination during security events.",
+  "implementation_guidance": "A defined communication plan ensures that the right individuals (employees, stakeholders, authorities) receive timely and accurate updates, preventing confusion and facilitating effective coordination during security events.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Communications & collaboration security"
+ },
+ {
+  "canonical_key": "email-authentication",
+  "code": "COM-02",
+  "name": "Implement email authentication (DMARC)",
+  "description": "DMARC (Domain-based Message Authentication, Reporting, and Conformance) helps prevent email spoofing and phishing attacks by verifying the authenticity of emails sent from your domain. It will do two things: ⇒ your recipient will know for sure it is coming from you and it will protect your company reputation (with gmail and cie). ⇒ you will be sure (if activated) that the email you received is really from the said company (if they configured DMARC as well)",
+  "implementation_guidance": "DMARC (Domain-based Message Authentication, Reporting, and Conformance) helps prevent email spoofing and phishing attacks by verifying the authenticity of emails sent from your domain. It will do two things: ⇒ your recipient will know for sure it is coming from you and it will protect your company reputation (with gmail and cie). ⇒ you will be sure (if activated) that the email you received is really from the said company (if they configured DMARC as well)",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Communications & collaboration security"
+ },
+ {
+  "canonical_key": "email-filtering",
+  "code": "COM-03",
+  "name": "Implement email filtering and warning system",
+  "description": "As you know ⇒ email is the most common entry point. Each phishing email filtered out of your employee mailbox is less mental load for you and your employees and less risk faced by your company. ## What? You need to configure your email system to scan all incoming emails for potential threats",
+  "implementation_guidance": "As you know ⇒ email is the most common entry point. Each phishing email filtered out of your employee mailbox is less mental load for you and your employees and less risk faced by your company. ## What? You need to configure your email system to scan all incoming emails for potential threats",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Communications & collaboration security"
+ },
+ {
+  "canonical_key": "external-support",
+  "code": "COM-04",
+  "name": "External support available",
+  "description": "External support is not required, but it enhances transparency by showcasing your security practices, policies, and compliance efforts, building trust with customers and stakeholders. Ultimately, this is what compliance is about: reassuring your prospect and customer on how you work. ## What? Create and maintain a complete list of support resources (eg. user guides, technical documentation) for all your services. Ensure easy access to those resources and keep them up to date.",
+  "implementation_guidance": "External support is not required, but it enhances transparency by showcasing your security practices, policies, and compliance efforts, building trust with customers and stakeholders. Ultimately, this is what compliance is about: reassuring your prospect and customer on how you work. ## What? Create and maintain a complete list of support resources (eg. user guides, technical documentation) for all your services. Ensure easy access to those resources and keep them up to date.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Communications & collaboration security"
+ },
+ {
+  "canonical_key": "follow-news-in-cybersecurity",
+  "code": "COM-05",
+  "name": "Follow news in cybersecurity",
+  "description": "Monitoring emerging attack trends and security patches enables proactive defenses, letting you adapt strategies quickly and remain resilient as the threat landscape evolves.",
+  "implementation_guidance": "Monitoring emerging attack trends and security patches enables proactive defenses, letting you adapt strategies quickly and remain resilient as the threat landscape evolves.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Communications & collaboration security"
+ },
+ {
+  "canonical_key": "security-page",
+  "code": "COM-07",
+  "name": "Have a security page",
+  "description": "Customers and other external users are provided with information on how to report systems failures, incidents, concerns, and other complaints to appropriate personnel. Also, having compliance for yourself is useless, you want to leverage it as much as possible.",
+  "implementation_guidance": "Customers and other external users are provided with information on how to report systems failures, incidents, concerns, and other complaints to appropriate personnel. Also, having compliance for yourself is useless, you want to leverage it as much as possible.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Communications & collaboration security"
+ },
+ {
+  "canonical_key": "data-inventory",
+  "code": "DAT-01",
+  "name": "Data inventory",
+  "description": "Having an accurate and up-to-date inventory of all your data assets (databases, cloud storage or even file shares) enables you to be exhaustive in how you treat your data safety.",
+  "implementation_guidance": "Having an accurate and up-to-date inventory of all your data assets (databases, cloud storage or even file shares) enables you to be exhaustive in how you treat your data safety.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Data management & privacy"
+ },
+ {
+  "canonical_key": "encrypt-your-data-in-transit",
+  "code": "DAT-02",
+  "name": "Encrypt your data in transit",
+  "description": "Data sent over networks can be intercepted and read - the encryption ensure it won’t be intelligible. It secure it from potential threats. ## What? If you don’t have your own network or are not using FTP, you only need to focus on web traffic.",
+  "implementation_guidance": "Data sent over networks can be intercepted and read - the encryption ensure it won’t be intelligible. It secure it from potential threats. ## What? If you don’t have your own network or are not using FTP, you only need to focus on web traffic.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Data management & privacy"
+ },
+ {
+  "canonical_key": "encrypt-your-data-storage",
+  "code": "DAT-03",
+  "name": "Encrypt your data storage",
+  "description": "By encrypting data, you ensure that loss or theft of a device won’t result in a data breach. It also protects sensitive information from unauthorized access. ## What? You need to ensure that all sensitive data stored is encrypted.",
+  "implementation_guidance": "By encrypting data, you ensure that loss or theft of a device won’t result in a data breach. It also protects sensitive information from unauthorized access. ## What? You need to ensure that all sensitive data stored is encrypted.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Data management & privacy"
+ },
+ {
+  "canonical_key": "help-the-auditor-with-a-data-flow-diagram",
+  "code": "DAT-04",
+  "name": "Help the auditor with a data-flow diagram",
+  "description": "The auditor doesn’t know your company and your systems. Providing him with a diagram that show all account data accross your systems & networks will enable him/her to understand your challenges faster and also to better evaluate your tradeoffs (when needed). It will also help you be 100% clear on how you process your data, and help with onboarding.",
+  "implementation_guidance": "The auditor doesn’t know your company and your systems. Providing him with a diagram that show all account data accross your systems & networks will enable him/her to understand your challenges faster and also to better evaluate your tradeoffs (when needed). It will also help you be 100% clear on how you process your data, and help with onboarding.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Data management & privacy"
+ },
+ {
+  "canonical_key": "prove-customer-data-is-deleted-upon-request",
+  "code": "DAT-05",
+  "name": "Prove customer data is deleted upon request",
+  "description": "Being able to demonstrate data deletion meets regulatory requirements (like GDPR), and protects you from potential legal consequences if data isn’t erased or retention policies aren’t followed.",
+  "implementation_guidance": "Being able to demonstrate data deletion meets regulatory requirements (like GDPR), and protects you from potential legal consequences if data isn’t erased or retention policies aren’t followed.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Data management & privacy"
+ },
+ {
+  "canonical_key": "document-your-development-lifecycle",
+  "code": "DEV-01",
+  "name": "Document your development lifecycle",
+  "description": "Formalizing a proper development lifecycle helps your engineer in their jobs and helps you to scale your team. It reduces the chances of human error.",
+  "implementation_guidance": "Formalizing a proper development lifecycle helps your engineer in their jobs and helps you to scale your team. It reduces the chances of human error.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Secure development & code management"
+ },
+ {
+  "canonical_key": "enable-code-scanning",
+  "code": "DEV-02",
+  "name": "Enable code scanning",
+  "description": "It ensures that potential security flaws are detected early. This proactive approach strengthens your security posture and helps maintain high code quality.",
+  "implementation_guidance": "It ensures that potential security flaws are detected early. This proactive approach strengthens your security posture and helps maintain high code quality.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Secure development & code management"
+ },
+ {
+  "canonical_key": "have-testing-procedures",
+  "code": "DEV-04",
+  "name": "Have testing procedures",
+  "description": "Systematic testing ensures reliability, quickly uncovers potential security or functionality gaps, and upholds quality standards. It leads to fewer incidents in production.",
+  "implementation_guidance": "Systematic testing ensures reliability, quickly uncovers potential security or functionality gaps, and upholds quality standards. It leads to fewer incidents in production.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Secure development & code management"
+ },
+ {
+  "canonical_key": "infra-github-tokens",
+  "code": "DEV-05",
+  "name": "Plug your infrastructure & GitHub - avoid lifetime tokens",
+  "description": "Having credentials to manage can become a nightmare (especially if you need to change/rotate them often) - it quickly becomes time consuming. It is the same with lifetime tokens - someone leaving and you need to change them.",
+  "implementation_guidance": "Having credentials to manage can become a nightmare (especially if you need to change/rotate them often) - it quickly becomes time consuming. It is the same with lifetime tokens - someone leaving and you need to change them.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Secure development & code management"
+ },
+ {
+  "canonical_key": "require-pull-requests-prs",
+  "code": "DEV-06",
+  "name": "Require Pull Requests (PRs)",
+  "description": "Requiring pull requests and code reviews ensures higher code quality and security by allowing multiple team members to catch bugs, inefficiencies, and potential vulnerabilities before code is merged. It also promotes collaboration, knowledge sharing, and accountability within the team. This process helps prevent issues in production and maintains adherence to coding standards.",
+  "implementation_guidance": "Requiring pull requests and code reviews ensures higher code quality and security by allowing multiple team members to catch bugs, inefficiencies, and potential vulnerabilities before code is merged. It also promotes collaboration, knowledge sharing, and accountability within the team. This process helps prevent issues in production and maintains adherence to coding standards.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Secure development & code management"
+ },
+ {
+  "canonical_key": "set-up-2fa-for-all-contributors",
+  "code": "DEV-07",
+  "name": "Set-up 2FA for all contributors",
+  "description": "It reduces the risk of account compromise for all contributors, especially the ones not in your company.",
+  "implementation_guidance": "It reduces the risk of account compromise for all contributors, especially the ones not in your company.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Secure development & code management"
+ },
+ {
+  "canonical_key": "set-up-dependancy-vulnerability-alerts",
+  "code": "DEV-08",
+  "name": "Set-up dependancy vulnerability alerts",
+  "description": "It ensures your project stays secure and up-to-date without manual tracking of dependencies. It also reduces the risk of using outdated or insecure libraries in your codebase.",
+  "implementation_guidance": "It ensures your project stays secure and up-to-date without manual tracking of dependencies. It also reduces the risk of using outdated or insecure libraries in your codebase.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Secure development & code management"
+ },
+ {
+  "canonical_key": "implement-an-mdm",
+  "code": "END-01",
+  "name": "Implement an MDM",
+  "description": "An MDM enforces consistent security policies, ensures encryption and up-to-date patches, and can remotely lock or wipe devices if they’re lost, reducing the risk of data breaches and unauthorized access.",
+  "implementation_guidance": "An MDM enforces consistent security policies, ensures encryption and up-to-date patches, and can remotely lock or wipe devices if they’re lost, reducing the risk of data breaches and unauthorized access.",
+  "importance": "advanced",
+  "control_sub_type": "Manual",
+  "category": "Endpoint security"
+ },
+ {
+  "canonical_key": "list-of-your-assets",
+  "code": "END-02",
+  "name": "List of your assets",
+  "description": "The assets storing/processing data are potential vulnerabilities that need to be known, properly managed, and secured to reduce your risk exposure.",
+  "implementation_guidance": "The assets storing/processing data are potential vulnerabilities that need to be known, properly managed, and secured to reduce your risk exposure.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Endpoint security"
+ },
+ {
+  "canonical_key": "monitor-usb-usage-endpoint-security",
+  "code": "END-03",
+  "name": "Monitor USB usage (endpoint security)",
+  "description": "Restricting and reviewing USB usage helps close an overlooked attack vector, ensuring sensitive data isn’t copied offsite and external malware-laden drives don’t compromise the network.",
+  "implementation_guidance": "Restricting and reviewing USB usage helps close an overlooked attack vector, ensuring sensitive data isn’t copied offsite and external malware-laden drives don’t compromise the network.",
+  "importance": "advanced",
+  "control_sub_type": "Manual",
+  "category": "Endpoint security"
+ },
+ {
+  "canonical_key": "protect-your-employees-devices",
+  "code": "END-04",
+  "name": "Protect your employees devices",
+  "description": "Mobile devices store and access sensitive data; proper configuration (screen lock, FileVault, firewall, etc.) reduces vulnerabilities and maintains compliance with security policies.",
+  "implementation_guidance": "Mobile devices store and access sensitive data; proper configuration (screen lock, FileVault, firewall, etc.) reduces vulnerabilities and maintains compliance with security policies.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Endpoint security"
+ },
+ {
+  "canonical_key": "vpn-remote-access",
+  "code": "END-05",
+  "name": "Use VPNs to secure access for remote devices",
+  "description": "In short, implementing a VPN will encrypt your data and ensure a safe transmission between your employees devices and your internal network (even when using untrusted networks like a public wifi) ⇒ it offers a layer of security for your data. If everything is on Google Suite/Notion/Slack/etc. with MFA and you don't have your own network => ignore this mitigation.",
+  "implementation_guidance": "In short, implementing a VPN will encrypt your data and ensure a safe transmission between your employees devices and your internal network (even when using untrusted networks like a public wifi) ⇒ it offers a layer of security for your data. If everything is on Google Suite/Notion/Slack/etc. with MFA and you don't have your own network => ignore this mitigation.",
+  "importance": "advanced",
+  "control_sub_type": "Manual",
+  "category": "Endpoint security"
+ },
+ {
+  "canonical_key": "create-kpi-aligned-with-isms-objectives",
+  "code": "GRC-01",
+  "name": "Create KPI aligned with ISMS objectives",
+  "description": "KPIs provide quantifiable metrics to track security performance, identify trends, and demonstrate the effectiveness of your security initiatives, ensuring continuous alignment with ISMS objectives.",
+  "implementation_guidance": "KPIs provide quantifiable metrics to track security performance, identify trends, and demonstrate the effectiveness of your security initiatives, ensuring continuous alignment with ISMS objectives.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "define-isms-objectives",
+  "code": "GRC-02",
+  "name": "Define ISMS objectives",
+  "description": "Clear ISMS objectives ensure that all security activities are aligned with business priorities, enabling focused resource allocation, measurable progress, and continuous improvement in your security posture.",
+  "implementation_guidance": "Clear ISMS objectives ensure that all security activities are aligned with business priorities, enabling focused resource allocation, measurable progress, and continuous improvement in your security posture.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "define-the-scope-of-the-isms",
+  "code": "GRC-03",
+  "name": "Define the scope of the ISMS",
+  "description": "Proper scoping of the ISMS ensures security controls remain relevant, covering all critical assets, technologies, and processes without leaving any newly added components at risk.",
+  "implementation_guidance": "Proper scoping of the ISMS ensures security controls remain relevant, covering all critical assets, technologies, and processes without leaving any newly added components at risk.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "determine-internal-external-threats-for-isms-scope",
+  "code": "GRC-04",
+  "name": "Determine internal & external threats for ISMS scope",
+  "description": "Knowing which threats your organization faces allows you to allocate resources effectively, implement appropriate countermeasures, and tailor your ISMS to the actual risk environment, improving resilience.",
+  "implementation_guidance": "Knowing which threats your organization faces allows you to allocate resources effectively, implement appropriate countermeasures, and tailor your ISMS to the actual risk environment, improving resilience.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "develop-a-risk-treatment-plan",
+  "code": "GRC-05",
+  "name": "Develop a risk treatment plan",
+  "description": "Having a clear plan to address each risk ensures accountability and drives progress on remediation, promoting a structured approach to reducing your overall risk exposure.",
+  "implementation_guidance": "Having a clear plan to address each risk ensures accountability and drives progress on remediation, promoting a structured approach to reducing your overall risk exposure.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "establish-documentation-system",
+  "code": "GRC-06",
+  "name": "Establish documentation system",
+  "description": "A central documentation system ensures information is accessible, consistent, and easily updated. It simplifies audits, maintains clarity across teams, and helps prove compliance with internal and external requirements.",
+  "implementation_guidance": "A central documentation system ensures information is accessible, consistent, and easily updated. It simplifies audits, maintains clarity across teams, and helps prove compliance with internal and external requirements.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "have-a-statement-of-applicability",
+  "code": "GRC-07",
+  "name": "Have a statement of applicability",
+  "description": "A statement of applicability clarifies your chosen security controls, ensures transparency in your compliance approach, and reduces confusion about what is in-scope for audits or reviews.",
+  "implementation_guidance": "A statement of applicability clarifies your chosen security controls, ensures transparency in your compliance approach, and reduces confusion about what is in-scope for audits or reviews.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "have-all-policies-approved-and-signed",
+  "code": "GRC-08",
+  "name": "Have all policies approved and signed",
+  "description": "",
+  "implementation_guidance": "",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "have-an-internal-audit",
+  "code": "GRC-09",
+  "name": "Have an internal audit",
+  "description": "Annual internal audits provide an objective view of security posture, ensuring controls are effective and highlighting areas that need remediation.",
+  "implementation_guidance": "Annual internal audits provide an objective view of security posture, ensuring controls are effective and highlighting areas that need remediation.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "have-the-scoping-document-signed-by-leadership",
+  "code": "GRC-10",
+  "name": "Have the scoping document signed by leadership",
+  "description": "Leadership sign-off cements organizational support, fosters clarity on ISMS coverage, and ensures everyone responsibilities.",
+  "implementation_guidance": "Leadership sign-off cements organizational support, fosters clarity on ISMS coverage, and ensures everyone responsibilities.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "identify-all-stakeholders-to-scope-the-isms",
+  "code": "GRC-11",
+  "name": "Identify all stakeholders to scope the ISMS",
+  "description": "Understanding the range of stakeholders ensures that security measures account for all relevant interests and obligations, preventing oversight of critical parties and enabling inclusive risk management.",
+  "implementation_guidance": "Understanding the range of stakeholders ensures that security measures account for all relevant interests and obligations, preventing oversight of critical parties and enabling inclusive risk management.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "identify-threats-mitigations-fire-extinguisher-etc",
+  "code": "GRC-12",
+  "name": "Identify threats & mitigations (fire extinguisher etc)",
+  "description": "Recognizing environmental and physical risks ensures you can proactively deploy measures.",
+  "implementation_guidance": "Recognizing environmental and physical risks ensures you can proactively deploy measures.",
+  "importance": "advanced",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "maintain-a-compliance-register",
+  "code": "GRC-13",
+  "name": "Maintain a compliance register",
+  "description": "A formal register of compliance requirements provides clarity on obligations, helps manage compliance tasks systematically, and reduces the risk of overlooked or outdated mandates leading to legal or regulatory issues.",
+  "implementation_guidance": "A formal register of compliance requirements provides clarity on obligations, helps manage compliance tasks systematically, and reduces the risk of overlooked or outdated mandates leading to legal or regulatory issues.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "perform-a-risk-assessment",
+  "code": "GRC-14",
+  "name": "Perform a risk assessment",
+  "description": "Risk assessments provide the foundation for your security strategy, highlighting where resources should be directed to mitigate the most significant risks, ensuring your approach remains both proactive and cost-effective.",
+  "implementation_guidance": "Risk assessments provide the foundation for your security strategy, highlighting where resources should be directed to mitigate the most significant risks, ensuring your approach remains both proactive and cost-effective.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "plan-security-improvements",
+  "code": "GRC-15",
+  "name": "Plan security improvements",
+  "description": "Proactively addressing identified weaknesses maintains a strong security posture, aligns with evolving risks, and demonstrates continuous commitment to protecting systems and data.",
+  "implementation_guidance": "Proactively addressing identified weaknesses maintains a strong security posture, aligns with evolving risks, and demonstrates continuous commitment to protecting systems and data.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "schedule-management-review",
+  "code": "GRC-16",
+  "name": "Schedule management review",
+  "description": "Management reviews keep leadership involved, ensure alignment with business goals, and validate that security initiatives are effectively reducing risk.",
+  "implementation_guidance": "Management reviews keep leadership involved, ensure alignment with business goals, and validate that security initiatives are effectively reducing risk.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "track-and-address-non-conformities",
+  "code": "GRC-17",
+  "name": "Track and address non conformities",
+  "description": "Handling nonconformities promptly maintains the integrity of your ISMS, prevents small oversights from escalating into serious breaches, and supports continuous improvement.",
+  "implementation_guidance": "Handling nonconformities promptly maintains the integrity of your ISMS, prevents small oversights from escalating into serious breaches, and supports continuous improvement.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Governance, Risk & Compliance"
+ },
+ {
+  "canonical_key": "define-roles-responsibilities-for-isms",
+  "code": "HR-01",
+  "name": "Define roles & responsibilities for ISMS",
+  "description": "Clear accountability and authority lines within your ISMS help avoid confusion, empower individuals to act decisively, and foster a security culture where each participant understands their own critical role in the organization’s protection.",
+  "implementation_guidance": "Clear accountability and authority lines within your ISMS help avoid confusion, empower individuals to act decisively, and foster a security culture where each participant understands their own critical role in the organization’s protection.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "define-roles-responsibilities-to-ensure-adequate-resources",
+  "code": "HR-02",
+  "name": "Define roles & responsibilities to ensure adequate resources",
+  "description": "Ensuring the right people are in the right roles supports smooth security operations, accelerates incident response, and reduces oversights caused by confusion over who is responsible for key tasks.",
+  "implementation_guidance": "Ensuring the right people are in the right roles supports smooth security operations, accelerates incident response, and reduces oversights caused by confusion over who is responsible for key tasks.",
+  "importance": "advanced",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "ensure-proof-of-employment",
+  "code": "HR-03",
+  "name": "Ensure proof of employment",
+  "description": "Having signed employment contracts reduces legal ambiguity, ensures clear understanding of obligations, and underpins accountability.",
+  "implementation_guidance": "Having signed employment contracts reduces legal ambiguity, ensures clear understanding of obligations, and underpins accountability.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "integrate-security-checklist-in-your-onboarding-process",
+  "code": "HR-04",
+  "name": "Integrate security checklist in your onboarding process",
+  "description": "It is the perfect timing to ensure that every employees has (not exhaustive): - accepted and signed all documents - the access needed to perform his/her tasks - started his/her security training",
+  "implementation_guidance": "It is the perfect timing to ensure that every employees has (not exhaustive): - accepted and signed all documents - the access needed to perform his/her tasks - started his/her security training",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "know-your-recruits",
+  "code": "HR-05",
+  "name": "Know your recruits",
+  "description": "When recruiting someone, you want to be sure of who you are hiring: by performing reference checks (it can also be background checks), you add an additional layer of certainty on the candidate by looking for potential red flags in the candidate’s past (history of unethical behavior, harassment, fraud, etc..). ## What? Recruitment is key, especially early stage, so you are probably already doing it right, it is only about documenting it.",
+  "implementation_guidance": "When recruiting someone, you want to be sure of who you are hiring: by performing reference checks (it can also be background checks), you add an additional layer of certainty on the candidate by looking for potential red flags in the candidate’s past (history of unethical behavior, harassment, fraud, etc..). ## What? Recruitment is key, especially early stage, so you are probably already doing it right, it is only about documenting it.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "performance-review",
+  "code": "HR-06",
+  "name": "Run performance reviews",
+  "description": "Makes sure your team has the skills and focus needed to protect what matters most in your business. They help spot training gaps, reinforce accountability and ensure everyone is aligned with your operational goals - security being one of them. It's all about building a culture that proactively minimizes risks while continuously improving. ## What? Create a simple employee performance evaluation process. It must rely on clear metrics and expectations and must be run at least once a year.",
+  "implementation_guidance": "Makes sure your team has the skills and focus needed to protect what matters most in your business. They help spot training gaps, reinforce accountability and ensure everyone is aligned with your operational goals - security being one of them. It's all about building a culture that proactively minimizes risks while continuously improving. ## What? Create a simple employee performance evaluation process. It must rely on clear metrics and expectations and must be run at least once a year.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "properly-off-board-your-employees",
+  "code": "HR-07",
+  "name": "Properly off-board your employees",
+  "description": "Yes, people will leave your company (either by your decision or theirs). And you want to be prepare! If an early employee leaves and you forgot to change the ownership on his/her document, you might lose the documents. Also, you want to be sure people can’t access the company data or systems once they left!",
+  "implementation_guidance": "Yes, people will leave your company (either by your decision or theirs). And you want to be prepare! If an early employee leaves and you forgot to change the ownership on his/her document, you might lose the documents. Also, you want to be sure people can’t access the company data or systems once they left!",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "train-your-employees-on-security",
+  "code": "HR-08",
+  "name": "Train your employees on security",
+  "description": "Your employees are the main target of cyber threats (especially phishing and social engineering), and education is one of the best way to reduce risk. Awareness of your employees will improve your company security.",
+  "implementation_guidance": "Your employees are the main target of cyber threats (especially phishing and social engineering), and education is one of the best way to reduce risk. Awareness of your employees will improve your company security.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Human resources & personnel security"
+ },
+ {
+  "canonical_key": "conduct-an-access-reviews",
+  "code": "IAM-01",
+  "name": "Conduct an Access Reviews",
+  "description": "A formal/explicit process to review employee access on a quarterly/yearly basis is a must have in terms of security hygiene. ## What? Every 3 or 6 months, plan an “Access review session” with the relevant people to audit accesses on all systems (that is another good reason to enable SSO). You need to ensure everyone has the proper access for his/her job - an account inactive for the last 90 days can probably be disable. If you proceed to any change, document it in the minutes of the meeting - those minutes will be asked for subsequent audits.",
+  "implementation_guidance": "A formal/explicit process to review employee access on a quarterly/yearly basis is a must have in terms of security hygiene. ## What? Every 3 or 6 months, plan an “Access review session” with the relevant people to audit accesses on all systems (that is another good reason to enable SSO). You need to ensure everyone has the proper access for his/her job - an account inactive for the last 90 days can probably be disable. If you proceed to any change, document it in the minutes of the meeting - those minutes will be asked for subsequent audits.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Identity & access management"
+ },
+ {
+  "canonical_key": "enable-2fa-on-critical-services",
+  "code": "IAM-02",
+  "name": "Enable 2FA on critical services",
+  "description": "In order to minimize the threat of someone getting access to something they should not, we follow the **secure principle:** nobody can easily get access to data/systems. We need to ensure that if someone has access to your password, they still cannot log into your account. Multi-Factor Authentication (MFA) adds extra layers of security by requiring users to provide additional authentication factors beyond their passwords. The most standard solution is 2FA: your password + something else. ## What? Enable 2FA across all your systems. If you don’t want to activate it everywhere, prioritize: - System containing sensitive data - System related to your network, infrastructure or production.",
+  "implementation_guidance": "In order to minimize the threat of someone getting access to something they should not, we follow the **secure principle:** nobody can easily get access to data/systems. We need to ensure that if someone has access to your password, they still cannot log into your account. Multi-Factor Authentication (MFA) adds extra layers of security by requiring users to provide additional authentication factors beyond their passwords. The most standard solution is 2FA: your password + something else. ## What? Enable 2FA across all your systems. If you don’t want to activate it everywhere, prioritize: - System containing sensitive data - System related to your network, infrastructure or production.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Identity & access management"
+ },
+ {
+  "canonical_key": "enforce-sso",
+  "code": "IAM-03",
+  "name": "Enforce SSO when possible",
+  "description": "To minimize the risk of unauthorized access, it's important to centralize and secure authentication across your organization. Single Sign-On (SSO) enhances security by enabling better control over account access, enforcing consistent security policies (e.g., 2FA), and making it easier to revoke access when someone leaves the organization.",
+  "implementation_guidance": "To minimize the risk of unauthorized access, it's important to centralize and secure authentication across your organization. Single Sign-On (SSO) enhances security by enabling better control over account access, enforcing consistent security policies (e.g., 2FA), and making it easier to revoke access when someone leaves the organization.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Identity & access management"
+ },
+ {
+  "canonical_key": "manage-your-service-accounts",
+  "code": "IAM-04",
+  "name": "Manage your service accounts",
+  "description": "You don’t want to use the “default” service account, it has way too many permissions - it is a super administrator. Even GCP is asking you not to use theirs, it is only here for legacy reasons. In the same idea, grant your service accounts only what is necessary.",
+  "implementation_guidance": "You don’t want to use the “default” service account, it has way too many permissions - it is a super administrator. Even GCP is asking you not to use theirs, it is only here for legacy reasons. In the same idea, grant your service accounts only what is necessary.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Identity & access management"
+ },
+ {
+  "canonical_key": "password-manager",
+  "code": "IAM-05",
+  "name": "Setup a password manager",
+  "description": "In order to minimize the threat of someone getting access to something they should not, we want to ensure a few things: 1. The password used in your company are complex enough. 2. They are stored encrypted. 3. They are shared safely when needed (not openly, on slack or by text). 4. They are not compromised. The easiest way to implement those is to use a password manager.",
+  "implementation_guidance": "In order to minimize the threat of someone getting access to something they should not, we want to ensure a few things: 1. The password used in your company are complex enough. 2. They are stored encrypted. 3. They are shared safely when needed (not openly, on slack or by text). 4. They are not compromised. The easiest way to implement those is to use a password manager.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Identity & access management"
+ },
+ {
+  "canonical_key": "setup-role-based-access",
+  "code": "IAM-06",
+  "name": "Setup role based access",
+  "description": "In order to minimize the threat of someone getting access to something they should not, we follow the **least privilege principle:** access is limited to what's necessary for job duties. We need to define which function should have access to which tool in your company to serve as a reference when providing access to people (password manager vaults etc.).",
+  "implementation_guidance": "In order to minimize the threat of someone getting access to something they should not, we follow the **least privilege principle:** access is limited to what's necessary for job duties. We need to define which function should have access to which tool in your company to serve as a reference when providing access to people (password manager vaults etc.).",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Identity & access management"
+ },
+ {
+  "canonical_key": "setup-slack-channel-for-access-request",
+  "code": "IAM-07",
+  "name": "Setup an access request process",
+  "description": "In order to minimize the threat of someone getting access to something they should not, we follow the **continuous update principle:** making sure the privileges are up to date. We need to setup a proper process to define how we grant and revoke access to different systems.",
+  "implementation_guidance": "In order to minimize the threat of someone getting access to something they should not, we follow the **continuous update principle:** making sure the privileges are up to date. We need to setup a proper process to define how we grant and revoke access to different systems.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Identity & access management"
+ },
+ {
+  "canonical_key": "be-automatically-notified-of-issues",
+  "code": "LOG-01",
+  "name": "Be automatically notified of issues",
+  "description": "Setting up alerting allows you to respond quickly and minimize downtime or potential data breaches. It ensures that important events, such as unauthorized access or system failures, are addressed promptly. ## What? Don't implement alerts for everything. **Focus on critical events** - if you have alerts on everything, it's not alerting anymore. You should consider (not mandatory or exhaustive): - **Resource Utilization**: Monitor high CPU, memory, or disk usage to prevent downtime or system crashes. - **System Downtime**: Set alerts for system unavailability or critical services going offline. - **Network Traffic Anomalies**: Monitor for unusual spikes or patterns in network traffic that could indicate a potential attack. - **Unauthorized Access Attempts:** Track and alert on failed logins, unusual login locations, or excessive login attempts.",
+  "implementation_guidance": "Setting up alerting allows you to respond quickly and minimize downtime or potential data breaches. It ensures that important events, such as unauthorized access or system failures, are addressed promptly. ## What? Don't implement alerts for everything. **Focus on critical events** - if you have alerts on everything, it's not alerting anymore. You should consider (not mandatory or exhaustive): - **Resource Utilization**: Monitor high CPU, memory, or disk usage to prevent downtime or system crashes. - **System Downtime**: Set alerts for system unavailability or critical services going offline. - **Network Traffic Anomalies**: Monitor for unusual spikes or patterns in network traffic that could indicate a potential attack. - **Unauthorized Access Attempts:** Track and alert on failed logins, unusual login locations, or excessive login attempts.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Logging, monitoring & incident management"
+ },
+ {
+  "canonical_key": "build-an-incident-response-process",
+  "code": "LOG-02",
+  "name": "Build an incident response process",
+  "description": "An **incident response plan** is crucial for quickly identifying, containing, and resolving incidents, minimizing potential disruptions. It ensures you’re prepared effectively and that you keep your operations running smoothly, even in the face of unexpected threats.",
+  "implementation_guidance": "An **incident response plan** is crucial for quickly identifying, containing, and resolving incidents, minimizing potential disruptions. It ensures you’re prepared effectively and that you keep your operations running smoothly, even in the face of unexpected threats.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Logging, monitoring & incident management"
+ },
+ {
+  "canonical_key": "configure-logs-and-implement-real-time-monitoring",
+  "code": "LOG-03",
+  "name": "Configure logs and implement real-time monitoring",
+  "description": "It allows you to detect and respond to potential security incidents or system failures immediately, minimizing downtime and reducing the risk of data breaches. It maintain visibility into system performance and security events. ## What? Once you have selected the tool you are using and implemented it, you need to implement your first dashboard (if not already the case). At least, we think you should be able to follow: - Availability: Resource usage (CPU, memory, storage), System downtime event - Optional: Uptime, latency - Access: Failed log attemps, unauthorized access, MFA usage - Integrity: Error rate (eg. rate of 500s), data loss or corruption (inc. transaction failures)",
+  "implementation_guidance": "It allows you to detect and respond to potential security incidents or system failures immediately, minimizing downtime and reducing the risk of data breaches. It maintain visibility into system performance and security events. ## What? Once you have selected the tool you are using and implemented it, you need to implement your first dashboard (if not already the case). At least, we think you should be able to follow: - Availability: Resource usage (CPU, memory, storage), System downtime event - Optional: Uptime, latency - Access: Failed log attemps, unauthorized access, MFA usage - Integrity: Error rate (eg. rate of 500s), data loss or corruption (inc. transaction failures)",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Logging, monitoring & incident management"
+ },
+ {
+  "canonical_key": "keep-your-logs",
+  "code": "LOG-04",
+  "name": "Keep your logs",
+  "description": "Logs help you to detect and investigate security incidents and troubleshoot operational issues. They provide an audit trail. ## What? You should consider a retention period of at least 90 days, and up to 1 year.",
+  "implementation_guidance": "Logs help you to detect and investigate security incidents and troubleshoot operational issues. They provide an audit trail. ## What? You should consider a retention period of at least 90 days, and up to 1 year.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Logging, monitoring & incident management"
+ },
+ {
+  "canonical_key": "maintain-history-of-incident-review",
+  "code": "LOG-05",
+  "name": "Maintain history of incident review",
+  "description": "Retaining incident review records helps you refine your incident response plans, avoid repeated mistakes, and provide an audit trail for accountability and compliance.",
+  "implementation_guidance": "Retaining incident review records helps you refine your incident response plans, avoid repeated mistakes, and provide an audit trail for accountability and compliance.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Logging, monitoring & incident management"
+ },
+ {
+  "canonical_key": "synchronize-clock-on-infra",
+  "code": "LOG-06",
+  "name": "Synchronize clock on infra",
+  "description": "Accurate timestamps are critical for correlating logs, investigating incidents, and maintaining consistent audit trails. A centralized clock source reduces confusion, improves analysis, and streamlines incident management.",
+  "implementation_guidance": "Accurate timestamps are critical for correlating logs, investigating incidents, and maintaining consistent audit trails. A centralized clock source reduces confusion, improves analysis, and streamlines incident management.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Logging, monitoring & incident management"
+ },
+ {
+  "canonical_key": "database-auth",
+  "code": "NET-01",
+  "name": "Implement IAM for database authentication",
+  "description": "You want to ensure that only the proper people can access your production database. You also want to avoid the burden of managing another list of users or rotating credentials.",
+  "implementation_guidance": "You want to ensure that only the proper people can access your production database. You also want to avoid the burden of managing another list of users or rotating credentials.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Infrastructure & network security"
+ },
+ {
+  "canonical_key": "enable-autoscaling",
+  "code": "NET-02",
+  "name": "Enable autoscaling",
+  "description": "Autoscaling helps maintain stable performance under changing workloads, preventing outages from sudden traffic spikes while optimizing costs when load decreases. It also reduces manual intervention, freeing your team to focus on more critical tasks.",
+  "implementation_guidance": "Autoscaling helps maintain stable performance under changing workloads, preventing outages from sudden traffic spikes while optimizing costs when load decreases. It also reduces manual intervention, freeing your team to focus on more critical tasks.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Infrastructure & network security"
+ },
+ {
+  "canonical_key": "keep-an-history-of-all-your-changes",
+  "code": "NET-03",
+  "name": "Keep an history of all your changes",
+  "description": "Infrastructure as Code (IaC) makes sure all your infrastructure changes are done in a standardized and repeatable process - the chance of human error is lower. Moreover, IaC enables version control and peer reviews. When growing, you will have to do it - the earlier the better (later, it can become really painful). ## What? **Option 1:** If you don’t want an IaC, provide a screenshot of the logs of your infrastructure changes. **Option 2:** If you already have an IaC, we only need a screenshot of it. **Option 3:** If you don’t have one, we recommend Terraform - the documentation is available [here](https://developer.hashicorp.com/terraform/tutorials).",
+  "implementation_guidance": "Infrastructure as Code (IaC) makes sure all your infrastructure changes are done in a standardized and repeatable process - the chance of human error is lower. Moreover, IaC enables version control and peer reviews. When growing, you will have to do it - the earlier the better (later, it can become really painful). ## What? **Option 1:** If you don’t want an IaC, provide a screenshot of the logs of your infrastructure changes. **Option 2:** If you already have an IaC, we only need a screenshot of it. **Option 3:** If you don’t have one, we recommend Terraform - the documentation is available [here](https://developer.hashicorp.com/terraform/tutorials).",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Infrastructure & network security"
+ },
+ {
+  "canonical_key": "restrict-public-access-on-your-infrastructure",
+  "code": "NET-04",
+  "name": "Restrict public access on your infrastructure",
+  "description": "Public access to your company's infrastructure is a serious security risk. By configuring your cloud provider to restrict public access, you can reduce the risk of unauthorized access to your sensitive data and systems.",
+  "implementation_guidance": "Public access to your company's infrastructure is a serious security risk. By configuring your cloud provider to restrict public access, you can reduce the risk of unauthorized access to your sensitive data and systems.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Infrastructure & network security"
+ },
+ {
+  "canonical_key": "run-a-penetration-test",
+  "code": "NET-05",
+  "name": "Run a penetration test",
+  "description": "It is a good way to safeguard your company’s data. It is a real-life simulation of attack scenarios on your company: it enables you to identify potential vulnerabilities that can be fixed before being exploited.",
+  "implementation_guidance": "It is a good way to safeguard your company’s data. It is a real-life simulation of attack scenarios on your company: it enables you to identify potential vulnerabilities that can be fixed before being exploited.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Infrastructure & network security"
+ },
+ {
+  "canonical_key": "scan-for-security-updates",
+  "code": "NET-06",
+  "name": "Scan for Security updates",
+  "description": "An automated security scanning software on your infrastructure components enables you to fix potential vulnerabilities as soon as they are uncovered.",
+  "implementation_guidance": "An automated security scanning software on your infrastructure components enables you to fix potential vulnerabilities as soon as they are uncovered.",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Infrastructure & network security"
+ },
+ {
+  "canonical_key": "set-up-a-waf",
+  "code": "NET-07",
+  "name": "Set-up a WAF",
+  "description": "It filters malicious traffic, preventing attacks (like SQL injections and cross-site scripting) and mitigates risks of service disruptions. Additionally, it can masks your origin IP, reducing exposure and limiting direct access to your infrastructure.",
+  "implementation_guidance": "It filters malicious traffic, preventing attacks (like SQL injections and cross-site scripting) and mitigates risks of service disruptions. Additionally, it can masks your origin IP, reducing exposure and limiting direct access to your infrastructure.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Infrastructure & network security"
+ },
+ {
+  "canonical_key": "cloud-datacenter-physical-security",
+  "code": "PHY-01",
+  "name": "Cloud datacenter physical security",
+  "description": "You know how critical a data center is. You don’t want unauthorized people to access it.",
+  "implementation_guidance": "You know how critical a data center is. You don’t want unauthorized people to access it.",
+  "importance": "preferred",
+  "control_sub_type": "Manual",
+  "category": "Physical & environmental security"
+ },
+ {
+  "canonical_key": "implement-physical-access-control",
+  "code": "PHY-02",
+  "name": "Implement physical access control",
+  "description": "Even if you do most of your business online, you still have offices, computers or even printed document: you need to make sure those assets are physically secured (we will focus on the digital access later).",
+  "implementation_guidance": "Even if you do most of your business online, you still have offices, computers or even printed document: you need to make sure those assets are physically secured (we will focus on the digital access later).",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Physical & environmental security"
+ },
+ {
+  "canonical_key": "implement-physical-security-measures",
+  "code": "PHY-03",
+  "name": "Implement physical security measures",
+  "description": "Physical safeguards bolster your security stance by preventing theft, deterring unauthorized access, and providing forensic evidence in case of breaches.",
+  "implementation_guidance": "Physical safeguards bolster your security stance by preventing theft, deterring unauthorized access, and providing forensic evidence in case of breaches.",
+  "importance": "advanced",
+  "control_sub_type": "Manual",
+  "category": "Physical & environmental security"
+ },
+ {
+  "canonical_key": "implement-visitor-access-policies",
+  "code": "PHY-04",
+  "name": "Keep track of visitors",
+  "description": "Even if you do most of your business online, you still have offices, computers or even printed document: you need to make sure those assets are physically secured (we will focus on the digital access later) regarding visitors. ## What? In your policies, we will mention that all visitors must be accompanied by an employee at all times. On your end, you need to keep track of them (and accompany them).",
+  "implementation_guidance": "Even if you do most of your business online, you still have offices, computers or even printed document: you need to make sure those assets are physically secured (we will focus on the digital access later) regarding visitors. ## What? In your policies, we will mention that all visitors must be accompanied by an employee at all times. On your end, you need to keep track of them (and accompany them).",
+  "importance": "mandatory",
+  "control_sub_type": "Manual",
+  "category": "Physical & environmental security"
+ }
+]

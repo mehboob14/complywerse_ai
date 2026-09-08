@@ -1,0 +1,774 @@
+[
+ {
+  "template_code": "BCP-01",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "BCP-01",
+  "requirement_key": "GDPR:Art. 32(1)(c)"
+ },
+ {
+  "template_code": "BCP-01",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "BCP-02",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "BCP-02",
+  "requirement_key": "GDPR:Art. 32(1)(c)"
+ },
+ {
+  "template_code": "BCP-02",
+  "requirement_key": "GDPR:Art. 32(1)(d)"
+ },
+ {
+  "template_code": "BCP-02",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "BCP-03",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "BCP-03",
+  "requirement_key": "GDPR:Art. 32(1)(c)"
+ },
+ {
+  "template_code": "BCP-03",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "GDPR:Art. 28"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "GDPR:Art. 28(1)"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "GDPR:Art. 44"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "GDPR:Art. 45"
+ },
+ {
+  "template_code": "BCP-04",
+  "requirement_key": "GDPR:Art. 46"
+ },
+ {
+  "template_code": "BCP-05",
+  "requirement_key": "GDPR:Art. 28"
+ },
+ {
+  "template_code": "BCP-05",
+  "requirement_key": "GDPR:Art. 28(3)"
+ },
+ {
+  "template_code": "BCP-05",
+  "requirement_key": "GDPR:Art. 44"
+ },
+ {
+  "template_code": "BCP-05",
+  "requirement_key": "GDPR:Art. 45"
+ },
+ {
+  "template_code": "BCP-05",
+  "requirement_key": "GDPR:Art. 46"
+ },
+ {
+  "template_code": "BCP-06",
+  "requirement_key": "GDPR:Art. 28"
+ },
+ {
+  "template_code": "BCP-06",
+  "requirement_key": "GDPR:Art. 28(3)"
+ },
+ {
+  "template_code": "COM-01",
+  "requirement_key": "GDPR:Art. 33"
+ },
+ {
+  "template_code": "COM-01",
+  "requirement_key": "GDPR:Art. 34"
+ },
+ {
+  "template_code": "COM-02",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "COM-02",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "COM-02",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "COM-03",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "COM-03",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "COM-03",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "COM-04",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "COM-05",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "COM-05",
+  "requirement_key": "GDPR:Art. 32(1)(d)"
+ },
+ {
+  "template_code": "COM-07",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "DAT-01",
+  "requirement_key": "GDPR:Art. 30"
+ },
+ {
+  "template_code": "DAT-01",
+  "requirement_key": "GDPR:Art. 30(1)"
+ },
+ {
+  "template_code": "DAT-02",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DAT-02",
+  "requirement_key": "GDPR:Art. 32(1)(a)"
+ },
+ {
+  "template_code": "DAT-02",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "DAT-03",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DAT-03",
+  "requirement_key": "GDPR:Art. 32(1)(a)"
+ },
+ {
+  "template_code": "DAT-03",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "DAT-04",
+  "requirement_key": "GDPR:Art. 30"
+ },
+ {
+  "template_code": "DAT-04",
+  "requirement_key": "GDPR:Art. 30(1)"
+ },
+ {
+  "template_code": "DAT-05",
+  "requirement_key": "GDPR:Art. 17"
+ },
+ {
+  "template_code": "DAT-05",
+  "requirement_key": "GDPR:Art. 5(1)(e)"
+ },
+ {
+  "template_code": "DEV-01",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "DEV-02",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DEV-02",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "DEV-04",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DEV-04",
+  "requirement_key": "GDPR:Art. 32(1)(d)"
+ },
+ {
+  "template_code": "DEV-05",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DEV-05",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "DEV-05",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "DEV-06",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DEV-06",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "DEV-07",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "DEV-07",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DEV-07",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "DEV-07",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "DEV-08",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "DEV-08",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "END-01",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "END-01",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "END-01",
+  "requirement_key": "GDPR:Art. 32(1)(a)"
+ },
+ {
+  "template_code": "END-01",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "END-01",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "END-02",
+  "requirement_key": "GDPR:Art. 30"
+ },
+ {
+  "template_code": "END-02",
+  "requirement_key": "GDPR:Art. 30(1)"
+ },
+ {
+  "template_code": "END-02",
+  "requirement_key": "GDPR:Art. 30(1)(g)"
+ },
+ {
+  "template_code": "END-03",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "END-03",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "END-03",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "END-04",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "END-04",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "END-04",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "END-05",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "END-05",
+  "requirement_key": "GDPR:Art. 32(1)(a)"
+ },
+ {
+  "template_code": "END-05",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "END-05",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "GRC-01",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-02",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-03",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-04",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "GRC-04",
+  "requirement_key": "GDPR:Art. 32(2)"
+ },
+ {
+  "template_code": "GRC-05",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "GRC-05",
+  "requirement_key": "GDPR:Art. 32(2)"
+ },
+ {
+  "template_code": "GRC-06",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-07",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-08",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-09",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-10",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-11",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-12",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "GRC-12",
+  "requirement_key": "GDPR:Art. 32(2)"
+ },
+ {
+  "template_code": "GRC-13",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-14",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "GRC-14",
+  "requirement_key": "GDPR:Art. 32(2)"
+ },
+ {
+  "template_code": "GRC-15",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "GRC-15",
+  "requirement_key": "GDPR:Art. 32(1)(d)"
+ },
+ {
+  "template_code": "GRC-16",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "GRC-17",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-01",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-02",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-03",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-03",
+  "requirement_key": "GDPR:Art. 29"
+ },
+ {
+  "template_code": "HR-03",
+  "requirement_key": "GDPR:Art. 39"
+ },
+ {
+  "template_code": "HR-04",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-04",
+  "requirement_key": "GDPR:Art. 29"
+ },
+ {
+  "template_code": "HR-04",
+  "requirement_key": "GDPR:Art. 39"
+ },
+ {
+  "template_code": "HR-05",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-05",
+  "requirement_key": "GDPR:Art. 29"
+ },
+ {
+  "template_code": "HR-05",
+  "requirement_key": "GDPR:Art. 39"
+ },
+ {
+  "template_code": "HR-06",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-06",
+  "requirement_key": "GDPR:Art. 29"
+ },
+ {
+  "template_code": "HR-06",
+  "requirement_key": "GDPR:Art. 39"
+ },
+ {
+  "template_code": "HR-07",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-07",
+  "requirement_key": "GDPR:Art. 29"
+ },
+ {
+  "template_code": "HR-07",
+  "requirement_key": "GDPR:Art. 39"
+ },
+ {
+  "template_code": "HR-08",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "HR-08",
+  "requirement_key": "GDPR:Art. 29"
+ },
+ {
+  "template_code": "HR-08",
+  "requirement_key": "GDPR:Art. 39"
+ },
+ {
+  "template_code": "IAM-01",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "IAM-01",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "IAM-01",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "IAM-01",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "IAM-02",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "IAM-02",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "IAM-02",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "IAM-02",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "IAM-03",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "IAM-03",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "IAM-03",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "IAM-03",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "IAM-03",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "IAM-04",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "IAM-04",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "IAM-04",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "IAM-04",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "IAM-05",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "IAM-05",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "IAM-05",
+  "requirement_key": "GDPR:Art. 32(1)(a)"
+ },
+ {
+  "template_code": "IAM-05",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "IAM-05",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "IAM-06",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "IAM-06",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "IAM-06",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "IAM-06",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "IAM-07",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "IAM-07",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "IAM-07",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "IAM-07",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "LOG-01",
+  "requirement_key": "GDPR:Art. 33"
+ },
+ {
+  "template_code": "LOG-01",
+  "requirement_key": "GDPR:Art. 34"
+ },
+ {
+  "template_code": "LOG-02",
+  "requirement_key": "GDPR:Art. 33"
+ },
+ {
+  "template_code": "LOG-02",
+  "requirement_key": "GDPR:Art. 34"
+ },
+ {
+  "template_code": "LOG-03",
+  "requirement_key": "GDPR:Art. 33"
+ },
+ {
+  "template_code": "LOG-03",
+  "requirement_key": "GDPR:Art. 34"
+ },
+ {
+  "template_code": "LOG-04",
+  "requirement_key": "GDPR:Art. 33"
+ },
+ {
+  "template_code": "LOG-04",
+  "requirement_key": "GDPR:Art. 34"
+ },
+ {
+  "template_code": "LOG-05",
+  "requirement_key": "GDPR:Art. 33"
+ },
+ {
+  "template_code": "LOG-05",
+  "requirement_key": "GDPR:Art. 33(5)"
+ },
+ {
+  "template_code": "LOG-06",
+  "requirement_key": "GDPR:Art. 33"
+ },
+ {
+  "template_code": "LOG-06",
+  "requirement_key": "GDPR:Art. 34"
+ },
+ {
+  "template_code": "NET-01",
+  "requirement_key": "GDPR:Art. 25(1)"
+ },
+ {
+  "template_code": "NET-01",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "NET-01",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "NET-01",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "NET-02",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "NET-02",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "NET-03",
+  "requirement_key": "GDPR:Art. 24"
+ },
+ {
+  "template_code": "NET-04",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "NET-04",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "NET-04",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "NET-05",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "NET-05",
+  "requirement_key": "GDPR:Art. 32(1)(d)"
+ },
+ {
+  "template_code": "NET-06",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "NET-06",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "NET-07",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "NET-07",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "NET-07",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "PHY-01",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "PHY-01",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "PHY-01",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "PHY-02",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "PHY-02",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "PHY-02",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "PHY-03",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "PHY-03",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "PHY-03",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ },
+ {
+  "template_code": "PHY-04",
+  "requirement_key": "GDPR:Art. 32"
+ },
+ {
+  "template_code": "PHY-04",
+  "requirement_key": "GDPR:Art. 32(1)(b)"
+ },
+ {
+  "template_code": "PHY-04",
+  "requirement_key": "GDPR:Art. 5(1)(f)"
+ }
+]

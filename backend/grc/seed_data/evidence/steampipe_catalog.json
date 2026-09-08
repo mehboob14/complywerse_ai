@@ -1,0 +1,587 @@
+{
+ "aiven": {
+  "label": "Aiven",
+  "category": "cloud",
+  "steampipe_plugin": "aiven"
+ },
+ "alicloud": {
+  "label": "Alibaba Cloud",
+  "category": "cloud",
+  "steampipe_plugin": "alicloud"
+ },
+ "ansible": {
+  "label": "Ansible",
+  "category": "other",
+  "steampipe_plugin": "ansible"
+ },
+ "auth0": {
+  "label": "Auth0",
+  "category": "identity",
+  "steampipe_plugin": "auth0"
+ },
+ "aws": {
+  "label": "AWS",
+  "category": "cloud",
+  "steampipe_plugin": "aws"
+ },
+ "awscfn": {
+  "label": "AWS CloudFormation",
+  "category": "cloud",
+  "steampipe_plugin": "awscfn"
+ },
+ "azure": {
+  "label": "Azure",
+  "category": "cloud",
+  "steampipe_plugin": "azure"
+ },
+ "azuread": {
+  "label": "Microsoft Entra ID",
+  "category": "identity",
+  "steampipe_plugin": "azuread"
+ },
+ "azuredevops": {
+  "label": "Azure DevOps",
+  "category": "scm",
+  "steampipe_plugin": "azuredevops"
+ },
+ "bigfix": {
+  "label": "Bigfix",
+  "category": "security",
+  "steampipe_plugin": "bigfix"
+ },
+ "bitbucket": {
+  "label": "Bitbucket",
+  "category": "scm",
+  "steampipe_plugin": "bitbucket"
+ },
+ "buildkite": {
+  "label": "Buildkite",
+  "category": "scm",
+  "steampipe_plugin": "buildkite"
+ },
+ "circleci": {
+  "label": "CircleCI",
+  "category": "scm",
+  "steampipe_plugin": "circleci"
+ },
+ "cloudflare": {
+  "label": "Cloudflare",
+  "category": "cloud",
+  "steampipe_plugin": "cloudflare"
+ },
+ "consul": {
+  "label": "Consul",
+  "category": "cloud",
+  "steampipe_plugin": "consul"
+ },
+ "crowdstrike": {
+  "label": "Crowdstrike",
+  "category": "security",
+  "steampipe_plugin": "crowdstrike"
+ },
+ "databricks": {
+  "label": "Databricks",
+  "category": "data",
+  "steampipe_plugin": "databricks"
+ },
+ "datadog": {
+  "label": "Datadog",
+  "category": "observability",
+  "steampipe_plugin": "datadog"
+ },
+ "digitalocean": {
+  "label": "DigitalOcean",
+  "category": "cloud",
+  "steampipe_plugin": "digitalocean"
+ },
+ "docker": {
+  "label": "Docker",
+  "category": "cloud",
+  "steampipe_plugin": "docker"
+ },
+ "dockerhub": {
+  "label": "Docker Hub",
+  "category": "cloud",
+  "steampipe_plugin": "dockerhub"
+ },
+ "doppler": {
+  "label": "Doppler",
+  "category": "security",
+  "steampipe_plugin": "doppler"
+ },
+ "duo": {
+  "label": "Duo",
+  "category": "identity",
+  "steampipe_plugin": "duo"
+ },
+ "equinix": {
+  "label": "Equinix",
+  "category": "cloud",
+  "steampipe_plugin": "equinix"
+ },
+ "fastly": {
+  "label": "Fastly",
+  "category": "cloud",
+  "steampipe_plugin": "fastly"
+ },
+ "fly": {
+  "label": "Fly",
+  "category": "cloud",
+  "steampipe_plugin": "fly"
+ },
+ "gcp": {
+  "label": "GCP",
+  "category": "cloud",
+  "steampipe_plugin": "gcp"
+ },
+ "github": {
+  "label": "GitHub",
+  "category": "scm",
+  "steampipe_plugin": "github"
+ },
+ "googledirectory": {
+  "label": "Google Directory",
+  "category": "identity",
+  "steampipe_plugin": "googledirectory"
+ },
+ "googlesheets": {
+  "label": "Google Sheets",
+  "category": "data",
+  "steampipe_plugin": "googlesheets"
+ },
+ "googleworkspace": {
+  "label": "Google Workspace",
+  "category": "identity",
+  "steampipe_plugin": "googleworkspace"
+ },
+ "grafana": {
+  "label": "Grafana",
+  "category": "observability",
+  "steampipe_plugin": "grafana"
+ },
+ "guardrails": {
+  "label": "Guardrails",
+  "category": "cloud",
+  "steampipe_plugin": "guardrails"
+ },
+ "hcloud": {
+  "label": "Hetzner Cloud",
+  "category": "cloud",
+  "steampipe_plugin": "hcloud"
+ },
+ "heroku": {
+  "label": "Heroku",
+  "category": "cloud",
+  "steampipe_plugin": "heroku"
+ },
+ "hubspot": {
+  "label": "HubSpot",
+  "category": "productivity",
+  "steampipe_plugin": "hubspot"
+ },
+ "ibm": {
+  "label": "IBM Cloud",
+  "category": "cloud",
+  "steampipe_plugin": "ibm"
+ },
+ "imap": {
+  "label": "Imap",
+  "category": "comms",
+  "steampipe_plugin": "imap"
+ },
+ "jenkins": {
+  "label": "Jenkins",
+  "category": "scm",
+  "steampipe_plugin": "jenkins"
+ },
+ "jira": {
+  "label": "Jira",
+  "category": "productivity",
+  "steampipe_plugin": "jira"
+ },
+ "jumpcloud": {
+  "label": "JumpCloud",
+  "category": "identity",
+  "steampipe_plugin": "jumpcloud"
+ },
+ "kafka": {
+  "label": "Kafka",
+  "category": "data",
+  "steampipe_plugin": "kafka"
+ },
+ "kubernetes": {
+  "label": "Kubernetes",
+  "category": "cloud",
+  "steampipe_plugin": "kubernetes"
+ },
+ "launchdarkly": {
+  "label": "LaunchDarkly",
+  "category": "scm",
+  "steampipe_plugin": "launchdarkly"
+ },
+ "ldap": {
+  "label": "Ldap",
+  "category": "identity",
+  "steampipe_plugin": "ldap"
+ },
+ "linear": {
+  "label": "Linear",
+  "category": "productivity",
+  "steampipe_plugin": "linear"
+ },
+ "linode": {
+  "label": "Linode",
+  "category": "cloud",
+  "steampipe_plugin": "linode"
+ },
+ "microsoft365": {
+  "label": "Microsoft 365",
+  "category": "identity",
+  "steampipe_plugin": "microsoft365"
+ },
+ "mongodbatlas": {
+  "label": "MongoDB Atlas",
+  "category": "data",
+  "steampipe_plugin": "mongodbatlas"
+ },
+ "newrelic": {
+  "label": "New Relic",
+  "category": "observability",
+  "steampipe_plugin": "newrelic"
+ },
+ "nomad": {
+  "label": "Nomad",
+  "category": "cloud",
+  "steampipe_plugin": "nomad"
+ },
+ "oci": {
+  "label": "Oracle Cloud (OCI)",
+  "category": "cloud",
+  "steampipe_plugin": "oci"
+ },
+ "okta": {
+  "label": "Okta",
+  "category": "identity",
+  "steampipe_plugin": "okta"
+ },
+ "onelogin": {
+  "label": "OneLogin",
+  "category": "identity",
+  "steampipe_plugin": "onelogin"
+ },
+ "onepassword": {
+  "label": "1Password",
+  "category": "identity",
+  "steampipe_plugin": "onepassword"
+ },
+ "openai": {
+  "label": "OpenAI",
+  "category": "ai",
+  "steampipe_plugin": "openai"
+ },
+ "openshift": {
+  "label": "Openshift",
+  "category": "cloud",
+  "steampipe_plugin": "openshift"
+ },
+ "pagerduty": {
+  "label": "PagerDuty",
+  "category": "productivity",
+  "steampipe_plugin": "pagerduty"
+ },
+ "panos": {
+  "label": "Panos",
+  "category": "security",
+  "steampipe_plugin": "panos"
+ },
+ "papertrail": {
+  "label": "Papertrail",
+  "category": "observability",
+  "steampipe_plugin": "papertrail"
+ },
+ "pipes": {
+  "label": "Pipes",
+  "category": "cloud",
+  "steampipe_plugin": "pipes"
+ },
+ "planetscale": {
+  "label": "PlanetScale",
+  "category": "cloud",
+  "steampipe_plugin": "planetscale"
+ },
+ "prismacloud": {
+  "label": "Prisma Cloud",
+  "category": "security",
+  "steampipe_plugin": "prismacloud"
+ },
+ "prometheus": {
+  "label": "Prometheus",
+  "category": "observability",
+  "steampipe_plugin": "prometheus"
+ },
+ "salesforce": {
+  "label": "Salesforce",
+  "category": "productivity",
+  "steampipe_plugin": "salesforce"
+ },
+ "scaleway": {
+  "label": "Scaleway",
+  "category": "cloud",
+  "steampipe_plugin": "scaleway"
+ },
+ "sentry": {
+  "label": "Sentry",
+  "category": "observability",
+  "steampipe_plugin": "sentry"
+ },
+ "servicenow": {
+  "label": "ServiceNow",
+  "category": "productivity",
+  "steampipe_plugin": "servicenow"
+ },
+ "slack": {
+  "label": "Slack",
+  "category": "productivity",
+  "steampipe_plugin": "slack"
+ },
+ "snowflake": {
+  "label": "Snowflake",
+  "category": "data",
+  "steampipe_plugin": "snowflake"
+ },
+ "splunk": {
+  "label": "Splunk",
+  "category": "observability",
+  "steampipe_plugin": "splunk"
+ },
+ "stripe": {
+  "label": "Stripe",
+  "category": "payments",
+  "steampipe_plugin": "stripe"
+ },
+ "supabase": {
+  "label": "Supabase",
+  "category": "cloud",
+  "steampipe_plugin": "supabase"
+ },
+ "tailscale": {
+  "label": "Tailscale",
+  "category": "other",
+  "steampipe_plugin": "tailscale"
+ },
+ "terraform": {
+  "label": "Terraform",
+  "category": "cloud",
+  "steampipe_plugin": "terraform"
+ },
+ "tfe": {
+  "label": "Terraform Cloud",
+  "category": "cloud",
+  "steampipe_plugin": "tfe"
+ },
+ "trivy": {
+  "label": "Trivy",
+  "category": "security",
+  "steampipe_plugin": "trivy"
+ },
+ "turbot": {
+  "label": "Turbot",
+  "category": "cloud",
+  "steampipe_plugin": "turbot"
+ },
+ "twilio": {
+  "label": "Twilio",
+  "category": "comms",
+  "steampipe_plugin": "twilio"
+ },
+ "updown": {
+  "label": "Updown",
+  "category": "observability",
+  "steampipe_plugin": "updown"
+ },
+ "uptimerobot": {
+  "label": "UptimeRobot",
+  "category": "observability",
+  "steampipe_plugin": "uptimerobot"
+ },
+ "vercel": {
+  "label": "Vercel",
+  "category": "cloud",
+  "steampipe_plugin": "vercel"
+ },
+ "wiz": {
+  "label": "Wiz",
+  "category": "security",
+  "steampipe_plugin": "wiz"
+ },
+ "workos": {
+  "label": "Workos",
+  "category": "identity",
+  "steampipe_plugin": "workos"
+ },
+ "zendesk": {
+  "label": "Zendesk",
+  "category": "productivity",
+  "steampipe_plugin": "zendesk"
+ },
+ "zoom": {
+  "label": "Zoom",
+  "category": "comms",
+  "steampipe_plugin": "zoom"
+ },
+ "sentinelone": {
+  "label": "SentinelOne",
+  "category": "security",
+  "steampipe_plugin": "sentinelone"
+ },
+ "gitlab": {
+  "label": "GitLab",
+  "category": "scm",
+  "steampipe_plugin": "gitlab"
+ },
+ "snyk": {
+  "label": "Snyk",
+  "category": "security",
+  "steampipe_plugin": "snyk"
+ },
+ "tenable": {
+  "label": "Tenable",
+  "category": "security",
+  "steampipe_plugin": "tenable"
+ },
+ "sonarcloud": {
+  "label": "Sonarcloud",
+  "category": "security",
+  "steampipe_plugin": "sonarcloud"
+ },
+ "semgrep": {
+  "label": "Semgrep",
+  "category": "security",
+  "steampipe_plugin": "semgrep"
+ },
+ "opsgenie": {
+  "label": "Opsgenie",
+  "category": "productivity",
+  "steampipe_plugin": "opsgenie"
+ },
+ "kandji": {
+  "label": "Kandji",
+  "category": "mdm",
+  "steampipe_plugin": "kandji"
+ },
+ "jamf": {
+  "label": "Jamf",
+  "category": "mdm",
+  "steampipe_plugin": "jamf"
+ },
+ "bamboohr": {
+  "label": "Bamboohr",
+  "category": "hr",
+  "steampipe_plugin": "bamboohr"
+ },
+ "rippling": {
+  "label": "Rippling",
+  "category": "hr",
+  "steampipe_plugin": "rippling"
+ },
+ "airtable": {
+  "label": "Airtable",
+  "category": "productivity",
+  "steampipe_plugin": "airtable"
+ },
+ "calendly": {
+  "label": "Calendly",
+  "category": "productivity",
+  "steampipe_plugin": "calendly"
+ },
+ "confluence": {
+  "label": "Confluence",
+  "category": "productivity",
+  "steampipe_plugin": "confluence"
+ },
+ "dropbox": {
+  "label": "Dropbox",
+  "category": "cloud",
+  "steampipe_plugin": "dropbox"
+ },
+ "postmark": {
+  "label": "Postmark",
+  "category": "email",
+  "steampipe_plugin": "postmark"
+ },
+ "mailgun": {
+  "label": "Mailgun",
+  "category": "email",
+  "steampipe_plugin": "mailgun"
+ },
+ "resend": {
+  "label": "Resend",
+  "category": "email",
+  "steampipe_plugin": "resend"
+ },
+ "clerk": {
+  "label": "Clerk",
+  "category": "identity",
+  "steampipe_plugin": "clerk"
+ },
+ "notion": {
+  "label": "Notion",
+  "category": "productivity",
+  "steampipe_plugin": "notion"
+ },
+ "clickup": {
+  "label": "Clickup",
+  "category": "productivity",
+  "steampipe_plugin": "clickup"
+ },
+ "monday": {
+  "label": "Monday",
+  "category": "productivity",
+  "steampipe_plugin": "monday"
+ },
+ "intercom": {
+  "label": "Intercom",
+  "category": "comms",
+  "steampipe_plugin": "intercom"
+ },
+ "posthog": {
+  "label": "Posthog",
+  "category": "observability",
+  "steampipe_plugin": "posthog"
+ },
+ "signoz": {
+  "label": "Signoz",
+  "category": "observability",
+  "steampipe_plugin": "signoz"
+ },
+ "better_stack": {
+  "label": "Better Stack",
+  "category": "observability",
+  "steampipe_plugin": "better_stack"
+ },
+ "render": {
+  "label": "Render",
+  "category": "cloud",
+  "steampipe_plugin": "render"
+ },
+ "neon": {
+  "label": "Neon",
+  "category": "cloud",
+  "steampipe_plugin": "neon"
+ },
+ "qovery": {
+  "label": "Qovery",
+  "category": "cloud",
+  "steampipe_plugin": "qovery"
+ },
+ "netlify": {
+  "label": "Netlify",
+  "category": "cloud",
+  "steampipe_plugin": "netlify"
+ },
+ "anthropic": {
+  "label": "Anthropic",
+  "category": "ai",
+  "steampipe_plugin": "anthropic"
+ }
+}

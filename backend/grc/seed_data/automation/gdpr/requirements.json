@@ -1,0 +1,498 @@
+[
+ {
+  "code": "Art. 5(1)(a)",
+  "name": "Lawfulness, fairness and transparency",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 5(1)(a)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 5(1)(c)",
+  "name": "Data minimisation",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 5(1)(c)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 5(1)(e)",
+  "name": "Storage limitation",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 5(1)(e)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 5(1)(f)",
+  "name": "Integrity and confidentiality",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 5(1)(f)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 6",
+  "name": "Lawfulness of processing",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 6",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 7",
+  "name": "Conditions for consent",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 7",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 8",
+  "name": "Child's consent for information society services",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 8",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 9(2)",
+  "name": "Exceptions for processing special categories of data",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 9(2)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 9(2)(a)",
+  "name": "Explicit consent for special categories",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 9(2)(a)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 10",
+  "name": "Processing of criminal conviction data",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 10",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 11",
+  "name": "Processing not requiring identification",
+  "description": "",
+  "category": "Principles & lawfulness",
+  "requirement_key": "GDPR:Art. 11",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 12(3)",
+  "name": "Response timelines for data subject requests",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 12(3)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 13",
+  "name": "Information for data collected from subject",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 13",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 14",
+  "name": "Information for data not obtained from subject",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 14",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 15",
+  "name": "Right of access",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 15",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 16",
+  "name": "Right to rectification",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 16",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 17",
+  "name": "Right to erasure",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 17",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 18",
+  "name": "Right to restriction of processing",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 18",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 19",
+  "name": "Notification of rectification, erasure or restriction",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 19",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 20",
+  "name": "Right to data portability",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 20",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 21",
+  "name": "Right to object",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 21",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 22",
+  "name": "Automated individual decision-making",
+  "description": "",
+  "category": "Data subject rights",
+  "requirement_key": "GDPR:Art. 22",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 24",
+  "name": "Responsibility of the controller",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 24",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 25(1)",
+  "name": "Data protection by design",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 25(1)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 25(2)",
+  "name": "Data protection by default",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 25(2)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 26",
+  "name": "Joint controllers arrangement",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 26",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 27",
+  "name": "Designation of representative (non-EU entities)",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 27",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 28",
+  "name": "General processor obligations",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 28",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 28(1)",
+  "name": "Selection of processors with sufficient guarantees",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 28(1)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 28(3)",
+  "name": "Data processing contract requirements",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 28(3)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 29",
+  "name": "Processing under authority",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 29",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 30",
+  "name": "Records of processing activities (general)",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 30",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 30(1)",
+  "name": "Controller record of processing activities",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 30(1)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 30(1)(g)",
+  "name": "Description of security measures in records",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 30(1)(g)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 31",
+  "name": "Cooperation with supervisory authority",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 31",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32",
+  "name": "Security of processing (general)",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32(1)",
+  "name": "Technical and organisational security measures",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32(1)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32(1)(a)",
+  "name": "Pseudonymisation and encryption",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32(1)(a)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32(1)(b)",
+  "name": "Confidentiality, integrity, availability and resilience",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32(1)(b)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32(1)(c)",
+  "name": "Restoration of availability and access",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32(1)(c)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32(1)(d)",
+  "name": "Regular testing and evaluation of security",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32(1)(d)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32(2)",
+  "name": "Assessment of security risks",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32(2)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 32(4)",
+  "name": "Processing under instructions",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 32(4)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 33",
+  "name": "Notification of breach to supervisory authority",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 33",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 33(1)",
+  "name": "Breach notification timeline",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 33(1)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 33(3)",
+  "name": "Content of breach notification",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 33(3)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 33(5)",
+  "name": "Documentation of breaches",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 33(5)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 34",
+  "name": "Communication of breach to data subject",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 34",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 34(1)",
+  "name": "High-risk breach communication",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 34(1)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 35(1)",
+  "name": "Requirement for data protection impact assessment",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 35(1)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 35(7)",
+  "name": "Minimum content of impact assessment",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 35(7)",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 36",
+  "name": "Prior consultation",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 36",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 37",
+  "name": "Designation of data protection officer",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 37",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 38",
+  "name": "Position and support of the DPO",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 38",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 39",
+  "name": "Tasks of the data protection officer",
+  "description": "",
+  "category": "Controller & processor obligations",
+  "requirement_key": "GDPR:Art. 39",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 44",
+  "name": "General principle for transfers",
+  "description": "",
+  "category": "International transfers",
+  "requirement_key": "GDPR:Art. 44",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 45",
+  "name": "Transfers based on adequacy decision",
+  "description": "",
+  "category": "International transfers",
+  "requirement_key": "GDPR:Art. 45",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 46",
+  "name": "Transfers subject to appropriate safeguards",
+  "description": "",
+  "category": "International transfers",
+  "requirement_key": "GDPR:Art. 46",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 47",
+  "name": "Binding corporate rules",
+  "description": "",
+  "category": "International transfers",
+  "requirement_key": "GDPR:Art. 47",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 48",
+  "name": "Transfers not authorised by Union law",
+  "description": "",
+  "category": "International transfers",
+  "requirement_key": "GDPR:Art. 48",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 49",
+  "name": "Derogations for specific situations",
+  "description": "",
+  "category": "International transfers",
+  "requirement_key": "GDPR:Art. 49",
+  "is_always_in_scope": true
+ },
+ {
+  "code": "Art. 50",
+  "name": "International cooperation",
+  "description": "",
+  "category": "International transfers",
+  "requirement_key": "GDPR:Art. 50",
+  "is_always_in_scope": true
+ }
+]
