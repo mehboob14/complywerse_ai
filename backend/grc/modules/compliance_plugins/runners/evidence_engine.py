@@ -216,8 +216,18 @@ def _eval_check(check: dict, rows: List[dict], collect_failed: bool = False) -> 
     non-decreasing: it rose when a connector was added and never fell when a control
     broke, and a revoked read scope looked identical to a clean result.
 
-    Count checks (min_count/max_count) are the exception: zero is a meaningful input to
-    a count, so they keep their arithmetic.
+    Count checks were treated as a blanket exception on the grounds that zero is a
+    meaningful input to a count. That holds for min_count and not for max_count:
+
+      min_count  "at least one firewall exists", zero rows => the thing that should
+                 exist does not. A real fail, kept.
+      max_count  "no more than N admins", zero rows => nothing was found to assess,
+                 and `0 <= N` is vacuously true. That is the same false green the
+                 offender kinds were fixed for: an empty population reported as a
+                 satisfied control. It now reports not_run.
+
+    `collect_failed` already separates "could not look" from "looked and saw nothing",
+    so this only ever fires on a successful, genuinely empty collection.
     """
     codes = check.get("controls") or []
     cid = check.get("id", "check")
@@ -237,12 +247,18 @@ def _eval_check(check: dict, rows: List[dict], collect_failed: bool = False) -> 
         n = len(rows)
         ok = n >= int(check.get("min", 1))
         return [_finding(codes, cid, "directory", "pass" if ok else "fail",
-                         f"{title}: found {n} (min {check.get('min', 1)})")]
+                         f"{title}: found {n} (min {check.get('min', 1)})",
+                         population=n, tested=n)]
     if kind == "max_count":
         n = len(rows)
+        if n == 0:
+            return [_finding(codes, cid, "directory", "not_run",
+                             f"{title}: no records to assess — not assessed",
+                             population=0, tested=0)]
         ok = n <= int(check.get("max", 0))
         return [_finding(codes, cid, "directory", "pass" if ok else "fail",
-                         f"{title}: found {n} (max {check.get('max', 0)})")]
+                         f"{title}: found {n} (max {check.get('max', 0)})",
+                         population=n, tested=n)]
 
     offenders: List[dict] = []
     if kind in ("all_true", "all_false"):
@@ -265,21 +281,29 @@ def _eval_check(check: dict, rows: List[dict], collect_failed: bool = False) -> 
         for r in considered[:MAX_FINDINGS]:
             findings.append(_finding(codes, cid, _label(r, item_name), "info", "present"))
         findings.append(_finding(codes, cid, "directory", "pass",
-                                 f"{title}: {len(considered)} present"))
+                                 f"{title}: {len(considered)} present",
+                                 population=len(considered), tested=len(considered),
+                                 truncated=len(considered) > MAX_FINDINGS))
         return findings
     else:
         return [_finding(codes, cid, "directory", "error", f"{title}: unknown check kind '{kind}'")]
 
     if not considered:
         return [_finding(codes, cid, "directory", "not_run",
-                         f"{title}: no records to assess — not assessed")]
+                         f"{title}: no records to assess — not assessed",
+                         population=len(rows), tested=0)]
 
     for r in offenders[:MAX_FINDINGS]:
         findings.append(_finding(codes, cid, _label(r, item_name), "fail",
                                  check.get("fail_msg", f"{title}: violation")))
+    # population is every row collected; tested is what survived skip_if_field_true.
+    # They differ whenever a check scopes itself, and an assessor asking "of how
+    # many?" needs both numbers, not the one that flatters the result.
     findings.append(_finding(codes, cid, "directory",
                              "pass" if not offenders else "fail",
-                             f"{title}: {len(offenders)} of {len(considered)} failed"))
+                             f"{title}: {len(offenders)} of {len(considered)} failed",
+                             population=len(rows), tested=len(considered),
+                             truncated=len(offenders) > MAX_FINDINGS))
     return findings
 
 

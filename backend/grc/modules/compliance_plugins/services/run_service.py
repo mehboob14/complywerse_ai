@@ -289,6 +289,18 @@ def execute_plugin(
     framework_controls_touched = _cascade_to_controls(
         db, tenant_id=tenant_id, plugin=plugin, run=run,
     )
+
+    # Durable per-control record of what this run asserted. Without it the
+    # findings die in raw_output JSON and "was this control operating in March"
+    # has no answer. Best-effort: a recorder must never break a collection run.
+    try:
+        from .check_result_recorder import record_check_results
+        record_check_results(
+            db, tenant_id=tenant_id, run=run, plugin=plugin,
+            findings=(raw or {}).get("findings") or [],
+        )
+    except Exception:  # noqa: BLE001 — recording is additive, collection is not
+        logger.exception("check-result recording failed for run %s", run.id)
     # Legacy AssetSecurityComplianceSelection table tags the attributed asset
     # (peer in room-scan, host otherwise) so its compliance page sees the
     # selection alongside the run.

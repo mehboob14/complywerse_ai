@@ -19,7 +19,7 @@ import json
 import urllib.error
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 # provider -> API spec. base ({domain} filled from creds), verify path (proves
 # authenticated connectivity), auth scheme, SOC2 control codes, optional
@@ -112,8 +112,27 @@ def _load_connector_checks() -> Dict[str, dict]:
 CONNECTOR_CHECKS: Dict[str, dict] = _load_connector_checks()
 
 
-def _finding(codes: List[str], check: str, resource: str, status: str, detail: str = "") -> dict:
-    return {"control_codes": list(codes), "check": check, "resource": resource, "status": status, "detail": detail}
+def _finding(codes: List[str], check: str, resource: str, status: str, detail: str = "",
+             population: Optional[int] = None, tested: Optional[int] = None,
+             truncated: Optional[bool] = None) -> dict:
+    """One assertion by one check.
+
+    `population`/`tested`/`truncated` answer "how much did you actually look at",
+    which is the question an assessor asks of any sampled result and which no
+    finding could answer before. They are optional so the 12 call sites that
+    genuinely have no population — a connectivity probe, a single config object —
+    stay silent rather than claim a made-up 1. Omitted keys are dropped, so the
+    stored shape only grows for findings that can honestly fill them.
+    """
+    out = {"control_codes": list(codes), "check": check, "resource": resource,
+           "status": status, "detail": detail}
+    if population is not None:
+        out["population_size"] = population
+    if tested is not None:
+        out["tested_size"] = tested
+    if truncated is not None:
+        out["truncated"] = bool(truncated)
+    return out
 
 
 def _auth_header(auth: str, token: str) -> dict:
