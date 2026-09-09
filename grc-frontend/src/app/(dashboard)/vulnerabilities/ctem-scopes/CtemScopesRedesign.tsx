@@ -605,12 +605,12 @@ export default function CtemScopesRedesign() {
           </div>
           <div style={{ fontSize: 10.5, color: FAINT, margin: '0 4px 10px' }}>Findings → dangerous → mobilised → fixed ✓ across all scopes · only a re-scan closure moves the score.</div>
         </div>
-        {/* scrolling content */}
+        {/* scrolling content — Scopes first (the actionable cards you open), Trends below */}
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 40 }}>
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px 6px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: MUTED }}>across closed cycles · progress is provable period over period</span></div>
-          {trends()}
-          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 2px 6px' }}><b style={{ fontSize: 14 }}>Scopes</b><span style={{ fontSize: 11.5, color: MUTED }}>each runs its own cycles, in parallel · worst first</span></div>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px 6px' }}><b style={{ fontSize: 14 }}>Scopes</b><span style={{ fontSize: 11.5, color: MUTED }}>each runs its own cycles, in parallel · worst first</span></div>
           {worstFirst.map(scopeCard)}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '14px 2px 6px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: MUTED }}>across closed cycles · progress is provable period over period</span></div>
+          {trends()}
         </div>
       </div>
     );
