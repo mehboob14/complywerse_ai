@@ -201,7 +201,7 @@ export default function CtemScopesRedesign() {
   const aiRun = (aiRunData as any)?.last_run ?? null;
   const mappingRunning = !!aiRun?.running;
   useEffect(() => {
-    if (aiRun && !aiRun.running) { qc.invalidateQueries({ queryKey: ['ctem-portfolio'] }); setActiveStage(null); }
+    if (aiRun && !aiRun.running) { qc.invalidateQueries({ queryKey: ['ctem-portfolio'] }); qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] }); setActiveStage(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRun?.running]);
 
@@ -209,6 +209,7 @@ export default function CtemScopesRedesign() {
     qc.invalidateQueries({ queryKey: ['ctem-portfolio'] });
     qc.invalidateQueries({ queryKey: ['ctem-scopes'] });
     qc.invalidateQueries({ queryKey: ['ctem-command-center'] });
+    qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] });
   };
   const createMutation = useMutation({
     mutationFn: () => {
