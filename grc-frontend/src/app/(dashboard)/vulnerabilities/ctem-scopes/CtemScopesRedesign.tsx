@@ -1122,7 +1122,7 @@ export default function CtemScopesRedesign() {
   };
 
   const accordion = () => (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden' }}>
       {STAGES.map((st, i) => {
         const done = stageDone[st.n];
         const reachable = stageReachable(st.n);
@@ -1141,7 +1141,7 @@ export default function CtemScopesRedesign() {
           : isCurrent ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.06em', color: '#fff', background: INK, borderRadius: 5, padding: '2px 7px' }}>CURRENT</span>
           : <span style={{ color: FAINT, fontSize: 14 }}>›</span>;
         return (
-          <div key={st.n} style={{ display: 'flex', gap: 14, ...(open ? { flex: 1, minHeight: 0 } : {}) }}>
+          <div key={st.n} style={{ display: 'flex', gap: 14, ...(open ? { flex: 1, minHeight: 340 } : {}) }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none', width: 26, paddingTop: 14 }}>{disc}{!last && <span style={{ flex: 1, width: 2, background: done ? st.c : '#E4E8EC', marginTop: 4, borderRadius: 2 }} />}</div>
             <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14, ...(open ? { display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
               <div style={{ ...CARD, overflow: 'hidden', ...(open ? { border: `1px solid ${st.c}`, boxShadow: '0 4px 14px rgba(2,6,23,.06)', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } : {}), ...(locked ? { opacity: 0.65 } : {}) }}>
