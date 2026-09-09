@@ -232,7 +232,7 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
 
           <div style={{ display: 'grid', gridTemplateColumns: '224px minmax(0,1fr)', gap: 14, alignItems: 'stretch', flex: 1, minHeight: 0, overflow: 'hidden' }}>
             {/* triage rail */}
-            <aside style={{ display: 'flex', flexDirection: 'column', gap: 3, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 16, boxShadow: '0 1px 2px rgba(16,24,40,.04)', padding: '9px 9px' }}>
+            <aside style={{ display: 'flex', flexDirection: 'column', gap: 3, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 16, boxShadow: '0 1px 2px rgba(16,24,40,.04)', padding: '9px 9px', minHeight: 0, overflowY: 'auto' }}>
               <div style={cap}>Triage views</div>
               {RAIL.map((r) => (
                 <button key={r.key} onClick={() => { setView(r.key); setPane('reg'); }} style={railBtn(view === r.key)}>
