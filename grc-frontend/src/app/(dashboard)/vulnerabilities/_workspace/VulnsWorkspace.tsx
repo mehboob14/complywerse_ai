@@ -168,7 +168,7 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
   const top10 = [...all].sort((a, b) => ctxScore(b) - ctxScore(a)).slice(0, 10);
 
   return (
-    <div className="inv2" style={{ background: '#F4F6F7', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '10px 10px 0', fontSize: 13.5, color: INK }}>
+    <div className="inv2" style={{ background: '#F4F6F7', height: '100%', minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: '10px 10px 0', fontSize: 13.5, color: INK }}>
       {/* header — hidden on the CTEM pane (mock: CTEM carries its own header) */}
       {pane !== 'ctem' && (
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap', flexShrink: 0 }}>
@@ -230,7 +230,7 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
             </div>
           </section>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '224px minmax(0,1fr)', gap: 14, alignItems: 'stretch', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '224px minmax(0,1fr)', gap: 14, alignItems: 'stretch', position: 'sticky', top: 0, height: '100%', flexShrink: 0, overflow: 'hidden' }}>
             {/* triage rail */}
             <aside style={{ display: 'flex', flexDirection: 'column', gap: 3, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 16, boxShadow: '0 1px 2px rgba(16,24,40,.04)', padding: '9px 9px', minHeight: 0, overflowY: 'auto' }}>
               <div style={cap}>Triage views</div>
