@@ -148,7 +148,7 @@ interface ConsolidatedArtifact {
 interface Coverage {
   /** covered = at least one connected source proves this; connect_one = it is
    *  automatable but the tenant runs none of the systems that would prove it. */
-  state: 'covered' | 'connect_one' | 'manual';
+  state: 'covered' | 'connect_one' | 'unbound' | 'manual';
   satisfied_by: string[];
   provider_count: number;
   options: {
@@ -376,7 +376,34 @@ function ImplementationPanel({ impl }: { impl: NonNullable<ControlDetail['implem
  */
 function CoveragePanel({ cov }: { cov: Coverage }) {
   const [showAll, setShowAll] = useState(false);
-  if (cov.state === 'manual' || !cov.options.length) return null;
+  if (cov.state === 'manual') return null;
+  // `unbound` has no categories to list: SCF says a machine could assess this
+  // control and no check reaches it, so the honest panel names the gap rather
+  // than showing an empty list or, worse, nothing at all.
+  if (cov.state === 'unbound') {
+    return (
+      <Panel
+        title="Evidence sources"
+        action={
+          <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-bold uppercase text-cyan-700">
+            no check yet
+          </span>
+        }
+      >
+        <p className="text-[13px] leading-relaxed text-slate-600">
+          SCF marks at least one of this control&rsquo;s assessment objectives as
+          <span className="font-semibold text-slate-800"> Technology</span>, so a machine could assess it.
+          No check reaches it today, because checks bind through SOC&nbsp;2 criteria and this control maps
+          to none. That is a gap in what we have built, not a property of the control.
+        </p>
+        <p className="mt-2 text-[12px] text-slate-500">
+          It is not Manual. Manual is for controls no collector could ever prove, such as board oversight
+          or staff training.
+        </p>
+      </Panel>
+    );
+  }
+  if (!cov.options.length) return null;
   const shown = showAll ? cov.options : cov.options.slice(0, 4);
   return (
     <Panel

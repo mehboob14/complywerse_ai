@@ -422,7 +422,24 @@ def _status_from_run(run, check_ids: set, control_codes: List[str],
     return "not_run"
 
 
-def _coverage_for(bound: List[Dict[str, Any]], connected: set) -> Dict[str, Any]:
+def _automatable_controls(db: Session, release_id: int) -> set:
+    """Controls SCF itself says a machine could assess.
+
+    Every assessment objective carries a PPTDF tag, and `Technology` is SCF's own
+    judgement that the objective is about a system's configuration rather than a
+    person's behaviour or a documented process. A control with at least one such
+    objective is automatable in principle, whatever we have built.
+    """
+    return {
+        s for (s,) in db.query(SCFObjective.scf_id)
+        .filter(SCFObjective.release_id == release_id,
+                SCFObjective.pptdf == "Technology")
+        .distinct().all()
+    }
+
+
+def _coverage_for(bound: List[Dict[str, Any]], connected: set,
+                  automatable: bool = False) -> Dict[str, Any]:
     """What could evidence this control, and what to do if nothing does yet.
 
     Connectors are grouped by category because that is the shape of the ask a
@@ -447,10 +464,24 @@ def _coverage_for(bound: List[Dict[str, Any]], connected: set) -> Dict[str, Any]
     ]
     options.sort(key=lambda o: (not o["connected"], -len(o["providers"]), o["category"]))
     satisfying = sorted({p["provider"] for o in options for p in o["providers"] if p["connected"]})
+    if satisfying:
+        state = "covered"
+    elif options:
+        # actionable: this control CAN be proven, the tenant simply runs none of
+        # the systems that would prove it
+        state = "connect_one"
+    elif automatable:
+        # SCF says a machine could assess this, and no check reaches it. Calling
+        # that `manual` is false — 570 of 1,534 controls sit here, including
+        # IAC-06 Multi-Factor Authentication, which maps to 18 frameworks and no
+        # SOC 2 criterion, so none of our four MFA collectors can touch it. It is
+        # a check-authoring gap, and naming it one makes it a worklist instead of
+        # a shrug.
+        state = "unbound"
+    else:
+        state = "manual"
     return {
-        # `connect_one` is the actionable state: this control CAN be automated,
-        # the tenant simply has none of the systems that would prove it.
-        "state": "covered" if satisfying else ("connect_one" if options else "manual"),
+        "state": state,
         "satisfied_by": satisfying,
         "options": options,
         "provider_count": sum(len(o["providers"]) for o in options),
@@ -458,7 +489,8 @@ def _coverage_for(bound: List[Dict[str, Any]], connected: set) -> Dict[str, Any]
 
 
 def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str],
-                       cadence: Optional[str] = None, connected: Optional[set] = None):
+                       cadence: Optional[str] = None, connected: Optional[set] = None,
+                       automatable: bool = False):
     """(checks payload, statuses, coverage) for a control, scoped to its own codes.
 
     `statuses` covers ONLY the providers this tenant has connected — see
@@ -468,7 +500,8 @@ def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str],
     """
     bound = _checks_for_control(db, control_codes)
     if not bound:
-        return [], [], {"state": "manual", "satisfied_by": [], "options": [], "provider_count": 0}
+        return [], [], {"state": "unbound" if automatable else "manual",
+                        "satisfied_by": [], "options": [], "provider_count": 0}
     if connected is None:
         connected = _connected_providers(db, tenant_id)
     latest = _latest_runs_by_plugin(db, tenant_id, [b["plugin"].id for b in bound])
@@ -490,7 +523,7 @@ def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str],
             "in_scope": in_scope,
             "last_run": _run_out(run) if run else None,
         })
-    return linked, statuses, _coverage_for(bound, connected)
+    return linked, statuses, _coverage_for(bound, connected, automatable)
 
 
 @router.post("/seed", status_code=201)
@@ -958,12 +991,14 @@ def list_common_controls(
     out: List[Dict[str, Any]] = []
     categories: set = set()
     connected = _connected_providers(db, tenant_id)
+    automatable = _automatable_controls(db, release.id)
     for scf_id, name, domain, dom_id, pptdf, weight, material, ao_count, _sk, cad in rows:
         if domain:
             categories.add(domain)
         req = {k: v for k, v in (reqs.get(scf_id) or {}).items() if v}
         soc2_codes = [r["code"] for r in req.get("soc2", [])]
-        linked, statuses, coverage = _linked_checks_for(db, tenant_id, soc2_codes, cad, connected)
+        linked, statuses, coverage = _linked_checks_for(db, tenant_id, soc2_codes, cad, connected,
+                                                        scf_id in automatable)
         out.append({
             "control_id": scf_id,
             "canonical_key": scf_id,
@@ -985,7 +1020,7 @@ def list_common_controls(
             # against 52 systems they do not run. With none connected there is
             # nothing to aggregate, and `coverage` says what to connect instead.
             "overall_status": (_aggregate_status(statuses) if statuses
-                               else ("connect_one" if linked else "manual")),
+                               else ("connect_one" if linked else coverage["state"])),
             "coverage": coverage,
             "checks": linked,
         })
@@ -1226,6 +1261,7 @@ def common_controls_overview(
                for pid, (p, cids) in bound.items()
                if _plugin_in_scope(p, (p.check_definition or {}).get("provider"), connected_now)]
         status_of[scf_id] = _aggregate_status(sts) if sts else "connect_one"
+    automatable_now = _automatable_controls(db, release.id)
 
     now = datetime.utcnow()
 
@@ -1360,7 +1396,11 @@ def common_controls_overview(
             d["tracked"] += 1
             if a["implementation_status"] in ("implemented", "verified"):
                 d["implemented"] += 1
-        posture[status_of.get(scf_id, "manual")] += 1
+        # A control no check reaches is only `manual` if SCF says no machine could
+        # assess it. Otherwise it is `unbound`: a check-authoring gap, not a
+        # property of the control.
+        posture[status_of.get(scf_id) or
+                ("unbound" if scf_id in automatable_now else "manual")] += 1
     by_domain = sorted(
         ({**d, "frameworks": len(d["frameworks"])} for d in doms.values()),
         key=lambda x: -x["controls"])
@@ -1979,7 +2019,9 @@ def get_common_control(
     )]
 
     soc2_codes = [i["code"] for g in req_groups if g["framework"] == "soc2" for i in g["items"]]
-    linked, statuses, coverage = _linked_checks_for(db, tenant_id, soc2_codes, ctl.conformity_cadence)
+    linked, statuses, coverage = _linked_checks_for(
+        db, tenant_id, soc2_codes, ctl.conformity_cadence, None,
+        ctl.scf_id in _automatable_controls(db, release.id))
 
     return {
         "control_id": ctl.scf_id,
@@ -1996,7 +2038,7 @@ def get_common_control(
         "sub_type": "Automated" if linked else "Manual",
         "checks_count": len(linked),
         "overall_status": (_aggregate_status(statuses) if statuses
-                           else ("connect_one" if linked else "manual")),
+                           else ("connect_one" if linked else coverage["state"])),
         "coverage": coverage,
         "checks": linked,
         "objectives": objectives,

@@ -133,7 +133,8 @@ function NotTracked({ system, cta }: { system: string; cta?: { href: string; lab
 const POSTURE_CLS: Record<string, string> = {
   passed: 'bg-emerald-500', failed: 'bg-rose-500', partial: 'bg-amber-500',
   error: 'bg-amber-400', expired: 'bg-orange-500', collection_failed: 'bg-purple-500',
-  connect_one: 'bg-indigo-500', not_run: 'bg-slate-300', manual: 'bg-slate-200',
+  connect_one: 'bg-indigo-500', unbound: 'bg-cyan-500',
+  not_run: 'bg-slate-300', manual: 'bg-slate-200',
 };
 const COLLECTION_CLS: Record<string, string> = {
   healthy: 'bg-emerald-50 text-emerald-700 border-emerald-200',

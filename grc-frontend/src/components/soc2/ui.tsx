@@ -99,6 +99,10 @@ export const CONTROL_STATUS: Record<string, { label: string; cls: string; dot: s
   // Automatable, but the tenant runs none of the systems that would prove it.
   // Distinct from "not run": there is nothing to run until something is connected.
   connect_one: { label: 'Connect a source', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
+  // SCF says a machine could assess this and no check reaches it yet. That is a
+  // gap in what we have built, not a property of the control, so it must not be
+  // filed under Manual alongside board oversight and staff training.
+  unbound: { label: 'No check yet', cls: 'bg-cyan-50 text-cyan-700 border-cyan-200', dot: 'bg-cyan-500' },
   manual: { label: 'Manual', cls: 'bg-slate-100 text-slate-500 border-slate-200', dot: 'bg-slate-400' },
 };
 
