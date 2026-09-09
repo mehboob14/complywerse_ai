@@ -33,6 +33,12 @@ import re
 from typing import Any, Dict, List, Optional
 
 from .live_api_catalog import _finding, _request  # reuse the exact request + finding helpers
+from .assertions import (
+    SpecError,
+    aggregate as _aggregate,
+    join_rows as _join_rows,
+    select as _select,
+)
 
 MAX_ITEMS = 300          # hard cap on rows collected per resource
 MAX_FINDINGS = 25        # per-check cap on per-item findings (summary is always emitted)
@@ -207,7 +213,84 @@ def _label(row: dict, item_name: Optional[str]) -> str:
     return "resource"
 
 
-def _eval_check(check: dict, rows: List[dict], collect_failed: bool = False) -> List[dict]:
+def _eval_spec_check(check: dict, rows: List[dict], collected: Dict[str, List[dict]],
+                     collect_failed: bool) -> List[dict]:
+    """Evaluate a check written in the scope/join/assert form.
+
+    A check opts in by declaring `assert`. Everything without it keeps running
+    through the original `kind` path untouched, so 251 shipped checks need no
+    edit and there is no flag day.
+
+        {"id": "...", "resource": "devices", "controls": ["CC6.7"],
+         "scope":  {"and": [["type","eq","laptop"], ["ownership","eq","corporate"]]},
+         "join":   {"resource": "agents", "on": ["serial","device_serial"],
+                    "unmatched": "fail"},
+         "assert": {"all": ["encrypted","truthy"]},
+         "empty":  "not_applicable"}
+    """
+    codes = check.get("controls") or []
+    cid = check.get("id", "check")
+    title = check.get("title", cid)
+    item_name = check.get("item_name")
+
+    if collect_failed:
+        return [_finding(codes, cid, "directory", "error",
+                         f"{title}: resource could not be collected — not assessed")]
+
+    try:
+        scoped = _select(rows, check.get("scope"))
+    except SpecError as e:
+        return [_finding(codes, cid, "directory", "error", f"{title}: bad scope — {e}")]
+    findings: List[dict] = []
+    unmatched: List[dict] = []
+
+    join = check.get("join")
+    if join:
+        other = collected.get(join.get("resource"))
+        if other is None:
+            return [_finding(codes, cid, "directory", "error",
+                             f"{title}: join resource '{join.get('resource')}' was not collected")]
+        on = join.get("on") or []
+        if len(on) != 2:
+            return [_finding(codes, cid, "directory", "error",
+                             f"{title}: join needs on:[left_key, right_key]")]
+        scoped, unmatched = _join_rows(scoped, other, (on[0], on[1]))
+        # A row on the left with no counterpart is the finding in every
+        # correlation control: the terminated employee still holding an account,
+        # the inventoried device with no agent. Whether that is a failure is the
+        # author's call, because a fuzzy key that half-matches would otherwise
+        # manufacture findings across the whole population.
+        if unmatched and join.get("unmatched") == "fail":
+            for r in unmatched[:MAX_FINDINGS]:
+                findings.append(_finding(codes, cid, _label(r, item_name), "fail",
+                                         join.get("unmatched_msg",
+                                                  f"{title}: no matching record in "
+                                                  f"'{join.get('resource')}'")))
+
+    try:
+        v = _aggregate(scoped, check.get("assert") or {},
+                       population=len(rows),
+                       empty=check.get("empty", "not_applicable"))
+    except SpecError as e:
+        return [_finding(codes, cid, "directory", "error", f"{title}: bad assertion — {e}")]
+
+    for r in v.offenders[:MAX_FINDINGS]:
+        findings.append(_finding(codes, cid, _label(r, item_name), "fail",
+                                 check.get("fail_msg", f"{title}: violation")))
+
+    status = v.status
+    if status == "pass" and unmatched and join and join.get("unmatched") == "fail":
+        status = "fail"                     # unmatched rows are their own failure
+    findings.append(_finding(
+        codes, cid, "directory", status,
+        f"{title}: {v.detail}" + (f"; {len(unmatched)} unmatched" if unmatched else ""),
+        population=v.population, tested=v.tested,
+        truncated=len(v.offenders) > MAX_FINDINGS))
+    return findings
+
+
+def _eval_check(check: dict, rows: List[dict], collect_failed: bool = False,
+                collected: Optional[Dict[str, List[dict]]] = None) -> List[dict]:
     """Evaluate one declarative check.
 
     An offender-list check (all_true/all_false/none_match/all_match/present) draws its
@@ -229,6 +312,11 @@ def _eval_check(check: dict, rows: List[dict], collect_failed: bool = False) -> 
     `collect_failed` already separates "could not look" from "looked and saw nothing",
     so this only ever fires on a successful, genuinely empty collection.
     """
+    # A check declaring `assert` is in the scope/join/aggregate form; everything
+    # else takes the original path unchanged.
+    if check.get("assert"):
+        return _eval_spec_check(check, rows, collected or {}, collect_failed)
+
     codes = check.get("controls") or []
     cid = check.get("id", "check")
     title = check.get("title", cid)
@@ -339,7 +427,8 @@ def run_connector_checks(provider: str, spec: dict, creds: dict, base: str, cdef
         if not rows and check.get("resource") not in collected:
             continue  # resource never declared
         try:
-            findings.extend(_eval_check(check, rows, check.get("resource") in failed))
+            findings.extend(_eval_check(check, rows, check.get("resource") in failed,
+                                        collected))
         except Exception:  # noqa: BLE001
             findings.append(_finding(check.get("controls") or [], check.get("id", "check"), "directory",
                                      "error", "check evaluation failed"))

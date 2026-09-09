@@ -132,6 +132,11 @@ _COLUMN_TYPE_FIXUPS = [
     ("grc_compliance_plugins", "os_keys", "JSONB"),
     # /os-registry uses jsonb operators on target_builds too.
     ("grc_compliance_plugins", "target_builds", "JSONB"),
+    # A check result can now be `not_applicable` — an empty population, an
+    # out-of-scope resource, a policy grace period. That is 14 characters and the
+    # column shipped as VARCHAR(10), which would have truncated it to
+    # `not_applic` silently rather than failing.
+    ("grc_scf_check_result", "status", "VARCHAR(20)"),
 ]
 
 

@@ -349,7 +349,9 @@ class SCFCheckResult(Base):
     scf_id = Column(String(16), nullable=False, index=True)
     ao_id = Column(String(24), nullable=True, index=True)   # NULL = whole-control claim
     method = Column(String(12), default="TEST")             # TEST|EXAMINE|INTERVIEW (800-53A)
-    status = Column(String(10), nullable=False)             # pass | fail | error
+    # not_applicable is 14 chars; the column shipped as VARCHAR(10) and a
+    # widening runs in compliance/schema_migrations._COLUMN_TYPE_FIXUPS.
+    status = Column(String(20), nullable=False)   # pass|fail|error|not_run|not_applicable
     severity = Column(String(10), nullable=True)
     resource = Column(String(255), nullable=True)
 
