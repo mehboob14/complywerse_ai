@@ -345,7 +345,11 @@ export default function CtemScopesRedesign() {
   // ── Portfolio roll-up (home KPI strip + trends) ────────────────────────────
   const portfolio = useMemo(() => {
     const sum = (f: (s: Scope) => number) => SCOPES.reduce((a, s) => a + f(s), 0);
-    const controls = sum((s) => s.controls), tested = sum((s) => s.tested) + sum((s) => s.verified ?? 0);
+    // Coverage = share of REAL vulns that have an addressing control LINKED (claimed) — the
+    // same linked/analysed the Validate stage shows. NOT tested/controls: that was proven-
+    // effectiveness (0 until a re-scan), which mislabelled this "% of real vulns with a control".
+    const linkedReal = sum((s) => s.pipeline?.linked ?? 0);
+    const realVulns = sum((s) => s.pipeline?.analysed ?? s.analysable?.real_vulnerabilities ?? 0);
     const worst = [...SCOPES].sort((a, b) => (b.dangerous - a.dangerous) || (b.findings - a.findings))[0];
     // real findings-per-cycle series from the worst scope's frozen history (+ live point)
     const hist = [...(worst?.cycleHistory ?? [])].filter((h) => h.findings != null).sort((a, b) => a.no - b.no).map((h) => h.findings as number);
@@ -356,7 +360,7 @@ export default function CtemScopesRedesign() {
       overdue: SCOPES.filter((s) => s.cycleOpen && s.cycleOverdue).length,
       findings: sum((s) => s.findings), dangerous: sum((s) => s.dangerous),
       mobilised: sum((s) => s.tasks ?? 0), fixed: sum((s) => s.closedVerified ?? 0),
-      coverage: controls ? Math.round((tested / controls) * 100) : 0,
+      coverage: realVulns ? Math.round((linkedReal / realVulns) * 100) : 0,
       worst, series,
     };
   }, [SCOPES]);
