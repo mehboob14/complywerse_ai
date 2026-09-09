@@ -486,7 +486,7 @@ export default function CtemScopesRedesign() {
     );
     return (
       <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(236px,100%),1fr))', gap: 10, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, alignItems: 'stretch' }}>
         {chartCard('Findings on scope', w ? `${w.name.length > 22 ? w.name.slice(0, 22) + '…' : w.name} · per cycle` : 'per cycle',
           n >= 2 ? (
             <svg viewBox="0 0 320 118" style={{ width: '100%', height: 108, display: 'block' }}>
@@ -584,31 +584,34 @@ export default function CtemScopesRedesign() {
       (Number(!!(b.cycleOpen && b.cycleOverdue)) - Number(!!(a.cycleOpen && a.cycleOverdue)))
       || (b.dangerous - a.dangerous) || (b.findings - a.findings));
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', maxWidth: 1060, width: '100%', margin: '0 auto', padding: '4px 18px 40px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ fontSize: 22, letterSpacing: '-.025em', fontWeight: 600 }}>Exposure program</h1>
-            <p style={{ fontSize: 12.5, color: MUTED, marginTop: 4 }}>Owned slices of the attack surface, each worked as open→close cycles.</p>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', maxWidth: 1060, width: '100%', margin: '0 auto', padding: '4px 18px 0' }}>
+        {/* pinned header — title + KPI strip stay put; only Trends/Scopes below scroll */}
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+            <div>
+              <h1 style={{ fontSize: 22, letterSpacing: '-.025em', fontWeight: 600 }}>Exposure program</h1>
+              <p style={{ fontSize: 12.5, color: MUTED, marginTop: 4 }}>Owned slices of the attack surface, each worked as open→close cycles.</p>
+            </div>
+            {canEdit && <Btn green onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> New scope</Btn>}
           </div>
-          {canEdit && <Btn green onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> New scope</Btn>}
+          <div style={{ ...STRIP, marginBottom: 6, alignItems: 'stretch', background: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,.04)' }}>
+            {kpiCell('Scopes', portfolio.scopes)}{SEP}
+            {kpiCell('Open cycles', portfolio.openCycles, ACS)}{SEP}
+            {kpiCell('Overdue', portfolio.overdue, portfolio.overdue ? RED : GREEN)}{SEP}
+            {kpiCell('Findings', portfolio.findings)}{ARROW}
+            {kpiCell('Dangerous', portfolio.dangerous, REDD)}{ARROW}
+            {kpiCell('Mobilised', portfolio.mobilised, BLUE)}{ARROW}
+            {kpiCell('Fixed ✓', portfolio.fixed, GREEN)}
+          </div>
+          <div style={{ fontSize: 10.5, color: FAINT, margin: '0 4px 10px' }}>Findings → dangerous → mobilised → fixed ✓ across all scopes · only a re-scan closure moves the score.</div>
         </div>
-
-        <div style={{ ...STRIP, marginBottom: 6, alignItems: 'stretch', background: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,.04)' }}>
-          {kpiCell('Scopes', portfolio.scopes)}{SEP}
-          {kpiCell('Open cycles', portfolio.openCycles, ACS)}{SEP}
-          {kpiCell('Overdue', portfolio.overdue, portfolio.overdue ? RED : GREEN)}{SEP}
-          {kpiCell('Findings', portfolio.findings)}{ARROW}
-          {kpiCell('Dangerous', portfolio.dangerous, REDD)}{ARROW}
-          {kpiCell('Mobilised', portfolio.mobilised, BLUE)}{ARROW}
-          {kpiCell('Fixed ✓', portfolio.fixed, GREEN)}
+        {/* scrolling content */}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px 6px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: MUTED }}>across closed cycles · progress is provable period over period</span></div>
+          {trends()}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 2px 6px' }}><b style={{ fontSize: 14 }}>Scopes</b><span style={{ fontSize: 11.5, color: MUTED }}>each runs its own cycles, in parallel · worst first</span></div>
+          {worstFirst.map(scopeCard)}
         </div>
-        <div style={{ fontSize: 10.5, color: FAINT, margin: '0 4px 10px' }}>Findings → dangerous → mobilised → fixed ✓ across all scopes · only a re-scan closure moves the score.</div>
-
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px 6px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: MUTED }}>across closed cycles · progress is provable period over period</span></div>
-        {trends()}
-
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 2px 6px' }}><b style={{ fontSize: 14 }}>Scopes</b><span style={{ fontSize: 11.5, color: MUTED }}>each runs its own cycles, in parallel · worst first</span></div>
-        {worstFirst.map(scopeCard)}
       </div>
     );
   };
