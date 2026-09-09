@@ -145,8 +145,21 @@ interface ConsolidatedArtifact {
   mandatory?: boolean | null;
   match_mode?: 'exact' | 'parent' | 'child';
 }
+interface Coverage {
+  /** covered = at least one connected source proves this; connect_one = it is
+   *  automatable but the tenant runs none of the systems that would prove it. */
+  state: 'covered' | 'connect_one' | 'manual';
+  satisfied_by: string[];
+  provider_count: number;
+  options: {
+    category: string;
+    connected: boolean;
+    providers: { provider: string; label: string; checks: number; connected: boolean }[];
+  }[];
+}
 interface ControlDetail {
   control_id: string;
+  coverage?: Coverage;
   assurance_mode?: 'automated' | 'manual' | 'hybrid';
   implementation?: {
     target_maturity: string | null;
@@ -349,6 +362,83 @@ function ImplementationPanel({ impl }: { impl: NonNullable<ControlDetail['implem
       <p className="mt-3 text-[10px] text-slate-400">
         Guidance reproduced verbatim from the Secure Controls Framework 2026.2.
       </p>
+    </Panel>
+  );
+}
+
+/** The sources that can prove this control, and what to connect if none is.
+ *
+ *  Connectors bound to a control are ALTERNATIVES: 53 of them claim CC6.1
+ *  because 53 systems can prove logical access, and nobody runs 53. So the ask
+ *  is "connect any one", grouped by category because that is the shape of a
+ *  decision a customer can act on. Connect a second and it joins the
+ *  conjunction — both then have to pass, because both are in scope.
+ */
+function CoveragePanel({ cov }: { cov: Coverage }) {
+  const [showAll, setShowAll] = useState(false);
+  if (cov.state === 'manual' || !cov.options.length) return null;
+  const shown = showAll ? cov.options : cov.options.slice(0, 4);
+  return (
+    <Panel
+      title="Evidence sources"
+      action={
+        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
+          cov.state === 'covered'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : 'border-indigo-200 bg-indigo-50 text-indigo-700'}`}>
+          {cov.state === 'covered' ? `${cov.satisfied_by.length} connected` : 'connect any one'}
+        </span>
+      }
+    >
+      <p className="text-[13px] leading-relaxed text-slate-600">
+        {cov.state === 'covered' ? (
+          <>
+            Evidenced by <span className="font-semibold text-slate-800">{cov.satisfied_by.join(', ')}</span>.
+            {' '}{cov.provider_count} sources in total can prove this control — connecting another adds
+            coverage, and its result then counts too.
+          </>
+        ) : (
+          <>
+            No source connected yet. Any <em>one</em> of these {cov.provider_count} proves this control —
+            you do not need them all. Pick whichever you already run.
+          </>
+        )}
+      </p>
+      <ul className="mt-3 space-y-2">
+        {shown.map((o) => (
+          <li key={o.category} className="rounded-lg border border-slate-200 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{o.category}</span>
+              {o.connected && (
+                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">connected</span>
+              )}
+              <span className="ml-auto text-[10px] text-slate-400">{o.providers.length} sources</span>
+            </div>
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {o.providers.slice(0, 8).map((pr) => (
+                <span key={pr.provider}
+                  title={`${pr.checks} check${pr.checks === 1 ? '' : 's'} for this control`}
+                  className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
+                    pr.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
+                  {pr.label}
+                </span>
+              ))}
+              {o.providers.length > 8 && (
+                <span className="text-[11px] text-slate-400">+{o.providers.length - 8}</span>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+      {cov.options.length > 4 && (
+        <button onClick={() => setShowAll((v) => !v)} className="mt-2 text-xs font-semibold text-primary-700 hover:underline">
+          {showAll ? 'Show fewer categories' : `Show ${cov.options.length - 4} more categories`}
+        </button>
+      )}
+      <Link href="/admin/evidence-collectors"
+        className="mt-3 inline-block rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+        Connect a source →
+      </Link>
     </Panel>
   );
 }
@@ -617,6 +707,7 @@ export default function ControlDetailPage() {
               {detailQ.data?.implementation && (
                 <ImplementationPanel impl={detailQ.data.implementation} />
               )}
+              {detailQ.data?.coverage && <CoveragePanel cov={detailQ.data.coverage} />}
               {detailQ.data?.evidence && (
                 <EvidencePanel ev={detailQ.data.evidence} mode={detailQ.data.assurance_mode} />
               )}

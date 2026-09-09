@@ -4,9 +4,11 @@ import {
   ChevronDown,
   Circle,
   ClipboardList,
+  Hand,
   History,
   Loader2,
   Lock,
+  MousePointer2,
   Play,
   Plus,
   Save,
@@ -20,6 +22,11 @@ import {
 } from 'lucide-react';
 import { WorkflowDefinition } from './types';
 import { usePermissions } from '@/hooks/usePermissions';
+
+/** Which pointer tool the canvas is in.
+ *  'draw' — the builder: drag nodes, pull edges between handles, marquee-select.
+ *  'hand' — pan the canvas; nodes sit still so a drag never moves one by accident. */
+export type CanvasTool = 'draw' | 'hand';
 
 type Props = {
   definitions: WorkflowDefinition[];
@@ -49,6 +56,8 @@ type Props = {
   onFitView: () => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
+  tool: CanvasTool;
+  onToolChange: (tool: CanvasTool) => void;
 };
 
 export function TopToolbar({

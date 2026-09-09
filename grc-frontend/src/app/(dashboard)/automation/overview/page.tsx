@@ -133,7 +133,7 @@ function NotTracked({ system, cta }: { system: string; cta?: { href: string; lab
 const POSTURE_CLS: Record<string, string> = {
   passed: 'bg-emerald-500', failed: 'bg-rose-500', partial: 'bg-amber-500',
   error: 'bg-amber-400', expired: 'bg-orange-500', collection_failed: 'bg-purple-500',
-  not_run: 'bg-slate-300', manual: 'bg-slate-200',
+  connect_one: 'bg-indigo-500', not_run: 'bg-slate-300', manual: 'bg-slate-200',
 };
 const COLLECTION_CLS: Record<string, string> = {
   healthy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -214,6 +214,13 @@ export default function AutomationOverviewPage() {
             {n(au.plugins_enabled)} checks enabled, {n(au.plugins_run)} have ever run. A check reaches a control
             through the SOC&nbsp;2 criteria it names, so only the {pct(covered, lib.controls)}% of the library
             that maps to SOC&nbsp;2 can be asserted automatically today.
+            {(au.posture.connect_one || 0) > 0 && (
+              <>
+                {' '}<span className="font-medium text-indigo-700">{n(au.posture.connect_one)}</span> of those
+                could be evidenced now — they map to connectors you have not configured. A control needs
+                <em> any one</em> source that proves it, not all of them.
+              </>
+            )}
           </p>
         </Panel>
 

@@ -96,6 +96,9 @@ export const CONTROL_STATUS: Record<string, { label: string; cls: string; dot: s
   collection_failed: { label: 'Not collected', cls: 'bg-purple-50 text-purple-700 border-purple-200', dot: 'bg-purple-500' },
   running: { label: 'Running', cls: 'bg-sky-50 text-sky-700 border-sky-200', dot: 'bg-sky-500' },
   not_run: { label: 'Not run', cls: 'bg-violet-50 text-violet-700 border-violet-200', dot: 'bg-violet-500' },
+  // Automatable, but the tenant runs none of the systems that would prove it.
+  // Distinct from "not run": there is nothing to run until something is connected.
+  connect_one: { label: 'Connect a source', cls: 'bg-indigo-50 text-indigo-700 border-indigo-200', dot: 'bg-indigo-500' },
   manual: { label: 'Manual', cls: 'bg-slate-100 text-slate-500 border-slate-200', dot: 'bg-slate-400' },
 };
 

@@ -297,6 +297,41 @@ def _plugins_by_control_code(db: Session) -> Dict[str, List[CompliancePlugin]]:
     return by_code
 
 
+def _connected_providers(db: Session, tenant_id: int) -> set:
+    """Providers this tenant has actually configured.
+
+    The connectors bound to a control are ALTERNATIVES, not a checklist: 53 of
+    them claim CC6.1 because 53 systems can prove logical access, and no tenant
+    runs 53. A provider the tenant has not configured is not a gap in their
+    control — it is not in their estate, and letting it contribute `not_run`
+    made a control whose one real collector passed report "partial".
+
+    What remains is a conjunction over what they DO run: weak MFA in AWS is not
+    excused by Okta passing, because both are in scope.
+    """
+    return {
+        c.integration_type
+        for c in db.query(IntegrationConnection.integration_type)
+        .filter(IntegrationConnection.tenant_id == tenant_id,
+                IntegrationConnection.is_active.is_(True))
+        .all()
+    }
+
+
+# A plugin with no `provider` still needs something connected to run: the
+# quantitative SOC 2 checks are boto3 calls and are as out of scope without an
+# AWS account as a GitHub check is without GitHub. Scoping only the connector
+# plugins left these contributing `not_run` for the same wrong reason.
+_RUNNER_NEEDS = {"aws_readonly": {"aws_readonly", "aws"}}
+
+
+def _plugin_in_scope(plugin, provider: Optional[str], connected: set) -> bool:
+    if provider is not None:
+        return provider in connected
+    needs = _RUNNER_NEEDS.get(plugin.runner_type)
+    return bool(needs & connected) if needs else True
+
+
 def _checks_for_control(db: Session, control_codes: List[str]) -> List[Dict[str, Any]]:
     """Plugins bound to this control, carrying ONLY the checks that name one of its codes.
 
@@ -387,12 +422,55 @@ def _status_from_run(run, check_ids: set, control_codes: List[str],
     return "not_run"
 
 
+def _coverage_for(bound: List[Dict[str, Any]], connected: set) -> Dict[str, Any]:
+    """What could evidence this control, and what to do if nothing does yet.
+
+    Connectors are grouped by category because that is the shape of the ask a
+    customer can act on: "connect an identity provider" is a decision, "connect
+    one of these 53 things" is a list. Within a category they are ranked by how
+    many of this control's checks they actually contribute, so the provider that
+    proves the most appears first rather than the one that sorts first.
+    """
+    cats: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for b in bound:
+        p = b.get("provider")
+        if not p:                       # a non-connector plugin, nothing to connect
+            continue
+        cats[(PROVIDER_API.get(p) or {}).get("category") or "other"].append(
+            {"provider": p, "label": (PROVIDER_API.get(p) or {}).get("label", p),
+             "checks": len(b["checks"]), "connected": p in connected})
+    options = [
+        {"category": c,
+         "providers": sorted(v, key=lambda x: (-x["checks"], x["provider"])),
+         "connected": any(x["connected"] for x in v)}
+        for c, v in cats.items()
+    ]
+    options.sort(key=lambda o: (not o["connected"], -len(o["providers"]), o["category"]))
+    satisfying = sorted({p["provider"] for o in options for p in o["providers"] if p["connected"]})
+    return {
+        # `connect_one` is the actionable state: this control CAN be automated,
+        # the tenant simply has none of the systems that would prove it.
+        "state": "covered" if satisfying else ("connect_one" if options else "manual"),
+        "satisfied_by": satisfying,
+        "options": options,
+        "provider_count": sum(len(o["providers"]) for o in options),
+    }
+
+
 def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str],
-                       cadence: Optional[str] = None):
-    """(checks payload, per-control statuses) for a control, scoped to its own codes."""
+                       cadence: Optional[str] = None, connected: Optional[set] = None):
+    """(checks payload, statuses, coverage) for a control, scoped to its own codes.
+
+    `statuses` covers ONLY the providers this tenant has connected — see
+    `_connected_providers` for why an unconfigured connector must not contribute.
+    `linked` still carries every bound connector so the detail page can show what
+    else could prove this control.
+    """
     bound = _checks_for_control(db, control_codes)
     if not bound:
-        return [], []
+        return [], [], {"state": "manual", "satisfied_by": [], "options": [], "provider_count": 0}
+    if connected is None:
+        connected = _connected_providers(db, tenant_id)
     latest = _latest_runs_by_plugin(db, tenant_id, [b["plugin"].id for b in bound])
     linked, statuses = [], []
     for b in bound:
@@ -400,16 +478,19 @@ def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str],
         run = latest.get(pl.id)
         ids = {c.get("id") for c in b["checks"]}
         st = _status_from_run(run, ids, control_codes, cadence) if run else "not_run"
-        statuses.append(st)
+        in_scope = _plugin_in_scope(pl, b.get("provider"), connected)
+        if in_scope:
+            statuses.append(st)
         linked.append({
             "plugin_key": pl.plugin_key, "id": pl.id, "title": pl.title,
             "severity": pl.severity, "seeded": True,
             "source": "connector" if pl.benchmark == CONNECTOR_BENCHMARK else "aws",
             "checks_matched": len(b["checks"]),
             "control_status": st,
+            "in_scope": in_scope,
             "last_run": _run_out(run) if run else None,
         })
-    return linked, statuses
+    return linked, statuses, _coverage_for(bound, connected)
 
 
 @router.post("/seed", status_code=201)
@@ -876,12 +957,13 @@ def list_common_controls(
 
     out: List[Dict[str, Any]] = []
     categories: set = set()
+    connected = _connected_providers(db, tenant_id)
     for scf_id, name, domain, dom_id, pptdf, weight, material, ao_count, _sk, cad in rows:
         if domain:
             categories.add(domain)
         req = {k: v for k, v in (reqs.get(scf_id) or {}).items() if v}
         soc2_codes = [r["code"] for r in req.get("soc2", [])]
-        linked, statuses = _linked_checks_for(db, tenant_id, soc2_codes, cad)
+        linked, statuses, coverage = _linked_checks_for(db, tenant_id, soc2_codes, cad, connected)
         out.append({
             "control_id": scf_id,
             "canonical_key": scf_id,
@@ -898,7 +980,13 @@ def list_common_controls(
             "requirements": req,
             "requirement_count": sum(len(v) for v in req.values()),
             "checks_count": len(linked),
-            "overall_status": _aggregate_status(statuses) if linked else "manual",
+            # `statuses` holds only the providers this tenant has connected, so a
+            # control whose one real collector passed no longer reads "partial"
+            # against 52 systems they do not run. With none connected there is
+            # nothing to aggregate, and `coverage` says what to connect instead.
+            "overall_status": (_aggregate_status(statuses) if statuses
+                               else ("connect_one" if linked else "manual")),
+            "coverage": coverage,
             "checks": linked,
         })
 
@@ -1116,6 +1204,7 @@ def common_controls_overview(
 
     # ── automation: what a check can currently assert ─────────────────────────
     cadence_of = {c.scf_id: c.conformity_cadence for c in controls}
+    connected_now = _connected_providers(db, tenant_id)
     idx = _check_index(db)
     plugin_ids = {p.id for lst in idx.values() for p, _ in lst}
     latest = _latest_runs_by_plugin(db, tenant_id, sorted(plugin_ids))
@@ -1130,9 +1219,13 @@ def common_controls_overview(
             continue
         checks_per_control[scf_id] = len(bound)
         cad = cadence_of.get(scf_id)
+        # Only the providers this tenant has connected. The rest are alternatives
+        # it does not run, and counting them made an evidenced control read
+        # "partial" — see _connected_providers.
         sts = [_status_from_run(latest[pid], cids, codes, cad) if latest.get(pid) else "not_run"
-               for pid, (_, cids) in bound.items()]
-        status_of[scf_id] = _aggregate_status(sts)
+               for pid, (p, cids) in bound.items()
+               if _plugin_in_scope(p, (p.check_definition or {}).get("provider"), connected_now)]
+        status_of[scf_id] = _aggregate_status(sts) if sts else "connect_one"
 
     now = datetime.utcnow()
 
@@ -1886,7 +1979,7 @@ def get_common_control(
     )]
 
     soc2_codes = [i["code"] for g in req_groups if g["framework"] == "soc2" for i in g["items"]]
-    linked, statuses = _linked_checks_for(db, tenant_id, soc2_codes, ctl.conformity_cadence)
+    linked, statuses, coverage = _linked_checks_for(db, tenant_id, soc2_codes, ctl.conformity_cadence)
 
     return {
         "control_id": ctl.scf_id,
@@ -1902,7 +1995,9 @@ def get_common_control(
         "ao_count": ctl.ao_count,
         "sub_type": "Automated" if linked else "Manual",
         "checks_count": len(linked),
-        "overall_status": _aggregate_status(statuses) if linked else "manual",
+        "overall_status": (_aggregate_status(statuses) if statuses
+                           else ("connect_one" if linked else "manual")),
+        "coverage": coverage,
         "checks": linked,
         "objectives": objectives,
         **_build_guidance(ctl, req_groups, linked),
