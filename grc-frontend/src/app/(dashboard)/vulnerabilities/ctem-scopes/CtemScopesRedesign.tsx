@@ -1141,16 +1141,16 @@ export default function CtemScopesRedesign() {
           : isCurrent ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.06em', color: '#fff', background: INK, borderRadius: 5, padding: '2px 7px' }}>CURRENT</span>
           : <span style={{ color: FAINT, fontSize: 14 }}>›</span>;
         return (
-          <div key={st.n} style={{ display: 'flex', gap: 14, ...(open ? { flex: 1, minHeight: 340 } : {}) }}>
+          <div key={st.n} style={{ display: 'flex', gap: 14 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none', width: 26, paddingTop: 14 }}>{disc}{!last && <span style={{ flex: 1, width: 2, background: done ? st.c : '#E4E8EC', marginTop: 4, borderRadius: 2 }} />}</div>
-            <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14, ...(open ? { display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
-              <div style={{ ...CARD, overflow: 'hidden', ...(open ? { border: `1px solid ${st.c}`, boxShadow: '0 4px 14px rgba(2,6,23,.06)', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } : {}), ...(locked ? { opacity: 0.65 } : {}) }}>
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14 }}>
+              <div style={{ ...CARD, overflow: 'hidden', ...(open ? { border: `1px solid ${st.c}`, boxShadow: '0 4px 14px rgba(2,6,23,.06)' } : {}), ...(locked ? { opacity: 0.65 } : {}) }}>
                 <div onClick={() => { if (!locked) setActiveStage(st.n); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 13px', cursor: locked ? 'default' : 'pointer' }}>
                   <b style={{ fontSize: 13, color: locked ? FAINT : INK, flex: 'none' }}>{st.label}</b>
                   <span style={{ fontSize: 11.5, color: locked ? FAINT : MUTED, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stageStat(st.n)}</span>
                   {tag}
                 </div>
-                {open && <div style={{ borderTop: `1px solid ${BORDER2}`, padding: '12px 14px', flex: 1, minHeight: 0, overflowY: 'auto' }}>{stageBody(st.n)}</div>}
+                {open && <div style={{ borderTop: `1px solid ${BORDER2}`, padding: '12px 14px' }}>{stageBody(st.n)}</div>}
               </div>
             </div>
           </div>
