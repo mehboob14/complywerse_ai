@@ -27,10 +27,11 @@ frontend dataset).
 """
 from __future__ import annotations
 
+import json
 from datetime import date, datetime, timedelta
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import Boolean, String, and_, func, or_
 from sqlalchemy.orm import Session
@@ -448,6 +449,31 @@ def _parse_dt(value: Any) -> Optional[datetime]:
         return None
 
 
+def _parse_multi_values(val: Any) -> List[str]:
+    """Decode multi-select filter values (JSON array, ``|``-joined, or scalar)."""
+    if val is None:
+        return []
+    if isinstance(val, (list, tuple)):
+        return [str(x).strip() for x in val if str(x).strip()]
+    s = str(val).strip()
+    if not s:
+        return []
+    if s.startswith("["):
+        try:
+            parsed = json.loads(s)
+            if isinstance(parsed, list):
+                return [str(x).strip() for x in parsed if str(x).strip()]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    if "|" in s:
+        return [p.strip() for p in s.split("|") if p.strip()]
+    return [s]
+
+
+# Sentinel matching the frontend EMPTY_TOKEN — blank / unassigned facet pick.
+_EMPTY_TOKEN = "__EMPTY__"
+
+
 def _build_condition(model: Any, spec: FilterSpec, kind: str):
     """Translate one filter condition into a SQLAlchemy expression.
 
@@ -506,13 +532,51 @@ def _build_condition(model: Any, spec: FilterSpec, kind: str):
     # Boolean-backed badge columns (kev_flag, internet_facing): coerce truthy text
     # (func.lower / ilike on a boolean column is a Postgres type error).
     if isinstance(col.type, Boolean):
+        if op in ("in", "notin"):
+            parts = _parse_multi_values(val)
+            names = [p for p in parts if p != _EMPTY_TOKEN]
+            if not names:
+                return None, "invalid_value"
+            # Match if ANY selected token is truthy-equivalent to the column.
+            wants_true = any(
+                str(p).strip().lower() in ("1", "true", "yes", "y", "on") for p in names
+            )
+            wants_false = any(
+                str(p).strip().lower() in ("0", "false", "no", "n", "off") for p in names
+            )
+            clauses = []
+            if wants_true:
+                clauses.append(col.is_(True))
+            if wants_false:
+                clauses.append(or_(col.is_(False), col.is_(None)))
+            if not clauses:
+                return None, "invalid_value"
+            expr = or_(*clauses)
+            return (~expr if op == "notin" else expr), None
         if op not in ("eq", "neq"):
             return None, "unsupported_operator"
         truthy = str(val).strip().lower() in ("1", "true", "yes", "y", "on")
         expr = col.is_(True) if truthy else or_(col.is_(False), col.is_(None))
         return (~expr if op == "neq" else expr), None
 
-    # text / badge
+    # text / badge — including multi-select facets
+    if op in ("in", "notin"):
+        parts = _parse_multi_values(val)
+        if not parts:
+            return None, None
+        wants_empty = _EMPTY_TOKEN in parts
+        names = [p for p in parts if p != _EMPTY_TOKEN]
+        is_text = isinstance(col.type, String)
+        clauses = []
+        if names:
+            clauses.append(or_(*[_norm_col(col) == _norm_literal(n) for n in names]))
+        if wants_empty:
+            clauses.append(or_(col.is_(None), col == "") if is_text else col.is_(None))
+        if not clauses:
+            return None, "invalid_value"
+        expr = or_(*clauses)
+        return (~expr if op == "notin" else expr), None
+
     s = str(val)
     if op == "eq":
         return _norm_col(col) == _norm_literal(s), None
@@ -1274,3 +1338,182 @@ def capture_snapshot(db: Session = Depends(get_db), user=Depends(require_auth)) 
     tenant_id = _tenant_id(user, db)
     written = metric_snapshots.write_daily(db, tenant_id)
     return {"written": written, "as_of": date.today().isoformat()}
+
+
+# ─── Metabase Analytics (Reports › Analytics) ───────────────────────────────
+
+class MetabaseSsoBody(BaseModel):
+    return_to: str = Field("/", description="Metabase path after SSO, e.g. /collection/root")
+    groups: Optional[List[str]] = None
+
+
+@router.get("/metabase/status")
+def metabase_status(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Frontend probe: is Metabase configured, embed mode, semantic views present."""
+    from ..services import metabase_sso
+    from ..services.reporting_semantic_layer import list_reporting_view_catalog
+
+    views_ok: List[str] = []
+    try:
+        bind = db.get_bind()
+        engine = getattr(bind, "engine", bind)
+        from sqlalchemy import text as _text
+        rows = engine.connect().execute(
+            _text(
+                "SELECT table_name FROM information_schema.views "
+                "WHERE table_schema = 'public' AND table_name LIKE 'reporting_%'"
+            )
+        ).fetchall()
+        views_ok = [r[0] for r in rows]
+    except Exception:
+        views_ok = []
+
+    return {
+        "configured": metabase_sso.metabase_enabled(),
+        "site_url": metabase_sso.metabase_site_url() or None,
+        "embed_enabled": metabase_sso.metabase_embed_enabled(),
+        "jwt_sso": metabase_sso.jwt_sso_configured(),
+        "static_embed": metabase_sso.static_embed_configured(),
+        "mode": metabase_sso.metabase_mode(),
+        "reporting_views": views_ok,
+        "view_catalog": list_reporting_view_catalog(),
+        "starter_dashboards": metabase_sso.starter_dashboard_catalog(),
+        "subscriptions": {
+            "owner": "metabase",
+            "requires": ["smtp_configured_in_metabase"],
+            "hint": (
+                "Metabase Admin → Settings → Email (local: Mailhog on :8025 via "
+                "deploy/metabase compose). Then dashboard → Sharing → Subscriptions."
+            ),
+            "mailhog_ui": "http://127.0.0.1:8025",
+            "configure_script": "deploy/metabase/configure_smtp.py",
+        },
+        "licence_note": (
+            "JWT SSO requires Metabase Pro (set METABASE_PRO_JWT=1). "
+            "OSS uses open_link or static embeds."
+        ),
+    }
+
+
+@router.post("/metabase/sso")
+def metabase_sso_url(
+    request: Request,
+    body: MetabaseSsoBody,
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Return a Metabase entry URL (Pro JWT SSO, or OSS open_link fallback)."""
+    from ..services import metabase_sso
+
+    if not metabase_sso.metabase_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Metabase is not configured. Set METABASE_SITE_URL on the backend.",
+        )
+
+    # Prefer the active request tenant (subdomain / X-Tenant-Slug); fall back
+    # to the singleton Tenant row on this DB. get_user_tenants returns ids only.
+    slug = getattr(request.state, "tenant_slug", None)
+    if not slug:
+        tenant = getattr(request.state, "tenant", None)
+        if isinstance(tenant, dict):
+            slug = tenant.get("slug")
+    if not slug:
+        row = db.query(Tenant).first()
+        slug = getattr(row, "slug", None) if row else None
+
+    groups = body.groups or ["compliverse_analyst"]
+    if slug:
+        groups = list({*groups, f"tenant_{slug}"})
+    if getattr(user, "is_superuser", False) or getattr(user, "is_platform_admin", False):
+        groups = list({*groups, "compliverse_admin"})
+
+    mode = metabase_sso.metabase_mode()
+    try:
+        if metabase_sso.jwt_sso_configured():
+            token = metabase_sso.mint_sso_token(
+                email=user.email,
+                display_name=getattr(user, "display_name", None) or user.username,
+                groups=groups,
+                tenant_slug=slug,
+            )
+            url = metabase_sso.sso_login_url(token, return_to=body.return_to or "/")
+            mode = "embed" if metabase_sso.metabase_embed_enabled() else "sso_link"
+        else:
+            # OSS: deep-link into Metabase (user logs in once in that tab).
+            url = metabase_sso.open_site_url(body.return_to or "/")
+            mode = "open_link"
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to build Metabase entry URL: {exc}",
+        ) from exc
+
+    return {
+        "url": url,
+        "expires_in": 300 if mode in ("sso_link", "embed") else None,
+        "tenant_slug": slug,
+        "mode": mode,
+    }
+
+
+@router.get("/metabase/embed/{dashboard_key}")
+def metabase_embed_dashboard(
+    dashboard_key: str,
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Mint a short-lived static embed URL for a curated starter dashboard."""
+    from ..services import metabase_sso
+
+    if not metabase_sso.static_embed_configured():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                "Static embedding is not configured. "
+                "Set METABASE_SITE_URL, METABASE_EMBEDDING_SECRET_KEY, METABASE_EMBED_ENABLED=1."
+            ),
+        )
+
+    catalog = {d["key"]: d for d in metabase_sso.starter_dashboard_catalog()}
+    entry = catalog.get(dashboard_key)
+    if not entry or not entry.get("metabase_dashboard_id"):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Unknown or unmapped starter dashboard '{dashboard_key}'.",
+        )
+
+    try:
+        url = metabase_sso.mint_static_embed_url(
+            resource_type="dashboard",
+            resource_id=int(entry["metabase_dashboard_id"]),
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to mint embed URL: {exc}",
+        ) from exc
+
+    return {
+        "key": dashboard_key,
+        "title": entry.get("title"),
+        "url": url,
+        "expires_in": 600,
+        "metabase_dashboard_id": entry["metabase_dashboard_id"],
+    }
+
+
+@router.post("/metabase/ensure-views", status_code=200)
+def metabase_ensure_views(
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Admin/analyst helper: (re)create reporting_* views on this tenant DB."""
+    from ..services.reporting_semantic_layer import ensure_reporting_views
+
+    bind = db.get_bind()
+    engine = getattr(bind, "engine", bind)
+    applied = ensure_reporting_views(engine)
+    return {"ok": True, "applied": applied}

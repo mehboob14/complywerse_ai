@@ -132,12 +132,49 @@ _COLUMN_TYPE_FIXUPS = [
     ("grc_compliance_plugins", "os_keys", "JSONB"),
     # /os-registry uses jsonb operators on target_builds too.
     ("grc_compliance_plugins", "target_builds", "JSONB"),
-    # A check result can now be `not_applicable` — an empty population, an
-    # out-of-scope resource, a policy grace period. That is 14 characters and the
-    # column shipped as VARCHAR(10), which would have truncated it to
-    # `not_applic` silently rather than failing.
-    ("grc_scf_check_result", "status", "VARCHAR(20)"),
 ]
+
+
+def _widen_scf_check_status(engine: Engine) -> bool:
+    """grc_scf_check_result.status VARCHAR(10) -> VARCHAR(20).
+
+    A check result can now be `not_applicable` (14 chars); VARCHAR(10) would
+    truncate it to `not_applic`. The generic _ensure_column_type cannot do this
+    one: `reporting_scf_check_results` selects the column, and Postgres refuses
+    to alter the type of a column a view depends on. That failure also left the
+    engine permanently un-ensured, so the self-heal retried and logged the same
+    traceback on every engine creation.
+
+    So: drop the view and widen in one transaction, then let the reporting layer
+    recreate its views, which it does idempotently. Returns True when the column
+    is wide enough, whether or not this call did the work.
+    """
+    try:
+        inspector = inspect(engine)
+        if "grc_scf_check_result" not in inspector.get_table_names():
+            return True
+        col = next((c for c in inspector.get_columns("grc_scf_check_result")
+                    if c["name"] == "status"), None)
+        width = getattr(col["type"], "length", None) if col else None
+        if width is None or width >= 20:
+            return True
+        with engine.begin() as conn:
+            conn.execute(text("DROP VIEW IF EXISTS reporting_scf_check_results"))
+            conn.execute(text(
+                "ALTER TABLE grc_scf_check_result ALTER COLUMN status TYPE VARCHAR(20)"))
+        try:
+            from ...services.reporting_semantic_layer import ensure_reporting_views
+            ensure_reporting_views(engine)
+        except Exception:  # noqa: BLE001 — the column is fixed; a view can be re-ensured later
+            logger.exception("recreating reporting views after status widening failed on %s",
+                             getattr(engine.url, "database", "?"))
+        logger.info("Widened grc_scf_check_result.status to VARCHAR(20) on %s",
+                    getattr(engine.url, "database", "?"))
+        return True
+    except Exception:
+        logger.exception("Failed to widen grc_scf_check_result.status on %s",
+                         getattr(engine.url, "database", "?"))
+        return False
 
 
 def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> None:
@@ -1001,6 +1038,7 @@ def _ensure_for_engine(engine: Engine) -> None:
             ok = _ensure_column_type(engine, table=table, column=column,
                                      expected_type=expected_type)
             all_ok = all_ok and ok
+        all_ok = _widen_scf_check_status(engine) and all_ok
 
         # Relax NOT NULL on columns the connector framework needs to leave
         # empty for non-scanner providers. Idempotent.
@@ -1015,6 +1053,16 @@ def _ensure_for_engine(engine: Engine) -> None:
         # find them. Idempotent — rows already migrated have a non-legacy
         # `register_type` and are skipped on subsequent runs.
         _backfill_framework_assessment_register_type(engine)
+
+        # Metabase / BI semantic layer — reporting_* views (idempotent).
+        try:
+            from ...services.reporting_semantic_layer import ensure_reporting_views
+            ensure_reporting_views(engine)
+        except Exception:
+            logger.exception(
+                "reporting semantic views failed on %s",
+                getattr(engine.url, "database", "?"),
+            )
 
         # Only mark the engine as "ensured" if every column add succeeded (or
         # was a no-op) — otherwise let a later request retry, since the

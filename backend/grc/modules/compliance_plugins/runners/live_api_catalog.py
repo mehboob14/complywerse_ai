@@ -32,7 +32,7 @@ PROVIDER_API: Dict[str, dict] = {
     # identity / access
     "okta": {"base": "https://{domain}/api/v1", "verify": "/users?limit=1", "auth": "ssws", "controls": ["CC6.1", "CC6.2"], "label": "Okta", "category": "identity", "needs_domain": True},
     "google_workspace": {"base": "https://www.googleapis.com", "verify": "/oauth2/v3/userinfo", "auth": "bearer", "controls": ["CC6.1"], "label": "Google Workspace", "category": "identity"},
-    "microsoft_365": {"base": "https://graph.microsoft.com/v1.0", "verify": "/me", "auth": "bearer", "controls": ["CC6.1"], "label": "Microsoft 365", "category": "identity"},
+    "microsoft_365": {"base": "https://graph.microsoft.com/v1.0", "verify": "/me", "auth": "bearer", "controls": ["CC6.1"], "label": "Microsoft Entra ID (Microsoft 365)", "category": "identity"},
     "clerk": {"base": "https://api.clerk.com/v1", "verify": "/users?limit=1", "auth": "bearer", "controls": ["CC6.1", "CC6.2"], "label": "Clerk", "category": "identity"},
     "tailscale": {"base": "https://api.tailscale.com/api/v2", "verify": "/tailnet/-/devices", "auth": "bearer", "controls": ["CC6.7"], "label": "Tailscale", "category": "identity"},
     "one_password": {"base": "https://{domain}", "verify": "/heartbeat", "auth": "bearer", "controls": ["CC6.1"], "label": "1Password", "category": "identity", "needs_domain": True},

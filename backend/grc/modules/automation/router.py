@@ -422,6 +422,72 @@ def _status_from_run(run, check_ids: set, control_codes: List[str],
     return "not_run"
 
 
+def _provider_of(check: Dict[str, Any]) -> Optional[str]:
+    """Which connector a linked check belongs to.
+
+    Connector plugins carry it in their key. The quantitative checks are boto3 calls
+    with no provider of their own, and they are AWS whatever their key says.
+    """
+    key = check.get("plugin_key") or ""
+    if check.get("source") == "aws" or "SOC2_QUANTITATIVE" in key:
+        return "aws"
+    return key.split("__", 1)[1] if "__" in key else None
+
+
+def _test_groups(linked: List[Dict[str, Any]], connected: set) -> List[Dict[str, Any]]:
+    """The Tests tab, grouped the way a customer has to decide.
+
+    A tenant runs one identity provider. Okta, Entra ID and Google Workspace are
+    alternatives for the same evidence, so listing each as its own "Not run" test
+    implies all three must be checked, which no tenant can satisfy and none should
+    try to. Grouping by category turns 26 flat rows into "connect any one of these",
+    and only the connected source's results are shown as results.
+    """
+    by_cat: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(dict)
+    for chk in linked:
+        p = _provider_of(chk)
+        if not p:
+            continue
+        spec = PROVIDER_API.get(p) or {}
+        slot = by_cat[spec.get("category") or "other"].setdefault(p, {
+            "provider": p, "label": spec.get("label", p),
+            "connected": p in connected, "checks": [],
+        })
+        slot["checks"].append(chk)
+
+    groups = []
+    for cat, provs in by_cat.items():
+        rows = sorted(provs.values(), key=lambda x: (not x["connected"], -len(x["checks"]), x["label"]))
+        live = [r for r in rows if r["connected"]]
+        # A connected provider's verdict is the only one that means anything; an
+        # unconnected one contributes nothing and is shown as an option, not a test.
+        statuses = [c["control_status"] for r in live for c in r["checks"]]
+        groups.append({
+            "category": cat,
+            "connected": bool(live),
+            "status": _aggregate_status(statuses) if statuses else "connect_one",
+            "providers": rows,
+        })
+    groups.sort(key=lambda g: (not g["connected"], -len(g["providers"]), g["category"]))
+    return groups
+
+
+@lru_cache(maxsize=1)
+def _templated_artifact_ids() -> frozenset:
+    """Catalogue artifacts that have an authored starter document.
+
+    1,498 of 4,706 catalogue deliverables have none, so offering a download on
+    every row would 404 a third of the time. artifact_content.json is 14.8 MB, so
+    only its keys are kept.
+    """
+    p = Path(__file__).resolve().parents[2] / "seed_data" / "artifact_content.json"
+    try:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001 — optional artifact
+        return frozenset()
+    return frozenset(aid for fw in data.values() if isinstance(fw, dict) for aid in fw)
+
+
 def _automatable_controls(db: Session, release_id: int) -> set:
     """Controls SCF itself says a machine could assess.
 
@@ -1911,6 +1977,103 @@ def _build_guidance(ctl, req_groups: List[Dict[str, Any]], linked_checks: List[D
     }
 
 
+def _normalized_control_id(db: Session, scf_id: str) -> Optional[int]:
+    """The evidence module links to grc_normalized_controls, which carries scf_id."""
+    row = (db.query(NormalizedControl.id)
+           .filter(NormalizedControl.scf_id == scf_id)
+           .order_by(NormalizedControl.id.desc()).first())
+    return row[0] if row else None
+
+
+@common_router.get("/controls/{scf_id}/evidence")
+def list_control_evidence(
+    scf_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Evidence a person has attached to this control.
+
+    Distinct from what a collector asserted: this is the manual and hybrid half,
+    the policy PDF or the access-review export, which no API produces.
+    """
+    from grc.models import Evidence, EvidenceControlMapping
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    nc_id = _normalized_control_id(db, scf_id)
+    if nc_id is None:
+        return {"scf_id": scf_id, "items": []}
+    rows = (
+        db.query(Evidence, EvidenceControlMapping)
+        .join(EvidenceControlMapping, EvidenceControlMapping.evidence_id == Evidence.id)
+        .filter(Evidence.tenant_id == tenant_id,
+                EvidenceControlMapping.normalized_control_id == nc_id)
+        .order_by(Evidence.uploaded_at.desc())
+        .all()
+    )
+    return {"scf_id": scf_id, "items": [{
+        "evidence_id": e.id, "mapping_id": m.id, "name": e.name,
+        "description": e.description, "file_name": e.file_name, "file_type": e.file_type,
+        "evidence_type": e.evidence_type, "status": e.status,
+        "uploaded_at": e.uploaded_at.isoformat() if e.uploaded_at else None,
+        "expiry_date": e.expiry_date.isoformat() if e.expiry_date else None,
+        "is_stale": bool(e.is_stale), "coverage_type": m.coverage_type,
+    } for e, m in rows]}
+
+
+class LinkEvidenceBody(BaseModel):
+    coverage_type: str = Field("supporting", description="full | partial | supporting")
+    note: Optional[str] = None
+
+
+@common_router.post("/controls/{scf_id}/evidence/{evidence_id}", status_code=201)
+def link_control_evidence(
+    scf_id: str,
+    evidence_id: int,
+    body: LinkEvidenceBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Attach an already-uploaded evidence item to an SCF control.
+
+    Upload stays in the evidence module, which owns storage, file-type
+    validation, versioning and OCR; this only records which control the file
+    evidences. Idempotent, so a double-click cannot attach the same file twice.
+    """
+    from grc.models import Evidence, EvidenceControlMapping
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    ev = db.query(Evidence).filter(Evidence.id == evidence_id,
+                                   Evidence.tenant_id == tenant_id).first()
+    if ev is None:
+        raise HTTPException(status_code=404, detail="Evidence not found for this tenant")
+    if body.coverage_type not in ("full", "partial", "supporting"):
+        raise HTTPException(status_code=422, detail="coverage_type must be full, partial or supporting")
+    nc_id = _normalized_control_id(db, scf_id)
+    if nc_id is None:
+        raise HTTPException(status_code=404, detail=f"No control {scf_id} in this tenant's catalog")
+
+    existing = (db.query(EvidenceControlMapping)
+                .filter(EvidenceControlMapping.evidence_id == evidence_id,
+                        EvidenceControlMapping.normalized_control_id == nc_id).first())
+    if existing:
+        return {"mapping_id": existing.id, "created": False}
+
+    release = (db.query(SCFRelease)
+               .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True)).first())
+    m = EvidenceControlMapping(
+        evidence_id=evidence_id,
+        normalized_control_id=nc_id,
+        framework_name=f"SCF {release.version}" if release else "SCF",
+        control_code=scf_id,
+        coverage_type=body.coverage_type,
+        matching_rationale=body.note,
+        rule_based_validation=False,
+    )
+    db.add(m)
+    db.commit()
+    return {"mapping_id": m.id, "created": True}
+
+
 @common_router.get("/controls/{scf_id}")
 def get_common_control(
     scf_id: str,
@@ -2019,9 +2182,17 @@ def get_common_control(
     )]
 
     soc2_codes = [i["code"] for g in req_groups if g["framework"] == "soc2" for i in g["items"]]
+    connected = _connected_providers(db, tenant_id)
     linked, statuses, coverage = _linked_checks_for(
-        db, tenant_id, soc2_codes, ctl.conformity_cadence, None,
+        db, tenant_id, soc2_codes, ctl.conformity_cadence, connected,
         ctl.scf_id in _automatable_controls(db, release.id))
+
+    templated = _templated_artifact_ids()
+    artifacts = [
+        {**a, "has_template": a.get("artifact_id") in templated}
+        for a in ((_consolidated_evidence().get(ctl.scf_id) or {}).get("artifacts") or [])
+        if a.get("source") == "catalog"
+    ]
 
     return {
         "control_id": ctl.scf_id,
@@ -2041,6 +2212,10 @@ def get_common_control(
                            else ("connect_one" if linked else coverage["state"])),
         "coverage": coverage,
         "checks": linked,
+        "test_groups": _test_groups(linked, connected),
+        # Deliverables the frameworks name for this control, with whether an
+        # authored starter document exists to download.
+        "artifacts": artifacts,
         "objectives": objectives,
         **_build_guidance(ctl, req_groups, linked),
         "requirement_groups": req_groups,

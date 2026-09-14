@@ -31,8 +31,11 @@ def _spec(provider: str, s: Dict[str, Any]) -> Dict[str, Any]:
         "plugin_key": f"{BENCHMARK}__{provider}",
         "benchmark": BENCHMARK,
         "rule_id": s["controls"][0],  # primary code (display / 1:1-compat); full set mapped separately
-        "title": f"SOC 2 evidence collector — {s['label']}",
-        "description": f"Read-only API evidence from {s['label']} mapped to SOC 2 {', '.join(codes)}.",
+        # Framework-neutral: a collector's findings reach every framework its mapped
+        # SCF controls carry, so naming one framework here understated the reach.
+        "title": f"{s['label']} evidence collector",
+        "description": f"Read-only API evidence from {s['label']}, reaching every framework "
+                       f"its mapped controls carry (criteria {', '.join(codes)}).",
         "rationale": f"Automated {s['label']} access/configuration evidence supports the mapped SOC 2 criteria.",
         "remediation": (
             f"Configure read-only {s['label']} "
