@@ -1407,7 +1407,8 @@ def update_artifact(
         artifact.content = payload.content
     if payload.status is not None:
         artifact.status = payload.status
-    if payload.assigned_to_id is not None:
+    # sent-as-null means "unassign"; a None check would silently keep the owner
+    if "assigned_to_id" in payload.model_fields_set:
         artifact.assigned_to_id = payload.assigned_to_id
     if payload.format is not None:
         artifact.format = payload.format

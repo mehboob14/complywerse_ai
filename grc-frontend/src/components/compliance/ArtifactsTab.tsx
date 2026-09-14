@@ -243,6 +243,7 @@ function DownloadMenu({
       <button
         onClick={() => setOpen((o) => !o)}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
+        aria-label={label || 'Download'} title={label ? undefined : 'Download'}
         className={`flex items-center gap-1.5 rounded-lg border border-gray-200 text-gray-700 hover:bg-gray-50 ${pad}`}>
         {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
         {label}
@@ -261,6 +262,41 @@ function DownloadMenu({
         </div>
       )}
     </div>
+  );
+}
+
+/** Download a working copy. Platform-native artifacts (risk register, asset
+ *  inventory, …) export live data as XLSX server-side, because their content is
+ *  live data, not the markdown stored in `artifact.content`; everything else is
+ *  rendered from its content in the formats that suit it. */
+export function ArtifactDownload({ artifact, label = '' }: { artifact: TenantArtifact; label?: string }) {
+  if (artifact.is_platform_native) {
+    return (
+      <button
+        onClick={() =>
+          downloadFromServer(`/artifacts/${artifact.id}/export`, {},
+            `${(artifact.name || 'artifact').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)}.xlsx`)
+            .catch((e) => { console.error('Platform artifact export failed', e); alert('Download failed — see console for details.'); })
+        }
+        className="p-1.5 rounded-lg text-purple-500 hover:bg-purple-50 transition-colors"
+        title="Download live platform data as XLSX"
+        aria-label="Download live platform data as XLSX"
+      >
+        <Download className="h-4 w-4" />
+      </button>
+    );
+  }
+  if (!artifact.content) return null;
+  const p = (artifact.format || '').toUpperCase().split('/')[0].trim();
+  return (
+    <DownloadMenu
+      label={label}
+      formats={p === 'XLSX' || p === 'CSV' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md']}
+      onPick={(fmt) =>
+        downloadFromServer(`/artifacts/${artifact.id}/export`, { fmt }, `${artifact.name}.${fmt}`)
+          .catch(() => alert('Download failed.'))
+      }
+    />
   );
 }
 
@@ -1186,50 +1222,7 @@ export default function ArtifactsTab({
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 flex-shrink-0">
-                          {!artifact.is_platform_native && artifact.content && (
-                            <DownloadMenu
-                              label=""
-                              formats={(() => {
-                                const p = (artifact.format || '').toUpperCase().split('/')[0].trim();
-                                return p === 'XLSX' || p === 'CSV' ? ['xlsx', 'csv', 'pdf', 'md'] : ['docx', 'pdf', 'md'];
-                              })()}
-                              onPick={(fmt) =>
-                                downloadFromServer(`/artifacts/${artifact.id}/export`, { fmt }, `${artifact.name}.${fmt}`)
-                                  .catch(() => alert('Download failed.'))
-                              }
-                            />
-                          )}
-                          {artifact.is_platform_native && (
-                            <button
-                              onClick={async () => {
-                                // Platform-native artifacts (risk register,
-                                // asset inventory, …) are exported server-side
-                                // because their content is live data, not the
-                                // markdown stored in `artifact.content`.
-                                try {
-                                  const res = await apiClient.get(
-                                    `/artifacts/${artifact.id}/export`,
-                                    { responseType: 'blob' },
-                                  );
-                                  const url = window.URL.createObjectURL(new Blob([res.data]));
-                                  const a = document.createElement('a');
-                                  a.href = url;
-                                  a.download = `${(artifact.name || 'artifact').replace(/[^A-Za-z0-9._-]+/g, '_').slice(0, 80)}.xlsx`;
-                                  document.body.appendChild(a);
-                                  a.click();
-                                  a.remove();
-                                  window.URL.revokeObjectURL(url);
-                                } catch (e) {
-                                  console.error('Platform artifact export failed', e);
-                                  alert('Download failed — see console for details.');
-                                }
-                              }}
-                              className="p-1.5 rounded-lg text-purple-500 hover:bg-purple-50 transition-colors"
-                              title="Download live platform data as XLSX"
-                            >
-                              <Download className="h-4 w-4" />
-                            </button>
-                          )}
+                          <ArtifactDownload artifact={artifact} />
                           <button
                             onClick={() => setEditingArtifact(artifact)}
                             className="p-1.5 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"

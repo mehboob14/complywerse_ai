@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { apiClient, automationApi, certificationsApi } from '@/lib/api';
 import {
-  CreateArtifactModal, EditArtifactModal, ViewArtifactModal,
+  ArtifactDownload, CreateArtifactModal, EditArtifactModal, ViewArtifactModal,
   type CatalogItem, type TenantArtifact, type TenantUser,
 } from '@/components/compliance/ArtifactsTab';
 import {
@@ -780,7 +780,11 @@ function ControlArtifactsPanel({ code }: { code: string }) {
     id: u.id, label: u.display_name || u.email || String(u.id), email: u.email ?? null,
   }));
 
-  const refresh = () => qc.invalidateQueries({ queryKey: ['control-artifacts', code] });
+  // same store as the Frameworks page, so its lists go stale too
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['control-artifacts', code] });
+    qc.invalidateQueries({ queryKey: ['tenant-artifacts'] });
+  };
   const create = useMutation({
     mutationFn: async (payload: Record<string, unknown>) => (await apiClient.post('/artifacts', payload)).data,
     onSuccess: () => { setCreating(null); refresh(); },
@@ -789,6 +793,10 @@ function ControlArtifactsPanel({ code }: { code: string }) {
     mutationFn: async ({ id, data }: { id: number; data: Partial<TenantArtifact> }) =>
       (await apiClient.put(`/artifacts/${id}`, data)).data,
     onSuccess: () => { setEditing(null); refresh(); },
+  });
+  const remove = useMutation({
+    mutationFn: (id: number) => apiClient.delete(`/artifacts/${id}`),
+    onSuccess: refresh,
   });
 
   const items = listQ.data?.items ?? [];
@@ -862,10 +870,18 @@ function ControlArtifactsPanel({ code }: { code: string }) {
                       View
                     </button>
                     {a ? (
-                      <button onClick={() => setEditing(a)}
-                        className="rounded-md bg-primary-600 px-2 py-1 text-xs font-semibold text-white hover:bg-primary-700">
-                        Edit &amp; review
-                      </button>
+                      <>
+                        <ArtifactDownload artifact={a} label="Download" />
+                        <button onClick={() => setEditing(a)}
+                          className="rounded-md bg-primary-600 px-2 py-1 text-xs font-semibold text-white hover:bg-primary-700">
+                          Edit &amp; review
+                        </button>
+                        <button onClick={() => { if (confirm(`Delete "${a.name}"?`)) remove.mutate(a.id); }}
+                          disabled={remove.isPending}
+                          className="rounded-md border border-rose-200 bg-white px-2 py-1 text-xs font-semibold text-rose-600 hover:bg-rose-50 disabled:opacity-50">
+                          Delete
+                        </button>
+                      </>
                     ) : (
                       <button onClick={() => setCreating(row)}
                         className="rounded-md bg-primary-600 px-2 py-1 text-xs font-semibold text-white hover:bg-primary-700">

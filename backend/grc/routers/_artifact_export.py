@@ -155,6 +155,13 @@ def _to_docx(title: str, blocks: List[dict]) -> bytes:
     return bio.getvalue()
 
 
+# A4 portrait holds about this many readable columns (~40pt each at 7pt type).
+# Registers run to 50+ columns, which leaves each column narrower than its own
+# padding (reportlab raises) or wraps cells taller than a page (LayoutError), so
+# anything wider is laid out record by record instead.
+_PDF_MAX_COLS = 12
+
+
 def _to_pdf(title: str, blocks: List[dict]) -> bytes:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -183,6 +190,25 @@ def _to_pdf(title: str, blocks: List[dict]) -> bytes:
             story.append(Paragraph("• " + _rl(b["text"]), styles["BodyText"]))
         elif t == "table" and (b["headers"] or b["rows"]):
             ncol = len(b["headers"]) or max((len(r) for r in b["rows"]), default=1)
+            if ncol > _PDF_MAX_COLS:
+                # One field/value block per record; a header-only template
+                # becomes one blank form.
+                heads = b["headers"] or [f"Column {j + 1}" for j in range(ncol)]
+                for n, r in enumerate(b["rows"] or [[]]):
+                    if n:
+                        story.append(Spacer(1, 6))
+                    kv = Table([[Paragraph(_rl(h), cell_style),
+                                 Paragraph(_rl(r[j]) if j < len(r) else "", cell_style)]
+                                for j, h in enumerate(heads)],
+                               hAlign="LEFT", colWidths=[doc.width * 0.35, doc.width * 0.65])
+                    kv.setStyle(TableStyle([
+                        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f1f5f9")),
+                        ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#cbd5e1")),
+                        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ]))
+                    story.append(kv)
+                story.append(Spacer(1, 6))
+                continue
             header = [Paragraph(_rl(c), head_style) for c in b["headers"]] if b["headers"] else None
             data = []
             if header:
