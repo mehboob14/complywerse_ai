@@ -13,6 +13,7 @@
 // claims, and only the second one is true today — a dashboard that renders the
 // first is worse than no dashboard.
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -44,6 +45,14 @@ interface Overview {
     controls_with_checks: number; checks_bound: number; plugins_enabled: number;
     plugins_run: number; last_run_at: string | null; posture: Record<string, number>;
   };
+  connector_categories: {
+    category: string;
+    connected: boolean;
+    connected_providers: { provider: string; label: string }[];
+    providers: { provider: string; label: string; connected: boolean; bindings: number }[];
+    controls_reachable: number;
+    controls_waiting: number;
+  }[];
   collection: {
     connectors: {
       plugin_key: string; title: string | null; provider: string | null;
@@ -136,6 +145,99 @@ const POSTURE_CLS: Record<string, string> = {
   connect_one: 'bg-indigo-500', unbound: 'bg-cyan-500',
   not_run: 'bg-slate-300', manual: 'bg-slate-200',
 };
+const CATEGORY_LABEL: Record<string, string> = {
+  scm: 'Source control', identity: 'Identity provider', cloud: 'Cloud',
+  observability: 'Observability', security: 'Security tooling', productivity: 'Work management',
+  comms: 'Communications', email: 'Email', incident: 'Incident response', hr: 'HR system',
+  mdm: 'Device management', itsm: 'IT service management', crm: 'CRM', data: 'Data platform',
+  payments: 'Payments', ai: 'AI platform', other: 'Other',
+};
+
+/** Which connector category to connect next, and what it would unlock.
+ *
+ *  A tenant needs any one source per category, not every source. So the
+ *  question worth answering at library level is not "which connectors exist"
+ *  but "which category is holding the most controls back", ranked by the
+ *  controls currently waiting on it.
+ */
+function ConnectorCategoriesPanel({ cats }: { cats: Overview['connector_categories'] }) {
+  const [open, setOpen] = useState<string | null>(null);
+  if (!cats.length) return null;
+  const connected = cats.filter((c) => c.connected).length;
+  const waiting = cats.filter((c) => !c.connected).reduce((n, c) => n + c.controls_waiting, 0);
+  const maxReach = Math.max(1, ...cats.map((c) => c.controls_reachable));
+  return (
+    <Panel
+      icon={Plug}
+      title="Connector categories"
+      hint={`${connected} of ${cats.length} connected`}
+      action={
+        <Link href="/admin/evidence-collectors" className="text-xs font-medium text-blue-700 hover:underline">
+          Connect a source →
+        </Link>
+      }
+    >
+      <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
+        Connect <span className="font-semibold text-slate-700">any one</span> source in a category; you do not need
+        them all. Categories are ranked by how many controls are waiting on them: automatable, with nothing connected
+        that proves them.
+        {waiting > 0 && <> Connecting the unconnected categories would reach up to <span className="font-semibold text-slate-700">{waiting.toLocaleString()}</span> waiting controls.</>}
+      </p>
+      <ul className="divide-y divide-slate-100 rounded border border-slate-200">
+        {cats.map((c) => {
+          const isOpen = open === c.category;
+          return (
+            <li key={c.category}>
+              <button
+                type="button"
+                onClick={() => setOpen(isOpen ? null : c.category)}
+                aria-expanded={isOpen}
+                className="grid w-full grid-cols-[10rem_1fr_auto] items-center gap-3 px-3 py-2 text-left hover:bg-slate-50"
+              >
+                <span className="flex items-center gap-2">
+                  <span className={`h-2 w-2 shrink-0 rounded-full ${c.connected ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                  <span className="truncate text-sm font-medium text-slate-800">{CATEGORY_LABEL[c.category] || c.category}</span>
+                </span>
+                <span className="flex items-center gap-2">
+                  <span className="h-1.5 w-full max-w-[12rem] overflow-hidden rounded bg-slate-100">
+                    <span className={`block h-full ${c.connected ? 'bg-emerald-400' : 'bg-indigo-400'}`}
+                      style={{ width: `${(c.controls_reachable / maxReach) * 100}%` }} />
+                  </span>
+                  <span className="whitespace-nowrap text-[11px] tabular-nums text-slate-500">{c.controls_reachable} controls</span>
+                </span>
+                <span className="whitespace-nowrap text-[11px]">
+                  {c.connected
+                    ? <span className="font-medium text-emerald-700">via {c.connected_providers.map((p) => p.label).join(', ')}</span>
+                    : c.controls_waiting > 0
+                      ? <span className="font-medium text-indigo-700">{c.controls_waiting} waiting</span>
+                      : <span className="text-slate-400">nothing waiting</span>}
+                </span>
+              </button>
+              {isOpen && (
+                <div className="border-t border-slate-100 bg-slate-50/50 px-3 py-2.5">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    {c.connected ? 'Connected, plus other sources in this category' : 'Connect any one of these'}
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {c.providers.map((p) => (
+                      <span key={p.provider}
+                        className={`rounded-md border px-2 py-1 text-[12px] ${p.connected
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                          : 'border-slate-200 bg-white text-slate-700'}`}>
+                        {p.label}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
 const COLLECTION_CLS: Record<string, string> = {
   healthy: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   stale: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -198,6 +300,8 @@ export default function AutomationOverviewPage() {
         <Stat label="Evidence sets" value={n(ev.controls_with_set)} sub={`${n(ev.artifacts)} artifacts`} />
         <Stat label="Owned" value={n(asr.assigned)} sub={asr.tracked ? `${n(asr.tracked)} tracked` : 'not tracked yet'} />
       </div>
+
+      <ConnectorCategoriesPanel cats={data.connector_categories ?? []} />
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Panel icon={Activity} title="Automation posture" hint={au.last_run_at ? `last run ${new Date(au.last_run_at).toLocaleDateString()}` : 'never run'}>

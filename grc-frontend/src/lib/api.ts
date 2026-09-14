@@ -5034,6 +5034,10 @@ export const automationApi = {
     body: { coverage_type: 'full' | 'partial' | 'supporting'; note?: string }) =>
     apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/evidence/${evidenceId}`, body),
   // An authored starter document for a catalogue deliverable.
+  // This control's deliverables as real catalogue items plus the tenant's working
+  // copies, so the Frameworks artifact modals can be reused unchanged.
+  listControlArtifacts: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/artifacts`),
   exportArtifactTemplate: (artifactId: string, fmt: string) =>
     apiClient.get('/artifacts/catalog/export', { params: { artifact_id: artifactId, fmt }, responseType: 'blob' }),
   // Mappings a reviewer should look at, worst first — lowest confidence, then

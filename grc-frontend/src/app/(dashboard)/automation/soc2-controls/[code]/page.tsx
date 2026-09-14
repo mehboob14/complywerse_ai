@@ -9,11 +9,15 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Activity, AlertCircle, ChevronDown, ChevronRight, FileText, Loader2, Play, Users,
 } from 'lucide-react';
-import { automationApi } from '@/lib/api';
+import { apiClient, automationApi, certificationsApi } from '@/lib/api';
+import {
+  CreateArtifactModal, EditArtifactModal, ViewArtifactModal,
+  type CatalogItem, type TenantArtifact, type TenantUser,
+} from '@/components/compliance/ArtifactsTab';
 import {
   CodeChip, ControlStatusPill, SubTypeChip, CONTROL_STATUS, FrameworkBadge,
   type CommonControl, type LinkedCheck,
@@ -181,6 +185,10 @@ interface ControlDetail {
   description?: string | null;
   control_question?: string | null;
   test_groups?: TestGroup[];
+  related?: {
+    family: { control_id: string; title: string | null }[];
+    by_requirements: { control_id: string; title: string | null; shared: number; score: number }[];
+  };
   artifacts?: ControlArtifact[];
   coverage?: Coverage;
   assurance_mode?: 'automated' | 'manual' | 'hybrid';
@@ -729,26 +737,74 @@ function ControlEvidencePanel({ code, mode, collected }: {
   );
 }
 
-/** Deliverables the frameworks name for this control, with starter documents. */
-function ArtifactsPanel({ artifacts }: { artifacts: ControlArtifact[] }) {
-  const [busy, setBusy] = useState<string | null>(null);
-  const [err, setErr] = useState<string | null>(null);
-  const download = async (a: ControlArtifact) => {
-    const fmt = (a.filetype || '').toLowerCase().includes('xls') ? 'xlsx' : 'docx';
-    setBusy(a.artifact_id); setErr(null);
-    try {
-      const r = await automationApi.exportArtifactTemplate(a.artifact_id, fmt);
-      const url = URL.createObjectURL(r.data as Blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `${a.artifact_id} - ${a.name}.${fmt}`;
-      link.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      setErr(`Could not download a starter document for ${a.name}.`);
-    } finally { setBusy(null); }
-  };
-  if (!artifacts.length) {
+interface ControlArtifactRow {
+  framework_key: string;
+  framework_name: string | null;
+  catalog: CatalogItem;
+  artifact: TenantArtifact | null;
+  required_by: string[];
+  match_mode?: 'exact' | 'parent' | 'child' | null;
+}
+
+const ARTIFACT_STATUS: Record<string, { label: string; cls: string }> = {
+  draft: { label: 'Draft', cls: 'bg-slate-100 text-slate-600 border-slate-200' },
+  in_review: { label: 'In review', cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  approved: { label: 'Approved', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  archived: { label: 'Archived', cls: 'bg-slate-50 text-slate-400 border-slate-200' },
+};
+
+/** This control's artifacts, with the same lifecycle the Frameworks page has.
+ *
+ *  View, start a working copy, assign, edit, send for review, approve and
+ *  download all go through the Frameworks modals, unchanged. A control's
+ *  artifacts span several frameworks, so each row carries its own framework key
+ *  rather than the page assuming one.
+ */
+function ControlArtifactsPanel({ code }: { code: string }) {
+  const qc = useQueryClient();
+  const [viewing, setViewing] = useState<ControlArtifactRow | null>(null);
+  const [creating, setCreating] = useState<ControlArtifactRow | null>(null);
+  const [editing, setEditing] = useState<TenantArtifact | null>(null);
+  const [filter, setFilter] = useState<'all' | 'started' | 'not_started'>('all');
+
+  const listQ = useQuery({
+    queryKey: ['control-artifacts', code],
+    queryFn: () => automationApi.listControlArtifacts(code).then((r) => r.data as { items: ControlArtifactRow[] }),
+  });
+  const usersQ = useQuery({
+    queryKey: ['control-artifact-users'],
+    queryFn: async () => (await certificationsApi.getTenantUsers()).data,
+    staleTime: 5 * 60_000,
+  });
+  const tenantUsers: TenantUser[] = (usersQ.data || []).map((u: { id: number; display_name?: string; email?: string }) => ({
+    id: u.id, label: u.display_name || u.email || String(u.id), email: u.email ?? null,
+  }));
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['control-artifacts', code] });
+  const create = useMutation({
+    mutationFn: async (payload: Record<string, unknown>) => (await apiClient.post('/artifacts', payload)).data,
+    onSuccess: () => { setCreating(null); refresh(); },
+  });
+  const update = useMutation({
+    mutationFn: async ({ id, data }: { id: number; data: Partial<TenantArtifact> }) =>
+      (await apiClient.put(`/artifacts/${id}`, data)).data,
+    onSuccess: () => { setEditing(null); refresh(); },
+  });
+
+  const items = listQ.data?.items ?? [];
+  const shown = items.filter((i) =>
+    filter === 'all' ? true : filter === 'started' ? !!i.artifact : !i.artifact);
+  const started = items.filter((i) => i.artifact).length;
+  const approved = items.filter((i) => i.artifact?.status === 'approved').length;
+
+  if (listQ.isLoading) {
+    return (
+      <Panel title="Artifacts">
+        <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+      </Panel>
+    );
+  }
+  if (!items.length) {
     return (
       <Panel title="Artifacts">
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
@@ -757,49 +813,114 @@ function ArtifactsPanel({ artifacts }: { artifacts: ControlArtifact[] }) {
       </Panel>
     );
   }
-  const withTemplate = artifacts.filter((a) => a.has_template).length;
+
   return (
-    <Panel title="Artifacts" action={<span className="text-xs text-slate-500">{withTemplate} of {artifacts.length} have a starter document</span>}>
-      <p className="mb-3 text-[13px] text-slate-600">
-        Documents the linked frameworks expect you to produce and keep. Download a starter where one exists,
-        then attach the finished version on the Evidence tab.
-      </p>
-      {err && <p className="mb-2 text-xs text-rose-700">{err}</p>}
-      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
-        {artifacts.map((a) => (
-          <li key={a.artifact_id} className="px-3.5 py-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="font-semibold text-slate-800">{a.name}</span>
-              {a.filetype && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{a.filetype}</span>}
-              {a.mandatory && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">mandatory</span>}
-              {a.match_mode === 'parent' && (
-                <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" title="Attached via a section-level reference, a weaker claim">
-                  section-level
-                </span>
-              )}
-              <span className="ml-auto flex items-center gap-2">
-                {a.has_template ? (
-                  <button onClick={() => download(a)} disabled={busy === a.artifact_id}
-                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                    {busy === a.artifact_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
-                    Starter document
+    <>
+      <Panel
+        title="Artifacts"
+        action={
+          <span className="text-xs text-slate-500">
+            {started} of {items.length} started · {approved} approved
+          </span>
+        }
+      >
+        <p className="mb-3 text-[13px] text-slate-600">
+          Documents the linked frameworks expect you to produce and keep. Open one to read it, start a working copy,
+          assign it, send it for review, and download it.
+        </p>
+        <div className="mb-3 flex gap-1.5">
+          {([['all', 'All'], ['started', 'Started'], ['not_started', 'Not started']] as const).map(([k, l]) => (
+            <button key={k} onClick={() => setFilter(k)}
+              className={`rounded-full px-2.5 py-1 text-xs font-medium ${filter === k ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+        <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+          {shown.map((row) => {
+            const c = row.catalog;
+            const a = row.artifact;
+            const st = a ? (ARTIFACT_STATUS[a.status] || ARTIFACT_STATUS.draft) : null;
+            return (
+              <li key={`${row.framework_key}-${c.artifact_id}`} className="px-3.5 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => setViewing(row)} className="text-left font-semibold text-slate-800 hover:text-primary-700">
+                    {a?.name || c.name}
                   </button>
-                ) : (
-                  <span className="text-[11px] text-slate-400">no starter yet</span>
-                )}
-              </span>
-            </div>
-            {a.description && <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{a.description}</p>}
-            <p className="mt-1 text-[11px] text-slate-400">
-              {[a.owner && `Owner: ${a.owner}`, a.required_by.length ? `Required by ${a.required_by.join(', ')}` : null, a.artifact_id]
-                .filter(Boolean).join(' · ')}
-            </p>
-          </li>
-        ))}
-      </ul>
-    </Panel>
+                  {c.format && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{c.format}</span>}
+                  {c.mandatory && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">mandatory</span>}
+                  {row.match_mode === 'parent' && (
+                    <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700"
+                      title="Attached via a section-level reference, a weaker claim">section-level</span>
+                  )}
+                  {st
+                    ? <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold ${st.cls}`}>{st.label}</span>
+                    : <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-400">Not started</span>}
+                  <span className="ml-auto flex items-center gap-1.5">
+                    <button onClick={() => setViewing(row)}
+                      className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                      View
+                    </button>
+                    {a ? (
+                      <button onClick={() => setEditing(a)}
+                        className="rounded-md bg-primary-600 px-2 py-1 text-xs font-semibold text-white hover:bg-primary-700">
+                        Edit &amp; review
+                      </button>
+                    ) : (
+                      <button onClick={() => setCreating(row)}
+                        className="rounded-md bg-primary-600 px-2 py-1 text-xs font-semibold text-white hover:bg-primary-700">
+                        Start
+                      </button>
+                    )}
+                  </span>
+                </div>
+                {c.description && <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{c.description}</p>}
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {[
+                    row.framework_name,
+                    a?.assigned_to_name ? `Assigned to ${a.assigned_to_name}` : (c.owner && `Suggested owner: ${c.owner}`),
+                    c.has_content ? 'starter document available' : 'no starter document yet',
+                    c.artifact_id,
+                  ].filter(Boolean).join(' · ')}
+                </p>
+              </li>
+            );
+          })}
+        </ul>
+      </Panel>
+
+      {viewing && (
+        <ViewArtifactModal
+          item={viewing.catalog}
+          frameworkKey={viewing.framework_key}
+          onClose={() => setViewing(null)}
+          onCreate={viewing.artifact ? undefined : () => { setCreating(viewing); setViewing(null); }}
+        />
+      )}
+      {creating && (
+        <CreateArtifactModal
+          item={creating.catalog}
+          frameworkKey={creating.framework_key}
+          frameworkName={creating.framework_name || creating.framework_key}
+          tenantUsers={tenantUsers}
+          onConfirm={(payload) => create.mutate(payload)}
+          onClose={() => setCreating(null)}
+          isPending={create.isPending}
+        />
+      )}
+      {editing && (
+        <EditArtifactModal
+          artifact={editing}
+          tenantUsers={tenantUsers}
+          onSave={(data) => update.mutate({ id: editing.id, data })}
+          onClose={() => setEditing(null)}
+          isPending={update.isPending}
+        />
+      )}
+    </>
   );
 }
+
 
 /** What to collect to evidence this control, by how it is obtained. */
 function EvidencePanel({ ev, mode }: { ev: NonNullable<ControlDetail['evidence']>; mode?: string }) {
@@ -961,13 +1082,6 @@ export default function ControlDetailPage() {
   );
   const totalReqs = reqGroups.reduce((n, g) => n + g.items.length, 0);
 
-  const related = useMemo(() => {
-    if (!control) return [];
-    const mine = new Set(allReqCodes(control));
-    return controls
-      .filter((c) => c.control_id !== control.control_id && allReqCodes(c).some((k) => mine.has(k)))
-      .slice(0, 12);
-  }, [control, controls]);
 
   const runTest = async () => {
     const ids = (control?.checks || []).map((c) => c.id).filter(Boolean) as number[];
@@ -1123,15 +1237,7 @@ export default function ControlDetailPage() {
             )
           )}
 
-          {tab === 'artifacts' && (
-            detailQ.isLoading ? (
-              <Panel title="Artifacts">
-                <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-              </Panel>
-            ) : (
-              <ArtifactsPanel artifacts={detailQ.data?.artifacts ?? []} />
-            )
-          )}
+          {tab === 'artifacts' && <ControlArtifactsPanel code={code} />}
 
           {tab === 'requirements' && (
             <Panel title="Linked requirements" action={<span className="text-xs text-slate-400">Every framework obligation this control discharges</span>}>
@@ -1215,17 +1321,41 @@ export default function ControlDetailPage() {
             )}
           </section>
 
-          {related.length > 0 && (
+          {detailQ.data?.related && (detailQ.data.related.family.length > 0 || detailQ.data.related.by_requirements.length > 0) && (
             <section className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="mb-1 text-base font-bold text-slate-900">Related controls</h2>
-              <p className="mb-3 text-[11px] text-slate-400">Also satisfying a criterion this control covers.</p>
-              <div className="flex flex-wrap gap-1.5">
-                {related.map((c) => (
-                  <Link key={c.control_id} href={`/automation/soc2-controls/${c.control_id}`} title={c.title}>
-                    <CodeChip code={c.control_id} className="hover:bg-primary-600 hover:text-white" />
-                  </Link>
-                ))}
-              </div>
+              <h2 className="mb-3 text-base font-bold text-slate-900">Related controls</h2>
+              {detailQ.data.related.family.length > 0 && (
+                <div className="mb-4">
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Same control family</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {detailQ.data.related.family.map((c) => (
+                      <Link key={c.control_id} href={`/automation/soc2-controls/${c.control_id}`} title={c.title || c.control_id}>
+                        <CodeChip code={c.control_id} className="hover:bg-primary-600 hover:text-white" />
+                      </Link>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {detailQ.data.related.by_requirements.length > 0 && (
+                <div>
+                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Shares specific requirements</p>
+                  <ul className="space-y-1.5">
+                    {detailQ.data.related.by_requirements.map((c) => (
+                      <li key={c.control_id}>
+                        <Link href={`/automation/soc2-controls/${c.control_id}`} className="group flex items-baseline gap-2">
+                          <CodeChip code={c.control_id} className="group-hover:bg-primary-600 group-hover:text-white" />
+                          <span className="min-w-0 flex-1 truncate text-[12px] text-slate-600 group-hover:text-slate-900">{c.title}</span>
+                          <span className="shrink-0 text-[10px] tabular-nums text-slate-400">{c.shared}</span>
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+                    Ranked by how specific the shared requirements are. One shared by two controls counts for far more
+                    than one shared by thirty.
+                  </p>
+                </div>
+              )}
             </section>
           )}
         </aside>

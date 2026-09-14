@@ -1331,6 +1331,45 @@ def common_controls_overview(
 
     now = datetime.utcnow()
 
+    # ── connector categories: which one to connect, and what it unlocks ────────
+    # The library-level form of the question each control page asks. A tenant
+    # needs any one source per category, so the useful number is how many
+    # controls a category can reach and how many of those are waiting on it —
+    # automatable, but with nothing connected that proves them.
+    cat_controls: Dict[str, set] = defaultdict(set)
+    cat_providers: Dict[str, Dict[str, int]] = defaultdict(dict)
+    for scf_id, codes in soc2_of.items():
+        for code in codes:
+            for p, cids in idx.get(code, []):
+                prov = (p.check_definition or {}).get("provider") or (
+                    "aws" if p.runner_type == "aws_readonly" else None)
+                if not prov:
+                    continue
+                cat = (PROVIDER_API.get(prov) or {}).get("category") or "other"
+                cat_controls[cat].add(scf_id)
+                cat_providers[cat][prov] = cat_providers[cat].get(prov, 0) + 1
+    connector_categories = []
+    for cat, reach in cat_controls.items():
+        provs = cat_providers[cat]
+        live = sorted(p for p in provs if p in connected_now)
+        waiting = {s for s in reach if status_of.get(s) == "connect_one"}
+        connector_categories.append({
+            "category": cat,
+            "connected": bool(live),
+            "connected_providers": [
+                {"provider": p, "label": (PROVIDER_API.get(p) or {}).get("label", p)} for p in live],
+            "providers": sorted(
+                ({"provider": p, "label": (PROVIDER_API.get(p) or {}).get("label", p),
+                  "connected": p in connected_now, "bindings": n} for p, n in provs.items()),
+                key=lambda x: (not x["connected"], -x["bindings"], x["label"])),
+            "controls_reachable": len(reach),
+            # controls this category could move out of connect_one if connected
+            "controls_waiting": len(waiting),
+        })
+    # unconnected categories that unlock the most controls come first
+    connector_categories.sort(key=lambda c: (c["connected"], -c["controls_waiting"],
+                                             -c["controls_reachable"], c["category"]))
+
     # ── collection health: a broken collector is not a broken control ─────────
     # A run that FAILED still collected — its checks came back negative. Only an
     # errored run means we could not look, so those are the only ones excluded
@@ -1524,6 +1563,7 @@ def common_controls_overview(
         # Deliberately its own block, not folded into posture: a connector that
         # cannot authenticate tells you nothing about the control, and the two
         # belong on separate lines of the same screen.
+        "connector_categories": connector_categories,
         "collection": {"connectors": collection, "counts": dict(coll_counts),
                        "stale_after_days": COLLECTION_STALE_DAYS},
         "frameworks": frameworks,
@@ -2020,6 +2060,159 @@ def list_control_evidence(
     } for e, m in rows]}
 
 
+def _related_controls(db: Session, release_id: int, scf_id: str, limit: int = 10) -> Dict[str, Any]:
+    """Controls genuinely related to this one, as two different kinds of relatedness.
+
+    The page used to call two controls related if they shared ONE requirement, and
+    then showed the first 12 alphabetically. A broad requirement such as "have an
+    information security policy" maps to dozens of controls, so the list was
+    mostly noise: IAC-06 Multi-Factor Authentication listed BCD-11 backups, and
+    its own MFA sub-controls never appeared because they sort after the cut-off.
+
+    family            SCF's own structure. IAC-06.1 is a sub-control of IAC-06;
+                      that is a fact in the catalogue, not an inference.
+    by_requirements   ranked by rarity-weighted overlap. A requirement shared by
+                      two controls is strong evidence they belong together; one
+                      shared by thirty-seven is barely any. Each shared requirement
+                      contributes 1/ln(1 + number of controls it maps to).
+    """
+    import math
+
+    base = (db.query(SCFControl.base_scf_id)
+            .filter(SCFControl.release_id == release_id, SCFControl.scf_id == scf_id).scalar()) or scf_id.split(".")[0]
+    family = [
+        {"control_id": s, "title": n}
+        for s, n in (db.query(SCFControl.scf_id, SCFControl.name)
+                     .filter(SCFControl.release_id == release_id,
+                             (SCFControl.base_scf_id == base) | (SCFControl.scf_id == base),
+                             SCFControl.scf_id != scf_id)
+                     .order_by(SCFControl.sort_key).all())
+    ]
+    family_ids = {f["control_id"] for f in family}
+
+    live = (SCFMapping.release_id == release_id, SCFMapping.provenance.in_(("resolver", "ai")))
+    mine = {(fw, code) for fw, code in
+            db.query(SCFMapping.source_slug, SCFMapping.requirement_code)
+            .filter(*live, SCFMapping.scf_id == scf_id).distinct().all()}
+    if not mine:
+        return {"family": family, "by_requirements": []}
+
+    from sqlalchemy import tuple_
+
+    holders: Dict[tuple, set] = defaultdict(set)
+    # one query for every requirement at once, bounded by this control's
+    # requirements x their fan-out rather than the whole catalogue
+    for fw, code, s in (db.query(SCFMapping.source_slug, SCFMapping.requirement_code, SCFMapping.scf_id)
+                        .filter(*live, tuple_(SCFMapping.source_slug, SCFMapping.requirement_code)
+                                .in_(sorted(mine)))
+                        .distinct().all()):
+        holders[(fw, code)].add(s)
+
+    score: Dict[str, float] = defaultdict(float)
+    shared: Dict[str, int] = defaultdict(int)
+    for req, ctrls in holders.items():
+        weight = 1.0 / math.log(1 + len(ctrls))
+        for other in ctrls:
+            if other != scf_id and other not in family_ids:
+                score[other] += weight
+                shared[other] += 1
+
+    top = sorted(score, key=lambda o: (-score[o], o))[:limit]
+    titles = dict(db.query(SCFControl.scf_id, SCFControl.name)
+                  .filter(SCFControl.release_id == release_id, SCFControl.scf_id.in_(top)).all()) if top else {}
+    return {
+        "family": family,
+        "by_requirements": [
+            {"control_id": o, "title": titles.get(o), "shared": shared[o],
+             "score": round(score[o], 2)}
+            for o in top
+        ],
+    }
+
+
+@common_router.get("/controls/{scf_id}/artifacts")
+def list_control_artifacts(
+    scf_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """This control's deliverables, in the shape the Frameworks artifact UI uses.
+
+    The Frameworks page lets a user view, assign, review, edit and download an
+    artifact, through modals keyed on one framework. A control's artifacts come
+    from many frameworks at once — IAC-06 draws on Aramco, CIS and MAS — so this
+    returns each as a real catalogue item carrying its own framework_key and
+    catalogue id, joined to the tenant's working copy where one exists. The
+    frontend then reuses the Frameworks modals unchanged: one lifecycle, one
+    store, no second artifact model.
+    """
+    from grc.models import ArtifactCatalogItem, TenantArtifact
+    from grc.routers.artifacts_router import (
+        _artifact_out, _ensure_catalog_seeded, _load_artifact_content,
+    )
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    wanted = {
+        a["artifact_id"]: a
+        for a in ((_consolidated_evidence().get(scf_id) or {}).get("artifacts") or [])
+        if a.get("source") == "catalog" and a.get("artifact_id")
+    }
+    if not wanted:
+        return {"scf_id": scf_id, "items": []}
+
+    _ensure_catalog_seeded(db)
+    catalog = (db.query(ArtifactCatalogItem)
+               .filter(ArtifactCatalogItem.artifact_id.in_(sorted(wanted))).all())
+    content = _load_artifact_content()
+
+    def has_body(aid: str) -> Optional[dict]:
+        # same rule as /artifacts/catalog: a key with empty content is not a
+        # starter document, it is a placeholder
+        for bucket in content.values():
+            e = bucket.get(aid) if isinstance(bucket, dict) else None
+            if e and e.get("content"):
+                return e
+        return None
+
+    copies = {
+        a.catalog_item_id: a
+        for a in (db.query(TenantArtifact)
+                  .filter(TenantArtifact.tenant_id == tenant_id,
+                          TenantArtifact.catalog_item_id.in_([c.id for c in catalog]))
+                  .order_by(TenantArtifact.id.desc()).all())
+    }
+
+    items = []
+    for c in catalog:
+        entry = has_body(c.artifact_id)
+        src = wanted[c.artifact_id]
+        copy = copies.get(c.id)
+        items.append({
+            "framework_key": c.framework_key,
+            "framework_name": c.framework_name,
+            "catalog": {
+                "id": c.id, "artifact_id": c.artifact_id, "stage": c.stage,
+                "stage_number": c.stage_number, "name": c.name,
+                "artifact_type": c.artifact_type, "control_ref": c.control_ref,
+                "mandatory": c.mandatory, "description": c.description,
+                "format": c.format, "owner": c.owner,
+                "is_platform_native": c.is_platform_native,
+                "platform_data_type": c.platform_data_type,
+                "has_content": entry is not None,
+                "content_format": (entry.get("content_format") or "markdown") if entry else None,
+            },
+            "artifact": _artifact_out(copy) if copy else None,
+            "required_by": src.get("required_by") or [],
+            # a section-level reference attached this, which is a weaker claim
+            "match_mode": src.get("match_mode"),
+        })
+    # working copies first, then mandatory, then the rest
+    items.sort(key=lambda i: (i["artifact"] is None, not i["catalog"]["mandatory"],
+                              i["catalog"]["name"]))
+    return {"scf_id": scf_id, "items": items,
+            "missing_from_catalog": sorted(set(wanted) - {c.artifact_id for c in catalog})}
+
+
 class LinkEvidenceBody(BaseModel):
     coverage_type: str = Field("supporting", description="full | partial | supporting")
     note: Optional[str] = None
@@ -2213,6 +2406,7 @@ def get_common_control(
         "coverage": coverage,
         "checks": linked,
         "test_groups": _test_groups(linked, connected),
+        "related": _related_controls(db, release.id, ctl.scf_id),
         # Deliverables the frameworks name for this control, with whether an
         # authored starter document exists to download.
         "artifacts": artifacts,
