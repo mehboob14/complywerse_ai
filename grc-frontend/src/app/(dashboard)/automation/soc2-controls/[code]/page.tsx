@@ -32,7 +32,7 @@ const SOURCE_BADGE: Record<string, string> = {
 const sevCls = (s: string | null) =>
   /crit|high/.test(s || '') ? 'text-rose-600' : /med/.test(s || '') ? 'text-amber-600' : 'text-slate-400';
 
-type Tab = 'overview' | 'evidence' | 'tests' | 'requirements' | 'history';
+type Tab = 'overview' | 'evidence' | 'tests' | 'artifacts' | 'requirements' | 'history';
 
 function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
@@ -157,8 +157,31 @@ interface Coverage {
     providers: { provider: string; label: string; checks: number; connected: boolean }[];
   }[];
 }
+interface TestGroup {
+  category: string;
+  connected: boolean;
+  status: string;
+  providers: { provider: string; label: string; connected: boolean; checks: LinkedCheck[] }[];
+}
+interface ControlArtifact {
+  artifact_id: string;
+  name: string;
+  description: string | null;
+  filetype: string | null;
+  owner: string | null;
+  mandatory: boolean | null;
+  stage: string | null;
+  artifact_type: string | null;
+  required_by: string[];
+  match_mode?: 'exact' | 'parent' | 'child';
+  has_template: boolean;
+}
 interface ControlDetail {
   control_id: string;
+  description?: string | null;
+  control_question?: string | null;
+  test_groups?: TestGroup[];
+  artifacts?: ControlArtifact[];
   coverage?: Coverage;
   assurance_mode?: 'automated' | 'manual' | 'hybrid';
   implementation?: {
@@ -327,8 +350,15 @@ function ImplementationPanel({ impl }: { impl: NonNullable<ControlDetail['implem
           <button type="button" onClick={() => setShowLadder((v) => !v)}
             className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 hover:underline">
             <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLadder ? 'rotate-180' : ''}`} />
-            {showLadder ? 'Hide' : 'Show'} the full maturity ladder ({levels.length} levels)
+            {showLadder ? 'Hide' : 'Show'} all {levels.length} maturity levels
           </button>
+          {!showLadder && (
+            <p className="mt-1 text-[11px] text-slate-500">
+              SCF grades every control on a six-step capability maturity model, from Level 0 Not Performed to
+              Level 5 Continuously Improving. Level 3 Well Defined is the usual target for a compliance obligation,
+              so it is shown above; the other levels describe what the control looks like below and beyond it.
+            </p>
+          )}
           {showLadder && (
             <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
               {levels.map(([name, text]) => (
@@ -470,6 +500,307 @@ function CoveragePanel({ cov }: { cov: Coverage }) {
   );
 }
 
+const CATEGORY_LABEL: Record<string, string> = {
+  scm: 'Source control', identity: 'Identity provider', cloud: 'Cloud',
+  observability: 'Observability', security: 'Security tooling', productivity: 'Work management',
+  comms: 'Communications', email: 'Email', incident: 'Incident response', hr: 'HR system',
+  mdm: 'Device management', itsm: 'IT service management', crm: 'CRM', data: 'Data platform',
+  payments: 'Payments', ai: 'AI platform', other: 'Other',
+};
+
+/** Automated tests grouped by connector category.
+ *
+ *  A tenant runs one identity provider. Okta, Entra ID and Google Workspace are
+ *  alternatives for the same evidence, so drawing each as its own "Not run" test
+ *  implies all three must be checked, which no tenant can satisfy and none should
+ *  try to. Each category asks for any one source; only a connected source's
+ *  results are shown as results.
+ */
+function TestGroupsPanel({ groups, onRan }: { groups: TestGroup[]; onRan: () => void }) {
+  const [openCat, setOpenCat] = useState<string | null>(null);
+  if (!groups.length) {
+    return (
+      <Panel title="Automated tests">
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-sm text-slate-500">
+          No automated test reaches this control yet.
+        </div>
+      </Panel>
+    );
+  }
+  const live = groups.filter((g) => g.connected).length;
+  return (
+    <Panel
+      title="Automated tests"
+      action={<span className="text-xs text-slate-500">{live} of {groups.length} categories connected</span>}
+    >
+      <p className="mb-3 text-[13px] leading-relaxed text-slate-600">
+        Each category below can evidence this control. Connect <span className="font-semibold">any one</span> source
+        from a category; you do not need them all. Once connected, that source&apos;s results count.
+      </p>
+      <ul className="space-y-2">
+        {groups.map((g) => {
+          const connectedProviders = g.providers.filter((p) => p.connected);
+          const options = g.providers.filter((p) => !p.connected);
+          const open = openCat === g.category;
+          return (
+            <li key={g.category} className="overflow-hidden rounded-lg border border-slate-200">
+              <button
+                type="button"
+                onClick={() => setOpenCat(open ? null : g.category)}
+                aria-expanded={open}
+                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-slate-50"
+              >
+                <span className="text-sm font-semibold text-slate-800">{CATEGORY_LABEL[g.category] || g.category}</span>
+                {g.connected
+                  ? <ControlStatusPill status={g.status} />
+                  : <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-700">connect any one</span>}
+                <span className="ml-auto truncate text-[11px] text-slate-500">
+                  {g.connected
+                    ? `via ${connectedProviders.map((p) => p.label).join(', ')}`
+                    : options.slice(0, 3).map((p) => p.label).join(' · ') + (options.length > 3 ? ` +${options.length - 3}` : '')}
+                </span>
+                <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+              </button>
+              {open && (
+                <div className="border-t border-slate-100 bg-slate-50/40 px-3.5 py-3">
+                  {connectedProviders.map((p) => (
+                    <div key={p.provider} className="mb-3 last:mb-0">
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{p.label} · connected</p>
+                      <ul className="space-y-2">
+                        {p.checks.map((chk, i) => <CheckRow key={`${p.provider}-${i}`} chk={chk} onRan={onRan} />)}
+                      </ul>
+                    </div>
+                  ))}
+                  {options.length > 0 && (
+                    <div>
+                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {g.connected ? 'Other sources that could also evidence this' : 'Connect any one of these'}
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {options.map((p) => (
+                          <span key={p.provider} title={`${p.checks.length} check${p.checks.length === 1 ? '' : 's'} for this control`}
+                            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-700">
+                            {p.label}
+                          </span>
+                        ))}
+                      </div>
+                      <Link href="/admin/evidence-collectors" className="mt-2 inline-block text-xs font-semibold text-primary-700 hover:underline">
+                        Connect a source →
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </Panel>
+  );
+}
+
+interface LinkedEvidence {
+  evidence_id: number; mapping_id: number; name: string; description: string | null;
+  file_name: string | null; file_type: string | null; evidence_type: string | null;
+  status: string; uploaded_at: string | null; expiry_date: string | null;
+  is_stale: boolean; coverage_type: string;
+}
+
+/** Evidence a person attaches: the manual and hybrid half no collector produces. */
+function ControlEvidencePanel({ code, mode, collected }: {
+  code: string; mode?: string; collected: LinkedCheck[];
+}) {
+  const qc = useQueryClient();
+  const [file, setFile] = useState<File | null>(null);
+  const [name, setName] = useState('');
+  const [coverage, setCoverage] = useState<'full' | 'partial' | 'supporting'>('supporting');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
+  const listQ = useQuery({
+    queryKey: ['control-evidence', code],
+    queryFn: () => automationApi.listControlEvidence(code).then((r) => r.data as { items: LinkedEvidence[] }),
+  });
+  const items = listQ.data?.items ?? [];
+  const acceptsUploads = mode !== 'automated';
+
+  const upload = async () => {
+    if (!file) { setMsg({ tone: 'err', text: 'Choose a file first.' }); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('name', name.trim() || file.name);
+      form.append('source_system', `Control ${code}`);
+      const up = await automationApi.uploadEvidenceItem(form);
+      const body = up.data as { id?: number; evidence_id?: number };
+      const id = body.id ?? body.evidence_id;
+      if (!id) throw new Error('Upload returned no evidence id');
+      await automationApi.linkControlEvidence(code, id, { coverage_type: coverage });
+      setMsg({ tone: 'ok', text: 'Evidence uploaded and attached to this control.' });
+      setFile(null); setName('');
+      await qc.invalidateQueries({ queryKey: ['control-evidence', code] });
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setMsg({ tone: 'err', text: detail || (e as Error)?.message || 'Upload failed.' });
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div className="space-y-4">
+      {acceptsUploads && (
+        <Panel title="Upload evidence">
+          <p className="mb-3 text-[13px] text-slate-600">
+            {mode === 'hybrid'
+              ? 'Part of this control is collected automatically. Attach the rest here: a policy, an approval record, an export.'
+              : 'No collector can prove this control, so evidence is attached by hand: a policy, a signed approval, a review record.'}
+          </p>
+          <div className="grid gap-2 sm:grid-cols-[1fr_1fr_auto]">
+            <input type="file" onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200" />
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (defaults to file name)"
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm focus:border-primary-500 focus:outline-none" />
+            <select value={coverage} onChange={(e) => setCoverage(e.target.value as 'full' | 'partial' | 'supporting')}
+              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-sm text-slate-700 focus:border-primary-500 focus:outline-none">
+              <option value="full">Fully evidences</option>
+              <option value="partial">Partially evidences</option>
+              <option value="supporting">Supporting</option>
+            </select>
+          </div>
+          <div className="mt-3 flex items-center gap-3">
+            <button onClick={upload} disabled={busy || !file}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50">
+              {busy && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Upload and attach
+            </button>
+            {msg && <span className={`text-xs ${msg.tone === 'ok' ? 'text-emerald-700' : 'text-rose-700'}`}>{msg.text}</span>}
+          </div>
+        </Panel>
+      )}
+
+      <Panel title="Attached evidence" action={<span className="text-xs text-slate-500">{items.length}</span>}>
+        {listQ.isLoading ? (
+          <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+        ) : items.length ? (
+          <ul className="divide-y divide-slate-100">
+            {items.map((it) => (
+              <li key={it.mapping_id} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                <span className="min-w-0 flex-1">
+                  <Link href={`/evidence/${it.evidence_id}`} className="block truncate text-sm font-medium text-slate-800 hover:text-primary-700">{it.name}</Link>
+                  <span className="block truncate text-[11px] text-slate-400">
+                    {it.file_name || it.evidence_type || 'file'}
+                    {it.uploaded_at && ` · ${new Date(it.uploaded_at).toLocaleDateString()}`}
+                    {it.expiry_date && ` · expires ${new Date(it.expiry_date).toLocaleDateString()}`}
+                  </span>
+                </span>
+                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-600">{it.coverage_type}</span>
+                {it.is_stale && <span className="rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-orange-700">stale</span>}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-slate-500">No evidence attached yet.</p>
+        )}
+      </Panel>
+
+      {collected.length > 0 && (
+        <Panel title="Collected automatically">
+          <ul className="divide-y divide-slate-100">
+            {collected.map((chk, i) => {
+              const st = CONTROL_STATUS[chk.last_run?.status || 'not_run'] || CONTROL_STATUS.not_run;
+              return (
+                <li key={i} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-slate-700">{chk.title || chk.plugin_key}</span>
+                    <span className="block truncate text-[11px] text-slate-400">
+                      {chk.last_run?.started_at ? new Date(chk.last_run.started_at).toLocaleString() : 'collected'}
+                    </span>
+                  </span>
+                  <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold ${st.cls}`}>
+                    <span className={`size-1.5 rounded-full ${st.dot}`} />{st.label}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+/** Deliverables the frameworks name for this control, with starter documents. */
+function ArtifactsPanel({ artifacts }: { artifacts: ControlArtifact[] }) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const download = async (a: ControlArtifact) => {
+    const fmt = (a.filetype || '').toLowerCase().includes('xls') ? 'xlsx' : 'docx';
+    setBusy(a.artifact_id); setErr(null);
+    try {
+      const r = await automationApi.exportArtifactTemplate(a.artifact_id, fmt);
+      const url = URL.createObjectURL(r.data as Blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${a.artifact_id} - ${a.name}.${fmt}`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setErr(`Could not download a starter document for ${a.name}.`);
+    } finally { setBusy(null); }
+  };
+  if (!artifacts.length) {
+    return (
+      <Panel title="Artifacts">
+        <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+          No framework names a specific deliverable for this control.
+        </div>
+      </Panel>
+    );
+  }
+  const withTemplate = artifacts.filter((a) => a.has_template).length;
+  return (
+    <Panel title="Artifacts" action={<span className="text-xs text-slate-500">{withTemplate} of {artifacts.length} have a starter document</span>}>
+      <p className="mb-3 text-[13px] text-slate-600">
+        Documents the linked frameworks expect you to produce and keep. Download a starter where one exists,
+        then attach the finished version on the Evidence tab.
+      </p>
+      {err && <p className="mb-2 text-xs text-rose-700">{err}</p>}
+      <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+        {artifacts.map((a) => (
+          <li key={a.artifact_id} className="px-3.5 py-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-semibold text-slate-800">{a.name}</span>
+              {a.filetype && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{a.filetype}</span>}
+              {a.mandatory && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">mandatory</span>}
+              {a.match_mode === 'parent' && (
+                <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" title="Attached via a section-level reference, a weaker claim">
+                  section-level
+                </span>
+              )}
+              <span className="ml-auto flex items-center gap-2">
+                {a.has_template ? (
+                  <button onClick={() => download(a)} disabled={busy === a.artifact_id}
+                    className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                    {busy === a.artifact_id ? <Loader2 className="h-3 w-3 animate-spin" /> : <FileText className="h-3 w-3" />}
+                    Starter document
+                  </button>
+                ) : (
+                  <span className="text-[11px] text-slate-400">no starter yet</span>
+                )}
+              </span>
+            </div>
+            {a.description && <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{a.description}</p>}
+            <p className="mt-1 text-[11px] text-slate-400">
+              {[a.owner && `Owner: ${a.owner}`, a.required_by.length ? `Required by ${a.required_by.join(', ')}` : null, a.artifact_id]
+                .filter(Boolean).join(' · ')}
+            </p>
+          </li>
+        ))}
+      </ul>
+    </Panel>
+  );
+}
+
 /** What to collect to evidence this control, by how it is obtained. */
 function EvidencePanel({ ev, mode }: { ev: NonNullable<ControlDetail['evidence']>; mode?: string }) {
   const [showAll, setShowAll] = useState(false);
@@ -604,10 +935,19 @@ export default function ControlDetailPage() {
   // detail endpoint resolves it server-side. Fetched only when the tab is opened.
   const detailQ = useQuery({
     queryKey: ['automation-common-detail', code],
-    enabled: (tab === 'requirements' || tab === 'overview') && !!code,
+    // Statement, grouped tests, artifacts and attached evidence all come from the
+    // detail endpoint, so it is needed on every tab rather than two of them.
+    enabled: !!code,
     queryFn: () => automationApi.getCommonControl(code).then((r) => r.data as ControlDetail),
   });
   const reqGroupsFull = detailQ.data?.requirement_groups ?? [];
+  // Same key as ControlEvidencePanel, so react-query shares one request between the
+  // tab count and the panel; without it an upload left the tab reading 0.
+  const attachedQ = useQuery({
+    queryKey: ['control-evidence', code],
+    enabled: !!code,
+    queryFn: () => automationApi.listControlEvidence(code).then((r) => r.data as { items: { mapping_id: number }[] }),
+  });
   const control = controls.find((c) => c.control_id === code);
 
   const allReqCodes = (c?: CommonControl) =>
@@ -660,8 +1000,9 @@ export default function ControlDetailPage() {
   const evidence = (control.checks || []).filter((c) => c.last_run);
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
-    { id: 'evidence', label: 'Evidence', count: evidence.length },
-    { id: 'tests', label: 'Tests', count: control.checks?.length || 0 },
+    { id: 'evidence', label: 'Evidence', count: evidence.length + (attachedQ.data?.items.length ?? 0) },
+    { id: 'tests', label: 'Tests', count: detailQ.data?.test_groups?.length ?? (control.checks?.length || 0) },
+    { id: 'artifacts', label: 'Artifacts', count: detailQ.data?.artifacts?.length ?? 0 },
     { id: 'requirements', label: 'Requirements', count: totalReqs },
     { id: 'history', label: 'History' },
   ];
@@ -723,7 +1064,20 @@ export default function ControlDetailPage() {
           {tab === 'overview' && (
             <>
               <Panel title="Control statement">
-                <p className="text-sm leading-relaxed text-slate-600">{control.description}</p>
+                {/* The list endpoint sends description: null for all 1,534 rows so the
+                    table stays light; the detail endpoint carries the real text. */}
+                {(detailQ.data?.description || control.description) ? (
+                  <p className="text-sm leading-relaxed text-slate-700">{detailQ.data?.description || control.description}</p>
+                ) : detailQ.isLoading ? (
+                  <p className="text-sm text-slate-400">Loading…</p>
+                ) : (
+                  <p className="text-sm italic text-slate-400">No statement published for this control.</p>
+                )}
+                {detailQ.data?.control_question && (
+                  <p className="mt-3 border-l-2 border-slate-200 pl-3 text-[13px] italic leading-relaxed text-slate-500">
+                    {detailQ.data.control_question}
+                  </p>
+                )}
                 {control.guidance && (
                   <>
                     <h3 className="mb-2 mt-5 text-sm font-bold text-slate-900">Implementation guidance</h3>
@@ -754,17 +1108,29 @@ export default function ControlDetailPage() {
           )}
 
           {tab === 'tests' && (
-            <Panel title="Automated tests">
-              {control.checks?.length ? (
-                <ul className="space-y-2">
-                  {control.checks.map((chk, i) => <CheckRow key={i} chk={chk} onRan={() => qc.invalidateQueries({ queryKey: ['automation-library'] })} />)}
-                </ul>
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-sm text-slate-500">
-                  No automated tests. Continuous tests run against connected systems — connect a collector to cover this control’s criteria.
-                </div>
-              )}
-            </Panel>
+            detailQ.isLoading ? (
+              <Panel title="Automated tests">
+                <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+              </Panel>
+            ) : (
+              <TestGroupsPanel
+                groups={detailQ.data?.test_groups ?? []}
+                onRan={() => {
+                  qc.invalidateQueries({ queryKey: ['automation-common-detail', code] });
+                  qc.invalidateQueries({ queryKey: ['automation-common'] });
+                }}
+              />
+            )
+          )}
+
+          {tab === 'artifacts' && (
+            detailQ.isLoading ? (
+              <Panel title="Artifacts">
+                <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
+              </Panel>
+            ) : (
+              <ArtifactsPanel artifacts={detailQ.data?.artifacts ?? []} />
+            )
           )}
 
           {tab === 'requirements' && (
@@ -790,7 +1156,7 @@ export default function ControlDetailPage() {
                     </p>
                   )}
                   {reqGroupsFull.map((g, i) => (
-                    <RequirementGroup key={g.framework} g={g} defaultOpen={i < 2} />
+                    <RequirementGroup key={g.framework} g={g} defaultOpen={false} />
                   ))}
                 </div>
               ) : (
@@ -802,29 +1168,11 @@ export default function ControlDetailPage() {
           )}
 
           {tab === 'evidence' && (
-            <Panel title="Evidence">
-              {evidence.length ? (
-                <ul className="divide-y divide-slate-100">
-                  {evidence.map((chk, i) => {
-                    const st = CONTROL_STATUS[chk.last_run?.status || 'not_run'] || CONTROL_STATUS.not_run;
-                    return (
-                      <li key={i} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                        <FileText className="h-4 w-4 shrink-0 text-slate-400" />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm text-slate-700">{chk.title || chk.plugin_key}</span>
-                          <span className="block truncate text-[11px] text-slate-400">{chk.last_run?.started_at ? new Date(chk.last_run.started_at).toLocaleString() : 'collected'}</span>
-                        </span>
-                        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold ${st.cls}`}><span className={`size-1.5 rounded-full ${st.dot}`} />{st.label}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              ) : (
-                <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
-                  No evidence collected yet. Run this control’s tests, or attach evidence from the collectors.
-                </div>
-              )}
-            </Panel>
+            <ControlEvidencePanel
+              code={code}
+              mode={detailQ.data?.assurance_mode}
+              collected={evidence}
+            />
           )}
 
           {tab === 'history' && (

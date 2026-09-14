@@ -2,6 +2,7 @@
 
 import type { ColumnDef, ColumnFilter, FilterRule, FilterRules, Row, SortSpec } from './types';
 import { OPERATORS } from './types';
+import { EMPTY_TOKEN, decodeMultiValue } from './filter-utils';
 
 /** A condition only counts once it has a column, an operator, and (for value
  *  operators) a non-blank value — so the builder's seeded empty row is ignored
@@ -10,6 +11,7 @@ export function isActiveCondition(c: FilterRule): boolean {
   if (!c.col || !c.op) return false;
   // Predicate-only operators need no value to be active.
   if (c.op === 'empty' || c.op === 'notempty' || c.op === 'linked' || c.op === 'notlinked') return true;
+  if (c.op === 'in' || c.op === 'notin') return decodeMultiValue(c.value).length > 0;
   return c.value != null && String(c.value).trim() !== '';
 }
 
@@ -123,14 +125,32 @@ function evalCond(col: ColumnDef, row: Row, op: string, value: string): boolean 
   const text = displayText(col, row);
   const textLower = text.toLowerCase();
   const v = (value || '').toLowerCase();
+  const raw = rawValue(col, row);
+  const cellEmpty = !text && (raw == null || String(raw).trim() === '');
   // Badge / enum: compare normalized keys so titleCase display matches raw enum.
-  const badgeEq = () => {
-    const raw = rawValue(col, row);
+  const badgeEq = (candidate: string) => {
     const rawN = normKey(String(raw ?? ''));
     const dispN = normKey(text);
-    const valN = normKey(value || '');
+    const valN = normKey(candidate || '');
     return rawN === valN || dispN === valN;
   };
+  const textEq = (candidate: string) => (
+    col.type === 'badge'
+      ? badgeEq(candidate)
+      : textLower === (candidate || '').toLowerCase()
+  );
+
+  // Multi-select facets — "is any of" / "is none of", including blank via EMPTY_TOKEN.
+  if (op === 'in' || op === 'notin') {
+    const parts = decodeMultiValue(value);
+    const wantsEmpty = parts.includes(EMPTY_TOKEN);
+    const names = parts.filter((p) => p !== EMPTY_TOKEN);
+    let hit = false;
+    if (wantsEmpty && cellEmpty) hit = true;
+    if (!hit && names.some((n) => textEq(n))) hit = true;
+    return op === 'in' ? hit : !hit;
+  }
+
   // Numeric comparisons use numericValue so a blank/whitespace cell is *empty*,
   // not 0 — otherwise `< 5`, `= 0`, `≥ 0` all wrongly match un-scored rows.
   if (col.type === 'number' && op !== 'empty' && op !== 'notempty') {
@@ -150,20 +170,19 @@ function evalCond(col: ColumnDef, row: Row, op: string, value: string): boolean 
   switch (op) {
     case 'contains':
       return col.type === 'badge'
-        ? normKey(text).includes(normKey(value || '')) || normKey(String(rawValue(col, row) ?? '')).includes(normKey(value || ''))
+        ? normKey(text).includes(normKey(value || '')) || normKey(String(raw ?? '')).includes(normKey(value || ''))
         : textLower.includes(v);
     case 'notcontains':
       return col.type === 'badge'
-        ? !(normKey(text).includes(normKey(value || '')) || normKey(String(rawValue(col, row) ?? '')).includes(normKey(value || '')))
+        ? !(normKey(text).includes(normKey(value || '')) || normKey(String(raw ?? '')).includes(normKey(value || '')))
         : !textLower.includes(v);
-    case 'eq': return col.type === 'badge' ? badgeEq() : textLower === v;
-    case 'neq': return col.type === 'badge' ? !badgeEq() : textLower !== v;
+    case 'eq': return col.type === 'badge' ? badgeEq(value || '') : textLower === v;
+    case 'neq': return col.type === 'badge' ? !badgeEq(value || '') : textLower !== v;
     case 'starts': return textLower.startsWith(v);
-    case 'empty': return !text && (rawValue(col, row) == null || String(rawValue(col, row)).trim() === '');
-    case 'notempty': return !!text || (rawValue(col, row) != null && String(rawValue(col, row)).trim() !== '');
+    case 'empty': return cellEmpty;
+    case 'notempty': return !cellEmpty;
     case 'before': case 'after': case 'on': {
       // Date-only compare (local YMD) — aligns with server day-bucket `_parse_dt`.
-      const raw = rawValue(col, row);
       const d = raw ? new Date(String(raw)) : null;
       if (!d || Number.isNaN(d.getTime()) || !value) return false;
       const ymd = localYMD(value);
@@ -202,8 +221,12 @@ export function describeRules(cols: ColumnDef[], rules: FilterRules): string {
     const ops = OPERATORS[col?.type || 'text'] || OPERATORS.text;
     const opLabel = ops.find((o) => o.key === c.op)?.label ?? c.op;
     const noValueOps = ['empty', 'notempty', 'linked', 'notlinked'];
-    const needsValue = !noValueOps.includes(c.op);
-    return `${col?.label ?? c.col} ${opLabel}${needsValue && c.value ? ` “${c.value}”` : ''}`;
+    if (noValueOps.includes(c.op)) return `${col?.label ?? c.col} ${opLabel}`;
+    if (c.op === 'in' || c.op === 'notin') {
+      const parts = decodeMultiValue(c.value).map((p) => (p === EMPTY_TOKEN ? '(none)' : p));
+      return `${col?.label ?? c.col} ${opLabel} ${parts.join(', ')}`;
+    }
+    return `${col?.label ?? c.col} ${opLabel}${c.value ? ` “${c.value}”` : ''}`;
   }).join(rules.logic === 'AND' ? ' and ' : ' or ');
 }
 

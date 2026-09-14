@@ -4988,6 +4988,15 @@ export const compliancePluginsApi = {
     apiClient.get('/compliance-plugins/classification-stats'),
 };
 
+/** Metabase Analytics surface under Reports › Analytics. */
+export const reportingMetabaseApi = {
+  status: () => apiClient.get('/reporting/metabase/status'),
+  sso: (body?: { return_to?: string; groups?: string[] }) =>
+    apiClient.post('/reporting/metabase/sso', body || { return_to: '/' }),
+  ensureViews: () => apiClient.post('/reporting/metabase/ensure-views'),
+  embedDashboard: (key: string) => apiClient.get(`/reporting/metabase/embed/${encodeURIComponent(key)}`),
+};
+
 /** SOC 2 quantitative controls + AWS automated checks (additive). */
 // Automation frameworks: SOC 2 / ISO 27001 / GDPR share one automated-check
 // engine (all run/collector/seed/connection calls hit /automation/soc2/*); only
@@ -5012,6 +5021,21 @@ export const automationApi = {
   // Library, automation, crosswalk, evidence and assurance aggregates for the
   // common control library — each answered by the system that actually holds it.
   getCommonOverview: () => apiClient.get('/automation/common/overview'),
+  // Evidence a person attached to a control — the manual and hybrid half no
+  // collector produces. Upload goes through the evidence module (storage,
+  // validation, versioning, OCR); linking records which control it evidences.
+  listControlEvidence: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/evidence`),
+  uploadEvidenceItem: (form: FormData) =>
+    apiClient.post('/evidence-mgmt/items/upload', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    }),
+  linkControlEvidence: (code: string, evidenceId: number,
+    body: { coverage_type: 'full' | 'partial' | 'supporting'; note?: string }) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/evidence/${evidenceId}`, body),
+  // An authored starter document for a catalogue deliverable.
+  exportArtifactTemplate: (artifactId: string, fmt: string) =>
+    apiClient.get('/artifacts/catalog/export', { params: { artifact_id: artifactId, fmt }, responseType: 'blob' }),
   // Mappings a reviewer should look at, worst first — lowest confidence, then
   // fan-out, then material controls. Rows already ruled on never come back.
   getMappingReviewQueue: (params?: { framework?: string; limit?: number }) =>

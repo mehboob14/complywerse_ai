@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import {
   AlertCircle, ArrowDownUp, Bookmark, Check, ChevronDown, Columns3, Copy, Download,
-  FileSpreadsheet, FileText, FileType2, Filter, FolderOpen, LayoutGrid, Loader2,
+  Equal, FileSpreadsheet, FileText, FileType2, Filter, FolderOpen, LayoutGrid, Loader2,
   Lock, Plus, Printer, Save, Search, Sigma, Trash2, Users, X, Pencil,
-  BarChart3, Table2,
+  BarChart3, Table2, ListOrdered,
 } from 'lucide-react';
 import type { ChartKind, ColType, ColumnDef, FilterRules, ReportDataset, ReportSpec, ReportBodyView, Row, ServerQuery, SortSpec } from './types';
 import { emptySpec } from './types';
@@ -16,7 +16,7 @@ import {
   rowMatchesRules, rowMatchesSearch,
 } from './grid-utils';
 import {
-  aggregateRows, canServerAggregate, isSummaryMode, measureColKey, measureLabel,
+  aggregateRows, canServerAggregate, dimensionCandidates, isSummaryMode, measureColKey, measureLabel,
 } from './aggregate-utils';
 import ReportDataTable from './ReportDataTable';
 import DashboardView from './DashboardView';
@@ -25,8 +25,10 @@ import PivotChart from './PivotChart';
 import { buildPivot } from './pivot';
 import FilterBuilder from './FilterBuilder';
 import ColumnPicker from './ColumnPicker';
+import SelectedColumnList from './SelectedColumnList';
 import SummarizePanel from './SummarizePanel';
 import { allLinkageColumns, enrichReportRows, fetchLinkageCatalog, linkageKeysForFields, linkagePresenceColumns, presenceTarget } from './linkages';
+import { EMPTY_TOKEN, decodeMultiValue, isClientSideFilter, isCountColumn } from './filter-utils';
 import { parseXmodKey, xmodKey } from './openCatalog';
 import { exportCSV, exportExcelMulti, exportWord } from './exporters';
 import { duplicateSpec, listSpecs, newSpecId, persistSpec, removeSpec, type SpecSource } from './savedReports';
@@ -38,18 +40,39 @@ const LINKAGE_OPS = new Set(['linked', 'notlinked']);
 const SERVER_BUILD_PAGE = 500;
 const SERVER_BUILD_CAP = 5000;
 
+/** Split rules into SQL-safe vs post-enrich client filters.
+ *  OR + any client filter → run everything client-side (server can't partial-OR). */
+function partitionServerFilters(
+  rules: FilterRules,
+  resolveCol?: (key: string) => ColumnDef | undefined,
+): { serverFilters: { col: string; op: string; value: string }[]; clientRules: FilterRules; allClient: boolean } {
+  const active = rules.conditions.filter(isActiveCondition);
+  const client = active.filter((c) => isClientSideFilter(c.col, c.op, resolveCol));
+  const server = active.filter((c) => !isClientSideFilter(c.col, c.op, resolveCol));
+  if (client.length > 0 && rules.logic === 'OR') {
+    return {
+      serverFilters: [],
+      clientRules: { logic: rules.logic, conditions: active },
+      allClient: true,
+    };
+  }
+  return {
+    serverFilters: server.map((c) => ({ col: c.col, op: c.op, value: c.value })),
+    clientRules: { logic: rules.logic, conditions: client },
+    allClient: false,
+  };
+}
+
 /** Fetch all server pages for Build mode (filters/search applied in SQL).
- *  Linkage ops are excluded — they need post-enrich client evaluation. */
+ *  Client-only filters (gaps, link counts, enriched names) apply after enrich. */
 async function fetchServerBuildRows(
   datasetKey: string,
   rules: FilterRules,
   search: string,
   sorts: SortSpec[],
+  resolveCol?: (key: string) => ColumnDef | undefined,
 ): Promise<Row[]> {
-  const filters = rules.conditions
-    .filter(isActiveCondition)
-    .filter((c) => !LINKAGE_OPS.has(c.op))
-    .map((c) => ({ col: c.col, op: c.op, value: c.value }));
+  const { serverFilters } = partitionServerFilters(rules, resolveCol);
   const out: Row[] = [];
   let skip = 0;
   while (skip < SERVER_BUILD_CAP) {
@@ -59,7 +82,7 @@ async function fetchServerBuildRows(
       limit: SERVER_BUILD_PAGE,
       search: search.trim() || undefined,
       sorts: (sorts || []).map((s) => ({ key: s.key, dir: s.dir })),
-      filters,
+      filters: serverFilters,
       logic: rules.logic,
     };
     const page = await queryServer(body);
@@ -79,6 +102,7 @@ function opLabel(op: string): string {
     gt: 'greater than', gte: 'greater or equal', lt: 'less than', lte: 'less or equal',
     on: 'on', before: 'before', after: 'after',
     linked: 'is linked to any', notlinked: 'is not linked to any',
+    in: 'is any of', notin: 'is none of',
   };
   return map[op] || op;
 }
@@ -128,7 +152,7 @@ export default function ReportBuilder({
   const [draftSearch, setDraftSearch] = useState(initial.search);
   const [fieldQ, setFieldQ] = useState('');
   const [datasetQ, setDatasetQ] = useState('');
-  const [panel, setPanel] = useState<'filters' | 'columns' | 'dataset' | 'add-data' | 'summarize' | null>(null);
+  const [panel, setPanel] = useState<'filters' | 'columns' | 'dataset' | 'add-data' | 'summarize' | 'fields' | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryQ, setLibraryQ] = useState('');
   const [savedSpecs, setSavedSpecs] = useState<ReportSpec[]>([]);
@@ -244,6 +268,13 @@ export default function ReportBuilder({
     }
     return out;
   }, [allCols, linkagePresenceCols]);
+  /** Filterable set = every real column plus the "(not) linked to any X" checks,
+   *  so orphan hunting (risks with no evidence, controls with no evidence…) is
+   *  reachable without first adding a column. */
+  const filterCols = useMemo(
+    () => [...allCols, ...linkagePresenceCols],
+    [allCols, linkagePresenceCols],
+  );
   // Filter / Summarize pickers only offer columns the user selected (visible set).
   const selectedCols = useMemo(
     () => visibleKeys
@@ -297,29 +328,48 @@ export default function ReportBuilder({
     [spec.rules],
   );
 
+  const hasClientSideFilters = useMemo(
+    () => spec.rules.conditions.some(
+      (c) => isActiveCondition(c) && isClientSideFilter(c.col, c.op, (k) => lookupCols.find((x) => x.key === k)),
+    ),
+    [spec.rules, lookupCols],
+  );
+
+  /** Count filters force the module list API (not SQL serialize). */
+  const needsListCounts = useMemo(
+    () => spec.rules.conditions.some(
+      (c) => isActiveCondition(c) && isCountColumn(lookupCols.find((x) => x.key === c.col)),
+    ),
+    [spec.rules, lookupCols],
+  );
+
   const measuresKey = JSON.stringify(spec.measures);
   const dimsKey = JSON.stringify(dimensions);
 
   const serverAggEligible = useMemo(() => {
-    if (!serverMode || !summaryMode || !dataset || hasLinkageFilters || forceClientAgg) return false;
+    if (!serverMode || !summaryMode || !dataset || hasLinkageFilters || hasClientSideFilters || forceClientAgg) return false;
     const allow = new Set(
       dataset.columns
         .map((c) => c.key)
         .filter((k) => !k.startsWith('xmod_') && !k.startsWith('link_')),
     );
     return canServerAggregate(dimensions, spec.measures, allow);
-  }, [serverMode, summaryMode, dataset, hasLinkageFilters, forceClientAgg, dimensions, spec.measures]);
+  }, [serverMode, summaryMode, dataset, hasLinkageFilters, hasClientSideFilters, forceClientAgg, dimensions, spec.measures]);
 
   useEffect(() => { setForceClientAgg(false); }, [dsKey, measuresKey, dimsKey]);
 
   const { data: rawRows = [], isLoading, isFetched, error, refetch, isFetching } = useQuery({
-    queryKey: ['report', dsKey, includesKey, serverMode, serverRulesKey, serverSearchKey, serverAggEligible],
+    queryKey: ['report', dsKey, includesKey, serverMode, serverRulesKey, serverSearchKey, serverAggEligible, needsListCounts],
     queryFn: async () => {
       if (!dataset) return [];
       // When server aggregate handles the whole result, skip shipping detail rows.
       if (serverAggEligible) return [];
-      const base = dataset.server
-        ? await fetchServerBuildRows(dataset.key, spec.rules, spec.search, spec.sorts ?? [])
+      const resolve = (k: string) => lookupCols.find((c) => c.key === k);
+      // Link-count columns (Controls linked, Risks linked, …) come from module
+      // list APIs, not SQL serialize — use the client fetch path when those
+      // filters are active so values exist before we evaluate = 0.
+      const base = dataset.server && !needsListCounts
+        ? await fetchServerBuildRows(dataset.key, spec.rules, spec.search, spec.sorts ?? [], resolve)
         : asRows(await dataset.fetch());
       if (!includes.length) return base;
       return enrichReportRows(dataset.key, base, includes, projectFields);
@@ -333,16 +383,14 @@ export default function ReportBuilder({
     queryKey: ['report-agg', dsKey, serverRulesKey, serverSearchKey, measuresKey, dimsKey],
     queryFn: async () => {
       if (!dataset) return null;
-      const filters = spec.rules.conditions
-        .filter(isActiveCondition)
-        .filter((c) => !LINKAGE_OPS.has(c.op))
-        .map((c) => ({ col: c.col, op: c.op, value: c.value }));
+      const resolve = (k: string) => lookupCols.find((c) => c.key === k);
+      const { serverFilters } = partitionServerFilters(spec.rules, resolve);
       try {
         return await aggregateServer({
           dataset: dataset.key,
           search: spec.search.trim() || undefined,
           sorts: (spec.sorts || []).map((s) => ({ key: s.key, dir: s.dir })),
-          filters,
+          filters: serverFilters,
           logic: spec.rules.logic,
           group_by: dimensions,
           measures: toServerMeasures(spec.measures),
@@ -508,22 +556,22 @@ export default function ReportBuilder({
   };
 
   const filteredRows = useMemo(() => {
-    // Server mode already applied search + non-linkage filters in SQL; only
-    // re-evaluate linkage presence ops client-side after enrich. Client mode
-    // applies the full rule set locally.
-    const linkageOnly: FilterRules = {
-      logic: spec.rules.logic,
-      conditions: spec.rules.conditions.filter((c) => LINKAGE_OPS.has(c.op)),
-    };
+    // Server mode applies SQL-safe filters in the query; client-only filters
+    // (gaps, link counts, enriched names) run here after enrich. When OR mixes
+    // both kinds — or when we fell back to the list API for counts — evaluate
+    // the full rule set locally.
+    const resolve = (k: string) => cols.find((x) => x.key === k) || lookupCols.find((x) => x.key === k);
+    const { clientRules, allClient } = partitionServerFilters(spec.rules, resolve);
     const matched = rows.filter((r) => {
-      if (serverMode) {
-        return rowMatchesRules(cols, r, linkageOnly);
+      if (serverMode && !needsListCounts) {
+        const rulesToApply = allClient ? spec.rules : clientRules;
+        return rowMatchesRules(cols, r, rulesToApply);
       }
       return rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules);
     });
     if (!spec.sorts?.length) return matched;
     return [...matched].sort((a, b) => compareRows(cols, a, b, spec.sorts as SortSpec[]));
-  }, [rows, cols, spec.search, spec.rules, spec.sorts, serverMode]);
+  }, [rows, cols, lookupCols, spec.search, spec.rules, spec.sorts, serverMode, needsListCounts]);
 
   const clientAggregate = useMemo(() => {
     if (!summaryMode || serverAggEligible) return null;
@@ -688,6 +736,44 @@ export default function ReportBuilder({
     });
   };
 
+  /** "Linked: Evidence" → "Evidence". */
+  const gapModuleLabel = (label: string) => label.replace(/^Linked:\s*/i, '');
+
+  /** Base-module count fields (Controls linked, Risks linked, …) for zero-shortcuts. */
+  const countGapCols = useMemo(
+    () => (dataset?.columns || []).filter((c) => isCountColumn(c)),
+    [dataset],
+  );
+
+  /** One click = "show only rows with nothing linked in <module>". Applies straight
+   *  away so results move behind the drawer; clicking again removes it. */
+  const toggleGapFilter = (colKey: string) => {
+    const existing = draftRules.conditions.find((c) => c.col === colKey && c.op === 'notlinked');
+    const conditions = existing
+      ? draftRules.conditions.filter((c) => c.id !== existing.id)
+      : [
+          ...draftRules.conditions.filter(isActiveCondition),
+          { id: `gap_${colKey}`, col: colKey, op: 'notlinked', value: '' },
+        ];
+    const next = { ...draftRules, conditions };
+    setDraftRules(next);
+    patch({ rules: next });
+  };
+
+  /** Toggle count-column = 0 (e.g. Risks linked equals 0 on Evidence). */
+  const toggleCountZero = (colKey: string) => {
+    const existing = draftRules.conditions.find((c) => c.col === colKey && c.op === 'eq' && c.value === '0');
+    const conditions = existing
+      ? draftRules.conditions.filter((c) => c.id !== existing.id)
+      : [
+          ...draftRules.conditions.filter(isActiveCondition),
+          { id: `cnt0_${colKey}`, col: colKey, op: 'eq', value: '0' },
+        ];
+    const next = { ...draftRules, conditions };
+    setDraftRules(next);
+    patch({ rules: next });
+  };
+
   const removeCondition = (id: string) => {
     const next = {
       ...spec.rules,
@@ -793,6 +879,25 @@ export default function ReportBuilder({
     setPanel('add-data');
   };
 
+  /** Confirm before wiping columns/filters when switching modules. */
+  const requestDatasetChange = (key: string, seedColumns?: string[]) => {
+    if (!onDatasetChange) return;
+    const dirty =
+      visibleKeys.length > 0 ||
+      ruleCount > 0 ||
+      Boolean(spec.search?.trim()) ||
+      (spec.measures?.length ?? 0) > 0;
+    if (dataset && key !== dataset.key && dirty) {
+      const ok = window.confirm(
+        'Switching modules clears columns, filters, and summary on this export. Continue?',
+      );
+      if (!ok) return;
+    }
+    onDatasetChange(key, seedColumns);
+    setPanel(null);
+    setDatasetQ('');
+  };
+
   const toggleDraftPick = (moduleKey: string, colKey: string) => {
     setDraftPicks((prev) => {
       const cur = new Set(prev[moduleKey] || []);
@@ -895,21 +1000,18 @@ export default function ReportBuilder({
 
   return (
     <div className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-2.5">
         <div className="min-w-0 flex-1">
           <div className="relative max-w-xl">
             <Pencil className="pointer-events-none absolute left-0 top-2.5 h-3.5 w-3.5 text-slate-300" />
             <input
               value={spec.name}
               onChange={(e) => patch({ name: e.target.value })}
-              placeholder="Untitled report"
-              className="w-full border-0 bg-transparent py-1 pl-5 text-lg font-semibold tracking-tight text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:outline-none"
+              placeholder="Untitled export"
+              className="w-full border-0 bg-transparent py-1 pl-5 text-base font-semibold tracking-tight text-slate-900 placeholder:font-normal placeholder:text-slate-400 focus:outline-none"
             />
           </div>
-          {spec.description ? (
-            <p className="mt-0.5 max-w-xl truncate text-[11px] text-slate-500">{spec.description}</p>
-          ) : null}
-          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] text-slate-500">
+          <p className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 pl-5 text-[11px] text-slate-500">
             <span className="font-medium text-slate-600">
               {dataset ? `${dataset.module} · ${dataset.label}` : 'No module selected'}
             </span>
@@ -997,7 +1099,7 @@ export default function ReportBuilder({
               </>
             ) : (
               <>
-                <Save className="h-3.5 w-3.5" /> Save report
+                <Save className="h-3.5 w-3.5" /> Save export
               </>
             )}
           </button>
@@ -1051,9 +1153,7 @@ export default function ReportBuilder({
                           key={`recent-${d.key}`}
                           type="button"
                           onClick={() => {
-                            onDatasetChange(d.key);
-                            setPanel(null);
-                            setDatasetQ('');
+                            requestDatasetChange(d.key);
                           }}
                           className={`mb-0.5 block w-full truncate rounded-lg px-2.5 py-2 text-left text-sm ${
                             d.key === dataset?.key
@@ -1077,9 +1177,7 @@ export default function ReportBuilder({
                           key={d.key}
                           type="button"
                           onClick={() => {
-                            onDatasetChange(d.key);
-                            setPanel(null);
-                            setDatasetQ('');
+                            requestDatasetChange(d.key);
                           }}
                           className={`mb-0.5 block w-full truncate rounded-lg px-2.5 py-1.5 text-left text-sm ${
                             d.key === dataset?.key
@@ -1102,11 +1200,12 @@ export default function ReportBuilder({
         </div>
 
         <ToolbarBtn
-          active={panel === 'filters' || ruleCount > 0}
+          active={panel === 'filters'}
+          badge={ruleCount || undefined}
           onClick={() => setPanel((p) => (p === 'filters' ? null : 'filters'))}
           icon={<Filter className="h-3.5 w-3.5" />}
         >
-          Filter{ruleCount ? ` (${ruleCount})` : ''}
+          Filter
         </ToolbarBtn>
 
         <div className="relative">
@@ -1115,7 +1214,7 @@ export default function ReportBuilder({
             onClick={() => { setPanel(null); setLibraryOpen((o) => !o); }}
             icon={<Bookmark className="h-3.5 w-3.5" />}
           >
-            My reports
+            My exports
             <ChevronDown className={`h-3 w-3 text-slate-400 transition-transform ${libraryOpen ? 'rotate-180' : ''}`} />
           </ToolbarBtn>
           {libraryOpen && (
@@ -1124,12 +1223,7 @@ export default function ReportBuilder({
               <div className="absolute left-0 top-full z-40 mt-1 flex max-h-[min(70vh,420px)] w-96 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
                 <div className="border-b border-slate-100 px-3 py-2.5">
                   <div className="flex items-center justify-between gap-2">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">Custom reports</p>
-                      <p className="mt-0.5 text-[11px] text-slate-500">
-                        Load a report you saved — filters, columns, and sort included.
-                      </p>
-                    </div>
+                    <p className="text-sm font-semibold text-slate-800">My exports</p>
                     <Link
                       href="/reports/saved"
                       className="shrink-0 text-[11px] font-semibold text-primary-700 hover:underline"
@@ -1143,7 +1237,7 @@ export default function ReportBuilder({
                     <input
                       value={libraryQ}
                       onChange={(e) => setLibraryQ(e.target.value)}
-                      placeholder="Search your reports…"
+                      placeholder="Search…"
                       className="w-full rounded-lg border border-slate-200 bg-slate-50 py-1.5 pl-8 pr-2 text-xs focus:border-primary-500 focus:bg-white focus:outline-none"
                     />
                   </div>
@@ -1157,10 +1251,10 @@ export default function ReportBuilder({
                     <div className="px-3 py-8 text-center">
                       <FolderOpen className="mx-auto h-7 w-7 text-slate-300" />
                       <p className="mt-2 text-sm font-medium text-slate-700">
-                        {savedSpecs.length === 0 ? 'No custom reports yet' : 'No matches'}
+                        {savedSpecs.length === 0 ? 'No saved exports yet' : 'No matches'}
                       </p>
                       <p className="mt-1 text-[11px] text-slate-500">
-                        Customize filters and columns, then click Save report.
+                        Set up fields and filters, then click Save export.
                       </p>
                     </div>
                   ) : (
@@ -1182,7 +1276,7 @@ export default function ReportBuilder({
                                 className="min-w-0 flex-1 text-left focus:outline-none"
                               >
                                 <p className="truncate text-sm font-medium text-slate-800">
-                                  {s.name || 'Untitled report'}
+                                  {s.name || 'Untitled export'}
                                   {s.shared && <Users className="ml-1 inline h-3 w-3 text-slate-400" />}
                                 </p>
                                 <p className="mt-0.5 truncate text-[11px] text-slate-500">
@@ -1234,21 +1328,27 @@ export default function ReportBuilder({
         </div>
 
         <ToolbarBtn
-          active={panel === 'columns' || panel === 'add-data' || visibleKeys.length > 0}
-          onClick={() => (dataset ? setPanel((p) => (p === 'columns' ? null : 'columns')) : openAddData())}
+          active={panel === 'fields' || panel === 'columns' || panel === 'add-data'}
+          badge={visibleKeys.length || undefined}
+          onClick={() => {
+            if (!dataset) {
+              openAddData();
+              return;
+            }
+            setPanel((p) => (p === 'fields' ? null : 'fields'));
+          }}
           icon={<Columns3 className="h-3.5 w-3.5" />}
         >
-          {visibleKeys.length || 0} columns
+          Fields
         </ToolbarBtn>
 
         <ToolbarBtn
-          active={panel === 'summarize' || summaryMode}
+          active={panel === 'summarize'}
+          badge={summaryMode ? spec.measures.length || undefined : undefined}
           onClick={() => dataset && setPanel((p) => (p === 'summarize' ? null : 'summarize'))}
           icon={<Sigma className="h-3.5 w-3.5" />}
         >
-          {summaryMode
-            ? `Summarize · ${spec.measures.length}`
-            : 'Summarize'}
+          Summarize
         </ToolbarBtn>
 
         <div className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-600">
@@ -1263,7 +1363,7 @@ export default function ReportBuilder({
             }}
             className="max-w-[10rem] bg-transparent text-xs font-medium focus:outline-none"
           >
-            <option value="">Sort: none</option>
+            <option value="">Sort</option>
             {(summaryMode ? displayVisibleKeys : visibleKeys).map((k) => (
               <optgroup key={k} label={summaryMode ? (displayCols.find((c) => c.key === k)?.label ?? k) : labelFor(k)}>
                 <option value={`${k}:asc`}>{(summaryMode ? displayCols.find((c) => c.key === k)?.label : labelFor(k)) ?? k} ↑</option>
@@ -1277,16 +1377,16 @@ export default function ReportBuilder({
           <ToolbarBtn
             active={showTotals}
             onClick={() => setShowTotals((t) => !t)}
-            icon={<Sigma className="h-3.5 w-3.5" />}
+            icon={<Equal className="h-3.5 w-3.5" />}
           >
-            Totals {showTotals ? 'on' : 'off'}
+            Totals
           </ToolbarBtn>
         )}
 
         <div className="ml-auto inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
           {([
             { v: 'table' as ReportBodyView, label: 'Table', icon: <Table2 className="h-3.5 w-3.5" /> },
-            { v: 'dashboard' as ReportBodyView, label: 'Dashboard', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
+            { v: 'dashboard' as ReportBodyView, label: 'Cards', icon: <LayoutGrid className="h-3.5 w-3.5" /> },
             { v: (chartMode ? view : 'bar') as ReportBodyView, label: 'Chart', icon: <BarChart3 className="h-3.5 w-3.5" /> },
           ]).map((o, i) => {
             const active = i === 0 ? view === 'table' : i === 1 ? view === 'dashboard' : chartMode;
@@ -1296,7 +1396,7 @@ export default function ReportBuilder({
                 type="button"
                 onClick={() => setView(o.v)}
                 title={
-                  o.label === 'Dashboard'
+                  o.label === 'Cards'
                     ? 'Every visible column charted automatically'
                     : o.label === 'Chart'
                       ? 'One chart from your Summarize setup'
@@ -1312,18 +1412,38 @@ export default function ReportBuilder({
             );
           })}
         </div>
-
-        <span className="text-[11px] tabular-nums text-slate-400">
-          {summaryMode
-            ? `${displayRows.length.toLocaleString()} group${displayRows.length === 1 ? '' : 's'}`
-            : `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows`}
-        </span>
       </div>
 
-      <div className="flex shrink-0 flex-wrap items-center gap-1.5 px-3 py-2">
+      {/* Slim context strip — filters & summary only (columns live in Fields drawer) */}
+      {(activeConditions.length > 0 || spec.search.trim() || summaryMode) && (
+      <div className="flex shrink-0 flex-wrap items-center gap-1.5 border-b border-slate-100 bg-slate-50/50 px-3 py-2">
         {activeConditions.map((c) => {
-          const col = cols.find((x) => x.key === c.col) || allCols.find((x) => x.key === c.col);
+          const col = cols.find((x) => x.key === c.col) || filterCols.find((x) => x.key === c.col);
           const noValueOp = ['empty', 'notempty', 'linked', 'notlinked'].includes(c.op);
+          // Read link checks as a sentence: "No Evidence linked", not "Linked: Evidence is not linked to any".
+          if (col?.type === 'linkage') {
+            return (
+              <Chip key={c.id} onRemove={() => removeCondition(c.id)}>
+                {c.op === 'notlinked' ? 'No' : 'Has'} {gapModuleLabel(col.label)} linked
+              </Chip>
+            );
+          }
+          if (c.op === 'in' || c.op === 'notin') {
+            const parts = decodeMultiValue(c.value).map((p) => (p === EMPTY_TOKEN ? '(none)' : p));
+            const shown = parts.slice(0, 3).join(', ') + (parts.length > 3 ? ` +${parts.length - 3}` : '');
+            return (
+              <Chip key={c.id} onRemove={() => removeCondition(c.id)}>
+                {col?.label || c.col} {opLabel(c.op)} {shown}
+              </Chip>
+            );
+          }
+          if (isCountColumn(col) && c.op === 'eq' && c.value === '0') {
+            return (
+              <Chip key={c.id} onRemove={() => removeCondition(c.id)}>
+                {col?.label || c.col} = 0
+              </Chip>
+            );
+          }
           return (
             <Chip key={c.id} onRemove={() => removeCondition(c.id)}>
               {col?.label || c.col} {opLabel(c.op)}
@@ -1336,26 +1456,10 @@ export default function ReportBuilder({
             Search “{spec.search.trim()}”
           </Chip>
         )}
-        {visibleKeys.map((k) => (
-          <span
-            key={k}
-            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700"
-          >
-            {labelFor(k)}
-            <button
-              type="button"
-              onClick={() => patch({ visibleColumns: visibleKeys.filter((x) => x !== k) })}
-              className="rounded-full p-0.5 text-slate-400 hover:bg-slate-100 hover:text-rose-600"
-              aria-label={`Remove ${labelFor(k)}`}
-            >
-              <X className="h-3 w-3" />
-            </button>
-          </span>
-        ))}
         {summaryMode && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-800">
+          <span className="inline-flex items-center gap-1 rounded-full border border-primary-200 bg-primary-50 px-2.5 py-0.5 text-[11px] font-medium text-primary-800">
             Summary
-            {dimensions.length > 0 ? ` by ${dimensions.map(labelFor).join(' › ')}` : ' · overall total'}
+            {dimensions.length > 0 ? ` by ${dimensions.map(labelFor).join(' › ')}` : ' · overall'}
             {' · '}
             {spec.measures.map((m) => measureLabel(m, m.key ? labelFor(m.key) : '')).join(', ')}
             <button
@@ -1370,50 +1474,99 @@ export default function ReportBuilder({
         )}
         <button
           type="button"
-          onClick={openAddData}
+          onClick={() => setPanel('filters')}
           className="inline-flex items-center gap-1 rounded-full border border-dashed border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-500 hover:border-primary-400 hover:text-primary-700"
         >
-          <Plus className="h-3 w-3" /> Add data
-          <ChevronDown className="h-3 w-3" />
+          <Plus className="h-3 w-3" /> Filter
         </button>
       </div>
+      )}
 
       {panel === 'filters' && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
-          <div className="absolute left-3 top-[7.25rem] z-40 w-[min(100%-1.5rem,28rem)] rounded-2xl border border-slate-200 bg-white p-3 shadow-2xl">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="min-w-0 pr-2">
-                <p className="text-sm font-semibold text-slate-800">Filter results</p>
-                <p className="mt-0.5 text-[10px] leading-snug text-slate-500">
-                  Show only the rows that match your rules. These run before any summary totals.
+          <div className="fixed inset-0 z-30 bg-slate-900/20" onClick={() => setPanel(null)} />
+          <div className="absolute bottom-0 right-0 top-0 z-40 flex w-[min(100%,26rem)] flex-col border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-100 px-4 py-3">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold text-slate-900">Filters</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  Narrow rows before export. Apply to refresh results.
                 </p>
               </div>
-              <button type="button" onClick={() => setPanel(null)} className="shrink-0 rounded p-1 text-slate-400 hover:text-slate-600">
+              <button type="button" onClick={() => setPanel(null)} className="shrink-0 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
                 <X className="h-4 w-4" />
               </button>
             </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
             {!dataset ? (
-              <p className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-6 text-center text-xs text-slate-500">
-                Select a dataset first to enable filters.
+              <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-8 text-center text-xs text-slate-500">
+                Select a module first to enable filters.
               </p>
             ) : (
               <>
+                {(linkagePresenceCols.length > 0 || countGapCols.length > 0) && (
+                  <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      Find gaps
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-slate-500">
+                      {dataset?.label} with nothing linked — or a link count of zero.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {linkagePresenceCols.map((c) => {
+                        const on = spec.rules.conditions.some((x) => x.col === c.key && x.op === 'notlinked');
+                        return (
+                          <button
+                            key={c.key}
+                            type="button"
+                            onClick={() => toggleGapFilter(c.key)}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                              on
+                                ? 'border-primary-300 bg-primary-500 text-[#0a0a0a]'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-primary-400 hover:text-primary-700'
+                            }`}
+                          >
+                            {on ? <Check className="h-3 w-3" strokeWidth={3} /> : <Plus className="h-3 w-3" />}
+                            No {gapModuleLabel(c.label)} linked
+                          </button>
+                        );
+                      })}
+                      {countGapCols.map((c) => {
+                        const on = spec.rules.conditions.some((x) => x.col === c.key && x.op === 'eq' && x.value === '0');
+                        return (
+                          <button
+                            key={`cnt-${c.key}`}
+                            type="button"
+                            onClick={() => toggleCountZero(c.key)}
+                            className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                              on
+                                ? 'border-primary-300 bg-primary-500 text-[#0a0a0a]'
+                                : 'border-slate-200 bg-white text-slate-600 hover:border-primary-400 hover:text-primary-700'
+                            }`}
+                          >
+                            {on ? <Check className="h-3 w-3" strokeWidth={3} /> : <Plus className="h-3 w-3" />}
+                            {c.label} = 0
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 {serverMode && (
-                  <p className="mb-2 rounded-md border border-sky-200 bg-sky-50 px-2 py-1 text-[10px] leading-snug text-sky-800">
-                    Click Apply filters to update results. Rules about linked records are checked after related data is loaded.
+                  <p className="mb-3 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] leading-snug text-sky-800">
+                    Click Apply to update results. Link checks run after related data loads.
                   </p>
                 )}
                 <input
                   value={draftSearch}
                   onChange={(e) => setDraftSearch(e.target.value)}
                   placeholder={serverMode ? 'Search dataset…' : 'Search columns…'}
-                  className="mb-2 w-full rounded-lg border border-slate-200 px-3 py-1.5 text-xs focus:border-primary-500 focus:outline-none"
+                  className="mb-3 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none"
                 />
                 <FilterBuilder
                   staged
                   dirty={filtersDirty}
-                  cols={selectedCols}
+                  cols={filterCols.length ? filterCols : selectedCols}
                   lookupCols={lookupCols}
                   rows={rows}
                   rules={draftRules}
@@ -1424,6 +1577,61 @@ export default function ReportBuilder({
                 />
               </>
             )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {panel === 'fields' && dataset && (
+        <>
+          <div className="fixed inset-0 z-30 bg-slate-900/20" onClick={() => setPanel(null)} />
+          <div className="absolute bottom-0 right-0 top-0 z-40 flex w-[min(100%,24rem)] flex-col border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex shrink-0 items-start justify-between gap-2 border-b border-slate-100 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Selected fields</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">
+                  {visibleKeys.length} column{visibleKeys.length === 1 ? '' : 's'} · drag to reorder
+                </p>
+              </div>
+              <button type="button" onClick={() => setPanel(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <SelectedColumnList
+                cols={lookupCols}
+                visibleKeys={visibleKeys}
+                align={spec.columnAlign ?? {}}
+                pinned={spec.pinnedColumns ?? []}
+                onReorder={(keys) => patch({ visibleColumns: keys })}
+                onRemove={(key) => patch({ visibleColumns: visibleKeys.filter((x) => x !== key) })}
+                onAlign={(key, align) =>
+                  patch({ columnAlign: { ...(spec.columnAlign ?? {}), [key]: align } })
+                }
+                onPin={(key) => {
+                  const pinned = new Set(spec.pinnedColumns ?? []);
+                  if (pinned.has(key)) pinned.delete(key);
+                  else pinned.add(key);
+                  patch({ pinnedColumns: Array.from(pinned) });
+                }}
+              />
+            </div>
+            <div className="flex shrink-0 flex-col gap-2 border-t border-slate-100 p-3">
+              <button
+                type="button"
+                onClick={openAddData}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-3 py-2.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600"
+              >
+                <Plus className="h-3.5 w-3.5" /> Add or change fields
+              </button>
+              <button
+                type="button"
+                onClick={() => setPanel('columns')}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <ListOrdered className="h-3.5 w-3.5" /> Linked fields &amp; advanced
+              </button>
+            </div>
           </div>
         </>
       )}
@@ -1438,9 +1646,9 @@ export default function ReportBuilder({
             >
               <div className="flex shrink-0 items-start justify-between gap-3 border-b border-slate-100 px-5 py-4">
                 <div>
-                  <p className="text-base font-semibold text-slate-900">Add data</p>
+                  <p className="text-base font-semibold text-slate-900">Choose module &amp; fields</p>
                   <p className="mt-0.5 text-xs text-slate-500">
-                    Select any fields from any module. Multi-select stays open until you apply.
+                    Select fields from any module. Stay open until you apply.
                   </p>
                 </div>
                 <button type="button" onClick={() => setPanel(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-600">
@@ -1667,17 +1875,15 @@ export default function ReportBuilder({
           measures={spec.measures}
           onDimensionsChange={(keys) => patch({ rows: keys })}
           onMeasuresChange={(measures) => {
-            // Adding the FIRST calculation must not wipe the columns the user
-            // already set up. Carry those columns in as the group-by so the
-            // summary is ADDED to the existing layout (their columns stay + a new
-            // metric column) instead of collapsing to a single overall total.
-            // They can then remove group-by fields to roll rows up. Later measure
-            // edits don't re-seed, so a deliberate grand-total setup is respected.
-            if (spec.measures.length === 0 && measures.length > 0 && dimensions.length === 0 && visibleKeys.length > 0) {
-              patch({ measures, rows: visibleKeys.slice() });
-            } else {
-              patch({ measures });
-            }
+            // Seed the FIRST calculation with one sensible breakdown (the first
+            // categorical column they selected) so the result reads as "count by
+            // Status" rather than a single anonymous total. Grouping by EVERY
+            // visible column would just restate the detail rows with a column of
+            // 1s. Later measure edits don't re-seed, so a deliberate grand-total
+            // or hand-picked breakdown is respected.
+            const firstRun = spec.measures.length === 0 && measures.length > 0 && dimensions.length === 0;
+            const seed = firstRun ? dimensionCandidates(selectedCols)[0]?.key : undefined;
+            patch(seed ? { measures, rows: [seed] } : { measures });
           }}
           onClose={() => setPanel(null)}
           onClear={() => patch({ rows: [], measures: [] })}
@@ -1686,11 +1892,11 @@ export default function ReportBuilder({
 
       {panel === 'columns' && dataset && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setPanel(null)} />
-          <div className="absolute left-3 top-[7.25rem] z-40 flex max-h-[min(72vh,560px)] w-[min(100%-1.5rem,28rem)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
-            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-3 py-2.5">
-              <p className="text-sm font-semibold text-slate-800">
-                Columns ({visibleKeys.length} selected)
+          <div className="fixed inset-0 z-30 bg-slate-900/20" onClick={() => setPanel(null)} />
+          <div className="absolute bottom-0 right-0 top-0 z-40 flex w-[min(100%,28rem)] flex-col border-l border-slate-200 bg-white shadow-2xl">
+            <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3">
+              <p className="text-sm font-semibold text-slate-900">
+                Linked &amp; advanced fields
               </p>
               <div className="flex items-center gap-2">
                 <button
@@ -1700,12 +1906,12 @@ export default function ReportBuilder({
                 >
                   Clear
                 </button>
-                <button type="button" onClick={() => setPanel(null)} className="rounded p-1 text-slate-400 hover:text-slate-600">
+                <button type="button" onClick={() => setPanel(null)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
                   <X className="h-4 w-4" />
                 </button>
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-hidden p-2.5">
+            <div className="min-h-0 flex-1 overflow-hidden p-3">
               <ColumnPicker
                 compact
                 defaultScope="all"
@@ -1857,32 +2063,39 @@ export default function ReportBuilder({
             </button>
           </div>
         ) : visibleKeys.length === 0 ? (
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-6 text-center">
-            <Columns3 className="h-9 w-9 text-slate-300" />
-            <h2 className="mt-3 text-base font-semibold text-slate-800">Empty report</h2>
-            <p className="mt-1 max-w-md text-sm text-slate-500">
-              Add columns for a detail table, or open Summarize to turn the list into counts, averages, and other totals.
-            </p>
-            <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
-              <button
-                type="button"
-                onClick={openAddData}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Add data
-                <ChevronDown className="h-3.5 w-3.5 text-slate-400" />
-              </button>
-              {dataset && (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col items-center justify-center px-6 py-10">
+            <div className="w-full max-w-md text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-primary-500/15 text-primary-800">
+                <Download className="h-5 w-5" />
+              </div>
+              <h2 className="mt-4 text-lg font-semibold tracking-tight text-slate-900">
+                {dataset ? `Add fields from ${dataset.label}` : 'Choose a module to export'}
+              </h2>
+              <p className="mt-1.5 text-sm text-slate-500">
+                {dataset
+                  ? 'Pick columns, optionally filter, then download.'
+                  : 'Any register you can access → columns → file.'}
+              </p>
+              <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setPanel('summarize')}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                  onClick={openAddData}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-primary-500 px-4 py-2.5 text-sm font-semibold text-[#0a0a0a] shadow-sm hover:bg-primary-600"
                 >
-                  <Sigma className="h-3.5 w-3.5" />
-                  Summarize
+                  <Plus className="h-4 w-4" />
+                  {dataset ? 'Add fields' : 'Choose module & fields'}
                 </button>
-              )}
+                {dataset && (
+                  <button
+                    type="button"
+                    onClick={() => setPanel('summarize')}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50"
+                  >
+                    <Sigma className="h-4 w-4" />
+                    Summarize
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         ) : (
@@ -1984,11 +2197,13 @@ function ToolbarBtn({
   onClick,
   active,
   icon,
+  badge,
 }: {
   children: React.ReactNode;
   onClick: () => void;
   active?: boolean;
   icon: React.ReactNode;
+  badge?: number;
 }) {
   return (
     <button
@@ -1996,12 +2211,21 @@ function ToolbarBtn({
       onClick={onClick}
       className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors ${
         active
-          ? 'border-primary-300 bg-primary-50 text-primary-800'
+          ? 'border-primary-300 bg-primary-50 text-primary-800 shadow-sm'
           : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
       }`}
     >
       {icon}
       {children}
+      {badge != null && badge > 0 && (
+        <span
+          className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+            active ? 'bg-primary-500/20 text-primary-900' : 'bg-slate-100 text-slate-600'
+          }`}
+        >
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

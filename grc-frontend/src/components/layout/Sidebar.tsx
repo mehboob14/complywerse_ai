@@ -245,13 +245,15 @@ const navigation: NavEntry[] = [
     requiredModules: ['critical_tasks'],
     requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
-  // Reports — built-in interactive reporting workspace across all modules.
+  // Reports — Analytics (Metabase) is primary for cross-module authoring;
+  // Quick export keeps the native register builder for simple CSVs.
   {
     name: 'Reports',
     icon: BarChart3,
     items: [
-      { name: 'Workspace', href: '/reports', icon: BarChart3 },
-      { name: 'Saved reports', href: '/reports/saved', icon: Bookmark },
+      { name: 'Analytics', href: '/reports/analytics', icon: LayoutDashboard, activeMatch: '/reports/analytics' },
+      { name: 'Quick export', href: '/reports', icon: BarChart3 },
+      { name: 'Saved exports', href: '/reports/saved', icon: Bookmark },
     ],
   },
   // Issues moved into "Issue & Incident Management" (top-bar quick action removed in Header.tsx).

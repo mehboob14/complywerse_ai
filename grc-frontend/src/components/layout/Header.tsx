@@ -57,8 +57,9 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/integrations/connections': { title: 'Scanner Connections', subtitle: 'Manage vulnerability scanner connections and sync schedules.' },
   '/integrations/exceptions': { title: 'Integration Exceptions', subtitle: 'Review and manage integration exceptions.' },
   '/tasks': { title: 'Task Board' },
-  '/reports': { title: 'Reports', subtitle: 'Explore datasets, build and share reports' },
-  '/reports/saved': { title: 'Saved Reports', subtitle: 'Manage, share and organize your report library' },
+  '/reports': { title: 'Quick export', subtitle: 'Module → columns → download' },
+  '/reports/saved': { title: 'Saved exports', subtitle: 'Reopen what you saved' },
+  '/reports/analytics': { title: 'Analytics', subtitle: 'Cross-module dashboards' },
   '/admin': { title: 'Administration' },
   '/is-projects': { title: 'IS Projects', subtitle: 'Track and manage information security projects across the organization' },
 };

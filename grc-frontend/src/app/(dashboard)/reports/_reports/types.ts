@@ -137,6 +137,7 @@ export interface FilterRules { logic: 'AND' | 'OR'; conditions: FilterRule[] }
 /** Operators available per column type in the advanced builder. */
 export const OPERATORS: Record<string, { key: string; label: string }[]> = {
   text: [
+    { key: 'in', label: 'is any of' }, { key: 'notin', label: 'is none of' },
     { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' },
     { key: 'contains', label: 'contains' }, { key: 'notcontains', label: 'does not contain' },
     { key: 'starts', label: 'starts with' },
@@ -152,10 +153,10 @@ export const OPERATORS: Record<string, { key: string; label: string }[]> = {
     { key: 'on', label: 'on' }, { key: 'before', label: 'before' }, { key: 'after', label: 'after' },
     { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
   ],
-  // Enum / status / Yes-No flags — pick from known values; no numeric compares.
+  // Enum / status / Yes-No flags — multi-select first; single compares kept for saved reports.
   badge: [
+    { key: 'in', label: 'is any of' }, { key: 'notin', label: 'is none of' },
     { key: 'eq', label: 'is' }, { key: 'neq', label: 'is not' },
-    { key: 'contains', label: 'contains' }, { key: 'notcontains', label: 'does not contain' },
     { key: 'empty', label: 'is empty' }, { key: 'notempty', label: 'is not empty' },
   ],
   // Cross-module linkage presence. Orphan-finding ("not linked to any X") is the
@@ -167,10 +168,10 @@ export const OPERATORS: Record<string, { key: string; label: string }[]> = {
 
 /** Short plain-language hint for filter panel copy (by column type). */
 export const FILTER_TYPE_HINT: Record<string, string> = {
-  text: 'Text: is / contains / starts with / empty',
+  text: 'Text: any of / contains / empty',
   number: 'Numbers: equals, greater/less than, empty',
   date: 'Dates: on / before / after / empty',
-  badge: 'Tags & status: is / is not / empty',
+  badge: 'Tags & status: any of / none of / empty',
   linkage: 'Links: linked to any / not linked to any',
 };
 export interface ColumnFilter {
