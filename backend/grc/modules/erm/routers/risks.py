@@ -25,7 +25,7 @@ from ....models import (
     ParsedFrameworkControl, UploadedFramework, RiskMitigationAction,
     Vulnerability, VulnerabilityAssetLink, RiskAssessmentRisk,
     Team, BusinessUnit, Vendor,
-    InternalControl, CertificationJourney, ControlObjective, FrameworkDomain,
+    InternalControl, InternalControlRiskLink, CertificationJourney, ControlObjective, FrameworkDomain,
 )
 from ....schemas import (
     RiskCreate, RiskUpdate, RiskResponse,
@@ -1475,13 +1475,43 @@ def get_risk_detail(
         )
     
     linked_controls = []
+    from grc.modules.scf.risk_links import control_status_indicator
     for link in risk.control_links:
         if link.normalized_control:
+            nc = link.normalized_control
             linked_controls.append({
                 "id": link.id,
-                "control_id": link.normalized_control.id,
-                "code": link.normalized_control.code,
-                "name": link.normalized_control.name
+                "control_id": nc.id,
+                "code": nc.code,
+                "name": nc.name,
+                "scf_id": nc.scf_id,
+                "source": nc.source,
+                "custom": nc.source == "custom",
+                "control_status": control_status_indicator(db, nc, tenant_id=risk.tenant_id),
+                # Decision 4: indicator only — residual is NOT auto-updated
+                "control_status_indicator": True,
+            })
+
+    linked_internal_controls = []
+    internal_links = (
+        db.query(InternalControlRiskLink)
+        .join(InternalControl, InternalControl.id == InternalControlRiskLink.control_id)
+        .filter(
+            InternalControlRiskLink.risk_id == risk_id,
+            InternalControl.tenant_id.in_(user_tenants),
+        )
+        .all()
+    )
+    for link in internal_links:
+        ctrl = link.control
+        if ctrl:
+            linked_internal_controls.append({
+                "id": ctrl.id,
+                "name": ctrl.name,
+                "title": ctrl.name,
+                "status": ctrl.status,
+                "link_id": link.id,
+                "control_id": ctrl.control_id,
             })
     
     linked_framework_controls = []
@@ -1552,6 +1582,7 @@ def get_risk_detail(
         "created_at": risk.created_at.isoformat(),
         "updated_at": risk.updated_at.isoformat(),
         "linked_controls": linked_controls,
+        "linked_internal_controls": linked_internal_controls,
         "linked_framework_controls": linked_framework_controls,
         "linked_assets": linked_assets,
         "linked_evidence": linked_evidence,

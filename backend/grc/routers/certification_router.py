@@ -28,6 +28,7 @@ from ..models import (
     Issue, IssueControlLink,
     # Framework compliance dashboard — trend history + automation derivation.
     ComplianceHistory, PluginControlMapping, ControlMapping, CompliancePluginRun,
+    NormalizedControlLink,
 )
 from ..schemas import (
     CertificationJourneyCreate, CertificationJourneyUpdate, CertificationJourneyResponse,
@@ -2159,6 +2160,14 @@ def calculate_progress_summary(journey: CertificationJourney, db: Session) -> Pr
     approved_evidence_controls = 0
 
     for impl in implementations:
+        # Align with gap analysis (is_applicable == True) and snapshots
+        # (skip is_applicable is False): out-of-scope must not inflate
+        # journey progress counts or the applicable denominator.
+        if impl.is_applicable is False:
+            not_applicable_count += 1
+            by_status["not_applicable"] = by_status.get("not_applicable", 0) + 1
+            continue
+
         parsed_control = impl.parsed_control
         framework_control = impl.framework_control
 
@@ -2253,6 +2262,7 @@ def calculate_progress_summary(journey: CertificationJourney, db: Session) -> Pr
 
     by_domain = list(by_domain_dict.values())
 
+    # Denominator excludes out-of-scope (is_applicable=False) and status not_applicable
     applicable_total = total - not_applicable_count
     completion_percentage = round((implemented_count / applicable_total * 100) if applicable_total > 0 else 0, 1)
     evidence_coverage_percentage = round((fully_evidenced_count / applicable_total * 100) if applicable_total > 0 else 0, 1)
@@ -2346,8 +2356,8 @@ def _snapshot_and_trend(journey: CertificationJourney, db: Session, prog: Progre
 
 def _automation_for_journey(journey: CertificationJourney, db: Session) -> dict:
     """Derive how many of this journey's requirements are AUTOMATED (linked to a
-    compliance plugin via PluginControlMapping → ControlMapping) and how many of
-    those are PASSING (latest plugin run = passed)."""
+    compliance plugin via PluginControlMapping → NormalizedControlLink /
+    ControlMapping) and how many of those are PASSING (latest plugin run = passed)."""
     impls = db.query(ControlImplementation).filter(
         ControlImplementation.journey_id == journey.id,
     ).all()
@@ -2363,25 +2373,35 @@ def _automation_for_journey(journey: CertificationJourney, db: Session) -> dict:
     if not pcms:
         return blank
 
-    # Bridge plugin mappings to parsed_control_id (via ControlMapping) and keep
-    # any direct framework_control_id links.
+    # Bridge plugin NC ids → parsed/framework controls.
+    # ControlMapping is NC↔FrameworkControl only (no parsed_control_id);
+    # NormalizedControlLink carries parsed_control_id (and optional FC).
     norm_ids = {m.normalized_control_id for m in pcms if getattr(m, "normalized_control_id", None)}
     norm_to_parsed: dict = {}
+    norm_to_fc: dict = {}
     if norm_ids:
+        for link in db.query(NormalizedControlLink).filter(
+            NormalizedControlLink.normalized_control_id.in_(list(norm_ids)),
+        ).all():
+            if link.parsed_control_id:
+                norm_to_parsed.setdefault(link.normalized_control_id, set()).add(link.parsed_control_id)
+            if link.framework_control_id:
+                norm_to_fc.setdefault(link.normalized_control_id, set()).add(link.framework_control_id)
         for cm in db.query(ControlMapping).filter(
             ControlMapping.normalized_control_id.in_(list(norm_ids)),
         ).all():
-            pid = getattr(cm, "parsed_control_id", None)
-            if pid:
-                norm_to_parsed.setdefault(cm.normalized_control_id, set()).add(pid)
+            if cm.framework_control_id:
+                norm_to_fc.setdefault(cm.normalized_control_id, set()).add(cm.framework_control_id)
 
     parsed_to_plugins: dict = {}
     fc_to_plugins: dict = {}
     for m in pcms:
         nkey = getattr(m, "normalized_control_id", None)
         if nkey:
-            for pid in norm_to_parsed.get(nkey, ()):  # parsed control ids
+            for pid in norm_to_parsed.get(nkey, ()):
                 parsed_to_plugins.setdefault(pid, set()).add(m.plugin_id)
+            for fcid in norm_to_fc.get(nkey, ()):
+                fc_to_plugins.setdefault(fcid, set()).add(m.plugin_id)
         fckey = getattr(m, "framework_control_id", None)
         if fckey:
             fc_to_plugins.setdefault(fckey, set()).add(m.plugin_id)

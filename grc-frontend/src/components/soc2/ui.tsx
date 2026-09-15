@@ -132,8 +132,13 @@ export interface LinkedCheck {
   severity: string | null;
   seeded: boolean;
   source?: string;
+  /** Stage G — SCF ao_id / scf_id tokens this check covers (when bound). */
+  covers?: string[];
   last_run: { status: string; started_at?: string | null; result_summary?: string | null } | null;
 }
+
+/** How this control's automated status was resolved (Stage G). */
+export type BindingSource = 'covers' | 'soc2_fallback' | 'none';
 export interface Soc2Control {
   control_id: string;
   title: string;
@@ -222,4 +227,23 @@ export interface CommonControl {
   checks_count: number;
   overall_status: string;
   checks: LinkedCheck[];
+  owner_user_id?: number | null;
+  owner_name?: string | null;
+  reviewer_user_id?: number | null;
+  assigned_user_ids?: number[] | null;
+  next_due_at?: string | null;
+  ownership_status?: 'unowned' | 'ok' | 'overdue' | string | null;
+  /** Tenant-authored control (Stage D); false/undefined = SCF catalogue row. */
+  custom?: boolean;
+  /** Stage G — whether status comes from SCF covers bindings or SOC 2 fallback. */
+  binding_source?: BindingSource;
+}
+
+/** Compact badge for tenant-authored rows in the common-controls list/detail. */
+export function CustomBadge() {
+  return (
+    <span className="inline-flex items-center rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-800">
+      Custom
+    </span>
+  );
 }

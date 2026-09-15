@@ -69,6 +69,8 @@ celery_app = Celery(
         # task that fans out daily; lives on `parsing` until the dedicated
         # `notification` queue spins up.
         "grc.tasks.exceptions",
+        # SCF Stage C — attestation due/overdue reminders (Celery beat).
+        "grc.tasks.scf",
         "grc.tasks.tprm",
         # Phase 7 — Cloud connector sync. Lives on `parsing` until the
         # dedicated `sync` queue spins up.
@@ -152,6 +154,7 @@ celery_app.conf.update(
         # Phase 8 — exception workflow sweep. Same story: shares `parsing`
         # until the dedicated `notification` queue lands.
         "grc.tasks.exceptions.*": {"queue": "parsing"},
+        "grc.tasks.scf.*": {"queue": "parsing"},
         "grc.tasks.tprm.*": {"queue": "parsing"},
         # Phase 7 — cloud connector sync. Shares `parsing` for now.
         "grc.tasks.cloud_sync.*": {"queue": "parsing"},
@@ -202,6 +205,12 @@ celery_app.conf.update(
         # without further code changes.
         "exception-expiry-daily-sweep": {
             "task": "grc.tasks.exceptions.daily_exception_expiry_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # SCF Stage C — daily attestation reminders for due/overdue controls.
+        "scf-attestation-daily-sweep": {
+            "task": "grc.tasks.scf.daily_attestation_sweep",
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },

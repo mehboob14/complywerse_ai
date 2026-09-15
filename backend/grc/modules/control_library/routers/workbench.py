@@ -32,7 +32,8 @@ from ....models import (
     NormalizedControl, NormalizedControlLink, NormalizationRun,
     InternalControl, InternalControlTest, InternalControlEscalation,
     InternalControlRiskLink, InternalControlEvidence,
-    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping, Risk,
+    ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
+    Risk, RiskControlLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
@@ -98,6 +99,20 @@ def _get_scope(db: Session, tenant_id: int) -> dict:
     t = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     settings = (t.settings or {}) if t else {}
     return dict(settings.get(_SETTINGS_KEY, {}) or {})
+
+
+def _resolved_scope_framework_ids(db: Session, tenant_id: int) -> list:
+    """Prefer Automation SCF default scope slugs; else Tenant.settings workbench."""
+    try:
+        from grc.modules.scf.scope_service import (
+            ensure_default_scope, uploaded_framework_ids_for_scope,
+        )
+        scf = ensure_default_scope(db, tenant_id)
+        if scf.framework_slugs:
+            return uploaded_framework_ids_for_scope(db, tenant_id, scf)
+    except Exception:  # noqa: BLE001
+        pass
+    return list(_get_scope(db, tenant_id).get("framework_ids", []) or [])
 
 
 def _set_scope(db: Session, tenant_id: int, framework_ids, updated_by=None) -> dict:
@@ -500,11 +515,28 @@ def _light_row(source_type, source_id, disp, wi):
 @router.get("/scope")
 def get_scope(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     """Selected frameworks (tenant-wide) + all available uploaded frameworks
-    (with control counts) + the change log — powers the Configure Frameworks page."""
+    (with control counts) + the change log — powers the Configure Frameworks page.
+
+    Prefer Automation → SCF default scope when it has framework_slugs set; else
+    fall back to Tenant.settings control_workbench (legacy).
+    """
     tid = _tenant(current_user, db)
     if not tid:
-        return {"framework_ids": [], "available": [], "can_edit": False, "history": []}
+        return {"framework_ids": [], "available": [], "can_edit": False, "history": [],
+                "source": "none"}
     cfg = _get_scope(db, tid)
+    framework_ids = _resolved_scope_framework_ids(db, tid)
+    source = "scf" if framework_ids and framework_ids != list(cfg.get("framework_ids", []) or []) else (
+        "scf" if (cfg.get("scf_scope_id") and framework_ids == list(cfg.get("framework_ids", []) or [])) else "workbench"
+    )
+    # Prefer explicit SCF when default scope has slugs.
+    try:
+        from grc.modules.scf.scope_service import ensure_default_scope
+        scf = ensure_default_scope(db, tid)
+        if scf.framework_slugs:
+            source = "scf"
+    except Exception:  # noqa: BLE001
+        source = "workbench"
     avail = _scope_framework_ids(db, get_user_tenants(current_user, db))
     fw_names = {fid: name for (fid, name) in avail}
     # control count per framework
@@ -525,8 +557,9 @@ def get_scope(db: Session = Depends(get_db), current_user: GRCUser = Depends(req
         "removed": [fw_names.get(i, f"#{i}") for i in e.get("removed", [])],
         "total": e.get("total"),
     } for e in reversed(log)]
-    return {"framework_ids": cfg.get("framework_ids", []), "available": available,
-            "can_edit": _is_admin(db, current_user), "history": history}
+    return {"framework_ids": framework_ids, "available": available,
+            "can_edit": _is_admin(db, current_user), "history": history,
+            "source": source}
 
 
 @router.put("/scope")
@@ -574,7 +607,7 @@ def overview(db: Session = Depends(get_db), current_user: GRCUser = Depends(requ
     if not tid:
         return {"domains": [], "totals": {}, "frameworks": []}
     pmap, domains = _canonical_maps(db, tid)
-    scope_fw = set(_get_scope(db, tid).get("framework_ids", []))
+    scope_fw = set(_resolved_scope_framework_ids(db, tid))
     visible = dict(_scope_framework_ids(db, tids))
     if scope_fw:
         visible = {k: v for k, v in visible.items() if k in scope_fw}
@@ -722,7 +755,7 @@ def domain_groups(domain: str, db: Session = Depends(get_db),
     if not tid:
         return {"groups": []}
     pmap, domains = _canonical_maps(db, tid)
-    scope_fw = set(_get_scope(db, tid).get("framework_ids", []))
+    scope_fw = set(_resolved_scope_framework_ids(db, tid))
     visible = dict(_scope_framework_ids(db, tids))
     if scope_fw:
         visible = {k: v for k, v in visible.items() if k in scope_fw}
@@ -802,7 +835,7 @@ def list_controls(
     if not tid:
         return {"total": 0, "items": []}
     cfg = _get_scope(db, tid)
-    scope_fw = cfg.get("framework_ids", [])
+    scope_fw = _resolved_scope_framework_ids(db, tid)
     want = source or "all"
     pmap, cdomains = _canonical_maps(db, tid)
 
@@ -1756,6 +1789,12 @@ def del_escalation(esc_id: int, db: Session = Depends(get_db),
 @router.post("/items/{work_item_id}/risks")
 def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(get_db),
              current_user: GRCUser = Depends(require_auth)):
+    """Link a risk to a work item.
+
+    When the work item resolves to a NormalizedControl, write only the canonical
+    ``RiskControlLink`` (Control Library's separate copy is no longer written).
+    Legacy internal-only work items without an NC keep ``ControlWorkRiskLink``.
+    """
     tid = _tenant(current_user, db)
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == work_item_id,
                                           ControlWorkItem.tenant_id == tid).first()
@@ -1764,10 +1803,27 @@ def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(ge
     rid = body.get("risk_id")
     if not rid:
         raise HTTPException(400, "risk_id required")
+    risk = db.query(Risk).filter(Risk.id == rid, Risk.tenant_id == tid).first()
+    if not risk:
+        raise HTTPException(404, "Risk not found")
+
+    nc_id = wi.source_id if wi.source_type == "normalized" else None
+    if nc_id:
+        existing = db.query(RiskControlLink).filter(
+            RiskControlLink.risk_id == rid,
+            RiskControlLink.normalized_control_id == nc_id,
+        ).first()
+        if existing:
+            return {"ok": True, "id": existing.id, "canonical": True}
+        link = RiskControlLink(risk_id=rid, normalized_control_id=nc_id)
+        db.add(link)
+        db.commit()
+        return {"ok": True, "id": link.id, "canonical": True}
+
     exists = db.query(ControlWorkRiskLink).filter(
         ControlWorkRiskLink.work_item_id == wi.id, ControlWorkRiskLink.risk_id == rid).first()
     if exists:
-        return {"ok": True, "id": exists.id}
+        return {"ok": True, "id": exists.id, "canonical": False}
     r = ControlWorkRiskLink(
         work_item_id=wi.id, tenant_id=tid, risk_id=rid,
         link_type=body.get("link_type", "mitigates"),
@@ -1775,14 +1831,37 @@ def add_risk(work_item_id: int, body: dict = Body(...), db: Session = Depends(ge
         created_by=getattr(current_user, "id", None))
     db.add(r)
     db.commit()
-    return {"ok": True, "id": r.id}
+    return {"ok": True, "id": r.id, "canonical": False}
 
 
 @router.delete("/risks/{link_id}")
 def del_risk(link_id: int, db: Session = Depends(get_db),
              current_user: GRCUser = Depends(require_auth)):
     tid = _tenant(current_user, db)
-    db.query(ControlWorkRiskLink).filter(ControlWorkRiskLink.id == link_id,
-                                         ControlWorkRiskLink.tenant_id == tid).delete()
-    db.commit()
-    return {"ok": True}
+    cwl = db.query(ControlWorkRiskLink).filter(
+        ControlWorkRiskLink.id == link_id,
+        ControlWorkRiskLink.tenant_id == tid,
+    ).first()
+    if cwl:
+        wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == cwl.work_item_id).first()
+        nc_id = wi.source_id if wi and wi.source_type == "normalized" else None
+        if nc_id:
+            db.query(RiskControlLink).filter(
+                RiskControlLink.risk_id == cwl.risk_id,
+                RiskControlLink.normalized_control_id == nc_id,
+            ).delete(synchronize_session=False)
+        db.delete(cwl)
+        db.commit()
+        return {"ok": True}
+
+    rcl = (
+        db.query(RiskControlLink)
+        .join(Risk, Risk.id == RiskControlLink.risk_id)
+        .filter(RiskControlLink.id == link_id, Risk.tenant_id == tid)
+        .first()
+    )
+    if rcl:
+        db.delete(rcl)
+        db.commit()
+        return {"ok": True}
+    raise HTTPException(404, "Risk link not found")

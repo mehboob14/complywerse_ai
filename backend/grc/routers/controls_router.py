@@ -420,6 +420,48 @@ def list_controls(
     return controls
 
 
+@router.get("/normalized")
+def list_normalized_controls_for_picker(
+    skip: int = 0,
+    limit: int = 5000,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Picker payload for risk detail / FE ``all-normalized-controls``.
+
+    Includes SCF bridge + tenant custom NCs. ``control_status`` is Decision-4
+    indicator only (never used to recalc residual).
+    """
+    from grc.modules.scf.risk_links import control_status_indicator
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    q = db.query(NormalizedControl).filter(
+        or_(
+            NormalizedControl.source == "scf",
+            and_(
+                NormalizedControl.source == "custom",
+                NormalizedControl.tenant_id == tenant_id,
+                NormalizedControl.retired_at.is_(None),
+            ),
+        )
+    )
+    rows = q.order_by(NormalizedControl.code).offset(skip).limit(limit).all()
+    return [
+        {
+            "id": nc.id,
+            "code": nc.code,
+            "name": nc.name,
+            "statement": nc.statement,
+            "scf_id": nc.scf_id,
+            "source": nc.source,
+            "custom": nc.source == "custom",
+            "control_status": control_status_indicator(db, nc, tenant_id=tenant_id),
+            "control_status_indicator": True,
+        }
+        for nc in rows
+    ]
+
+
 @router.post("", response_model=NormalizedControlResponse, status_code=status.HTTP_201_CREATED)
 def create_control(
     control: NormalizedControlCreate,

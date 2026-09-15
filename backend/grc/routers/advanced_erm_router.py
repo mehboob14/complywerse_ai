@@ -1263,6 +1263,9 @@ def get_appetite_breaches(
 # Control Effectiveness
 # =============================================================================
 
+_EFFECTIVENESS_TO_PCT = {"high": 70.0, "medium": 40.0, "low": 15.0}
+
+
 @router.put("/controls/{link_id}/effectiveness", response_model=MessageResponse)
 def update_control_effectiveness(
     link_id: int,
@@ -1282,10 +1285,22 @@ def update_control_effectiveness(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Control link not found"
         )
-    
-    link.effectiveness_rating = effectiveness.effectiveness_rating
-    if effectiveness.notes:
-        link.notes = effectiveness.notes
+
+    rating = (effectiveness.effectiveness_rating or "").strip().lower()
+    pct = _EFFECTIVENESS_TO_PCT.get(rating)
+    if pct is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="effectiveness_rating must be one of: high, medium, low",
+        )
+
+    # RiskControlLink stores FAIR effect fields, not effectiveness_rating/notes.
+    link.freq_reduction_ml_pct = pct
+    link.mag_reduction_ml_pct = pct
+    if effectiveness.notes is not None:
+        link.effect_rationale = effectiveness.notes
+    link.effect_updated_by = current_user.id
+    link.effect_updated_at = datetime.utcnow()
     
     db.commit()
     return {"message": "Control effectiveness updated", "id": link_id}

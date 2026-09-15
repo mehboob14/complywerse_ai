@@ -250,6 +250,10 @@ class SCFScope(Base):
     has_facilities = Column(Boolean, default=True)       # gates 51 Facility controls
     processes_personal_data = Column(Boolean, default=True)  # gates 97 Data controls
     target_cmm = Column(Integer, default=3)
+    # Free-text boundary + organisational scope (Stage B).
+    scope_statement = Column(Text, nullable=True)
+    business_unit_ids = Column(JSON, nullable=True)      # list of BU ids
+    locations = Column(JSON, nullable=True)              # list of location labels/ids
     is_default = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -273,8 +277,9 @@ class SCFControlState(Base):
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     scope_id = Column(Integer, ForeignKey("grc_scf_scope.id", ondelete="CASCADE"),
                       nullable=False, index=True)
-    # join on the stable TEXT id so a release upgrade cannot orphan the overlay
-    scf_id = Column(String(16), nullable=False, index=True)
+    # join on the stable TEXT id so a release upgrade cannot orphan the overlay.
+    # VARCHAR(64): custom controls share this identity space with SCF codes.
+    scf_id = Column(String(64), nullable=False, index=True)
 
     # NULL = inherit the derived answer; TRUE/FALSE = an explicit human decision
     # that survives every recompute.
@@ -293,6 +298,7 @@ class SCFControlState(Base):
 
     owner_user_id = Column(Integer, nullable=True, index=True)
     reviewer_user_id = Column(Integer, nullable=True)
+    assigned_user_ids = Column(JSON, nullable=True)  # list of user ids
     alternative_scf_id = Column(String(16), nullable=True)
     alternative_justification = Column(Text, nullable=True)
     # shared responsibility — distinct from a compensating control

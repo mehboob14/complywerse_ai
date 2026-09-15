@@ -272,7 +272,15 @@ export interface Risk {
 }
 
 export interface RiskDetail extends Risk {
-  linked_controls: Array<{id: number; control_id: number; code: string; name: string}>;
+  linked_controls: Array<{
+    id: number;
+    control_id: number;
+    code: string;
+    name: string;
+    control_status?: string | null;
+    custom?: boolean;
+    scf_id?: string | null;
+  }>;
   linked_framework_controls: Array<{id: number; framework_control_id: number; code: string; name: string; mitigation_effectiveness?: string; notes?: string; control_ref?: string; title?: string}>;
   linked_assets: Array<{id: number; asset_id: number; name: string; asset_type: string}>;
   linked_evidence: Array<{id: number; evidence_id: number; name: string; status: string}>;
@@ -448,7 +456,17 @@ export interface ITAsset {
 }
 
 export interface AssetDetail extends ITAsset {
-  linked_controls: Array<{id: number; code: string; title: string}>;
+  linked_controls: Array<{
+    id: number;
+    control_id?: number;
+    code: string;
+    name?: string;
+    title?: string;
+    scf_id?: string | null;
+    custom?: boolean;
+    control_status?: string | null;
+    check_status?: string | null;
+  }>;
   linked_framework_controls: Array<{id: number; control_ref: string; title: string; framework_name: string}>;
   linked_risks: Array<{id: number; title: string; risk_score: number}>;
   linked_evidence: Array<{id: number; name: string; status: string}>;

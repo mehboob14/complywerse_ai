@@ -30,7 +30,8 @@ import {
   Lock, Cpu, Sparkles, ArrowRight, ShieldCheck, AlertCircle, Loader2,
   Shield, X, AlertTriangle, Plus, Filter, Layers, ChevronDown, ChevronRight,
 } from 'lucide-react';
-import { assetsApi, riskPostureApi } from '@/lib/api';
+import { assetsApi, controlsApi, riskPostureApi } from '@/lib/api';
+import { ControlStatusPill, CustomBadge } from '@/components/soc2/ui';
 import { GuideMarker } from '@/components/guide';
 import { InlineLinkPicker, PageLoader } from '@/components/ui';
 
@@ -426,11 +427,177 @@ function CISCard({ assetId, onOpenCompliance }: { assetId: number; onOpenComplia
 
 /* ─── Mapped Controls: coverage ring + table (was ControlsSection) ─────── */
 
-type CtrlLink = { id: number; code?: string; internal_control_id?: number; name: string; category?: string; coverage_status?: string };
-
-const KIND_LABEL: Record<'internal' | 'framework' | 'legacy', string> = {
-  internal: 'Internal Control', framework: 'Framework Control', legacy: 'Legacy Control',
+type CtrlLink = {
+  id: number;
+  code?: string;
+  internal_control_id?: number;
+  name: string;
+  category?: string;
+  coverage_status?: string;
+  control_id?: number;
+  scf_id?: string | null;
+  custom?: boolean;
+  control_status?: string | null;
+  check_status?: string | null;
 };
+
+const CHECK_STATUS_PILL: Record<string, string> = {
+  failed: 'bg-rose-50 text-rose-700 border-rose-200',
+  passed: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  partial: 'bg-amber-50 text-amber-700 border-amber-200',
+  not_run: 'bg-slate-100 text-slate-600 border-slate-200',
+  unknown: 'bg-slate-100 text-slate-500 border-slate-200',
+};
+
+function checkStatusLabel(s?: string | null) {
+  const key = (s || 'not_run').toLowerCase();
+  if (key === 'passed') return 'Passed';
+  if (key === 'failed') return 'Failed';
+  if (key === 'partial') return 'Partial';
+  if (key === 'not_run') return 'Not run';
+  return (s || 'Unknown').replace(/_/g, ' ');
+}
+
+const KIND_LABEL: Record<'internal' | 'framework', string> = {
+  internal: 'Internal Control', framework: 'Framework Control',
+};
+
+/** SCF / custom / normalized control links (Stage F) — separate from internal linker. */
+function NormalizedControlsCard({
+  assetId,
+  linked,
+  onUnlink,
+  isUnlinking,
+}: {
+  assetId: number;
+  linked: CtrlLink[];
+  onUnlink: (linkId: number) => void;
+  isUnlinking: boolean;
+}) {
+  const qc = useQueryClient();
+  const linkedNcIds = new Set(
+    linked.map((c) => Number(c.control_id)).filter((n) => Number.isFinite(n) && n > 0),
+  );
+
+  const ncQ = useQuery({
+    queryKey: ['normalized-controls-for-asset-link'],
+    queryFn: () => controlsApi.getNormalized().then((r) => r.data as Array<{
+      id: number | string;
+      name?: string;
+      code?: string | null;
+      scf_id?: string | null;
+      source?: string | null;
+      custom?: boolean;
+      internal_id?: string;
+      category?: string;
+    }>),
+  });
+
+  const linkMut = useMutation({
+    mutationFn: (normalizedControlId: number) =>
+      assetsApi.linkControl(assetId, { normalized_control_id: normalizedControlId }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      void qc.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+    },
+  });
+
+  const pickerItems = (ncQ.data || [])
+    .filter((c) => !linkedNcIds.has(Number(c.id)))
+    .map((c) => {
+      const scfOrCode = c.scf_id || c.code || c.internal_id || null;
+      const isCustom = !!(c.custom || c.source === 'custom');
+      const kind = isCustom ? 'Custom' : scfOrCode ? 'SCF' : 'Normalized';
+      return {
+        value: String(c.id),
+        label: c.name || `Control ${scfOrCode || c.id}`,
+        subLabel: scfOrCode ? `${kind} · ${scfOrCode}` : kind,
+      };
+    });
+
+  return (
+    <div className={CARD}>
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-[14px] border-b border-[#F0F3F5]">
+        <div className="min-w-0">
+          <h3 className="flex items-center gap-2 text-[14px] font-semibold text-[#0F1F2B]">
+            <Shield size={15} className="text-[#8A95A1]" />
+            Automation / Normalized controls
+            <span className="rounded-full bg-[#F1F4F6] text-[#6B7787] px-2 py-0.5 text-[11px] font-bold">{linked.length}</span>
+          </h3>
+          <p className="text-[11px] text-[#8A95A1] mt-[3px] max-w-[420px]">
+            SCF catalogue, custom, and normalized library controls linked to this asset.
+          </p>
+        </div>
+        <InlineLinkPicker
+          triggerLabel="+ Link control"
+          triggerClassName={BTN_PRIMARY}
+          items={pickerItems}
+          isLoading={ncQ.isLoading || linkMut.isPending}
+          emptyText="No controls available"
+          searchPlaceholder="Search normalized controls"
+          onSelect={(value) => linkMut.mutate(Number(value))}
+        />
+      </div>
+      <div className="px-4 py-3">
+        {linked.length === 0 ? (
+          <p className="text-[12px] text-[#8A95A1] py-2">No normalized controls linked yet.</p>
+        ) : (
+          <ul className="divide-y divide-[#F0F3F5]">
+            {linked.map((c) => {
+              const href = c.scf_id
+                ? `/automation/soc2-controls/${encodeURIComponent(c.scf_id)}`
+                : c.control_id
+                  ? `/control-library/${c.control_id}`
+                  : undefined;
+              const st = (c.check_status || '').toLowerCase();
+              const stCls = CHECK_STATUS_PILL[st] || CHECK_STATUS_PILL.unknown;
+              const title = (
+                <span className="text-[12px] font-semibold text-[#0F1F2B] truncate">{c.name}</span>
+              );
+              return (
+                <li key={c.id} className="flex items-start gap-3 py-2.5 first:pt-0 last:pb-0">
+                  <div className="min-w-0 flex-1">
+                    {href ? (
+                      <Link href={href} className="block hover:text-[#12A085]">{title}</Link>
+                    ) : title}
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      {(c.scf_id || c.code) && (
+                        <span className={'text-[10.5px] font-bold text-[#12A085] ' + MONO}>
+                          {c.scf_id || c.code}
+                        </span>
+                      )}
+                      {c.custom && <CustomBadge />}
+                      {c.control_status && <ControlStatusPill status={c.control_status} />}
+                      {c.check_status && (
+                        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${stCls}`}>
+                          {checkStatusLabel(c.check_status)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onUnlink(c.id)}
+                    disabled={isUnlinking}
+                    className="rounded p-1 text-[#AEB8C2] hover:text-[#B23A3A] disabled:opacity-50 flex-none"
+                    title="Unlink"
+                  >
+                    <X size={14} />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {linked.length > 0 && (
+          <p className="mt-2 text-[11px] text-[#8A95A1]">
+            Check status is an indicator only — linking does not recalculate risk scores.
+          </p>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function MappedControlsCard({
   asset, allControls, controlsLoading, coveragePctFromApi,
@@ -457,11 +624,10 @@ function MappedControlsCard({
       subLabel: c.category,
     }));
 
-  type Row = CtrlLink & { kind: 'internal' | 'framework' | 'legacy' };
+  type Row = CtrlLink & { kind: 'internal' | 'framework' };
   const rows: Row[] = [
     ...(asset.linked_internal_controls || []).map((c) => ({ ...c, kind: 'internal' as const })),
     ...(asset.linked_framework_controls || []).map((c) => ({ ...c, kind: 'framework' as const })),
-    ...(asset.linked_controls || []).map((c) => ({ ...c, kind: 'legacy' as const })),
   ];
   const totalControls = rows.length;
   const pct = coveragePctFromApi ?? null;
@@ -477,7 +643,7 @@ function MappedControlsCard({
             <span className="rounded-full bg-[#F1F4F6] text-[#6B7787] px-2 py-0.5 text-[11px] font-bold">{totalControls}</span>
           </h3>
           <p className="text-[11px] text-[#8A95A1] mt-[3px] max-w-[420px]">
-            Controls applied to this asset across Internal Controls, Framework Controls, and the Normalized Control Library. Mapping more reduces this asset’s contribution to the tenant’s risk score.
+            Internal and framework controls mapped to this asset. Mapping more reduces this asset’s contribution to the tenant’s risk score.
           </p>
         </div>
         <div className="flex items-center gap-4 flex-none">
@@ -921,14 +1087,17 @@ export interface RisksPanelProps {
   isLinkingControl: boolean;
   onUnlinkInternalControl: (linkId: number) => void;
   onUnlinkFrameworkControl: (linkId: number) => void;
+  onUnlinkNormalizedControl: (linkId: number) => void;
   isUnlinkingInternal: boolean;
   isUnlinkingFramework: boolean;
+  isUnlinkingNormalized: boolean;
 }
 
 export default function RisksPanel({
   assetId, asset, onOpenCompliance, coveragePctFromApi,
   allControls, controlsLoading, onLinkControl, isLinkingControl,
-  onUnlinkInternalControl, onUnlinkFrameworkControl, isUnlinkingInternal, isUnlinkingFramework,
+  onUnlinkInternalControl, onUnlinkFrameworkControl, onUnlinkNormalizedControl,
+  isUnlinkingInternal, isUnlinkingFramework, isUnlinkingNormalized,
 }: RisksPanelProps) {
   // External (EASM) assets have no CIA ratings or CIS baseline — those two
   // editable cards don't apply; the Residual Risk card shows the exposure
@@ -949,6 +1118,12 @@ export default function RisksPanel({
           bars, findings banner, mapped-controls table with coverage ring. */}
       <ResidualRiskCard assetId={assetId} asset={asset} />
       <FindingsBanner assetId={assetId} />
+      <NormalizedControlsCard
+        assetId={assetId}
+        linked={asset.linked_controls || []}
+        onUnlink={onUnlinkNormalizedControl}
+        isUnlinking={isUnlinkingNormalized}
+      />
       <MappedControlsCard
         asset={asset}
         allControls={allControls}

@@ -11,6 +11,9 @@ class UploadedFramework(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=True, index=True)
     name = Column(String(255), nullable=False)
+    # Stable product slug matching seed_data/scf/crosswalk_registry.json (e.g. 'soc2').
+    # Nullable for legacy rows; backfilled when frameworks are re-seeded or scoped.
+    slug = Column(String(64), nullable=True, index=True)
     description = Column(Text, nullable=True)
     file_name = Column(String(255), nullable=False)
     file_path = Column(String(500), nullable=False)

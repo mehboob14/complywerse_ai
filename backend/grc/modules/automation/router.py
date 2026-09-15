@@ -15,7 +15,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from sqlalchemy import desc, distinct, func
+from sqlalchemy import desc, distinct, func, or_
 from sqlalchemy.orm import Session
 
 from grc.models import (
@@ -27,13 +27,17 @@ from grc.models import (
     GRCUser,
     IntegrationConnection,
     NormalizedControl,
+    SCFCheckResult,
     SCFControl,
+    SCFControlState,
     SCFMapping,
     SCFMappingReview,
     SCFObjective,
     SCFRelease,
     get_db,
 )
+from grc.modules.scf import ownership as scf_own
+from grc.modules.scf import custom_controls as scf_custom
 from grc.routers.auth_router import (
     get_user_primary_tenant,
     require_auth,
@@ -59,9 +63,16 @@ from grc.modules.compliance_plugins.runners.live_api_catalog import (
     provider_meta,
     run_provider,
 )
+from grc.modules.compliance_plugins.runners.covers import (
+    covers_for_check,
+    scf_targets_from_covers,
+)
 from grc.modules.compliance_plugins.services.credentials import resolve_credentials_for_connection
 from grc.modules.compliance_plugins.services.run_service import execute_plugin
 from grc.crypto import encrypt_secret
+from grc.modules.scf.scope_service import ensure_default_scope, get_applicable_scf_ids
+from grc.modules.scf import risk_links as scf_risks
+from grc.modules.scf import asset_links as scf_assets
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +107,40 @@ lib_router = APIRouter(prefix="/automation/{framework}", tags=["Automation Frame
 common_router = APIRouter(prefix="/automation/common", tags=["Automation Common Controls"])
 
 _require_scan_perm = require_tenant_permission("compliance:scan:execute")
+# Seed / connectors / mapping review share the scan gate — same operators who
+# run checks configure the automation plane. Evidence attach uses the evidence
+# library edit permission so auditors without scan rights can still link files.
+_require_evidence_edit = require_tenant_permission("evidence:evidence_library:edit")
+
+
+def _require_risk_link_edit(
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """erm:risks:edit OR controls:control_library:edit (Stage E link writes)."""
+    from grc.modules.vendor_risk.tpra.rbac import user_has_any_permission
+
+    if user_has_any_permission(
+        db, current_user, ("erm:risks:edit", "controls:control_library:edit")
+    ):
+        return True
+    raise HTTPException(status_code=403, detail="Permission denied")
+
+
+def _require_asset_link_edit(
+    current_user: GRCUser = Depends(require_auth),
+    db: Session = Depends(get_db),
+):
+    """assets:asset_inventory:edit OR controls:control_library:edit (Stage F)."""
+    from grc.modules.vendor_risk.tpra.rbac import user_has_any_permission
+
+    if user_has_any_permission(
+        db,
+        current_user,
+        ("assets:asset_inventory:edit", "controls:control_library:edit"),
+    ):
+        return True
+    raise HTTPException(status_code=403, detail="Permission denied")
 
 _AUTOMATION_DATA = Path(__file__).resolve().parents[2] / "seed_data" / "automation"
 
@@ -422,6 +467,61 @@ def _status_from_run(run, check_ids: set, control_codes: List[str],
     return "not_run"
 
 
+_SCF_RESULT_STATUS = {
+    "pass": "passed",
+    "fail": "failed",
+    "error": "collection_failed",
+    "not_run": "not_run",
+}
+
+
+def _status_from_scf_results(
+    rows: List[Any],
+    check_ids: set,
+    now: Optional[datetime] = None,
+) -> Optional[str]:
+    """Aggregate latest SCFCheckResult per check_id. None → fall back to run."""
+    if not rows or not check_ids:
+        return None
+    latest: Dict[str, Any] = {}
+    for r in rows:
+        cid = getattr(r, "check_id", None)
+        if cid not in check_ids:
+            continue
+        prev = latest.get(cid)
+        if prev is None or (getattr(r, "collected_at", None) or datetime.min) >= (
+            getattr(prev, "collected_at", None) or datetime.min
+        ):
+            latest[cid] = r
+    if not latest:
+        return None
+    stamp = now or datetime.utcnow()
+    mapped: List[str] = []
+    for r in latest.values():
+        exp = getattr(r, "expires_at", None)
+        if exp is not None and exp < stamp:
+            mapped.append("expired")
+            continue
+        mapped.append(_SCF_RESULT_STATUS.get((getattr(r, "status", None) or ""), "not_run"))
+    return _aggregate_status(mapped) if mapped else None
+
+
+def _scf_results_for_control(
+    db: Session,
+    tenant_id: int,
+    scf_id: str,
+    check_ids: Optional[set] = None,
+) -> List[Any]:
+    """Latest-ish result rows for a control (and optionally its bound checks)."""
+    q = db.query(SCFCheckResult).filter(
+        SCFCheckResult.tenant_id == tenant_id,
+        SCFCheckResult.scf_id == scf_id,
+    )
+    if check_ids:
+        q = q.filter(SCFCheckResult.check_id.in_(sorted(check_ids)))
+    return q.order_by(desc(SCFCheckResult.collected_at)).limit(500).all()
+
+
 def _provider_of(check: Dict[str, Any]) -> Optional[str]:
     """Which connector a linked check belongs to.
 
@@ -556,46 +656,33 @@ def _coverage_for(bound: List[Dict[str, Any]], connected: set,
 
 def _linked_checks_for(db: Session, tenant_id: int, control_codes: List[str],
                        cadence: Optional[str] = None, connected: Optional[set] = None,
-                       automatable: bool = False):
-    """(checks payload, statuses, coverage) for a control, scoped to its own codes.
+                       automatable: bool = False, scf_id: Optional[str] = None):
+    """(checks payload, statuses, coverage, binding_source) for a control.
 
+    Prefer covers→scf_id bindings; fall back to SOC 2 codes when covers miss.
     `statuses` covers ONLY the providers this tenant has connected — see
     `_connected_providers` for why an unconfigured connector must not contribute.
     `linked` still carries every bound connector so the detail page can show what
     else could prove this control.
     """
-    bound = _checks_for_control(db, control_codes)
-    if not bound:
-        return [], [], {"state": "unbound" if automatable else "manual",
-                        "satisfied_by": [], "options": [], "provider_count": 0}
+    idx = _check_index(db)
     if connected is None:
         connected = _connected_providers(db, tenant_id)
-    latest = _latest_runs_by_plugin(db, tenant_id, [b["plugin"].id for b in bound])
-    linked, statuses = [], []
-    for b in bound:
-        pl = b["plugin"]
-        run = latest.get(pl.id)
-        ids = {c.get("id") for c in b["checks"]}
-        st = _status_from_run(run, ids, control_codes, cadence) if run else "not_run"
-        in_scope = _plugin_in_scope(pl, b.get("provider"), connected)
-        if in_scope:
-            statuses.append(st)
-        linked.append({
-            "plugin_key": pl.plugin_key, "id": pl.id, "title": pl.title,
-            "severity": pl.severity, "seeded": True,
-            "source": "connector" if pl.benchmark == CONNECTOR_BENCHMARK else "aws",
-            "checks_matched": len(b["checks"]),
-            "control_status": st,
-            "in_scope": in_scope,
-            "last_run": _run_out(run) if run else None,
-        })
-    return linked, statuses, _coverage_for(bound, connected, automatable)
+    latest = _latest_runs_by_plugin(
+        db, tenant_id, sorted({p.id for lst in list(idx["soc2"].values()) + list(idx["scf"].values())
+                               for p, _ in lst}),
+    )
+    return _linked_from_index(
+        idx, latest, connected, control_codes, cadence, automatable,
+        scf_id=scf_id, db=db, tenant_id=tenant_id,
+    )
 
 
 @router.post("/seed", status_code=201)
 def seed_soc2(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_scan_perm),
 ):
     """Idempotently seed SOC 2 quantitative plugins + optional framework mappings."""
     tenant_id = get_user_primary_tenant(current_user, db)
@@ -823,6 +910,7 @@ def connect_collector(
     body: CollectorConnectBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_scan_perm),
 ):
     """Save (encrypted) credentials for a collector, creating/updating its connection."""
     if provider not in PROVIDER_API:
@@ -925,66 +1013,14 @@ def list_controls(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Control library for the framework with per-control automated-check status.
-    Each control maps to framework criteria; its linked checks = every shared SOC 2
-    automated check (AWS quantitative + SaaS connector) covering any of those
-    criteria — resolved through the framework crosswalk — latest run aggregated."""
+    """Deprecated per-framework control library.
+
+    Prefer ``GET /automation/common/controls`` (SCF). Kept as a thin wrapper so
+    old bookmarks do not 500; the previous body referenced an undefined ``out``.
+    """
     _fw(framework)
-    tenant_id = get_user_primary_tenant(current_user, db)
-    lib = _load_control_library(framework)
-    crosswalk = _load_crosswalk(framework)
-    by_code = _plugins_by_control_code(db)
-    all_ids = {p.id for ps in by_code.values() for p in ps}
-    latest = _latest_runs_by_plugin(db, tenant_id, list(all_ids))
-
-    controls_out = []
-    for c in lib.get("controls") or []:
-        criteria = c.get("criteria") or []
-        linked = []
-        statuses: List[str] = []
-        seen: set = set()
-        for code in criteria:
-            # SOC 2 has no crosswalk (identity); ISO/GDPR map their criterion to
-            # the SOC 2 criteria the shared checks are indexed by.
-            for sc in crosswalk.get(code, [code]):
-                for p in by_code.get(sc, []):
-                    if p.id in seen:
-                        continue
-                    seen.add(p.id)
-                    run = latest.get(p.id)
-                    if run:
-                        statuses.append(run.status)
-                    linked.append({
-                        "plugin_key": p.plugin_key,
-                        "id": p.id,
-                        "title": p.title,
-                        "severity": p.severity,
-                        "seeded": True,
-                        "source": "connector" if p.benchmark == CONNECTOR_BENCHMARK else "aws",
-                        "last_run": _run_out(run) if run else None,
-                    })
-        controls_out.append({
-            "control_id": c.get("control_id"),
-            "title": c.get("title"),
-            "description": c.get("description"),
-            "guidance": c.get("guidance"),
-            "sub_type": c.get("sub_type"),
-            "category": c.get("category"),
-            "domain": c.get("category"),
-            "importance": c.get("importance"),
-            "criteria": criteria,
-            "checks_count": len(linked),
-            "overall_status": _aggregate_status(statuses) if linked else "manual",
-            "checks": linked,
-        })
-
-    return {
-        "framework": lib.get("framework"),
-        "framework_key": framework,
-        "catalog_version": lib.get("catalog_version"),
-        "seeded_plugin_count": sum(c["checks_count"] for c in out),
-        "controls": controls_out,
-    }
+    # Redirect callers to the common library payload shape without the crash.
+    return list_common_controls(db=db, current_user=current_user, scope="all")
 
 
 @lib_router.get("/criteria")
@@ -1003,6 +1039,10 @@ def list_criteria(
 
 @common_router.get("/controls")
 def list_common_controls(
+    scope: str = Query("in_scope", description="in_scope | all"),
+    ownership: Optional[str] = Query(
+        None, description="unowned | mine | overdue (only with scope=in_scope)"
+    ),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -1012,8 +1052,17 @@ def list_common_controls(
     across every framework we support (via grc_scf_mapping) rather than the three
     the Probo library covered. Falls back to the legacy Probo library for a tenant
     whose SCF catalog has not been imported, so this never 500s mid-rollout.
+
+    ``scope=in_scope`` (default) filters to the tenant's default SCF scope
+    applicable set. With no frameworks selected yet, returns an empty list and
+    ``scope_status: unconfigured`` rather than all 1,534 controls.
     """
     tenant_id = get_user_primary_tenant(current_user, db)
+    own_filter = (ownership or "").strip().lower() or None
+    if own_filter and own_filter not in ("unowned", "mine", "overdue"):
+        raise HTTPException(400, "ownership must be 'unowned', 'mine', or 'overdue'")
+    if own_filter and (scope if isinstance(scope, str) else "in_scope").strip().lower() != "in_scope":
+        raise HTTPException(400, "ownership filter requires scope=in_scope")
     release = (
         db.query(SCFRelease)
         .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True))
@@ -1022,8 +1071,54 @@ def list_common_controls(
     if release is None:
         return _legacy_common_controls(db, tenant_id)
 
+    scope_mode = scope if isinstance(scope, str) else "in_scope"
+    scope_mode = (scope_mode or "in_scope").strip().lower()
+    if scope_mode not in ("in_scope", "all"):
+        raise HTTPException(400, "scope must be 'in_scope' or 'all'")
+
+    scf_scope = None
+    applicable: Optional[set] = None
+    scope_status = "all"
+    try:
+        scf_scope = ensure_default_scope(db, tenant_id)
+    except RuntimeError:
+        scf_scope = None
+
+    if scope_mode == "in_scope" and scf_scope is not None:
+        fw_slugs = list(scf_scope.framework_slugs or [])
+        if not fw_slugs and int(scf_scope.esp_level or 0) <= 0:
+            scope_status = "unconfigured"
+            # Still surface tenant-authored custom controls when scope is empty.
+            custom_out = _custom_controls_for_list(
+                db, tenant_id, scf_scope, release.id, current_user.id,
+                own_filter=own_filter, suppressed=set(), retargets={},
+            )
+            return {
+                "framework": "SCF " + release.version,
+                "source": "scf",
+                "count": len(custom_out),
+                "categories": sorted({c["category"] for c in custom_out if c.get("category")}),
+                "frameworks": [],
+                "seeded_plugin_count": 0,
+                "controls": custom_out,
+                "scope_status": scope_status,
+                "scope": {
+                    "framework_slugs": [],
+                    "applicable_count": len(custom_out),
+                    "total_count": (
+                        db.query(func.count(SCFControl.id))
+                        .filter(SCFControl.release_id == release.id)
+                        .scalar() or 0
+                    ),
+                },
+            }
+        applicable = get_applicable_scf_ids(db, tenant_id, scf_scope.id)
+        scope_status = "in_scope"
+
     # Crosswalk: only OUR framework slugs (provenance resolver|ai). SCF's own 249
     # source keys are the upstream catalogue, not what a tenant is assessed against.
+    # Reviewer suppressions and retargets are applied at read time.
+    suppressed, retargets = _mapping_reviews(db, tenant_id)
     reqs: Dict[str, Dict[str, List[Dict[str, Any]]]] = defaultdict(lambda: defaultdict(list))
     fw_seen: set = set()
     ai_slugs: set = set()
@@ -1034,8 +1129,12 @@ def list_common_controls(
                 SCFMapping.provenance.in_(("resolver", "ai")))
         .all()
     ):
-        bucket = reqs[scf_id][slug]
-        if len(bucket) < 12:                      # the table renders 6 + overflow
+        effective = _effective_mapping_scf(slug, code, scf_id, suppressed, retargets)
+        if effective is None:
+            continue
+        bucket = reqs[effective][slug]
+        # Full list for accurate counts; FE truncates display itself.
+        if not any(x.get("code") == code for x in bucket):
             bucket.append({"code": code, "name": code})
         fw_seen.add(slug)
         if prov == "ai":
@@ -1053,18 +1152,62 @@ def list_common_controls(
         .order_by(SCFControl.sort_key)
         .all()
     )
+    total_count = len(rows)
 
     out: List[Dict[str, Any]] = []
     categories: set = set()
     connected = _connected_providers(db, tenant_id)
     automatable = _automatable_controls(db, release.id)
+    idx = _check_index(db)
+    plugin_ids = {
+        p.id
+        for bucket in (idx.get("soc2") or {}, idx.get("scf") or {})
+        for lst in bucket.values()
+        for p, _ in lst
+    }
+    latest = _latest_runs_by_plugin(db, tenant_id, sorted(plugin_ids))
+
+    state_by_scf: Dict[str, SCFControlState] = {}
+    owner_names: Dict[int, str] = {}
+    now = datetime.utcnow()
+    if scf_scope is not None:
+        state_by_scf = scf_own.states_by_scf_id(db, tenant_id, scf_scope.id)
+        owner_ids = {s.owner_user_id for s in state_by_scf.values() if s.owner_user_id}
+        if owner_ids:
+            for u in db.query(GRCUser).filter(GRCUser.id.in_(sorted(owner_ids))).all():
+                owner_names[u.id] = (
+                    getattr(u, "display_name", None)
+                    or getattr(u, "username", None)
+                    or getattr(u, "email", None)
+                    or str(u.id)
+                )
+
     for scf_id, name, domain, dom_id, pptdf, weight, material, ao_count, _sk, cad in rows:
+        if applicable is not None and scf_id not in applicable:
+            continue
+        st = state_by_scf.get(scf_id)
+        own_fields = scf_own.ownership_fields(
+            st,
+            owner_name=owner_names.get(st.owner_user_id) if st and st.owner_user_id else None,
+            now=now,
+        )
+        if own_filter == "unowned" and own_fields["ownership_status"] != "unowned":
+            continue
+        if own_filter == "overdue" and own_fields["ownership_status"] != "overdue":
+            continue
+        if own_filter == "mine":
+            is_owner = st is not None and st.owner_user_id == current_user.id
+            is_assigned = scf_own.user_in_assigned(st, current_user.id)
+            if not (is_owner or is_assigned):
+                continue
         if domain:
             categories.add(domain)
         req = {k: v for k, v in (reqs.get(scf_id) or {}).items() if v}
         soc2_codes = [r["code"] for r in req.get("soc2", [])]
-        linked, statuses, coverage = _linked_checks_for(db, tenant_id, soc2_codes, cad, connected,
-                                                        scf_id in automatable)
+        linked, statuses, coverage, binding_source = _linked_from_index(
+            idx, latest, connected, soc2_codes, cad, scf_id in automatable,
+            scf_id=scf_id, db=db, tenant_id=tenant_id,
+        )
         out.append({
             "control_id": scf_id,
             "canonical_key": scf_id,
@@ -1073,7 +1216,7 @@ def list_common_controls(
             "category": domain,
             "domain": dom_id,
             "importance": "material" if material else None,
-            "sub_type": "Automated" if linked else "Manual",
+            "sub_type": _control_sub_type(linked, pptdf),
             "pptdf": pptdf,
             "weight": weight,
             "ao_count": ao_count,
@@ -1089,8 +1232,22 @@ def list_common_controls(
                                else ("connect_one" if linked else coverage["state"])),
             "coverage": coverage,
             "checks": linked,
+            "binding_source": binding_source,
+            **own_fields,
         })
 
+    # Stage D — append active custom controls (tenant-authored, always in-scope).
+    for custom_row in _custom_controls_for_list(
+        db, tenant_id, scf_scope, release.id, current_user.id,
+        own_filter=own_filter, suppressed=suppressed, retargets=retargets,
+        existing_codes={c["control_id"] for c in out},
+        idx=idx, latest=latest, connected=connected,
+    ):
+        if custom_row.get("category"):
+            categories.add(custom_row["category"])
+        out.append(custom_row)
+
+    fw_slugs_out = list((scf_scope.framework_slugs if scf_scope else None) or [])
     return {
         "framework": "SCF " + release.version,
         "source": "scf",
@@ -1107,6 +1264,12 @@ def list_common_controls(
         ],
         "seeded_plugin_count": sum(c["checks_count"] for c in out),
         "controls": out,
+        "scope_status": scope_status,
+        "scope": {
+            "framework_slugs": fw_slugs_out,
+            "applicable_count": len(applicable) if applicable is not None else len(out),
+            "total_count": total_count,
+        },
     }
 
 
@@ -1186,6 +1349,22 @@ def requirement_coverage(
 
     grand = doc.get("total") or 0
     counts = doc.get("counts") or {}
+
+    # Stage D — additive parallel section; does not alter disposition math.
+    tenant_id = get_user_primary_tenant(current_user, db)
+    custom_mappings: List[Dict[str, Any]] = []
+    for nc in scf_custom.list_custom_for_tenant(db, tenant_id, include_retired=False):
+        code = nc.scf_id or nc.code
+        for slug, items in scf_custom.requirements_for_custom(db, nc).items():
+            if framework and slug != framework:
+                continue
+            for item in items:
+                custom_mappings.append({
+                    "framework": slug,
+                    "requirement_code": item["code"],
+                    "control_code": code,
+                })
+
     return {
         "generated": doc.get("generated"),
         "total": grand,
@@ -1194,6 +1373,7 @@ def requirement_coverage(
         "mapped_pct": round(counts.get("mapped", 0) / grand * 100, 1) if grand else 0.0,
         "accounted_pct": round((grand - counts.get("pending", 0)) / grand * 100, 1) if grand else 0.0,
         "frameworks": rows,
+        "custom_mappings": custom_mappings,
     }
 
 
@@ -1222,29 +1402,543 @@ def _suppressed_pairs(db: Session, tenant_id: int) -> set:
     }
 
 
-def _check_index(db: Session):
-    """soc2 code -> [(plugin, check_ids)], built once.
+def _mapping_reviews(db: Session, tenant_id: int) -> tuple:
+    """Standing review decisions: suppressed triples + retarget map.
 
-    `_checks_for_control` re-queries every plugin per control, which is fine for
-    one control and quadratic for 1,534. Same binding rule, inverted: index the
-    codes each check names rather than scanning the checks for each code.
+    Retarget key is ``(source_slug, requirement_code, scf_id)`` → new SCF id.
+    Applied at read time so catalogue rows stay intact and decisions reverse.
     """
-    idx: Dict[str, List[Any]] = defaultdict(list)
+    suppressed: set = set()
+    retargets: Dict[tuple, str] = {}
+    for r in (
+        db.query(SCFMappingReview.source_slug, SCFMappingReview.requirement_code,
+                 SCFMappingReview.scf_id, SCFMappingReview.verdict,
+                 SCFMappingReview.retarget_scf_id)
+        .filter(SCFMappingReview.tenant_id == tenant_id,
+                SCFMappingReview.verdict.in_(("suppressed", "retargeted")))
+        .all()
+    ):
+        key = (r.source_slug, r.requirement_code, r.scf_id)
+        if r.verdict == "suppressed":
+            suppressed.add(key)
+        elif r.verdict == "retargeted" and (r.retarget_scf_id or "").strip():
+            retargets[key] = r.retarget_scf_id.strip()
+    return suppressed, retargets
+
+
+def _effective_mapping_scf(
+    slug: str, code: str, scf_id: str, suppressed: set, retargets: Dict[tuple, str],
+) -> Optional[str]:
+    """Return the SCF id that should own this mapping, or None if suppressed."""
+    key = (slug, code, scf_id)
+    if key in suppressed:
+        return None
+    return retargets.get(key, scf_id)
+
+
+def _control_sub_type(linked: list, pptdf: Optional[str]) -> str:
+    """Automated / Manual / Hybrid from linked checks + PPTDF dimensions.
+
+    Technology/Data with people/process/facility dimensions → Hybrid when checks
+    exist (automation covers only part of the control). No checks → Manual.
+    """
+    if not linked:
+        return "Manual"
+    dims = set((pptdf or "").upper())
+    has_tech = bool(dims & {"T", "D"})
+    has_human = bool(dims & {"P", "F"}) or "P" in (pptdf or "").upper()
+    # PPTDF strings are sometimes concatenated letters without separators.
+    raw = (pptdf or "").upper()
+    has_tech = has_tech or ("T" in raw or "D" in raw)
+    has_human = has_human or ("P" in raw or "F" in raw)
+    if has_tech and has_human:
+        return "Hybrid"
+    return "Automated"
+
+
+def _bound_checks_payload(
+    db: Session,
+    tenant_id: int,
+    scf_id: str,
+    bound_check_ids: List[str],
+    idx: Optional[Dict[str, Any]] = None,
+    latest: Optional[Dict[int, Any]] = None,
+    connected: Optional[set] = None,
+    cadence: Optional[str] = None,
+) -> tuple:
+    """Resolve custom-control bound_check_ids into linked/status/coverage."""
+    wanted = {str(x).strip() for x in (bound_check_ids or []) if str(x).strip()}
+    if not wanted:
+        return [], [], {"state": "manual", "hint": "Custom control — no connector checks",
+                        "satisfied_by": [], "options": [], "provider_count": 0}, "none"
+
+    if idx is None:
+        idx = _check_index(db)
+    if connected is None:
+        connected = _connected_providers(db, tenant_id)
+
+    # Invert covers index: find plugins that own these check ids.
+    bound: Dict[int, Any] = {}
+    check_covers = idx.get("check_covers") or {}
+    for bucket in (idx.get("scf") or {}, idx.get("soc2") or {}):
+        for _key, lst in bucket.items():
+            for p, cids in lst:
+                hit = (cids or set()) & wanted
+                if not hit and not cids:
+                    continue
+                if hit:
+                    entry = bound.setdefault(
+                        p.id,
+                        {"plugin": p, "checks": set(),
+                         "provider": (p.check_definition or {}).get("provider")},
+                    )
+                    entry["checks"].update(hit)
+
+    # Also scan provider_checks for ids not yet indexed (bound-only checks).
+    if len({c for b in bound.values() for c in b["checks"]}) < len(wanted):
+        for p in (db.query(CompliancePlugin)
+                  .filter(CompliancePlugin.benchmark.in_([BENCHMARK, CONNECTOR_BENCHMARK]),
+                          CompliancePlugin.enabled.is_(True)).all()):
+            provider = (p.check_definition or {}).get("provider")
+            if not provider:
+                continue
+            for c in provider_checks(provider):
+                cid = c.get("id")
+                if cid in wanted:
+                    entry = bound.setdefault(
+                        p.id,
+                        {"plugin": p, "checks": set(), "provider": provider},
+                    )
+                    entry["checks"].add(cid)
+                    if cid not in check_covers:
+                        check_covers[cid] = covers_for_check(c)
+
+    if not bound:
+        return [], [], {"state": "unbound", "hint": "bound_check_ids set but no plugins matched",
+                        "satisfied_by": [], "options": [], "provider_count": 0}, "covers"
+
+    if latest is None:
+        latest = _latest_runs_by_plugin(db, tenant_id, sorted(bound.keys()))
+
+    all_cids = {cid for b in bound.values() for cid in b["checks"]}
+    # Results keyed by custom code OR any of the bound check ids.
+    scf_rows = (
+        db.query(SCFCheckResult)
+        .filter(
+            SCFCheckResult.tenant_id == tenant_id,
+            or_(
+                SCFCheckResult.scf_id == scf_id,
+                SCFCheckResult.check_id.in_(sorted(all_cids)),
+            ),
+        )
+        .order_by(desc(SCFCheckResult.collected_at))
+        .limit(500)
+        .all()
+    )
+
+    linked, statuses = [], []
+    for b in bound.values():
+        pl = b["plugin"]
+        run = latest.get(pl.id)
+        ids = b["checks"]
+        st = _status_from_scf_results(scf_rows, ids)
+        if st is None:
+            st = _status_from_run(run, ids, [], cadence) if run else "not_run"
+        in_scope = _plugin_in_scope(pl, b.get("provider"), connected)
+        if in_scope:
+            statuses.append(st)
+        linked.append({
+            "plugin_key": pl.plugin_key, "id": pl.id, "title": pl.title,
+            "severity": pl.severity, "seeded": True,
+            "source": "connector" if pl.benchmark == CONNECTOR_BENCHMARK else "aws",
+            "checks_matched": len(ids),
+            "control_status": st,
+            "in_scope": in_scope,
+            "last_run": _run_out(run) if run else None,
+            "binding": "covers",
+            "covers": {cid: check_covers.get(cid) or [] for cid in ids},
+            "check_ids": sorted(ids),
+        })
+    bound_list = [{"plugin": b["plugin"], "checks": [{"id": x} for x in b["checks"]],
+                   "provider": b.get("provider")} for b in bound.values()]
+    return linked, statuses, _coverage_for(bound_list, connected, True), "covers"
+
+
+def _custom_controls_for_list(
+    db: Session,
+    tenant_id: int,
+    scf_scope,
+    release_id: int,
+    user_id: int,
+    *,
+    own_filter: Optional[str],
+    suppressed: set,
+    retargets: Dict[tuple, str],
+    existing_codes: Optional[set] = None,
+    idx: Optional[Dict[str, Any]] = None,
+    latest: Optional[Dict[int, Any]] = None,
+    connected: Optional[set] = None,
+) -> List[Dict[str, Any]]:
+    """Build list-row dicts for non-retired custom NormalizedControls."""
+    existing_codes = existing_codes or set()
+    customs = scf_custom.list_custom_for_tenant(db, tenant_id, include_retired=False)
+    if not customs:
+        return []
+
+    state_by_scf: Dict[str, SCFControlState] = {}
+    owner_names: Dict[int, str] = {}
+    now = datetime.utcnow()
+    if scf_scope is not None:
+        state_by_scf = scf_own.states_by_scf_id(db, tenant_id, scf_scope.id)
+        owner_ids = {s.owner_user_id for s in state_by_scf.values() if s.owner_user_id}
+        if owner_ids:
+            for u in db.query(GRCUser).filter(GRCUser.id.in_(sorted(owner_ids))).all():
+                owner_names[u.id] = (
+                    getattr(u, "display_name", None)
+                    or getattr(u, "username", None)
+                    or getattr(u, "email", None)
+                    or str(u.id)
+                )
+
+    out: List[Dict[str, Any]] = []
+    for nc in customs:
+        code = nc.scf_id or nc.code
+        if not code or code in existing_codes:
+            continue
+        st = state_by_scf.get(code)
+        own_fields = scf_own.ownership_fields(
+            st,
+            owner_name=owner_names.get(st.owner_user_id) if st and st.owner_user_id else None,
+            now=now,
+        )
+        if own_filter == "unowned" and own_fields["ownership_status"] != "unowned":
+            continue
+        if own_filter == "overdue" and own_fields["ownership_status"] != "overdue":
+            continue
+        if own_filter == "mine":
+            is_owner = st is not None and st.owner_user_id == user_id
+            is_assigned = scf_own.user_in_assigned(st, user_id)
+            if not (is_owner or is_assigned):
+                continue
+
+        direct = scf_custom.requirements_for_custom(db, nc)
+        inherited = scf_custom.inherited_requirements_from_scf(
+            db, release_id, nc.implements_scf_ids, suppressed, retargets,
+        )
+        req = scf_custom.merge_requirements(direct, inherited)
+        # Strip internal keys for list shape (code/name only).
+        req_list = {
+            slug: [{"code": i["code"], "name": i.get("name") or i.get("title") or i["code"]}
+                   for i in items]
+            for slug, items in req.items()
+        }
+        bound_ids = list(nc.bound_check_ids or [])
+        linked, statuses, coverage, binding_source = _bound_checks_payload(
+            db, tenant_id, code, bound_ids, idx=idx, latest=latest,
+            connected=connected, cadence=nc.conformity_cadence,
+        )
+        overall = (
+            _aggregate_status(statuses) if statuses
+            else ("connect_one" if linked else coverage.get("state", "manual"))
+        )
+        out.append({
+            "control_id": code,
+            "canonical_key": code,
+            "title": nc.name,
+            "description": nc.statement,
+            "category": nc.domain,
+            "domain": nc.domain,
+            "importance": None,
+            "sub_type": nc.control_sub_type or ("Automated" if linked else "Manual"),
+            "pptdf": nc.pptdf,
+            "weight": None,
+            "ao_count": 0,
+            "frameworks": sorted(req_list.keys()),
+            "requirements": req_list,
+            "requirement_count": sum(len(v) for v in req_list.values()),
+            "checks_count": len(linked),
+            "overall_status": overall if linked else "manual",
+            "coverage": coverage,
+            "checks": linked,
+            "binding_source": binding_source,
+            "bound_check_ids": bound_ids,
+            "custom": True,
+            "badge": "Custom",
+            "conformity_cadence": nc.conformity_cadence,
+            "implements_scf_ids": list(nc.implements_scf_ids or []),
+            **own_fields,
+        })
+    return out
+
+
+def _custom_control_detail(
+    db: Session,
+    tenant_id: int,
+    code: str,
+    release: SCFRelease,
+    current_user: GRCUser,
+) -> Optional[Dict[str, Any]]:
+    nc = scf_custom.get_custom(db, tenant_id, code)
+    if nc is None or nc.retired_at is not None:
+        return None
+
+    suppressed, retargets = _mapping_reviews(db, tenant_id)
+    direct = scf_custom.requirements_for_custom(db, nc)
+    inherited = scf_custom.inherited_requirements_from_scf(
+        db, release.id, nc.implements_scf_ids, suppressed, retargets,
+    )
+    merged = scf_custom.merge_requirements(direct, inherited)
+
+    in_scope_slugs: set = set()
+    scf_scope = None
+    try:
+        scf_scope = ensure_default_scope(db, tenant_id)
+        in_scope_slugs = set(scf_scope.framework_slugs or [])
+    except RuntimeError:
+        pass
+
+    req_groups = []
+    for slug, items in merged.items():
+        req_groups.append({
+            "framework": slug,
+            "label": _FW_LABELS.get(slug, slug.replace("_", " ").title()),
+            "version": None,
+            "provenance": "custom",
+            "pivot_via": None,
+            "items": [
+                {
+                    "code": i["code"],
+                    "reference": i.get("reference") or i["code"],
+                    "title": i.get("title") or i.get("name"),
+                    "text": None,
+                    "domain": None,
+                    "match_mode": "exact",
+                    "confidence": None,
+                    "resolved": True,
+                    "source": i.get("source"),
+                    "via_scf_id": i.get("via_scf_id"),
+                }
+                for i in items
+            ],
+            "count": len(items),
+            "unresolved": 0,
+            "match_modes": ["exact"],
+            "inferred_count": 0,
+            "confidence": None,
+            "in_scope": slug in in_scope_slugs if in_scope_slugs else False,
+        })
+    req_groups.sort(key=lambda g: (not g.get("in_scope"), -g["count"], g["label"]))
+
+    own_fields = {
+        "owner_user_id": None,
+        "owner_name": None,
+        "reviewer_user_id": None,
+        "assigned_user_ids": [],
+        "next_due_at": None,
+        "ownership_status": "unowned",
+    }
+    if scf_scope is not None:
+        st = (
+            db.query(SCFControlState)
+            .filter(
+                SCFControlState.tenant_id == tenant_id,
+                SCFControlState.scope_id == scf_scope.id,
+                SCFControlState.scf_id == (nc.scf_id or code),
+            )
+            .first()
+        )
+        owner_name = None
+        if st and st.owner_user_id:
+            ou = db.query(GRCUser).filter(GRCUser.id == st.owner_user_id).first()
+            if ou:
+                owner_name = (
+                    getattr(ou, "display_name", None)
+                    or getattr(ou, "username", None)
+                    or getattr(ou, "email", None)
+                )
+        own_fields = scf_own.ownership_fields(st, owner_name=owner_name)
+
+    bound_ids = list(nc.bound_check_ids or [])
+    linked, statuses, coverage, binding_source = _bound_checks_payload(
+        db, tenant_id, nc.scf_id or code, bound_ids,
+        cadence=nc.conformity_cadence,
+    )
+    overall = (
+        _aggregate_status(statuses) if statuses
+        else ("connect_one" if linked else coverage.get("state", "manual"))
+    )
+
+    return {
+        "control_id": nc.scf_id or nc.code,
+        "title": nc.name,
+        "description": nc.statement,
+        "control_question": None,
+        "category": nc.domain,
+        "domain": nc.domain,
+        "pptdf": nc.pptdf,
+        "weight": None,
+        "is_material": False,
+        "conformity_cadence": nc.conformity_cadence,
+        "ao_count": 0,
+        "sub_type": nc.control_sub_type or ("Automated" if linked else "Manual"),
+        "checks_count": len(linked),
+        "overall_status": overall if linked else "manual",
+        "coverage": coverage,
+        "checks": linked,
+        "test_groups": _test_groups(linked, _connected_providers(db, tenant_id)) if linked else [],
+        "related": [],
+        "artifacts": [],
+        "objectives": [],
+        "objectives_note": "Custom control — no SCF objectives",
+        "requirement_groups": req_groups,
+        "requirement_count": sum(g["count"] for g in req_groups),
+        "framework_count": len(req_groups),
+        "release": release.version,
+        "custom": True,
+        "badge": "Custom",
+        "implements_scf_ids": list(nc.implements_scf_ids or []),
+        "bound_check_ids": bound_ids,
+        "binding_source": binding_source,
+        "scf_prompts": {
+            "risks": [],
+            "threats": [],
+            "risk_if_not_implemented": None,
+        },
+        **own_fields,
+    }
+
+
+def _linked_from_index(
+    idx: Dict[str, Any],
+    latest: Dict[int, Any],
+    connected: set,
+    soc2_codes: List[str],
+    cadence: Optional[str],
+    automatable: bool,
+    scf_id: Optional[str] = None,
+    db: Optional[Session] = None,
+    tenant_id: Optional[int] = None,
+):
+    """Same payload as ``_linked_checks_for``, using a pre-built check index.
+
+    Prefer covers→scf_id; fall back to SOC 2 codes. Status prefers SCFCheckResult
+    rows when present for the bound check_ids.
+    """
+    soc2_idx = idx.get("soc2") if isinstance(idx, dict) and "soc2" in idx else idx
+    scf_idx = idx.get("scf") if isinstance(idx, dict) else {}
+    check_covers = (idx.get("check_covers") if isinstance(idx, dict) else None) or {}
+
+    bound: Dict[int, Any] = {}
+    binding_source = "none"
+
+    if scf_id and scf_idx:
+        for p, cids in scf_idx.get(scf_id, []):
+            entry = bound.setdefault(
+                p.id,
+                {"plugin": p, "checks": set(),
+                 "provider": (p.check_definition or {}).get("provider")},
+            )
+            entry["checks"].update(cids or set())
+        if bound:
+            binding_source = "covers"
+
+    if not bound:
+        for code in soc2_codes or []:
+            for p, cids in (soc2_idx or {}).get(code, []):
+                entry = bound.setdefault(
+                    p.id,
+                    {"plugin": p, "checks": set(),
+                     "provider": (p.check_definition or {}).get("provider")},
+                )
+                entry["checks"].update(cids or set())
+        if bound:
+            binding_source = "soc2_fallback"
+
+    if not bound:
+        return [], [], {"state": "unbound" if automatable else "manual",
+                        "satisfied_by": [], "options": [], "provider_count": 0}, binding_source
+
+    all_cids = {cid for b in bound.values() for cid in b["checks"]}
+    scf_rows: List[Any] = []
+    if db is not None and tenant_id is not None and scf_id:
+        scf_rows = _scf_results_for_control(db, tenant_id, scf_id, all_cids or None)
+
+    linked, statuses = [], []
+    for b in bound.values():
+        pl = b["plugin"]
+        run = latest.get(pl.id)
+        ids = b["checks"]
+        st = _status_from_scf_results(scf_rows, ids)
+        if st is None:
+            st = _status_from_run(run, ids, soc2_codes, cadence) if run else "not_run"
+        in_scope = _plugin_in_scope(pl, b.get("provider"), connected)
+        if in_scope:
+            statuses.append(st)
+        covers_map = {
+            cid: check_covers.get(cid) or []
+            for cid in ids
+        }
+        linked.append({
+            "plugin_key": pl.plugin_key, "id": pl.id, "title": pl.title,
+            "severity": pl.severity, "seeded": True,
+            "source": "connector" if pl.benchmark == CONNECTOR_BENCHMARK else "aws",
+            "checks_matched": len(b["checks"]),
+            "control_status": st,
+            "in_scope": in_scope,
+            "last_run": _run_out(run) if run else None,
+            "binding": binding_source,
+            "covers": covers_map,
+            "check_ids": sorted(ids),
+        })
+    bound_list = [{"plugin": b["plugin"], "checks": [{"id": x} for x in b["checks"]],
+                   "provider": b.get("provider")} for b in bound.values()]
+    return linked, statuses, _coverage_for(bound_list, connected, automatable), binding_source
+
+
+def _check_index(db: Session) -> Dict[str, Any]:
+    """Index checks by SOC 2 code (fallback) and by SCF id from covers.
+
+    Returns ``{"soc2": {code: [(plugin, check_ids)]}, "scf": {scf_id: [...]},
+    "check_covers": {check_id: [tokens]}}``.
+    """
+    soc2: Dict[str, List[Any]] = defaultdict(list)
+    scf: Dict[str, List[Any]] = defaultdict(list)
+    check_covers: Dict[str, List[str]] = {}
+
     for p in (db.query(CompliancePlugin)
               .filter(CompliancePlugin.benchmark.in_([BENCHMARK, CONNECTOR_BENCHMARK]),
                       CompliancePlugin.enabled.is_(True)).all()):
         if p.benchmark == CONNECTOR_BENCHMARK:
             provider = (p.check_definition or {}).get("provider")
             for c in provider_checks(provider):
+                cid = c.get("id")
+                cset = {cid} if cid else set()
                 for code in c.get("controls") or []:
-                    idx[code].append((p, {c.get("id")}))
+                    soc2[code].append((p, cset))
+                covers = covers_for_check(c)
+                if cid and covers:
+                    check_covers[cid] = covers
+                    for target in scf_targets_from_covers(covers):
+                        scf[target].append((p, cset))
         elif p.rule_id:
-            idx[p.rule_id].append((p, set()))
-    return idx
+            soc2[p.rule_id].append((p, set()))
+            # Quantitative AWS plugins: look up cloud checks by rule's sibling
+            # covers via check id when the plugin is a transport provider.
+            provider = (p.check_definition or {}).get("provider")
+            if provider:
+                for c in provider_checks(provider):
+                    cid = c.get("id")
+                    covers = covers_for_check(c)
+                    if cid and covers:
+                        check_covers[cid] = covers
+                        for target in scf_targets_from_covers(covers):
+                            scf[target].append((p, {cid}))
+    return {"soc2": soc2, "scf": scf, "check_covers": check_covers}
 
 
 @common_router.get("/overview")
 def common_controls_overview(
+    scope: str = Query("in_scope", description="in_scope | all"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -1259,6 +1953,8 @@ def common_controls_overview(
     Where a system holds nothing yet the count is zero and the caller is told
     which system it came from, because "0 implemented" and "implementation is
     not tracked here yet" are different statements and only one is true today.
+
+    ``scope=in_scope`` (default) restricts aggregates to the default SCF scope.
     """
     tenant_id = get_user_primary_tenant(current_user, db)
     release = (
@@ -1269,6 +1965,55 @@ def common_controls_overview(
     if release is None:
         raise HTTPException(status_code=409, detail="No SCF release imported for this tenant")
 
+    scope_mode = scope if isinstance(scope, str) else "in_scope"
+    scope_mode = (scope_mode or "in_scope").strip().lower()
+    if scope_mode not in ("in_scope", "all"):
+        raise HTTPException(400, "scope must be 'in_scope' or 'all'")
+
+    scf_scope = None
+    applicable: Optional[set] = None
+    scope_status = "all"
+    try:
+        scf_scope = ensure_default_scope(db, tenant_id)
+    except RuntimeError:
+        scf_scope = None
+
+    if scope_mode == "in_scope" and scf_scope is not None:
+        fw_slugs = list(scf_scope.framework_slugs or [])
+        if not fw_slugs and int(scf_scope.esp_level or 0) <= 0:
+            total = (
+                db.query(func.count(SCFControl.id))
+                .filter(SCFControl.release_id == release.id)
+                .scalar() or 0
+            )
+            return {
+                "release": release.version,
+                "scope_status": "unconfigured",
+                "scope": {
+                    "framework_slugs": [],
+                    "applicable_count": 0,
+                    "total_count": total,
+                },
+                "library": {
+                    "controls": 0, "domains": 0, "material": 0,
+                    "orphans": 0, "objectives": 0,
+                    "pptdf": {}, "cadence": {}, "by_domain": [],
+                },
+                "automation": {
+                    "controls_with_checks": 0, "checks_bound": 0,
+                    "plugins_enabled": 0, "plugins_run": 0,
+                    "last_run_at": None, "posture": {},
+                },
+                "connector_categories": [],
+                "collection": {"connectors": [], "counts": {}, "stale_after_days": COLLECTION_STALE_DAYS},
+                "frameworks": [],
+                "crosswalk": {"rows": 0, "by_match_mode": {}, "reviewed": 0},
+                "evidence": {"controls_with_set": 0, "artifacts": 0, "by_method": {}, "top_owners": []},
+                "message": "No frameworks selected in SCF scope — configure scope before viewing in-scope controls.",
+            }
+        applicable = get_applicable_scf_ids(db, tenant_id, scf_scope.id)
+        scope_status = "in_scope"
+
     controls = (
         db.query(SCFControl.scf_id, SCFControl.domain_identifier, SCFControl.domain_name,
                  SCFControl.is_material, SCFControl.pptdf, SCFControl.ao_count,
@@ -1277,8 +2022,12 @@ def common_controls_overview(
         .order_by(SCFControl.sort_key)
         .all()
     )
+    total_count = len(controls)
+    if applicable is not None:
+        controls = [c for c in controls if c.scf_id in applicable]
 
     # ── crosswalk: frameworks per control, and how firm each claim is ──────────
+    suppressed, retargets = _mapping_reviews(db, tenant_id)
     fw_of: Dict[str, set] = defaultdict(set)
     soc2_of: Dict[str, List[str]] = defaultdict(list)
     inferred: Dict[str, set] = defaultdict(set)
@@ -1292,8 +2041,11 @@ def common_controls_overview(
                 SCFMapping.provenance.in_(("resolver", "ai")))
         .all()
     ):
-        fw_of[scf_id].add(slug)
-        fw_controls[slug].add(scf_id)
+        effective = _effective_mapping_scf(slug, code, scf_id, suppressed, retargets)
+        if effective is None:
+            continue
+        fw_of[effective].add(slug)
+        fw_controls[slug].add(effective)
         fw_reqs[slug].add(code)
         mapping_modes[mode or "exact"] += 1
         if mode and mode != "exact":
@@ -1301,33 +2053,35 @@ def common_controls_overview(
             # rollup is one inferred requirement, not five
             inferred[slug].add(code)
         if slug == "soc2":
-            soc2_of[scf_id].append(code)
+            soc2_of[effective].append(code)
 
     # ── automation: what a check can currently assert ─────────────────────────
     cadence_of = {c.scf_id: c.conformity_cadence for c in controls}
     connected_now = _connected_providers(db, tenant_id)
+    automatable_now = _automatable_controls(db, release.id)
     idx = _check_index(db)
-    plugin_ids = {p.id for lst in idx.values() for p, _ in lst}
+    plugin_ids = {
+        p.id
+        for bucket in (idx.get("soc2") or {}, idx.get("scf") or {})
+        for lst in bucket.values()
+        for p, _ in lst
+    }
     latest = _latest_runs_by_plugin(db, tenant_id, sorted(plugin_ids))
     status_of: Dict[str, str] = {}
     checks_per_control: Dict[str, int] = {}
-    for scf_id, codes in soc2_of.items():
-        bound = {}
-        for code in codes:
-            for p, cids in idx.get(code, []):
-                bound.setdefault(p.id, (p, set()))[1].update(cids)
-        if not bound:
+    in_list = {c.scf_id for c in controls}
+    scf_keys = (set(soc2_of.keys()) | set((idx.get("scf") or {}).keys())) & in_list
+    for scf_id in scf_keys:
+        codes = soc2_of.get(scf_id) or []
+        linked, statuses, _cov, _src = _linked_from_index(
+            idx, latest, connected_now, codes, cadence_of.get(scf_id),
+            scf_id in automatable_now,
+            scf_id=scf_id, db=db, tenant_id=tenant_id,
+        )
+        if not linked:
             continue
-        checks_per_control[scf_id] = len(bound)
-        cad = cadence_of.get(scf_id)
-        # Only the providers this tenant has connected. The rest are alternatives
-        # it does not run, and counting them made an evidenced control read
-        # "partial" — see _connected_providers.
-        sts = [_status_from_run(latest[pid], cids, codes, cad) if latest.get(pid) else "not_run"
-               for pid, (p, cids) in bound.items()
-               if _plugin_in_scope(p, (p.check_definition or {}).get("provider"), connected_now)]
-        status_of[scf_id] = _aggregate_status(sts) if sts else "connect_one"
-    automatable_now = _automatable_controls(db, release.id)
+        checks_per_control[scf_id] = len(linked)
+        status_of[scf_id] = _aggregate_status(statuses) if statuses else "connect_one"
 
     now = datetime.utcnow()
 
@@ -1338,9 +2092,22 @@ def common_controls_overview(
     # automatable, but with nothing connected that proves them.
     cat_controls: Dict[str, set] = defaultdict(set)
     cat_providers: Dict[str, Dict[str, int]] = defaultdict(dict)
-    for scf_id, codes in soc2_of.items():
+    for scf_id in scf_keys:
+        codes = soc2_of.get(scf_id) or []
+        seen_plugins: set = set()
+        for p, cids in (idx.get("scf") or {}).get(scf_id, []):
+            seen_plugins.add(p.id)
+            prov = (p.check_definition or {}).get("provider") or (
+                "aws" if p.runner_type == "aws_readonly" else None)
+            if not prov:
+                continue
+            cat = (PROVIDER_API.get(prov) or {}).get("category") or "other"
+            cat_controls[cat].add(scf_id)
+            cat_providers[cat][prov] = cat_providers[cat].get(prov, 0) + 1
         for code in codes:
-            for p, cids in idx.get(code, []):
+            for p, cids in (idx.get("soc2") or {}).get(code, []):
+                if p.id in seen_plugins:
+                    continue
                 prov = (p.check_definition or {}).get("provider") or (
                     "aws" if p.runner_type == "aws_readonly" else None)
                 if not prov:
@@ -1382,10 +2149,19 @@ def common_controls_overview(
                     CompliancePluginRun.plugin_id.in_(sorted(plugin_ids)),
                     CompliancePluginRun.status.in_(("passed", "failed")))
             .group_by(CompliancePluginRun.plugin_id).all())
-    plugin_meta = {p.id: p for lst in idx.values() for p, _ in lst}
+    plugin_meta = {
+        p.id: p
+        for bucket in (idx.get("soc2") or {}, idx.get("scf") or {})
+        for lst in bucket.values()
+        for p, _ in lst
+    }
     controls_per_plugin: Counter = Counter()
-    for scf_id, codes in soc2_of.items():
-        for pid in {p.id for code in codes for p, _ in idx.get(code, [])}:
+    for scf_id in scf_keys:
+        codes = soc2_of.get(scf_id) or []
+        pids = {p.id for p, _ in (idx.get("scf") or {}).get(scf_id, [])}
+        for code in codes:
+            pids.update(p.id for p, _ in (idx.get("soc2") or {}).get(code, []))
+        for pid in pids:
             controls_per_plugin[pid] += 1
 
     collection: List[Dict[str, Any]] = []
@@ -1547,6 +2323,12 @@ def common_controls_overview(
     last_run = max((r.started_at for r in latest.values() if r.started_at), default=None)
     return {
         "release": release.version,
+        "scope_status": scope_status,
+        "scope": {
+            "framework_slugs": list((scf_scope.framework_slugs if scf_scope else None) or []),
+            "applicable_count": len(applicable) if applicable is not None else len(controls),
+            "total_count": total_count,
+        },
         "library": {
             "controls": len(controls), "domains": len(doms), "material": material,
             "orphans": orphans, "objectives": sum(d["objectives"] for d in by_domain),
@@ -1671,6 +2453,7 @@ def record_mapping_review(
     body: MappingReviewBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_scan_perm),
 ):
     """Record one standing decision. Idempotent on the mapping's identity."""
     tenant_id = get_user_primary_tenant(current_user, db)
@@ -2213,6 +2996,212 @@ def list_control_artifacts(
             "missing_from_catalog": sorted(set(wanted) - {c.artifact_id for c in catalog})}
 
 
+class LinkRiskBody(BaseModel):
+    risk_id: int
+
+
+class NewRiskBody(BaseModel):
+    title: str
+    description: Optional[str] = None
+    category: Optional[str] = None
+    inherent_likelihood: Optional[int] = None
+    inherent_impact: Optional[int] = None
+
+
+@common_router.get("/controls/{scf_id}/risks")
+def list_control_risks(
+    scf_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    release = (
+        db.query(SCFRelease)
+        .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True))
+        .first()
+    )
+    try:
+        items = scf_risks.list_risks_for_control(db, tenant_id, scf_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+    prompts = scf_risks.scf_risk_prompts(
+        db, release.id if release else None, scf_id,
+    )
+    return {"items": items, "scf_prompts": prompts}
+
+
+@common_router.post("/controls/{scf_id}/risks", status_code=201)
+def link_control_risk(
+    scf_id: str,
+    body: LinkRiskBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_risk_link_edit),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        link = scf_risks.link_risk(
+            db, tenant_id, scf_id, body.risk_id, getattr(current_user, "id", None),
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(404, str(e)) from e
+    return {"link_id": link.id, "risk_id": link.risk_id,
+            "normalized_control_id": link.normalized_control_id}
+
+
+@common_router.delete("/controls/{scf_id}/risks/{link_id}")
+def unlink_control_risk(
+    scf_id: str,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_risk_link_edit),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        scf_risks.unlink_risk(
+            db, tenant_id, scf_id, link_id, getattr(current_user, "id", None),
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True}
+
+
+@common_router.post("/controls/{scf_id}/risks/new", status_code=201)
+def create_and_link_control_risk(
+    scf_id: str,
+    body: NewRiskBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_risk_link_edit),
+):
+    """Create a tenant Risk and link it to this control.
+
+    Decision 4: do NOT invent residual from control status — residual stays
+    unset unless the Risk model / caller supplies likelihood×impact later.
+    """
+    from grc.models import Risk
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    title = (body.title or "").strip()
+    if not title:
+        raise HTTPException(422, "title required")
+    category = (body.category or "compliance").strip().lower() or "compliance"
+    likelihood = body.inherent_likelihood if body.inherent_likelihood in (1, 2, 3, 4, 5) else None
+    impact = body.inherent_impact if body.inherent_impact in (1, 2, 3, 4, 5) else None
+    inherent_score = float(likelihood * impact) if (likelihood and impact) else None
+
+    risk = Risk(
+        tenant_id=tenant_id,
+        title=title[:255],
+        description=body.description,
+        category=category,
+        risk_category=category,
+        inherent_likelihood=likelihood,
+        inherent_impact=impact,
+        inherent_score=inherent_score,
+        # residual deliberately left None — indicator status must not invent it
+        status="open",
+        source_type="framework_gap",
+        source_reference=f"scf:{scf_id}",
+        owner_id=getattr(current_user, "id", None),
+    )
+    db.add(risk)
+    db.flush()
+    try:
+        link = scf_risks.link_risk(
+            db, tenant_id, scf_id, risk.id, getattr(current_user, "id", None),
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(404, str(e)) from e
+    return {
+        "risk_id": risk.id,
+        "link_id": link.id,
+        "title": risk.title,
+        "inherent_score": risk.inherent_score,
+        "residual_score": risk.residual_score,
+    }
+
+
+class LinkAssetBody(BaseModel):
+    asset_id: int
+
+
+@common_router.get("/controls/{scf_id}/assets")
+def list_control_assets(
+    scf_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        items = scf_assets.list_assets_for_control(db, tenant_id, scf_id)
+    except ValueError as e:
+        raise HTTPException(404, str(e)) from e
+
+    note = None
+    in_scope: List[Dict[str, Any]] = []
+    try:
+        scf_scope = ensure_default_scope(db, tenant_id)
+        in_scope = scf_assets.in_scope_assets(db, tenant_id, scf_scope)
+        if not list(scf_scope.framework_slugs or []):
+            note = "No frameworks in default SCF scope — in_scope list is empty."
+    except Exception:  # noqa: BLE001
+        note = "Could not resolve default SCF scope for in-scope assets."
+
+    return {"items": items, "in_scope": in_scope, "note": note}
+
+
+@common_router.post("/controls/{scf_id}/assets", status_code=201)
+def link_control_asset(
+    scf_id: str,
+    body: LinkAssetBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_asset_link_edit),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        link = scf_assets.link_asset(
+            db, tenant_id, scf_id, body.asset_id, getattr(current_user, "id", None),
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(404, str(e)) from e
+    return {
+        "link_id": link.id,
+        "asset_id": link.asset_id,
+        "normalized_control_id": link.normalized_control_id,
+    }
+
+
+@common_router.delete("/controls/{scf_id}/assets/{link_id}")
+def unlink_control_asset(
+    scf_id: str,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_asset_link_edit),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        scf_assets.unlink_asset(
+            db, tenant_id, scf_id, link_id, getattr(current_user, "id", None),
+        )
+        db.commit()
+    except ValueError as e:
+        db.rollback()
+        raise HTTPException(404, str(e)) from e
+    return {"ok": True}
+
+
 class LinkEvidenceBody(BaseModel):
     coverage_type: str = Field("supporting", description="full | partial | supporting")
     note: Optional[str] = None
@@ -2225,6 +3214,7 @@ def link_control_evidence(
     body: LinkEvidenceBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_evidence_edit),
 ):
     """Attach an already-uploaded evidence item to an SCF control.
 
@@ -2291,6 +3281,11 @@ def get_common_control(
         .first()
     )
     if ctl is None:
+        custom_detail = _custom_control_detail(
+            db, tenant_id, scf_id, release, current_user,
+        )
+        if custom_detail is not None:
+            return custom_detail
         raise HTTPException(404, f"Unknown control '{scf_id}'")
 
     idx = _requirement_index()
@@ -2299,20 +3294,22 @@ def get_common_control(
     # A reviewer's suppression is a standing decision: the row is wrong and does
     # not come back on the next release. Applied at read time rather than by
     # deleting the mapping, so the catalogue stays a faithful copy of what was
-    # imported and the decision remains visible and reversible.
-    suppressed = _suppressed_pairs(db, tenant_id)
+    # imported and the decision remains visible and reversible. Retargets move
+    # a requirement onto a different SCF control without rewriting the catalogue.
+    suppressed, retargets = _mapping_reviews(db, tenant_id)
 
     groups: Dict[str, Dict[str, Any]] = {}
-    for slug, code, prov, conf, mode, pivot in (
-        db.query(SCFMapping.source_slug, SCFMapping.requirement_code,
+    mapping_rows = (
+        db.query(SCFMapping.scf_id, SCFMapping.source_slug, SCFMapping.requirement_code,
                  SCFMapping.provenance, SCFMapping.confidence,
                  SCFMapping.match_mode, SCFMapping.pivot_via_slug)
         .filter(SCFMapping.release_id == release.id,
-                SCFMapping.scf_id == scf_id,
                 SCFMapping.provenance.in_(("resolver", "ai")))
         .all()
-    ):
-        if (slug, code, scf_id) in suppressed:
+    )
+    for owner_scf, slug, code, prov, conf, mode, pivot in mapping_rows:
+        effective = _effective_mapping_scf(slug, code, owner_scf, suppressed, retargets)
+        if effective != scf_id:
             continue
         g = groups.setdefault(slug, {
             "framework": slug,
@@ -2346,6 +3343,13 @@ def get_common_control(
         })
 
     req_groups = []
+    in_scope_slugs: set = set()
+    try:
+        scf_scope = ensure_default_scope(db, tenant_id)
+        in_scope_slugs = set(scf_scope.framework_slugs or [])
+    except RuntimeError:
+        scf_scope = None
+
     for g in groups.values():
         g.pop("_seen", None)
         g["items"].sort(key=lambda i: i["code"])
@@ -2358,11 +3362,15 @@ def get_common_control(
         # the group is only as good as its weakest row, not its first one
         confs = [i["confidence"] for i in g["items"] if i["confidence"] is not None]
         g["confidence"] = min(confs) if confs else None
+        g["in_scope"] = g["framework"] in in_scope_slugs if in_scope_slugs else False
         req_groups.append(g)
-    # SCF-published mappings first: an audit of 671 links found them 73%
-    # defensible against 38% for our authored ones, so the reliable evidence
-    # leads and the weaker material sits below it.
-    req_groups.sort(key=lambda g: (g["provenance"] != "resolver", -g["count"], g["label"]))
+    # In-scope frameworks first, then SCF-published (resolver) mappings, then count.
+    req_groups.sort(key=lambda g: (
+        not g.get("in_scope"),
+        g["provenance"] != "resolver",
+        -g["count"],
+        g["label"],
+    ))
 
     objectives = [{
         "ao_id": o.ao_id, "seq": o.seq, "objective": o.objective,
@@ -2376,9 +3384,11 @@ def get_common_control(
 
     soc2_codes = [i["code"] for g in req_groups if g["framework"] == "soc2" for i in g["items"]]
     connected = _connected_providers(db, tenant_id)
-    linked, statuses, coverage = _linked_checks_for(
+    linked, statuses, coverage, binding_source = _linked_checks_for(
         db, tenant_id, soc2_codes, ctl.conformity_cadence, connected,
-        ctl.scf_id in _automatable_controls(db, release.id))
+        ctl.scf_id in _automatable_controls(db, release.id),
+        scf_id=ctl.scf_id,
+    )
 
     templated = _templated_artifact_ids()
     artifacts = [
@@ -2386,6 +3396,51 @@ def get_common_control(
         for a in ((_consolidated_evidence().get(ctl.scf_id) or {}).get("artifacts") or [])
         if a.get("source") == "catalog"
     ]
+
+    own_fields = {
+        "owner_user_id": None,
+        "owner_name": None,
+        "reviewer_user_id": None,
+        "assigned_user_ids": [],
+        "next_due_at": None,
+        "ownership_status": "unowned",
+    }
+    # Stage H — light designation / exception / inheritance fields from default scope.
+    assurance_fields = {
+        "exception_id": None,
+        "alternative_scf_id": None,
+        "inheritance_type": None,
+        "provider_vendor_id": None,
+        "designation": None,
+    }
+    if scf_scope is not None:
+        st = (
+            db.query(SCFControlState)
+            .filter(
+                SCFControlState.tenant_id == tenant_id,
+                SCFControlState.scope_id == scf_scope.id,
+                SCFControlState.scf_id == scf_id,
+            )
+            .first()
+        )
+        owner_name = None
+        if st and st.owner_user_id:
+            ou = db.query(GRCUser).filter(GRCUser.id == st.owner_user_id).first()
+            if ou:
+                owner_name = (
+                    getattr(ou, "display_name", None)
+                    or getattr(ou, "username", None)
+                    or getattr(ou, "email", None)
+                )
+        own_fields = scf_own.ownership_fields(st, owner_name=owner_name)
+        if st is not None:
+            assurance_fields = {
+                "exception_id": st.exception_id,
+                "alternative_scf_id": st.alternative_scf_id,
+                "inheritance_type": st.inheritance_type,
+                "provider_vendor_id": st.provider_vendor_id,
+                "designation": st.designation or "not_assessed",
+            }
 
     return {
         "control_id": ctl.scf_id,
@@ -2399,23 +3454,28 @@ def get_common_control(
         "is_material": bool(ctl.is_material),
         "conformity_cadence": ctl.conformity_cadence,
         "ao_count": ctl.ao_count,
-        "sub_type": "Automated" if linked else "Manual",
+        "sub_type": _control_sub_type(linked, ctl.pptdf),
         "checks_count": len(linked),
         "overall_status": (_aggregate_status(statuses) if statuses
                            else ("connect_one" if linked else coverage["state"])),
         "coverage": coverage,
         "checks": linked,
+        "binding_source": binding_source,
         "test_groups": _test_groups(linked, connected),
         "related": _related_controls(db, release.id, ctl.scf_id),
         # Deliverables the frameworks name for this control, with whether an
         # authored starter document exists to download.
         "artifacts": artifacts,
         "objectives": objectives,
+        "scope_id": scf_scope.id if scf_scope is not None else None,
         **_build_guidance(ctl, req_groups, linked),
         "requirement_groups": req_groups,
         "requirement_count": sum(g["count"] for g in req_groups),
         "framework_count": len(req_groups),
         "release": release.version,
+        "scf_prompts": scf_risks.scf_risk_prompts(db, release.id, ctl.scf_id),
+        **own_fields,
+        **assurance_fields,
     }
 
 
@@ -2514,17 +3574,20 @@ def list_aws_connections(
 
 
 def _resolve_aws_connection(
-    db: Session, tenant_id: int, connection_id: int
+    db: Session, tenant_id: int, connection_id: Optional[int]
 ) -> IntegrationConnection:
-    conn = (
+    q = (
         db.query(IntegrationConnection)
         .filter(
-            IntegrationConnection.id == connection_id,
             IntegrationConnection.tenant_id == tenant_id,
             IntegrationConnection.integration_type == "aws_readonly",
         )
-        .first()
     )
+    if connection_id is not None:
+        conn = q.filter(IntegrationConnection.id == connection_id).first()
+    else:
+        # Control-page "Run test" may omit the id; use the newest connection.
+        conn = q.order_by(IntegrationConnection.id.desc()).first()
     if not conn:
         raise HTTPException(
             404,

@@ -109,6 +109,10 @@ interface LinkedControl {
   control_id: number;
   code: string;
   name: string;
+  scf_id?: string | null;
+  custom?: boolean;
+  control_status?: string | null;
+  check_status?: string | null;
 }
 
 interface LinkedInternalControl {
@@ -495,6 +499,14 @@ export default function AssetDetailPage() {
     },
   });
 
+  const unlinkNormalizedControlMutation = useMutation({
+    mutationFn: (linkId: number) => assetsApi.unlinkControl(assetId, linkId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['asset-detail', assetId] });
+      queryClient.invalidateQueries({ queryKey: ['asset-coverage', assetId] });
+    },
+  });
+
   const unlinkEvidenceMutation = useMutation({
     mutationFn: (linkId: number) => assetsApi.unlinkEvidence(assetId, linkId),
     onSuccess: () => {
@@ -715,6 +727,7 @@ export default function AssetDetailPage() {
 
   const tabCounts: Partial<Record<TabType, number>> = {
     risks: (asset?.linked_risks?.length ?? 0)
+      + (asset?.linked_controls?.length ?? 0)
       + (asset?.linked_internal_controls?.length ?? 0)
       + (asset?.linked_framework_controls?.length ?? 0),
     vulnerabilities: (asset?.linked_vulnerabilities ?? []).filter(isOpenVuln).length,
@@ -907,8 +920,10 @@ export default function AssetDetailPage() {
                 isLinkingControl={linkControlMutation.isPending}
                 onUnlinkInternalControl={(linkId) => unlinkInternalControlMutation.mutate(linkId)}
                 onUnlinkFrameworkControl={(linkId) => unlinkFrameworkControlMutation.mutate(linkId)}
+                onUnlinkNormalizedControl={(linkId) => unlinkNormalizedControlMutation.mutate(linkId)}
                 isUnlinkingInternal={unlinkInternalControlMutation.isPending}
                 isUnlinkingFramework={unlinkFrameworkControlMutation.isPending}
+                isUnlinkingNormalized={unlinkNormalizedControlMutation.isPending}
               />
             )}
             {activeTab === 'criticality' && (

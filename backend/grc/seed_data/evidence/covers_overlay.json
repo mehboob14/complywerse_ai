@@ -1,0 +1,181 @@
+{
+  "_comment": "Stage G partial covers. Human-reviewed rows move to covers_review.csv. Tokens are ao_id or scf_id.",
+  "bindings": {
+    "okta.mfa_enrollment_policy": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - IdP MFA enrollment policy",
+      "reviewed_by": null
+    },
+    "github.org_2fa_required": {
+      "covers": [
+        "IAC-06.2_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - SCM org 2FA",
+      "reviewed_by": null
+    },
+    "github.members_all_have_2fa": {
+      "covers": [
+        "IAC-06.2_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - SCM members without 2FA",
+      "reviewed_by": null
+    },
+    "aws.root_mfa": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06.1_A02"
+      ],
+      "rationale": "draft - AWS root MFA",
+      "reviewed_by": null
+    },
+    "aws.iam_mfa": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06.1_A02"
+      ],
+      "rationale": "draft - AWS IAM console MFA sweep",
+      "reviewed_by": null
+    },
+    "aws.iam_user_mfa": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - per-user AWS console MFA",
+      "reviewed_by": null
+    },
+    "gitlab.groups_enforce_2fa": {
+      "covers": [
+        "IAC-06.2_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - GitLab group 2FA enforce",
+      "reviewed_by": null
+    },
+    "microsoft_365.mfa_registered": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Entra MFA registration (all users)",
+      "reviewed_by": null
+    },
+    "microsoft_365.admin_mfa_registered": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06.1_A02"
+      ],
+      "rationale": "draft - privileged Entra MFA registration",
+      "reviewed_by": null
+    },
+    "clerk.users.mfa_enabled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Clerk user 2FA",
+      "reviewed_by": null
+    },
+    "cloudflare.member_2fa_enabled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Cloudflare account member 2FA",
+      "reviewed_by": null
+    },
+    "heroku.account_mfa_enabled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Heroku account MFA",
+      "reviewed_by": null
+    },
+    "heroku.team_members_mfa": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Heroku team member MFA",
+      "reviewed_by": null
+    },
+    "sentry.org_require_2fa": {
+      "covers": [
+        "IAC-06.2_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Sentry org require 2FA",
+      "reviewed_by": null
+    },
+    "sentry.member_2fa_enabled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Sentry member 2FA",
+      "reviewed_by": null
+    },
+    "posthog.org-enforce-2fa": {
+      "covers": [
+        "IAC-06.2_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - PostHog org enforce 2FA",
+      "reviewed_by": null
+    },
+    "posthog.members-2fa-enabled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - PostHog members 2FA",
+      "reviewed_by": null
+    },
+    "slack.users_mfa": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Slack workspace MFA",
+      "reviewed_by": null
+    },
+    "zendesk.staff_2fa_enabled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Zendesk agent/admin 2FA",
+      "reviewed_by": null
+    },
+    "jumpcloud.users_mfa": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - JumpCloud user MFA",
+      "reviewed_by": null
+    },
+    "onelogin.mfa_factors_enrolled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - OneLogin MFA factors enrolled",
+      "reviewed_by": null
+    },
+    "sentinelone.console-mfa": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - SentinelOne console 2FA",
+      "reviewed_by": null
+    }
+  }
+}

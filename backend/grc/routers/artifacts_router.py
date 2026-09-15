@@ -24,6 +24,7 @@ from ..models import (
     get_db,
 )
 from .auth_router import require_auth, get_user_primary_tenant
+from ..modules.scf.ownership import refuse_artifact_self_approval
 
 logger = logging.getLogger(__name__)
 
@@ -676,6 +677,8 @@ def _artifact_out(artifact: TenantArtifact) -> dict:
         "assigned_to_name": assigned_name,
         "created_by_id": artifact.created_by_id,
         "created_by_name": created_name,
+        "reviewed_by_id": artifact.reviewed_by_id,
+        "approved_by_id": artifact.approved_by_id,
         "is_platform_native": artifact.is_platform_native or False,
         "platform_data_type": artifact.platform_data_type,
         "platform_record_count": artifact.platform_record_count,
@@ -1405,8 +1408,39 @@ def update_artifact(
         artifact.description = payload.description
     if payload.content is not None:
         artifact.content = payload.content
+
+    prev_status = artifact.status
     if payload.status is not None:
-        artifact.status = payload.status
+        new_status = payload.status
+        if new_status == "approved" and prev_status != "approved":
+            from .admin_router import check_permission
+            if not check_permission(current_user, db, "controls:artifacts:approve"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Permission denied: controls:artifacts:approve required to approve artifacts",
+                )
+            try:
+                refuse_artifact_self_approval(
+                    current_user.id,
+                    artifact.created_by_id,
+                    artifact.assigned_to_id,
+                )
+            except ValueError as exc:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
+            artifact.status = "approved"
+            artifact.approved_by_id = current_user.id
+        elif new_status == "in_review":
+            artifact.status = "in_review"
+            _notify_artifact_users(
+                db,
+                tenant_id=tenant_id,
+                artifact=artifact,
+                subject=f"Artifact '{artifact.name}' submitted for review",
+                message=f"Artifact '{artifact.name}' is now in review.",
+            )
+        else:
+            artifact.status = new_status
+
     # sent-as-null means "unassign"; a None check would silently keep the owner
     if "assigned_to_id" in payload.model_fields_set:
         artifact.assigned_to_id = payload.assigned_to_id
@@ -1416,6 +1450,29 @@ def update_artifact(
     db.commit()
     db.refresh(artifact)
     return _artifact_out(artifact)
+
+
+def _notify_artifact_users(db, *, tenant_id: int, artifact: TenantArtifact, subject: str, message: str):
+    ids = []
+    if artifact.assigned_to_id:
+        ids.append(artifact.assigned_to_id)
+    if artifact.created_by_id and artifact.created_by_id not in ids:
+        ids.append(artifact.created_by_id)
+    if not ids:
+        return
+    try:
+        from ..modules.workflow_engine.services.notification_service import send_workflow_notification
+        send_workflow_notification(
+            db,
+            tenant_id=tenant_id,
+            subject=subject,
+            message=message,
+            workflow_instance_id=None,
+            user_ids=ids,
+            notification_type="info",
+        )
+    except Exception:
+        logger.exception("artifact notification failed id=%s", artifact.id)
 
 
 @router.delete("/{artifact_id}")
@@ -1454,6 +1511,23 @@ def assign_artifact(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     artifact.assigned_to_id = user_id
+    # Keep draft/planned ownership assign even with no content yet.
+    if not artifact.status:
+        artifact.status = "draft"
     db.commit()
     db.refresh(artifact)
+    try:
+        from ..modules.workflow_engine.services.notification_service import send_workflow_notification
+        send_workflow_notification(
+            db,
+            tenant_id=tenant_id,
+            subject=f"Artifact '{artifact.name}' assigned to you",
+            message=f"You have been assigned artifact '{artifact.name}'.",
+            workflow_instance_id=None,
+            user_ids=[user_id],
+            notification_type="info",
+        )
+        db.commit()
+    except Exception:
+        logger.exception("assign notify failed artifact_id=%s", artifact_id)
     return _artifact_out(artifact)

@@ -33,6 +33,9 @@ yarn-error.log*
 .env.*.local
 .env.staging
 .env.production
+deploy/metabase/.env
+deploy/metabase/backend-metabase.env
+backend/_mb_uvicorn*.log
 
 # IDE
 .idea/

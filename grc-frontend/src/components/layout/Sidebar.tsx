@@ -29,7 +29,6 @@ import {
   Workflow,
   Globe,
   Calendar,
-  CheckCircle,
   Bot,
   FolderKanban,
   ListTodo,
@@ -105,6 +104,12 @@ const navigation: NavEntry[] = [
     icon: LayoutDashboard,
     requiredModules: ['dashboard'],
     requiredPermissions: ['dashboard:overview:*']
+  },
+  {
+    name: 'My Work',
+    href: '/my-work',
+    icon: ClipboardList,
+    requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'],
   },
   {
     name: 'Governance',
@@ -186,24 +191,17 @@ const navigation: NavEntry[] = [
       },
     ],
   },
-  {
-    name: 'Control Testing & Assurance',
-    icon: CheckCircle,
-    requiredModules: ['controls'],
-    items: [
-      { name: 'Assurance Overview', href: '/control-library/assurance', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Controls Overview', href: '/controls/overview', icon: Shield, requiredPermissions: ['controls:control_library:*'] },
-      { name: 'Control Catalog', href: '/controls', icon: Layers, requiredPermissions: ['controls:control_library:*'] },
-    ],
-  },
+  // Decision 6 / Stage H parity: hide Control Testing & Assurance nav (routes still work).
   {
     name: 'Automation',
     icon: Zap,
     requiredModules: ['controls'],
     items: [
       { name: 'Overview', href: '/automation/overview', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
+      { name: 'Scope', href: '/automation/scope', icon: Crosshair, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
       { name: 'Common Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
       { name: 'Automated Checks', href: '/automation/checks', icon: PlayCircle, requiredPermissions: ['controls:control_library:*', 'compliance:scan:execute', 'compliance:frameworks:*'] },
+      { name: 'Assurance', href: '/automation/assurance', icon: ClipboardCheck, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
     ],
   },
   {

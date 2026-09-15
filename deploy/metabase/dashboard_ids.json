@@ -1,0 +1,6 @@
+{
+  "risk_posture": { "id": 2, "title": "Risk posture" },
+  "vendor_tpra": { "id": 3, "title": "Vendor & TPRA" },
+  "issues_vulns": { "id": 4, "title": "Issues & vulnerabilities" },
+  "evidence_compliance": { "id": 5, "title": "Evidence & compliance" }
+}

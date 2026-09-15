@@ -1,0 +1,106 @@
+{
+  "version": 1,
+  "description": "Starter Metabase dashboards for ComplyVerse Reports › Analytics. Build once against reporting_* Models, then serialize for tenant bootstrap.",
+  "models": [
+    {
+      "name": "Risks",
+      "source_view": "reporting_risks",
+      "suggested_metrics": [
+        "Count of open risks",
+        "Average residual_score",
+        "Count where residual_score >= 15"
+      ]
+    },
+    {
+      "name": "Risks with issues",
+      "source_view": "reporting_risks_with_issues",
+      "suggested_metrics": [
+        "Count of issue rows by issue_severity",
+        "Count distinct risk_id with open issues"
+      ]
+    },
+    {
+      "name": "Vendors & TPRA",
+      "source_view": "reporting_vendors_tpra",
+      "suggested_metrics": [
+        "Count vendors by tier",
+        "Average residual_risk_score",
+        "Count open findings by finding_severity"
+      ]
+    },
+    {
+      "name": "Issues",
+      "source_view": "reporting_issues_tasks",
+      "suggested_metrics": [
+        "Count by severity where workflow_state not closed",
+        "Count sla_breached = true"
+      ]
+    },
+    {
+      "name": "Evidence & controls",
+      "source_view": "reporting_evidence_controls",
+      "suggested_metrics": [
+        "Count is_stale = true",
+        "Count by evidence_status"
+      ]
+    },
+    {
+      "name": "Vulnerabilities",
+      "source_view": "reporting_assets_vulns",
+      "suggested_metrics": [
+        "Count by severity where status = open",
+        "Average cvss_score"
+      ]
+    },
+    {
+      "name": "Automation / SCF results",
+      "source_view": "reporting_scf_check_results",
+      "suggested_metrics": [
+        "Count by status",
+        "Count truncated = true"
+      ]
+    }
+  ],
+  "dashboards": [
+    {
+      "key": "risk_posture",
+      "title": "Risk posture",
+      "cards": [
+        "Open risks by category (bar)",
+        "Residual score trend / distribution",
+        "Risks with open linked issues (table)",
+        "Top owners by open risk count"
+      ]
+    },
+    {
+      "key": "vendor_tpra",
+      "title": "Vendor & TPRA",
+      "cards": [
+        "Vendors by tier (pie/donut)",
+        "Open findings by severity",
+        "Residual risk by vendor (table)",
+        "Reassessment due in 90 days"
+      ]
+    },
+    {
+      "key": "issues_vulns",
+      "title": "Issues & vulnerabilities",
+      "cards": [
+        "Open issues by severity",
+        "SLA breached count (number)",
+        "Open vulns by severity",
+        "Aging open issues (table)"
+      ]
+    },
+    {
+      "key": "evidence_compliance",
+      "title": "Evidence & compliance",
+      "cards": [
+        "Stale evidence count",
+        "Evidence by status",
+        "Evidence mapped to controls (table)",
+        "Expiring evidence next 30 days"
+      ]
+    }
+  ]
+}

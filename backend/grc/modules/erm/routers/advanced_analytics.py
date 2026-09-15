@@ -189,8 +189,8 @@ def get_bowtie_analysis(
         if ctrl:
             control_data = BowTieControl(
                 id=ctrl.id,
-                name=ctrl.title or ctrl.description or f"Control {ctrl.id}",
-                code=ctrl.control_code if hasattr(ctrl, 'control_code') else None,
+                name=ctrl.name or ctrl.statement or f"Control {ctrl.id}",
+                code=getattr(ctrl, "code", None),
                 effectiveness="effective"
             )
             if len(preventive_controls) <= len(mitigating_controls):
@@ -772,7 +772,10 @@ def generate_bowtie_ai_narrative(
     for link in (risk.control_links or []):
         ctrl = link.normalized_control
         if ctrl:
-            ctrl_data = {"name": ctrl.title or ctrl.description or f"Control {ctrl.id}", "code": getattr(ctrl, 'control_code', None)}
+            ctrl_data = {
+                "name": ctrl.name or ctrl.statement or f"Control {ctrl.id}",
+                "code": getattr(ctrl, "code", None),
+            }
             if len(preventive_controls_info) <= len(mitigating_controls_info):
                 preventive_controls_info.append(ctrl_data)
             else:

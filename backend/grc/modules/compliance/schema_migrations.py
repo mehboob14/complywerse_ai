@@ -177,6 +177,72 @@ def _widen_scf_check_status(engine: Engine) -> bool:
         return False
 
 
+def _widen_scf_id_columns(engine: Engine) -> bool:
+    """Widen scf_id to VARCHAR(64) on control_state (critical) and normalized_controls.
+
+    Custom controls share the SCF identity space and need codes longer than 16.
+    If a dependent view blocks the NC alter, log and continue — state table is
+    the hard requirement for Stage D.
+    """
+    db_label = getattr(engine.url, "database", "?")
+    state_ok = True
+    try:
+        inspector = inspect(engine)
+        tables = set(inspector.get_table_names())
+
+        def _needs_widen(table: str) -> bool:
+            if table not in tables:
+                return False
+            col = next(
+                (c for c in inspector.get_columns(table) if c["name"] == "scf_id"),
+                None,
+            )
+            if col is None:
+                return False
+            width = getattr(col["type"], "length", None)
+            return width is not None and width < 64
+
+        if _needs_widen("grc_scf_control_state"):
+            with engine.begin() as conn:
+                # Best-effort: drop known reporting views that might pin the type.
+                conn.execute(text("DROP VIEW IF EXISTS reporting_scf_check_results"))
+                conn.execute(text(
+                    "ALTER TABLE grc_scf_control_state "
+                    "ALTER COLUMN scf_id TYPE VARCHAR(64)"
+                ))
+            logger.info("Widened grc_scf_control_state.scf_id to VARCHAR(64) on %s", db_label)
+
+        if _needs_widen("grc_normalized_controls"):
+            try:
+                with engine.begin() as conn:
+                    conn.execute(text("DROP VIEW IF EXISTS reporting_scf_check_results"))
+                    conn.execute(text(
+                        "ALTER TABLE grc_normalized_controls "
+                        "ALTER COLUMN scf_id TYPE VARCHAR(64)"
+                    ))
+                logger.info(
+                    "Widened grc_normalized_controls.scf_id to VARCHAR(64) on %s", db_label
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to widen grc_normalized_controls.scf_id on %s "
+                    "(continuing; control_state widen is critical)",
+                    db_label,
+                )
+
+        try:
+            from ...services.reporting_semantic_layer import ensure_reporting_views
+            ensure_reporting_views(engine)
+        except Exception:
+            logger.exception(
+                "recreating reporting views after scf_id widening failed on %s", db_label
+            )
+        return state_ok
+    except Exception:
+        logger.exception("Failed to widen scf_id columns on %s", db_label)
+        return False
+
+
 def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> None:
     try:
         inspector = inspect(engine)
@@ -878,12 +944,27 @@ _COLUMN_ADDS = [
     # carries its scf_id, so every table already FK'd to grc_normalized_controls
     # (evidence, exceptions, assessments, work items) keeps working unchanged and
     # nothing else in the platform has to learn the word "SCF".
-    ("grc_normalized_controls", "scf_id", "VARCHAR(16)", "ix_grc_normalized_controls_scf_id"),
+    ("grc_normalized_controls", "scf_id", "VARCHAR(64)", "ix_grc_normalized_controls_scf_id"),
+    # Stage D — custom controls share SCF identity on NormalizedControl.
+    ("grc_normalized_controls", "tenant_id", "INTEGER", "ix_grc_normalized_controls_tenant_id"),
+    ("grc_normalized_controls", "pptdf", "VARCHAR(16)", None),
+    ("grc_normalized_controls", "conformity_cadence", "VARCHAR(20)", None),
+    ("grc_normalized_controls", "control_sub_type", "VARCHAR(20)", None),
+    ("grc_normalized_controls", "retired_at", "TIMESTAMP", None),
+    ("grc_normalized_controls", "implements_scf_ids", "JSON", None),
+    # Stage G — custom controls may bind connector check ids directly.
+    ("grc_normalized_controls", "bound_check_ids", "JSON", None),
     # Collection health, kept distinct from control failure: a revoked scope or an
     # expired secret must surface as "not collected in 90 days", never as a
     # deficient control.
     ("grc_integration_connections", "last_success_at", "TIMESTAMP", None),
     ("grc_integration_connections", "last_error", "TEXT", None),
+    # Stage B — SCF scope boundary fields + UploadedFramework slug for journey sync.
+    ("grc_scf_scope", "scope_statement", "TEXT", None),
+    ("grc_scf_scope", "business_unit_ids", "JSON", None),
+    ("grc_scf_scope", "locations", "JSON", None),
+    ("grc_scf_control_state", "assigned_user_ids", "JSON", None),
+    ("grc_uploaded_frameworks", "slug", "VARCHAR(64)", "ix_grc_uploaded_frameworks_slug"),
 ]
 
 
@@ -1039,6 +1120,7 @@ def _ensure_for_engine(engine: Engine) -> None:
                                      expected_type=expected_type)
             all_ok = all_ok and ok
         all_ok = _widen_scf_check_status(engine) and all_ok
+        all_ok = _widen_scf_id_columns(engine) and all_ok
 
         # Relax NOT NULL on columns the connector framework needs to leave
         # empty for non-scanner providers. Idempotent.

@@ -2434,6 +2434,8 @@ export const artifactsApi = {
   get: (id: number) => apiClient.get(`/artifacts/${id}`),
   create: (data: Record<string, unknown>) => apiClient.post('/artifacts', data),
   update: (id: number, data: Record<string, unknown>) => apiClient.put(`/artifacts/${id}`, data),
+  assign: (id: number, userId: number) =>
+    apiClient.post(`/artifacts/${id}/assign`, null, { params: { user_id: userId } }),
   remove: (id: number) => apiClient.delete(`/artifacts/${id}`),
   export: (id: number, fmt: string) => apiClient.get(`/artifacts/${id}/export`, { params: { fmt }, responseType: 'blob' }),
   catalogContent: (artifactId: string, frameworkKey: string) =>
@@ -5008,8 +5010,18 @@ export const automationApi = {
   listControls: (framework: AutomationFramework = 'soc2') =>
     apiClient.get(`/automation/${framework}/controls`),
   // Unified common control library — one control set, each mapped to requirements
-  // across SOC 2 / ISO 27001 / GDPR.
-  listCommonControls: () => apiClient.get('/automation/common/controls'),
+  // across SOC 2 / ISO 27001 / GDPR. scope=in_scope (default) filters to the
+  // tenant's SCF scope; scope=all returns the full catalogue.
+  listCommonControls: (opts?: {
+    scope?: 'in_scope' | 'all';
+    ownership?: 'unowned' | 'mine' | 'overdue';
+  }) =>
+    apiClient.get('/automation/common/controls', {
+      params: {
+        scope: opts?.scope ?? 'in_scope',
+        ...(opts?.ownership ? { ownership: opts.ownership } : {}),
+      },
+    }),
   // One control with its framework requirements resolved to real text +
   // provenance, so a reviewer can trace any row back to its source library.
   getCommonControl: (code: string) =>
@@ -5020,7 +5032,10 @@ export const automationApi = {
     apiClient.get('/automation/common/coverage', { params: framework ? { framework } : undefined }),
   // Library, automation, crosswalk, evidence and assurance aggregates for the
   // common control library — each answered by the system that actually holds it.
-  getCommonOverview: () => apiClient.get('/automation/common/overview'),
+  getCommonOverview: (opts?: { scope?: 'in_scope' | 'all' }) =>
+    apiClient.get('/automation/common/overview', {
+      params: { scope: opts?.scope ?? 'in_scope' },
+    }),
   // Evidence a person attached to a control — the manual and hybrid half no
   // collector produces. Upload goes through the evidence module (storage,
   // validation, versioning, OCR); linking records which control it evidences.
@@ -5037,6 +5052,29 @@ export const automationApi = {
   // copies, so the Frameworks artifact modals can be reused unchanged.
   listControlArtifacts: (code: string) =>
     apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/artifacts`),
+  // Live risk-register links for a common control. SCF catalogue risk/threat
+  // codes come back as scf_prompts only — never as register rows.
+  listControlRisks: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/risks`),
+  linkControlRisk: (code: string, riskId: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/risks`, { risk_id: riskId }),
+  unlinkControlRisk: (code: string, linkId: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/risks/${linkId}`),
+  createControlRisk: (code: string, body: {
+    title: string;
+    description?: string;
+    category?: string;
+    inherent_likelihood?: number;
+    inherent_impact?: number;
+  }) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/risks/new`, body),
+  // Live asset inventory links for a common control (Stage F).
+  listControlAssets: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assets`),
+  linkControlAsset: (code: string, assetId: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assets`, { asset_id: assetId }),
+  unlinkControlAsset: (code: string, linkId: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assets/${linkId}`),
   // Mappings a reviewer should look at, worst first — lowest confidence, then
   // fan-out, then material controls. Rows already ruled on never come back.
   getMappingReviewQueue: (params?: { framework?: string; limit?: number }) =>
@@ -5072,6 +5110,273 @@ export const automationApi = {
     apiClient.post(`/automation/soc2/collectors/${provider}/connect`, body),
   testCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/test`),
   runCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/run`),
+};
+
+/** SCF scope & applicability — frameworks catalog, default scope, recompute. */
+export type ScfFramework = {
+  slug: string;
+  label: string;
+  scf_keys?: string[];
+  expected?: number | null;
+  file?: string | null;
+};
+
+export type ScfScope = {
+  id: number;
+  tenant_id?: number;
+  name?: string;
+  framework_slugs: string[];
+  framework_obligations: Record<string, string>;
+  baseline_keys?: string[];
+  esp_level: number;
+  firm_size: number | null;
+  has_facilities: boolean;
+  processes_personal_data: boolean;
+  target_cmm?: number | null;
+  scope_statement?: string | null;
+  business_unit_ids?: unknown[];
+  locations?: unknown[];
+  is_default?: boolean;
+  created_at?: string | null;
+  updated_at?: string | null;
+  hint?: string;
+};
+
+export type ScfScopeUpdateBody = {
+  framework_slugs?: string[];
+  framework_obligations?: Record<string, string>;
+  esp_level?: number;
+  firm_size?: number | null;
+  has_facilities?: boolean;
+  processes_personal_data?: boolean;
+  target_cmm?: number | null;
+  scope_statement?: string | null;
+  locations?: unknown[];
+  business_unit_ids?: unknown[];
+};
+
+export type ScfOwnershipBody = {
+  owner_user_id?: number | null;
+  reviewer_user_id?: number | null;
+  assigned_user_ids?: number[];
+};
+
+export type ScfBulkOwnershipBody = {
+  scf_ids?: string[];
+  domain?: string | null;
+  owner_user_id: number;
+  assigned_user_ids?: number[];
+};
+
+export type ScfHistoryEntry = {
+  id?: number;
+  action?: string;
+  actor_name?: string | null;
+  actor_id?: number | null;
+  summary?: string | null;
+  created_at?: string | null;
+  resource_name?: string | null;
+  before?: Record<string, unknown> | null;
+  after?: Record<string, unknown> | null;
+};
+
+export type ScfMyWorkItem = {
+  scf_id?: string;
+  control_id?: string;
+  name?: string | null;
+  title?: string | null;
+  next_due_at?: string | null;
+  status?: string | null;
+  overall_status?: string | null;
+  owner_user_id?: number | null;
+  [key: string]: unknown;
+};
+
+export type ScfMyWork = {
+  controls?: ScfMyWorkItem[];
+  na_reviews?: ScfMyWorkItem[];
+  overdue?: ScfMyWorkItem[];
+  artifacts?: Array<{
+    id?: number;
+    name?: string | null;
+    status?: string | null;
+    scf_id?: string | null;
+    control_ref?: string | null;
+    [key: string]: unknown;
+  }>;
+  failing?: ScfMyWorkItem[];
+};
+
+/** Tenant-authored custom control (Stage D) — own statement, never SCF prose. */
+export type ScfCustomControl = {
+  code: string;
+  name?: string | null;
+  statement?: string | null;
+  domain?: string | null;
+  pptdf?: string | null;
+  conformity_cadence?: string | null;
+  control_sub_type?: string | null;
+  parsed_control_ids?: number[];
+  implements_scf_ids?: string[];
+  /** Stage G — connector check ids whose results drive this control's status. */
+  bound_check_ids?: string[];
+  custom?: boolean;
+  retired_at?: string | null;
+  [key: string]: unknown;
+};
+
+export type ScfCustomControlCreateBody = {
+  code: string;
+  name?: string;
+  statement?: string;
+  domain?: string;
+  pptdf?: string;
+  conformity_cadence?: string;
+  control_sub_type?: string;
+  parsed_control_ids?: number[];
+  implements_scf_ids?: string[];
+};
+
+export type ScfCustomControlUpdateBody = {
+  name?: string;
+  statement?: string;
+  domain?: string;
+  pptdf?: string;
+  conformity_cadence?: string;
+  control_sub_type?: string;
+};
+
+export type ScfCustomControlMappingsBody = {
+  parsed_control_ids?: number[];
+  implements_scf_ids?: string[];
+};
+
+/** Stage H — per-framework coverage roll-up (conformity is INDICATIVE). */
+export type ScfFrameworkStatus = {
+  framework_slug: string;
+  label: string;
+  applicable_count: number;
+  not_assessed_count: number;
+  controls_with_checks: number;
+  automation_coverage_pct: number;
+  evidence_coverage_pct: number;
+  indicative_conformity_pct: number;
+  indicative?: boolean;
+  conformity_basis?: string;
+};
+
+export type ScfAssuranceSummary = {
+  scope_id: number;
+  frameworks: ScfFrameworkStatus[];
+};
+
+export type ScfAuditPeriod = {
+  id: number;
+  tenant_id?: number;
+  scope_id: number;
+  name: string;
+  framework_slug?: string | null;
+  period_start: string | null;
+  period_end: string | null;
+  release_id?: number | null;
+  status: string;
+  frozen_at?: string | null;
+  frozen_by?: number | null;
+  has_soa_snapshot?: boolean;
+  created_at?: string | null;
+  soa_snapshot?: Record<string, unknown> | null;
+};
+
+export type ScfAuditPeriodCreateBody = {
+  name: string;
+  period_start: string;
+  period_end: string;
+  framework_slug?: string | null;
+  scope_id?: number | null;
+};
+
+export type ScfParityChecklist = {
+  decision?: number;
+  note?: string;
+  stages?: Array<{
+    stage: string;
+    name: string;
+    present: boolean;
+    features?: string[];
+  }>;
+};
+
+export const scfApi = {
+  listFrameworks: () => apiClient.get<{ frameworks: ScfFramework[] }>('/scf/frameworks'),
+  getDefaultScope: () => apiClient.get<ScfScope>('/scf/scopes/default'),
+  updateScope: (id: number, body: ScfScopeUpdateBody) =>
+    apiClient.put<ScfScope>(`/scf/scopes/${id}`, body),
+  recompute: (id: number, commit = false) =>
+    apiClient.post(`/scf/scopes/${id}/recompute`, null, { params: { commit } }),
+  setOwnership: (scopeId: number, scfId: string, body: ScfOwnershipBody) =>
+    apiClient.put(`/scf/scopes/${scopeId}/controls/${encodeURIComponent(scfId)}/ownership`, body),
+  bulkOwnership: (scopeId: number, body: ScfBulkOwnershipBody) =>
+    apiClient.post(`/scf/scopes/${scopeId}/ownership/bulk`, body),
+  getControlHistory: (scopeId: number, scfId: string) =>
+    apiClient.get<{ items?: ScfHistoryEntry[] } | ScfHistoryEntry[]>(
+      `/scf/scopes/${scopeId}/controls/${encodeURIComponent(scfId)}/history`,
+    ),
+  myWork: () => apiClient.get<ScfMyWork>('/scf/my-work'),
+
+  // Stage D — tenant custom controls (blank authored fields; no SCF copy/AI).
+  listCustomControls: () =>
+    apiClient.get<{ controls?: ScfCustomControl[] } | ScfCustomControl[]>('/scf/custom-controls'),
+  getCustomControl: (code: string) =>
+    apiClient.get<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}`),
+  createCustomControl: (body: ScfCustomControlCreateBody) =>
+    apiClient.post<ScfCustomControl>('/scf/custom-controls', body),
+  updateCustomControl: (code: string, body: ScfCustomControlUpdateBody) =>
+    apiClient.put<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}`, body),
+  retireCustomControl: (code: string) =>
+    apiClient.post<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}/retire`),
+  updateCustomControlMappings: (code: string, body: ScfCustomControlMappingsBody) =>
+    apiClient.put<ScfCustomControl>(
+      `/scf/custom-controls/${encodeURIComponent(code)}/mappings`,
+      body,
+    ),
+  /** Stage G — attach connector check ids; status then comes from those checks' results. */
+  setCustomControlChecks: (code: string, body: { check_ids: string[] }) =>
+    apiClient.put<ScfCustomControl>(
+      `/scf/custom-controls/${encodeURIComponent(code)}/checks`,
+      body,
+    ),
+
+  // Stage H — assurance roll-ups, audit periods, SoA export, Decision 6 parity.
+  getAssuranceSummary: (scopeId?: number) =>
+    apiClient.get<ScfAssuranceSummary>('/scf/assurance/summary', {
+      params: scopeId != null ? { scope_id: scopeId } : undefined,
+    }),
+  getFrameworkStatus: (slug: string, scopeId?: number) =>
+    apiClient.get<ScfFrameworkStatus>(`/scf/frameworks/${encodeURIComponent(slug)}/status`, {
+      params: scopeId != null ? { scope_id: scopeId } : undefined,
+    }),
+  listAuditPeriods: (scopeId?: number) =>
+    apiClient.get<{ periods: ScfAuditPeriod[] }>('/scf/audit-periods', {
+      params: scopeId != null ? { scope_id: scopeId } : undefined,
+    }),
+  createAuditPeriod: (body: ScfAuditPeriodCreateBody) =>
+    apiClient.post<ScfAuditPeriod>('/scf/audit-periods', body),
+  freezeAuditPeriod: (id: number) =>
+    apiClient.post<ScfAuditPeriod>(`/scf/audit-periods/${id}/freeze`),
+  closeAuditPeriod: (id: number) =>
+    apiClient.post<ScfAuditPeriod>(`/scf/audit-periods/${id}/close`),
+  getSoa: (
+    scopeId: number,
+    opts: { format: 'json' | 'oscal' | 'xlsx'; periodId?: number },
+  ) => {
+    const params: Record<string, string | number> = { format: opts.format };
+    if (opts.periodId != null) params.period_id = opts.periodId;
+    if (opts.format === 'xlsx') {
+      return apiClient.get(`/scf/scopes/${scopeId}/soa`, { params, responseType: 'blob' });
+    }
+    return apiClient.get(`/scf/scopes/${scopeId}/soa`, { params });
+  },
+  getParityChecklist: () => apiClient.get<ScfParityChecklist>('/scf/parity'),
 };
 
 // ─── CIS Phase 3 agent installer + scan-push helpers ─────────────────────

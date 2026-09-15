@@ -111,6 +111,16 @@ PERMISSION_MATRIX = [
                 "name": "gap_analysis",
                 "display_name": "Gap Analysis",
                 "actions": ["view", "create", "edit"]
+            },
+            {
+                "name": "controls",
+                "display_name": "Controls",
+                "actions": ["view", "assign", "approve"]
+            },
+            {
+                "name": "artifacts",
+                "display_name": "Artifacts",
+                "actions": ["view", "approve"]
             }
         ]
     },

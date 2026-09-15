@@ -1786,6 +1786,66 @@ def link_asset_to_control(
     return MessageResponse(message="Control linked successfully")
 
 
+@router.get("/{asset_id}/controls")
+def list_asset_controls(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """SCF Stage F — reverse view of AssetControlLink rows for one asset."""
+    user_tenants = get_user_tenants(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants),
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found",
+        )
+    from grc.modules.scf.asset_links import list_controls_for_asset
+
+    try:
+        items = list_controls_for_asset(db, asset.tenant_id, asset_id)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e)) from e
+    return {"items": items}
+
+
+@router.delete("/{asset_id}/controls/{link_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_asset_from_control(
+    asset_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    user_tenants = get_user_tenants(current_user, db)
+
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id,
+        ITAsset.tenant_id.in_(user_tenants)
+    ).first()
+    if not asset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Asset not found"
+        )
+
+    db_link = db.query(AssetControlLink).filter(
+        AssetControlLink.id == link_id,
+        AssetControlLink.asset_id == asset_id
+    ).first()
+    if not db_link:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Link not found"
+        )
+
+    db.delete(db_link)
+    db.commit()
+    return None
+
+
 @router.post("/{asset_id}/assess", response_model=AssetRiskAssessmentResponse)
 def assess_asset(
     asset_id: int,
@@ -1929,14 +1989,27 @@ def get_asset_detail(
         )
     
     linked_controls = []
+    from grc.modules.scf.risk_links import control_status_indicator
+    from grc.modules.scf.asset_links import per_asset_check_status
     for link in asset.control_links:
         control = db.query(NormalizedControl).filter(NormalizedControl.id == link.normalized_control_id).first()
         if control:
+            scf_key = getattr(control, "scf_id", None) or getattr(control, "code", None) or ""
             linked_controls.append({
                 "id": link.id,
                 "control_id": control.id,
                 "code": control.code,
-                "name": control.name
+                "name": control.name,
+                "scf_id": getattr(control, "scf_id", None),
+                "source": getattr(control, "source", None),
+                "custom": (getattr(control, "source", None) or "") == "custom",
+                "control_status": control_status_indicator(
+                    db, control, tenant_id=asset.tenant_id,
+                ),
+                "check_status": per_asset_check_status(
+                    db, asset.tenant_id, str(scf_key), asset.id,
+                ) if scf_key else "unknown",
+                "control_status_indicator": True,
             })
     
     linked_internal_controls = []

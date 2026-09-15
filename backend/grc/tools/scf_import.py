@@ -10,7 +10,8 @@ engine first. Routes treat a missing catalog as 503 not_provisioned instead.
     python -m grc.tools.scf_import --tenant 1link --force     # re-import in place
 
 Idempotent on (version, checksum): re-running is a no-op unless --force, which
-deletes the release (children cascade) and re-imports.
+replaces the SCF catalog (release cascade) while preserving bridge NormalizedControl
+ids — risk links, evidence mappings, exceptions, and assessments survive.
 """
 from __future__ import annotations
 
@@ -139,37 +140,33 @@ def import_tenant(slug: str, tenant_id: int, force: bool = False) -> Dict[str, A
             }
         if existing and force:
             db.execute(text("DELETE FROM grc_scf_release WHERE id = :i"), {"i": existing.id})
-            # The bridge run's NormalizedControls are FK'd from several tables, and
-            # the run itself is FK'd from the controls — so tear down children first.
-            # Anything a user has since attached to an SCF control (evidence, an
-            # exception, a work item) is deleted with it: --force is a re-import of
-            # an unused catalog, NOT a migration tool.
+            # Catalog CASCADE wipe is fine. The NC bridge must NOT be torn down:
+            # risk links, evidence mappings, exceptions, and assessments hang off
+            # grc_normalized_controls.id and must survive --force. Rematerializable
+            # children (domain group mappings / groups) are rebuilt below; catalog
+            # is replaced; bridge NC ids are preserved via upsert-by-scf_id.
+            # Delete only rematerializable group mappings for the SCF bridge run
+            # so domains can be rebuilt under the same NormalizationRun.
             sel = ("SELECT id FROM grc_normalized_controls WHERE run_id IN "
                    "(SELECT id FROM grc_normalization_runs WHERE tenant_id = :t AND label = :l)")
             for child, col in (
                 ("grc_common_control_group_mappings", "normalized_control_id"),
-                ("grc_control_mappings", "normalized_control_id"),
-                ("grc_normalized_control_links", "normalized_control_id"),
-                ("grc_evidence_control_mappings", "normalized_control_id"),
-                ("grc_ai_control_proposals", "normalized_control_id"),
-                ("grc_internal_control_framework_links", "normalized_control_id"),
-                ("grc_exceptions", "normalized_control_id"),
-                ("grc_compliance_assessments", "normalized_control_id"),
             ):
                 try:
                     db.execute(text(f"DELETE FROM {child} WHERE {col} IN ({sel})"),
                                {"t": tenant_id, "l": f"SCF {version}"})
                     db.commit()
                 except Exception:
-                    db.rollback()  # table or column absent on this tenant — fine
-            db.execute(text(f"DELETE FROM grc_normalized_controls WHERE id IN ({sel})"),
-                       {"t": tenant_id, "l": f"SCF {version}"})
-            db.execute(text("DELETE FROM grc_common_control_groups WHERE run_id IN "
-                            "(SELECT id FROM grc_normalization_runs WHERE tenant_id = :t AND label = :l)"),
-                       {"t": tenant_id, "l": f"SCF {version}"})
-            db.execute(text("DELETE FROM grc_normalization_runs WHERE tenant_id = :t AND label = :l"),
-                       {"t": tenant_id, "l": f"SCF {version}"})
-            db.commit()
+                    db.rollback()
+            try:
+                db.execute(text("DELETE FROM grc_common_control_groups WHERE run_id IN "
+                                "(SELECT id FROM grc_normalization_runs WHERE tenant_id = :t AND label = :l)"),
+                           {"t": tenant_id, "l": f"SCF {version}"})
+                db.commit()
+            except Exception:
+                db.rollback()
+            # Intentionally NOT deleting grc_normalized_controls, risk_control_links,
+            # evidence mappings, exceptions, assessments, or the NormalizationRun.
 
         meta = _load("manifest.json")
         rel = SCFRelease(
@@ -277,15 +274,29 @@ def import_tenant(slug: str, tenant_id: int, force: bool = False) -> Dict[str, A
             ), {"r": rid})
         db.commit()
 
-        # ── the bridge: one NormalizedControl per SCF control ────────────────
-        run = NormalizationRun(
-            tenant_id=tenant_id, label=f"SCF {version}", scope="full",
-            status="completed", is_baseline=False,
-            started_at=datetime.utcnow(), completed_at=datetime.utcnow(),
-            summary={"source": "scf", "version": version, "controls": len(ctls)},
+        # ── the bridge: one NormalizedControl per SCF control (upsert by scf_id)
+        # Find or create the NormalizationRun so force-reimport keeps the same
+        # bridge NC.id values (and therefore every FK into them).
+        run = (
+            db.query(NormalizationRun)
+            .filter(NormalizationRun.tenant_id == tenant_id,
+                    NormalizationRun.label == f"SCF {version}")
+            .first()
         )
-        db.add(run)
-        db.commit()
+        if run is None:
+            run = NormalizationRun(
+                tenant_id=tenant_id, label=f"SCF {version}", scope="full",
+                status="completed", is_baseline=False,
+                started_at=datetime.utcnow(), completed_at=datetime.utcnow(),
+                summary={"source": "scf", "version": version, "controls": len(ctls)},
+            )
+            db.add(run)
+            db.commit()
+        else:
+            run.status = "completed"
+            run.completed_at = datetime.utcnow()
+            run.summary = {"source": "scf", "version": version, "controls": len(ctls)}
+            db.commit()
         # NormalizedControl.code is GLOBALLY unique — the SCF- prefix is mandatory
         # or a re-import raises IntegrityError partway through.
         # Domain groups. The Control Library UI lists CommonControlGroup rows
@@ -302,21 +313,43 @@ def import_tenant(slug: str, tenant_id: int, force: bool = False) -> Dict[str, A
         db.flush()
         gid = {g.code: g.id for g in groups}
 
-        db.bulk_insert_mappings(NormalizedControl, [{
-            "run_id": run.id, "code": f"SCF-{c['scf_id']}"[:50],
-            "name": (c["name"] or c["scf_id"])[:255], "statement": c["description"],
-            "objective": c["control_question"], "domain": (c["domain_name"] or "")[:255],
-            "source": "scf", "scf_id": c["scf_id"],
-            "common_group_id": gid.get(c["domain_identifier"]),
-            "created_at": datetime.utcnow(),
-        } for c in ctls])
+        # Upsert by (source='scf', scf_id): update in place, keep NC.id stable.
+        existing_ncs = {
+            row.scf_id: row
+            for row in db.query(NormalizedControl).filter(
+                NormalizedControl.source == "scf",
+                NormalizedControl.scf_id.isnot(None),
+            ).all()
+            if row.scf_id
+        }
+        now = datetime.utcnow()
+        for c in ctls:
+            sid = c["scf_id"]
+            nc = existing_ncs.get(sid)
+            if nc is not None:
+                nc.run_id = run.id
+                nc.name = (c["name"] or c["scf_id"])[:255]
+                nc.statement = c["description"]
+                nc.objective = c["control_question"]
+                nc.domain = (c["domain_name"] or "")[:255]
+                nc.common_group_id = gid.get(c["domain_identifier"])
+            else:
+                db.add(NormalizedControl(
+                    run_id=run.id, code=f"SCF-{sid}"[:50],
+                    name=(c["name"] or sid)[:255], statement=c["description"],
+                    objective=c["control_question"], domain=(c["domain_name"] or "")[:255],
+                    source="scf", scf_id=sid,
+                    common_group_id=gid.get(c["domain_identifier"]),
+                    created_at=now,
+                ))
         db.commit()
 
         # group <-> control mapping rows (what the group detail view reads)
         dom_of = {c["scf_id"]: c["domain_identifier"] for c in ctls}
         nc_rows = db.execute(text(
-            "SELECT id, scf_id FROM grc_normalized_controls WHERE run_id = :r"),
-            {"r": run.id}).fetchall()
+            "SELECT id, scf_id FROM grc_normalized_controls "
+            "WHERE source = 'scf' AND scf_id IS NOT NULL"),
+            {}).fetchall()
         db.bulk_insert_mappings(CommonControlGroupMapping, [{
             "group_id": gid[dom_of[sid]], "normalized_control_id": nid,
             "mapping_source": "scf", "mapping_confidence": 1.0,

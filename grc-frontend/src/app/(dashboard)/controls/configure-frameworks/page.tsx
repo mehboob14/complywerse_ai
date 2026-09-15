@@ -82,6 +82,17 @@ export default function ConfigureFrameworks() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-5 p-1">
+      <div className="rounded-lg border border-primary-200 bg-primary-50 px-4 py-3 text-sm text-primary-900">
+        <p className="font-semibold">Framework selection for the control plane moved</p>
+        <p className="mt-1 text-[13px] text-primary-800/90">
+          Configure which frameworks drive Common Controls under{' '}
+          <Link href="/automation/scope" className="font-semibold underline underline-offset-2 hover:text-primary-950">
+            Automation → Scope
+          </Link>
+          . The workbench selector below remains for the Control Catalog only.
+        </p>
+      </div>
+
       <div>
         <Link href="/controls" className="inline-flex items-center gap-1 text-[12.5px] font-semibold text-slate-500 hover:text-primary-700">
           <ChevronLeft className="h-4 w-4" /> Back to Control Catalog

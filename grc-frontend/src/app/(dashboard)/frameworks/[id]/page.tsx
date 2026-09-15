@@ -4435,7 +4435,23 @@ export default function CertificationJourneyPage() {
       case 'phases':
         return renderPhasesTab();
       case 'scoping':
-        return renderScopingTab();
+        // Dead placeholder removed in Stage B — Automation → Scope is the control plane.
+        return (
+          <div className="rounded-xl border border-slate-200 bg-white p-6">
+            <h2 className="text-lg font-semibold text-slate-900">Scope moved</h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Framework applicability is configured once under Automation → Scope
+              (firm size, ESP, facilities, personal data, and in-scope frameworks).
+              That selection drives Common Controls, journeys, and the Control Catalog.
+            </p>
+            <Link
+              href="/automation/scope"
+              className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
+            >
+              Open Automation Scope
+            </Link>
+          </div>
+        );
       case 'context':
         return renderPlaceholderTab(
           'Context of Organization',
