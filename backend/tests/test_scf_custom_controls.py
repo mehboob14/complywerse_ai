@@ -48,12 +48,31 @@ def test_validate_code_collision_with_scf_catalog_ids():
 
 
 def test_retire_custom_sets_retired_at_on_object():
-    """Conceptual retire: stamp retired_at without deleting."""
+    """Conceptual retire: stamp retired_at without deleting.
+
+    It also drops the control out of applicability — a retired control must stop
+    counting in scope totals — which is why the fake DB answers queries.
+    """
     from grc.modules.scf.custom_controls import retire_custom
+
+    state = SimpleNamespace(is_applicable=True, applicability_reason=None, updated_at=None)
+
+    class _FakeQuery:
+        def filter(self, *_a, **_k):
+            return self
+
+        def first(self):
+            return None          # no profile row
+
+        def all(self):
+            return [state]       # the control's applicability state
 
     class _FakeDB:
         def flush(self):
             pass
+
+        def query(self, *_a, **_k):
+            return _FakeQuery()
 
     # Patch only the lookup + audit path so this stays DB-free.
     import grc.modules.scf.custom_controls as mod
@@ -84,6 +103,8 @@ def test_retire_custom_sets_retired_at_on_object():
         assert out is nc
         assert nc.retired_at == stamp
         assert calls["audit"] == 1
+        # It left the library, so it stops counting as applicable.
+        assert state.is_applicable is False
         # Idempotent second retire
         out2 = retire_custom(_FakeDB(), 1, "CUST-01", actor_id=9, now=stamp)
         assert out2.retired_at == stamp

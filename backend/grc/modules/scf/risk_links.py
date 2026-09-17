@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from grc.models import (
@@ -33,9 +34,14 @@ def ensure_normalized_for_control(
     if not code:
         raise ValueError("scf_id_or_code required")
 
+    # Catalogue rows carry no tenant; a custom control belongs to exactly one,
+    # so never resolve another tenant's authored control by its code.
     nc = (
         db.query(NormalizedControl)
-        .filter(NormalizedControl.scf_id == code)
+        .filter(
+            NormalizedControl.scf_id == code,
+            or_(NormalizedControl.tenant_id.is_(None), NormalizedControl.tenant_id == tenant_id),
+        )
         .order_by(NormalizedControl.id.asc())
         .first()
     )

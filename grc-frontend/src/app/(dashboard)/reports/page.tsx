@@ -11,6 +11,7 @@ import {
   Lock,
   Plus,
   Sparkles,
+  TrendingUp,
 } from 'lucide-react';
 import { DATASETS } from './_reports/datasets';
 import ReportBuilder from './_reports/ReportBuilder';
@@ -18,6 +19,8 @@ import type { ReportSpec } from './_reports/types';
 import { emptySpec } from './_reports/types';
 import { listSpecs } from './_reports/savedReports';
 import { usePermissions } from './_reports/usePermissions';
+import { EMPTY_TOKEN, encodeMultiValue } from './_reports/filter-utils';
+import { isActiveCondition } from './_reports/grid-utils';
 
 const RECENT_KEY = 'grc.reports.recentDatasets';
 
@@ -70,7 +73,42 @@ export default function ReportsPage() {
       if (editId) {
         const { specs: all } = await listSpecs();
         if (cancelled) return;
-        const s = all.find((x) => x.id === editId);
+        const found = all.find((x) => x.id === editId);
+        // Dashboard drill-through: open the report narrowed to the category the
+        // viewer clicked. Added as an ordinary filter condition on a copy of
+        // the spec, so it is visible, removable, and never saved back unless
+        // the user chooses to save.
+        const drillCol = searchParams.get('drillCol');
+        const drillValue = searchParams.get('drillValue');
+        // The filter model is one flat AND/OR list, so it cannot say
+        // "(A OR B) AND category". Narrowing an OR report would silently turn
+        // it into A AND B AND category — a different, smaller set. Only narrow
+        // when AND semantics already hold; otherwise open the report as saved.
+        const canNarrow = !!found && (
+          found.rules.logic === 'AND'
+          || found.rules.conditions.filter(isActiveCondition).length <= 1
+        );
+        const s = found && canNarrow && drillCol && drillValue != null
+          ? {
+              ...found,
+              rules: {
+                ...found.rules,
+                logic: 'AND' as const,
+                conditions: [
+                  ...found.rules.conditions,
+                  {
+                    id: `drill_${Date.now().toString(36)}`,
+                    col: drillCol,
+                    op: 'in',
+                    // The pivot labels a blank group "—"; the filter spells
+                    // blank as EMPTY_TOKEN, so translate rather than matching
+                    // a literal dash that no row contains.
+                    value: encodeMultiValue([drillValue === '—' ? EMPTY_TOKEN : drillValue]),
+                  },
+                ],
+              },
+            }
+          : found;
         if (s) {
           setBlankEmpty(false);
           setActiveKey(s.dataset);
@@ -178,6 +216,20 @@ export default function ReportsPage() {
         >
           <LayoutDashboard className="h-3.5 w-3.5 text-slate-400" />
           Analytics
+        </Link>
+        <Link
+          href="/reports/dashboards"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          <LayoutDashboard className="h-3.5 w-3.5 text-slate-400" />
+          Dashboards
+        </Link>
+        <Link
+          href="/reports/trends"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          <TrendingUp className="h-3.5 w-3.5 text-slate-400" />
+          Trends
         </Link>
         <Link
           href="/reports/saved"

@@ -71,6 +71,8 @@ celery_app = Celery(
         "grc.tasks.exceptions",
         # SCF Stage C — attestation due/overdue reminders (Celery beat).
         "grc.tasks.scf",
+        # Connected evidence collectors, collected daily (hourly sweep, 20h due window).
+        "grc.tasks.evidence_collectors",
         "grc.tasks.tprm",
         # Phase 7 — Cloud connector sync. Lives on `parsing` until the
         # dedicated `sync` queue spins up.
@@ -155,6 +157,7 @@ celery_app.conf.update(
         # until the dedicated `notification` queue lands.
         "grc.tasks.exceptions.*": {"queue": "parsing"},
         "grc.tasks.scf.*": {"queue": "parsing"},
+        "grc.tasks.evidence_collectors.*": {"queue": "parsing"},
         "grc.tasks.tprm.*": {"queue": "parsing"},
         # Phase 7 — cloud connector sync. Shares `parsing` for now.
         "grc.tasks.cloud_sync.*": {"queue": "parsing"},
@@ -212,6 +215,13 @@ celery_app.conf.update(
         "scf-attestation-daily-sweep": {
             "task": "grc.tasks.scf.daily_attestation_sweep",
             "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Automated control tests: each connected collector runs once its last
+        # run is 20h old, so evidence stays inside its reassessment window.
+        "evidence-collectors-hourly-sweep": {
+            "task": "grc.tasks.evidence_collectors.hourly_sweep",
+            "schedule": 60 * 60,
             "options": {"queue": "parsing"},
         },
         # TPRM — daily portfolio + per-vendor risk snapshot so the dashboard

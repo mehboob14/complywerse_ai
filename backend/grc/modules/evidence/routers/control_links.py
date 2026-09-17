@@ -337,6 +337,7 @@ def link_evidence_to_controls(
             framework_control_id=link.framework_control_id,
             parsed_control_id=link.parsed_control_id,
             uploaded_framework_id=link.uploaded_framework_id or (parsed_control.uploaded_framework_id if parsed_control else None),
+            created_by_ai=False,  # user-chosen link; the column defaults to True
         )
         db.add(mapping)
         db.flush()

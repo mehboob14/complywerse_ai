@@ -291,6 +291,11 @@ _COLUMN_ADDS = [
     # scanner writes. asset_role + parent_asset_id support promoting an
     # application detected on a host into its own child asset.
     ("grc_it_assets", "detected_software_json", "JSON DEFAULT '[]'::json", None),
+    # Every address this machine has answered on (multi-NIC, DHCP history).
+    # Written by asset_discovery.resolver and read by finding_asset_linker, so
+    # a missing column breaks every `SELECT * FROM grc_it_assets` ORM query —
+    # the whole IT Asset Inventory register, not just discovery.
+    ("grc_it_assets", "known_ips", "JSON", None),
     ("grc_it_assets", "asset_role", "VARCHAR(50)", None),
     ("grc_it_assets", "parent_asset_id", "INTEGER",
      "ix_grc_it_assets_parent_asset_id"),
@@ -597,6 +602,12 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "last_seen_at", "TIMESTAMP",
      "ix_it_asset_last_seen_at"),
     ("grc_it_assets", "last_seen_source", "VARCHAR(50)", None),
+    # Birth provenance + host aliases. Same omission as known_ips above: both
+    # ship on the model and are written by discovery, so a tenant DB predating
+    # them raises UndefinedColumn on every asset query.
+    ("grc_it_assets", "origin_source", "VARCHAR(30)",
+     "ix_grc_it_assets_origin_source"),
+    ("grc_it_assets", "dns_aliases", "JSON", None),
     # Phase 6 — Vendor Patch Intelligence (MSRC first). All nullable so the
     # column adds are no-ops for existing rows; populated on demand via
     # /vulnerabilities/{id}/sync-patch-info, on ingest via Celery, and by
@@ -645,6 +656,29 @@ _COLUMN_ADDS = [
     # the ITAsset.owning_team_id FK above.
     # Committee charter — structured sections JSON for uploaded charters
     # so they render in the same UI as AI-drafted ones.
+    # Control Workbench — Assurance tab: procedure outcomes tied to SCF objectives,
+    # and a reproducible sampling plan + reviewable conclusion on each test.
+    ("grc_control_work_test_procedures", "ao_ids", "JSON", None),
+    ("grc_control_work_test_procedures", "expected_result", "TEXT", None),
+    ("grc_control_work_test_procedures", "result", "VARCHAR(20)", None),
+    ("grc_control_work_test_procedures", "result_note", "TEXT", None),
+    ("grc_control_work_test_procedures", "tested_by", "INTEGER", None),
+    ("grc_control_work_test_procedures", "tested_at", "TIMESTAMP", None),
+    ("grc_control_work_tests", "frequency", "VARCHAR(30)", None),
+    ("grc_control_work_tests", "population_size", "INTEGER", None),
+    ("grc_control_work_tests", "population_description", "TEXT", None),
+    ("grc_control_work_tests", "selection_method", "VARCHAR(20)", None),
+    ("grc_control_work_tests", "sample_seed", "INTEGER", None),
+    ("grc_control_work_tests", "tolerable_exceptions", "INTEGER DEFAULT 0", None),
+    ("grc_control_work_tests", "conclusion_rationale", "TEXT", None),
+    ("grc_control_work_tests", "locked_at", "TIMESTAMP", None),
+    ("grc_control_work_tests", "independent_review", "BOOLEAN", None),
+    # Evidence linked to a specific required artifact on a control (Assurance tab).
+    ("grc_evidence_control_mappings", "artifact_key", "VARCHAR(255)",
+     "ix_evidence_control_mappings_artifact_key"),
+    # Saved reports vs dashboards share one table; `kind` separates them.
+    ("grc_report_definitions", "kind", "VARCHAR(16) DEFAULT 'report'",
+     "ix_report_definition_kind"),
     ("grc_committee_charters", "sections_json", "JSON", None),
     # External connector framework — extends IntegrationConnection beyond
     # the original Nessus/Nexpose scope to cover ticketing, SIEM, pen-test,

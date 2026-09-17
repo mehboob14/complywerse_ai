@@ -119,6 +119,13 @@ class EvidenceControlMapping(Base):
     # Audit trail
     created_at = Column(DateTime, default=datetime.utcnow)
     created_by_ai = Column(Boolean, default=True)  # True if AI-generated, False if manual
+    # Which required artifact this file satisfies on the control, as the artifact's
+    # normalised name (evidence_match.artifact_key). Consolidated artifacts have no
+    # id, but a name is consistent across every control that asks for the same
+    # document — which is what lets a file linked as the 'Business Continuity
+    # Plan' once be offered wherever that artifact is required. NULL = linked to
+    # the control generally, not to a specific artifact.
+    artifact_key = Column(String(255), nullable=True, index=True)
     assessment_id = Column(Integer, ForeignKey("grc_evidence_ai_assessments.id"), nullable=True)
     
     evidence = relationship("Evidence", back_populates="control_mappings")

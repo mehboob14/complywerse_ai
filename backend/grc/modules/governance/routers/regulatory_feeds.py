@@ -1,4 +1,5 @@
 from ....config import get_openai_api_key, get_openai_model
+from ....services.licence_guard import exclude_restricted
 
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
@@ -788,7 +789,8 @@ def analyze_feed_item(
         Framework.is_active == True
     ).all()
 
-    controls = db.query(NormalizedControl).all()
+    # Listed to the model by name; SCF control names may not reach it (CC BY-ND).
+    controls = exclude_restricted(db.query(NormalizedControl), NormalizedControl).all()
     
     policies = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id == tenant_id,

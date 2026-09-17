@@ -1,4 +1,5 @@
 from ....config import get_openai_api_key, get_openai_model
+from ....services.licence_guard import is_restricted_control
 
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
@@ -3066,8 +3067,14 @@ def generate_ai_treatment_plan(
 
     linked_controls = []
     for link in risk.control_links:
-        if link.normalized_control:
-            linked_controls.append(f"{link.normalized_control.code}: {link.normalized_control.name}")
+        nc = link.normalized_control
+        if nc:
+            # An SCF control is named by a placeholder, not skipped: dropping it would
+            # tell the model the risk has no controls and the plan would recommend
+            # building ones that exist. Its name and code are SCF content (CC BY-ND).
+            linked_controls.append(
+                f"Linked control {nc.id} (wording withheld: licensed text)" if is_restricted_control(nc)
+                else f"{nc.code}: {nc.name}")
     for link in risk.framework_control_links:
         if link.framework_control:
             linked_controls.append(f"{link.framework_control.code}: {link.framework_control.name}")

@@ -1,4 +1,5 @@
 from ....config import get_openai_model
+from ....services.licence_guard import exclude_restricted
 from typing import Any, List, Optional
 from datetime import datetime, timezone, timedelta
 import json
@@ -491,7 +492,11 @@ def _analyze_and_persist(
     # For most regulators we map controls to NormalizedControl. For SBP circulars
     # we restrict control mapping to ERM InternalControl so impact/gap analysis
     # only considers what exists internally.
-    controls = db.query(NormalizedControl).all()
+    # Controls are listed to the model by name. SCF control names are SCF content
+    # (CC BY-ND, no AI derivatives), and every tenant library is SCF, so they stay
+    # out: the analysis then reports policy impacts and tasks without naming SCF
+    # controls, rather than producing an assessment derived from SCF text.
+    controls = exclude_restricted(db.query(NormalizedControl), NormalizedControl).all()
     internal_controls = None
     if source_value == "SBP":
         internal_controls = (

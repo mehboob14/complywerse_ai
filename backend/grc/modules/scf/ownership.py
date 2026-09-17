@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from grc.models import (
     AuditLog,
+    GRCUser,
     SCFControl,
     SCFControlState,
     SCFScope,
@@ -197,6 +198,18 @@ def assign_ownership(
             .first()
         )
         cadence = ctl.conformity_cadence if ctl else None
+        if ctl is None:
+            # A tenant-authored control is not in the catalogue; its own cadence
+            # is what sets the due date (otherwise everything fell to Annual).
+            from grc.models import NormalizedControl
+
+            cadence = (
+                db.query(NormalizedControl.conformity_cadence)
+                .filter(NormalizedControl.tenant_id == tenant_id,
+                        NormalizedControl.source == "custom",
+                        NormalizedControl.scf_id == scf_id)
+                .scalar()
+            )
         state.next_due_at = compute_next_due(datetime.utcnow(), cadence)
 
     state.updated_at = datetime.utcnow()
@@ -267,6 +280,11 @@ def bulk_assign(
     return {"count": len(updated), "scf_ids": updated}
 
 
+#: Audit resource types that describe one control, shown on its History tab.
+CONTROL_HISTORY_TYPES = ("scf_control_state", "control_testing", "control_evidence", "control_maturity",
+                         "controls_automation", "control_record_link")
+
+
 def list_history(
     db: Session,
     tenant_id: int,
@@ -274,39 +292,49 @@ def list_history(
     *,
     limit: int = 100,
 ) -> List[Dict[str, Any]]:
-    """Audit rows for this control's ownership / applicability trail."""
+    """This control's audit trail: ownership, applicability, testing, evidence, maturity.
+
+    Matched on the row's resource name in SQL. The earlier scan read the newest
+    500 rows tenant-wide and matched the id anywhere in the JSON, so one bulk
+    change hid a control's history and "AST-01" also matched "AST-01.1".
+    """
     rows = (
         db.query(AuditLog)
         .filter(
             AuditLog.tenant_id == tenant_id,
-            AuditLog.resource_type == "scf_control_state",
+            AuditLog.resource_type.in_(CONTROL_HISTORY_TYPES),
+            AuditLog.changes["resource_name"].as_string() == scf_id,
         )
         .order_by(AuditLog.timestamp.desc())
-        .limit(500)
+        .limit(limit)
         .all()
     )
+    names: Dict[int, str] = {}
+    user_ids = {r.user_id for r in rows if r.user_id}
+    if user_ids:
+        for u in db.query(GRCUser).filter(GRCUser.id.in_(sorted(user_ids))).all():
+            names[u.id] = u.display_name or u.username or u.email or f"User {u.id}"
     out: List[Dict[str, Any]] = []
-    needle = scf_id
     for row in rows:
-        changes = row.changes or {}
-        if not isinstance(changes, dict):
-            continue
-        resource_name = changes.get("resource_name")
-        blob = json.dumps(changes, default=str)
-        if resource_name != needle and needle not in blob:
-            continue
+        changes = row.changes if isinstance(row.changes, dict) else {}
+        snapshot = changes.get("snapshot") if isinstance(changes.get("snapshot"), dict) else {}
+        ts = row.timestamp.isoformat() if row.timestamp else None
         out.append({
             "id": row.id,
             "action": row.action,
+            "resource_type": row.resource_type,
             "user_id": row.user_id,
+            "actor_id": row.user_id,
+            "actor_name": names.get(row.user_id) if row.user_id else None,
             "resource_id": row.resource_id,
-            "resource_name": resource_name,
-            "summary": (changes.get("summary") if isinstance(changes, dict) else None),
+            "resource_name": changes.get("resource_name"),
+            "summary": changes.get("summary"),
+            "before": snapshot.get("before"),
+            "after": snapshot.get("after"),
             "changes": changes,
-            "timestamp": row.timestamp.isoformat() if row.timestamp else None,
+            "timestamp": ts,
+            "created_at": ts,
         })
-        if len(out) >= limit:
-            break
     return out
 
 

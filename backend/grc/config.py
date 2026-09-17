@@ -118,9 +118,26 @@ def install_openai_compat_shim() -> bool:
         except Exception:
             pass
 
+    def _screen(kwargs):
+        # Licence gate: refuse any prompt carrying SCF prose before it leaves the
+        # process. Imported lazily, like ai_usage, so this module stays importable
+        # on its own. LicenceRestrictedContent propagates; anything else the guard
+        # raises must not take the model call down with it.
+        try:
+            from .services.licence_guard import LicenceRestrictedContent, assert_llm_safe
+        except Exception:
+            return
+        try:
+            assert_llm_safe(kwargs.get("messages"))
+        except LicenceRestrictedContent:
+            raise
+        except Exception:
+            pass
+
     def _wrap(orig, is_async=False):
         if is_async:
             async def _patched_async(self, *args, **kwargs):
+                _screen(kwargs)
                 model = _prepare(kwargs)
                 started_at = time.perf_counter()
                 try:
@@ -134,6 +151,7 @@ def install_openai_compat_shim() -> bool:
             return _patched_async
 
         def _patched(self, *args, **kwargs):
+            _screen(kwargs)
             model = _prepare(kwargs)
             started_at = time.perf_counter()
             try:

@@ -94,6 +94,15 @@ SENSITIVE_KEYS = {
     "password", "password_hash", "token", "access_token",
     "refresh_token", "secret", "api_key", "authorization", "cookie",
 }
+# Any key naming one of these is redacted too: a connector's second secret
+# (`secret2`), a `client_secret`, a `private_key`, an `x_api_token`. An exact-name
+# list let `secret2` through into the stored request payload.
+SENSITIVE_KEY_PARTS = ("password", "secret", "token", "api_key", "apikey", "private_key", "credential")
+
+
+def is_sensitive_key(key: Any) -> bool:
+    k = str(key).lower()
+    return k in SENSITIVE_KEYS or any(part in k for part in SENSITIVE_KEY_PARTS)
 
 SKIP_INTERNAL_KEYS = {"_sa_instance_state"}
 
@@ -112,7 +121,7 @@ def model_to_dict(obj: Any) -> Dict[str, Any]:
 def _sanitize(value: Any) -> Any:
     if isinstance(value, dict):
         return {
-            k: "***" if k.lower() in SENSITIVE_KEYS else _sanitize(v)
+            k: "***" if is_sensitive_key(k) else _sanitize(v)
             for k, v in value.items()
         }
     if isinstance(value, list):
@@ -191,7 +200,8 @@ def write_rich_audit_log(
             "actor_source": resolved_actor_source,
             "resource_name": resource_name,
             "summary": summary,
-            "snapshot": merged_snapshot,
+            # snapshots are copies of model rows; a credential column must not land here
+            "snapshot": _sanitize(merged_snapshot),
         }
         row = AuditLog(
             tenant_id=tenant_id,

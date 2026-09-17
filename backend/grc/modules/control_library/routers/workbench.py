@@ -23,10 +23,11 @@ from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.exc import SQLAlchemyError
 from pydantic import BaseModel
 
-from ....config import get_openai_model
+from ....config import get_openai_base_url, get_openai_model
+from ....services.licence_guard import is_restricted_control
 from ....models import (
     get_db, GRCUser, Tenant,
-    ControlWorkItem, ControlWorkTest, ControlWorkTestProcedure, ControlWorkEvidence,
+    ControlWorkItem, ControlWorkTest, ControlWorkTestProcedure, ControlWorkEvidence, ControlWorkSample,
     ControlWorkEscalation, ControlWorkWorkflowAction, ControlWorkRiskLink,
     ControlAssuranceSnapshot, CONTROL_WORKBENCH_MODELS,
     NormalizedControl, NormalizedControlLink, NormalizationRun,
@@ -1333,6 +1334,7 @@ def review_test(test_id: int, body: dict = Body(default={}), db: Session = Depen
                                          ControlWorkTest.tenant_id == tid).first()
     if not t:
         raise HTTPException(404, "Test not found")
+    _refuse_locked(t)
     action = (body.get("action") or "reviewed").lower()
     if action == "reopen":
         t.status = "completed"
@@ -1346,16 +1348,27 @@ def review_test(test_id: int, body: dict = Body(default={}), db: Session = Depen
     return {"ok": True, "id": t.id, "status": t.status}
 
 
+def _refuse_locked(t: ControlWorkTest) -> None:
+    """A test signed off on the Assurance tab is locked as the audit record; the
+    catalog shares those rows, so it must not rewrite or delete them either."""
+    if getattr(t, "locked_at", None):
+        raise HTTPException(409, "This test was signed off and is locked as the audit record.")
+
+
 def _resync_effectiveness(db, wi: ControlWorkItem) -> None:
     """Recompute a work item's design/operating effectiveness from its LATEST
     test of each type (after a test is edited or deleted) + sync the internal
     control source."""
+    # Only a concluded test rates a control. The Assurance tab opens a test while
+    # its samples are still being worked (status in_progress, result "pending");
+    # counting that as the latest test would stamp a rating nobody concluded.
+    concluded = ControlWorkTest.status.in_(("completed", "reviewed"))
     for ttype, field in (("design", "design_effectiveness"), ("operating", "operating_effectiveness")):
         latest = (db.query(ControlWorkTest)
-                  .filter(ControlWorkTest.work_item_id == wi.id, ControlWorkTest.test_type == ttype)
+                  .filter(ControlWorkTest.work_item_id == wi.id, ControlWorkTest.test_type == ttype, concluded)
                   .order_by(ControlWorkTest.test_date.desc()).first())
         setattr(wi, field, latest.result if latest else None)
-    last = (db.query(ControlWorkTest).filter(ControlWorkTest.work_item_id == wi.id)
+    last = (db.query(ControlWorkTest).filter(ControlWorkTest.work_item_id == wi.id, concluded)
             .order_by(ControlWorkTest.test_date.desc()).first())
     wi.last_tested_at = last.test_date if last else None
     if wi.source_type == "internal":
@@ -1385,6 +1398,7 @@ def update_test(test_id: int, body: TestUpdate, db: Session = Depends(get_db),
                                          ControlWorkTest.tenant_id == tid).first()
     if not t:
         raise HTTPException(404, "Test not found")
+    _refuse_locked(t)
     for k, v in body.dict(exclude_unset=True).items():
         setattr(t, k, v)
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == t.work_item_id).first()
@@ -1405,7 +1419,10 @@ def delete_test(test_id: int, db: Session = Depends(get_db),
                                          ControlWorkTest.tenant_id == tid).first()
     if not t:
         raise HTTPException(404, "Test not found")
+    _refuse_locked(t)
     wid = t.work_item_id
+    # samples reference the test with no cascade; a sampled test otherwise failed to delete
+    db.query(ControlWorkSample).filter(ControlWorkSample.test_id == t.id).delete(synchronize_session=False)
     db.delete(t)
     db.flush()
     wi = db.query(ControlWorkItem).filter(ControlWorkItem.id == wid).first()
@@ -1423,6 +1440,7 @@ CONTROL
 - Title: {title}
 - Requirement / how it is implemented: {description}
 - Framework(s): {framework}
+{artifacts}
 
 EVIDENCE THE ORGANISATION HAS PROVIDED — your procedures must test AGAINST these actual artefacts:
 {evidence}
@@ -1472,10 +1490,30 @@ def generate_procedures(work_item_id: int, replace: bool = Query(True), db: Sess
         nm, etype = ev_meta.get(e.evidence_id, (e.file_name, None))
         if nm:
             ev_lines.append(f"- {nm}" + (f" (type: {etype})" if etype else ""))
-    # supplement with the normalized control's recommended evidence, if any
-    if wi.source_type == "normalized":
-        nc = db.query(NormalizedControl).filter(NormalizedControl.id == wi.source_id).first()
-        rec = getattr(nc, "recommended_evidence", None) if nc else None
+    nc = (db.query(NormalizedControl).filter(NormalizedControl.id == wi.source_id).first()
+          if wi.source_type == "normalized" else None)
+    restricted = bool(nc) and is_restricted_control(nc)
+
+    # What the model may be told about the control itself. An SCF control's name,
+    # statement and objective are SCF text (CC BY-ND, no AI derivatives), and so
+    # may be its recommended_evidence, so none of it goes in. It gets the SCF id
+    # plus our own consolidated evidence set for that control, the artefacts an
+    # assessor collects, which NOTICE.md records as our text.
+    title, description, artifacts_block = wi.name or "", (wi.description or "Not provided")[:2000], ""
+    if restricted:
+        title = f"SCF control {nc.scf_id}"
+        description = "Withheld: this control's wording is licensed text that may not be sent to an AI model."
+        try:
+            from ...automation.router import _consolidated_evidence
+            arts = (_consolidated_evidence().get(nc.scf_id or "") or {}).get("artifacts") or []
+        except Exception:  # noqa: BLE001
+            arts = []
+        if arts:
+            artifacts_block = "EVIDENCE AN ASSESSOR COLLECTS FOR THIS CONTROL:\n" + "\n".join(
+                f"- {a.get('name')} ({a.get('collection_method') or 'manual'}): {a.get('description') or ''}"[:400]
+                for a in arts[:15])
+    elif nc is not None:
+        rec = getattr(nc, "recommended_evidence", None)
         if isinstance(rec, list):
             for r in rec[:6]:
                 if r:
@@ -1487,11 +1525,10 @@ def generate_procedures(work_item_id: int, replace: bool = Query(True), db: Sess
     try:
         from ....config import get_openai_api_key
         from openai import OpenAI
-        client = OpenAI(api_key=get_openai_api_key())
-        prompt = _AI_PROMPT.format(code=wi.code or "", title=wi.name or "",
-                                   description=(wi.description or "Not provided")[:2000],
+        client = OpenAI(api_key=get_openai_api_key(), base_url=get_openai_base_url())
+        prompt = _AI_PROMPT.format(code=wi.code or "", title=title, description=description,
                                    framework=wi.framework_name or "General",
-                                   evidence=evidence_block)
+                                   artifacts=artifacts_block, evidence=evidence_block)
         resp = client.chat.completions.create(
             model=get_openai_model(),
             messages=[{"role": "system", "content": "You are a Senior GRC Auditor. Respond only with valid JSON."},
@@ -1506,20 +1543,47 @@ def generate_procedures(work_item_id: int, replace: bool = Query(True), db: Sess
         procedures = json.loads(txt.strip()).get("test_procedures")
     except Exception:  # noqa: BLE001 — resilient: fall back to a sensible default set
         logger.warning("AI procedure generation failed for work item %s", work_item_id, exc_info=True)
+    source = "ai"
     if not procedures:
         procedures = _fallback_procedures(disp)
+        # Canned steps were saved as source="ai", so a failed call looked
+        # identical to a real recommendation in the checklist.
+        source = "template"
 
     if replace:
-        db.query(ControlWorkTestProcedure).filter(
+        # Only replace steps nobody has worked on. A step with samples attached
+        # is referenced by grc_control_work_evidence (no cascade), so deleting it
+        # raised an FK violation on "Regenerate"; a ticked step is recorded work.
+        worked = {pid for (pid,) in db.query(ControlWorkEvidence.test_procedure_id).filter(
+            ControlWorkEvidence.work_item_id == wi.id,
+            ControlWorkEvidence.test_procedure_id.isnot(None)).all()}
+        # a step a test sample was performed against is recorded work too (and an FK)
+        worked |= {pid for (pid,) in db.query(ControlWorkSample.procedure_id).filter(
+            ControlWorkSample.work_item_id == wi.id,
+            ControlWorkSample.procedure_id.isnot(None)).all()}
+        stale = db.query(ControlWorkTestProcedure).filter(
             ControlWorkTestProcedure.work_item_id == wi.id,
-            ControlWorkTestProcedure.source == "ai").delete(synchronize_session=False)
-    start = db.query(ControlWorkTestProcedure).filter(
-        ControlWorkTestProcedure.work_item_id == wi.id).count()
+            ControlWorkTestProcedure.source.in_(("ai", "template")),
+            ControlWorkTestProcedure.is_checked.isnot(True))
+        if worked:
+            stale = stale.filter(ControlWorkTestProcedure.id.notin_(worked))
+        stale.delete(synchronize_session=False)
+    # Number after the highest surviving step, not after the count of them: kept
+    # steps keep their numbers, so a count can land on one that is still in use.
+    start = db.query(func.max(ControlWorkTestProcedure.seq)).filter(
+        ControlWorkTestProcedure.work_item_id == wi.id).scalar() or 0
+    def _clip(value, limit):
+        # the model writes prose ("25 records, or 100% if fewer than 25; stratified…");
+        # the columns hold 50/100 characters, and one long answer failed the whole insert
+        text = str(value).strip() if value is not None else ""
+        return (text[: limit - 1] + "…" if len(text) > limit else text) or None
+
     for idx, p in enumerate(procedures):
         db.add(ControlWorkTestProcedure(
             work_item_id=wi.id, tenant_id=tid, seq=start + idx + 1,
-            procedure_type=p.get("procedure_type"), description=p.get("description") or "",
-            frequency=p.get("frequency"), sample_size=str(p.get("sample_size") or ""), source="ai"))
+            procedure_type=_clip(p.get("procedure_type"), 50), description=p.get("description") or "",
+            frequency=_clip(p.get("frequency"), 100), sample_size=_clip(p.get("sample_size"), 100) or "",
+            source=source))
     db.commit()
     rows = db.query(ControlWorkTestProcedure).filter(
         ControlWorkTestProcedure.work_item_id == wi.id).order_by(ControlWorkTestProcedure.seq).all()
@@ -1577,6 +1641,18 @@ def _map_sample_to_control(db, evidence_id, wi: ControlWorkItem, proc, uid):
                             if proc else "Uploaded as a control sample from Control Testing & Assurance")))
 
 
+def _start_ocr(db: Session, evidence_id: int, tenant_id: int) -> None:
+    """Kick off the evidence module's OCR + assessment pipeline (best-effort)."""
+    try:
+        from ...evidence.routers.evidence import process_evidence_background
+        slug = db.query(Tenant.slug).filter(Tenant.id == tenant_id).scalar()
+        if slug:
+            threading.Thread(target=process_evidence_background, args=(evidence_id, slug),
+                             daemon=True).start()
+    except Exception:  # noqa: BLE001
+        logger.debug("OCR kickoff skipped for evidence %s", evidence_id, exc_info=True)
+
+
 @router.post("/items/{work_item_id}/evidence")
 async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None),
                        test_procedure_id: Optional[int] = Form(None),
@@ -1600,6 +1676,7 @@ async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None
 
     fname = None
     file_path = None
+    ocr_evidence_id = None
     if evidence_id:
         ev = db.query(Evidence).filter(Evidence.id == evidence_id, Evidence.tenant_id == tid).first()
         if not ev:
@@ -1633,13 +1710,8 @@ async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None
         db.add(ev)
         db.flush()
         evidence_id = ev.id
-        # kick off OCR the same way the evidence module does (best-effort)
         if ev.ocr_status == "pending":
-            try:
-                from ...evidence.routers.evidence import process_evidence_background
-                threading.Thread(target=process_evidence_background, args=(ev.id,), daemon=True).start()
-            except Exception:  # noqa: BLE001
-                logger.debug("OCR kickoff skipped for evidence %s", ev.id, exc_info=True)
+            ocr_evidence_id = ev.id  # started after commit, below
 
     cwe = ControlWorkEvidence(
         work_item_id=wi.id, tenant_id=tid, test_procedure_id=test_procedure_id,
@@ -1649,6 +1721,13 @@ async def add_evidence(work_item_id: int, evidence_id: Optional[int] = Form(None
     if wi.implementation_status == "not_started":
         wi.implementation_status = "in_progress"
     db.commit()  # the sample + its work-item link are safely persisted first
+    if ocr_evidence_id:
+        # OCR runs in its own session, so it starts only once the row is committed
+        # (it was started before, and could look up a row that did not exist yet),
+        # and it needs the tenant slug to open that tenant's database. It was
+        # called without one, raised TypeError inside the thread, and no workbench
+        # upload was ever read, so its text never reached search or matching.
+        _start_ocr(db, ocr_evidence_id, tid)
     # then maintain the control → (procedure) → sample hierarchy in Evidence
     # Management (best-effort, separate txn so it can never lose the upload)
     try:

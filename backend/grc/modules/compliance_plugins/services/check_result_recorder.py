@@ -36,10 +36,11 @@ logger = logging.getLogger(__name__)
 # router — the same three windows SCF ships.
 _CADENCE_DAYS = {"Quarterly": 90, "Semi-Annual": 180, "Annual": 365}
 
-# `status` is String(10). pass/fail/error/not_run all fit; `not_applicable` (14)
-# does not, and arrives with the objective-binding work that needs it. Guard here
-# so a future status silently truncating is impossible.
-_MAX_STATUS = 10
+# `status` is String(20) — widened from 10 by _widen_scf_check_status so that
+# `not_applicable` (14) fits. The cap matches the column, not the old width:
+# at 10 it would have cut `not_applicable` to `not_applic` the day that status
+# joins _VERDICTS with the objective-binding work.
+_MAX_STATUS = 20
 # An assertion, as opposed to collected inventory.
 _VERDICTS = {"pass", "fail", "error", "not_run"}
 

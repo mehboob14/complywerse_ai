@@ -5048,12 +5048,88 @@ export const automationApi = {
   linkControlEvidence: (code: string, evidenceId: number,
     body: { coverage_type: 'full' | 'partial' | 'supporting'; note?: string }) =>
     apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/evidence/${evidenceId}`, body),
+  // Assurance tab: which required artifacts are satisfied, the automated results
+  // behind them, and the control's testing record (Control Workbench rows).
+  getControlAssurance: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assurance`),
+  // Library items that may satisfy each required artifact, with the reason.
+  getAssuranceSuggestions: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assurance/suggestions`),
+  linkAssuranceEvidence: (code: string, body: {
+    evidence_id: number; artifact_name?: string | null;
+    coverage_type?: 'full' | 'partial' | 'supporting'; note?: string;
+  }) => apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/evidence`, body),
+  unlinkAssuranceEvidence: (code: string, mappingId: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assurance/evidence/${mappingId}`),
+  // SCF SCR-CMM 0–5: the level the control operates at and the level it should reach. null clears.
+  setControlMaturity: (code: string, body: { cmm_actual?: number | null; cmm_target?: number | null }) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/maturity`, body),
+  // Testing record: procedures tied to SCF objectives, sampled tests, sign-off.
+  /** Every recorded test on the tenant's common controls (Reports: Control Tests). */
+  listControlTests: () => apiClient.get('/automation/common/assurance/tests'),
+  getAssuranceTesting: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/assurance/testing`),
+  scaffoldProcedures: (code: string) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/scaffold`),
+  /** Get AI Recommendation; `replace` regenerates steps nobody has worked on. */
+  suggestProcedures: (code: string, replace = false) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/suggest`, null,
+      { params: { replace } }),
+  // The Controls catalog's actions: details, a recorded test, a correction to one.
+  updateTestingDetails: (code: string, body: { priority?: string; implementation_status?: string; is_key_control?: boolean; frequency?: string }) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/details`, body),
+  recordTest: (code: string, body: {
+    test_type: 'design' | 'operating'; result: string; sample_size?: number | null;
+    exceptions_found?: number; findings?: string; frequency?: string;
+  }) => apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/record`, body),
+  editTest: (code: string, id: number, body: {
+    test_type?: string; result?: string; sample_size?: number | null; exceptions_found?: number; findings?: string;
+  }) => apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}`, body),
+  addProcedure: (code: string, body: Record<string, unknown>) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures`, body),
+  updateProcedure: (code: string, id: number, body: Record<string, unknown>) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/${id}`, body),
+  moveProcedure: (code: string, id: number, direction: -1 | 1) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/${id}/move`, null,
+      { params: { direction } }),
+  deleteProcedure: (code: string, id: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assurance/procedures/${id}`),
+  startTest: (code: string, body: Record<string, unknown>) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests`, body),
+  recordSample: (code: string, id: number, body: Record<string, unknown>) =>
+    apiClient.patch(`/automation/common/controls/${encodeURIComponent(code)}/assurance/samples/${id}`, body),
+  concludeTest: (code: string, id: number, body: Record<string, unknown>) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}/conclude`, body),
+  reopenTest: (code: string, id: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}/reopen`),
+  signOffTest: (code: string, id: number) =>
+    apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}/review`),
+  deleteTest: (code: string, id: number) =>
+    apiClient.delete(`/automation/common/controls/${encodeURIComponent(code)}/assurance/tests/${id}`),
   // This control's deliverables as real catalogue items plus the tenant's working
   // copies, so the Frameworks artifact modals can be reused unchanged.
   listControlArtifacts: (code: string) =>
     apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/artifacts`),
   // Live risk-register links for a common control. SCF catalogue risk/threat
   // codes come back as scf_prompts only — never as register rows.
+  // Cross-module record links (risks, assets, evidence, documents, statements,
+  // vulnerabilities, issues, vendors, projects, tasks, internal controls).
+  listLinkTypes: () =>
+    apiClient.get<{ types: { key: string; label: string; plural: string; url: string }[] }>(
+      '/automation/common/link-types'),
+  searchLinkTargets: (type: string, q?: string, limit = 20) =>
+    apiClient.get<{ type: string; items: ControlRecordLink[] }>(
+      '/automation/common/link-targets',
+      { params: { type, q: q || undefined, limit } }),
+  listControlLinks: (code: string) =>
+    apiClient.get<{ scf_id: string; items: ControlRecordLink[] }>(
+      `/automation/common/controls/${encodeURIComponent(code)}/links`),
+  linkControlRecord: (code: string, body: { type: string; record_id: number; note?: string }) =>
+    apiClient.post<ControlRecordLink & { created: boolean }>(
+      `/automation/common/controls/${encodeURIComponent(code)}/links`, body),
+  unlinkControlRecord: (code: string, type: string, recordId: number) =>
+    apiClient.delete(
+      `/automation/common/controls/${encodeURIComponent(code)}/links/${type}/${recordId}`),
   listControlRisks: (code: string) =>
     apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/risks`),
   linkControlRisk: (code: string, riskId: number) =>
@@ -5106,8 +5182,10 @@ export const automationApi = {
   listCollectors: () => apiClient.get('/automation/soc2/collectors'),
   // Full connector universe: wired connectors + Steampipe discovery catalog.
   listCatalog: () => apiClient.get('/automation/soc2/catalog'),
-  connectCollector: (provider: string, body: { token: string; domain?: string; email?: string; access_key_id?: string; region?: string }) =>
+  connectCollector: (provider: string, body: { token: string; secret2?: string; domain?: string; email?: string; access_key_id?: string; region?: string }) =>
     apiClient.post(`/automation/soc2/collectors/${provider}/connect`, body),
+  // How to connect a collector, its form fields, every test it runs and every call it makes.
+  getCollectorDetails: (provider: string) => apiClient.get(`/automation/soc2/collectors/${provider}/details`),
   testCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/test`),
   runCollector: (provider: string) => apiClient.post(`/automation/soc2/collectors/${provider}/run`),
 };
@@ -5225,25 +5303,106 @@ export type ScfCustomControl = {
   [key: string]: unknown;
 };
 
-export type ScfCustomControlCreateBody = {
-  code: string;
-  name?: string;
-  statement?: string;
-  domain?: string;
-  pptdf?: string;
-  conformity_cadence?: string;
-  control_sub_type?: string;
-  parsed_control_ids?: number[];
-  implements_scf_ids?: string[];
+/** An evidence item the author says this control produces. */
+export type AuthoredEvidence = {
+  name: string;
+  description?: string | null;
+  collection_method?: 'manual' | 'automated' | 'hybrid';
+  filetype?: string | null;
+  mandatory?: boolean;
 };
 
-export type ScfCustomControlUpdateBody = {
+/** Register fields carried over from the ERM internal-control register. */
+export type CustomControlProfile = {
+  category?: string | null;
+  sub_category?: string | null;
+  control_type?: string | null;
+  operating_frequency?: string | null;
+  department_id?: number | null;
+  department_name?: string | null;
+  backup_owner_id?: number | null;
+  backup_owner_name?: string | null;
+  regulatory_source?: string | null;
+  effective_date?: string | null;
+  review_date?: string | null;
+  lifecycle_status?: string | null;
+  submitted_by?: number | null;
+  submitted_by_name?: string | null;
+  submitted_at?: string | null;
+  approved_by?: number | null;
+  approved_by_name?: string | null;
+  approved_at?: string | null;
+  decision_comment?: string | null;
+};
+
+/** Records of any module a control can be linked to. */
+export type ControlRecordLink = {
+  type: string;
+  type_label: string;
+  id: number;
+  label: string;
+  code?: string | null;
+  subtitle?: string | null;
+  status?: string | null;
+  url: string;
+  link_id?: number;
+  note?: string | null;
+  created_at?: string | null;
+};
+
+export type ScfCustomControlWriteBody = {
   name?: string;
-  statement?: string;
-  domain?: string;
-  pptdf?: string;
-  conformity_cadence?: string;
-  control_sub_type?: string;
+  statement?: string | null;
+  domain?: string | null;
+  pptdf?: string | null;
+  conformity_cadence?: string | null;
+  control_sub_type?: string | null;
+  objective?: string | null;
+  implementation_guidance?: string | null;
+  testing_guidance?: string | null;
+  recommended_evidence?: AuthoredEvidence[];
+  category?: string | null;
+  sub_category?: string | null;
+  control_type?: string | null;
+  operating_frequency?: string | null;
+  department_id?: number | null;
+  backup_owner_id?: number | null;
+  regulatory_source?: string | null;
+  effective_date?: string | null;
+  review_date?: string | null;
+  owner_user_id?: number | null;
+  reviewer_user_id?: number | null;
+  assigned_user_ids?: number[];
+  priority?: string | null;
+  is_key_control?: boolean;
+  parsed_control_ids?: number[];
+  implements_scf_ids?: string[];
+  /** {"risk": [1, 2], "asset": [7]} — written into each module's own link table. */
+  links?: Record<string, number[]>;
+};
+
+export type ScfCustomControlCreateBody = ScfCustomControlWriteBody & {
+  code: string;
+  name: string;
+  lifecycle_status?: string;
+};
+
+export type ScfCustomControlUpdateBody = ScfCustomControlWriteBody;
+
+export type CustomControlOptions = {
+  categories: { value: string; sub_categories: string[] }[];
+  control_types: string[];
+  control_sub_types: string[];
+  operating_frequencies: string[];
+  conformity_cadences: string[];
+  pptdf: string[];
+  priorities: string[];
+  lifecycle_statuses: string[];
+  lifecycle_actions: Record<string, { from: string[]; to: string }>;
+  departments: { id: number; name: string }[];
+  link_types: { key: string; label: string; plural: string; url: string }[];
+  /** What an unnamed control would be called (CTL-0001 style). */
+  next_code?: string;
 };
 
 export type ScfCustomControlMappingsBody = {
@@ -5313,12 +5472,15 @@ export const scfApi = {
     apiClient.put<ScfScope>(`/scf/scopes/${id}`, body),
   recompute: (id: number, commit = false) =>
     apiClient.post(`/scf/scopes/${id}/recompute`, null, { params: { commit } }),
+  /** What applying these answers would change, without saving them. */
+  previewScope: (id: number, body: ScfScopeUpdateBody) =>
+    apiClient.post(`/scf/scopes/${id}/preview`, body),
   setOwnership: (scopeId: number, scfId: string, body: ScfOwnershipBody) =>
     apiClient.put(`/scf/scopes/${scopeId}/controls/${encodeURIComponent(scfId)}/ownership`, body),
   bulkOwnership: (scopeId: number, body: ScfBulkOwnershipBody) =>
     apiClient.post(`/scf/scopes/${scopeId}/ownership/bulk`, body),
   getControlHistory: (scopeId: number, scfId: string) =>
-    apiClient.get<{ items?: ScfHistoryEntry[] } | ScfHistoryEntry[]>(
+    apiClient.get<{ items?: ScfHistoryEntry[]; events?: ScfHistoryEntry[] } | ScfHistoryEntry[]>(
       `/scf/scopes/${scopeId}/controls/${encodeURIComponent(scfId)}/history`,
     ),
   myWork: () => apiClient.get<ScfMyWork>('/scf/my-work'),
@@ -5334,6 +5496,12 @@ export const scfApi = {
     apiClient.put<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}`, body),
   retireCustomControl: (code: string) =>
     apiClient.post<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}/retire`),
+  getCustomControlOptions: () =>
+    apiClient.get<CustomControlOptions>('/scf/custom-controls/options'),
+  setCustomControlLifecycle: (code: string, body: { action: string; comment?: string }) =>
+    apiClient.post<ScfCustomControl>(
+      `/scf/custom-controls/${encodeURIComponent(code)}/lifecycle`, body,
+    ),
   updateCustomControlMappings: (code: string, body: ScfCustomControlMappingsBody) =>
     apiClient.put<ScfCustomControl>(
       `/scf/custom-controls/${encodeURIComponent(code)}/mappings`,

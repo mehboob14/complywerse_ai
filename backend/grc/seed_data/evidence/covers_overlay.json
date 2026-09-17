@@ -176,6 +176,99 @@
       ],
       "rationale": "draft - SentinelOne console 2FA",
       "reviewed_by": null
+    },
+    "digitalocean.droplet_backups_enabled": {
+      "covers": [
+        "BCD-11_A07",
+        "BCD-11"
+      ],
+      "rationale": "draft - Droplet (system-level) backups enabled",
+      "reviewed_by": null
+    },
+    "digitalocean.database_backups_present": {
+      "covers": [
+        "BCD-11_A06",
+        "BCD-11"
+      ],
+      "rationale": "draft - managed database backups exist",
+      "reviewed_by": null
+    },
+    "neon.project_history_retention": {
+      "covers": [
+        "BCD-11_A06",
+        "BCD-11_A11",
+        "BCD-11"
+      ],
+      "rationale": "draft - database point-in-time recovery window retained",
+      "reviewed_by": null
+    },
+    "supabase.database_backups_enabled": {
+      "covers": [
+        "BCD-11_A06",
+        "BCD-11"
+      ],
+      "rationale": "draft - project database backups enabled",
+      "reviewed_by": null
+    },
+    "aws.backup_plans": {
+      "covers": [
+        "BCD-11_A06",
+        "BCD-11_A07",
+        "BCD-11"
+      ],
+      "rationale": "draft - AWS Backup plan schedules backups",
+      "reviewed_by": null
+    },
+    "aws.backup_protected_resources": {
+      "covers": [
+        "BCD-11_A06",
+        "BCD-11_A07",
+        "BCD-11"
+      ],
+      "rationale": "draft - resources are protected by AWS Backup",
+      "reviewed_by": null
+    },
+    "aws.rds_backup_retention": {
+      "covers": [
+        "BCD-11_A06",
+        "BCD-11_A11",
+        "BCD-11"
+      ],
+      "rationale": "draft - RDS automated backups retained 7+ days",
+      "reviewed_by": null
+    },
+    "aws.dynamodb_pitr": {
+      "covers": [
+        "BCD-11_A06",
+        "BCD-11_A11",
+        "BCD-11"
+      ],
+      "rationale": "draft - DynamoDB point-in-time recovery enabled",
+      "reviewed_by": null
+    },
+    "google_workspace.users_2sv_enrolled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Google Workspace user 2-Step Verification",
+      "reviewed_by": null
+    },
+    "google_workspace.super_admins_2sv": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06.1_A02"
+      ],
+      "rationale": "draft - privileged Google Workspace 2SV",
+      "reviewed_by": null
+    },
+    "okta.users_mfa_enrolled": {
+      "covers": [
+        "IAC-06_A01",
+        "IAC-06"
+      ],
+      "rationale": "draft - Okta per-user MFA factor enrolled",
+      "reviewed_by": null
     }
   }
 }

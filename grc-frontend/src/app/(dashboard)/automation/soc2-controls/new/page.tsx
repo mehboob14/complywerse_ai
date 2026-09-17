@@ -8,7 +8,7 @@ import { useRouter } from 'next/navigation';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { ChevronRight } from 'lucide-react';
 import { scfApi } from '@/lib/api';
-import { CustomControlForm, type CustomControlFormValues } from '@/components/soc2/CustomControlForm';
+import { CustomControlForm, toWriteBody, type CustomControlFormValues } from '@/components/soc2/CustomControlForm';
 import { useToast } from '@/components/ui';
 
 export default function NewCustomControlPage() {
@@ -18,16 +18,7 @@ export default function NewCustomControlPage() {
 
   const create = useMutation({
     mutationFn: async (v: CustomControlFormValues) => {
-      const body = {
-        code: v.code.trim(),
-        name: v.name || undefined,
-        statement: v.statement || undefined,
-        domain: v.domain || undefined,
-        pptdf: v.pptdf || undefined,
-        conformity_cadence: v.conformity_cadence || undefined,
-        control_sub_type: v.control_sub_type || undefined,
-        implements_scf_ids: v.implements_scf_ids.length ? v.implements_scf_ids : undefined,
-      };
+      const body = { ...toWriteBody(v), code: v.code.trim(), name: v.name.trim() };
       return (await scfApi.createCustomControl(body)).data;
     },
     onSuccess: async (data) => {
@@ -45,7 +36,7 @@ export default function NewCustomControlPage() {
   });
 
   return (
-    <div className="mx-auto max-w-2xl px-1 py-1">
+    <div className="mx-auto max-w-3xl px-1 py-1">
       <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-sm">
         <Link href="/automation/soc2-controls" className="text-slate-400 hover:text-slate-700">Controls</Link>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
@@ -54,10 +45,11 @@ export default function NewCustomControlPage() {
 
       <h1 className="text-2xl font-bold text-slate-900">New custom control</h1>
       <p className="mt-1.5 text-sm text-slate-500">
-        Author your own control statement. Map to SCF ids optionally; requirement links can wait until after create.
+        Author your own control: how it is classified, who owns it, how it is implemented and tested,
+        and everything it is linked to. It is created as a draft — submit it for approval when it is ready.
       </p>
 
-      <div className="mt-5 rounded-xl border border-slate-200 bg-white p-5">
+      <div className="mt-5">
         <CustomControlForm
           submitLabel="Create control"
           pending={create.isPending}

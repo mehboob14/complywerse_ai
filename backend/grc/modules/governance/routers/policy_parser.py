@@ -1342,6 +1342,36 @@ def get_document_policy_statements(
         ).first()
         result.append(serialize_statement(statement, compliance.id if compliance else None))
     
+    # Controls that already answer these statements, so the page can show what a
+    # statement has been turned into rather than offering to create it again.
+    for row in result:
+        row["controls"] = []
+    by_id = {row.get("id"): row for row in result}
+    if by_id:
+        from ....models import NormalizedControl, StatementControlMapping
+
+        mappings = (
+            db.query(StatementControlMapping)
+            .filter(StatementControlMapping.statement_id.in_(list(by_id)),
+                    StatementControlMapping.control_kind == "normalized")
+            .all()
+        )
+        sources = dict(
+            db.query(NormalizedControl.id, NormalizedControl.source)
+            .filter(NormalizedControl.id.in_(
+                [m.normalized_control_id for m in mappings if m.normalized_control_id] or [0])).all()
+        ) if mappings else {}
+        for m in mappings:
+            row = by_id.get(m.statement_id)
+            if row is None or not m.control_code:
+                continue
+            row["controls"].append({
+                "code": m.control_code,
+                "title": m.control_title,
+                "custom": sources.get(m.normalized_control_id) == "custom",
+                "coverage_type": m.coverage_type,
+            })
+
     return {
         "document_id": document_id,
         "document_title": document.title,

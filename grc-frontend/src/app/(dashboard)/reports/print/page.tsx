@@ -13,11 +13,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2, Printer } from 'lucide-react';
 import { DATASETS, datasetByKey } from '../_reports/datasets';
-import { enrichReportRows, fetchLinkageCatalog, linkageColumns, linkagePresenceColumns } from '../_reports/linkages';
+import { fetchLinkageCatalog } from '../_reports/linkages';
 import { readPrintSpec } from '../_reports/printPayload';
-import { asRows, describeRules, rowMatchesRules, rowMatchesSearch } from '../_reports/grid-utils';
+import { describeRules } from '../_reports/grid-utils';
+import { filterReportRows, loadReportRows, resolveReportColumns } from '../_reports/reportData';
 import ReportDataTable from '../_reports/ReportDataTable';
-import type { ReportSpec, Row } from '../_reports/types';
+import type { ReportSpec } from '../_reports/types';
 
 export default function ReportPrintPage() {
   const [spec, setSpec] = useState<ReportSpec | null>(null);
@@ -26,36 +27,33 @@ export default function ReportPrintPage() {
   useEffect(() => { setSpec(readPrintSpec()); setReady(true); }, []);
 
   const dataset = spec ? datasetByKey(spec.dataset) : undefined;
-  const includes = useMemo(() => spec?.includes ?? [], [spec?.includes]);
-  const project = useMemo(() => spec?.visibleColumns ?? [], [spec?.visibleColumns]);
-  const { data: linkageCatalog = [] } = useQuery({
+  const { data: linkageResult } = useQuery({
     queryKey: ['report-linkages', dataset?.key, 'print'],
     queryFn: () => fetchLinkageCatalog(dataset!.key, DATASETS),
     enabled: !!dataset,
     staleTime: 60_000,
   });
-  const { data: rawRows = [], isLoading, error } = useQuery<Row[]>({
-    queryKey: ['report', dataset?.key, includes.join(','), project.join(',')],
-    queryFn: async () => {
-      const base = asRows(await dataset!.fetch());
-      if (!includes.length) return base;
-      return enrichReportRows(dataset!.key, base, includes, project);
-    },
-    enabled: !!dataset,
+  const linkageCatalog = linkageResult?.defs ?? [];
+
+  // Same pipeline as the builder and dashboard tiles. This page used to fetch
+  // through the module list API for every dataset, so a server-mode report
+  // printed whatever that API returned rather than what the SQL filters in the
+  // builder had selected — a PDF that disagreed with the screen it came from.
+  const plan = useMemo(
+    () => resolveReportColumns(spec ?? ({} as ReportSpec), dataset, linkageCatalog),
+    [spec, dataset, linkageCatalog],
+  );
+  const includes = plan.includes;
+  const cols = plan.cols;
+
+  const { data: loaded, isLoading, error } = useQuery({
+    queryKey: ['report-print', dataset?.key, includes.join(','), JSON.stringify(spec?.rules), spec?.search],
+    queryFn: () => loadReportRows(spec!, dataset!, plan),
+    enabled: !!dataset && !!spec,
     staleTime: 30_000,
   });
-  const rows = asRows(rawRows);
+  const rows = loaded?.rows ?? [];
 
-  const cols = useMemo(() => {
-    if (!dataset) return [];
-    const inc = new Set(includes);
-    return [
-      ...dataset.columns,
-      ...linkageColumns(linkageCatalog, includes),
-      // Presence pseudo-columns so saved "(not) linked to any X" filters resolve here too.
-      ...linkagePresenceColumns(linkageCatalog).filter((c) => c.linkageKey && inc.has(c.linkageKey)),
-    ];
-  }, [dataset, linkageCatalog, includes]);
   const labelFor = (key: string) => {
     const col = cols.find((c) => c.key === key);
     if (!col) return key;
@@ -65,8 +63,10 @@ export default function ReportPrintPage() {
   const visibleKeys = useMemo(() => spec?.visibleColumns ?? [], [spec?.visibleColumns]);
 
   const filteredRows = useMemo(
-    () => (spec ? rows.filter((r) => rowMatchesSearch(cols, r, spec.search) && rowMatchesRules(cols, r, spec.rules)) : []),
-    [rows, cols, spec],
+    () => (spec
+      ? filterReportRows(cols, rows, spec, !!dataset?.server, (k) => plan.lookupCols.find((c) => c.key === k))
+      : []),
+    [rows, cols, spec, dataset, plan.lookupCols],
   );
 
   useEffect(() => {

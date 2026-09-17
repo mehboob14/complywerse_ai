@@ -84,3 +84,64 @@ def scf_keys_for_slug(slug: str) -> List[str]:
         if fw.get("slug") == slug:
             return list(fw.get("scf_keys") or [])
     return []
+
+
+def join_field_for_slug(slug: str) -> str:
+    """The library field the crosswalk resolver joined this framework on.
+
+    iso_42001's ``control_id`` is a local 1..n counter while the citable clause
+    lives in ``original_reference``; keying on the wrong one renders a different
+    requirement's text under the right code.
+    """
+    for fw in _entries():
+        if fw.get("slug") == slug:
+            return fw.get("join_field") or "control_id"
+    return "control_id"
+
+
+def _norm_name(value: Optional[str]) -> str:
+    return "".join(ch for ch in (value or "").lower() if ch.isalnum())
+
+
+@lru_cache(maxsize=1)
+def _name_index() -> Dict[str, str]:
+    """Framework library display name (normalised) -> product slug.
+
+    Seeded ``grc_uploaded_frameworks`` rows carry the library's own
+    ``metadata.name`` but no slug, so this is how an uploaded framework is
+    recognised as one of the crosswalked ones.
+    """
+    fw_dir = _REGISTRY_PATH.parents[1] / "frameworks"
+    out: Dict[str, str] = {}
+    for entry in _entries():
+        slug = entry.get("slug")
+        if not slug:
+            continue
+        out.setdefault(_norm_name(slug), slug)
+        out.setdefault(_norm_name(label_for_slug(slug)), slug)
+        path = fw_dir / (entry.get("file") or "")
+        if not path.is_file():
+            continue
+        try:
+            with path.open(encoding="utf-8") as fh:
+                meta = (json.load(fh).get("metadata") or {})
+        except Exception:  # noqa: BLE001 — a broken library must not break lookup
+            continue
+        for key in ("name", "framework_name"):
+            if meta.get(key):
+                out.setdefault(_norm_name(meta[key]), slug)
+    return out
+
+
+def slug_for_framework(
+    name: Optional[str] = None,
+    *,
+    slug: Optional[str] = None,
+) -> Optional[str]:
+    """Resolve an uploaded framework to its crosswalk slug, or None."""
+    idx = _name_index()
+    for candidate in (slug, name):
+        hit = idx.get(_norm_name(candidate))
+        if hit:
+            return hit
+    return None

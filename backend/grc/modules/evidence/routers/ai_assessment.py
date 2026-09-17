@@ -285,13 +285,21 @@ def compute_content_hash(content: str) -> str:
     return hashlib.sha256(content.encode('utf-8')).hexdigest()
 
 
+_PARSE_FAILED_SUMMARY = "Unable to parse AI response"
+
+
 def _assessment_parse_fallback() -> dict:
+    # Marked so run_ai_assessment can refuse it. These scores are placeholders,
+    # not an assessment: saved, they became the file's quality score, its
+    # summary read "Unable to parse AI response", and the result was cached
+    # against the content hash so every re-assessment served it again.
     return {
+        "_parse_failed": True,
         "relevance_score": 50,
         "adequacy_score": 50,
         "audit_readiness": 50,
         "confidence_score": 30,
-        "summary": "Unable to parse AI response",
+        "summary": _PARSE_FAILED_SUMMARY,
         "detected_controls": [],
         "clause_mappings": [],
         "gaps": ["Assessment parsing failed"],
@@ -624,6 +632,14 @@ def get_cached_assessment(content_hash: str, tenant_id: int, db: Session) -> Opt
     ).first()
     
     if cache_entry:
+        response = cache_entry.cached_response or {}
+        # A cached parse failure is not a result. Entries written before failures
+        # were refused carry only the placeholder summary; drop them so the next
+        # run assesses the file instead of replaying the failure.
+        if response.get("_parse_failed") or response.get("summary") == _PARSE_FAILED_SUMMARY:
+            db.delete(cache_entry)
+            db.commit()
+            return None
         # Update usage tracking
         cache_entry.last_used_at = datetime.utcnow()
         cache_entry.use_count = (cache_entry.use_count or 0) + 1
@@ -957,6 +973,14 @@ def run_ai_assessment(
 
         assessment_duration = int((time.time() - start_time) * 1000)
         ai_result = parse_ai_response(response.choices[0].message.content or "")
+        if ai_result.get("_parse_failed"):
+            # Nothing is saved or cached: no assessment row with placeholder scores,
+            # no fake summary on the file. Every caller already treats an exception
+            # as a failed assessment.
+            raise HTTPException(
+                status_code=502,
+                detail="The AI assessment returned output that couldn't be read, so nothing was saved. Try again.",
+            )
         
         # CRITICAL: Validate and filter clause mappings against actual database controls
         # This prevents hallucinated control IDs (like generic ISO 27001 IDs) from being saved

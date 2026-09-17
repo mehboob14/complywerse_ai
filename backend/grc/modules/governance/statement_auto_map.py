@@ -25,6 +25,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ...config import get_openai_api_key, get_openai_model
+from ...services.licence_guard import exclude_restricted
 
 from ...models import (
     GovernanceDocument,
@@ -81,12 +82,17 @@ def _candidates(db: Session, fw_ids=None):
             ParsedFrameworkControl,
             NormalizedControlLink.parsed_control_id == ParsedFrameworkControl.id,
         ).filter(ParsedFrameworkControl.uploaded_framework_id.in_(fw_ids)).subquery()
-        ncs = db.query(NormalizedControl).filter(NormalizedControl.id.in_(sub)).all()
+        # Candidates are shown to the model with their statement text, and an SCF
+        # control's statement is licensed text that may not reach a model. With
+        # SCF rows excluded, the parsed framework controls below take over.
+        ncs = exclude_restricted(
+            db.query(NormalizedControl).filter(NormalizedControl.id.in_(sub)), NormalizedControl,
+        ).all()
         if ncs:
             return "normalized", ncs
         # No normalized linkage for these frameworks → map directly against their parsed controls.
         return "parsed", parsed
-    ncs = db.query(NormalizedControl).all()
+    ncs = exclude_restricted(db.query(NormalizedControl), NormalizedControl).all()
     if ncs:
         return "normalized", ncs
     return "parsed", db.query(ParsedFrameworkControl).all()

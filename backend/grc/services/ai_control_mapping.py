@@ -92,6 +92,11 @@ def load_corpus(db: Session, tenant_id: Optional[int]) -> List[Dict[str, Any]]:
                  NormalizedControl.domain, NormalizedControl.statement)
     if run is not None:
         q = q.filter(NormalizedControl.run_id == run)
+    # The corpus is read by the model in full, statements included. SCF rows
+    # carry licensed text (CC BY-ND, no AI derivatives), and with no baseline
+    # run the unfiltered query above is every SCF control in the tenant.
+    from .licence_guard import exclude_restricted
+    q = exclude_restricted(q, NormalizedControl)
     corpus: List[Dict[str, Any]] = [
         {"kind": "normalized_control", "ref_id": r.id, "code": r.code or "", "title": r.name or "",
          "domain": r.domain or "", "framework": "Unified Control Library",

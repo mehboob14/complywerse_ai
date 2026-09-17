@@ -29,6 +29,7 @@ from ....models import (
     ControlComparisonRun, ControlComparisonMapping,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.licence_guard import is_restricted_control
 
 router = APIRouter(prefix="/comparison", tags=["Control Library - Comparison"])
 
@@ -112,6 +113,8 @@ def get_control_details(control_type: str, control_id: int, db: Session) -> Opti
                 "name": control.name,
                 "statement": control.statement,
                 "objective": control.objective,
+                # SCF text: compared by word overlap only, never by the model.
+                "restricted": is_restricted_control(control),
                 "framework_id": None,
                 "framework_name": None,
                 "framework_code": None
@@ -722,7 +725,7 @@ def get_side_by_side_comparison(
         text1 = get_control_text(pair.control1_type, pair.control1_id, db)
         text2 = get_control_text(pair.control2_type, pair.control2_id, db)
         
-        if ai_available:
+        if ai_available and not (control1.get("restricted") or control2.get("restricted")):
             differences = get_control_differences(text1 or "", text2 or "")
             comparison_data = {
                 "similarity_score": differences.get("similarity_score", 0),
@@ -888,7 +891,8 @@ def get_ai_analyzed_differences(
             "ai_analysis": False
         }
     
-    if not ai_available:
+    restricted = bool(main_control.get("restricted")) or any(c.get("restricted") for c in equivalent_controls)
+    if not ai_available or restricted:
         main_words = set((main_text or "").lower().split())
         all_equiv_words = set()
         for eq_text in equivalent_texts:
@@ -912,7 +916,12 @@ def get_ai_analyzed_differences(
                 "common_keywords": list(common_words)[:20],
                 "unique_keywords": list(unique_to_main)[:20]
             },
-            "ai_unavailable_message": "OpenAI API key is not configured. Enable AI features for detailed analysis."
+            "ai_unavailable_message": (
+                "Secure Controls Framework text can't be sent to an AI model under its licence, "
+                "so this comparison uses word overlap."
+                if restricted else
+                "OpenAI API key is not configured. Enable AI features for detailed analysis."
+            )
         }
     
     analysis = analyze_control_with_equivalents(main_text or "", equivalent_texts)

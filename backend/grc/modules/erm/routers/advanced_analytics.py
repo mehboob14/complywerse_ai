@@ -1,4 +1,5 @@
 from ....config import get_openai_api_key, get_openai_model
+from ....services.licence_guard import is_restricted_control
 
 from typing import List, Optional
 import os
@@ -775,6 +776,7 @@ def generate_bowtie_ai_narrative(
             ctrl_data = {
                 "name": ctrl.name or ctrl.statement or f"Control {ctrl.id}",
                 "code": getattr(ctrl, "code", None),
+                "_restricted": is_restricted_control(ctrl),
             }
             if len(preventive_controls_info) <= len(mitigating_controls_info):
                 preventive_controls_info.append(ctrl_data)
@@ -794,6 +796,19 @@ def generate_bowtie_ai_narrative(
     if not consequences_info:
         consequences_info.append("Business impact")
 
+    def _for_model(items):
+        # SCF control names and codes are SCF content (CC BY-ND, no AI derivatives).
+        # The model still learns how many controls sit on each side of the bow-tie;
+        # the offline fallback narrative below keeps the real names, since no model
+        # is involved there.
+        out = []
+        for item in items:
+            if item.get("_restricted"):
+                out.append({"name": "Linked control (wording withheld: licensed text)", "code": None})
+            else:
+                out.append({k: v for k, v in item.items() if k != "_restricted"})
+        return out
+
     prompt = f"""You are a senior risk management analyst. Analyze the following bow-tie risk data and generate a comprehensive plain-English narrative explaining the full causal chain.
 
 Risk Event:
@@ -807,10 +822,10 @@ Threats/Causes ({len(threats_info)}):
 {json.dumps(threats_info, indent=2)}
 
 Preventive Controls ({len(preventive_controls_info)}):
-{json.dumps(preventive_controls_info, indent=2)}
+{json.dumps(_for_model(preventive_controls_info), indent=2)}
 
 Mitigating Controls ({len(mitigating_controls_info)}):
-{json.dumps(mitigating_controls_info, indent=2)}
+{json.dumps(_for_model(mitigating_controls_info), indent=2)}
 
 Potential Consequences:
 {json.dumps(consequences_info, indent=2)}

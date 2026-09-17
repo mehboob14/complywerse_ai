@@ -9,6 +9,7 @@ from starlette.responses import Response
 
 from .models import SessionLocal, AuditLog, GRCUser
 from .routers.auth_router import decode_token
+from .rich_audit import is_sensitive_key
 
 
 AUDIT_EXCLUDED_PATH_PREFIXES = (
@@ -59,7 +60,7 @@ def _sanitize_value(value: Any) -> Any:
     if isinstance(value, dict):
         sanitized: Dict[str, Any] = {}
         for key, nested_value in value.items():
-            if key.lower() in SENSITIVE_KEYS:
+            if is_sensitive_key(key):
                 sanitized[key] = "***"
             else:
                 sanitized[key] = _sanitize_value(nested_value)
@@ -106,6 +107,9 @@ _MODULE_RESOURCE_ALIASES: dict[str, str] = {
     "chatbot": "chatbot",
     "integrations": "integrations",
     "workflow-engine": "workflow",
+    # Controls Automation: common controls, scope, testing, collectors
+    "automation": "controls_automation",
+    "scf": "controls_automation",
 }
 
 
@@ -157,6 +161,10 @@ _KNOWN_SUB_ACTION_VERBS = {
     "ask", "suggest", "reword",
     # Domain
     "measure", "assign", "reassign", "clone", "duplicate", "merge",
+    # Controls Automation: testing, scope and collector actions
+    "conclude", "reopen", "review", "move", "scaffold", "record", "connect", "test", "seed",
+    "lifecycle", "links",
+    "recompute", "preview", "freeze", "close", "retire",
 }
 
 
@@ -321,6 +329,22 @@ _HUMAN_VERBS = {
     "natural_language": "Generated workflow from prompt",
     "natural_language_failed": "Failed to generate workflow from prompt",
     "email_config": "Updated email configuration for",
+    "conclude": "Concluded",
+    "reopen": "Reopened",
+    "review": "Reviewed",
+    "move": "Reordered",
+    "scaffold": "Drafted",
+    "record": "Recorded",
+    "connect": "Connected",
+    "test": "Tested",
+    "seed": "Seeded",
+    "recompute": "Recomputed",
+    "preview": "Previewed",
+    "freeze": "Froze",
+    "close": "Closed",
+    "retire": "Retired",
+    "lifecycle": "Changed the status of",
+    "links": "Linked records to",
 }
 
 _HUMAN_RESOURCE = {
@@ -340,6 +364,15 @@ _HUMAN_RESOURCE = {
     "auth": "session",
     "admin": "admin record",
     "chatbot": "chatbot session",
+    "controls_automation": "controls automation record",
+    "control_testing": "control test",
+    "control_evidence": "control evidence",
+    "control_maturity": "control maturity",
+    "evidence_collector": "evidence collector",
+    "scf_scope": "controls scope",
+    "scf_audit_period": "audit period",
+    "scf_control_state": "control",
+    "control_record_link": "control link",
 }
 
 

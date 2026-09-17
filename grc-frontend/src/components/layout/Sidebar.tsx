@@ -23,7 +23,6 @@ import {
   Activity,
   AlertCircle,
   Bug,
-  Crosshair,
   Clock,
   Layers,
   Workflow,
@@ -39,7 +38,6 @@ import {
   LifeBuoy,
   CalendarClock,
   Zap,
-  PlayCircle,
   Bookmark,
   Building2,
   type LucideIcon,
@@ -191,17 +189,15 @@ const navigation: NavEntry[] = [
       },
     ],
   },
-  // Decision 6 / Stage H parity: hide Control Testing & Assurance nav (routes still work).
+  // Scope is configured from Common controls, and checks and assurance live on
+  // each control; their standalone routes still work.
   {
-    name: 'Automation',
+    name: 'Controls Automation',
     icon: Zap,
     requiredModules: ['controls'],
     items: [
       { name: 'Overview', href: '/automation/overview', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-      { name: 'Scope', href: '/automation/scope', icon: Crosshair, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
       { name: 'Common Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-      { name: 'Automated Checks', href: '/automation/checks', icon: PlayCircle, requiredPermissions: ['controls:control_library:*', 'compliance:scan:execute', 'compliance:frameworks:*'] },
-      { name: 'Assurance', href: '/automation/assurance', icon: ClipboardCheck, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
     ],
   },
   {

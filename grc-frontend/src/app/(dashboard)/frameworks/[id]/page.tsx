@@ -4445,7 +4445,7 @@ export default function CertificationJourneyPage() {
               That selection drives Common Controls, journeys, and the Control Catalog.
             </p>
             <Link
-              href="/automation/scope"
+              href="/automation/soc2-controls?configure=scope"
               className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-primary-700"
             >
               Open Automation Scope

@@ -62,6 +62,11 @@ def _generate_audit_description(
         "documents": "document", "assets": "asset", "users": "user",
         "integrations": "integration", "workflow": "workflow",
         "system": "system", "chatbot": "chat",
+        "controls_automation": "controls automation record", "control_testing": "control test",
+        "control_evidence": "control evidence", "control_maturity": "control maturity",
+        "evidence_collector": "evidence collector", "scf_scope": "controls scope",
+        "scf_audit_period": "audit period", "scf_control_state": "control",
+        "control_record_link": "control link",
     }
     rt = RT.get(resource_type, resource_type.replace("_", " ") if resource_type else "record")
     id_part = f" #{resource_id}" if resource_id else ""
@@ -1160,13 +1165,17 @@ def list_audit_logs(
                 or "Unknown User"
             )
 
-        description = _generate_audit_description(
-            action=log.action,
-            resource_type=log.resource_type,
-            resource_id=log.resource_id,
-            path=changes.get("path", ""),
-            request_payload=changes.get("request"),
-        )
+        # A business event (no HTTP method) was written with its own sentence
+        # ("Signed off the design test on AST-01"); a request row is described
+        # from its path and payload.
+        description = (changes.get("summary") if not changes.get("method") and changes.get("summary") else None) \
+            or _generate_audit_description(
+                action=log.action,
+                resource_type=log.resource_type,
+                resource_id=log.resource_id,
+                path=changes.get("path", ""),
+                request_payload=changes.get("request"),
+            )
 
         result.append({
             "id": log.id,

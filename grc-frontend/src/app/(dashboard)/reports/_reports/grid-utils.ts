@@ -1,8 +1,11 @@
 // Shared value/format/filter/sort helpers for the report grid + exporters.
 
 import type { ColumnDef, ColumnFilter, FilterRule, FilterRules, Row, SortSpec } from './types';
-import { OPERATORS } from './types';
-import { EMPTY_TOKEN, decodeMultiValue } from './filter-utils';
+// Explicit extensions on the runtime imports so this module (and calcColumns,
+// which builds on it) can be loaded by `node --test` without a bundler.
+// Type-only imports are erased and need none.
+import { OPERATORS } from './types.ts';
+import { EMPTY_TOKEN, decodeMultiValue } from './filter-utils.ts';
 
 /** A condition only counts once it has a column, an operator, and (for value
  *  operators) a non-blank value — so the builder's seeded empty row is ignored

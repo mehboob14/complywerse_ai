@@ -8,130 +8,52 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  Activity, AlertCircle, AlertTriangle, ChevronDown, ChevronRight, FileText, HardDrive, Loader2, Play, X,
+  Activity, AlertTriangle, ChevronDown, ChevronRight, Clock, FileText, FolderTree, HardDrive, Loader2, Play,
+  RefreshCw, X,
 } from 'lucide-react';
 import {
   apiClient, artifactsApi, assetsApi, automationApi, certificationsApi, risksApi, scfApi,
-  type ScfHistoryEntry,
+  type ControlRecordLink, type CustomControlProfile, type ScfHistoryEntry,
 } from '@/lib/api';
 import {
   ArtifactDownload, CreateArtifactModal, EditArtifactModal, ViewArtifactModal,
   type CatalogItem, type TenantArtifact, type TenantUser,
 } from '@/components/compliance/ArtifactsTab';
 import {
-  CodeChip, ControlStatusPill, SubTypeChip, CONTROL_STATUS, FrameworkBadge, CustomBadge,
-  type BindingSource, type CommonControl, type LinkedCheck,
+  CodeChip, ControlStatusPill, CONTROL_STATUS, FrameworkBadge, CustomBadge, frameworkColor,
+  type BindingSource, type LinkedCheck,
 } from '@/components/soc2/ui';
-import { CustomControlForm, type CustomControlFormValues } from '@/components/soc2/CustomControlForm';
+import { CustomControlForm, toWriteBody, type CustomControlFormValues } from '@/components/soc2/CustomControlForm';
+import { RecordLinker, RecordTypeIcon, groupByType, type LinkedRecord } from '@/components/soc2/RecordLinker';
 import { AnimatedModal, MultiSelectDropdown, useToast } from '@/components/ui';
 import InlineLinkPicker from '@/components/ui/InlineLinkPicker';
+import AssuranceTab from './_assurance/AssuranceTab';
+import { DetailPanel, SummaryCard, Tally } from './_assurance/cards';
+import EvidenceWorkspace from './_assurance/EvidenceWorkspace';
+import AutomatedTests, { type TestGroup } from './_assurance/AutomatedTests';
+import { LEVELS, MaturityMeter, MaturityPanel } from './_assurance/Maturity';
+import type { Objective } from './_assurance/types';
 import type { ITAsset, Risk } from '@/types';
 
-// Framework slugs come from the data now (the SCF crosswalk resolves 31 of them),
-// ordered by how many requirements each one contributes.
-const fwOrder = (reqs?: CommonControl['requirements']): string[] =>
-  Object.keys(reqs || {}).filter((k) => (reqs?.[k] || []).length)
-    .sort((a, b) => ((reqs?.[b]?.length || 0) - (reqs?.[a]?.length || 0)) || a.localeCompare(b));
-
-const SOURCE_BADGE: Record<string, string> = {
-  connector: 'bg-indigo-100 text-indigo-800',
-  aws: 'bg-amber-100 text-amber-800',
-};
-const sevCls = (s: string | null) =>
-  /crit|high/.test(s || '') ? 'text-rose-600' : /med/.test(s || '') ? 'text-amber-600' : 'text-slate-400';
-
-type Tab = 'overview' | 'evidence' | 'tests' | 'artifacts' | 'risks' | 'assets' | 'requirements' | 'history';
+type Tab = 'overview' | 'assurance' | 'evidence' | 'tests' | 'artifacts' | 'risks' | 'assets' | 'links' | 'requirements' | 'history';
+const TAB_IDS: Tab[] = ['overview', 'assurance', 'evidence', 'tests', 'artifacts', 'risks', 'assets', 'links', 'requirements', 'history'];
 
 const EMPTY_CHECK_IDS: string[] = [];
 
 function Panel({ title, action, children }: { title: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
+    <section className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
-        <h2 className="text-base font-bold text-slate-900">{title}</h2>
+        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
         {action}
       </div>
       {children}
     </section>
   );
 }
-function Fact({ label, value, muted = false }: { label: string; value: React.ReactNode; muted?: boolean }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-2.5 last:border-0">
-      <span className="shrink-0 text-sm text-slate-400">{label}</span>
-      <span className={`min-w-0 text-right text-sm font-semibold ${muted ? 'text-slate-300' : 'text-slate-700'}`}>{value}</span>
-    </div>
-  );
-}
-
-function CheckRow({
-  chk,
-  connectionId,
-  onRan,
-}: {
-  chk: LinkedCheck;
-  connectionId?: number | null;
-  onRan: () => void;
-}) {
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ status: string; msg?: string } | null>(null);
-  const run = async () => {
-    if (!chk.id) return;
-    setBusy(true);
-    try {
-      // AWS checks need a connection; connectors ignore it (API accepts null).
-      const r = await automationApi.runCheck(chk.id, connectionId ?? undefined);
-      const run = (r.data as { run?: { status?: string } })?.run;
-      setResult({ status: run?.status || 'done' });
-      onRan();
-    } catch (e: unknown) {
-      setResult({ status: 'error', msg: (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Failed' });
-    } finally {
-      setBusy(false);
-    }
-  };
-  const status = result?.status || chk.last_run?.status || 'not_run';
-  const st = CONTROL_STATUS[status] || CONTROL_STATUS.not_run;
-  const covers = chk.covers?.filter(Boolean) ?? [];
-  return (
-    <li className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 p-3">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-sm font-medium text-slate-700">{chk.title || chk.plugin_key}</span>
-          {chk.source && <span className={`rounded px-1 py-0.5 text-[9px] font-bold uppercase ${SOURCE_BADGE[chk.source] || 'bg-slate-100 text-slate-600'}`}>{chk.source}</span>}
-          {chk.severity && <span className={`text-[10px] font-semibold uppercase ${sevCls(chk.severity)}`}>{chk.severity}</span>}
-        </div>
-        {covers.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {covers.map((id) => (
-              <span
-                key={id}
-                title={`Covers ${id}`}
-                className="rounded bg-teal-50 px-1.5 py-0.5 font-mono text-[10px] font-medium text-teal-800"
-              >
-                {id}
-              </span>
-            ))}
-          </div>
-        )}
-        {result?.msg && <p className="mt-1 text-[11px] text-rose-600">{result.msg}</p>}
-        {chk.last_run?.result_summary && !result?.msg && <p className="mt-1 truncate text-[11px] text-slate-400">{chk.last_run.result_summary}</p>}
-      </div>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold ${st.cls}`}><span className={`size-1.5 rounded-full ${st.dot}`} />{st.label}</span>
-        {chk.id && (
-          <button onClick={run} disabled={busy} title="Run this test" className="rounded p-1.5 text-slate-400 hover:bg-slate-100 hover:text-primary-700 disabled:opacity-50">
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-          </button>
-        )}
-      </div>
-    </li>
-  );
-}
-
 function BindingSourceCaption({ source }: { source?: BindingSource | null }) {
   if (source === 'soc2_fallback') {
     return (
@@ -306,12 +228,6 @@ interface Coverage {
     providers: { provider: string; label: string; checks: number; connected: boolean }[];
   }[];
 }
-interface TestGroup {
-  category: string;
-  connected: boolean;
-  status: string;
-  providers: { provider: string; label: string; connected: boolean; checks: LinkedCheck[] }[];
-}
 interface ControlArtifact {
   artifact_id: string;
   name: string;
@@ -327,18 +243,33 @@ interface ControlArtifact {
 }
 interface ControlDetail {
   control_id: string;
+  title: string;
+  category?: string | null;
+  domain?: string | null;
+  sub_type?: string | null;
+  checks?: LinkedCheck[];
+  checks_count?: number;
+  overall_status?: string;
+  is_material?: boolean;
+  conformity_cadence?: string | null;
+  /** The tenant's in-scope frameworks; requirement_groups holds only these when set. */
+  scope_frameworks?: { key: string; label: string }[];
   description?: string | null;
   control_question?: string | null;
   custom?: boolean;
   implements_scf_ids?: string[];
   bound_check_ids?: string[];
   binding_source?: BindingSource;
+  /** The SCF objective tokens, or SOC 2 criteria, the tests reach this control through. */
+  binding_via?: string[];
   test_groups?: TestGroup[];
   related?: {
     family: { control_id: string; title: string | null }[];
-    by_requirements: { control_id: string; title: string | null; shared: number; score: number }[];
+    by_requirements: { control_id: string; title: string | null; shared: number; score: number; requirements?: string[] }[];
   };
   artifacts?: ControlArtifact[];
+  /** SCF assessment objectives, verbatim. */
+  objectives?: Objective[];
   coverage?: Coverage;
   assurance_mode?: 'automated' | 'manual' | 'hybrid';
   implementation?: {
@@ -347,6 +278,13 @@ interface ControlDetail {
     solutions: Record<string, string>;
     conformity_cadence: string | null;
     pptdf: string | null;
+    /** Custom controls: the SCF control the criteria above are published for. */
+    maturity_from?: string | null;
+    /** Custom controls: what the tenant wrote. */
+    objective?: string | null;
+    guidance?: string | null;
+    testing_guidance?: string | null;
+    authored?: boolean;
   };
   evidence?: {
     automated: { check_id: string; connector: string; title: string | null }[];
@@ -356,6 +294,12 @@ interface ControlDetail {
     from_frameworks: number;
     consolidated?: ConsolidatedArtifact[] | null;
     consolidated_from?: number | null;
+    /** In scope: each in-scope framework's own evidence asks, named once. */
+    required?: { key: string; name: string; description: string; filetype: string | null; type: string;
+      collection_method: 'automated' | 'hybrid' | 'manual'; required_by: string[]; references: string[] }[];
+    /** Custom controls: the evidence the author said this control produces. */
+    authored?: { key: string; name: string; description: string; filetype: string | null; type: string;
+      collection_method: 'automated' | 'hybrid' | 'manual'; required_by: string[]; references: string[] }[];
   };
   requirement_groups: ReqGroup[];
   requirement_count: number;
@@ -370,10 +314,26 @@ interface ControlDetail {
   ownership_status?: string | null;
   /** Stage H — SCFControlState fields when default scope has a row. */
   designation?: string | null;
+  /** SCR-CMM 0–5, rated by the organisation; the target falls back to the scope default. */
+  cmm_actual?: number | null;
+  cmm_target?: number | null;
+  cmm_target_default?: number;
   inheritance_type?: string | null;
   exception_id?: number | null;
   alternative_scf_id?: string | null;
   provider_vendor_id?: number | null;
+  /** Custom controls: the register fields, work fields and link counts. */
+  profile?: CustomControlProfile | null;
+  link_counts?: Record<string, number>;
+  implements_titles?: Record<string, string | null>;
+  priority?: string | null;
+  is_key_control?: boolean;
+  implementation_status?: string | null;
+  design_effectiveness?: string | null;
+  operating_effectiveness?: string | null;
+  last_tested_at?: string | null;
+  next_test_date?: string | null;
+  objectives_note?: string | null;
 }
 
 type TenantUserRow = { id: number; display_name?: string; email?: string; username?: string };
@@ -386,12 +346,16 @@ function errDetail(e: unknown, fallback = 'Request failed') {
   return (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || fallback;
 }
 
-function OwnershipEditors({
+/** One row of properties under the header: who owns the control, who reviews
+ *  it, who works on it, and the facts people look for first. People save as
+ *  soon as they are picked. */
+function PropertiesBar({
   code,
   ownerId,
   reviewerId,
   assignedIds,
   nextDueAt,
+  facts,
   onSaved,
 }: {
   code: string;
@@ -399,6 +363,7 @@ function OwnershipEditors({
   reviewerId?: number | null;
   assignedIds?: number[] | null;
   nextDueAt?: string | null;
+  facts: { label: string; value: React.ReactNode; muted?: boolean }[];
   onSaved: () => void;
 }) {
   const { toast } = useToast();
@@ -432,86 +397,70 @@ function OwnershipEditors({
   );
 
   const save = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (next: { owner: string[]; reviewer: string[]; assignees: string[] }) => {
       const scopeId = scopeQ.data?.id;
       if (!scopeId) throw new Error('No default scope');
       return scfApi.setOwnership(scopeId, code, {
-        owner_user_id: owner[0] ? Number(owner[0]) : null,
-        reviewer_user_id: reviewer[0] ? Number(reviewer[0]) : null,
-        assigned_user_ids: assignees.map(Number),
+        owner_user_id: next.owner[0] ? Number(next.owner[0]) : null,
+        reviewer_user_id: next.reviewer[0] ? Number(next.reviewer[0]) : null,
+        assigned_user_ids: next.assignees.map(Number),
       });
     },
-    onSuccess: () => {
-      toast({ type: 'success', title: 'Ownership saved' });
-      onSaved();
-    },
+    onSuccess: () => onSaved(),
     onError: (e) => toast({ type: 'error', title: 'Could not save ownership', message: errDetail(e) }),
   });
+  const pick = (patch: Partial<{ owner: string[]; reviewer: string[]; assignees: string[] }>) => {
+    const next = { owner, reviewer, assignees, ...patch };
+    setOwner(next.owner); setReviewer(next.reviewer); setAssignees(next.assignees);
+    save.mutate(next);
+  };
 
   const dueLabel = nextDueAt
     ? new Date(nextDueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
     : null;
   const dueOverdue = nextDueAt ? new Date(nextDueAt).getTime() < Date.now() : false;
+  const disabled = !scopeQ.data?.id;
+
+  const label = (text: string) => <p className="mb-1 text-[11px] font-medium text-slate-500">{text}</p>;
 
   return (
-    <div className="mt-3 space-y-2 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-      <div className="flex flex-wrap items-end gap-2">
-        <div className="min-w-[160px] flex-1">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Owner</p>
-          <MultiSelectDropdown
-            title="Owner"
-            items={people}
-            selectedValues={owner}
-            onApply={setOwner}
-            multiSelect={false}
-            autoApply
-            forceSearch
-            triggerVariant="input"
-            size="sm"
-            placeholder="Unassigned"
-          />
-        </div>
-        <div className="min-w-[160px] flex-1">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Reviewer</p>
-          <MultiSelectDropdown
-            title="Reviewer"
-            items={people}
-            selectedValues={reviewer}
-            onApply={setReviewer}
-            multiSelect={false}
-            autoApply
-            forceSearch
-            triggerVariant="input"
-            size="sm"
-            placeholder="Unassigned"
-          />
-        </div>
-        <div className="min-w-[200px] flex-[1.4]">
-          <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Assignees</p>
-          <MultiSelectDropdown
-            title="Assignees"
-            items={people}
-            selectedValues={assignees}
-            onApply={setAssignees}
-            multiSelect
-            forceSearch
-            triggerVariant="input"
-            size="sm"
-            placeholder="Add people…"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => save.mutate()}
-          disabled={save.isPending || !scopeQ.data?.id}
-          className="inline-flex h-8 items-center rounded-lg bg-primary-600 px-3 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-        >
-          {save.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save'}
-        </button>
+    <div className="flex flex-wrap items-end gap-x-5 gap-y-3 rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div className="w-44">
+        {label('Owner')}
+        <MultiSelectDropdown title="Owner" items={people} selectedValues={owner} onApply={(v) => pick({ owner: v })}
+          multiSelect={false} autoApply forceSearch triggerVariant="input" size="sm" placeholder="Unassigned"
+          className="w-full" triggerClassName="w-full" />
       </div>
-      <p className={`text-[11px] ${dueOverdue ? 'font-semibold text-rose-600' : 'text-slate-500'}`}>
-        Next due: {dueLabel || '—'}{dueOverdue ? ' · overdue' : ''}
-      </p>
+      <div className="w-44">
+        {label('Reviewer')}
+        <MultiSelectDropdown title="Reviewer" items={people} selectedValues={reviewer} onApply={(v) => pick({ reviewer: v })}
+          multiSelect={false} autoApply forceSearch triggerVariant="input" size="sm" placeholder="Unassigned"
+          className="w-full" triggerClassName="w-full" />
+      </div>
+      <div className="w-52">
+        {label('Assignees')}
+        <MultiSelectDropdown title="Assignees" items={people} selectedValues={assignees} onApply={(v) => pick({ assignees: v })}
+          multiSelect forceSearch triggerVariant="input" size="sm" placeholder="Add people…"
+          className="w-full" triggerClassName="w-full" />
+      </div>
+      <div className="flex h-8 items-center">
+        {save.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />}
+        {disabled && !scopeQ.isLoading && <span className="text-[11px] text-slate-400">Scope not set up</span>}
+      </div>
+      <div className="ml-auto flex flex-wrap items-end gap-x-6 gap-y-2">
+        <div>
+          {label('Next review')}
+          <p className={`flex h-8 items-center text-[13px] font-medium ${dueOverdue ? 'text-rose-600' : dueLabel ? 'text-slate-800' : 'text-slate-400'}`}>
+            {dueLabel ? `${dueLabel}${dueOverdue ? ' · overdue' : ''}` : 'Not scheduled'}
+          </p>
+        </div>
+        {facts.map((f) => (
+          <div key={f.label}>
+            {label(f.label)}
+            <div className={`flex h-8 items-center text-[13px] font-medium ${f.muted ? 'text-slate-400' : 'text-slate-800'}`}>{f.value}</div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -526,14 +475,15 @@ function HistoryPanel({ code }: { code: string }) {
     queryKey: ['scf-control-history', scopeQ.data?.id, code],
     enabled: !!scopeQ.data?.id && !!code,
     queryFn: async () => {
-      const raw = (await scfApi.getControlHistory(scopeQ.data!.id, code)).data;
-      return Array.isArray(raw) ? raw : (raw?.items || []);
+      const raw = (await scfApi.getControlHistory(scopeQ.data!.id, code)).data as
+        ScfHistoryEntry[] | { items?: ScfHistoryEntry[]; events?: ScfHistoryEntry[] };
+      return Array.isArray(raw) ? raw : (raw?.events || raw?.items || []);
     },
   });
   const items = histQ.data || [];
 
   return (
-    <Panel title="History" action={<span className="text-xs text-slate-400">Ownership &amp; applicability audit</span>}>
+    <Panel title="History" action={<span className="text-xs text-slate-400">Ownership, applicability, testing &amp; evidence audit</span>}>
       {histQ.isLoading || scopeQ.isLoading ? (
         <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
       ) : histQ.isError ? (
@@ -542,7 +492,7 @@ function HistoryPanel({ code }: { code: string }) {
         </div>
       ) : items.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
-          No ownership or applicability events yet.
+          No changes recorded for this control yet.
         </div>
       ) : (
         <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
@@ -570,6 +520,195 @@ function HistoryPanel({ code }: { code: string }) {
 }
 
 /** How a mapping was established — the traceability claim, stated on every group. */
+/** Everything this control is linked to, across every module. Adding or removing
+ *  writes into the target module's own link table, so the record's own page
+ *  shows the control back. */
+function LinkedRecordsPanel({ code }: { code: string }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [busy, setBusy] = useState<string | null>(null);
+  const linksQ = useQuery({
+    queryKey: ['control-links', code],
+    queryFn: async () => (await automationApi.listControlLinks(code)).data.items,
+  });
+  const typesQ = useQuery({
+    queryKey: ['control-link-types'],
+    queryFn: async () => (await automationApi.listLinkTypes()).data.types,
+    staleTime: 60 * 60_000,
+  });
+  const links = useMemo(() => linksQ.data ?? [], [linksQ.data]);
+  const order = (typesQ.data ?? []).map((t) => t.key);
+
+  const refresh = () => {
+    void qc.invalidateQueries({ queryKey: ['control-links', code] });
+    void qc.invalidateQueries({ queryKey: ['automation-common-detail', code] });
+    void qc.invalidateQueries({ queryKey: ['control-risks', code] });
+    void qc.invalidateQueries({ queryKey: ['control-assets', code] });
+  };
+
+  // The picker hands back the whole selection; the difference against what is
+  // stored is the one link to write or remove.
+  const apply = async (next: LinkedRecord[]) => {
+    const before = new Map(links.map((r) => [r.type + ':' + r.id, r]));
+    const after = new Map(next.map((r) => [r.type + ':' + r.id, r]));
+    const added = next.find((r) => !before.has(r.type + ':' + r.id));
+    const removed = links.find((r) => !after.has(r.type + ':' + r.id));
+    const target = added || removed;
+    if (!target) return;
+    setBusy(target.type + ':' + target.id);
+    try {
+      if (added) {
+        await automationApi.linkControlRecord(code, { type: added.type, record_id: added.id });
+        toast({ type: 'success', title: 'Linked ' + added.type_label.toLowerCase() });
+      } else if (removed) {
+        await automationApi.unlinkControlRecord(code, removed.type, removed.id);
+        toast({ type: 'success', title: 'Unlinked ' + removed.type_label.toLowerCase() });
+      }
+      refresh();
+    } catch (e) {
+      toast({ type: 'error', title: 'Could not save the link', message: errDetail(e) });
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const groups = groupByType(links, order);
+  return (
+    <div className="space-y-4">
+      <Panel title="Link a record" action={<span className="text-xs text-slate-400">Searched across the platform</span>}>
+        <RecordLinker selected={links} onChange={(next) => { void apply(next); }} busyKey={busy} label="" />
+      </Panel>
+
+      <Panel title="Linked records" action={<span className="text-xs text-slate-400">{links.length} linked</span>}>
+        {linksQ.isLoading ? (
+          <div className="flex h-24 items-center justify-center"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>
+        ) : links.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+            Nothing linked yet. Attach the risks this control mitigates, the assets it covers, the documents that
+            define it, or the issues it failed.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {groups.map(([type, rows]) => (
+              <div key={type}>
+                <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                  {(typesQ.data ?? []).find((t) => t.key === type)?.plural || type.replace(/_/g, ' ')} &middot; {rows.length}
+                </p>
+                <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200">
+                  {rows.map((row) => (
+                    <li key={row.type + ':' + row.id} className="flex items-center gap-2.5 px-3 py-2">
+                      <RecordTypeIcon type={row.type} className="h-4 w-4 shrink-0 text-slate-400" />
+                      <div className="min-w-0 flex-1">
+                        <Link href={row.url} className="block truncate text-[13px] font-medium text-slate-800 hover:text-primary-700">
+                          {row.code ? <span className="mr-1.5 font-mono text-[11px] text-slate-500">{row.code}</span> : null}
+                          {row.label}
+                        </Link>
+                        {row.subtitle && <p className="truncate text-[11px] capitalize text-slate-400">{row.subtitle}</p>}
+                      </div>
+                      {row.status && (
+                        <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[10.5px] font-medium capitalize text-slate-600">
+                          {String(row.status).replace(/_/g, ' ')}
+                        </span>
+                      )}
+                      <button type="button" aria-label={'Unlink ' + row.label}
+                        onClick={() => { void apply(links.filter((r) => !(r.type === row.type && r.id === row.id))); }}
+                        disabled={busy === row.type + ':' + row.id}
+                        className="shrink-0 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600 disabled:opacity-50">
+                        {busy === row.type + ':' + row.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+    </div>
+  );
+}
+
+const LIFECYCLE_STYLES: Record<string, string> = {
+  draft: 'border-slate-200 bg-slate-50 text-slate-600',
+  pending_approval: 'border-amber-200 bg-amber-50 text-amber-700',
+  active: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+  inactive: 'border-slate-200 bg-slate-100 text-slate-500',
+  rejected: 'border-rose-200 bg-rose-50 text-rose-700',
+};
+
+/** The register's approval workflow: draft -> pending approval -> active.
+ *  Whoever submitted a control cannot approve it. */
+function LifecycleActions({ code, profile, onDone }: {
+  code: string; profile?: CustomControlProfile | null; onDone: () => void;
+}) {
+  const { toast } = useToast();
+  const status = profile?.lifecycle_status || 'draft';
+  const act = useMutation({
+    mutationFn: async (action: string) => scfApi.setCustomControlLifecycle(code, { action }),
+    onSuccess: (_d, action) => { toast({ type: 'success', title: 'Control ' + action + 'd' }); onDone(); },
+    onError: (e) => toast({ type: 'error', title: 'Could not change the status', message: errDetail(e) }),
+  });
+  const actions: [string, string][] = status === 'pending_approval'
+    ? [['approve', 'Approve'], ['reject', 'Reject']]
+    : status === 'active'
+      ? [['deactivate', 'Deactivate']]
+      : [['submit', 'Submit for approval']];
+  return (
+    <>
+      <span title={'Register status: ' + status.replace(/_/g, ' ')}
+        className={'inline-flex h-8 items-center rounded-lg border px-2.5 text-[11px] font-semibold uppercase tracking-wide ' + (LIFECYCLE_STYLES[status] || LIFECYCLE_STYLES.draft)}>
+        {status.replace(/_/g, ' ')}
+      </span>
+      {actions.map(([action, label]) => (
+        <button key={action} type="button" disabled={act.isPending} onClick={() => act.mutate(action)}
+          className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+          {act.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}{label}
+        </button>
+      ))}
+    </>
+  );
+}
+
+/** The register fields, for a control the tenant wrote. */
+function RegisterCard({ d }: { d: ControlDetail }) {
+  const p = d.profile || {};
+  const date = (v?: string | null) => (v ? new Date(v).toLocaleDateString() : null);
+  const rows: [string, React.ReactNode][] = [
+    ['Category', [p.category, p.sub_category].filter(Boolean).join(' \u00b7 ') || null],
+    ['Control type', p.control_type ? p.control_type[0].toUpperCase() + p.control_type.slice(1) : null],
+    ['Operates', p.operating_frequency ? p.operating_frequency.replace(/_/g, ' ') : null],
+    ['Department', p.department_name],
+    ['Backup owner', p.backup_owner_name],
+    ['Regulatory source', p.regulatory_source],
+    ['Effective', date(p.effective_date)],
+    ['Next review', date(p.review_date)],
+    ['Priority', d.priority ? d.priority[0].toUpperCase() + d.priority.slice(1) : null],
+  ];
+  const filled = rows.filter(([, v]) => v);
+  return (
+    <SummaryCard title="Control register" meta={d.is_key_control ? 'Key control' : undefined}>
+      {filled.length ? (
+        <dl className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {filled.map(([label, value]) => (
+            <div key={label} className="min-w-0">
+              <dt className="text-[10.5px] uppercase tracking-wide text-slate-400">{label}</dt>
+              <dd className="truncate text-[12.5px] capitalize text-slate-700">{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <p className="text-[13px] text-slate-500">No register fields recorded yet. Use Edit to add them.</p>
+      )}
+      {p.submitted_at && (
+        <p className="mt-2.5 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+          Submitted {p.submitted_by_name ? 'by ' + p.submitted_by_name + ' ' : ''}{new Date(p.submitted_at).toLocaleDateString()}
+          {p.approved_at ? ' \u00b7 approved ' + (p.approved_by_name ? 'by ' + p.approved_by_name + ' ' : '') + new Date(p.approved_at).toLocaleDateString() : ''}
+        </p>
+      )}
+    </SummaryCard>
+  );
+}
+
 function ProvenanceChip({ g }: { g: ReqGroup }) {
   if (g.provenance === 'ai') {
     const pct = g.confidence != null ? Math.round(g.confidence * 100) : null;
@@ -687,302 +826,6 @@ function RequirementGroup({ g, defaultOpen }: { g: ReqGroup; defaultOpen: boolea
 }
 
 
-/** Implementation guidance, rendered verbatim from the catalog. */
-function ImplementationPanel({ impl }: { impl: NonNullable<ControlDetail['implementation']> }) {
-  const [showLadder, setShowLadder] = useState(false);
-  const [size, setSize] = useState<string>('medium');
-  const sizes = Object.keys(impl.solutions || {});
-  const levels = Object.entries(impl.maturity_levels || {});
-  return (
-    <Panel title="How to implement this" action={<span className="text-xs text-slate-400">Target: SCR-CMM Level 3 · Well Defined</span>}>
-      {impl.target_maturity ? (
-        <p className="whitespace-pre-line text-sm leading-relaxed text-slate-700">{impl.target_maturity}</p>
-      ) : (
-        <p className="text-sm italic text-slate-400">No maturity guidance published for this control.</p>
-      )}
-
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-        {impl.pptdf && <span className="rounded bg-slate-100 px-2 py-0.5 font-medium">{impl.pptdf}</span>}
-        {impl.conformity_cadence && (
-          <span className="rounded bg-slate-100 px-2 py-0.5 font-medium">Reassess: {impl.conformity_cadence}</span>
-        )}
-      </div>
-
-      {levels.length > 0 && (
-        <div className="mt-4">
-          <button type="button" onClick={() => setShowLadder((v) => !v)}
-            className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-700 hover:underline">
-            <ChevronDown className={`h-3.5 w-3.5 transition-transform ${showLadder ? 'rotate-180' : ''}`} />
-            {showLadder ? 'Hide' : 'Show'} all {levels.length} maturity levels
-          </button>
-          {!showLadder && (
-            <p className="mt-1 text-[11px] text-slate-500">
-              SCF grades every control on a six-step capability maturity model, from Level 0 Not Performed to
-              Level 5 Continuously Improving. Level 3 Well Defined is the usual target for a compliance obligation,
-              so it is shown above; the other levels describe what the control looks like below and beyond it.
-            </p>
-          )}
-          {showLadder && (
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {levels.map(([name, text]) => (
-                <li key={name} className="px-3.5 py-3">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">{name}</p>
-                  <p className="mt-1 whitespace-pre-line text-[13px] leading-relaxed text-slate-600">{text}</p>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
-      {sizes.length > 0 && (
-        <div className="mt-5">
-          <div className="mb-2 flex flex-wrap items-center gap-1.5">
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Options for</span>
-            {sizes.map((k) => (
-              <button key={k} type="button" onClick={() => setSize(k)}
-                className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold capitalize transition-colors ${
-                  size === k ? 'bg-primary-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>
-                {k}
-              </button>
-            ))}
-          </div>
-          <p className="whitespace-pre-line rounded-lg border border-slate-200 bg-slate-50/60 px-3.5 py-3 text-[13px] leading-relaxed text-slate-600">
-            {impl.solutions[size] || 'No options published for this organisation size.'}
-          </p>
-        </div>
-      )}
-      <p className="mt-3 text-[10px] text-slate-400">
-        Guidance reproduced verbatim from the Secure Controls Framework 2026.2.
-      </p>
-    </Panel>
-  );
-}
-
-/** The sources that can prove this control, and what to connect if none is.
- *
- *  Connectors bound to a control are ALTERNATIVES: 53 of them claim CC6.1
- *  because 53 systems can prove logical access, and nobody runs 53. So the ask
- *  is "connect any one", grouped by category because that is the shape of a
- *  decision a customer can act on. Connect a second and it joins the
- *  conjunction — both then have to pass, because both are in scope.
- */
-function CoveragePanel({ cov }: { cov: Coverage }) {
-  const [showAll, setShowAll] = useState(false);
-  if (cov.state === 'manual') return null;
-  // `unbound` has no categories to list: SCF says a machine could assess this
-  // control and no check reaches it, so the honest panel names the gap rather
-  // than showing an empty list or, worse, nothing at all.
-  if (cov.state === 'unbound') {
-    return (
-      <Panel
-        title="Evidence sources"
-        action={
-          <span className="rounded-full border border-cyan-200 bg-cyan-50 px-2 py-0.5 text-[10px] font-bold uppercase text-cyan-700">
-            no check yet
-          </span>
-        }
-      >
-        <p className="text-[13px] leading-relaxed text-slate-600">
-          SCF marks at least one of this control&rsquo;s assessment objectives as
-          <span className="font-semibold text-slate-800"> Technology</span>, so a machine could assess it.
-          No check reaches it today, because checks bind through SOC&nbsp;2 criteria and this control maps
-          to none. That is a gap in what we have built, not a property of the control.
-        </p>
-        <p className="mt-2 text-[12px] text-slate-500">
-          It is not Manual. Manual is for controls no collector could ever prove, such as board oversight
-          or staff training.
-        </p>
-      </Panel>
-    );
-  }
-  if (!cov.options.length) return null;
-  const shown = showAll ? cov.options : cov.options.slice(0, 4);
-  return (
-    <Panel
-      title="Evidence sources"
-      action={
-        <span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
-          cov.state === 'covered'
-            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-            : 'border-indigo-200 bg-indigo-50 text-indigo-700'}`}>
-          {cov.state === 'covered' ? `${cov.satisfied_by.length} connected` : 'connect any one'}
-        </span>
-      }
-    >
-      <p className="text-[13px] leading-relaxed text-slate-600">
-        {cov.state === 'covered' ? (
-          <>
-            Evidenced by <span className="font-semibold text-slate-800">{cov.satisfied_by.join(', ')}</span>.
-            {' '}{cov.provider_count} sources in total can prove this control — connecting another adds
-            coverage, and its result then counts too.
-          </>
-        ) : (
-          <>
-            No source connected yet. Any <em>one</em> of these {cov.provider_count} proves this control —
-            you do not need them all. Pick whichever you already run.
-          </>
-        )}
-      </p>
-      <ul className="mt-3 space-y-2">
-        {shown.map((o) => (
-          <li key={o.category} className="rounded-lg border border-slate-200 px-3 py-2">
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{o.category}</span>
-              {o.connected && (
-                <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] font-bold text-emerald-700">connected</span>
-              )}
-              <span className="ml-auto text-[10px] text-slate-400">{o.providers.length} sources</span>
-            </div>
-            <div className="mt-1.5 flex flex-wrap gap-1">
-              {o.providers.slice(0, 8).map((pr) => (
-                <span key={pr.provider}
-                  title={`${pr.checks} check${pr.checks === 1 ? '' : 's'} for this control`}
-                  className={`rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                    pr.connected ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-600'}`}>
-                  {pr.label}
-                </span>
-              ))}
-              {o.providers.length > 8 && (
-                <span className="text-[11px] text-slate-400">+{o.providers.length - 8}</span>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-      {cov.options.length > 4 && (
-        <button onClick={() => setShowAll((v) => !v)} className="mt-2 text-xs font-semibold text-primary-700 hover:underline">
-          {showAll ? 'Show fewer categories' : `Show ${cov.options.length - 4} more categories`}
-        </button>
-      )}
-      <Link href="/admin/evidence-collectors"
-        className="mt-3 inline-block rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-        Connect a source →
-      </Link>
-    </Panel>
-  );
-}
-
-const CATEGORY_LABEL: Record<string, string> = {
-  scm: 'Source control', identity: 'Identity provider', cloud: 'Cloud',
-  observability: 'Observability', security: 'Security tooling', productivity: 'Work management',
-  comms: 'Communications', email: 'Email', incident: 'Incident response', hr: 'HR system',
-  mdm: 'Device management', itsm: 'IT service management', crm: 'CRM', data: 'Data platform',
-  payments: 'Payments', ai: 'AI platform', other: 'Other',
-};
-
-/** Automated tests grouped by connector category.
- *
- *  A tenant runs one identity provider. Okta, Entra ID and Google Workspace are
- *  alternatives for the same evidence, so drawing each as its own "Not run" test
- *  implies all three must be checked, which no tenant can satisfy and none should
- *  try to. Each category asks for any one source; only a connected source's
- *  results are shown as results.
- */
-function TestGroupsPanel({
-  groups,
-  connectionId,
-  onRan,
-  bindingSource,
-}: {
-  groups: TestGroup[];
-  connectionId?: number | null;
-  onRan: () => void;
-  bindingSource?: BindingSource | null;
-}) {
-  const [openCat, setOpenCat] = useState<string | null>(null);
-  if (!groups.length) {
-    return (
-      <Panel title="Automated tests">
-        <BindingSourceCaption source={bindingSource} />
-        <div className={`rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center text-sm text-slate-500 ${bindingSource === 'covers' || bindingSource === 'soc2_fallback' ? 'mt-3' : ''}`}>
-          No automated test reaches this control yet.
-        </div>
-      </Panel>
-    );
-  }
-  const live = groups.filter((g) => g.connected).length;
-  return (
-    <Panel
-      title="Automated tests"
-      action={<span className="text-xs text-slate-500">{live} of {groups.length} categories connected</span>}
-    >
-      {(bindingSource === 'covers' || bindingSource === 'soc2_fallback') && (
-        <div className="mb-3"><BindingSourceCaption source={bindingSource} /></div>
-      )}
-      <p className="mb-3 text-[13px] leading-relaxed text-slate-600">
-        Each category below can evidence this control. Connect <span className="font-semibold">any one</span> source
-        from a category; you do not need them all. Once connected, that source&apos;s results count.
-      </p>
-      <ul className="space-y-2">
-        {groups.map((g) => {
-          const connectedProviders = g.providers.filter((p) => p.connected);
-          const options = g.providers.filter((p) => !p.connected);
-          const open = openCat === g.category;
-          return (
-            <li key={g.category} className="overflow-hidden rounded-lg border border-slate-200">
-              <button
-                type="button"
-                onClick={() => setOpenCat(open ? null : g.category)}
-                aria-expanded={open}
-                className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left hover:bg-slate-50"
-              >
-                <span className="text-sm font-semibold text-slate-800">{CATEGORY_LABEL[g.category] || g.category}</span>
-                {g.connected
-                  ? <ControlStatusPill status={g.status} />
-                  : <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2 py-0.5 text-[10px] font-bold uppercase text-indigo-700">connect any one</span>}
-                <span className="ml-auto truncate text-[11px] text-slate-500">
-                  {g.connected
-                    ? `via ${connectedProviders.map((p) => p.label).join(', ')}`
-                    : options.slice(0, 3).map((p) => p.label).join(' · ') + (options.length > 3 ? ` +${options.length - 3}` : '')}
-                </span>
-                <ChevronDown className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-180' : ''}`} />
-              </button>
-              {open && (
-                <div className="border-t border-slate-100 bg-slate-50/40 px-3.5 py-3">
-                  {connectedProviders.map((p) => (
-                    <div key={p.provider} className="mb-3 last:mb-0">
-                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">{p.label} · connected</p>
-                      <ul className="space-y-2">
-                        {p.checks.map((chk, i) => (
-                          <CheckRow
-                            key={`${p.provider}-${i}`}
-                            chk={chk}
-                            connectionId={connectionId}
-                            onRan={onRan}
-                          />
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                  {options.length > 0 && (
-                    <div>
-                      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        {g.connected ? 'Other sources that could also evidence this' : 'Connect any one of these'}
-                      </p>
-                      <div className="flex flex-wrap gap-1.5">
-                        {options.map((p) => (
-                          <span key={p.provider} title={`${p.checks.length} check${p.checks.length === 1 ? '' : 's'} for this control`}
-                            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[12px] text-slate-700">
-                            {p.label}
-                          </span>
-                        ))}
-                      </div>
-                      <Link href="/admin/evidence-collectors" className="mt-2 inline-block text-xs font-semibold text-primary-700 hover:underline">
-                        Connect a source →
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </Panel>
-  );
-}
-
 interface LinkedEvidence {
   evidence_id: number; mapping_id: number; name: string; description: string | null;
   file_name: string | null; file_type: string | null; evidence_type: string | null;
@@ -991,8 +834,10 @@ interface LinkedEvidence {
 }
 
 /** Evidence a person attaches: the manual and hybrid half no collector produces. */
-function ControlEvidencePanel({ code, mode, collected }: {
+function ControlEvidencePanel({ code, mode, collected, workspace = false }: {
   code: string; mode?: string; collected: LinkedCheck[];
+  /** SCF controls: linked and required evidence side by side, as on the Frameworks page. */
+  workspace?: boolean;
 }) {
   const qc = useQueryClient();
   const [file, setFile] = useState<File | null>(null);
@@ -1031,7 +876,12 @@ function ControlEvidencePanel({ code, mode, collected }: {
 
   return (
     <div className="space-y-4">
-      {acceptsUploads && (
+      {workspace && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4">
+          <EvidenceWorkspace code={code} />
+        </section>
+      )}
+      {!workspace && acceptsUploads && (
         <Panel title="Upload evidence">
           <p className="mb-3 text-[13px] text-slate-600">
             {mode === 'hybrid'
@@ -1060,7 +910,7 @@ function ControlEvidencePanel({ code, mode, collected }: {
         </Panel>
       )}
 
-      <Panel title="Attached evidence" action={<span className="text-xs text-slate-500">{items.length}</span>}>
+      {!workspace && <Panel title="Attached evidence" action={<span className="text-xs text-slate-500">{items.length}</span>}>
         {listQ.isLoading ? (
           <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
         ) : items.length ? (
@@ -1084,7 +934,7 @@ function ControlEvidencePanel({ code, mode, collected }: {
         ) : (
           <p className="text-sm text-slate-500">No evidence attached yet.</p>
         )}
-      </Panel>
+      </Panel>}
 
       {collected.length > 0 && (
         <Panel title="Collected automatically">
@@ -1125,11 +975,6 @@ interface LinkedControlRisk {
 
 interface ControlRisksResponse {
   items: LinkedControlRisk[];
-  scf_prompts?: {
-    risks?: string[] | string | null;
-    threats?: string[] | string | null;
-    risk_if_not_implemented?: string | null;
-  } | null;
 }
 
 const RISK_STATUS_PILL: Record<string, string> = {
@@ -1141,13 +986,7 @@ const RISK_STATUS_PILL: Record<string, string> = {
   closed: 'bg-slate-100 text-slate-600 border-slate-200',
 };
 
-function asCodeList(v?: string[] | string | null): string[] {
-  if (!v) return [];
-  if (Array.isArray(v)) return v.map(String).filter(Boolean);
-  return String(v).split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean);
-}
-
-/** Live risk-register links + read-only SCF catalogue prompts (Decision 4). */
+/** The register risks this control treats: link existing ones or raise a new one. */
 function ControlRisksPanel({ code }: { code: string }) {
   const qc = useQueryClient();
   const { toast } = useToast();
@@ -1161,7 +1000,6 @@ function ControlRisksPanel({ code }: { code: string }) {
     queryFn: () => automationApi.listControlRisks(code).then((r) => r.data as ControlRisksResponse),
   });
   const items = listQ.data?.items ?? [];
-  const prompts = listQ.data?.scf_prompts;
   const linkedIds = new Set(items.map((i) => i.risk_id));
 
   const risksQ = useQuery({
@@ -1222,10 +1060,6 @@ function ControlRisksPanel({ code }: { code: string }) {
       subLabel: [r.status, r.owner_name].filter(Boolean).join(' · ') || undefined,
     }));
 
-  const riskCodes = asCodeList(prompts?.risks);
-  const threatCodes = asCodeList(prompts?.threats);
-  const riskIfNot = prompts?.risk_if_not_implemented?.trim() || '';
-  const hasPrompts = riskCodes.length > 0 || threatCodes.length > 0 || !!riskIfNot;
 
   return (
     <div className="space-y-4">
@@ -1298,40 +1132,6 @@ function ControlRisksPanel({ code }: { code: string }) {
           Control status is an indicator only — linking a risk does not recalculate residual score.
         </p>
       </Panel>
-
-      {hasPrompts && (
-        <Panel title="SCF catalogue references (prompts)">
-          <p className="mb-3 text-[12px] leading-relaxed text-slate-500">
-            Verbatim SCF catalogue text — not live risk-register rows. Use them as prompts when raising or linking risks.
-          </p>
-          {riskCodes.length > 0 && (
-            <div className="mb-3">
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Risk codes</p>
-              <div className="flex flex-wrap gap-1.5">
-                {riskCodes.map((c) => (
-                  <span key={c} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-medium text-slate-600">{c}</span>
-                ))}
-              </div>
-            </div>
-          )}
-          {threatCodes.length > 0 && (
-            <div className="mb-3">
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Threat codes</p>
-              <div className="flex flex-wrap gap-1.5">
-                {threatCodes.map((c) => (
-                  <span key={c} className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-[11px] font-medium text-slate-600">{c}</span>
-                ))}
-              </div>
-            </div>
-          )}
-          {riskIfNot && (
-            <div>
-              <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Risk if not implemented</p>
-              <p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{riskIfNot}</p>
-            </div>
-          )}
-        </Panel>
-      )}
 
       <AnimatedModal
         isOpen={raiseOpen}
@@ -1875,120 +1675,25 @@ function ControlArtifactsPanel({ code }: { code: string }) {
 }
 
 
-/** What to collect to evidence this control, by how it is obtained. */
-function EvidencePanel({ ev, mode }: { ev: NonNullable<ControlDetail['evidence']>; mode?: string }) {
-  const [showAll, setShowAll] = useState(false);
-  const scfFirst = [...ev.manual].sort((a, b) =>
-    Number(b.source === 'SCF evidence request list') - Number(a.source === 'SCF evidence request list'));
-  const shown = showAll ? scfFirst : scfFirst.slice(0, 10);
-  const tone = mode === 'automated' ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-    : mode === 'hybrid' ? 'border-sky-200 bg-sky-50 text-sky-700'
-      : 'border-slate-200 bg-slate-50 text-slate-600';
-  return (
-    <Panel title="Recommended evidence"
-      action={<span className={`rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${tone}`}>{mode || 'manual'}</span>}>
-      <section>
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          Automated · {ev.automated_count}
-        </h3>
-        {ev.automated.length ? (
-          <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {ev.automated.map((a) => (
-              <li key={a.check_id} className="flex items-center gap-2.5 px-3.5 py-2.5">
-                <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{a.connector}</span>
-                <span className="text-[13px] text-slate-600">{a.title}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-1.5 text-[13px] text-slate-400">No collector asserts this control — evidence is produced by hand.</p>
-        )}
-      </section>
-
-      {ev.consolidated && ev.consolidated.length > 0 ? (
-        <section className="mt-5">
-          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-            What to collect · {ev.consolidated.length}
-            <span className="ml-1.5 font-normal normal-case text-slate-400">
-              {ev.consolidated_from
-                ? `merged from ${ev.consolidated_from} requests across ${ev.from_frameworks} frameworks`
-                : 'deliverables named by the frameworks this control maps to'}
-            </span>
-          </h3>
-          <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-            {ev.consolidated.map((a) => {
-              const tone = a.collection_method === 'automated' ? 'bg-emerald-50 text-emerald-700'
-                : a.collection_method === 'hybrid' ? 'bg-sky-50 text-sky-700' : 'bg-slate-100 text-slate-600';
-              return (
-                <li key={a.name} className="px-3.5 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase ${tone}`}>{a.collection_method}</span>
-                    <span className="font-semibold text-slate-800">{a.name}</span>
-                    {a.filetype && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{a.filetype}</span>}
-                    {a.mandatory && <span className="rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">mandatory</span>}
-                    {/* the framework cited a whole section, not this control — a weaker claim */}
-                    {a.match_mode === 'parent' && (
-                      <span className="rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700" title="attached via a section-level reference">
-                        section-level
-                      </span>
-                    )}
-                    <span className="ml-auto text-[10px] text-slate-400" title={a.required_by.join(', ')}>
-                      {a.owner ? `${a.owner} · ` : ''}
-                      required by {a.required_by.length} framework{a.required_by.length === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  {a.description && <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{a.description}</p>}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : (
-      <section className="mt-5">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-          Manual · {ev.manual_count}
-          {ev.from_frameworks > 0 && (
-            <span className="ml-1.5 font-normal normal-case text-slate-400">
-              merged from {ev.from_frameworks} framework{ev.from_frameworks === 1 ? '' : 's'}
-            </span>
-          )}
-        </h3>
-        {shown.length ? (
-          <>
-            <ul className="mt-2 divide-y divide-slate-100 rounded-lg border border-slate-200">
-              {shown.map((m, i) => (
-                <li key={`${m.ref}-${i}`} className="px-3.5 py-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-slate-800">{m.name}</span>
-                    {m.filetype && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium text-slate-500">{m.filetype}</span>}
-                    <span className="ml-auto text-[10px] text-slate-400">{m.source}{m.ref ? ` · ${m.ref}` : ''}</span>
-                  </div>
-                  {m.description && <p className="mt-1 text-[13px] leading-relaxed text-slate-600">{m.description}</p>}
-                </li>
-              ))}
-            </ul>
-            {!showAll && scfFirst.length > shown.length && (
-              <button type="button" onClick={() => setShowAll(true)}
-                className="mt-2 text-xs font-semibold text-primary-700 hover:underline">
-                Show {scfFirst.length - shown.length} more
-              </button>
-            )}
-            {ev.manual_count > 25 && (
-              <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
-                These are every artifact the linked frameworks ask for, de-duplicated by name only.
-                Many are the same document described in different words — consolidating them into one
-                request per artifact is not done yet.
-              </p>
-            )}
-          </>
-        ) : (
-          <p className="mt-1.5 text-[13px] text-slate-400">No manual evidence is defined for this control.</p>
-        )}
-      </section>
-      )}
-    </Panel>
-  );
+/** The row the header and tabs read: built from the detail payload, or from the
+ *  custom-control record right after one is created. */
+interface ControlView {
+  control_id: string;
+  title: string;
+  description: string;
+  category: string;
+  sub_type: string | null;
+  checks: LinkedCheck[];
+  checks_count: number;
+  overall_status: string;
 }
+
+// Requirement codes in reading order: 6.3.2 before 11.2.
+const byCode = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true });
+
+const METHOD_DOT: Record<string, string> = { automated: 'bg-indigo-500', hybrid: 'bg-violet-500', manual: 'bg-slate-400' };
+
+type OverviewPanel = 'statement' | 'evidence' | 'implement' | 'related';
 
 export default function ControlDetailPage() {
   const params = useParams();
@@ -1997,15 +1702,16 @@ export default function ControlDetailPage() {
   const code = decodeURIComponent(String(params.code || ''));
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [tab, setTab] = useState<Tab>('overview');
+  // ?tab= lets another page send someone straight to a section (Connections → Tests)
+  const searchParams = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => {
+    const wanted = searchParams.get('tab') as Tab | null;
+    return wanted && TAB_IDS.includes(wanted) ? wanted : 'overview';
+  });
+  const [panel, setPanel] = useState<OverviewPanel | null>(null);
   const [runningAll, setRunningAll] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [implementsDraft, setImplementsDraft] = useState('');
-
-  const controlsQ = useQuery({
-    queryKey: ['automation-common'],
-    queryFn: () => automationApi.listCommonControls().then((r) => r.data as { controls: CommonControl[] }),
-  });
 
   const connectionsQ = useQuery({
     queryKey: ['automation', 'soc2-connections'],
@@ -2017,26 +1723,22 @@ export default function ControlDetailPage() {
     return list.length ? list[0].id : null;
   }, [connectionsQ.data]);
 
-  const controls = controlsQ.data?.controls ?? [];
-  const listControl = controls.find((c) => c.control_id === code);
-
-  // Requirement text lives in the framework libraries, not the crosswalk, so the
-  // detail endpoint resolves it server-side. Fetched only when the tab is opened.
+  // The detail endpoint carries the whole control, in scope or not. The page used
+  // to download the entire in-scope list to find this one row, which was slow and
+  // reported any out-of-scope control as "not found".
   const detailQ = useQuery({
     queryKey: ['automation-common-detail', code],
-    // Statement, grouped tests, artifacts and attached evidence all come from the
-    // detail endpoint, so it is needed on every tab rather than two of them.
     enabled: !!code,
     queryFn: () => automationApi.getCommonControl(code).then((r) => r.data as ControlDetail),
     retry: false,
   });
+  const d = detailQ.data;
   const customDetailQ = useQuery({
     queryKey: ['scf-custom-control', code],
-    enabled: !!code && (!!listControl?.custom || !!detailQ.data?.custom || detailQ.isError || (!listControl && !controlsQ.isLoading)),
+    enabled: !!code && (!!d?.custom || detailQ.isError),
     queryFn: () => scfApi.getCustomControl(code).then((r) => r.data),
     retry: false,
   });
-  const reqGroupsFull = detailQ.data?.requirement_groups ?? [];
   // Same key as ControlEvidencePanel, so react-query shares one request between the
   // tab count and the panel; without it an upload left the tab reading 0.
   const attachedQ = useQuery({
@@ -2049,82 +1751,71 @@ export default function ControlDetailPage() {
     enabled: !!code,
     queryFn: () => automationApi.listControlRisks(code).then((r) => r.data as { items: { link_id: number }[] }),
   });
+  const artifactsTabQ = useQuery({
+    queryKey: ['control-artifacts', code],
+    enabled: !!code,
+    queryFn: () => automationApi.listControlArtifacts(code).then((r) => r.data as { items: unknown[] }),
+  });
   const assetsTabQ = useQuery({
     queryKey: ['control-assets', code],
     enabled: !!code,
     queryFn: () => automationApi.listControlAssets(code).then((r) => r.data as { items: { link_id: number }[] }),
   });
+  const linksQ = useQuery({
+    queryKey: ['control-links', code],
+    enabled: !!code,
+    queryFn: async () => (await automationApi.listControlLinks(code)).data.items,
+  });
 
-  // Prefer automation list/detail; fall back to custom-control GET right after create
-  // (or if the common list has not merged the tenant row yet).
-  const control: CommonControl | undefined = listControl || (customDetailQ.data ? {
-    control_id: customDetailQ.data.code,
-    canonical_key: customDetailQ.data.code,
-    title: customDetailQ.data.name || customDetailQ.data.code,
-    description: customDetailQ.data.statement || '',
-    category: customDetailQ.data.domain || 'Custom',
-    domain: customDetailQ.data.domain || undefined,
-    sub_type: customDetailQ.data.control_sub_type || null,
-    frameworks: [],
-    requirements: {},
-    requirement_count: 0,
+  const custom = customDetailQ.data;
+  const control: ControlView | undefined = d ? {
+    control_id: d.control_id,
+    title: d.title,
+    description: d.description || '',
+    category: d.category || (d.custom ? 'Custom' : ''),
+    sub_type: d.sub_type ?? null,
+    checks: d.checks || [],
+    checks_count: d.checks_count ?? 0,
+    overall_status: d.overall_status || 'manual',
+  } : custom ? {
+    control_id: custom.code,
+    title: custom.name || custom.code,
+    description: custom.statement || '',
+    category: custom.domain || 'Custom',
+    sub_type: custom.control_sub_type || null,
+    checks: [],
     checks_count: 0,
     overall_status: 'manual',
-    checks: [],
-    custom: true,
-  } : undefined);
-  const isCustom = !!(control?.custom || detailQ.data?.custom || customDetailQ.data?.custom);
-  const bindingSource: BindingSource | undefined =
-    detailQ.data?.binding_source || listControl?.binding_source || undefined;
+  } : undefined;
+  const isCustom = !!(d?.custom || custom?.custom || (!d && custom));
+  const bindingSource: BindingSource | undefined = d?.binding_source || undefined;
   const boundCheckIds = useMemo(
-    () => customDetailQ.data?.bound_check_ids
-      || detailQ.data?.bound_check_ids
-      || EMPTY_CHECK_IDS,
-    [customDetailQ.data?.bound_check_ids, detailQ.data?.bound_check_ids],
+    () => custom?.bound_check_ids || d?.bound_check_ids || EMPTY_CHECK_IDS,
+    [custom?.bound_check_ids, d?.bound_check_ids],
   );
+  const reqGroups = d?.requirement_groups ?? [];
+  const scopeFws = d?.scope_frameworks ?? [];
 
   useEffect(() => {
-    const ids = customDetailQ.data?.implements_scf_ids
-      || detailQ.data?.implements_scf_ids
-      || [];
+    const ids = custom?.implements_scf_ids || d?.implements_scf_ids || [];
     setImplementsDraft(ids.join('\n'));
-  }, [customDetailQ.data?.implements_scf_ids, detailQ.data?.implements_scf_ids]);
-
-  const allReqCodes = (c?: CommonControl) =>
-    c ? fwOrder(c.requirements).flatMap((f) => (c.requirements[f] || []).map((r) => `${f}:${r.code}`)) : [];
-
-  // Requirement mappings grouped by framework (only frameworks with mappings).
-  const reqGroups = useMemo(
-    () => (control ? fwOrder(control.requirements)
-      .map((f) => ({ fw: f, items: control.requirements[f] || [] })) : []),
-    [control],
-  );
-  const totalReqs = reqGroups.reduce((n, g) => n + g.items.length, 0);
+  }, [custom?.implements_scf_ids, d?.implements_scf_ids]);
 
   const invalidateControl = async () => {
     await Promise.all([
       qc.invalidateQueries({ queryKey: ['automation-common'] }),
       qc.invalidateQueries({ queryKey: ['automation-common-detail', code] }),
       qc.invalidateQueries({ queryKey: ['scf-custom-control', code] }),
+      qc.invalidateQueries({ queryKey: ['control-links', code] }),
     ]);
   };
 
   const updateCustom = useMutation({
-    mutationFn: async (v: CustomControlFormValues) => {
-      await scfApi.updateCustomControl(code, {
-        name: v.name || undefined,
-        statement: v.statement || undefined,
-        domain: v.domain || undefined,
-        pptdf: v.pptdf || undefined,
-        conformity_cadence: v.conformity_cadence || undefined,
-        control_sub_type: v.control_sub_type || undefined,
-      });
-      if (v.implements_scf_ids) {
-        await scfApi.updateCustomControlMappings(code, {
-          implements_scf_ids: v.implements_scf_ids,
-        });
-      }
-    },
+    // One call: the control's own fields, its register profile, owner and
+    // priority, its SCF mappings and its links. Link types that were present
+    // before the edit are sent even when now empty, so removals apply.
+    mutationFn: async (v: CustomControlFormValues) =>
+      scfApi.updateCustomControl(code, toWriteBody(v, Array.from(new Set(linkedRecords.map((r) => r.type))))),
     onSuccess: async () => {
       toast({ type: 'success', title: 'Control updated' });
       setEditOpen(false);
@@ -2183,7 +1874,7 @@ export default function ControlDetailPage() {
     setRunningAll(false);
   };
 
-  if (controlsQ.isLoading || (customDetailQ.isLoading && !listControl && !control)) {
+  if (detailQ.isLoading || (detailQ.isError && customDetailQ.isLoading)) {
     return <div className="flex h-64 items-center justify-center text-slate-400"><Loader2 className="h-6 w-6 animate-spin" /></div>;
   }
   if (!control) {
@@ -2195,417 +1886,511 @@ export default function ControlDetailPage() {
     );
   }
 
-  const lastTested = (control.checks || [])
+  const lastTested = control.checks
     .map((c) => c.last_run?.started_at)
     .filter(Boolean)
     .sort()
     .pop();
-  const evidence = (control.checks || []).filter((c) => c.last_run);
+  const evidence = control.checks.filter((c) => c.last_run);
+  const linkedRecords: LinkedRecord[] = linksQ.data ?? [];
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'assurance', label: 'Assurance' },
     { id: 'evidence', label: 'Evidence', count: evidence.length + (attachedQ.data?.items.length ?? 0) },
-    { id: 'tests', label: 'Tests', count: detailQ.data?.test_groups?.length ?? (control.checks?.length || 0) },
-    { id: 'artifacts', label: 'Artifacts', count: detailQ.data?.artifacts?.length ?? 0 },
+    { id: 'tests', label: 'Tests', count: d?.test_groups?.length ?? control.checks.length },
+    { id: 'artifacts', label: 'Artifacts', count: artifactsTabQ.data?.items.length ?? 0 },
     { id: 'risks', label: 'Risks', count: risksQ.data?.items.length ?? 0 },
     { id: 'assets', label: 'Assets', count: assetsTabQ.data?.items.length ?? 0 },
-    { id: 'requirements', label: 'Requirements', count: totalReqs },
+    { id: 'links', label: 'Linked records', count: linkedRecords.length },
+    { id: 'requirements', label: 'Requirements', count: d?.requirement_count ?? 0 },
     { id: 'history', label: 'History' },
   ];
 
-  const ownerId = detailQ.data?.owner_user_id ?? control.owner_user_id ?? null;
-  const reviewerId = detailQ.data?.reviewer_user_id ?? control.reviewer_user_id ?? null;
-  const assignedIds = detailQ.data?.assigned_user_ids ?? control.assigned_user_ids ?? null;
-  const nextDueAt = detailQ.data?.next_due_at ?? control.next_due_at ?? null;
+  const cadence = d?.conformity_cadence || d?.implementation?.conformity_cadence || custom?.conformity_cadence;
+  const designation = d?.designation && d.designation !== 'not_assessed' ? d.designation.replace(/_/g, ' ') : null;
+  const scopeNames = scopeFws.map((f) => f.label).join(', ');
+  const statement = d?.description || custom?.statement || control.description;
+  const question = d?.control_question || '';
 
+  // Related controls, each with the reason it is related.
+  const related = d?.related && !Array.isArray(d.related) ? d.related : null;
+  const relatedRows = [
+    ...(related?.family ?? []).map((c) => ({ id: c.control_id, title: c.title, why: 'Same control family' })),
+    ...(related?.by_requirements ?? []).map((c) => ({
+      id: c.control_id, title: c.title,
+      why: c.requirements?.length ? `Shares ${c.requirements.join(', ')}` : `Shares ${c.shared} requirement${c.shared === 1 ? '' : 's'}`,
+    })),
+  ];
+
+  // What to collect: the in-scope frameworks' own asks; with nothing in scope,
+  // the consolidated set across frameworks.
+  const ev = d?.evidence;
+  const collect = ev?.required
+    ? ev.required.map((a) => ({ name: a.name, method: a.collection_method }))
+    : ev?.consolidated?.length
+      ? ev.consolidated.map((a) => ({ name: a.name, method: a.collection_method }))
+      : (ev?.manual ?? []).map((m) => ({ name: m.name || 'Evidence', method: 'manual' }));
+
+  const cmmActual = d?.cmm_actual ?? null;
+  const cmmTarget = d?.cmm_target ?? d?.cmm_target_default ?? 3;
+  const targetCriteria = Object.entries(d?.implementation?.maturity_levels ?? {})
+    .find(([k]) => new RegExp(`Level\\s*${cmmTarget}\\b`).test(k))?.[1] ?? '';
+  const methodCount = collect.reduce<Record<string, number>>((acc, a) => { acc[a.method] = (acc[a.method] || 0) + 1; return acc; }, {});
+
+  const checkCounts = control.checks.reduce<Record<string, number>>((acc, c) => {
+    const s = c.last_run?.status || 'not_run'; acc[s] = (acc[s] || 0) + 1; return acc;
+  }, {});
+  const cov = d?.coverage;
+
+  const profile = d?.profile || (custom?.profile as CustomControlProfile | undefined);
+  const dateOnly = (v?: string | null) => (v ? String(v).slice(0, 10) : '');
   const editInitial: Partial<CustomControlFormValues> = {
     code: control.control_id,
-    name: customDetailQ.data?.name || control.title || '',
-    statement: customDetailQ.data?.statement || detailQ.data?.description || control.description || '',
-    domain: customDetailQ.data?.domain || control.domain || control.category || '',
-    pptdf: customDetailQ.data?.pptdf || detailQ.data?.implementation?.pptdf || '',
-    conformity_cadence: customDetailQ.data?.conformity_cadence
-      || detailQ.data?.implementation?.conformity_cadence
+    name: custom?.name || control.title || '',
+    statement: custom?.statement || d?.description || control.description || '',
+    domain: custom?.domain || d?.domain || '',
+    pptdf: custom?.pptdf || d?.implementation?.pptdf || '',
+    conformity_cadence: custom?.conformity_cadence
+      || d?.implementation?.conformity_cadence
       || 'Annual',
-    control_sub_type: customDetailQ.data?.control_sub_type || control.sub_type || 'Manual',
-    implements_scf_ids: customDetailQ.data?.implements_scf_ids || detailQ.data?.implements_scf_ids || [],
+    control_sub_type: custom?.control_sub_type || control.sub_type || 'Manual',
+    implements_scf_ids: custom?.implements_scf_ids || d?.implements_scf_ids || [],
+    category: profile?.category || '',
+    sub_category: profile?.sub_category || '',
+    control_type: profile?.control_type || '',
+    operating_frequency: profile?.operating_frequency || '',
+    department_id: profile?.department_id ?? null,
+    backup_owner_id: profile?.backup_owner_id ?? null,
+    owner_user_id: d?.owner_user_id ?? null,
+    reviewer_user_id: d?.reviewer_user_id ?? null,
+    priority: d?.priority || 'medium',
+    is_key_control: !!d?.is_key_control,
+    regulatory_source: profile?.regulatory_source || '',
+    effective_date: dateOnly(profile?.effective_date),
+    review_date: dateOnly(profile?.review_date),
+    objective: (custom?.objective as string | undefined) || d?.implementation?.objective || '',
+    implementation_guidance: (custom?.implementation_guidance as string | undefined)
+      || d?.implementation?.guidance || '',
+    testing_guidance: (custom?.testing_guidance as string | undefined)
+      || d?.implementation?.testing_guidance || '',
+    recommended_evidence: ((custom?.recommended_evidence as CustomControlFormValues['recommended_evidence'])
+      || (d?.evidence?.authored as CustomControlFormValues['recommended_evidence'])
+      || []),
+    links: linkedRecords,
   };
 
   return (
-    <div className="mx-auto max-w-[1200px] px-1 py-1">
-      <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-sm">
-        <Link href={backHref} className="text-slate-400 hover:text-slate-700">Controls</Link>
-        <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
-        <span className="font-semibold text-slate-700">{control.control_id}</span>
+    <div className="mx-auto max-w-[1400px] px-1 py-1">
+      <nav aria-label="Breadcrumb" className="mb-2 flex items-center gap-1.5 text-xs">
+        <Link href={backHref} className="text-slate-400 hover:text-slate-700">Common controls</Link>
+        <ChevronRight className="h-3 w-3 text-slate-300" />
+        <span className="font-medium text-slate-600">{control.control_id}</span>
       </nav>
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <CodeChip code={control.control_id} />
             {isCustom && <CustomBadge />}
             <ControlStatusPill status={control.overall_status} />
-            {control.importance && <span className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">{control.importance}</span>}
-            {(detailQ.data?.owner_name || control.owner_name) && (
-              <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">
-                Owner: {detailQ.data?.owner_name || control.owner_name}
+            {d?.is_material && (
+              <span title="SCF weights this as a material control" className="rounded bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                Material
               </span>
             )}
           </div>
-          <BindingSourceCaption source={bindingSource} />
-          <h1 className="mt-1.5 text-2xl font-bold text-slate-900">{control.title}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-500">
+          <h1 className="mt-1.5 text-xl font-bold leading-snug text-slate-900 sm:text-2xl">{control.title}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-x-3.5 gap-y-1.5 text-xs text-slate-500">
+            {control.category && (
+              <span className="inline-flex items-center gap-1.5"><FolderTree className="h-3.5 w-3.5 text-slate-400" />{control.category}</span>
+            )}
             {control.sub_type && (
               <span className="inline-flex items-center gap-1.5"><Activity className="h-3.5 w-3.5 text-slate-400" />{control.sub_type}</span>
             )}
-            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">{control.category}</span>
+            {cadence && (
+              <span className="inline-flex items-center gap-1.5"><RefreshCw className="h-3.5 w-3.5 text-slate-400" />Reassess {String(cadence).toLowerCase()}</span>
+            )}
+            <span className="inline-flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-slate-400" />
+              {lastTested ? `Tested ${new Date(lastTested).toLocaleDateString()}` : 'Not tested yet'}
+            </span>
+            {reqGroups.map((g) => (
+              <button key={g.framework} type="button" onClick={() => setTab('requirements')}
+                title={`${g.count} ${g.label} requirement${g.count === 1 ? '' : 's'}`}
+                className="inline-flex items-center gap-1 rounded-md bg-white px-1.5 py-0.5 font-medium text-slate-700 ring-1 ring-slate-200 hover:ring-slate-300">
+                <span className="size-1.5 rounded-full" style={{ backgroundColor: frameworkColor(g.framework) }} />
+                {g.label}
+                <span className="tabular-nums text-slate-400">{g.count}</span>
+              </button>
+            ))}
           </div>
-          <OwnershipEditors
-            code={code}
-            ownerId={ownerId}
-            reviewerId={reviewerId}
-            assignedIds={assignedIds}
-            nextDueAt={nextDueAt}
-            onSaved={() => { void invalidateControl(); }}
-          />
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           {isCustom && (
             <>
-              <button
-                type="button"
-                onClick={() => setEditOpen(true)}
-                className="inline-flex items-center rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-              >
+              <LifecycleActions code={code} profile={d?.profile} onDone={() => { void invalidateControl(); }} />
+              <button type="button" onClick={() => setEditOpen(true)}
+                className="inline-flex h-8 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
                 Edit
               </button>
-              <button
-                type="button"
-                disabled={retireCustom.isPending}
-                onClick={() => {
-                  if (confirm(`Retire custom control ${code}? It will leave the active library.`)) {
-                    retireCustom.mutate();
-                  }
-                }}
-                className="inline-flex items-center rounded-lg border border-rose-200 bg-white px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
-              >
-                {retireCustom.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Retire'}
+              <button type="button" disabled={retireCustom.isPending}
+                onClick={() => { if (confirm(`Retire custom control ${code}? It will leave the active library.`)) retireCustom.mutate(); }}
+                className="inline-flex h-8 items-center rounded-lg border border-rose-200 bg-white px-3 text-xs font-semibold text-rose-700 hover:bg-rose-50 disabled:opacity-50">
+                {retireCustom.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Retire'}
               </button>
             </>
           )}
-          <button
-            onClick={runTest}
-            disabled={runningAll || !(control.checks?.length)}
-            title={control.checks?.length ? 'Run all automated tests for this control' : 'This control is evidenced manually — no automated test'}
-            className="inline-flex shrink-0 items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {runningAll ? <Loader2 className="h-4 w-4 animate-spin" /> : <Activity className="h-4 w-4" />}
-            Run test
-          </button>
+          {control.checks.length > 0 && (
+            <button onClick={runTest} disabled={runningAll} title="Run every automated test linked to this control"
+              className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-primary-600 px-3 text-xs font-semibold text-white shadow-sm hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {runningAll ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+              Run tests
+            </button>
+          )}
         </div>
+      </header>
+
+      <div className="mt-3">
+        <PropertiesBar
+          code={code}
+          ownerId={d?.owner_user_id ?? null}
+          reviewerId={d?.reviewer_user_id ?? null}
+          assignedIds={d?.assigned_user_ids ?? null}
+          nextDueAt={d?.next_due_at ?? null}
+          onSaved={() => { void qc.invalidateQueries({ queryKey: ['automation-common'] }); }}
+          facts={[
+            { label: 'Assurance', value: <span className="capitalize">{designation || 'Not assessed'}</span>, muted: !designation },
+            { label: 'Automated checks', value: control.checks_count ? `${control.checks_count} linked` : 'None', muted: !control.checks_count },
+            { label: 'Origin', value: isCustom ? 'Custom' : `SCF ${d?.release ?? ''}`.trim() },
+          ]}
+        />
       </div>
 
-      <nav aria-label="Sections" className="mb-5 mt-5 flex gap-1 border-b border-slate-200">
+      <nav aria-label="Sections" role="tablist" className="mb-4 mt-3 flex gap-0.5 overflow-x-auto border-b border-slate-200">
         {tabs.map((t) => {
           const active = tab === t.id;
           return (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={`relative -mb-px flex items-center gap-2 px-3 py-2.5 text-sm font-medium transition-colors ${active ? 'text-primary-700' : 'text-slate-500 hover:text-slate-800'}`}
-            >
+            <button key={t.id} type="button" role="tab" aria-selected={active} onClick={() => setTab(t.id)}
+              className={`relative -mb-px flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-2 text-[13px] font-medium transition-colors ${active ? 'text-primary-700' : 'text-slate-500 hover:text-slate-800'}`}>
               {t.label}
-              {t.count !== undefined && <span className="tabular-nums text-xs text-slate-400">{t.count}</span>}
-              {active && <span className="absolute inset-x-3 -bottom-px h-0.5 rounded-full bg-primary-600" />}
+              {!!t.count && (
+                <span className={`rounded-full px-1.5 text-[10px] font-semibold tabular-nums ${active ? 'bg-primary-100 text-primary-700' : 'bg-slate-100 text-slate-500'}`}>
+                  {t.count}
+                </span>
+              )}
+              {active && <span className="absolute inset-x-2 -bottom-px h-0.5 rounded-full bg-primary-600" />}
             </button>
           );
         })}
       </nav>
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_20rem]">
-        <div className="min-w-0 space-y-4">
-          {tab === 'overview' && (
-            <>
-              {(detailQ.data?.designation != null
-                || detailQ.data?.inheritance_type
-                || detailQ.data?.exception_id != null) && (
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-slate-50/80 px-3.5 py-2 text-[12px] text-slate-600">
-                  <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Assurance</span>
-                  {detailQ.data.designation != null && (
-                    <span>
-                      Designation:{' '}
-                      <span className="font-medium text-slate-800">
-                        {String(detailQ.data.designation).replace(/_/g, ' ')}
-                      </span>
+      <div className="min-w-0 space-y-4">
+        {tab === 'overview' && (
+          <>
+            {(d?.inheritance_type || d?.exception_id != null) && (
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border border-slate-200 bg-slate-50/80 px-3.5 py-2 text-[12px] text-slate-600">
+                {d?.inheritance_type && (
+                  <span>
+                    Inherited from vendor
+                    <span className="ml-1 font-medium text-slate-800">
+                      ({d.inheritance_type}{d.provider_vendor_id != null ? ` · vendor #${d.provider_vendor_id}` : ''})
                     </span>
-                  )}
-                  {detailQ.data.inheritance_type && (
-                    <span>
-                      Inherited from vendor
-                      <span className="ml-1 font-medium text-slate-800">
-                        ({detailQ.data.inheritance_type}
-                        {detailQ.data.provider_vendor_id != null
-                          ? ` · vendor #${detailQ.data.provider_vendor_id}`
-                          : ''}
-                        )
-                      </span>
-                    </span>
-                  )}
-                  {detailQ.data.exception_id != null && (
-                    <span>
-                      Exception #{detailQ.data.exception_id}
-                      {detailQ.data.alternative_scf_id
-                        ? ` · alt ${detailQ.data.alternative_scf_id}`
-                        : ''}
-                    </span>
-                  )}
-                </div>
-              )}
-              <Panel title="Control statement">
-                {isCustom && (
-                  <p className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] leading-relaxed text-slate-500">
-                    SCF catalogue text stays read-only; write your own statement.
-                  </p>
+                  </span>
                 )}
-                {/* The list endpoint sends description: null for all 1,534 rows so the
-                    table stays light; the detail endpoint carries the real text. */}
-                {(detailQ.data?.description || customDetailQ.data?.statement || control.description) ? (
-                  <p className="text-sm leading-relaxed text-slate-700">
-                    {detailQ.data?.description || customDetailQ.data?.statement || control.description}
-                  </p>
-                ) : detailQ.isLoading ? (
-                  <p className="text-sm text-slate-400">Loading…</p>
+                {d?.exception_id != null && (
+                  <span>
+                    Exception #{d.exception_id}
+                    {d.alternative_scf_id ? ` · alternative ${d.alternative_scf_id}` : ''}
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              <SummaryCard title="Control statement" className="md:col-span-2"
+                action={statement && (statement.length > 320 || question.length > 140) ? 'Read in full' : undefined}
+                onAction={() => setPanel('statement')}>
+                {statement ? (
+                  <p className="line-clamp-4 text-sm leading-relaxed text-slate-700">{statement}</p>
                 ) : (
                   <p className="text-sm italic text-slate-400">No statement published for this control.</p>
                 )}
-                {detailQ.data?.control_question && !isCustom && (
-                  <p className="mt-3 border-l-2 border-slate-200 pl-3 text-[13px] italic leading-relaxed text-slate-500">
-                    {detailQ.data.control_question}
-                  </p>
+                {question && (
+                  <p className="mt-2.5 line-clamp-2 border-l-2 border-slate-200 pl-3 text-[13px] italic leading-relaxed text-slate-500">{question}</p>
                 )}
-                {control.guidance && (
-                  <>
-                    <h3 className="mb-2 mt-5 text-sm font-bold text-slate-900">Implementation guidance</h3>
-                    <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600">{control.guidance}</p>
-                  </>
+                {reqGroups.length > 0 && (
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
+                    {reqGroups.map((g) => (
+                      <span key={g.framework} className="inline-flex min-w-0 items-center gap-1">
+                        <span className="size-1.5 shrink-0 rounded-full" style={{ backgroundColor: frameworkColor(g.framework) }} />
+                        <span className="font-medium text-slate-700">{g.label}</span>
+                        <span className="truncate font-mono text-[10px]">
+                          {[...g.items].sort((a, b) => byCode(a.code, b.code)).slice(0, 6).map((i) => i.code).join(' · ')}
+                          {g.items.length > 6 ? ` +${g.items.length - 6}` : ''}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
                 )}
-              </Panel>
-              {detailQ.data?.implementation && (
-                <ImplementationPanel impl={detailQ.data.implementation} />
-              )}
-              {detailQ.data?.coverage && <CoveragePanel cov={detailQ.data.coverage} />}
-              {detailQ.data?.evidence && (
-                <EvidencePanel ev={detailQ.data.evidence} mode={detailQ.data.assurance_mode} />
-              )}
-              {isCustom && (
-                <AttachedChecksPanel
-                  code={code}
-                  initialIds={boundCheckIds}
-                  onSaved={() => { void invalidateControl(); }}
-                />
-              )}
-              <Panel title="Automated tests">
-                {(bindingSource === 'covers' || bindingSource === 'soc2_fallback') && (
-                  <div className="mb-3"><BindingSourceCaption source={bindingSource} /></div>
-                )}
-                {control.checks?.length ? (
+              </SummaryCard>
+
+              <SummaryCard title="Related controls" meta={relatedRows.length ? String(relatedRows.length) : undefined}
+                action={relatedRows.length > 4 ? `View all ${relatedRows.length}` : undefined} onAction={() => setPanel('related')}>
+                {relatedRows.length ? (
                   <ul className="space-y-2">
-                    {control.checks.map((chk, i) => (
-                      <CheckRow
-                        key={i}
-                        chk={chk}
-                        connectionId={awsConnectionId}
-                        onRan={() => { void invalidateControl(); }}
-                      />
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="flex items-start gap-2.5 rounded-lg border border-slate-200 bg-slate-50/70 px-3.5 py-3">
-                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
-                    <p className="text-sm text-slate-600">No collector asserts this control yet. Its status is <span className="font-semibold">not assessed</span> — not satisfied. Connect a collector on the Connections page, or record the manual evidence listed above.</p>
-                  </div>
-                )}
-              </Panel>
-            </>
-          )}
-
-          {tab === 'tests' && (
-            detailQ.isLoading ? (
-              <Panel title="Automated tests">
-                <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
-              </Panel>
-            ) : (
-              <TestGroupsPanel
-                groups={detailQ.data?.test_groups ?? []}
-                connectionId={awsConnectionId}
-                bindingSource={bindingSource}
-                onRan={() => {
-                  qc.invalidateQueries({ queryKey: ['automation-common-detail', code] });
-                  qc.invalidateQueries({ queryKey: ['automation-common'] });
-                }}
-              />
-            )
-          )}
-
-          {tab === 'artifacts' && <ControlArtifactsPanel code={code} />}
-
-          {tab === 'risks' && <ControlRisksPanel code={code} />}
-
-          {tab === 'assets' && <ControlAssetsPanel code={code} />}
-
-          {tab === 'requirements' && (
-            <>
-              {isCustom && (
-                <Panel title="Edit mappings" action={<span className="text-xs text-slate-400">SCF ids this control implements</span>}>
-                  <p className="mb-2 text-[12px] leading-relaxed text-slate-500">
-                    One SCF id per line (e.g. GOV-01). Requirement links from framework libraries appear below when the backend wires them.
-                  </p>
-                  <textarea
-                    value={implementsDraft}
-                    onChange={(e) => setImplementsDraft(e.target.value)}
-                    rows={4}
-                    placeholder={'GOV-01\nIAC-06'}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-700 focus:border-primary-500 focus:outline-none"
-                  />
-                  <div className="mt-2 flex justify-end">
-                    <button
-                      type="button"
-                      disabled={saveMappings.isPending}
-                      onClick={() => saveMappings.mutate()}
-                      className="inline-flex items-center rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
-                    >
-                      {saveMappings.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save mappings'}
-                    </button>
-                  </div>
-                </Panel>
-              )}
-              <Panel title="Linked requirements" action={<span className="text-xs text-slate-400">Every framework obligation this control discharges</span>}>
-                {detailQ.isLoading ? (
-                  <div className="flex h-32 items-center justify-center text-slate-400"><Loader2 className="h-5 w-5 animate-spin" /></div>
-                ) : detailQ.isError ? (
-                  <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-6 text-center text-sm text-rose-600">
-                    Couldn&apos;t load requirement text.
-                  </div>
-                ) : reqGroupsFull.length ? (
-                  <div className="space-y-3">
-                    <p className="text-xs text-slate-500">
-                      <span className="font-semibold tabular-nums text-slate-700">{detailQ.data?.requirement_count}</span> requirements across{' '}
-                      <span className="font-semibold tabular-nums text-slate-700">{detailQ.data?.framework_count}</span> frameworks
-                      <span className="text-slate-400"> · crosswalked via SCF {detailQ.data?.release}</span>
-                    </p>
-                    {(detailQ.data?.framework_count ?? 0) > 10 && (
-                      <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
-                        This control appears in <span className="font-semibold text-slate-700">{detailQ.data?.framework_count}</span> frameworks
-                        because many of them restate the same underlying obligation. A high count is crosswalk breadth,
-                        not extra assurance — authored mappings below are our own and capped at 8 per framework.
-                      </p>
-                    )}
-                    {reqGroupsFull.map((g) => (
-                      <RequirementGroup key={g.framework} g={g} defaultOpen={false} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
-                    {isCustom
-                      ? 'No framework requirements linked yet. Add SCF ids above; requirement rows appear when mappings resolve.'
-                      : 'This control is in the catalog but no framework you have selected requires it.'}
-                  </div>
-                )}
-              </Panel>
-            </>
-          )}
-
-          {tab === 'evidence' && (
-            <ControlEvidencePanel
-              code={code}
-              mode={detailQ.data?.assurance_mode}
-              collected={evidence}
-            />
-          )}
-
-          {tab === 'history' && <HistoryPanel code={code} />}
-        </div>
-
-        <aside className="space-y-4">
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-1 text-base font-bold text-slate-900">Status</h2>
-            {(bindingSource === 'covers' || bindingSource === 'soc2_fallback') && (
-              <div className="mb-2"><BindingSourceCaption source={bindingSource} /></div>
-            )}
-            <Fact label="Implementation" value={<ControlStatusPill status={control.overall_status} inline />} />
-            <Fact label="Sub-type" value={control.sub_type || '—'} />
-            <Fact label="Origin" value={isCustom ? 'Custom' : 'SCF'} />
-            <Fact label="Checks" value={`${control.checks_count} linked`} />
-            <Fact label="Last tested" value={lastTested ? new Date(lastTested).toLocaleDateString() : 'Not tested'} muted={!lastTested} />
-            <Fact
-              label="Owner"
-              value={detailQ.data?.owner_name || control.owner_name || (ownerId != null ? `User ${ownerId}` : 'Unassigned')}
-              muted={!ownerId}
-            />
-            <Fact
-              label="Next due"
-              value={nextDueAt ? new Date(nextDueAt).toLocaleDateString() : '—'}
-              muted={!nextDueAt}
-            />
-          </section>
-
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-3 text-base font-bold text-slate-900">Framework mappings</h2>
-            {reqGroups.length ? (
-              <div className="space-y-3">
-                {reqGroups.map((g) => (
-                  <div key={g.fw}>
-                    <FrameworkBadge fw={g.fw} />
-                    <div className="mt-1.5 flex flex-wrap gap-1">
-                      {g.items.map((r) => (
-                        <span key={r.code} title={r.text || r.name} className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-medium text-slate-600">{r.code}</span>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-amber-600">Not mapped to any framework requirement</p>
-            )}
-          </section>
-
-          {detailQ.data?.related && (detailQ.data.related.family.length > 0 || detailQ.data.related.by_requirements.length > 0) && (
-            <section className="rounded-xl border border-slate-200 bg-white p-5">
-              <h2 className="mb-3 text-base font-bold text-slate-900">Related controls</h2>
-              {detailQ.data.related.family.length > 0 && (
-                <div className="mb-4">
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Same control family</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {detailQ.data.related.family.map((c) => (
-                      <Link key={c.control_id} href={`/automation/soc2-controls/${c.control_id}`} title={c.title || c.control_id}>
-                        <CodeChip code={c.control_id} className="hover:bg-primary-600 hover:text-white" />
-                      </Link>
-                    ))}
-                  </div>
-                </div>
-              )}
-              {detailQ.data.related.by_requirements.length > 0 && (
-                <div>
-                  <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Shares specific requirements</p>
-                  <ul className="space-y-1.5">
-                    {detailQ.data.related.by_requirements.map((c) => (
-                      <li key={c.control_id}>
-                        <Link href={`/automation/soc2-controls/${c.control_id}`} className="group flex items-baseline gap-2">
-                          <CodeChip code={c.control_id} className="group-hover:bg-primary-600 group-hover:text-white" />
-                          <span className="min-w-0 flex-1 truncate text-[12px] text-slate-600 group-hover:text-slate-900">{c.title}</span>
-                          <span className="shrink-0 text-[10px] tabular-nums text-slate-400">{c.shared}</span>
+                    {relatedRows.slice(0, 4).map((c) => (
+                      <li key={c.id} className="min-w-0">
+                        <Link href={`/automation/soc2-controls/${c.id}`} className="group flex items-center gap-2">
+                          <CodeChip code={c.id} className="shrink-0 group-hover:bg-primary-600 group-hover:text-white" />
+                          <span className="min-w-0 truncate text-[12px] text-slate-700 group-hover:text-slate-900">{c.title}</span>
                         </Link>
+                        <p className="mt-0.5 truncate text-[10px] text-slate-400">{c.why}</p>
                       </li>
                     ))}
                   </ul>
-                  <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
-                    Ranked by how specific the shared requirements are. One shared by two controls counts for far more
-                    than one shared by thirty.
+                ) : (
+                  <p className="text-[13px] leading-relaxed text-slate-500">
+                    {scopeFws.length ? `No other in-scope control shares ${scopeNames} requirements with this one.` : 'No related controls.'}
                   </p>
+                )}
+              </SummaryCard>
+
+              <SummaryCard title="What to collect" meta={collect.length ? String(collect.length) : undefined}
+                action={collect.length ? 'View evidence list' : undefined} onAction={() => setPanel('evidence')}>
+                {collect.length ? (
+                  <>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      <Tally n={methodCount.manual || 0} label=" uploaded by hand" dot={METHOD_DOT.manual} />
+                      <Tally n={methodCount.hybrid || 0} label=" hybrid" dot={METHOD_DOT.hybrid} />
+                      <Tally n={methodCount.automated || 0} label=" from a collector" dot={METHOD_DOT.automated} />
+                    </div>
+                    <ul className="mt-2.5 space-y-1.5">
+                      {collect.slice(0, 4).map((a, i) => (
+                        <li key={`${a.name}-${i}`} className="flex items-center gap-2 text-[12px] text-slate-700">
+                          <span className={`size-1.5 shrink-0 rounded-full ${METHOD_DOT[a.method] || METHOD_DOT.manual}`} />
+                          <span className="min-w-0 truncate">{a.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                ) : (
+                  <p className="text-[13px] leading-relaxed text-slate-500">
+                    {scopeFws.length ? `${scopeNames} name no specific evidence for this control.` : 'No evidence is defined for this control.'}
+                  </p>
+                )}
+              </SummaryCard>
+
+              <SummaryCard title="Automated testing"
+                meta={control.checks.length ? `${control.checks.length} test${control.checks.length === 1 ? '' : 's'}` : undefined}
+                action={control.checks.length ? 'Open tests' : cov?.state === 'connect_one' ? 'See sources and tests' : undefined}
+                onAction={() => setTab('tests')}>
+                {control.checks.length ? (
+                  <>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      <Tally n={checkCounts.passed || 0} label=" passing" dot="bg-emerald-500" />
+                      <Tally n={checkCounts.failed || 0} label=" failing" dot="bg-rose-500" />
+                      <Tally n={(checkCounts.not_run || 0) + (checkCounts.error || 0) + (checkCounts.collection_failed || 0)} label=" not run" dot="bg-slate-300" />
+                    </div>
+                    {cov?.satisfied_by?.length ? (
+                      <p className="mt-2.5 text-[12px] text-slate-600">Evidenced by {cov.satisfied_by.join(', ')}</p>
+                    ) : null}
+                    <div className="mt-2"><BindingSourceCaption source={bindingSource} /></div>
+                  </>
+                ) : cov?.state === 'connect_one' ? (
+                  <p className="text-[13px] leading-relaxed text-slate-600">
+                    Automatable. Connect any <span className="font-semibold">one</span> of {cov.provider_count} sources and its results count here.
+                  </p>
+                ) : cov?.state === 'unbound' ? (
+                  <p className="text-[13px] leading-relaxed text-slate-600">
+                    A machine could assess this control, but no check reaches it yet. That is a gap in what is built, not a manual control.
+                  </p>
+                ) : (
+                  <p className="text-[13px] leading-relaxed text-slate-600">
+                    Manual control. No collector can prove it, so evidence is uploaded by hand.
+                  </p>
+                )}
+              </SummaryCard>
+
+              {isCustom && d && <RegisterCard d={d} />}
+
+              <SummaryCard title="How to implement" meta={d?.implementation ? `Target: level ${cmmTarget}` : undefined}
+                action={d?.implementation ? 'Rate maturity and read guidance' : undefined} onAction={() => setPanel('implement')}>
+                {d?.implementation ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 text-[12px]">
+                      <span className="text-slate-500">Operates at</span>
+                      <span className={cmmActual == null ? 'text-slate-400' : 'font-semibold text-slate-800'}>
+                        {cmmActual == null ? 'Not rated' : `Level ${cmmActual} · ${LEVELS[cmmActual]?.name}`}
+                      </span>
+                    </div>
+                    <div className="mt-1.5"><MaturityMeter current={cmmActual} target={cmmTarget} /></div>
+                    {targetCriteria && (
+                      <p className="mt-2.5 line-clamp-3 text-[12px] leading-relaxed text-slate-600">
+                        <span className="font-medium text-slate-700">Level {cmmTarget} means: </span>
+                        {targetCriteria.split('\n')[0]}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[13px] text-slate-500">No maturity guidance published for this control.</p>
+                )}
+              </SummaryCard>
+            </div>
+
+            {isCustom && (
+              <AttachedChecksPanel code={code} initialIds={boundCheckIds} onSaved={() => { void invalidateControl(); }} />
+            )}
+
+            <DetailPanel open={panel === 'statement'} onClose={() => setPanel(null)} title="Control statement" subtitle={control.control_id}>
+              <p className="text-sm leading-relaxed text-slate-700">{statement}</p>
+              {question && (
+                <p className="mt-4 border-l-2 border-slate-200 pl-3 text-[13px] italic leading-relaxed text-slate-500">{question}</p>
+              )}
+            </DetailPanel>
+            <DetailPanel open={panel === 'related'} onClose={() => setPanel(null)} title="Related controls"
+              subtitle={scopeFws.length ? `In-scope controls only · ${scopeNames}` : undefined}>
+              <ul className="divide-y divide-slate-100">
+                {relatedRows.map((c) => (
+                  <li key={c.id} className="py-2.5">
+                    <Link href={`/automation/soc2-controls/${c.id}`} className="group flex items-center gap-2">
+                      <CodeChip code={c.id} className="shrink-0 group-hover:bg-primary-600 group-hover:text-white" />
+                      <span className="min-w-0 truncate text-[13px] font-medium text-slate-800 group-hover:text-primary-700">{c.title}</span>
+                    </Link>
+                    <p className="mt-1 text-[11px] text-slate-500">{c.why}</p>
+                  </li>
+                ))}
+              </ul>
+            </DetailPanel>
+            <DetailPanel open={panel === 'evidence'} onClose={() => setPanel(null)} title="What to collect" wide
+              subtitle={scopeFws.length ? `What ${scopeNames} ask for, and what is already linked` : undefined}>
+              <EvidenceWorkspace code={code} />
+            </DetailPanel>
+            <DetailPanel open={panel === 'implement'} onClose={() => setPanel(null)} title="How to implement" wide
+              subtitle={d?.implementation?.maturity_from && isCustom
+                ? `Written for this control, with the capability criteria published for ${d.implementation.maturity_from}.`
+                : 'SCF capability maturity: where this control operates today, where it should be, and what each level takes.'}>
+              {(d?.implementation?.guidance || d?.implementation?.testing_guidance) && (
+                <div className="mb-4 space-y-3">
+                  {d?.implementation?.guidance && (
+                    <div>
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Implementation guidance</p>
+                      <p className="whitespace-pre-line text-[13px] leading-relaxed text-slate-700">{d.implementation.guidance}</p>
+                    </div>
+                  )}
+                  {d?.implementation?.testing_guidance && (
+                    <div>
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Testing guidance</p>
+                      <p className="whitespace-pre-line text-[13px] leading-relaxed text-slate-700">{d.implementation.testing_guidance}</p>
+                    </div>
+                  )}
                 </div>
               )}
-            </section>
-          )}
-        </aside>
+              {d?.implementation && (
+                <MaturityPanel code={code} levels={d.implementation.maturity_levels} solutions={d.implementation.solutions}
+                  cadence={d.implementation.conformity_cadence} pptdf={d.implementation.pptdf}
+                  cmmActual={cmmActual} cmmTarget={d.cmm_target ?? null} targetDefault={d.cmm_target_default ?? 3}
+                  designation={d.designation} />
+              )}
+            </DetailPanel>
+          </>
+        )}
+
+        {tab === 'tests' && (
+          <AutomatedTests
+            code={code}
+            groups={d?.test_groups ?? []}
+            connectionId={awsConnectionId}
+            bindingSource={bindingSource}
+            bindingVia={d?.binding_via ?? []}
+            onRan={() => {
+              qc.invalidateQueries({ queryKey: ['automation-common-detail', code] });
+              qc.invalidateQueries({ queryKey: ['automation-common'] });
+            }}
+          />
+        )}
+
+        {tab === 'artifacts' && <ControlArtifactsPanel code={code} />}
+
+        {tab === 'risks' && <ControlRisksPanel code={code} />}
+
+        {tab === 'assets' && <ControlAssetsPanel code={code} />}
+
+        {tab === 'links' && <LinkedRecordsPanel code={code} />}
+
+        {tab === 'requirements' && (
+          <>
+            {isCustom && (
+              <Panel title="Edit mappings" action={<span className="text-xs text-slate-400">SCF ids this control implements</span>}>
+                <p className="mb-2 text-[12px] leading-relaxed text-slate-500">
+                  One SCF id per line (e.g. GOV-01). This control then discharges those controls&rsquo; framework
+                  requirements, and inherits their capability criteria and deliverables.
+                </p>
+                <textarea
+                  value={implementsDraft}
+                  onChange={(e) => setImplementsDraft(e.target.value)}
+                  rows={4}
+                  placeholder={'GOV-01\nIAC-06'}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 font-mono text-sm text-slate-700 focus:border-primary-500 focus:outline-none"
+                />
+                <div className="mt-2 flex justify-end">
+                  <button
+                    type="button"
+                    disabled={saveMappings.isPending}
+                    onClick={() => saveMappings.mutate()}
+                    className="inline-flex items-center rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-primary-700 disabled:opacity-50"
+                  >
+                    {saveMappings.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'Save mappings'}
+                  </button>
+                </div>
+              </Panel>
+            )}
+            <Panel
+              title="Requirements"
+              action={<span className="text-xs text-slate-400">{scopeFws.length ? `What ${scopeNames} require of this control` : 'Every framework obligation this control discharges'}</span>}
+            >
+              {reqGroups.length ? (
+                <div className="space-y-3">
+                  <p className="text-xs text-slate-500">
+                    <span className="font-semibold tabular-nums text-slate-700">{d?.requirement_count}</span> requirement{d?.requirement_count === 1 ? '' : 's'} across{' '}
+                    <span className="font-semibold tabular-nums text-slate-700">{d?.framework_count}</span> {scopeFws.length ? 'in-scope ' : ''}framework{d?.framework_count === 1 ? '' : 's'}
+                    <span className="text-slate-400"> · crosswalked via SCF {d?.release}</span>
+                  </p>
+                  {!scopeFws.length && (d?.framework_count ?? 0) > 10 && (
+                    <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] leading-relaxed text-slate-500">
+                      This control appears in <span className="font-semibold text-slate-700">{d?.framework_count}</span> frameworks
+                      because many of them restate the same underlying obligation. A high count is crosswalk breadth,
+                      not extra assurance. Choose your frameworks under Scope to see only the ones you are assessed against.
+                    </p>
+                  )}
+                  {reqGroups.map((g) => (
+                    <RequirementGroup key={g.framework} g={g} defaultOpen={reqGroups.length <= 2} />
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+                  {isCustom
+                    ? 'No framework requirements yet. Add the SCF ids this control implements above, or map it to framework controls directly.'
+                    : scopeFws.length
+                      ? `None of your in-scope frameworks (${scopeNames}) require this control.`
+                      : 'No framework requirement maps to this control.'}
+                </div>
+              )}
+            </Panel>
+          </>
+        )}
+
+        {tab === 'evidence' && (
+          <ControlEvidencePanel
+            code={code}
+            mode={d?.assurance_mode}
+            collected={evidence}
+            workspace
+          />
+        )}
+
+        {tab === 'assurance' && <AssuranceTab code={code} objectives={d?.objectives ?? []} note={d?.objectives_note} />}
+
+        {tab === 'history' && <HistoryPanel code={code} />}
       </div>
 
       <AnimatedModal

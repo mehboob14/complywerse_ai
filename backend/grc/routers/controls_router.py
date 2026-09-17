@@ -202,13 +202,21 @@ def get_control_ai_recommendations(
 ):
     """Generate AI-powered test procedures and evidence requirements for a control."""
     try:
+        # The prompt is built from the stored control, not from text in the request.
+        # The body was trusted as-is, so any client could post arbitrary text —
+        # including SCF control text shown on the automation pages — straight into
+        # a prompt. Parsed framework controls are never SCF rows. The body's text
+        # fields are kept only so existing callers don't break.
+        control = get_framework_control_or_404(request.control_id, get_user_tenants(current_user, db), db)
+        framework_name = db.query(UploadedFramework.name).filter(
+            UploadedFramework.id == control.uploaded_framework_id).scalar()
         client = get_openai_client()
         
         prompt = AI_RECOMMENDATION_PROMPT.format(
             control_id=request.control_id,
-            control_title=request.control_title,
-            control_description=request.control_description or "Not provided",
-            framework_name=request.framework_name or "General compliance framework"
+            control_title=control.title or "",
+            control_description=control.description or "Not provided",
+            framework_name=framework_name or "General compliance framework"
         )
         
         response = client.chat.completions.create(

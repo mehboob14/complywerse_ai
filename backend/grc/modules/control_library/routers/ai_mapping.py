@@ -16,6 +16,7 @@ from ....models import (
     GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.licence_guard import exclude_restricted, is_restricted_control
 
 router = APIRouter(prefix="/ai-mapping", tags=["Control Library - AI Mapping"])
 
@@ -283,8 +284,12 @@ Return a JSON object with an array of 5-10 key terms:
 
 
 def get_control_text(control_type: str, control_id: int, db: Session) -> Optional[str]:
+    """Control text for an AI prompt. Its only callers build prompts, so an SCF
+    control is refused here rather than handed back."""
     if control_type == "normalized":
         control = db.query(NormalizedControl).filter(NormalizedControl.id == control_id).first()
+        if control and is_restricted_control(control):
+            raise HTTPException(status_code=422, detail="Your control library is the Secure Controls Framework, and its licence doesn't allow its control names or text to be sent to an AI model, so AI mapping isn't available for SCF controls.")
         if control:
             return f"Title: {control.name}\nCode: {control.code}\nStatement: {control.statement or ''}\nObjective: {control.objective or ''}"
     elif control_type == "framework":
@@ -402,7 +407,8 @@ def start_analysis(
     try:
         controls_list = []
         
-        normalized_controls = db.query(NormalizedControl).limit(50).all()
+        # Candidates go to the model with name and statement; SCF rows may not.
+        normalized_controls = exclude_restricted(db.query(NormalizedControl), NormalizedControl).limit(50).all()
         for nc in normalized_controls:
             controls_list.append({
                 "id": nc.id,
@@ -756,9 +762,9 @@ def get_suggestions(
     
     all_controls = []
     
-    normalized_controls = db.query(NormalizedControl).filter(
+    normalized_controls = exclude_restricted(db.query(NormalizedControl).filter(
         NormalizedControl.id != control_id if control_type == "normalized" else True
-    ).limit(30).all()
+    ), NormalizedControl).limit(30).all()
     
     for nc in normalized_controls:
         all_controls.append({

@@ -79,6 +79,20 @@ export type ChartKind =
  *  · ChartKind   — one chart built from the Summarize setup */
 export type ReportBodyView = 'table' | 'dashboard' | ChartKind;
 
+/** User-defined derived fields. Shape lives in ./calcColumns; re-declared as a
+ *  structural type here so types.ts stays dependency-free. */
+export interface CalcColumnSpec {
+  id: string;
+  label: string;
+  kind: 'days_between' | 'difference' | 'ratio' | 'bucket' | 'concat';
+  a: string;
+  b?: string;
+  asPercent?: boolean;
+  decimals?: number;
+  bands?: { max: number | null; label: string }[];
+  separator?: string;
+}
+
 /** A saved report definition — the unit the builder edits and persists. */
 export interface ReportSpec {
   id: string;
@@ -100,6 +114,7 @@ export interface ReportSpec {
   pinnedColumns?: string[];
   sorts?: SortSpec[];
   includes?: string[];         // cross-module linkage keys to enrich (e.g. vulnerabilities, risks)
+  calcColumns?: CalcColumnSpec[];  // derived fields (days open, inherent-residual, %…)
   showLegend?: boolean;        // chart option (default on)
   showLabels?: boolean;        // data labels on marks (default off)
   shared?: boolean;            // visible to everyone in the tenant
@@ -110,7 +125,7 @@ export interface ReportSpec {
 export const emptySpec = (dataset: string): ReportSpec => ({
   id: '', name: '', description: '', dataset, rows: [], col: null, measures: [],
   rules: { logic: 'AND', conditions: [] }, search: '', view: 'table', measureIdx: 0,
-  includes: [], visibleColumns: [], columnWidths: {}, columnAlign: {}, pinnedColumns: [], sorts: [],
+  includes: [], calcColumns: [], visibleColumns: [], columnWidths: {}, columnAlign: {}, pinnedColumns: [], sorts: [],
 });
 
 /** Server-mode aggregate contract — mirrors backend POST /reporting/aggregate. */

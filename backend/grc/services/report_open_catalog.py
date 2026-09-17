@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import date, datetime
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from ..models import (
@@ -898,6 +899,34 @@ def _join_values(values: List[Any], *, limit: int = 12) -> Any:
     if len(clean) <= limit:
         return "; ".join(clean)
     return "; ".join(clean[:limit]) + f"; +{len(clean) - limit} more"
+
+
+def linked_base_ids(db: Session, base: str, target: str) -> Optional[Set[int]]:
+    """Every ``base`` row id that has at least one link to ``target``.
+
+    Scope is a subquery, not a Python id list: every edge resolver uses its
+    ``ids`` argument only inside ``.in_(ids)``, and SQLAlchemy renders a
+    ``select()`` there as ``IN (SELECT ...)``. So the whole register is scanned
+    in SQL with no parameter list to build and no row cap.
+
+    This is what lets "risks with no evidence linked" be a WHERE clause instead
+    of a browser-side pass over the first N rows — a gap filter that silently
+    stops at a page boundary reports a shortfall that isn't there, which on a
+    register is indistinguishable from an audit finding.
+
+    Returns None when the pair has no join edge, so callers can tell "no way to
+    answer this" apart from "nothing is linked".
+    """
+    fn = EDGE_RESOLVERS.get((base, target))
+    model = DATASET_MODELS.get(base)
+    if fn is None or model is None:
+        return None
+    try:
+        scope = select(model.id)
+        mapping = fn(db, scope) or {}
+    except Exception:  # noqa: BLE001 — never fail the whole report
+        return None
+    return {int(k) for k, v in mapping.items() if v}
 
 
 def resolve_related_ids(db: Session, base: str, target: str, ids: List[int]) -> Dict[int, List[int]]:

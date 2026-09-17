@@ -99,11 +99,16 @@ def test_inventory_is_not_a_verdict():
 
 
 def test_every_recordable_status_fits_the_column():
-    # SCFCheckResult.status is String(10). A longer status would truncate
-    # silently, which is how `not_applicable` would have become `not_applic`.
-    for s in _VERDICTS:
-        assert len(s) <= _MAX_STATUS, s
-    assert len("not_applicable") > _MAX_STATUS, "widen the column before adding this status"
+    # The recorder's cap has to be the column's real width. The column was widened
+    # 10 -> 20 so that `not_applicable` fits, but the cap stayed at 10: the two had
+    # drifted, and the day that status joins _VERDICTS it would have been cut to
+    # `not_applic` in silence. Pinning the cap to the model catches the next drift.
+    from grc.models import SCFCheckResult
+
+    width = SCFCheckResult.__table__.c.status.type.length
+    assert _MAX_STATUS == width
+    for s in _VERDICTS | {"not_applicable"}:
+        assert len(s) <= width, s
 
 
 def test_expiry_uses_scfs_own_three_windows():

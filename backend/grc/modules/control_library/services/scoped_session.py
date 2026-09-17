@@ -24,6 +24,7 @@ from ....models import (
     NormalizationRun,
 )
 from . import normalization as N
+from ....services.licence_guard import is_restricted_control
 
 logger = logging.getLogger(__name__)
 
@@ -81,6 +82,12 @@ def build_scoped_session(
         progress_cb(5, 100, "Loading master baseline…")
 
     base_ncs = db.query(NormalizedControl).filter(NormalizedControl.run_id == base.id).all()
+    if any(is_restricted_control(nc) for nc in base_ncs):
+        # Every base control's name is the model's classification list, sent in full
+        # with every batch. SCF names are SCF content (CC BY-ND, no AI derivatives),
+        # and on an SCF library there is no other list to classify onto. Raised as
+        # ValueError: every caller already reports that as a failed job.
+        raise ValueError("Your control library is the Secure Controls Framework, and its licence doesn't allow its control names or text to be sent to an AI model, so an AI-built unified view isn't available for it.")
     fw_name = {f.id: f.name for f in db.query(UploadedFramework).all()}
 
     # Baseline DOMAIN layer: the domain each control lives in, so the scoped view

@@ -1039,28 +1039,36 @@ def enrich_rows(
 
     merged: List[Dict[str, Any]] = []
     for r in rows:
+        row = dict(r)
         try:
             rid = int(r.get("id"))
         except (TypeError, ValueError):
-            row = dict(r)
-            for link_key in valid:
-                prefix = f"link_{link_key}"
-                row.setdefault(f"{prefix}_count", 0)
-                row.setdefault(f"{prefix}_names", "")
-                row.setdefault(f"{prefix}_open_count", 0)
             merged.append(row)
             continue
-        row = dict(r)
         for link_key, bucket in (buckets.get(rid) or {}).items():
             row.update(_flatten_link(rid, link_key, bucket))
+        merged.append(row)
+
+    # Open-ended field projection (any column from any linked module). It also
+    # derives link counts from EDGE_RESOLVERS for every pair the hand-written
+    # `_ENRICHERS` above don't cover.
+    #
+    # ORDER MATTERS. The zero stubs used to be written in the loop above, which
+    # meant every `setdefault(link_X_count, len(rel_ids))` inside
+    # enrich_xmod_fields hit a key that already existed and was discarded. The
+    # UI derives "has a real join edge" from EDGE_RESOLVERS but the counts only
+    # ever came from _ENRICHERS, so every pair the two tables disagreed on
+    # answered "nothing is linked" for every row — and a Report Builder gap
+    # filter ("risks with no internal control linked") returned the entire
+    # register as a finding. Stub only what neither source could resolve.
+    merged = enrich_xmod_fields(
+        db, dataset=dataset, rows=merged, includes=valid, project=project,
+    )
+
+    for row in merged:
         for link_key in valid:
             prefix = f"link_{link_key}"
             row.setdefault(f"{prefix}_count", 0)
             row.setdefault(f"{prefix}_names", "")
             row.setdefault(f"{prefix}_open_count", 0)
-        merged.append(row)
-
-    # Open-ended field projection (any column from any linked module)
-    return enrich_xmod_fields(
-        db, dataset=dataset, rows=merged, includes=valid, project=project,
-    )
+    return merged

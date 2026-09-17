@@ -210,7 +210,7 @@ export default function AutomationAssurancePage() {
         {frameworks.length === 0 ? (
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-600">
             No frameworks in scope yet.{' '}
-            <Link href="/automation/scope" className="font-semibold text-primary-700 hover:underline">
+            <Link href="/automation/soc2-controls?configure=scope" className="font-semibold text-primary-700 hover:underline">
               Configure scope
             </Link>{' '}
             to see automation, evidence, and indicative conformity.

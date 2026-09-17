@@ -16,6 +16,7 @@ from ....models import (
     Framework, GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.licence_guard import consolidated_recommendations, is_restricted_control
 
 router = APIRouter(prefix="/evidence-recs", tags=["Control Library - Evidence Recommendations"])
 
@@ -448,7 +449,9 @@ def generate_for_control(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Normalized control not found")
         control_text = control.statement or control.name
         control_name = control.name
+        restricted = is_restricted_control(control)
     else:
+        restricted = False
         control = db.query(FrameworkControl).options(
             joinedload(FrameworkControl.objective).joinedload(ControlObjective.domain).joinedload(FrameworkDomain.framework)
         ).filter(FrameworkControl.id == control_id).first()
@@ -459,11 +462,16 @@ def generate_for_control(
         if control.objective and control.objective.domain and control.objective.domain.framework:
             framework_name = control.objective.domain.framework.name
     
-    ai_recommendations = generate_evidence_recommendations(
-        control_text=control_text,
-        control_type=control_type,
-        control_name=control_name,
-        framework_name=framework_name
+    # An SCF control's text may not reach a model: answer from our consolidated
+    # evidence set for it instead of generating one.
+    ai_recommendations = (
+        consolidated_recommendations(control.scf_id) if restricted
+        else generate_evidence_recommendations(
+            control_text=control_text,
+            control_type=control_type,
+            control_name=control_name,
+            framework_name=framework_name
+        )
     )
     
     created_recommendations = []
@@ -546,12 +554,16 @@ def generate_for_group(
                 NormalizedControl.id == mapping.normalized_control_id
             ).first()
             if control:
-                control_text = control.statement or control.name
-                ai_recs = generate_evidence_recommendations(
-                    control_text=control_text,
-                    control_type="normalized",
-                    control_name=control.name,
-                    framework_name="Normalized"
+                # SCF domains are seeded as control groups, so one click here used to
+                # send a whole domain's SCF statements to the model, one per control.
+                ai_recs = (
+                    consolidated_recommendations(control.scf_id) if is_restricted_control(control)
+                    else generate_evidence_recommendations(
+                        control_text=control.statement or control.name,
+                        control_type="normalized",
+                        control_name=control.name,
+                        framework_name="Normalized"
+                    )
                 )
                 for rec_data in ai_recs:
                     rec = AIEvidenceRecommendation(

@@ -132,6 +132,18 @@ const MODULE_LABELS: Record<string, string> = {
   // Compliance Agents — `/agents/...` (enrollment, installer downloads,
   // results push, revoke, scan-now-push).
   agents: 'Compliance Agents',
+  // Controls Automation — `/automation/...` and `/scf/...` requests, and the
+  // business events it writes (testing, evidence, maturity, scope, collectors).
+  automation: 'Controls Automation',
+  scf: 'Controls Automation',
+  controls_automation: 'Controls Automation',
+  control_testing: 'Controls Automation',
+  control_evidence: 'Controls Automation',
+  control_maturity: 'Controls Automation',
+  scf_control_state: 'Controls Automation',
+  scf_scope: 'Controls Automation',
+  scf_audit_period: 'Controls Automation',
+  evidence_collector: 'Evidence Collectors',
 };
 
 const SUBMODULE_LABELS: Record<string, string> = {
@@ -256,6 +268,15 @@ const SUBMODULE_LABELS: Record<string, string> = {
   // Connections under compliance-plugins
   connections: 'Connections',
   'connections-scope': 'Connection Scope',
+  // Controls Automation
+  'soc2-controls': 'Common Controls',
+  common: 'Common Controls',
+  soc2: 'Automated Checks',
+  scopes: 'Scope',
+  'custom-controls': 'Custom Controls',
+  'audit-periods': 'Audit Periods',
+  assurance: 'Assurance',
+  'my-work': 'My Work',
 };
 
 const SUB_ENTITY_MODULES = new Set([
@@ -267,6 +288,7 @@ const SUB_ENTITY_MODULES = new Set([
   // CIS additions — all three modules nest resources under the
   // top-level URL prefix (e.g. /compliance-plugins/runs/...).
   'compliance-plugins', 'connect-wizard', 'agents',
+  'automation', 'scf',
 ]);
 
 function titleCase(s: string): string {

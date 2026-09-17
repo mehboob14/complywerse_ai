@@ -2,6 +2,21 @@
  "github": {
   "resources": [
    {
+    "name": "account",
+    "path": "/user",
+    "method": "GET",
+    "items": [
+     "$"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "login": "login",
+     "two_factor": "two_factor_authentication"
+    }
+   },
+   {
     "name": "orgs",
     "path": "/user/orgs",
     "method": "GET",
@@ -9,8 +24,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "login": "login",
@@ -33,8 +47,11 @@
     },
     "fields": {
      "login": "login",
-     "two_factor_required": "bool:two_factor_requirement_enabled"
-    }
+     "two_factor_required": "two_factor_requirement_enabled"
+    },
+    "items": [
+     "$"
+    ]
    },
    {
     "name": "members_no_2fa",
@@ -51,8 +68,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "login": "login"
@@ -66,8 +82,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "full_name": "full_name",
@@ -96,7 +111,10 @@
     "fields": {
      "name": "name",
      "protected": "bool:protected"
-    }
+    },
+    "items": [
+     "$"
+    ]
    }
   ],
   "checks": [
@@ -110,7 +128,8 @@
     ],
     "title": "Organizations require two-factor authentication",
     "item_name": "login",
-    "fail_msg": "Organization does not enforce mandatory 2FA for all members"
+    "fail_msg": "Organization does not enforce mandatory 2FA for all members",
+    "skip_missing": true
    },
    {
     "id": "github.members_all_have_2fa",
@@ -122,7 +141,8 @@
     ],
     "title": "No organization members without two-factor authentication",
     "item_name": "login",
-    "fail_msg": "Member has two-factor authentication disabled"
+    "fail_msg": "Member has two-factor authentication disabled",
+    "empty": "pass"
    },
    {
     "id": "github.repos_not_public",
@@ -149,6 +169,20 @@
     "title": "Default branch protection is enabled on all repositories",
     "item_name": "name",
     "fail_msg": "Default branch has no branch protection rule"
+   },
+   {
+    "id": "github.account_2fa",
+    "resource": "account",
+    "kind": "all_true",
+    "field": "two_factor",
+    "skip_missing": true,
+    "controls": [
+     "CC6.1",
+     "CC6.2"
+    ],
+    "item_name": "login",
+    "title": "The connected GitHub account has two-factor authentication",
+    "fail_msg": "The account whose token is connected has two-factor authentication off"
    }
   ]
  },
@@ -162,8 +196,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "id": "id",
@@ -179,8 +212,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "name": "full_path",
@@ -203,8 +235,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 100
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -219,8 +250,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -300,18 +330,38 @@
  "bitbucket": {
   "resources": [
    {
-    "name": "repos",
-    "path": "/repositories?role=member",
+    "name": "workspaces",
+    "path": "/user/workspaces?pagelen=100",
     "method": "GET",
     "items": [
      "values"
     ],
     "paginate": {
-     "style": "page",
-     "param": "page",
-     "size_param": "pagelen",
-     "size": 100,
-     "limit": 200
+     "style": "next_url",
+     "next": "next"
+    },
+    "fields": {
+     "slug": "workspace.slug",
+     "name": "workspace.slug"
+    }
+   },
+   {
+    "name": "repos",
+    "path": "/repositories/{workspace}?pagelen=100",
+    "method": "GET",
+    "items": [
+     "values"
+    ],
+    "paginate": {
+     "style": "next_url",
+     "next": "next"
+    },
+    "for_each": {
+     "resource": "workspaces",
+     "vars": {
+      "workspace": "slug"
+     },
+     "label_field": "slug"
     },
     "fields": {
      "full_name": "full_name",
@@ -321,17 +371,14 @@
    },
    {
     "name": "branch_restrictions",
-    "path": "/repositories/{full_name}/branch-restrictions",
+    "path": "/repositories/{full_name}/branch-restrictions?pagelen=100",
     "method": "GET",
     "items": [
      "values"
     ],
     "paginate": {
-     "style": "page",
-     "param": "page",
-     "size_param": "pagelen",
-     "size": 100,
-     "limit": 200
+     "style": "next_url",
+     "next": "next"
     },
     "for_each": {
      "resource": "repos",
@@ -411,12 +458,46 @@
     "method": "GET",
     "items": [],
     "paginate": {
-     "style": "none"
+     "style": "link_header"
     },
     "fields": {
      "label": "label",
      "status": "status",
      "sign_on_mode": "signOnMode"
+    }
+   },
+   {
+    "name": "active_users",
+    "path": "/users?filter=status%20eq%20%22ACTIVE%22&limit=200",
+    "method": "GET",
+    "items": [],
+    "paginate": {
+     "style": "link_header"
+    },
+    "fields": {
+     "id": "id",
+     "login": "profile.login"
+    }
+   },
+   {
+    "name": "user_factors",
+    "path": "/users/{id}/factors",
+    "method": "GET",
+    "items": [
+     "$"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "active_users",
+     "vars": {
+      "id": "id"
+     },
+     "label_field": "login"
+    },
+    "fields": {
+     "factors": "len:value"
     }
    }
   ],
@@ -471,6 +552,21 @@
     "title": "Integrated application inventory",
     "item_name": "label",
     "fail_msg": "No integrated applications returned"
+   },
+   {
+    "id": "okta.users_mfa_enrolled",
+    "resource": "user_factors",
+    "kind": "all_match",
+    "field": "factors",
+    "op": "gt",
+    "value": 0,
+    "controls": [
+     "CC6.1",
+     "CC6.2"
+    ],
+    "item_name": "_parent",
+    "title": "Every active user has an MFA factor enrolled",
+    "fail_msg": "Active Okta user with no enrolled MFA factor"
    }
   ]
  },
@@ -478,13 +574,15 @@
   "resources": [
    {
     "name": "users",
-    "path": "/admin/directory/v1/users?customer=my_customer&maxResults=50",
+    "path": "/admin/directory/v1/users?customer=my_customer&maxResults=500",
     "method": "GET",
     "items": [
      "users"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "pageToken",
+     "next": "nextPageToken"
     },
     "fields": {
      "email": "primaryEmail",
@@ -570,13 +668,14 @@
   "resources": [
    {
     "name": "users",
-    "path": "/users?$select=displayName,userPrincipalName,accountEnabled&$top=100",
+    "path": "/users?$select=displayName,userPrincipalName,accountEnabled&$top=999",
     "method": "GET",
     "items": [
      "value"
     ],
     "paginate": {
-     "style": "none"
+     "style": "next_url",
+     "next": "@odata.nextLink"
     },
     "fields": {
      "name": "displayName",
@@ -592,7 +691,8 @@
      "value"
     ],
     "paginate": {
-     "style": "none"
+     "style": "next_url",
+     "next": "@odata.nextLink"
     },
     "fields": {
      "upn": "userPrincipalName",
@@ -679,8 +779,7 @@
      "style": "offset",
      "param": "offset",
      "size_param": "limit",
-     "size": 100,
-     "limit": 200
+     "size": 500
     },
     "fields": {
      "id": "id",
@@ -911,8 +1010,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 50,
-     "limit": 200
+     "size": 50
     },
     "fields": {
      "id": "id",
@@ -930,8 +1028,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 50,
-     "limit": 200
+     "size": 50
     },
     "for_each": {
      "resource": "accounts",
@@ -957,8 +1054,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 50,
-     "limit": 200
+     "size": 50
     },
     "fields": {
      "name": "name",
@@ -968,7 +1064,7 @@
    },
    {
     "name": "tokens",
-    "path": "/user/tokens",
+    "path": "/user/tokens?include_expired=true",
     "method": "GET",
     "items": [
      "result"
@@ -977,8 +1073,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 50,
-     "limit": 200
+     "size": 50
     },
     "fields": {
      "name": "name",
@@ -1038,7 +1133,11 @@
      "projects"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "until",
+     "next": "pagination.next",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -1054,7 +1153,11 @@
      "teams"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "until",
+     "next": "pagination.next",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "team_id": "id",
@@ -1071,7 +1174,11 @@
      "members"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "until",
+     "next": "pagination.next",
+     "size_param": "limit",
+     "size": 100
     },
     "for_each": {
      "resource": "teams",
@@ -1168,8 +1275,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -1273,7 +1379,9 @@
     "name": "account",
     "path": "/account",
     "method": "GET",
-    "items": [],
+    "items": [
+     "$"
+    ],
     "paginate": {
      "style": "none"
     },
@@ -1407,11 +1515,15 @@
   "resources": [
    {
     "name": "services",
-    "path": "/services?limit=100",
+    "path": "/services",
     "method": "GET",
     "items": [],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "cursor",
+     "next": "last:cursor",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "name": "service.name",
@@ -1511,7 +1623,10 @@
     },
     "fields": {
      "enforced": "bool:currentConfig.database"
-    }
+    },
+    "items": [
+     "$"
+    ]
    },
    {
     "name": "network_restrictions",
@@ -1531,6 +1646,32 @@
      "entitlement": "entitlement",
      "allowed_cidrs": "config.dbAllowedCidrs",
      "allowed_cidrs_v6": "config.dbAllowedCidrsV6"
+    },
+    "items": [
+     "$"
+    ]
+   },
+   {
+    "name": "database_backups",
+    "path": "/projects/{ref}/database/backups",
+    "method": "GET",
+    "items": [
+     "$"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "projects",
+     "vars": {
+      "ref": "ref"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "backups_enabled": "bool:walg_enabled",
+     "pitr_enabled": "bool:pitr_enabled",
+     "backup_count": "len:backups"
     }
    }
   ],
@@ -1572,14 +1713,41 @@
     "title": "Database network access is IP-restricted (not open to the internet)",
     "item_name": "name",
     "fail_msg": "Project database allows connections from 0.0.0.0/0 (any IPv4 address)"
+   },
+   {
+    "id": "supabase.database_backups_enabled",
+    "resource": "database_backups",
+    "kind": "all_true",
+    "field": "backups_enabled",
+    "controls": [
+     "A1.2"
+    ],
+    "title": "Project databases are backed up daily",
+    "item_name": "_parent",
+    "fail_msg": "Project has no database backups (daily backups need a paid plan)"
    }
   ]
  },
  "neon": {
   "resources": [
    {
+    "name": "organizations",
+    "path": "/users/me/organizations",
+    "method": "GET",
+    "items": [
+     "organizations"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "id": "id",
+     "name": "name"
+    }
+   },
+   {
     "name": "projects",
-    "path": "/projects",
+    "path": "/projects?org_id={org_id}&limit=400",
     "method": "GET",
     "items": [
      "projects"
@@ -1594,6 +1762,13 @@
      "ip_allowlist_count": "len:settings.allowed_ips.ips",
      "block_public": "bool:settings.block_public_connections",
      "history_retention": "history_retention_seconds"
+    },
+    "for_each": {
+     "resource": "organizations",
+     "vars": {
+      "org_id": "id"
+     },
+     "label_field": "name"
     }
    }
   ],
@@ -1822,8 +1997,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -1842,8 +2016,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -1861,8 +2034,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "description": "description",
@@ -1881,14 +2053,36 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
+     "id": "id",
      "name": "name",
      "engine": "engine",
      "ssl": "bool:connection.ssl",
      "in_vpc": "bool:private_network_uuid"
+    }
+   },
+   {
+    "name": "database_backups",
+    "path": "/databases/{id}/backups",
+    "method": "GET",
+    "items": [
+     "$"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "for_each": {
+     "resource": "databases",
+     "vars": {
+      "id": "id"
+     },
+     "label_field": "name"
+    },
+    "fields": {
+     "backup_count": "len:backups",
+     "latest_backup_at": "backups.0.created_at"
     }
    }
   ],
@@ -1897,7 +2091,6 @@
     "id": "digitalocean.firewalls_present",
     "resource": "firewalls",
     "kind": "min_count",
-    "field": "name",
     "min": 1,
     "controls": [
      "CC6.6"
@@ -1910,7 +2103,6 @@
     "id": "digitalocean.monitoring_alerts_present",
     "resource": "monitoring_alerts",
     "kind": "min_count",
-    "field": "description",
     "min": 1,
     "controls": [
      "CC7.1"
@@ -1971,6 +2163,20 @@
     "title": "Droplets have automated backups enabled",
     "item_name": "name",
     "fail_msg": "Droplet does not have automated backups enabled"
+   },
+   {
+    "id": "digitalocean.database_backups_present",
+    "resource": "database_backups",
+    "kind": "all_match",
+    "field": "backup_count",
+    "op": "gt",
+    "value": 0,
+    "controls": [
+     "A1.2"
+    ],
+    "title": "Managed databases have restorable backups",
+    "item_name": "_parent",
+    "fail_msg": "Managed database has no backups available to restore from"
    }
   ]
  },
@@ -1982,7 +2188,11 @@
     "method": "GET",
     "items": [],
     "paginate": {
-     "style": "none"
+     "style": "page",
+     "param": "page",
+     "size_param": "page_size",
+     "size": 1000,
+     "start": 0
     },
     "fields": {
      "name": "name",
@@ -2014,7 +2224,10 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "offset",
+     "size_param": "limit",
+     "size": 1000
     },
     "fields": {
      "name": "name",
@@ -2084,7 +2297,7 @@
     "method": "GET",
     "items": [],
     "paginate": {
-     "style": "none"
+     "style": "link_header"
     },
     "fields": {
      "slug": "slug",
@@ -2095,18 +2308,23 @@
    },
    {
     "name": "projects",
-    "path": "/projects/",
+    "path": "/organizations/{org}/projects/",
     "method": "GET",
     "items": [],
     "paginate": {
-     "style": "none"
+     "style": "link_header"
     },
     "fields": {
      "slug": "slug",
      "name": "name",
-     "is_public": "isPublic",
-     "platform": "platform",
-     "org": "organization.slug"
+     "platform": "platform"
+    },
+    "for_each": {
+     "resource": "organizations",
+     "vars": {
+      "org": "slug"
+     },
+     "label_field": "slug"
     }
    },
    {
@@ -2115,7 +2333,7 @@
     "method": "GET",
     "items": [],
     "paginate": {
-     "style": "none"
+     "style": "link_header"
     },
     "for_each": {
      "resource": "organizations",
@@ -2162,24 +2380,9 @@
     "fail_msg": "Member has not enabled two-factor authentication"
    },
    {
-    "id": "sentry.projects_not_public",
-    "resource": "projects",
-    "kind": "none_match",
-    "field": "is_public",
-    "op": "eq",
-    "value": true,
-    "controls": [
-     "CC6.1"
-    ],
-    "title": "No projects are publicly exposed",
-    "item_name": "slug",
-    "fail_msg": "Project is publicly visible to unauthenticated users"
-   },
-   {
     "id": "sentry.error_monitoring_configured",
     "resource": "projects",
     "kind": "min_count",
-    "field": "slug",
     "min": 1,
     "controls": [
      "CC7.2"
@@ -2229,8 +2432,7 @@
      "style": "page",
      "param": "page",
      "size_param": "perpage",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -2416,7 +2618,8 @@
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "next_url",
+     "next": "next"
     },
     "fields": {
      "user_email": "user.email",
@@ -2480,8 +2683,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 250,
-     "limit": 250
+     "size": 250
     },
     "fields": {
      "name": "attributes.pronounceable_name",
@@ -2504,8 +2706,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 250,
-     "limit": 250
+     "size": 250
     },
     "fields": {
      "name": "attributes.name",
@@ -2571,13 +2772,16 @@
   "resources": [
    {
     "name": "escalation_policies",
-    "path": "/escalation_policies?limit=100",
+    "path": "/escalation_policies",
     "method": "GET",
     "items": [
      "escalation_policies"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "offset",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -2586,13 +2790,16 @@
    },
    {
     "name": "services",
-    "path": "/services?limit=100",
+    "path": "/services",
     "method": "GET",
     "items": [
      "services"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "offset",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -2676,7 +2883,12 @@
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "start_cursor",
+     "next": "next_cursor",
+     "more": "has_more",
+     "size_param": "page_size",
+     "size": 100
     },
     "fields": {
      "name": "name",
@@ -2880,7 +3092,9 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "offset",
+     "next": "next_page.offset"
     },
     "fields": {
      "name": "name",
@@ -2897,7 +3111,9 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "offset",
+     "next": "next_page.offset"
     },
     "for_each": {
      "resource": "workspaces",
@@ -2916,13 +3132,15 @@
    },
    {
     "name": "users",
-    "path": "/users?opt_fields=name,email&limit=50",
+    "path": "/users?opt_fields=name,email&limit=100",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "offset",
+     "next": "next_page.offset"
     },
     "fields": {
      "name": "name",
@@ -2989,10 +3207,13 @@
   "resources": [
    {
     "name": "users",
-    "path": "/users/search?maxResults=1000",
+    "path": "/users/search",
     "method": "GET",
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "startAt",
+     "size_param": "maxResults",
+     "size": 1000
     },
     "fields": {
      "displayName": "displayName",
@@ -3137,7 +3358,7 @@
     "path": "/v2",
     "method": "POST",
     "body": {
-     "query": "query { users (limit: 500) { id name email is_admin is_guest is_view_only is_pending enabled status } }"
+     "query": "query { users (limit: 1000) { id name email kind status } }"
     },
     "items": [
      "data",
@@ -3149,11 +3370,7 @@
     "fields": {
      "name": "name",
      "email": "email",
-     "admin": "bool:is_admin",
-     "guest": "bool:is_guest",
-     "view_only": "bool:is_view_only",
-     "pending": "bool:is_pending",
-     "enabled": "bool:enabled",
+     "kind": "kind",
      "status": "status"
     }
    }
@@ -3163,28 +3380,30 @@
     "id": "monday.admin_count_bounded",
     "resource": "users",
     "kind": "max_count",
-    "field": "admin",
-    "op": "truthy",
+    "field": "kind",
+    "op": "eq",
     "max": 5,
     "controls": [
      "CC6.3"
     ],
     "title": "Full admins kept to a least-privilege minimum",
     "item_name": "email",
-    "fail_msg": "More than 5 users hold full account-admin rights"
+    "fail_msg": "More than 5 users hold full account-admin rights",
+    "value": "admin"
    },
    {
     "id": "monday.no_lingering_pending_invites",
     "resource": "users",
     "kind": "none_match",
-    "field": "pending",
-    "op": "truthy",
+    "field": "status",
+    "op": "eq",
     "controls": [
      "CC6.2"
     ],
     "title": "No lingering pending/unaccepted user invites",
     "item_name": "email",
-    "fail_msg": "User invite is still pending and should be reviewed or revoked"
+    "fail_msg": "User invite is still pending and should be reviewed or revoked",
+    "value": "PENDING"
    },
    {
     "id": "monday.user_inventory",
@@ -3203,13 +3422,17 @@
   "resources": [
    {
     "name": "users",
-    "path": "/users.list?limit=100",
+    "path": "/users.list",
     "method": "GET",
     "items": [
      "members"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "cursor",
+     "next": "response_metadata.next_cursor",
+     "size_param": "limit",
+     "size": 200
     },
     "fields": {
      "name": "name",
@@ -3238,8 +3461,12 @@
     ],
     "title": "All workspace members have two-factor authentication enabled",
     "item_name": "name",
-    "skip_if_field_true": "is_bot",
-    "fail_msg": "Member does not have two-factor authentication enabled"
+    "skip_if_field_true": [
+     "is_bot",
+     "deleted"
+    ],
+    "fail_msg": "Member does not have two-factor authentication enabled",
+    "skip_missing": true
    },
    {
     "id": "slack.user_inventory",
@@ -3267,8 +3494,7 @@
      "style": "page",
      "param": "page",
      "size_param": "per_page",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "email": "email",
@@ -3375,7 +3601,11 @@
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after",
+     "next": "paging.next.after",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "email": "email",
@@ -3652,7 +3882,10 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after",
+     "next": "last_id",
+     "more": "has_more"
     },
     "fields": {
      "email": "email",
@@ -3669,7 +3902,10 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after",
+     "next": "last_id",
+     "more": "has_more"
     },
     "fields": {
      "email": "email",
@@ -3686,7 +3922,10 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after",
+     "next": "last_id",
+     "more": "has_more"
     },
     "fields": {
      "name": "name",
@@ -3702,7 +3941,10 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after",
+     "next": "last_id",
+     "more": "has_more"
     },
     "fields": {
      "name": "name",
@@ -3764,13 +4006,16 @@
   "resources": [
    {
     "name": "users",
-    "path": "/organizations/users",
+    "path": "/organizations/users?limit=1000",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after_id",
+     "next": "last_id",
+     "more": "has_more"
     },
     "fields": {
      "id": "id",
@@ -3782,13 +4027,16 @@
    },
    {
     "name": "api_keys",
-    "path": "/organizations/api_keys",
+    "path": "/organizations/api_keys?limit=1000",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after_id",
+     "next": "last_id",
+     "more": "has_more"
     },
     "fields": {
      "id": "id",
@@ -3803,13 +4051,16 @@
    },
    {
     "name": "workspaces",
-    "path": "/organizations/workspaces",
+    "path": "/organizations/workspaces?limit=1000",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "after_id",
+     "next": "last_id",
+     "more": "has_more"
     },
     "fields": {
      "id": "id",
@@ -3880,8 +4131,7 @@
      "param": "page",
      "size_param": "per_page",
      "size": 50,
-     "start": 0,
-     "limit": 200
+     "start": 0
     },
     "fields": {
      "name": "name",
@@ -3898,8 +4148,7 @@
      "param": "page",
      "size_param": "per_page",
      "size": 50,
-     "start": 0,
-     "limit": 200
+     "start": 0
     },
     "fields": {
      "name": "name",
@@ -3978,13 +4227,16 @@
   "resources": [
    {
     "name": "systemusers",
-    "path": "/systemusers?limit=100",
+    "path": "/systemusers",
     "method": "GET",
     "items": [
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "skip",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "username": "username",
@@ -4000,13 +4252,16 @@
    },
    {
     "name": "systems",
-    "path": "/systems?limit=100",
+    "path": "/systems",
     "method": "GET",
     "items": [
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "skip",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "hostname": "hostname",
@@ -4200,13 +4455,15 @@
   "resources": [
    {
     "name": "agents",
-    "path": "/agents",
+    "path": "/agents?limit=1000",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "cursor",
+     "next": "pagination.nextCursor"
     },
     "fields": {
      "name": "raw.computerName",
@@ -4219,13 +4476,15 @@
    },
    {
     "name": "users",
-    "path": "/users",
+    "path": "/users?limit=1000",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "cursor",
+     "next": "pagination.nextCursor"
     },
     "fields": {
      "email": "raw.email",
@@ -4306,7 +4565,8 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "next_url",
+     "next": "links.next"
     },
     "fields": {
      "id": "id",
@@ -4322,7 +4582,8 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "next_url",
+     "next": "links.next"
     },
     "for_each": {
      "resource": "orgs",
@@ -4339,13 +4600,14 @@
    },
    {
     "name": "issues",
-    "path": "/rest/orgs/{org_id}/issues?version=2024-10-15&status=open&limit=100",
+    "path": "/rest/orgs/{org_id}/issues?version=2024-10-15&status=open&limit=100&effective_severity_level=critical,high",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "next_url",
+     "next": "links.next"
     },
     "for_each": {
      "resource": "orgs",
@@ -4559,8 +4821,7 @@
      "style": "page",
      "param": "p",
      "size_param": "ps",
-     "size": 100,
-     "limit": 200
+     "size": 100
     },
     "fields": {
      "key": "key",
@@ -4607,8 +4868,7 @@
      "style": "page",
      "param": "p",
      "size_param": "ps",
-     "size": 100,
-     "limit": 300
+     "size": 100
     },
     "fields": {
      "key": "key",
@@ -4707,8 +4967,7 @@
      "param": "page",
      "size_param": "page_size",
      "size": 100,
-     "start": 0,
-     "limit": 300
+     "start": 0
     },
     "fields": {
      "name": "name",
@@ -4735,8 +4994,7 @@
      "param": "page",
      "size_param": "page_size",
      "size": 100,
-     "start": 0,
-     "limit": 500
+     "start": 0
     },
     "fields": {
      "severity": "severity",
@@ -4807,13 +5065,16 @@
   "resources": [
    {
     "name": "changes",
-    "path": "/table/change_request?sysparm_limit=200&sysparm_query=close_codeISNOTEMPTY&sysparm_fields=number,approval,state,close_code,sys_id",
+    "path": "/table/change_request?sysparm_query=close_codeISNOTEMPTY&sysparm_fields=number,approval,state,close_code,sys_id",
     "method": "GET",
     "items": [
      "result"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "sysparm_offset",
+     "size_param": "sysparm_limit",
+     "size": 1000
     },
     "fields": {
      "number": "raw.number",
@@ -4855,13 +5116,16 @@
    },
    {
     "name": "admin_roles",
-    "path": "/table/sys_user_has_role?sysparm_limit=200&sysparm_query=role.name=admin^user.active=true&sysparm_fields=user,role,sys_id",
+    "path": "/table/sys_user_has_role?sysparm_query=role.name=admin^user.active=true&sysparm_fields=user,role,sys_id",
     "method": "GET",
     "items": [
      "result"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "sysparm_offset",
+     "size_param": "sysparm_limit",
+     "size": 1000
     },
     "fields": {
      "user": "raw.user",
@@ -4924,13 +5188,16 @@
   "resources": [
    {
     "name": "users",
-    "path": "/users?limit=100",
+    "path": "/users",
     "method": "GET",
     "items": [
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "offset",
+     "size_param": "limit",
+     "size": 100
     },
     "fields": {
      "username": "raw.username",
@@ -5072,7 +5339,11 @@
      "clusters"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "page_token",
+     "next": "next_page_token",
+     "size_param": "page_size",
+     "size": 100
     },
     "fields": {
      "cluster_id": "cluster_id",
@@ -5111,6 +5382,20 @@
     "fields": {
      "user": "userName",
      "active": "active"
+    }
+   },
+   {
+    "name": "workspace_conf",
+    "path": "/2.0/workspace-conf?keys=enableIpAccessLists",
+    "method": "GET",
+    "items": [
+     "$"
+    ],
+    "paginate": {
+     "style": "none"
+    },
+    "fields": {
+     "ip_access_lists_enabled": "enableIpAccessLists"
     }
    }
   ],
@@ -5167,8 +5452,23 @@
     "controls": [
      "CC6.6"
     ],
-    "title": "Workspace network access is restricted by IP access lists",
-    "fail_msg": "No IP access lists configured; workspace is reachable from any network."
+    "title": "Enabled IP access lists restrict workspace network access",
+    "fail_msg": "No IP access lists configured; workspace is reachable from any network.",
+    "field": "enabled",
+    "op": "truthy"
+   },
+   {
+    "id": "databricks.ip_access_lists_enforced",
+    "resource": "workspace_conf",
+    "kind": "all_match",
+    "field": "ip_access_lists_enabled",
+    "op": "eq",
+    "value": "true",
+    "controls": [
+     "CC6.6"
+    ],
+    "title": "IP access list enforcement is switched on for the workspace",
+    "fail_msg": "enableIpAccessLists is not true, so configured IP access lists have no effect"
    }
   ]
  },
@@ -5179,7 +5479,7 @@
     "path": "/meta/whoami",
     "method": "GET",
     "items": [
-     "."
+     "$"
     ],
     "paginate": {
      "style": "none"
@@ -5196,7 +5496,9 @@
      "bases"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "offset",
+     "next": "offset"
     },
     "fields": {
      "id": "id",
@@ -5373,23 +5675,6 @@
  "confluence": {
   "resources": [
    {
-    "name": "spaces",
-    "path": "/space",
-    "method": "GET",
-    "items": [
-     "results"
-    ],
-    "paginate": {
-     "style": "none"
-    },
-    "fields": {
-     "key": "key",
-     "name": "name",
-     "type": "type",
-     "status": "status"
-    }
-   },
-   {
     "name": "groups",
     "path": "/group",
     "method": "GET",
@@ -5397,7 +5682,10 @@
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "start",
+     "size_param": "limit",
+     "size": 200
     },
     "fields": {
      "name": "name",
@@ -5413,7 +5701,10 @@
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "start",
+     "size_param": "limit",
+     "size": 200
     },
     "for_each": {
      "resource": "groups",
@@ -5702,20 +5993,21 @@
    },
    {
     "name": "workers",
-    "path": "/workers",
+    "path": "/workers?limit=100",
     "method": "GET",
     "items": [
      "results"
     ],
     "paginate": {
-     "style": "none"
+     "style": "next_url",
+     "next": "next_link"
     },
     "fields": {
      "wid": "raw.id",
      "status": "raw.status",
-     "manager": "raw.manager",
-     "dept": "raw.department",
-     "emp_type": "raw.employment_type",
+     "manager": "manager_id",
+     "dept": "department_id",
+     "emp_type": "employment_type_id",
      "terminated": "raw.termination_details",
      "not_terminated": "!raw.termination_details"
     }
@@ -5773,7 +6065,10 @@
     "method": "GET",
     "items": [],
     "paginate": {
-     "style": "none"
+     "style": "offset",
+     "param": "offset",
+     "size_param": "limit",
+     "size": 300
     },
     "fields": {
      "device_id": "device_id",
@@ -5789,7 +6084,9 @@
     "name": "device_details",
     "path": "/devices/{device_id}/details",
     "method": "GET",
-    "items": [],
+    "items": [
+     "$"
+    ],
     "paginate": {
      "style": "none"
     },
@@ -5860,7 +6157,7 @@
   "resources": [
    {
     "name": "computers",
-    "path": "/api/v1/computers-inventory?section=GENERAL&section=SECURITY&section=DISK_ENCRYPTION",
+    "path": "/api/v4/computers-inventory?section=GENERAL&section=SECURITY&section=DISK_ENCRYPTION",
     "method": "GET",
     "items": [
      "results"
@@ -5870,7 +6167,7 @@
      "param": "page",
      "size_param": "page-size",
      "size": 100,
-     "limit": 500
+     "start": 0
     },
     "fields": {
      "name": "raw.general.name",
@@ -5988,7 +6285,7 @@
     "resource": "tokens",
     "kind": "none_match",
     "field": "scope",
-    "op": "contains",
+    "op": "has_word",
     "value": "global",
     "controls": [
      "CC6.3"
@@ -6014,17 +6311,14 @@
   "resources": [
    {
     "name": "accounts",
-    "path": "/Accounts.json",
+    "path": "/Accounts.json?PageSize=1000",
     "method": "GET",
     "items": [
      "accounts"
     ],
     "paginate": {
-     "style": "page",
-     "param": "Page",
-     "size_param": "PageSize",
-     "size": 1000,
-     "limit": 1000
+     "style": "next_url",
+     "next": "next_page_uri"
     },
     "fields": {
      "sid": "sid",
@@ -6033,17 +6327,14 @@
    },
    {
     "name": "keys",
-    "path": "/Accounts/{accountSid}/Keys.json",
+    "path": "/Accounts/{accountSid}/Keys.json?PageSize=1000",
     "method": "GET",
     "items": [
      "keys"
     ],
     "paginate": {
-     "style": "page",
-     "param": "Page",
-     "size_param": "PageSize",
-     "size": 1000,
-     "limit": 1000
+     "style": "next_url",
+     "next": "next_page_uri"
     },
     "for_each": {
      "resource": "accounts",
@@ -6095,7 +6386,10 @@
      "data"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "starting_after",
+     "next": "last:id",
+     "more": "has_more"
     },
     "fields": {
      "url": "url",
@@ -6274,11 +6568,11 @@
      "users"
     ],
     "paginate": {
-     "style": "page",
-     "param": "page_number",
+     "style": "cursor",
+     "param": "next_page_token",
+     "next": "next_page_token",
      "size_param": "page_size",
-     "size": 300,
-     "limit": 300
+     "size": 300
     },
     "fields": {
      "email": "email",
@@ -6305,17 +6599,21 @@
     }
    },
    {
-    "name": "managed_domain",
-    "path": "/accounts/me/managed_domains",
+    "name": "pending_users",
+    "path": "/users?status=pending",
     "method": "GET",
     "items": [
-     "domains"
+     "users"
     ],
     "paginate": {
-     "style": "none"
+     "style": "cursor",
+     "param": "next_page_token",
+     "next": "next_page_token",
+     "size_param": "page_size",
+     "size": 300
     },
     "fields": {
-     "domain": "domain",
+     "email": "email",
      "status": "status"
     }
    }
@@ -6335,17 +6633,16 @@
    },
    {
     "id": "zoom.users_no_pending",
-    "resource": "user",
-    "kind": "none_match",
-    "field": "status",
-    "op": "eq",
-    "value": "pending",
+    "resource": "pending_users",
+    "kind": "max_count",
     "controls": [
      "CC6.2"
     ],
     "title": "No pending (un-provisioned) accounts",
     "item_name": "email",
-    "fail_msg": "Account still in pending state"
+    "fail_msg": "Account still in pending state",
+    "max": 0,
+    "empty": "pass"
    },
    {
     "id": "zoom.roles_defined",
@@ -6356,20 +6653,6 @@
      "CC6.3"
     ],
     "title": "Multiple RBAC roles defined for least privilege"
-   },
-   {
-    "id": "zoom.managed_domains_verified",
-    "resource": "managed_domain",
-    "kind": "all_match",
-    "field": "status",
-    "op": "eq",
-    "value": "verified",
-    "controls": [
-     "CC6.1"
-    ],
-    "title": "Managed login domains verified",
-    "item_name": "domain",
-    "fail_msg": "Managed domain not verified"
    }
   ]
  },
@@ -6464,7 +6747,7 @@
     },
     "fields": {
      "url": "Url",
-     "has_auth": "HttpAuth",
+     "has_auth": "HttpAuth.Username",
      "status": "Status",
      "stream": "MessageStream"
     }

@@ -32,6 +32,11 @@ published and is never paraphrased or rewritten.
 using artificial intelligence to leverage SCF content to generate policies,
 standards, procedures, metrics, risks, threats or other derivative content. No
 SCF prose is passed to a language model for generation anywhere in this codebase.
+This is enforced, not just intended: `backend/grc/services/licence_guard.py`
+keeps SCF rows out of every AI feature's corpus, and the OpenAI client shim
+refuses any prompt containing SCF wording (`tests/test_licence_guard.py`).
+Test procedures scaffolded from SCF objectives are fixed templates that quote the
+objective verbatim, with no model involved.
 
 Material in this repository that *references* SCF — the crosswalk registry,
 requirement dispositions, resolver output and consolidated evidence sets — cites
@@ -69,6 +74,13 @@ built from NIST's Cybersecurity Framework Reference Tool export, and libraries
 referencing NIST SP 800-53 and SP 800-171 — is a work of the United States
 Government and is not subject to copyright protection in the United States
 (17 U.S.C. § 105). It is reproduced verbatim.
+
+`backend/grc/seed_data/nist/sp800_53a.json` holds the NIST SP 800-53A Rev 5.2.0
+assessment procedures (examine / interview / test objects and objective
+statements) for the 787 controls that SCF objectives cite, trimmed by
+`backend/grc/tools/build_nist_53a.py` from NIST's OSCAL catalog
+(<https://github.com/usnistgov/oscal-content>, `nist.gov/SP800-53/rev5/json/NIST_SP-800-53_rev5_catalog.json`).
+Parameters are shown as NIST writes them unassigned. Public domain as above.
 
 ---
 

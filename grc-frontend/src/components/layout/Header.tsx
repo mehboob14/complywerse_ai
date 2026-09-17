@@ -60,6 +60,8 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/reports': { title: 'Quick export', subtitle: 'Module → columns → download' },
   '/reports/saved': { title: 'Saved exports', subtitle: 'Reopen what you saved' },
   '/reports/analytics': { title: 'Analytics', subtitle: 'Cross-module dashboards' },
+  '/reports/trends': { title: 'Trends', subtitle: 'KPI history across every module' },
+  '/reports/dashboards': { title: 'Dashboards', subtitle: 'Saved reports, side by side' },
   '/admin': { title: 'Administration' },
   '/is-projects': { title: 'IS Projects', subtitle: 'Track and manage information security projects across the organization' },
 };

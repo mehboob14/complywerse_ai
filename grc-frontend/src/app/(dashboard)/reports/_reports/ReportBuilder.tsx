@@ -7,7 +7,7 @@ import {
   AlertCircle, ArrowDownUp, Bookmark, Check, ChevronDown, Columns3, Copy, Download,
   Equal, FileSpreadsheet, FileText, FileType2, Filter, FolderOpen, LayoutGrid, Loader2,
   Lock, Plus, Printer, Save, Search, Sigma, Trash2, Users, X, Pencil,
-  BarChart3, Table2, ListOrdered,
+  BarChart3, Table2, ListOrdered, Calculator,
 } from 'lucide-react';
 import type { ChartKind, ColType, ColumnDef, FilterRules, ReportDataset, ReportSpec, ReportBodyView, Row, ServerQuery, SortSpec } from './types';
 import { emptySpec } from './types';
@@ -28,6 +28,8 @@ import ColumnPicker from './ColumnPicker';
 import SelectedColumnList from './SelectedColumnList';
 import SummarizePanel from './SummarizePanel';
 import { allLinkageColumns, enrichReportRows, fetchLinkageCatalog, linkageKeysForFields, linkagePresenceColumns, presenceTarget } from './linkages';
+import { buildCalcColumns, type CalcColumnDef } from './calcColumns';
+import CalcColumnPanel from './CalcColumnPanel';
 import { EMPTY_TOKEN, decodeMultiValue, isClientSideFilter, isCountColumn } from './filter-utils';
 import { parseXmodKey, xmodKey } from './openCatalog';
 import { exportCSV, exportExcelMulti, exportWord } from './exporters';
@@ -35,63 +37,9 @@ import { duplicateSpec, listSpecs, newSpecId, persistSpec, removeSpec, type Spec
 import { stashPrintSpec } from './printPayload';
 import { aggregateServer, queryServer, toServerMeasures } from './serverApi';
 import { datasetByKey } from './datasets';
-
-const LINKAGE_OPS = new Set(['linked', 'notlinked']);
-const SERVER_BUILD_PAGE = 500;
-const SERVER_BUILD_CAP = 5000;
-
-/** Split rules into SQL-safe vs post-enrich client filters.
- *  OR + any client filter → run everything client-side (server can't partial-OR). */
-function partitionServerFilters(
-  rules: FilterRules,
-  resolveCol?: (key: string) => ColumnDef | undefined,
-): { serverFilters: { col: string; op: string; value: string }[]; clientRules: FilterRules; allClient: boolean } {
-  const active = rules.conditions.filter(isActiveCondition);
-  const client = active.filter((c) => isClientSideFilter(c.col, c.op, resolveCol));
-  const server = active.filter((c) => !isClientSideFilter(c.col, c.op, resolveCol));
-  if (client.length > 0 && rules.logic === 'OR') {
-    return {
-      serverFilters: [],
-      clientRules: { logic: rules.logic, conditions: active },
-      allClient: true,
-    };
-  }
-  return {
-    serverFilters: server.map((c) => ({ col: c.col, op: c.op, value: c.value })),
-    clientRules: { logic: rules.logic, conditions: client },
-    allClient: false,
-  };
-}
-
-/** Fetch all server pages for Build mode (filters/search applied in SQL).
- *  Client-only filters (gaps, link counts, enriched names) apply after enrich. */
-async function fetchServerBuildRows(
-  datasetKey: string,
-  rules: FilterRules,
-  search: string,
-  sorts: SortSpec[],
-  resolveCol?: (key: string) => ColumnDef | undefined,
-): Promise<Row[]> {
-  const { serverFilters } = partitionServerFilters(rules, resolveCol);
-  const out: Row[] = [];
-  let skip = 0;
-  while (skip < SERVER_BUILD_CAP) {
-    const body: ServerQuery = {
-      dataset: datasetKey,
-      skip,
-      limit: SERVER_BUILD_PAGE,
-      search: search.trim() || undefined,
-      sorts: (sorts || []).map((s) => ({ key: s.key, dir: s.dir })),
-      filters: serverFilters,
-      logic: rules.logic,
-    };
-    const page = await queryServer(body);
-    out.push(...asRows(page.rows));
-    if (out.length >= page.total || page.rows.length < SERVER_BUILD_PAGE) break;
-    skip += SERVER_BUILD_PAGE;
-  }
-  return out;
-}
+import {
+  LINKAGE_OPS, SERVER_BUILD_CAP, fetchServerBuildRows, partitionServerFilters,
+} from './reportData';
 
 const typeHint = (t?: ColType) => (t === 'number' ? '#' : t === 'date' ? 'date' : t === 'badge' ? 'tag' : 'text');
 
@@ -152,7 +100,7 @@ export default function ReportBuilder({
   const [draftSearch, setDraftSearch] = useState(initial.search);
   const [fieldQ, setFieldQ] = useState('');
   const [datasetQ, setDatasetQ] = useState('');
-  const [panel, setPanel] = useState<'filters' | 'columns' | 'dataset' | 'add-data' | 'summarize' | 'fields' | null>(null);
+  const [panel, setPanel] = useState<'filters' | 'columns' | 'dataset' | 'add-data' | 'summarize' | 'fields' | 'calc' | null>(null);
   const [libraryOpen, setLibraryOpen] = useState(false);
   const [libraryQ, setLibraryQ] = useState('');
   const [savedSpecs, setSavedSpecs] = useState<ReportSpec[]>([]);
@@ -171,6 +119,8 @@ export default function ReportBuilder({
   const [showTotals, setShowTotals] = useState(true);
   /** If server /aggregate rejects measures (computed columns, etc.), fall back to client. */
   const [forceClientAgg, setForceClientAgg] = useState(false);
+  /** Rows matched vs rows we could hold, when the build pass hit SERVER_BUILD_CAP. */
+  const [truncatedTotal, setTruncatedTotal] = useState<number | null>(null);
   /** Module currently shown in the Add data modal (right pane). */
   const [addDataModule, setAddDataModule] = useState<string | null>(null);
   /** Draft multi-select: datasetKey → field keys. Modal stays open until Apply. */
@@ -238,12 +188,14 @@ export default function ReportBuilder({
     return picks;
   };
 
-  const { data: linkageCatalog = [] } = useQuery({
+  const { data: linkageResult } = useQuery({
     queryKey: ['report-linkages', dsKey, (datasets ?? []).map((d) => d.key).join(',')],
     queryFn: () => fetchLinkageCatalog(dsKey, datasets ?? (dataset ? [dataset] : [])),
     staleTime: 60_000,
     enabled: !!dataset,
   });
+  const linkageCatalog = linkageResult?.defs ?? [];
+  const linkageDegraded = linkageResult?.degraded ?? false;
 
   const visibleKeys = useMemo(() => spec.visibleColumns ?? [], [spec.visibleColumns]);
   const dimensions = spec.rows ?? [];
@@ -253,9 +205,25 @@ export default function ReportBuilder({
 
   const linkageColDefs = useMemo(() => allLinkageColumns(linkageCatalog), [linkageCatalog]);
   const linkagePresenceCols = useMemo(() => linkagePresenceColumns(linkageCatalog), [linkageCatalog]);
-  const allCols = useMemo(
+  /** Source fields a calculated column may reference. Deliberately excludes
+   *  other calculated columns: no cycles to detect, no evaluation order to
+   *  define. ponytail: flat one level — add a dependency sort only if someone
+   *  actually needs a calculation of a calculation. */
+  const sourceCols = useMemo(
     () => (dataset ? [...dataset.columns, ...linkageColDefs] : []),
     [dataset, linkageColDefs],
+  );
+  const calcDefs = useMemo(
+    () => (spec.calcColumns ?? []) as CalcColumnDef[],
+    [spec.calcColumns],
+  );
+  const calcCols = useMemo(
+    () => buildCalcColumns(calcDefs, (k) => sourceCols.find((c) => c.key === k)),
+    [calcDefs, sourceCols],
+  );
+  const allCols = useMemo(
+    () => (dataset ? [...sourceCols, ...calcCols] : []),
+    [dataset, sourceCols, calcCols],
   );
   /** Full column catalog for labels / stale filter+summarize fields (not offered as new picks). */
   const lookupCols = useMemo(() => {
@@ -297,9 +265,13 @@ export default function ReportBuilder({
       ...draftRules.conditions.map((c) => c.col),
       ...spec.measures.map((m) => m.key).filter(Boolean),
       ...dimensions,
+      // A calculation reads its operands, which may live in another module —
+      // those have to be enriched even though the operand itself is not a
+      // visible column, or the calculated cell comes back blank.
+      ...calcDefs.flatMap((d) => [d.a, d.b].filter((k): k is string => !!k)),
     ]);
     return Array.from(keys);
-  }, [visibleKeys, spec.rules.conditions, draftRules.conditions, spec.measures, dimensions]);
+  }, [visibleKeys, spec.rules.conditions, draftRules.conditions, spec.measures, dimensions, calcDefs]);
 
   const includes = useMemo(() => {
     const base = linkageKeysForFields(appliedFieldKeys, linkageCatalog);
@@ -368,9 +340,15 @@ export default function ReportBuilder({
       // Link-count columns (Controls linked, Risks linked, …) come from module
       // list APIs, not SQL serialize — use the client fetch path when those
       // filters are active so values exist before we evaluate = 0.
-      const base = dataset.server && !needsListCounts
-        ? await fetchServerBuildRows(dataset.key, spec.rules, spec.search, spec.sorts ?? [], resolve)
-        : asRows(await dataset.fetch());
+      let base: Row[];
+      if (dataset.server && !needsListCounts) {
+        const page = await fetchServerBuildRows(dataset.key, spec.rules, spec.search, spec.sorts ?? [], resolve);
+        base = page.rows;
+        setTruncatedTotal(page.total > page.rows.length ? page.total : null);
+      } else {
+        base = asRows(await dataset.fetch());
+        setTruncatedTotal(null);
+      }
       if (!includes.length) return base;
       return enrichReportRows(dataset.key, base, includes, projectFields);
     },
@@ -418,8 +396,11 @@ export default function ReportBuilder({
       // Presence pseudo-columns for enriched targets so active "(not) linked"
       // conditions resolve during row evaluation (and read cleanly in exports).
       ...linkagePresenceCols.filter((c) => c.linkageKey && inc.has(c.linkageKey)),
+      // Calculated fields evaluate off the row like any accessor column, so
+      // they belong in the set the table, filters and exports read through.
+      ...calcCols,
     ];
-  }, [dataset, linkageColDefs, linkagePresenceCols, includes]);
+  }, [dataset, linkageColDefs, linkagePresenceCols, includes, calcCols]);
 
   const filtersDirty = useMemo(
     () => JSON.stringify(draftRules) !== JSON.stringify(spec.rules) || draftSearch !== spec.search,
@@ -914,6 +895,21 @@ export default function ReportBuilder({
     [draftPicks],
   );
 
+  /** How many of the ticked fields are NOT already on the report. The modal
+   *  opens pre-seeded with the current columns, so the raw count read as
+   *  "Add 12 fields" when the user had ticked exactly one. */
+  const draftNewCount = useMemo(() => {
+    if (!dataset) return draftPickCount;
+    const current = new Set(visibleKeys);
+    let n = 0;
+    for (const [modKey, cols] of Object.entries(draftPicks)) {
+      for (const c of cols) {
+        if (!current.has(modKey === dataset.key ? c : xmodKey(modKey, c))) n += 1;
+      }
+    }
+    return n;
+  }, [draftPicks, visibleKeys, dataset, draftPickCount]);
+
   const applyAddData = () => {
     const entries = Object.entries(draftPicks).filter(([, cols]) => cols.length > 0);
     if (!entries.length) {
@@ -938,15 +934,25 @@ export default function ReportBuilder({
     }
 
     // Existing base — keep it; map other modules to xmod_* linkage keys.
-    const visible: string[] = [];
+    //
+    // This MERGES, it does not replace. Two things would be destroyed by an
+    // overwrite, and both look to the user like "adding a field deleted my work":
+    //  · Linked aggregates (link_<ds>_count / _names / _open_count) and any
+    //    server-catalog field come from the advanced picker, which this modal
+    //    cannot represent — `picksFromVisible` can't parse them, so a rebuild
+    //    from picks alone silently drops them.
+    //  · Column order. Rebuilding grouped-by-module discards every drag-reorder.
+    const picked = new Set<string>();
     for (const [modKey, cols] of entries) {
-      if (modKey === dataset.key) {
-        visible.push(...cols);
-      } else {
-        for (const c of cols) visible.push(xmodKey(modKey, c));
-      }
+      for (const c of cols) picked.add(modKey === dataset.key ? c : xmodKey(modKey, c));
     }
-    patch({ visibleColumns: visible });
+    const unrepresentable = (k: string) =>
+      !parseXmodKey(k) && !dataset.columns.some((c) => c.key === k);
+    // Existing columns keep their position; anything the modal never showed is
+    // carried through untouched. Newly ticked fields append in picker order.
+    const kept = visibleKeys.filter((k) => picked.has(k) || unrepresentable(k));
+    const added = Array.from(picked).filter((k) => !visibleKeys.includes(k));
+    patch({ visibleColumns: [...kept, ...added] });
     setPanel(null);
   };
 
@@ -1023,6 +1029,17 @@ export default function ReportBuilder({
                 ? (serverAggEligible ? 'Server aggregate' : `${filteredRows.length.toLocaleString()} source rows`)
                 : `${filteredRows.length.toLocaleString()}${filteredRows.length !== rows.length ? ` of ${rows.length.toLocaleString()}` : ''} rows`}
             </span>
+            {truncatedTotal != null && (
+              <>
+                <span>·</span>
+                <span
+                  className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 font-medium text-amber-700"
+                  title={`This module matched ${truncatedTotal.toLocaleString()} rows; the builder loads the first ${SERVER_BUILD_CAP.toLocaleString()}. Totals, gap counts and charts describe the loaded rows only — add filters to bring the result under the limit.`}
+                >
+                  First {SERVER_BUILD_CAP.toLocaleString()} of {truncatedTotal.toLocaleString()}
+                </span>
+              </>
+            )}
             {busyFetching && (
               <>
                 <span>·</span>
@@ -1504,6 +1521,14 @@ export default function ReportBuilder({
               </p>
             ) : (
               <>
+                {linkageDegraded && (
+                  <p className="mb-3 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                    Link checks are unavailable right now — the linkage catalog
+                    did not load, so gap filters (&ldquo;nothing linked&rdquo;) are hidden
+                    rather than answered from incomplete data. Cross-module
+                    columns still work. Retry, or reopen the report.
+                  </p>
+                )}
                 {(linkagePresenceCols.length > 0 || countGapCols.length > 0) && (
                   <div className="mb-3 rounded-xl border border-slate-200 bg-slate-50/70 p-2.5">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -1630,6 +1655,17 @@ export default function ReportBuilder({
                 className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
               >
                 <ListOrdered className="h-3.5 w-3.5" /> Linked fields &amp; advanced
+              </button>
+              <button
+                type="button"
+                onClick={() => setPanel('calc')}
+                className="inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                <Calculator className="h-3.5 w-3.5" />
+                Calculated fields
+                {calcDefs.length > 0 && (
+                  <span className="rounded-full bg-slate-100 px-1.5 text-[10px] text-slate-500">{calcDefs.length}</span>
+                )}
               </button>
             </div>
           </div>
@@ -1859,7 +1895,9 @@ export default function ReportBuilder({
                   className="inline-flex items-center gap-1.5 rounded-lg bg-primary-500 px-4 py-1.5 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-600 disabled:opacity-40"
                 >
                   <Check className="h-3.5 w-3.5" strokeWidth={3} />
-                  Add {draftPickCount || ''} field{draftPickCount === 1 ? '' : 's'}
+                  {draftNewCount > 0
+                    ? `Add ${draftNewCount} field${draftNewCount === 1 ? '' : 's'}`
+                    : 'Apply'}
                 </button>
               </div>
             </div>
@@ -1887,6 +1925,19 @@ export default function ReportBuilder({
           }}
           onClose={() => setPanel(null)}
           onClear={() => patch({ rows: [], measures: [] })}
+        />
+      )}
+
+      {panel === 'calc' && dataset && (
+        <CalcColumnPanel
+          cols={sourceCols}
+          defs={calcDefs}
+          rows={rows}
+          onChange={(next) => patch({ calcColumns: next })}
+          onClose={() => setPanel(null)}
+          onAddToReport={(key) => {
+            if (!visibleKeys.includes(key)) patch({ visibleColumns: [...visibleKeys, key] });
+          }}
         />
       )}
 

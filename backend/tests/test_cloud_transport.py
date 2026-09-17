@@ -64,6 +64,16 @@ HEALTHY = {
     "cloudtrail": {"describe_trails": {"trailList": [{"Name": "org", "IsMultiRegionTrail": True}]}},
     "ec2": {"get_ebs_encryption_by_default": {"EbsEncryptionByDefault": True}},
     "config": {"describe_configuration_recorders": {"ConfigurationRecorders": [{"name": "default"}]}},
+    "backup": {
+        "list_backup_plans": {"BackupPlansList": [{"BackupPlanName": "daily"}]},
+        "list_protected_resources": {"Results": [{"ResourceType": "RDS"}]},
+    },
+    "rds": {"describe_db_instances": {"DBInstances": [{"DBInstanceIdentifier": "orders", "BackupRetentionPeriod": 14}]}},
+    "dynamodb": {
+        "list_tables": {"TableNames": ["carts"]},
+        "describe_continuous_backups": {"ContinuousBackupsDescription": {
+            "PointInTimeRecoveryDescription": {"PointInTimeRecoveryStatus": "ENABLED"}}},
+    },
 }
 
 
@@ -108,7 +118,7 @@ def test_healthy_account_passes_every_check():
     assert result["connectivity"] == "pass"
     assert result["summary"]["fail"] == 0
     assert result["summary"]["error"] == 0
-    assert result["summary"]["pass"] == len(CLOUD_CHECKS["aws"]) + 1   # + the MFA sweep
+    assert result["summary"]["pass"] == len(CLOUD_CHECKS["aws"]) + 2   # + the MFA and PITR sweeps
 
 
 # ── a collector that cannot collect never fails a control ────────────────────
@@ -196,3 +206,47 @@ def test_write_operations_are_refused(op):
 def test_every_seeded_check_uses_a_read_only_verb():
     for check in CLOUD_CHECKS["aws"]:
         assert check["operation"].startswith(("get_", "list_", "describe_", "head_", "lookup_"))
+
+
+# ── backups ──────────────────────────────────────────────────────────────────
+
+def with_service(service, responses):
+    return {**HEALTHY, service: {**HEALTHY.get(service, {}), **responses}}
+
+
+def test_short_rds_backup_retention_fails_and_names_the_instance():
+    result = run(with_service("rds", {"describe_db_instances": {"DBInstances": [
+        {"DBInstanceIdentifier": "orders", "BackupRetentionPeriod": 14},
+        {"DBInstanceIdentifier": "legacy", "BackupRetentionPeriod": 1},
+    ]}}))
+    f = findings_by_check(result)["aws.rds_backup_retention"]
+    assert f["status"] == "fail" and "legacy" in f["detail"] and "1 of 2" in f["detail"]
+
+
+def test_no_rds_instances_is_not_assessed_rather_than_passed():
+    f = findings_by_check(run(with_service("rds", {"describe_db_instances": {"DBInstances": []}})))
+    assert f["aws.rds_backup_retention"]["status"] == "not_run"
+
+
+def test_dynamodb_table_without_pitr_is_named():
+    result = run(with_service("dynamodb", {
+        "list_tables": {"TableNames": ["carts", "sessions"]},
+        "describe_continuous_backups": lambda TableName: {"ContinuousBackupsDescription": {
+            "PointInTimeRecoveryDescription": {
+                "PointInTimeRecoveryStatus": "ENABLED" if TableName == "carts" else "DISABLED"}}},
+    }))
+    named = [f for f in result["findings"] if f["check"] == "aws.dynamodb_table_pitr"]
+    assert [f["resource"] for f in named] == ["sessions"]
+    assert findings_by_check(result)["aws.dynamodb_pitr"]["status"] == "fail"
+
+
+def test_no_dynamodb_tables_is_not_assessed():
+    f = findings_by_check(run(with_service("dynamodb", {"list_tables": {"TableNames": []}})))
+    assert f["aws.dynamodb_pitr"]["status"] == "not_run"
+
+
+def test_backup_sweep_is_bound_like_any_declared_check():
+    from grc.modules.compliance_plugins.runners.live_api_catalog import provider_checks
+    ids = {c["id"]: c["controls"] for c in provider_checks("aws")}
+    assert ids["aws.dynamodb_pitr"] == ["A1.2"] and ids["aws.iam_mfa"] == ["CC6.1", "CC6.2"]
+    assert "aws.sweep" not in ids

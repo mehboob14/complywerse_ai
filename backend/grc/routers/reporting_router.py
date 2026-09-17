@@ -33,7 +33,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import Boolean, String, and_, func, or_
+from sqlalchemy import Boolean, String, and_, false, func, or_, true
 from sqlalchemy.orm import Session
 
 from ..models import (
@@ -42,7 +42,7 @@ from ..models import (
     RolePermission, Tenant, UserRole, Vendor, Vulnerability, get_db,
 )
 from ..services import metric_catalog, metric_snapshots
-from ..services import report_linkages
+from ..services import report_linkages, report_open_catalog
 from .auth_router import get_user_primary_tenant, get_user_tenants, require_auth
 
 router = APIRouter(prefix="/reporting", tags=["Reporting Engine"])
@@ -397,6 +397,8 @@ def _apply_query_filters(
     body_filters: List[FilterSpec],
     logic: str,
     search: Optional[str],
+    db: Optional[Session] = None,
+    dataset_key: Optional[str] = None,
 ):
     """Shared WHERE builder for /query and /aggregate. Returns (query, skipped_filters)."""
     if search:
@@ -409,7 +411,7 @@ def _apply_query_filters(
     skipped_filters: List[Dict[str, Any]] = []
     for spec_f in body_filters:
         kind = spec.filterable.get(spec_f.col, "text")
-        cond, skip_reason = _build_condition(model, spec_f, kind)
+        cond, skip_reason = _build_condition(model, spec_f, kind, db=db, dataset_key=dataset_key)
         if cond is not None:
             conditions.append(cond)
         elif skip_reason:
@@ -474,7 +476,37 @@ def _parse_multi_values(val: Any) -> List[str]:
 _EMPTY_TOKEN = "__EMPTY__"
 
 
-def _build_condition(model: Any, spec: FilterSpec, kind: str):
+def _link_presence_condition(model: Any, spec: FilterSpec, db: Session, dataset_key: str):
+    """`linkpresence_<target>` + linked/notlinked as a real WHERE clause.
+
+    The browser can only judge "is this row linked" from enriched rows it has
+    already downloaded, so a gap filter used to be capped at whatever the build
+    pass fetched (5,000 rows) and quietly reported every row past that as
+    unlinked. Resolving the linked id set in SQL makes it exact over the whole
+    register and lets the answer paginate like any other filter.
+    """
+    target = spec.col[len("linkpresence_"):]
+    pk = _col(model, "id")
+    if not target or pk is None:
+        return None, "unknown_column"
+    linked = report_open_catalog.linked_base_ids(db, dataset_key, target)
+    if linked is None:
+        return None, "unsupported_operator"   # no join edge — let the client try
+    if not linked:
+        # Nothing is linked: "not linked" is everything, "linked" is nothing.
+        # Expressed as a literal so an empty IN () never becomes a SQL error.
+        return (true() if spec.op == "notlinked" else false()), None
+    ids = list(linked)
+    return (pk.notin_(ids) if spec.op == "notlinked" else pk.in_(ids)), None
+
+
+def _build_condition(
+    model: Any,
+    spec: FilterSpec,
+    kind: str,
+    db: Optional[Session] = None,
+    dataset_key: Optional[str] = None,
+):
     """Translate one filter condition into a SQLAlchemy expression.
 
     Returns ``(condition_or_None, skip_reason_or_None)``. `skip_reason` is only
@@ -483,15 +515,18 @@ def _build_condition(model: Any, spec: FilterSpec, kind: str):
     value) so the caller can surface it as a `warnings.skipped_filters` entry.
     The common "no value typed yet" case stays silent, exactly like before.
     """
+    op = spec.op
+
+    # Cross-module link presence resolves through the report linkage graph, not
+    # a column on this table — so it is handled before the column lookup.
+    if op in ("linked", "notlinked"):
+        if db is not None and dataset_key and spec.col.startswith("linkpresence_"):
+            return _link_presence_condition(model, spec, db, dataset_key)
+        return None, "unsupported_operator"
+
     col = _col(model, spec.col)
     if col is None:
         return None, "unknown_column"
-    op = spec.op
-
-    # Cross-module linkage filters (linked/notlinked) are a client-side
-    # (report-builder) concept — server mode has no join graph here yet.
-    if op in ("linked", "notlinked"):
-        return None, "unsupported_operator"
 
     # Emptiness — only string columns have a meaningful "" case; on date/number/
     # boolean columns `col == ""` would be a Postgres type error, so use NULL only.
@@ -643,6 +678,7 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
 
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
+        db=db, dataset_key=body.dataset,
     )
 
     total = q.count()
@@ -808,6 +844,7 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
     q = db.query(*select_exprs).select_from(model)
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
+        db=db, dataset_key=body.dataset,
     )
     if group_cols:
         q = q.group_by(*group_cols)
@@ -844,7 +881,10 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
             col = _col(model, field) if field else None
             g_exprs.append(_agg_sql(mm["fn"], col).label(mm["alias"]))
         gq = db.query(*g_exprs).select_from(model)
-        gq, _ = _apply_query_filters(gq, model, spec, body.filters, body.logic, body.search)
+        gq, _ = _apply_query_filters(
+            gq, model, spec, body.filters, body.logic, body.search,
+            db=db, dataset_key=body.dataset,
+        )
         g_row = gq.one()
         g_map = g_row._mapping if hasattr(g_row, "_mapping") else None
         for i, mm in enumerate(measure_meta):
@@ -954,15 +994,21 @@ def _ensure_report_table(db: Session) -> None:
 class ReportDefIn(BaseModel):
     slug: str
     name: str
-    dataset: str
+    # A dashboard draws on its tiles' reports, so it carries no dataset.
+    dataset: str = ""
+    kind: str = "report"
     spec: Dict[str, Any] = Field(default_factory=dict)
     is_shared: bool = False
+
+
+_KINDS = frozenset({"report", "dashboard"})
 
 
 def _report_out(r: ReportDefinition, user_id: Optional[int]) -> Dict[str, Any]:
     return {
         "slug": r.slug,
         "name": r.name,
+        "kind": getattr(r, "kind", None) or "report",
         "dataset": r.dataset,
         "spec": r.spec or {},
         "is_shared": bool(r.is_shared),
@@ -971,13 +1017,37 @@ def _report_out(r: ReportDefinition, user_id: Optional[int]) -> Dict[str, Any]:
     }
 
 
+def _kind_filter(kind: str):
+    """Rows written before `kind` existed have NULL, and they are all reports —
+    so a plain `kind == 'report'` would hide every report saved to date."""
+    if kind == "report":
+        return or_(ReportDefinition.kind.is_(None), ReportDefinition.kind == "report")
+    return ReportDefinition.kind == kind
+
+
 @router.get("/reports")
-def list_reports(db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
-    """Reports the caller can see: their own, plus anything shared in the tenant."""
+def list_reports(
+    kind: str = "report",
+    db: Session = Depends(get_db),
+    user=Depends(require_auth),
+) -> Dict[str, Any]:
+    """Reports the caller can see: their own, plus anything shared in the tenant.
+
+    `kind` selects reports or dashboards — they share this table because a
+    dashboard is the same kind of object (an owned, shareable JSON spec).
+    """
     _ensure_report_table(db)
+    if kind not in _KINDS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unknown kind '{kind}'.",
+        )
     rows = (
         db.query(ReportDefinition)
-        .filter(or_(ReportDefinition.created_by == user.id, ReportDefinition.is_shared.is_(True)))
+        .filter(
+            or_(ReportDefinition.created_by == user.id, ReportDefinition.is_shared.is_(True)),
+            _kind_filter(kind),
+        )
         .order_by(ReportDefinition.updated_at.desc())
         .all()
     )
@@ -1028,6 +1098,7 @@ def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends
         db.add(row)
 
     row.name = body.name
+    row.kind = body.kind if body.kind in _KINDS else "report"
     row.dataset = body.dataset
     row.spec = body.spec
     row.is_shared = body.is_shared

@@ -1,0 +1,3291 @@
+{
+ "airtable": {
+  "credential": "Personal access token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "patXXXXXXXXXXXXXX.EXAMPLE",
+    "help": "Created at airtable.com/create/tokens; starts with pat and is shown only once."
+   }
+  ],
+  "steps": [
+   "Sign in to Airtable as the account whose base access you want reviewed (on Enterprise Scale, a service account).",
+   "Open airtable.com/create/tokens and click Create new token.",
+   "Give the token a unique name and add the scope schema.bases:read.",
+   "Click Add a base and add the workspaces and bases to inventory (or all of them).",
+   "Create the token and copy it immediately."
+  ],
+  "create_url": "https://airtable.com/create/tokens",
+  "permissions": "Scope schema.bases:read (GET /v0/meta/bases); GET /v0/meta/whoami needs no scope. Access: every base or workspace that should be listed.",
+  "plan_note": "The API and personal access tokens work on all plans; service accounts need Enterprise Scale.",
+  "token_lifetime": "No expiry documented; valid until you regenerate or delete it.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "whoami read as one row; bases paged."
+  },
+  "docs_url": "https://airtable.com/developers/web/guides/personal-access-tokens",
+  "sources": [
+   "https://airtable.com/developers/web/guides/personal-access-tokens",
+   "https://airtable.com/developers/web/api/authentication",
+   "https://airtable.com/developers/web/api/scopes",
+   "https://airtable.com/developers/web/api/get-user-id-scopes",
+   "https://airtable.com/developers/web/api/list-bases",
+   "https://support.airtable.com/docs/service-accounts-overview"
+  ],
+  "verified": true,
+  "caveats": [
+   "The token acts as its creator: bases where that user has creator permission are flagged, so prefer a service account or a user with read or comment access.",
+   "Only bases and workspaces added to the token are listed.",
+   "Enterprise Scale admins create service account tokens under Admin Panel > Users > Service accounts."
+  ]
+ },
+ "anthropic": {
+  "credential": "Admin API key (Claude Console)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Admin API key",
+    "placeholder": "sk-ant-admin01-EXAMPLE",
+    "help": "Created in Claude Console under Settings > Admin keys; starts with sk-ant-admin01-."
+   }
+  ],
+  "steps": [
+   "Use a Claude Console organization (the Admin API is unavailable for individual accounts) and sign in as a member with the admin role.",
+   "Go to Claude Console > Settings > Admin keys.",
+   "Click Create key, enter a name, choose a key expiration, and click Create.",
+   "Copy the secret that starts with sk-ant-admin01- right away; it is shown only once."
+  ],
+  "create_url": "https://platform.claude.com/settings/admin-keys",
+  "permissions": [
+   "Organization admin role (owners and primary owners also qualify) to create the key",
+   "Admin API key: Claude Console keys have no selectable scopes and carry full access to Admin API endpoints"
+  ],
+  "plan_note": "Requires a Claude Console (Claude Platform) organization; the Admin API is unavailable for individual accounts. Claude Enterprise (claude.ai) keys only cover member and invite endpoints, and Claude Platform on AWS only exposes workspace endpoints.",
+  "token_lifetime": "Set at creation: 3 hours, 1 day, 7 days, 30 days, a custom duration, or Never (unless an organization expiration policy removes Never); cannot be changed later.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Connection test uses /organizations/me; lists page with after_id."
+  },
+  "docs_url": "https://platform.claude.com/docs/en/manage-claude/admin-api-keys",
+  "sources": [
+   "https://platform.claude.com/docs/en/manage-claude/admin-api-keys",
+   "https://platform.claude.com/docs/en/manage-claude/admin-api",
+   "https://platform.claude.com/docs/en/manage-claude/authentication",
+   "https://platform.claude.com/docs/en/manage-claude/usage-cost-api",
+   "https://platform.claude.com/docs/en/api/models/list",
+   "https://platform.claude.com/docs/en/api/admin/api_keys/list",
+   "https://platform.claude.com/docs/en/api/admin/workspaces/list",
+   "https://github.com/uttej-badwane/terraform-provider-anthropic-enterprise/issues/7"
+  ],
+  "verified": true,
+  "caveats": [
+   "Admin API keys cannot be restricted to read-only; they can also rename and deactivate API keys and manage members.",
+   "A standard API key (sk-ant-api03-) does not work here; workspace-scoped keys are rejected by the Admin API.",
+   "List Workspaces does not include the Default Workspace.",
+   "Choose an expiration you will track: an expired key returns 401 and cannot be reactivated."
+  ]
+ },
+ "asana": {
+  "credential": "Personal access token (PAT)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "2/EXAMPLE/EXAMPLE:EXAMPLE",
+    "help": "Created in the Asana developer console; shown only once."
+   }
+  ],
+  "steps": [
+   "Sign in to Asana with an account that belongs to every workspace or organization to review.",
+   "Open the developer console: click your profile photo, then My Settings > Apps > Manage Developer Apps.",
+   "Select + Create new token.",
+   "Enter a Token name and click Create token.",
+   "Copy the token and store it securely; it is shown only once."
+  ],
+  "create_url": "https://app.asana.com/0/my-apps",
+  "permissions": "PATs have no scopes: they get the same access as the user who created them. The equivalent OAuth scopes are users:read and workspaces:read. Service accounts must use the Full Permissions option.",
+  "plan_note": "The API works on all plans; service accounts are an Enterprise tier feature created by super admins.",
+  "token_lifetime": "Persistent by default (Enterprise+ admin controls can restrict PATs).",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Offset-token paging."
+  },
+  "docs_url": "https://developers.asana.com/docs/personal-access-token",
+  "sources": [
+   "https://developers.asana.com/docs/personal-access-token",
+   "https://developers.asana.com/docs/quick-start",
+   "https://developers.asana.com/docs/authentication",
+   "https://developers.asana.com/docs/oauth-scopes",
+   "https://developers.asana.com/reference/getusers",
+   "https://developers.asana.com/reference/getworkspaces",
+   "https://developers.asana.com/reference/getworkspacemembershipsforworkspace"
+  ],
+  "verified": true,
+  "caveats": [
+   "Asana PATs can't be limited to read-only; the token can also change anything its user can edit.",
+   "Checks only cover workspaces the token's user belongs to.",
+   "Enterprise: a super admin can instead create a Service Account (admin console > Apps > Service Accounts > Add Service Account) with Full Permissions."
+  ]
+ },
+ "auth0": {
+  "credential": "Machine to Machine application (Client ID and Client Secret) authorized for the Auth0 Management API",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Domain",
+    "placeholder": "your-tenant.us.auth0.com",
+    "help": "The Domain on the application's Settings tab; use your Auth0 tenant domain, not a custom domain."
+   },
+   {
+    "key": "access_key_id",
+    "label": "Client ID",
+    "placeholder": "EXAMPLE",
+    "help": "The Client ID on the application's Settings tab."
+   },
+   {
+    "key": "token",
+    "label": "Client Secret",
+    "placeholder": "64-character secret, e.g. Zq3vX9...",
+    "help": "The Client Secret on the application's Settings tab."
+   }
+  ],
+  "steps": [
+   "In the Auth0 Dashboard, go to Applications > Applications and click Create Application.",
+   "Enter a name, select Machine to Machine Applications, and click Create.",
+   "Select Auth0 Management API as the API to authorize.",
+   "Select the permissions read:clients, read:connections, read:connections_options and read:log_streams, then click Authorize.",
+   "Open the application's Settings tab and copy the Domain, Client ID and Client Secret."
+  ],
+  "create_url": null,
+  "permissions": [
+   "read:clients - Get clients (includes grant_types)",
+   "read:connections - Get connections",
+   "read:connections_options - returns connection options such as brute_force_protection",
+   "read:log_streams - Get log streams"
+  ],
+  "plan_note": null,
+  "token_lifetime": "The Client Secret doesn't expire until rotated; each Management API access token lasts 24 hours by default (configurable up to 30 days).",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Client-credentials token exchange per run."
+  },
+  "docs_url": "https://auth0.com/docs/secure/tokens/access-tokens/management-api-access-tokens/get-management-api-access-tokens-for-production",
+  "sources": [
+   "https://auth0.com/docs/secure/tokens/access-tokens/management-api-access-tokens/get-management-api-access-tokens-for-production",
+   "https://auth0.com/docs/secure/tokens/access-tokens/management-api-access-tokens/get-management-api-access-tokens-for-testing",
+   "https://auth0.com/docs/secure/tokens/access-tokens/management-api-access-tokens",
+   "https://auth0.com/docs/get-started/auth0-overview/create-applications/machine-to-machine-apps",
+   "https://auth0.com/docs/api/management/v2/clients/get-clients",
+   "https://auth0.com/docs/api/management/v2/connections/get-connections",
+   "https://auth0.com/docs/api/management/v2/log-streams/get-log-streams",
+   "https://auth0.com/docs/get-started/apis/api-settings",
+   "https://auth0.com/docs/customize/custom-domains/configure-features-to-use-custom-domains"
+  ],
+  "verified": true,
+  "caveats": [
+   "Don't grant read:client_keys or read:client_credentials; they expose client secrets and aren't needed.",
+   "Enter your tenant domain (for example your-tenant.us.auth0.com) even if you use a custom domain."
+  ]
+ },
+ "aws": {
+  "credential": "IAM user access key (access key ID and secret access key)",
+  "fields": [
+   {
+    "key": "access_key_id",
+    "label": "Access key ID",
+    "placeholder": "EXAMPLE",
+    "help": "Shown on the IAM user's Security credentials tab after you create the access key."
+   },
+   {
+    "key": "token",
+    "label": "Secret access key",
+    "placeholder": "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+    "help": "Shown only once when the access key is created; download the .csv file to keep it."
+   },
+   {
+    "key": "region",
+    "label": "Region",
+    "placeholder": "us-east-1",
+    "help": "The AWS Region code to assess; regional checks only cover this Region."
+   }
+  ],
+  "steps": [
+   "Sign in to the IAM console as a user allowed to create IAM users, policies and access keys.",
+   "In the navigation pane choose Users > Create user, enter a user name, choose Next, then Create user (no console access needed).",
+   "Open the user, choose the Permissions tab > Add permissions > Create inline policy, switch to JSON, and allow the read-only actions listed under permissions.",
+   "On the Security credentials tab, in Access keys, choose Create access key, choose Other, then Next and Create access key.",
+   "Copy the access key ID and secret access key (the secret is shown only once) and enter the Region to assess."
+  ],
+  "create_url": "https://console.aws.amazon.com/iam/home#/users",
+  "permissions": [
+   "iam:GetAccountSummary",
+   "iam:GetAccountPasswordPolicy",
+   "iam:ListUsers",
+   "iam:GetLoginProfile",
+   "iam:ListMFADevices",
+   "cloudtrail:DescribeTrails",
+   "ec2:GetEbsEncryptionByDefault",
+   "config:DescribeConfigurationRecorders",
+   "backup:ListBackupPlans",
+   "backup:ListProtectedResources",
+   "rds:DescribeDBInstances",
+   "dynamodb:ListTables",
+   "dynamodb:DescribeContinuousBackups"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Does not expire; rotate or deactivate the access key yourself.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "boto3 signing with an access key ID, secret access key and Region is the standard SDK flow, and every operation exists. Beyond the listed calls the collector also calls sts:GetCallerIdentity (connectivity; needs no permission), iam:GetLoginProfile and iam:ListMFADevices (per-user MFA sweep) and dynamodb:ListTables (before DescribeContinuousBackups), so those are included in the permissions. The form has no session token field, so only long-term IAM user keys (AKIA...) work; temporary credentials (ASIA...) from roles or IAM Identity Center fail. Only the first page of IAM users (100) and DynamoDB tables (100) is checked."
+  },
+  "docs_url": "https://docs.aws.amazon.com/IAM/latest/UserGuide/access-keys-admin-managed.html",
+  "sources": [
+   "https://docs.aws.amazon.com/IAM/latest/UserGuide/access-keys-admin-managed.html",
+   "https://docs.aws.amazon.com/IAM/latest/UserGuide/id_credentials_access-keys.html",
+   "https://docs.aws.amazon.com/IAM/latest/UserGuide/getting-started-workloads.html",
+   "https://docs.aws.amazon.com/IAM/latest/UserGuide/access_policies_manage-attach-detach.html",
+   "https://docs.aws.amazon.com/aws-managed-policy/latest/reference/SecurityAudit.html",
+   "https://docs.aws.amazon.com/STS/latest/APIReference/API_GetCallerIdentity.html",
+   "https://docs.aws.amazon.com/IAM/latest/APIReference/API_ListUsers.html",
+   "https://docs.aws.amazon.com/aws-backup/latest/devguide/API_ListProtectedResources.html"
+  ],
+  "verified": true,
+  "caveats": [
+   "The AWS managed SecurityAudit policy covers everything except backup:ListBackupPlans and backup:ListProtectedResources; add those two if you attach SecurityAudit instead of an inline policy.",
+   "Grant iam:GetLoginProfile: without it every user is treated as having no console password and the MFA check passes without testing anyone.",
+   "EBS default encryption, AWS Config, AWS Backup, RDS and DynamoDB are read only in the Region you enter.",
+   "AWS recommends temporary credentials over long-term access keys; store this key securely and rotate it."
+  ]
+ },
+ "azure_devops": {
+  "credential": "Personal access token (PAT)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Organization",
+    "placeholder": "contoso",
+    "help": "Only the organization name from https://dev.azure.com/{organization}, not the full URL."
+   },
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "Paste the PAT shown once after you select Create",
+    "help": "Created under User settings > Personal access tokens with the Code (read) and Project and team (read) scopes."
+   }
+  ],
+  "steps": [
+   "Sign in to https://dev.azure.com/{your organization} with an account that has at least Basic access and can see every project to assess.",
+   "Open User settings and select Personal access tokens.",
+   "Select + New Token, enter a name, select your organization (not All accessible organizations) and set an expiration date.",
+   "Select the scopes Code (read) and Project and team (read), then select Create.",
+   "Copy the token (it isn't shown again) and paste it here with your organization name."
+  ],
+  "create_url": "https://dev.azure.com/{organization}/_usersSettings/tokens",
+  "permissions": [
+   "Code (read) - vso.code (GET /_apis/git/repositories, GET /{project}/_apis/policy/configurations)",
+   "Project and team (read) - vso.project (GET /_apis/projects)"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Expires on the date you set, at most one year; admins can enforce a shorter maximum. Global PATs (All accessible organizations) stop working on December 1, 2026.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Basic auth with an empty username and the PAT as password matches Microsoft's documented curl -u :{PAT}. api-version=7.1 is valid for GET /_apis/projects (vso.project), GET /_apis/git/repositories at organization level (project is optional; vso.code) and GET /{project}/_apis/policy/configurations (project ID accepted; vso.code). Global PATs are decommissioned on 1 Dec 2026, so customers must scope the PAT to their organization. Only the first 25 projects get the policy check (engine MAX_FOREACH)."
+  },
+  "docs_url": "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops",
+  "sources": [
+   "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops",
+   "https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/manage-pats-with-policies-for-administrators?view=azure-devops",
+   "https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/oauth?view=azure-devops",
+   "https://learn.microsoft.com/en-us/rest/api/azure/devops/core/projects/list?view=azure-devops-rest-7.1",
+   "https://learn.microsoft.com/en-us/rest/api/azure/devops/git/repositories/list?view=azure-devops-rest-7.1",
+   "https://learn.microsoft.com/en-us/rest/api/azure/devops/policy/configurations/list?view=azure-devops-rest-7.1",
+   "https://devblogs.microsoft.com/devops/retirement-of-global-personal-access-tokens-in-azure-devops/",
+   "https://learn.microsoft.com/en-us/training/modules/use-application-lifecycle/5-connect-devops-tokens"
+  ],
+  "verified": true,
+  "caveats": [
+   "Select your specific organization when creating the PAT; global PATs stop working on December 1, 2026.",
+   "In organizations backed by Microsoft Entra ID, sign in with the new PAT within 90 days or it becomes inactive.",
+   "The PAT only sees projects its owner can access; projects it can't see are not assessed.",
+   "Organization policies can block PAT creation or shorten token lifetimes; ask an Azure DevOps administrator if you can't create one."
+  ]
+ },
+ "bamboohr": {
+  "credential": "BambooHR API key",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Company domain",
+    "placeholder": "mycompany",
+    "help": "The part before .bamboohr.com in your BambooHR URL (https://mycompany.bamboohr.com)."
+   },
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "EXAMPLE",
+    "help": "A 40-character hexadecimal key from the API Keys page."
+   }
+  ],
+  "steps": [
+   "Sign in to BambooHR as the user the integration should act as; the key gets exactly that user's permissions.",
+   "Click your name in the lower-left corner of any page and select API Keys (it appears only if your access level allows API keys).",
+   "Add a new key, give it a name (for example, GRC evidence collector), and copy the key.",
+   "Ask an admin to confirm that Settings > Company Directory shares the full Company Directory with that user's access level."
+  ],
+  "create_url": null,
+  "permissions": [
+   "API key with the creating user's permissions (BambooHR API keys can't be scoped)",
+   "Company Directory shared with that user's access level (Settings > Company Directory) - covers GET /v1/employees/directory"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Does not expire; stops working if the key is disabled or deleted, or its user is disabled.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Key is the Basic-auth user; https://{company}.bamboohr.com/api/v1."
+  },
+  "docs_url": "https://documentation.bamboohr.com/docs/getting-started",
+  "sources": [
+   "https://documentation.bamboohr.com/docs/getting-started",
+   "https://documentation.bamboohr.com/docs/api-details",
+   "https://documentation.bamboohr.com/reference/get-employees-directory",
+   "https://documentation.bamboohr.com/reference/list-employees",
+   "https://documentation.bamboohr.com/docs/past-changes-to-the-api",
+   "https://documentation.bamboohr.com/docs/planned-changes-to-the-api",
+   "https://www.bamboohr.com/product-updates/admin-api-keys-settings",
+   "https://www.bamboohr.com/product-updates/api-key-management-enhancements"
+  ],
+  "verified": true,
+  "caveats": [
+   "API keys can't be limited to read-only; the key can do whatever its user can.",
+   "The directory omits inactive employees and anyone hidden from the directory, so it isn't a complete roster.",
+   "If only Company Org Chart is shared, work email and department are omitted and those checks fail.",
+   "Admins can review, disable or delete keys under Settings > Account > API Keys."
+  ]
+ },
+ "better_stack": {
+  "credential": "Uptime API token (team-based)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Uptime API token",
+    "placeholder": "Paste your Uptime API token",
+    "help": "Better Stack > API tokens > Team-based tokens > your team > Uptime API tokens."
+   }
+  ],
+  "steps": [
+   "Sign in to Better Stack with the Admin role (only Admins can create or edit API tokens).",
+   "Go to Better Stack > API tokens > Team-based tokens and select the team to monitor.",
+   "In the Uptime API tokens section, create a new token or copy an existing one.",
+   "Paste the token here.",
+   "To cover several teams with one credential, use a token from the Global API tokens section instead."
+  ],
+  "create_url": "https://betterstack.com/settings/api-tokens/0",
+  "permissions": "A team-based Uptime API token (or a Global API token). Better Stack tokens have no permission scopes; one token covers GET /api/v2/monitors and GET /api/v3/policies.",
+  "plan_note": null,
+  "token_lifetime": "No expiry documented; valid until the token is deleted.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Bearer auth on https://uptime.betterstack.com matches the Uptime API. GET /api/v2/monitors (paused_at, verify_ssl, policy_id) and GET /api/v3/policies (name, repeat_count, steps) are documented, and our page/per_page=250 paging is within the documented maximum of 250 per page."
+  },
+  "docs_url": "https://betterstack.com/docs/uptime/api/getting-started-with-uptime-api/",
+  "sources": [
+   "https://betterstack.com/docs/uptime/api/getting-started-with-uptime-api/",
+   "https://betterstack.com/docs/uptime/api/list-all-existing-monitors/",
+   "https://betterstack.com/docs/uptime/api/list-all-escalation-policies/",
+   "https://betterstack.com/docs/uptime/api/pagination/",
+   "https://betterstack.com/docs/uptime/team-management/manage-roles/"
+  ],
+  "verified": true,
+  "caveats": [
+   "Better Stack documents no read-only API tokens: this token can also change monitors and policies, so store it securely.",
+   "A team-based token only returns that team's monitors and escalation policies.",
+   "Team leads can view tokens, but only Admins can create or edit them."
+  ]
+ },
+ "bitbucket": {
+  "credential": "Atlassian API token with Bitbucket scopes",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "EXAMPLE",
+    "help": "Created at id.atlassian.com under Security > Create and manage API tokens > Create API token with scopes, with Bitbucket as the app."
+   }
+  ],
+  "steps": [
+   "Sign in with an account that has Admin access to the repositories you want assessed; the token can never do more than its account.",
+   "Select your profile icon (top right) > Account settings, open the Security tab and select Create and manage API tokens.",
+   "Select Create API token with scopes, enter a name and an expiry date, and select Next.",
+   "Select Bitbucket as the app and select Next.",
+   "Select the scopes read:user:bitbucket, read:workspace:bitbucket, read:repository:bitbucket and admin:repository:bitbucket, then select Next.",
+   "Review the token, select Create token, then copy it (it is shown only once) and paste it here."
+  ],
+  "create_url": "https://id.atlassian.com/manage-profile/security/api-tokens",
+  "permissions": [
+   "read:user:bitbucket (GET /user)",
+   "read:workspace:bitbucket (GET /user/workspaces)",
+   "read:repository:bitbucket (GET /repositories/{workspace})",
+   "admin:repository:bitbucket (GET /repositories/{workspace}/{repo_slug}/branch-restrictions; it also allows editing them and Bitbucket has no read-only alternative)"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Expires on the date you choose, 1 to 365 days after creation.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Workspace-scoped listing; admin:repository scope needed for branch restrictions."
+  },
+  "docs_url": "https://support.atlassian.com/bitbucket-cloud/docs/create-an-api-token/",
+  "sources": [
+   "https://support.atlassian.com/bitbucket-cloud/docs/create-an-api-token/",
+   "https://support.atlassian.com/bitbucket-cloud/docs/using-api-tokens/",
+   "https://support.atlassian.com/bitbucket-cloud/docs/api-token-permissions/",
+   "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/",
+   "https://developer.atlassian.com/cloud/bitbucket/swagger.v3.json",
+   "https://developer.atlassian.com/cloud/bitbucket/changelog/",
+   "https://community.developer.atlassian.com/t/bitbucket-cloud-announcing-end-of-life-for-cross-workspace-apis-timeline-next-steps-and-instructions-for-connect-apps/99972",
+   "https://community.atlassian.com/forums/Bitbucket-questions/replacements-for-deprecated-user-scoped-permission-endpoints/qaq-p/3166685",
+   "https://community.atlassian.com/forums/Bitbucket-questions/Replacement-for-listing-all-user-repositories/qaq-p/3182101",
+   "https://www.atlassian.com/blog/developer/building-secure-and-scalable-integrations-our-guidance-for-third-party-apps"
+  ],
+  "verified": true,
+  "caveats": [
+   "App passwords no longer work; create an API token with scopes.",
+   "admin:repository:bitbucket is the only scope that can read branch restrictions, and it also allows changing them.",
+   "Replace the token before its expiry date or collection stops."
+  ]
+ },
+ "calendly": {
+  "credential": "Personal access token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "eyJ_EXAMPLE...",
+    "help": "Created in Calendly under Automations > Integrations & apps > API and webhooks; it is shown only once."
+   }
+  ],
+  "steps": [
+   "Sign in to Calendly as an Owner or Admin of your organization (a token from a User-role account only returns that user's own data).",
+   "Go to Automations > Integrations & apps, then use the search bar to find and open API and webhooks.",
+   "Under Personal access tokens, select Get a token now (or Create a token if you already have one).",
+   "Name the token, choose the scopes users:read, organizations:read and webhooks:read, then select Next.",
+   "If prompted, enter the verification code sent to your email.",
+   "Copy the token, select Close, and paste the token here."
+  ],
+  "create_url": "https://calendly.com/integrations/api_webhooks",
+  "permissions": [
+   "users:read (GET /users/me)",
+   "organizations:read (GET /organization_memberships)",
+   "webhooks:read (GET /webhook_subscriptions)",
+   "Calendly role: Owner or Admin of the organization"
+  ],
+  "plan_note": "The API works on every plan, including Free. Webhook subscriptions need a paid Professional, Standard, Standard Plus, Teams, Teams Plus or Enterprise plan, so the webhook checks fail on Free.",
+  "token_lifetime": "No expiry date. Calendly revokes it if the account's login email, password or login method changes, or when you select Revoke on the API & Webhooks page.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "The /users/me object under resource is read as one row."
+  },
+  "docs_url": "https://calendly.com/help/calendly-api-overview",
+  "sources": [
+   "https://calendly.com/help/calendly-api-overview",
+   "https://developer.calendly.com/personal-access-tokens",
+   "https://developer.calendly.com/scopes",
+   "https://developer.calendly.com/docs/getting-started/frequently-asked-questions",
+   "https://developer.calendly.com/api-docs/calendly-api/users/get-current-user",
+   "https://developer.calendly.com/api-docs/calendly-api/organizations/list-organization-memberships",
+   "https://developer.calendly.com/api-docs/calendly-api/webhooks/list-webhook-subscriptions"
+  ],
+  "verified": true,
+  "caveats": [
+   "New tokens have no API access until scopes are selected; a missing scope returns a 403 Insufficient scope error.",
+   "Only organization-scoped webhook subscriptions are counted; user- and group-scoped webhooks are not checked.",
+   "Changing the token owner's password, login email or login method revokes the token; reconnect with a new one."
+  ]
+ },
+ "clerk": {
+  "credential": "Secret Key for your production instance",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Secret Key",
+    "placeholder": "sk_live_EXAMPLE",
+    "help": "Copy it from the API keys page in the Clerk Dashboard; production keys start with sk_live_."
+   }
+  ],
+  "steps": [
+   "Sign in to the Clerk Dashboard and open your application.",
+   "At the top of the Dashboard, use the instance selector to switch to your Production instance.",
+   "Open the API keys page.",
+   "Copy the Secret Key (it starts with sk_live_)."
+  ],
+  "create_url": "https://dashboard.clerk.com/~/api-keys",
+  "permissions": [
+   "Secret Key - Backend API access, covers GET /users"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Does not expire (Clerk documents no expiry); valid until the key is removed.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Offset paging."
+  },
+  "docs_url": "https://clerk.com/docs/guides/development/clerk-environment-variables",
+  "sources": [
+   "https://clerk.com/openapi.json",
+   "https://clerk.com/docs/reference/backend-api",
+   "https://clerk.com/docs/guides/development/clerk-environment-variables",
+   "https://clerk.com/docs/guides/development/machine-auth/api-keys",
+   "https://clerk.com/docs/guides/development/deployment/production"
+  ],
+  "verified": true,
+  "caveats": [
+   "The Secret Key authorizes the whole Backend API, including write endpoints; Clerk documents no read-only option, so store it securely.",
+   "Development and production instances have separate users and keys; connect the production instance.",
+   "Use the Secret Key, not the Publishable Key (pk_live_) or keys from Clerk's user-facing API keys feature."
+  ]
+ },
+ "clickup": {
+  "credential": "Personal API token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal API token",
+    "placeholder": "pk_12345678_EXAMPLE",
+    "help": "Starts with pk_. Found in ClickUp under your avatar > Settings > Apps > API Token."
+   }
+  ],
+  "steps": [
+   "Sign in to ClickUp with a user who belongs to every Workspace you want assessed.",
+   "In the upper-right corner, click your avatar and select Settings.",
+   "In the sidebar, click Apps.",
+   "Under API Token, click Generate (or Regenerate if a token already exists).",
+   "Click Copy and paste the token here."
+  ],
+  "create_url": "https://app.clickup.com/settings/apps",
+  "permissions": [
+   "No scopes: a personal API token has the same access as the ClickUp user who generated it (read-only scoping is not available)"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Never expires, per ClickUp docs; regenerating it replaces the token.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "ClickUp documents personal tokens as Authorization: {personal_token} with no Bearer prefix, which is our raw scheme. GET /api/v2/user (Get Authorized User) and GET /api/v2/team (Get Authorized Workspaces, returns teams[] with members) are current v2 endpoints. The duplicate GET /team entry is the legacy DEEP pull, which is skipped because connector_checks.json defines ClickUp."
+  },
+  "docs_url": "https://developer.clickup.com/docs/authentication",
+  "sources": [
+   "https://developer.clickup.com/docs/authentication",
+   "https://developer.clickup.com/reference/getauthorizeduser",
+   "https://developer.clickup.com/reference/getauthorizedteams"
+  ],
+  "verified": true,
+  "caveats": [
+   "ClickUp personal tokens cannot be limited to read-only; generate it from a dedicated user if possible.",
+   "Only Workspaces the token owner belongs to are inventoried.",
+   "If you regenerate the token, paste the new one here or collection stops."
+  ]
+ },
+ "cloudflare": {
+  "credential": "User API token (custom token)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "cfut_EXAMPLE",
+    "help": "A user token from My Profile > API Tokens; the secret is shown once when created."
+   }
+  ],
+  "steps": [
+   "In the Cloudflare dashboard, go to My Profile > API Tokens (a user token, not Manage Account > API Tokens).",
+   "Select Create Token and choose to create a custom token.",
+   "Add the permissions Account > Account Settings > Read, Zone > Zone > Read, and User > API Tokens > Read.",
+   "Include all accounts and all zones you want assessed as resources; optionally set Client IP Address Filtering and TTL.",
+   "Select Continue to summary, then Create Token, and copy the secret (shown only once)."
+  ],
+  "create_url": "https://dash.cloudflare.com/profile/api-tokens",
+  "permissions": [
+   "Account Settings Read",
+   "Zone Read",
+   "API Tokens Read"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Does not expire unless you set a TTL end date when creating it.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Expired tokens included."
+  },
+  "docs_url": "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
+  "sources": [
+   "https://developers.cloudflare.com/fundamentals/api/get-started/create-token/",
+   "https://developers.cloudflare.com/fundamentals/api/get-started/account-owned-tokens/",
+   "https://developers.cloudflare.com/fundamentals/api/reference/permissions/",
+   "https://developers.cloudflare.com/api/resources/user/subresources/tokens/methods/list/",
+   "https://developers.cloudflare.com/api/resources/user/subresources/tokens/methods/verify/",
+   "https://developers.cloudflare.com/api/resources/accounts/subresources/tokens/methods/verify/",
+   "https://developers.cloudflare.com/api/resources/accounts/methods/list/",
+   "https://developers.cloudflare.com/api/resources/accounts/subresources/members/methods/list/",
+   "https://developers.cloudflare.com/api/resources/zones/methods/list/"
+  ],
+  "verified": true,
+  "caveats": [
+   "The token check only reviews tokens created by the token's own user, not other members' or account-owned tokens.",
+   "The token acts on behalf of the user who created it; if that user leaves the account the connection stops working.",
+   "Members whose invitation is still pending may show as not having 2FA enabled."
+  ]
+ },
+ "confluence": {
+  "credential": "Atlassian API token (created without scopes)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Site URL",
+    "placeholder": "your-company.atlassian.net",
+    "help": "Your Confluence Cloud site host only, without https:// or /wiki."
+   },
+   {
+    "key": "email",
+    "label": "Atlassian account email",
+    "placeholder": "grc-admin@your-company.com",
+    "help": "The email address of the Atlassian account that created the API token."
+   },
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "EXAMPLE",
+    "help": "Created at id.atlassian.com > Security > API tokens using Create API token."
+   }
+  ],
+  "steps": [
+   "Use an Atlassian account that has the Confluence Administrator global permission (required to read the audit log).",
+   "Go to https://id.atlassian.com/manage-profile/security/api-tokens and, if asked, verify your identity with the one-time code emailed to you.",
+   "Select Create API token (not Create API token with scopes).",
+   "Enter a name, choose an expiration date (1 to 365 days), and select Create.",
+   "Select Copy to clipboard, then paste the token here with the account email and your site URL."
+  ],
+  "create_url": "https://id.atlassian.com/manage-profile/security/api-tokens",
+  "permissions": [
+   "'Can use' global permission (GET /user/current, /group, /group/{groupId}/membersByGroupId, /space)",
+   "'Confluence Administrator' global permission (GET /audit)"
+  ],
+  "plan_note": "The audit log isn't available on the Confluence Free plan, so the audit-logging check fails on Free.",
+  "token_lifetime": "Expires on the date you choose, 1 to 365 days after creation.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Basic auth (Atlassian account email + API token) against https://<site>.atlassian.net/wiki/rest/api matches Atlassian's documented use of API tokens created without scopes. Tokens created with scopes must be called through https://api.atlassian.com/ex/confluence/{cloudId}/{api}, and Atlassian's documented Confluence path there is /rest/api/... without /wiki, so our base URL cannot use scoped tokens. GET /user/current, /group, /group/{groupId}/membersByGroupId and /audit are in the current v1 reference. GET /wiki/rest/api/space (v1 Get spaces) was deprecated for v2 and is no longer in the v1 reference (only create/update/delete space remain); no check uses it, but replace it with GET /wiki/api/v2/spaces (scope read:space:confluence). Policy risk: Atlassian's June 2025 guidance says third-party services that have customers generate API tokens and then store them violate its Acceptable Use Policy and cloud app security requirements (customers were to be migrated by 31 Dec 2025); the compliant long-term path is a single distributable OAuth 2.0 (3LO) or Forge app."
+  },
+  "docs_url": "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/",
+  "sources": [
+   "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/",
+   "https://developer.atlassian.com/cloud/confluence/basic-auth-for-rest-apis/",
+   "https://developer.atlassian.com/cloud/confluence/swagger.v3.json",
+   "https://developer.atlassian.com/cloud/confluence/rest/v1/api-group-space/",
+   "https://dac-static.atlassian.com/cloud/confluence/openapi-v2.v3.json",
+   "https://developer.atlassian.com/cloud/confluence/oauth-2-3lo-apps/",
+   "https://support.atlassian.com/confluence-cloud/docs/view-the-audit-log/",
+   "https://community.developer.atlassian.com/t/deprecating-many-confluence-v1-apis-that-have-v2-equivalents/66883",
+   "https://www.atlassian.com/blog/developer/building-secure-and-scalable-integrations-our-guidance-for-third-party-apps"
+  ],
+  "verified": true,
+  "caveats": [
+   "A token created with scopes is rejected at your site URL; create it with Create API token.",
+   "The token acts with the account's full Confluence permissions and cannot be limited to read-only; use a dedicated admin account where possible.",
+   "Replace the token before its expiry date or collection stops."
+  ]
+ },
+ "databricks": {
+  "credential": "Personal access token (PAT) owned by a workspace admin",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Workspace instance name",
+    "placeholder": "dbc-a1b2c3d4-e5f6.cloud.databricks.com",
+    "help": "The host of your workspace URL without https:// (Azure example: adb-1234567890123456.7.azuredatabricks.net)."
+   },
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "dapiEXAMPLE",
+    "help": "Generated under Settings > Developer > Access tokens; copy it before you close the dialog."
+   }
+  ],
+  "steps": [
+   "Sign in to the workspace as a workspace admin (listing all tokens and IP access lists needs admin rights).",
+   "Click your username in the top bar, select Settings, then click Developer.",
+   "Next to Access tokens, click Manage, then click Generate new token.",
+   "Enter a name (for example, GRC evidence collector) and set the token's lifetime in days.",
+   "Select Other APIs and add the scopes authentication, clusters, networking and scim.",
+   "Click Generate, copy the token to a secure location, then click Done."
+  ],
+  "create_url": null,
+  "permissions": [
+   "Workspace admin (token owner)",
+   "authentication - List all tokens (Token management API)",
+   "clusters - List clusters",
+   "networking - List IP access lists",
+   "scim - List users (GET /Me accepts any scoped token)"
+  ],
+  "plan_note": "Token management requires the Premium plan or above. IP access lists require the Enterprise tier on AWS and the Premium plan on Azure and Google Cloud.",
+  "token_lifetime": "Expires after the lifetime you set (new tokens are capped at 730 days unless an admin sets a lower maximum). Databricks also revokes tokens that go unused for 90 days.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Clusters paged; enableIpAccessLists checked."
+  },
+  "docs_url": "https://docs.databricks.com/aws/en/dev-tools/auth/pat",
+  "sources": [
+   "https://docs.databricks.com/aws/en/dev-tools/auth/pat",
+   "https://docs.databricks.com/aws/en/admin/access-control/tokens",
+   "https://docs.databricks.com/aws/en/security/auth/api-access-permissions",
+   "https://docs.databricks.com/api/workspace/scopes",
+   "https://docs.databricks.com/api/workspace/tokenmanagement/list",
+   "https://docs.databricks.com/api/workspace/clusters/list",
+   "https://docs.databricks.com/api/workspace/ipaccesslists/list",
+   "https://docs.databricks.com/api/workspace/users/list",
+   "https://docs.databricks.com/api/workspace/currentuser/me",
+   "https://docs.databricks.com/aws/en/dev-tools/cli/reference/token-management-commands",
+   "https://docs.databricks.com/aws/en/security/network/front-end/ip-access-list-workspace",
+   "https://docs.databricks.com/gcp/en/security/network/front-end/ip-access-list-workspace",
+   "https://learn.microsoft.com/en-us/azure/databricks/security/network/front-end/ip-access-list-workspace",
+   "https://databricks-sdk-py.readthedocs.io/en/latest/workspace/settings/ip_access_lists.html",
+   "https://docs.databricks.com/aws/en/workspace/workspace-details"
+  ],
+  "verified": true,
+  "caveats": [
+   "Databricks labels PATs as legacy and recommends OAuth, but PATs remain supported.",
+   "Tokens with the authentication scope can create new tokens, so store this token securely.",
+   "If Generate new token isn't available, a workspace admin must enable personal access token authentication for the workspace.",
+   "If IP access lists are enabled, add the collector's egress IP to an allow list; the lists also apply to REST API calls.",
+   "Create one connection per workspace."
+  ]
+ },
+ "datadog": {
+  "credential": "API key and an application key scoped to read monitors, log indexes and SLOs",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "EXAMPLE",
+    "help": "Organization Settings > API Keys."
+   },
+   {
+    "key": "secret2",
+    "label": "Application key",
+    "placeholder": "EXAMPLE",
+    "help": "Created on a service account with only the scopes listed; Datadog shows it once."
+   },
+   {
+    "key": "domain",
+    "label": "API host",
+    "placeholder": "api.datadoghq.com",
+    "help": "Leave blank for US1 (app.datadoghq.com). Otherwise api. and your site: api.datadoghq.eu, api.us3.datadoghq.com, api.us5.datadoghq.com, api.ap1.datadoghq.com, api.ap2.datadoghq.com or api.ddog-gov.com.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to Datadog as a user with the Datadog Admin Role.",
+   "Go to Organization Settings > API Keys, click New Key, name it (for example GRC evidence collector) and copy it.",
+   "Go to Organization Settings > Service Accounts, click New Service Account, give it the Datadog Read Only Role and create it.",
+   "Open the service account, create a new application key under Application Keys, and copy it; it is shown only once.",
+   "Edit the application key's scopes and select only monitors_read, logs_read_config and slos_read.",
+   "Enter both keys here, and the API host if your Datadog site is not US1."
+  ],
+  "create_url": "https://app.datadoghq.com/organization-settings/service-accounts",
+  "permissions": [
+   "monitors_read - GET /api/v1/monitor (also the connection test)",
+   "logs_read_config - GET /api/v1/logs/config/indexes",
+   "slos_read - GET /api/v1/slo"
+  ],
+  "plan_note": "Log index checks need Datadog Log Management.",
+  "token_lifetime": "API keys and application keys don't expire; they work until revoked or the service account is disabled.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "API key + scoped application key; site host selectable; monitors and SLOs paged."
+  },
+  "docs_url": "https://docs.datadoghq.com/account_management/api-app-keys/",
+  "sources": [
+   "https://docs.datadoghq.com/account_management/service-access-tokens/",
+   "https://docs.datadoghq.com/account_management/org_settings/service_accounts/",
+   "https://docs.datadoghq.com/account_management/api-app-keys/",
+   "https://docs.datadoghq.com/account_management/personal-access-tokens/",
+   "https://docs.datadoghq.com/api/latest/authentication/",
+   "https://docs.datadoghq.com/api/latest/monitors/",
+   "https://docs.datadoghq.com/api/latest/logs-indexes/",
+   "https://docs.datadoghq.com/account_management/rbac/permissions/",
+   "https://github.com/DataDog/datadog-api-client-python/blob/master/.generator/schemas/v1/openapi.yaml",
+   "https://www.datadoghq.com/blog/datadog-api-authentication/"
+  ],
+  "verified": true,
+  "caveats": [
+   "Put the application key on a service account, so collection doesn't stop when a person leaves.",
+   "Your API host follows the site in your Datadog URL; US1 (app.datadoghq.com) uses api.datadoghq.com.",
+   "Revoking either key or disabling the service account stops collection."
+  ]
+ },
+ "digitalocean": {
+  "credential": "Personal access token with custom scopes",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "dop_v1_EXAMPLE",
+    "help": "Generated under Account > API > Tokens; shown only once."
+   }
+  ],
+  "steps": [
+   "Log in to the DigitalOcean Control Panel and switch to the team that owns the resources.",
+   "In the main menu, click Account, then API to open the Applications & API page on the Tokens tab.",
+   "In Personal access tokens, click Generate New Token and enter a Token name and Expiration.",
+   "Under Scopes, choose Custom Scopes and select account:read, droplet:read, firewall:read, monitoring:read and database:read (or choose Read Only).",
+   "Click Generate Token and copy the token; it is shown only once."
+  ],
+  "create_url": "https://cloud.digitalocean.com/account/api/tokens",
+  "permissions": [
+   "account:read",
+   "droplet:read",
+   "firewall:read",
+   "monitoring:read",
+   "database:read"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Expires after the Expiration period you choose when generating it; it then disappears from your account.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Bearer auth, base URL https://api.digitalocean.com/v2 and GET /account, /droplets, /firewalls, /monitoring/alerts, /databases and /databases/{id}/backups match the API reference and its scope list. The backups endpoint only supports PostgreSQL and MySQL clusters, so Caching/Valkey and other engines are not assessed for backups."
+  },
+  "docs_url": "https://docs.digitalocean.com/reference/api/create-personal-access-token/",
+  "sources": [
+   "https://docs.digitalocean.com/reference/api/create-personal-access-token/",
+   "https://docs.digitalocean.com/reference/api/scopes/",
+   "https://raw.githubusercontent.com/digitalocean/openapi/main/specification/resources/monitoring/monitoring_list_alertPolicy.yml",
+   "https://raw.githubusercontent.com/digitalocean/openapi/main/specification/resources/databases/databases_list_backups.yml",
+   "https://www.digitalocean.com/blog/updated-api-tokens-new-management-features"
+  ],
+  "verified": true,
+  "caveats": [
+   "Scopes cannot be edited after creation; generate a new token to change them.",
+   "Available scopes depend on your team role, and a token only sees the resources of the team it was created in.",
+   "Track the token's expiry and replace it before it lapses, or collection will fail with 401."
+  ]
+ },
+ "dropbox": {
+  "credential": "Team-scoped Dropbox app (App key, App secret) and an offline refresh token",
+  "fields": [
+   {
+    "key": "access_key_id",
+    "label": "App key",
+    "placeholder": "abcd1234efgh567",
+    "help": "On the app's Settings tab in the App Console."
+   },
+   {
+    "key": "secret2",
+    "label": "App secret",
+    "placeholder": "ijkl8901mnop234",
+    "help": "On the app's Settings tab; click Show to reveal it."
+   },
+   {
+    "key": "token",
+    "label": "Refresh token",
+    "placeholder": "EXAMPLE",
+    "help": "The refresh_token value from step 6."
+   }
+  ],
+  "steps": [
+   "Sign in as a Dropbox team admin; only a team admin can authorize an app that uses team scopes.",
+   "Open the App Console, click Create app, choose Scoped access, name the app and create it.",
+   "On the Permissions tab, select team_info.read, members.read, sessions.list and groups.read, then click Submit.",
+   "On the Settings tab, copy the App key and App secret.",
+   "Open https://www.dropbox.com/oauth2/authorize?client_id=YOUR_APP_KEY&response_type=code&token_access_type=offline in a browser, approve the app, and copy the access code shown.",
+   "Exchange the code for a refresh token right away, on your own machine: curl https://api.dropboxapi.com/oauth2/token -d code=ACCESS_CODE -d grant_type=authorization_code -u YOUR_APP_KEY:YOUR_APP_SECRET, then copy refresh_token from the response.",
+   "Enter the App key, App secret and refresh token here."
+  ],
+  "create_url": "https://www.dropbox.com/developers/apps",
+  "permissions": [
+   "team_info.read",
+   "members.read",
+   "sessions.list",
+   "groups.read"
+  ],
+  "plan_note": "Team endpoints require a Dropbox team (business) account, and the app must be authorized by a team admin.",
+  "token_lifetime": "The refresh token doesn't expire; it works until the app is unlinked from the team. Each run uses it to get a 4-hour access token.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Customer generates an offline refresh token once (steps 5-6); refresh exchange per run."
+  },
+  "docs_url": "https://developers.dropbox.com/oauth-guide",
+  "sources": [
+   "https://docs.dropboxapi.com/dropbox-api/docs/oauth",
+   "https://docs.dropboxapi.com/dropbox-api/docs/get-started/authorization",
+   "https://docs.dropboxapi.com/dropbox-api/docs/team-administration",
+   "https://www.dropbox.com/developers/documentation/http/teams",
+   "https://www.dropbox.com/developers/reference/auth-types",
+   "https://www.dropboxforum.com/t5/Dropbox-API-Support-Feedback/Forced-to-make-all-users-Team-Admins-quot-You-must-be-a-team/td-p/486473"
+  ],
+  "verified": false,
+  "caveats": [
+   "The access code from step 5 works once and expires quickly; if the exchange fails, repeat step 5.",
+   "Permissions added later need a new authorization (steps 5 and 6) and a new refresh token.",
+   "The authorization belongs to the team, not the admin who approved it."
+  ]
+ },
+ "fastly": {
+  "credential": "User API token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "EXAMPLE",
+    "help": "A user token created under Account > API tokens; the token string is shown only once."
+   }
+  ],
+  "steps": [
+   "Log in to the Fastly control panel on the correct account as a user with the Superuser, TLS admin or TLS viewer role.",
+   "Go to Account > API tokens, click Create token, and re-authenticate when prompted.",
+   "Select User token, enter a Name, and under Scope select Read-only access (global:read).",
+   "Under Service access choose all services, then set the Expiration.",
+   "Click Create user token and copy the token; it will never be visible again."
+  ],
+  "create_url": "https://manage.fastly.com/account/personal/tokens",
+  "permissions": [
+   "global:read",
+   "Service access: all services",
+   "User role able to view TLS settings: Superuser, TLS admin or TLS viewer"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Defaults to 90 days; you can choose a specific date or never expire. Tokens unused for two years are deleted automatically.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Global scope matched as a word."
+  },
+  "docs_url": "https://www.fastly.com/documentation/guides/account-info/user-and-account-management/using-api-tokens/",
+  "sources": [
+   "https://www.fastly.com/documentation/guides/account-info/user-and-account-management/using-api-tokens/",
+   "https://www.fastly.com/documentation/guides/account-info/user-and-account-management/about-user-roles-and-permissions/",
+   "https://www.fastly.com/documentation/reference/api/auth-tokens/user/",
+   "https://www.fastly.com/documentation/reference/api/tls/custom-certs/activations/",
+   "https://github.com/fastly/fastly-py/blob/main/docs/TokensApi.md",
+   "https://www.fastly.com/documentation/help/cli/cli-auth/"
+  ],
+  "verified": true,
+  "caveats": [
+   "User tokens carry the permissions of the user who created them and stop working when that user is removed.",
+   "Tokens cannot be edited after creation; create a new one to change scope or expiry.",
+   "If you belong to several Fastly accounts, switch to the right account before creating the token."
+  ]
+ },
+ "github": {
+  "credential": "Personal access token (classic)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token (classic)",
+    "placeholder": "ghp_EXAMPLE",
+    "help": "Created under Settings > Developer settings > Personal access tokens > Tokens (classic)."
+   }
+  ],
+  "steps": [
+   "Sign in as an owner of every organization you want assessed (only owners can see the 2FA requirement and members without 2FA).",
+   "Click your profile picture > Settings, then Developer settings in the left sidebar.",
+   "Under Personal access tokens, click Tokens (classic), then Generate new token > Generate new token (classic).",
+   "Enter a Note, choose an Expiration, and select the scopes repo, admin:org and read:user.",
+   "Click Generate token, copy the token and paste it here.",
+   "If an organization uses SAML single sign-on, click Configure SSO next to the token on the Personal access tokens page, then Authorize for that organization."
+  ],
+  "create_url": "https://github.com/settings/tokens/new",
+  "permissions": [
+   "Classic scope repo: private repositories and their branches (GET /user/repos, GET /repos/{owner}/{repo}/branches/{branch})",
+   "Classic scope admin:org: full organization details including two_factor_requirement_enabled (GET /orgs/{org}); it includes read:org, which covers GET /user/orgs and GET /orgs/{org}/members",
+   "Classic scope read:user: private profile fields on GET /user, including the account's 2FA status",
+   "Role: organization owner (filter=2fa_disabled and full organization details are owner-only)",
+   "Fine-grained equivalents for reference: Organization permission Members (read), Repository permissions Metadata (read) and Contents (read); not usable yet because GET /user/orgs returns an empty list to fine-grained tokens"
+  ],
+  "plan_note": "Protected branches are available on public repositories with GitHub Free, and on private repositories only with GitHub Pro, GitHub Team or GitHub Enterprise Cloud, so private-repository branch checks fail on Free.",
+  "token_lifetime": "Expires on the date you choose when creating it; GitHub also automatically removes tokens that haven't been used in a year.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Classic PAT required (fine-grained tokens see no orgs); org 2FA field owner-only, not assessed otherwise."
+  },
+  "docs_url": "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens",
+  "sources": [
+   "https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens",
+   "https://docs.github.com/en/rest/authentication/permissions-required-for-fine-grained-personal-access-tokens",
+   "https://docs.github.com/en/apps/oauth-apps/building-oauth-apps/scopes-for-oauth-apps",
+   "https://docs.github.com/en/rest/users/users",
+   "https://docs.github.com/en/rest/orgs/orgs",
+   "https://docs.github.com/en/rest/orgs/members",
+   "https://docs.github.com/en/rest/repos/repos",
+   "https://docs.github.com/en/rest/branches/branches",
+   "https://docs.github.com/en/rest/branches/branch-protection",
+   "https://docs.github.com/en/rest/about-the-rest-api/api-versions",
+   "https://docs.github.com/en/enterprise-cloud@latest/authentication/authenticating-with-single-sign-on/authorizing-a-personal-access-token-for-use-with-single-sign-on"
+  ],
+  "verified": true,
+  "caveats": [
+   "Fine-grained tokens aren't supported yet: GitHub returns no organizations to them, so organization checks would be skipped.",
+   "The repo and admin:org scopes include write access; GitHub has no read-only classic scope for private repositories or full organization settings.",
+   "If an organization has disabled classic personal access tokens, requests to that organization fail with a 403 response."
+  ]
+ },
+ "gitlab": {
+  "credential": "Personal access token (legacy) with the read_api scope",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "glpat-EXAMPLE",
+    "help": "A legacy personal access token with the read_api scope; it starts with glpat-."
+   },
+   {
+    "key": "domain",
+    "label": "GitLab host",
+    "placeholder": "gitlab.com",
+    "help": "Leave blank for GitLab.com; for Self-Managed or Dedicated, your instance host without https://.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to GitLab as a user with the Maintainer or Owner role in the groups you want checked.",
+   "In the upper-right corner, select your avatar, then select Edit profile.",
+   "In the left sidebar, select Access > Personal access tokens.",
+   "From the Generate token dropdown list, select Legacy token.",
+   "Enter a Token name and an Expiration date, and select the read_api scope.",
+   "Select Generate token and copy the token now; you cannot view it again after leaving the page."
+  ],
+  "create_url": "https://gitlab.com/-/user_settings/personal_access_tokens",
+  "permissions": "read_api scope (GitLab allows it on every GET/HEAD API request, which covers all calls). The token's user needs the Maintainer or Owner role in each group to be checked (GET /groups?min_access_level=40) and must be able to read code in each project (at least Reporter on private projects) for GET /projects/:id/protected_branches.",
+  "plan_note": null,
+  "token_lifetime": "Expires on the date you choose, at most 365 days after creation; GitLab emails reminders 60, 30 and 7 days before expiry.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Self-Managed/Dedicated host selectable."
+  },
+  "docs_url": "https://docs.gitlab.com/user/profile/personal_access_tokens/",
+  "sources": [
+   "https://docs.gitlab.com/user/profile/personal_access_tokens/",
+   "https://docs.gitlab.com/security/tokens/access_token_scopes/",
+   "https://docs.gitlab.com/api/rest/authentication/",
+   "https://docs.gitlab.com/api/personal_access_tokens/",
+   "https://docs.gitlab.com/api/groups/",
+   "https://docs.gitlab.com/api/protected_branches/",
+   "https://docs.gitlab.com/api/users/",
+   "https://docs.gitlab.com/security/two_factor_authentication/",
+   "https://gitlab.com/gitlab-org/gitlab/-/raw/master/lib/api/api.rb",
+   "https://gitlab.com/gitlab-org/gitlab/-/raw/master/lib/api/protected_branches.rb",
+   "https://gitlab.com/gitlab-org/gitlab/-/raw/master/lib/api/personal_access_tokens.rb",
+   "https://gitlab.com/gitlab-org/gitlab/-/raw/master/lib/api/entities/group.rb"
+  ],
+  "verified": true,
+  "caveats": [
+   "Groups where the token's user is below Maintainer are not checked.",
+   "The token-expiry check only sees the connecting user's own tokens, because GitLab.com does not let non-administrators list other users' tokens.",
+   "2FA enforcement is read from each group's own setting; a subgroup that only inherits enforcement from its parent group may show as not enforcing it.",
+   "Create a new token and update the connection before the expiration date.",
+   "A Self-Managed or Dedicated instance must be reachable from the collector over HTTPS."
+  ]
+ },
+ "google_workspace": {
+  "credential": "Service account JSON key with domain-wide delegation, impersonating a super admin",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Service account key (JSON)",
+    "placeholder": "{\"type\": \"service_account\", \"project_id\": \"my-project\", \"client_email\": \"grc-collector@my-project.iam.gserviceaccount.com\", ...}",
+    "help": "Paste the entire contents of the JSON key file downloaded from Google Cloud."
+   },
+   {
+    "key": "email",
+    "label": "Admin email to impersonate",
+    "placeholder": "admin@example.com",
+    "help": "A super admin in your Google Workspace account."
+   }
+  ],
+  "steps": [
+   "In the Google Cloud console, select a project and enable the Admin SDK API (Directory API).",
+   "Go to IAM & Admin > Service Accounts, click Create service account, enter a name, and click Done.",
+   "Open the service account, go to the Keys tab, click Add key > Create new key, select JSON and click Create.",
+   "On the service account, click Show advanced settings and copy the Client ID under Domain-wide delegation.",
+   "Signed in as a super admin, open the Google Admin console and go to Security > Access and data control > API controls, then click Manage Domain Wide Delegation.",
+   "Click Add new, paste the Client ID, enter the OAuth scopes https://www.googleapis.com/auth/admin.directory.user.readonly,https://www.googleapis.com/auth/admin.directory.domain.readonly and click Authorize."
+  ],
+  "create_url": "https://console.cloud.google.com/iam-admin/serviceaccounts",
+  "permissions": [
+   "https://www.googleapis.com/auth/admin.directory.user.readonly - users.list",
+   "https://www.googleapis.com/auth/admin.directory.domain.readonly - domains.list",
+   "Impersonated user: a super admin (the read-only scopes above limit what the key can do)"
+  ],
+  "plan_note": null,
+  "token_lifetime": "The JSON key never expires unless your organization sets a key expiry policy; the access tokens it issues last 1 hour.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Service-account JWT exchange impersonating the admin; users page with pageToken."
+  },
+  "docs_url": "https://developers.google.com/workspace/guides/create-credentials",
+  "sources": [
+   "https://developers.google.com/workspace/guides/create-credentials",
+   "https://developers.google.com/identity/protocols/oauth2/service-account",
+   "https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/list",
+   "https://developers.google.com/workspace/admin/directory/reference/rest/v1/domains/list",
+   "https://developers.google.com/workspace/admin/directory/reference/rest/v1/users",
+   "https://developers.google.com/workspace/admin/directory/v1/quickstart/python",
+   "https://developers.google.com/workspace/admin/directory/v1/guides/manage-users",
+   "https://developers.google.com/identity/openid-connect/openid-connect",
+   "https://admin.googleapis.com/$discovery/rest?version=directory_v1",
+   "https://cloud.google.com/iam/docs/keys-create-delete",
+   "https://cloud.google.com/iam/docs/service-account-creds",
+   "https://support.google.com/a/answer/1219251"
+  ],
+  "verified": true,
+  "caveats": [
+   "Organizations created on or after May 3, 2024 block service account key creation by default (iam.disableServiceAccountKeyCreation); an organization policy admin must exempt the project.",
+   "Domain-wide delegation usually applies within minutes but can take up to 24 hours.",
+   "The downloaded JSON file is the only copy of the key; store it securely."
+  ]
+ },
+ "grafana": {
+  "credential": "Service account token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Service account token",
+    "placeholder": "glsa_EXAMPLE_XXXXXXXX",
+    "help": "Generated on the service account page; starts with glsa_ and is shown once."
+   },
+   {
+    "key": "domain",
+    "label": "Grafana URL",
+    "placeholder": "yourstack.grafana.net",
+    "help": "Your Grafana host without https://; include any sub-path, e.g. grafana.example.com/grafana."
+   }
+  ],
+  "steps": [
+   "Sign in to Grafana as an organization administrator and click Administration in the left-side menu.",
+   "Click Users and access > Service accounts > Add service account, enter a Display name, and click Create.",
+   "Assign the role: Admin on Grafana OSS; on Grafana Enterprise or Grafana Cloud, Viewer plus the fixed roles fixed:org.users:reader, fixed:serviceaccounts:reader and fixed:datasources:reader.",
+   "Click Add service account token, enter a name, optionally set an expiration date, and click Generate token.",
+   "Copy the token and your Grafana host."
+  ],
+  "create_url": null,
+  "permissions": "Actions: org.users:read (GET /api/org/users), serviceaccounts:read (GET /api/serviceaccounts/search), datasources:read (GET /api/datasources), plus read access to the dashboards listed by GET /api/search. Grafana OSS grants the first two only to the Admin role. Enterprise/Cloud least privilege: Viewer + fixed:org.users:reader, fixed:serviceaccounts:reader, fixed:datasources:reader.",
+  "plan_note": "Fixed (RBAC) roles need Grafana Enterprise or Grafana Cloud; Grafana OSS requires the Admin role.",
+  "token_lifetime": "No expiry by default; you can set an expiration date (your instance may cap it with token_expiration_day_limit).",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Bearer service account token and https://{domain} are correct and every path exists; GET /api/user returns 200 for service accounts. GET /api/org/users (org.users:read) and GET /api/serviceaccounts/search (serviceaccounts:read) are granted only to the Admin basic role, and GET /api/datasources (datasources:read) is Admin-only where data source permissions are enforced (Enterprise/Cloud). A Viewer token passes the connection test but those checks fail with 403, so customers must assign Admin (OSS) or Viewer plus fixed reader roles (Enterprise/Cloud). Grafana 13 marks /api routes as legacy, but they remain available."
+  },
+  "docs_url": "https://grafana.com/docs/grafana/latest/administration/service-accounts/",
+  "sources": [
+   "https://grafana.com/docs/grafana/latest/administration/service-accounts/",
+   "https://grafana.com/docs/grafana/latest/developer-resources/api-reference/http-api/org/",
+   "https://grafana.com/docs/grafana/latest/developer-resources/api-reference/http-api/serviceaccount/",
+   "https://grafana.com/docs/grafana/latest/developer-resources/api-reference/http-api/data_source/",
+   "https://grafana.com/docs/grafana/latest/developer-resources/api-reference/http-api/user/",
+   "https://grafana.com/docs/grafana/latest/developer-resources/api-reference/http-api/folder_dashboard_search/",
+   "https://grafana.com/docs/grafana/latest/administration/roles-and-permissions/access-control/",
+   "https://grafana.com/docs/grafana/latest/administration/roles-and-permissions/access-control/rbac-fixed-basic-role-definitions/",
+   "https://grafana.com/docs/grafana/latest/administration/roles-and-permissions/access-control/assign-rbac-roles/",
+   "https://github.com/grafana/grafana/blob/main/pkg/api/user.go",
+   "https://github.com/grafana/grafana/blob/main/pkg/services/accesscontrol/roles.go",
+   "https://github.com/grafana/grafana/blob/main/pkg/services/serviceaccounts/manager/roles.go",
+   "https://github.com/grafana/grafana/blob/main/pkg/api/accesscontrol.go"
+  ],
+  "verified": true,
+  "caveats": [
+   "On Grafana OSS the collector's own Admin service account will fail the 'Service accounts do not hold the Admin role' check.",
+   "Grafana Cloud: create the token in your stack's Grafana (Administration), not a Cloud Access Policy token.",
+   "Service accounts only see the organization they were created in.",
+   "The instance must be reachable from the collector over HTTPS."
+  ]
+ },
+ "heroku": {
+  "credential": "Non-expiring OAuth authorization token (heroku authorizations:create)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "HRKU-EXAMPLE",
+    "help": "The Token value printed by heroku authorizations:create."
+   }
+  ],
+  "steps": [
+   "Use a Heroku account that is not federated through SSO and is a member of each team you want assessed.",
+   "Install the Heroku CLI and run heroku login.",
+   "Run heroku authorizations:create --description \"GRC evidence collector\" --scope identity,read",
+   "Copy the Token value (starts with HRKU-) from the output."
+  ],
+  "create_url": null,
+  "permissions": [
+   "identity",
+   "read"
+  ],
+  "plan_note": "Team member checks only return data for Heroku teams the token's account belongs to.",
+  "token_lifetime": "Does not expire unless you pass --expires-in; tokens from heroku auth:token last at most 1 year (8 hours for SSO accounts).",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Bearer auth, Accept: application/vnd.heroku+json; version=3, base URL https://api.heroku.com and GET /account, /apps, /teams and /teams/{team_id}/members match the Platform API reference. Customers must use a token from heroku authorizations:create: a heroku auth:token token expires (at most 1 year, 8 hours for SSO accounts), and federated SSO accounts cannot create authorizations. Lists are single-page; Heroku returns up to 200 items and the Next-Range header is not followed."
+  },
+  "docs_url": "https://devcenter.heroku.com/articles/platform-api-quickstart",
+  "sources": [
+   "https://devcenter.heroku.com/articles/platform-api-quickstart",
+   "https://devcenter.heroku.com/articles/oauth",
+   "https://devcenter.heroku.com/articles/heroku-cli-commands",
+   "https://devcenter.heroku.com/articles/platform-api-reference",
+   "https://help.heroku.com/PBGP6IDE/how-should-i-generate-an-api-key-that-allows-me-to-use-the-heroku-platform-api",
+   "https://github.com/heroku/cli/blob/main/docs/authorizations.md",
+   "https://raw.githubusercontent.com/heroku/cli/main/src/commands/authorizations/create.ts"
+  ],
+  "verified": false,
+  "caveats": [
+   "Not fully verified: Heroku does not document which scope each endpoint needs; identity covers GET /account and read covers apps and resources. If team calls return 403, recreate the authorization with --scope global, which is read-write.",
+   "Heroku recommends a separate non-SSO user invited to the team for integration tokens; that user will show as not federated in the SSO check.",
+   "The account MFA check only covers the account that created the token.",
+   "Tokens with read scope can see credentials embedded in resources such as log drain URLs."
+  ]
+ },
+ "hubspot": {
+  "credential": "Legacy private app access token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Access token",
+    "placeholder": "pat-na1-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "help": "On your legacy private app's Auth tab, click Show token."
+   }
+  ],
+  "steps": [
+   "Make sure you're a Super Admin in the HubSpot account.",
+   "Go to Development, click Legacy apps in the left sidebar, click Create legacy app and select Private.",
+   "On the Basic Info tab, enter an app name.",
+   "On the Scopes tab, click Add new scope, select settings.users.read and click Update.",
+   "Click Create app, then Continue creating.",
+   "Open the app's Auth tab, click Show token, then Copy."
+  ],
+  "create_url": null,
+  "permissions": "settings.users.read (users and roles; the connection test lists one user).",
+  "plan_note": "Roles (permission sets) require an Enterprise subscription; the user list works on any tier.",
+  "token_lifetime": "No automatic expiry is documented; HubSpot recommends rotating the token every six months.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Connection test uses /settings/v3/users; users paged."
+  },
+  "docs_url": "https://developers.hubspot.com/docs/apps/legacy-apps/private-apps/overview",
+  "sources": [
+   "https://developers.hubspot.com/docs/apps/legacy-apps/private-apps/overview",
+   "https://developers.hubspot.com/docs/api-reference/legacy/account/settings/user-provisioning/guide",
+   "https://developers.hubspot.com/docs/api-reference/latest/account/settings/user-provisioning/guide",
+   "https://developers.hubspot.com/docs/api-reference/legacy/account/account-information/guide",
+   "https://developers.hubspot.com/docs/apps/legacy-apps/authentication/scopes",
+   "https://developers.hubspot.com/docs/developer-tooling/platform/versioning",
+   "https://knowledge.hubspot.com/user-management/create-permission-sets"
+  ],
+  "verified": false,
+  "caveats": [
+   "Without an Enterprise subscription there are no permission sets, so the roles check has no data.",
+   "If the user who created the private app is removed, some calls fail until you rotate the token.",
+   "After rotating the token, update it here."
+  ]
+ },
+ "intercom": {
+  "credential": "Access Token from a private app in the Developer Hub",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Access Token",
+    "placeholder": "EXAMPLE=",
+    "help": "Found in your app's Configure > Authentication section in the Developer Hub."
+   }
+  ],
+  "steps": [
+   "Make sure your teammate permissions include Can access developer hub.",
+   "Open the Developer Hub, go to Your Apps and click New App.",
+   "Name the app, select your workspace and click Create app.",
+   "Make sure the app has the Read admins and Read one admin permissions.",
+   "Open Configure > Authentication and copy the Access Token."
+  ],
+  "create_url": "https://app.intercom.com/a/apps/_/developer-hub",
+  "permissions": "Read admins (GET /admins) and Read one admin (GET /me).",
+  "plan_note": null,
+  "token_lifetime": "No expiry is documented; the token works until you regenerate it (Test & Publish > your workspace > Regenerate token) or uninstall the app.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Technically correct: Bearer auth, https://api.intercom.io, GET /me and GET /admins exist, and api.intercom.io attempts to route EU- and AU-hosted workspaces to their region (api.eu.intercom.io / api.au.intercom.io exist if routing fails). Policy problem: Intercom's docs say apps must use OAuth rather than asking users for Access Tokens, that doing so is against its terms of service, and that API access may be revoked. Fix: register a public Intercom app with OAuth (Read admins, Read one admin) and store the OAuth token instead of a pasted Access Token."
+  },
+  "docs_url": "https://developers.intercom.com/docs/build-an-integration/learn-more/authentication",
+  "sources": [
+   "https://developers.intercom.com/docs/build-an-integration/learn-more/authentication",
+   "https://developers.intercom.com/docs/build-an-integration/getting-started",
+   "https://developers.intercom.com/docs/build-an-integration/learn-more/authentication/oauth-scopes",
+   "https://developers.intercom.com/docs/build-an-integration/learn-more/authentication/setting-up-oauth",
+   "https://developers.intercom.com/docs/build-an-integration/learn-more/authentication/installing-uninstalling-apps",
+   "https://developers.intercom.com/docs/build-an-integration/learn-more/rest-apis",
+   "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/admins/listadmins",
+   "https://developers.intercom.com/docs/references/rest-api/api.intercom.io/admins/identifyadmin",
+   "https://www.intercom.com/help/en/articles/176-teammate-permissions-how-to-control-workspace-access",
+   "https://www.intercom.com/help/en/articles/9071694-intercom-developer-faqs"
+  ],
+  "verified": false,
+  "caveats": [
+   "Intercom advises against giving Access Tokens to third-party app providers and recommends OAuth; treat this token like a password.",
+   "Intercom documents the Read admins and Read one admin permissions for OAuth apps but not how they apply to a private app's Access Token.",
+   "Regenerating the token or uninstalling the app disconnects the collector."
+  ]
+ },
+ "jamf": {
+  "credential": "Jamf Pro API client (client ID and client secret)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Jamf Pro server URL",
+    "placeholder": "acme.jamfcloud.com",
+    "help": "Your Jamf Pro host without https://; include the port if it isn't 443 (for example jamf.example.com:8443)."
+   },
+   {
+    "key": "access_key_id",
+    "label": "Client ID",
+    "placeholder": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d",
+    "help": "Shown on the API client in Settings > API roles and clients."
+   },
+   {
+    "key": "token",
+    "label": "Client secret",
+    "placeholder": "XXXXXXXX-EXAMPLE",
+    "help": "Created with Generate Client Secret; it's displayed only once."
+   }
+  ],
+  "steps": [
+   "In Jamf Pro, click Settings in the sidebar, then click API roles and clients in the System section.",
+   "On the API Roles tab, click New, enter a display name, add the Read Computers privilege, and click Save.",
+   "On the API Clients tab, click New, enter a display name, add the role, set the Access Token Lifetime, and click Save.",
+   "Click Edit, click Enable API Client, and click Save.",
+   "Click Generate Client Secret, then Create Secret, and copy the client ID and client secret.",
+   "Enter your Jamf Pro host, client ID and client secret here."
+  ],
+  "create_url": null,
+  "permissions": "API role privilege 'Read Computers' (GET /api/v1/auth needs no privilege).",
+  "plan_note": "API clients require Jamf Pro 10.49.0 or later; /api/v4/computers-inventory requires Jamf Pro 11.30.0 or later.",
+  "token_lifetime": "The client secret has no documented expiry (rotate or disable it yourself); each access token lasts the Access Token Lifetime set on the client, in seconds.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Client-credentials token exchange; zero-based pages; v4 inventory."
+  },
+  "docs_url": "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Client",
+  "sources": [
+   "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Role",
+   "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Creating_an_API_Client",
+   "https://learn.jamf.com/r/en-US/jamf-pro-documentation-current/Generating_a_Client_Secret",
+   "https://developer.jamf.com/jamf-pro/docs/client-credentials",
+   "https://developer.jamf.com/jamf-pro/docs/privileges-and-deprecations.md",
+   "https://developer.jamf.com/jamf-pro/reference/get_v1-computers-inventory.md",
+   "https://developer.jamf.com/jamf-pro/reference/get_v4-computers-inventory.md",
+   "https://developer.jamf.com/jamf-pro/reference/get_v1-auth.md",
+   "https://developer.jamf.com/jamf-pro/reference/postoauthtoken.md",
+   "https://developer.jamf.com/jamf-pro/changelog/11300-deprecations.md",
+   "https://developer.jamf.com/jamf-pro/changelog/11300-additions.md"
+  ],
+  "verified": true,
+  "caveats": [
+   "The client secret is displayed only once; store it securely before closing the dialog.",
+   "Adding or removing roles on an existing API client requires rotating its client secret; privilege changes to a role apply immediately.",
+   "Disabling or deleting a client doesn't revoke access tokens that are still valid."
+  ]
+ },
+ "jira": {
+  "credential": "Atlassian API token (created without scopes)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Site URL",
+    "placeholder": "your-company.atlassian.net",
+    "help": "Your Jira Cloud site host only, without https://."
+   },
+   {
+    "key": "email",
+    "label": "Atlassian account email",
+    "placeholder": "grc-admin@your-company.com",
+    "help": "The email address of the Atlassian account that created the API token."
+   },
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "EXAMPLE",
+    "help": "Created at id.atlassian.com > Security > API tokens using Create API token."
+   }
+  ],
+  "steps": [
+   "Use an Atlassian account with the Administer Jira and Browse users and groups global permissions (Administer Jira is required for the audit log).",
+   "Go to https://id.atlassian.com/manage-profile/security/api-tokens and, if asked, verify your identity with the one-time code emailed to you.",
+   "Select Create API token (not Create API token with scopes).",
+   "Enter a name, choose an expiration date (1 to 365 days), and select Create.",
+   "Select Copy to clipboard, then paste the token here with the account email and your site URL."
+  ],
+  "create_url": "https://id.atlassian.com/manage-profile/security/api-tokens",
+  "permissions": [
+   "Browse users and groups global permission (GET /users/search)",
+   "Administer Jira global permission (GET /auditing/record)",
+   "Permission to access Jira (GET /myself, /permissionscheme, /permissionscheme/{schemeId}/permission)"
+  ],
+  "plan_note": "The Jira audit log isn't available if all of your Jira Cloud apps are on the Free plan, so the audit-logging check fails there.",
+  "token_lifetime": "Expires on the date you choose, 1 to 365 days after creation.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Basic auth (Atlassian account email + API token) against https://<site>.atlassian.net/rest/api/3 matches Atlassian docs for tokens created without scopes. All five calls are current v3 endpoints: users/search caps maxResults at 1000, auditing/record limit defaults to 1000, and holder type 'anyone' is documented as 'Grant for anonymous users', so the anonymous-access check value is right. Scoped tokens only work through https://api.atlassian.com/ex/jira/{cloudId}; because {domain} may hold a path, entering api.atlassian.com/ex/jira/<cloudId> as the site should let a read-only scoped token work (untested). Granular scopes documented for these endpoints: read:user:jira, read:group:jira, read:application-role:jira, read:avatar:jira, read:audit-log:jira, read:permission-scheme:jira, read:permission:jira, read:field:jira, read:project-role:jira, read:project-category:jira, read:project:jira. Policy risk: Atlassian's June 2025 guidance says third-party services that have customers generate API tokens and then store them violate its Acceptable Use Policy and cloud app security requirements; the compliant long-term path is a single distributable OAuth 2.0 (3LO) or Forge app."
+  },
+  "docs_url": "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/",
+  "sources": [
+   "https://support.atlassian.com/atlassian-account/docs/manage-api-tokens-for-your-atlassian-account/",
+   "https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/",
+   "https://developer.atlassian.com/cloud/jira/platform/swagger-v3.v3.json",
+   "https://developer.atlassian.com/cloud/confluence/oauth-2-3lo-apps/",
+   "https://support.atlassian.com/jira-cloud-administration/docs/audit-activities-in-jira-applications/",
+   "https://support.atlassian.com/jira/kb/retrieve-my-atlassian-sites-cloud-id/",
+   "https://www.atlassian.com/blog/developer/building-secure-and-scalable-integrations-our-guidance-for-third-party-apps"
+  ],
+  "verified": true,
+  "caveats": [
+   "A token created with scopes is rejected at your site URL; create it with Create API token.",
+   "The token acts with the account's full Jira permissions and cannot be limited to read-only; use a dedicated admin account where possible.",
+   "Replace the token before its expiry date or collection stops."
+  ]
+ },
+ "jumpcloud": {
+  "credential": "JumpCloud administrator API key (sent as x-api-key)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API Key",
+    "placeholder": "jca_EXAMPLE",
+    "help": "From your account name > My API Key in the JumpCloud Admin Portal; it starts with jca_."
+   },
+   {
+    "key": "domain",
+    "label": "Console host",
+    "placeholder": "console.jumpcloud.com",
+    "help": "Leave blank for the US data center; EU: console.eu.jumpcloud.com, India: console.in.jumpcloud.com.",
+    "required": false
+   },
+   {
+    "key": "access_key_id",
+    "label": "Organization ID",
+    "placeholder": "EXAMPLE",
+    "required": false,
+    "help": "Only for a multi-tenant (MTP) administrator key: the ID of the organization to read."
+   }
+  ],
+  "steps": [
+   "As an Administrator with Billing, go to Settings > Administrators and click + Admin > As New to create a dedicated integration admin (or click details on an existing admin).",
+   "Set the Role to Read Only, select the Enable API access checkbox, and click create (or Save).",
+   "Sign in to the JumpCloud Admin Portal as that admin, click your account name, and select My API Key.",
+   "Click Generate New API Key and copy the key (it starts with jca_ and is only displayed once).",
+   "In the same panel, set the Expiration Date (30, 60 or 90 days, Custom, or No Expiration), then paste the key here."
+  ],
+  "create_url": "https://console.jumpcloud.com/login",
+  "permissions": "Admin Portal role 'Read Only' with 'Enable API access' selected. The API key carries its admin's role; Read Only can view users and devices but can't change anything.",
+  "plan_note": null,
+  "token_lifetime": "Newly generated keys expire after 90 days by default; you can choose 30, 60 or 90 days, Custom (1 hour to 365 days), or No Expiration.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Region host and MTP x-org-id supported; skip paging."
+  },
+  "docs_url": "https://jumpcloud.com/support/jumpcloud-apis",
+  "sources": [
+   "https://jumpcloud.com/support/jumpcloud-apis",
+   "https://jumpcloud.com/support/manage-admin-accounts",
+   "https://jumpcloud.com/support/admin-portal-roles",
+   "https://jumpcloud.com/support/service-account-for-apis",
+   "https://jumpcloud.com/support/jumpcloud-data-centers-login-urls-and-service-endpoints",
+   "https://docs.jumpcloud.com/api/1.0/index.html",
+   "https://docs.jumpcloud.com/api/1.0/index.yaml"
+  ],
+  "verified": true,
+  "caveats": [
+   "Only an Administrator with Billing can turn on Enable API access for an admin.",
+   "Generating a new key revokes that admin's previous key and breaks anything still using it, so use a dedicated admin.",
+   "Replace the key before it expires; JumpCloud emails the admin daily starting 7 days before expiry."
+  ]
+ },
+ "kandji": {
+  "credential": "Iru (formerly Kandji) API token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "Paste the API token (shown once)",
+    "help": "Copied with Copy Token when you create the token; it can't be viewed again."
+   },
+   {
+    "key": "domain",
+    "label": "API URL",
+    "placeholder": "yourcompany.api.kandji.io",
+    "help": "Your organization's API URL from Access > API tokens, without https:// (EU tenants: yourcompany.api.eu.kandji.io)."
+   }
+  ],
+  "steps": [
+   "Sign in to the Iru (Kandji) web app as an administrator who can use the Access page.",
+   "In the sidebar, select the Account Menu Button, then Access, and open the API tokens tab.",
+   "Select Add Token, enter a Name and Description (leave Enable MCP off), and select Create.",
+   "Select Copy Token, store the token safely, and select Next.",
+   "Select Configure, check only Devices > Device Information > Device list and Device details, then select Save.",
+   "Copy Your organization's API URL from the API tokens page."
+  ],
+  "create_url": null,
+  "permissions": "Devices > Device Information: Device list (GET /api/v1/devices) and Device details (GET /api/v1/devices/{device_id}/details). No other permissions are needed.",
+  "plan_note": null,
+  "token_lifetime": "No expiry documented; valid until revoked (it keeps working if the admin who created it is removed).",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Bearer auth to https://{domain}/api/v1 matches Iru's API (US {subdomain}.api.kandji.io, EU {subdomain}.api.eu.kandji.io; migrated tenants may also use {subdomain}.api.iru.com). GET /devices (default and maximum 300 records per request) and GET /devices/{device_id}/details exist, and the fields read (mdm_enabled, agent_installed, is_missing, filevault.filevault_enabled) match the documented responses. Tenants with more than 300 devices are only partly covered because the collector doesn't page with offset."
+  },
+  "docs_url": "https://docs.iru.com/en/endpoint/api/iru-api-overview",
+  "sources": [
+   "https://docs.iru.com/en/endpoint/api/iru-api-overview",
+   "https://docs.iru.com/en/iru/platform-overview/iru-brand-update",
+   "https://api-docs.iru.com/",
+   "https://api-docs.iru.com/api/collections/15284493/TzCTZkBe?segregateAuth=true&versionTag=latest",
+   "https://support.kandji.io/kb/kandji-api",
+   "https://support.kandji.io/kb/authorize-your-kandji-tenant-for-okta-workflows",
+   "https://github.com/kandji-inc/support/blob/main/api-tools/code-examples/pagination_with_limit_and_offset_example.py",
+   "https://smallstep.com/docs/tutorials/connect-iru-to-smallstep/",
+   "https://tailscale.com/docs/integrations/iru",
+   "https://help.vanta.com/en/articles/11345787-connecting-vanta-iru"
+  ],
+  "verified": true,
+  "caveats": [
+   "Enter the API URL host (yourcompany.api.kandji.io), not your web app address.",
+   "The FileVault check reads Mac disk encryption; iPhone, iPad, Apple TV or Windows devices have no FileVault status and may be flagged.",
+   "All API tokens in a tenant share one limit of 10,000 requests per hour."
+  ]
+ },
+ "linear": {
+  "credential": "Personal API key",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "lin_api_EXAMPLE",
+    "help": "Created in Linear under Settings > Account > Security & Access."
+   }
+  ],
+  "steps": [
+   "Sign in as a workspace Admin (Admins can always create API keys; Members can only if an Admin allows it in Settings > Administration > API > Member API keys).",
+   "Go to Settings > Account > Security & Access.",
+   "Create a new personal API key with a recognizable name.",
+   "Restrict the key's permissions to Read and don't limit it to specific teams.",
+   "Copy the key and paste it here."
+  ],
+  "create_url": null,
+  "permissions": [
+   "API key permission: Read",
+   "Team access: all teams"
+  ],
+  "plan_note": "SAML and SCIM are only available on Linear's Enterprise plan, so those two checks fail on other plans. On Free plans every user is an Admin, so the admin least-privilege check fails once the workspace has more than 3 users.",
+  "token_lifetime": "No expiry is documented; the key works until you or a workspace Admin revokes it.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Linear documents Authorization: <API_KEY> without Bearer for personal API keys, which is our raw scheme, and POST https://api.linear.app/graphql. Schema check against Linear's published SDK schema: Organization.samlEnabled, scimEnabled and allowedAuthServices (deprecated in favour of authSettings.allowedAuthServices but still served; an empty list means all methods allowed) and User.admin, active and guest all exist. The GET /graphql entry in the call list is the legacy DEEP pull, which is skipped for Linear and sends POST anyway. users(first: 250) is not paginated and excludes suspended users by default, so very large workspaces are only partly assessed."
+  },
+  "docs_url": "https://linear.app/docs/api-and-webhooks",
+  "sources": [
+   "https://linear.app/docs/api-and-webhooks",
+   "https://linear.app/docs/security-and-access",
+   "https://linear.app/developers/graphql",
+   "https://linear.app/developers/oauth-2-0-authentication",
+   "https://github.com/linear/linear/blob/master/packages/sdk/src/schema.graphql",
+   "https://linear.app/docs/saml-and-access-control",
+   "https://linear.app/docs/scim",
+   "https://linear.app/docs/members-roles"
+  ],
+  "verified": false,
+  "caveats": [
+   "Linear doesn't document whether a Read-only key can see workspace SAML, SCIM and login-method settings; if those checks show errors, recreate the key with full access.",
+   "Linear doesn't document the exact button names for creating a key, so steps 3 and 4 describe the options rather than exact labels."
+  ]
+ },
+ "mailgun": {
+  "credential": "Mailgun account API key (Analyst role if your plan offers key roles)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "EXAMPLE-0123abcd-4567ef89",
+    "help": "Created on the API keys page under Account Settings; Mailgun shows it only once."
+   },
+   {
+    "key": "domain",
+    "label": "API host",
+    "placeholder": "api.mailgun.net",
+    "help": "Leave blank for US-region domains; EU region: api.eu.mailgun.net.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to the Mailgun dashboard as a user with the Admin role (only admins can create API keys).",
+   "Select Account Settings on the right side, then open the API keys page.",
+   "Click Create key and fill in the form (for example, a description such as GRC evidence collector).",
+   "If a role choice is offered, select Analyst (read-only access to data and metrics).",
+   "Click Create Key and copy the key; you can view it only once."
+  ],
+  "create_url": null,
+  "permissions": [
+   "Analyst role (Domains: Read) - covers GET /v4/domains"
+  ],
+  "plan_note": "Role-based (Analyst) API keys are available on Enterprise and certain Business plans; on other plans, account API keys have full access to the account.",
+  "token_lifetime": "No expiry by default; an optional expiration can be set when a key is created through the Keys API.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "raw. paths resolve; Basic user is api; EU host selectable."
+  },
+  "docs_url": "https://documentation.mailgun.com/docs/mailgun/user-manual/api-key-mgmt/rbac-mgmt",
+  "sources": [
+   "https://documentation.mailgun.com/docs/mailgun/user-manual/api-key-mgmt/rbac-mgmt",
+   "https://documentation.mailgun.com/docs/mailgun/api-reference/mg-auth",
+   "https://documentation.mailgun.com/docs/mailgun/api-reference/api-overview",
+   "https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/domains/get-v4-domains",
+   "https://documentation.mailgun.com/docs/mailgun/api-reference/send/mailgun/keys/post-v1-keys",
+   "https://help.mailgun.com/hc/en-us/articles/26016288026907-API-Key-Roles"
+  ],
+  "verified": true,
+  "caveats": [
+   "Domain sending keys won't work; they can only send messages.",
+   "If you use IP allowlisting for API access, allow the collector's egress IP.",
+   "A key's role can't be changed after creation; create a new key to change it.",
+   "Domains in the other Mailgun region aren't included; each region has its own API host."
+  ]
+ },
+ "microsoft_365": {
+  "credential": "Microsoft Entra app registration with a client secret (Microsoft Graph application permissions)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Directory (tenant) ID",
+    "placeholder": "aaaabbbb-0000-cccc-1111-dddd2222eeee",
+    "help": "Shown on the app registration's Overview page."
+   },
+   {
+    "key": "access_key_id",
+    "label": "Application (client) ID",
+    "placeholder": "00001111-aaaa-2222-bbbb-3333cccc4444",
+    "help": "Shown on the app registration's Overview page."
+   },
+   {
+    "key": "token",
+    "label": "Client secret value",
+    "placeholder": "Abc8Q~EXAMPLE",
+    "help": "The secret's Value (not its Secret ID) from Certificates & secrets; it's never displayed again after you leave the page."
+   }
+  ],
+  "steps": [
+   "Sign in to the Microsoft Entra admin center as at least an Application Developer and browse to Entra ID > App registrations > New registration.",
+   "Enter a name, keep Single tenant only, select Register, and copy the Application (client) ID and Directory (tenant) ID from the Overview page.",
+   "Select API permissions > Add a permission > Microsoft Graph > Application permissions and add User.Read.All, AuditLog.Read.All and Policy.Read.All.",
+   "Select Grant admin consent for your tenant (requires at least the Privileged Role Administrator role).",
+   "Select Certificates & secrets > Client secrets > New client secret, choose an expiration (24 months maximum), select Add, and copy the secret Value.",
+   "Enter the tenant ID, client ID and secret value here."
+  ],
+  "create_url": "https://entra.microsoft.com",
+  "permissions": "Microsoft Graph application permissions: User.Read.All, AuditLog.Read.All, Policy.Read.All (admin consent required). All three are read-only.",
+  "plan_note": "The MFA registration report (userRegistrationDetails) requires Microsoft Entra ID P1 or P2; Conditional Access requires Entra ID P1 (also included in Microsoft 365 Business Premium).",
+  "token_lifetime": "The client secret expires on the date you choose (24 months maximum); each Graph access token lasts 60-90 minutes.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Client-credentials token exchange; pages with @odata.nextLink."
+  },
+  "docs_url": "https://learn.microsoft.com/en-us/graph/auth-v2-service",
+  "sources": [
+   "https://learn.microsoft.com/en-us/graph/api/authenticationmethodsroot-list-userregistrationdetails?view=graph-rest-1.0",
+   "https://learn.microsoft.com/en-us/graph/api/conditionalaccessroot-list-policies?view=graph-rest-1.0",
+   "https://learn.microsoft.com/en-us/graph/api/user-list?view=graph-rest-1.0",
+   "https://raw.githubusercontent.com/microsoftgraph/microsoft-graph-docs-contrib/main/api-reference/v1.0/api/user-get.md",
+   "https://raw.githubusercontent.com/microsoftgraph/microsoft-graph-docs-contrib/main/api-reference/v1.0/includes/me-apis-sign-in-note.md",
+   "https://raw.githubusercontent.com/microsoftgraph/microsoft-graph-docs-contrib/main/api-reference/v1.0/resources/authenticationmethods-usage-insights-overview.md",
+   "https://raw.githubusercontent.com/microsoftgraph/microsoft-graph-docs-contrib/main/concepts/auth-v2-service.md",
+   "https://raw.githubusercontent.com/MicrosoftDocs/entra-docs/main/docs/identity-platform/quickstart-register-app.md",
+   "https://raw.githubusercontent.com/MicrosoftDocs/entra-docs/main/docs/identity-platform/how-to-add-credentials.md",
+   "https://raw.githubusercontent.com/MicrosoftDocs/entra-docs/main/docs/identity/enterprise-apps/grant-admin-consent.md",
+   "https://raw.githubusercontent.com/MicrosoftDocs/entra-docs/main/docs/identity-platform/access-tokens.md",
+   "https://raw.githubusercontent.com/MicrosoftDocs/entra-docs/main/docs/identity-platform/v2-oauth2-client-creds-grant-flow.md",
+   "https://raw.githubusercontent.com/MicrosoftDocs/entra-docs/main/docs/identity/conditional-access/overview.md",
+   "https://raw.githubusercontent.com/MicrosoftDocs/entra-docs/main/docs/identity-platform/howto-create-service-principal-portal.md"
+  ],
+  "verified": true,
+  "caveats": [
+   "Create a new client secret before the current one expires and update it here.",
+   "Microsoft recommends certificates or federated credentials over client secrets for production apps.",
+   "The MFA registration report doesn't include disabled users."
+  ]
+ },
+ "monday": {
+  "credential": "Personal API token (API v2)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "eyJ_EXAMPLE.eyJ_EXAMPLE...",
+    "help": "In monday.com: profile picture > Developers > API token > Show."
+   }
+  ],
+  "steps": [
+   "Sign in as an account admin: the token has exactly your user's permissions, and guests and viewers cannot use API tokens.",
+   "Click your profile picture in the top right corner and select Developers; the Developer Center opens in a new tab.",
+   "Click API token > Show and copy your personal token (admins can also use profile picture > Administration > Connections > Personal API token).",
+   "Paste the token here."
+  ],
+  "create_url": null,
+  "permissions": [
+   "No scopes: a personal API token has all permission scopes and mirrors the user's monday.com permissions (read-only is not possible)",
+   "User type: admin (recommended) or member"
+  ],
+  "plan_note": null,
+  "token_lifetime": "No expiry is documented; it stays valid until regenerated, which invalidates it immediately.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "API-Version 2026-07; kind/status replace deprecated user fields."
+  },
+  "docs_url": "https://developer.monday.com/api-reference/docs/authentication",
+  "sources": [
+   "https://developer.monday.com/api-reference/docs/authentication",
+   "https://developer.monday.com/api-reference/docs/basics",
+   "https://developer.monday.com/api-reference/docs/api-versioning",
+   "https://developer.monday.com/api-reference/reference/users",
+   "https://developer.monday.com/api-reference/changelog/major-user-entity-update"
+  ],
+  "verified": true,
+  "caveats": [
+   "monday.com personal tokens cannot be limited to read-only.",
+   "Regenerating the token disconnects this collector until you paste the new token."
+  ]
+ },
+ "neon": {
+  "credential": "Organization API key",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "napi_EXAMPLE",
+    "help": "Created in your organization's Settings > API keys; shown only once."
+   }
+  ],
+  "steps": [
+   "Sign in to the Neon Console as an organization Admin; only Admins can create organization API keys.",
+   "Switch to your organization, then go to Settings > API keys.",
+   "Click Create new, give the key a name, and do not select Project-scoped.",
+   "Copy the key immediately; it is shown only once."
+  ],
+  "create_url": null,
+  "permissions": [
+   "Organization Admin role to create the key",
+   "Neon API keys have no read-only scopes; an organization API key has admin-level access to all organization projects"
+  ],
+  "plan_note": "IP Allow and Private Networking (blocking public connections) are Scale plan features; on other plans those checks will fail.",
+  "token_lifetime": "Does not expire; valid until revoked.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Projects are listed per organization from /users/me/organizations."
+  },
+  "docs_url": "https://neon.com/docs/manage/api-keys",
+  "sources": [
+   "https://neon.com/docs/manage/api-keys",
+   "https://neon.com/docs/manage/orgs-api",
+   "https://neon.com/api_spec/release/v2.json",
+   "https://api-docs.neon.tech/reference/listprojects",
+   "https://api-docs.neon.tech/reference/getcurrentuserinfo",
+   "https://neon.com/docs/reference/api/users/transfer-projects-from-user-to-org",
+   "https://neon.com/docs/introduction/ip-allow",
+   "https://neon.com/docs/guides/neon-private-networking"
+  ],
+  "verified": true,
+  "caveats": [
+   "Neon API keys cannot be restricted to read-only.",
+   "Project-scoped keys cannot list organization projects; use an organization API key.",
+   "A personal API key stops reaching organization projects when its user leaves the organization."
+  ]
+ },
+ "netlify": {
+  "credential": "Personal access token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "nfp_EXAMPLE",
+    "help": "Generated under User settings > Applications > Personal access tokens; copy it before leaving the page."
+   }
+  ],
+  "steps": [
+   "In Netlify, select your avatar > User settings > Applications > Personal access tokens.",
+   "Select New access token and enter a descriptive name.",
+   "If your team uses SAML SSO, log in to the team with SSO and select Allow access to my SAML-based Netlify team.",
+   "Select an Expiration date, then Generate token.",
+   "Copy the token before navigating away, then select Done."
+  ],
+  "create_url": "https://app.netlify.com/user/applications#personal-access-tokens",
+  "permissions": [
+   "Personal access tokens have no scopes; they act with the full access of the user who created them",
+   "The user must be a member of each Netlify team to assess",
+   "Allow access to my SAML-based Netlify team (SAML SSO teams only)"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Expires on the expiration date you select when generating it; a Netlify password reset invalidates it permanently.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Bearer auth, base URL https://api.netlify.com/api/v1 and GET /user, /sites (page/per_page up to 100), /accounts and /{account_slug}/members (listMembersForAccount) match the Netlify API docs and OpenAPI spec. For teams that require SAML SSO the token must be generated with Allow access to my SAML-based Netlify team, or team data is denied."
+  },
+  "docs_url": "https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/",
+  "sources": [
+   "https://docs.netlify.com/api-and-cli-guides/api-guides/get-started-with-api/",
+   "https://docs.netlify.com/manage/accounts-and-billing/user-settings/",
+   "https://raw.githubusercontent.com/netlify/open-api/master/swagger.yml",
+   "https://answers.netlify.com/t/change-to-the-netlify-authentication-token-format/106146"
+  ],
+  "verified": true,
+  "caveats": [
+   "Tokens cannot be restricted to read-only; use a dedicated account if possible.",
+   "Resetting the Netlify password of the token's user invalidates the token.",
+   "Only teams the token's user belongs to are assessed."
+  ]
+ },
+ "notion": {
+  "credential": "Internal connection installation access token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Installation access token",
+    "placeholder": "ntn_EXAMPLE",
+    "help": "From your internal connection's Configuration tab in the Notion Developer portal; new tokens start with ntn_, older ones with secret_."
+   }
+  ],
+  "steps": [
+   "You must be a Workspace Owner. Open the Notion Developer portal at https://app.notion.com/developers/connections.",
+   "In the Build section of the sidebar, select Internal connections, click Create a new connection, name it and choose your workspace.",
+   "On the Configuration tab, enable Read content and User information with email addresses; leave the update, insert and comment capabilities off.",
+   "On the Content access tab, click Edit access and select the top-level pages and databases to check (child pages are included).",
+   "Copy the Installation access token from the Configuration tab and paste it here."
+  ],
+  "create_url": "https://app.notion.com/developers/connections",
+  "permissions": [
+   "Read content",
+   "User information with email addresses",
+   "Content access to the pages being checked (Content access tab, or a page's ... menu > Connections > + Add connection)"
+  ],
+  "plan_note": null,
+  "token_lifetime": "No expiry is documented for internal connection tokens; it stays valid until you refresh it on the Configuration tab or delete the connection.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Authorization: Bearer <token>, base https://api.notion.com/v1 and Notion-Version 2022-06-28 are valid (Notion has no plans to retire older versions; latest is 2026-03-11; search filter value 'page' is valid). Our checks depend on setup: (1) GET /v1/users works only for connection tokens with a user-information capability; Notion personal access tokens cannot list users, and guests are never returned. (2) person.email_verified is only returned with 'User information with email addresses'; without it every member fails the verified-email check (confirmed with a mocked run). (3) POST /v1/search only returns pages shared with the connection, and we read just the first 100 results without start_cursor paging (GET /v1/users is also read as one page)."
+  },
+  "docs_url": "https://developers.notion.com/guides/get-started/internal-connections",
+  "sources": [
+   "https://developers.notion.com/guides/get-started/internal-connections",
+   "https://developers.notion.com/guides/get-started/personal-access-tokens",
+   "https://developers.notion.com/guides/get-started/authorization",
+   "https://developers.notion.com/reference/capabilities",
+   "https://developers.notion.com/reference/versioning",
+   "https://developers.notion.com/reference/user",
+   "https://developers.notion.com/reference/get-users",
+   "https://developers.notion.com/reference/post-search",
+   "https://developers.notion.com/reference/page",
+   "https://developers.notion.com/page/changelog"
+  ],
+  "verified": true,
+  "caveats": [
+   "Use an internal connection token, not a Notion personal access token: personal access tokens cannot list workspace users.",
+   "Pages that aren't shared with the connection are not checked for public web publishing.",
+   "Guests are not included in the user inventory."
+  ]
+ },
+ "okta": {
+  "credential": "Okta API token (SSWS)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Okta domain",
+    "placeholder": "acme.okta.com",
+    "help": "Your Okta org host without https://."
+   },
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "EXAMPLE",
+    "help": "Created under Security > API > Tokens; you can only copy it when it's created."
+   }
+  ],
+  "steps": [
+   "Sign in to the Okta Admin Console as a super admin and create a dedicated service-account user.",
+   "Go to Security > Administrators, open the Admins tab, click Add administrator, and assign the service account the Read-only Administrator role.",
+   "Sign in to the Admin Console as the service account, go to Security > API, open the Tokens tab, and click Create token.",
+   "Enter a token name, choose where API calls may originate from (Any IP, or IP network zones that include our collector), and click Create token.",
+   "Click Copy to clipboard and paste the token here with your Okta domain."
+  ],
+  "create_url": null,
+  "permissions": "Standard role 'Read-only Administrator' (READ_ONLY_ADMIN): views users, their factors and apps. If the password or MFA-enrollment policy checks return HTTP 403, also assign a custom admin role with the 'View policies' permission (okta.policies.read).",
+  "plan_note": null,
+  "token_lifetime": "Valid for 30 days from creation or last use (each API call renews it); revoked after 30 days without use or if the creating user is deactivated.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Per-user MFA factors as declared checks; Link-header paging."
+  },
+  "docs_url": "https://help.okta.com/oie/en-us/content/topics/security/api.htm",
+  "sources": [
+   "https://developer.okta.com/docs/guides/create-an-api-token/main/",
+   "https://help.okta.com/oie/en-us/content/topics/security/api.htm",
+   "https://help.okta.com/oie/en-us/content/topics/security/administrators-read-only-admin.htm",
+   "https://help.okta.com/oie/en-us/content/topics/security/administrators-admin-comparison.htm",
+   "https://help.okta.com/oie/en-us/content/topics/security/custom-admin-role/about-role-permissions.htm",
+   "https://help.okta.com/oie/en-us/content/topics/security/custom-admin-role/create-admin-role-assignment-by-admin.htm",
+   "https://help.okta.com/oie/en-us/content/topics/security/custom-admin-role/auditor-admin-setting.htm",
+   "https://developer.okta.com/docs/api/openapi/okta-management/guides/roles",
+   "https://developer.okta.com/docs/api/openapi/okta-management/guides/permissions",
+   "https://raw.githubusercontent.com/okta/okta-management-openapi-spec/master/dist/current/management-minimal.yaml"
+  ],
+  "verified": false,
+  "caveats": [
+   "Not fully verified: Okta's docs confirm Read-only Administrators can create API tokens and view users and apps, but don't say whether they can list password and MFA-enrollment policies through the API.",
+   "The token acts as the user who created it and stops working if that user is deactivated, so use a dedicated service account.",
+   "If you restrict the token to network zones, only IP zones work with SSWS tokens; include the collector's egress IPs.",
+   "Where the Early Access Auditor (Read-Only) mode is enabled, you can apply it to the service account's admin assignment to block writes in the Admin Console and API."
+  ]
+ },
+ "one_password": {
+  "credential": "Events Reporting integration bearer token (1Password Events API)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Events API host",
+    "placeholder": "events.1password.com",
+    "help": "events.1password.com, events.ent.1password.com, events.1password.ca or events.1password.eu, matching where your account is hosted."
+   },
+   {
+    "key": "token",
+    "label": "Bearer token",
+    "placeholder": "eyJ_EXAMPLE...",
+    "help": "Issued by your Events Reporting integration on 1Password.com."
+   }
+  ],
+  "steps": [
+   "Make sure you're an owner or administrator of a 1Password Business account.",
+   "Sign in to your account on 1Password.com and select Integrations in the sidebar (then Directory, if you already have integrations).",
+   "In the Events Reporting section, choose your SIEM or select Other, enter a name, and select Add Integration.",
+   "Enter a Token Name, choose Expires After, and keep sign-in attempts, item usages and audit events selected under Events to Report.",
+   "Select Issue Token, save the token in 1Password, and paste it here with your Events API host."
+  ],
+  "create_url": null,
+  "permissions": "Events to Report: sign-in attempts, item usages and audit events (token features signinattempts, itemusages, auditevents). The Events API is read-only.",
+  "plan_note": "Requires a 1Password Business account.",
+  "token_lifetime": "Never expires by default; you can choose 30, 90 or 180 days.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Connection test uses /api/v2/auth/introspect."
+  },
+  "docs_url": "https://developer.1password.com/docs/events-api/get-started/",
+  "sources": [
+   "https://developer.1password.com/docs/events-api/get-started/",
+   "https://developer.1password.com/docs/events-api/reference/",
+   "https://developer.1password.com/docs/events-api/servers/",
+   "https://www.1password.dev/events-api/beta/about-v3-beta.md",
+   "https://www.1password.dev/events-api.md"
+  ],
+  "verified": true,
+  "caveats": [
+   "Choose the Events API host that matches where your 1Password account is hosted (1password.com, ent.1password.com, 1password.ca or 1password.eu).",
+   "Keep all three event types selected; a token can only read the event types it was issued for.",
+   "If you set an expiry, issue a new token before it lapses and update it here."
+  ]
+ },
+ "onelogin": {
+  "credential": "OneLogin API credential pair (client ID and client secret, API v2)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "OneLogin subdomain",
+    "placeholder": "acme.onelogin.com",
+    "help": "Your OneLogin host (<subdomain>.onelogin.com) without https://."
+   },
+   {
+    "key": "access_key_id",
+    "label": "Client ID",
+    "placeholder": "EXAMPLE",
+    "help": "From Developers > API Credentials."
+   },
+   {
+    "key": "token",
+    "label": "Client Secret",
+    "placeholder": "EXAMPLE",
+    "help": "From the same API credential pair."
+   }
+  ],
+  "steps": [
+   "Sign in to OneLogin as an account owner or administrator.",
+   "Go to Developers > API Credentials and click New Credential.",
+   "Give the credential pair a meaningful name and select the Manage All scope.",
+   "Click Save, copy the client ID and client secret, and click Done.",
+   "Enter your OneLogin subdomain, client ID and client secret here."
+  ],
+  "create_url": null,
+  "permissions": "Manage All. GET /api/2/mfa/users/{user_id}/devices is documented for the Manage users scope, which doesn't cover GET /api/2/roles (Read Users, Read All, Manage All) or GET /api/2/apps (Read All, Manage All), so Manage All is the only single scope that covers every call. Read-only scoping isn't possible.",
+  "plan_note": null,
+  "token_lifetime": "The credential pair has no documented expiry; each access token is valid for 10 hours.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Client-credentials token exchange per run."
+  },
+  "docs_url": "https://developers.onelogin.com/api-docs/2/getting-started/working-with-api-credentials",
+  "sources": [
+   "https://developers.onelogin.com/api-docs/2/getting-started/working-with-api-credentials",
+   "https://developers.onelogin.com/api-docs/2/oauth20-tokens/generate-tokens-2",
+   "https://developers.onelogin.com/api-docs/2/users/list-users",
+   "https://developers.onelogin.com/api-docs/2/roles/list-roles",
+   "https://developers.onelogin.com/api-docs/2/apps/list-apps",
+   "https://developers.onelogin.com/api-docs/2/multi-factor-authentication/enrolled-factors",
+   "https://developers.onelogin.com/api-docs/2/users/user-resource"
+  ],
+  "verified": true,
+  "caveats": [
+   "Manage All can also create, change and delete data; OneLogin has no read-only scope that covers MFA device lookups.",
+   "API credentials stop working if the user who created them is deleted.",
+   "Disabling or deleting the credential pair revokes the tokens it issued."
+  ]
+ },
+ "openai": {
+  "credential": "Organization Admin key (OpenAI API Platform)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Admin key",
+    "placeholder": "sk-admin-EXAMPLE",
+    "help": "Created by an Organization Owner under API Platform organization settings > Admin keys."
+   }
+  ],
+  "steps": [
+   "Sign in to the OpenAI API Platform as an Organization Owner; only owners can create Admin keys.",
+   "Open API Platform organization settings > Admin keys.",
+   "Select Create new admin key and enter a descriptive name.",
+   "Choose the permissions for the key; read access to Organization Admin covers users, invites, admin keys and projects.",
+   "Copy the key (starts with sk-admin-) and store it securely; a lost key cannot be recovered."
+  ],
+  "create_url": "https://platform.openai.com/settings/organization/admin-keys",
+  "permissions": [
+   "Organization Owner role (required to create Admin keys)",
+   "Organization Admin: Read"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Does not expire unless an expiration is set; Admin keys can be given an expiry of up to 365 days.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Connection test uses /organization/projects; lists page with after."
+  },
+  "docs_url": "https://developers.openai.com/api/docs/guides/admin-apis",
+  "sources": [
+   "https://developers.openai.com/api/docs/guides/admin-apis",
+   "https://developers.openai.com/api/reference/administration/overview",
+   "https://help.openai.com/en/articles/9687866-admin-and-audit-logs-api-for-the-api-platform",
+   "https://help.openai.com/en/articles/20001407-managing-admin-keys-in-the-credentials-tab",
+   "https://developers.openai.com/api/docs/guides/rbac",
+   "https://platform.openai.com/docs/api-reference/users/list",
+   "https://platform.openai.com/docs/api-reference/invite/list",
+   "https://platform.openai.com/docs/api-reference/admin-api-keys/list",
+   "https://platform.openai.com/docs/api-reference/admin-api-keys/create",
+   "https://platform.openai.com/docs/api-reference/projects/list"
+  ],
+  "verified": false,
+  "caveats": [
+   "Not fully verified: OpenAI does not document the permission labels in the API Platform admin-key dialog; its RBAC guide names the area Organization Admin (Read, Write).",
+   "ChatGPT workspace Admin keys created in Admin Console do not work for /v1/organization endpoints; use an API Platform organization Admin key.",
+   "Admin keys cannot call non-admin endpoints such as /v1/models or model inference.",
+   "The admin key used for this connection is itself counted by the admin key check."
+  ]
+ },
+ "opsgenie": {
+  "credential": "Opsgenie API key from API Key Management",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+    "help": "From Settings > App Settings > API Key Management."
+   },
+   {
+    "key": "domain",
+    "label": "API host",
+    "placeholder": "api.opsgenie.com",
+    "help": "Leave blank for US-instance accounts; EU instance: api.eu.opsgenie.com.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to Opsgenie as the account owner or a global admin.",
+   "Go to Settings > App Settings > API Key Management and click Add New API Key.",
+   "Enter a name and select only the Read and Configuration Access access rights.",
+   "Click Add API Key and copy the key."
+  ],
+  "create_url": null,
+  "permissions": "API key access rights Read and Configuration Access (users, schedules, escalations and integrations are configuration domains). Create/Update and Delete aren't needed.",
+  "plan_note": "API Key Management is available on all Opsgenie plans. Opsgenie is no longer sold (since June 4, 2025) and reaches end of support on April 5, 2027.",
+  "token_lifetime": "No expiry is documented; the key works until you delete it.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "GenieKey prefix added; EU host selectable."
+  },
+  "docs_url": "https://support.atlassian.com/opsgenie/docs/api-key-management/",
+  "sources": [
+   "https://docs.opsgenie.com/docs/api-overview",
+   "https://docs.opsgenie.com/docs/authentication.md",
+   "https://docs.opsgenie.com/docs/api-access-management.md",
+   "https://support.atlassian.com/opsgenie/docs/api-key-management/",
+   "https://docs.opsgenie.com/docs/user-api.md",
+   "https://docs.opsgenie.com/docs/schedule-api.md",
+   "https://docs.opsgenie.com/docs/escalation-api.md",
+   "https://docs.opsgenie.com/docs/integration-api.md",
+   "https://www.atlassian.com/licensing/opsgenie"
+  ],
+  "verified": true,
+  "caveats": [
+   "Opsgenie shuts down on April 5, 2027; plan your move to Jira Service Management or Compass.",
+   "Don't use a team integration's API key; team keys can't read account-level configuration."
+  ]
+ },
+ "pagerduty": {
+  "credential": "PagerDuty general access REST API key (read-only)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "REST API key",
+    "placeholder": "Ab1_Cd2Ef3Gh4Ij5Kl6M",
+    "help": "20-character general access key from Integrations > Developer Tools > API Access Keys."
+   }
+  ],
+  "steps": [
+   "Sign in to PagerDuty as an Admin or the Account Owner.",
+   "In the web app, go to Integrations > Developer Tools > API Access Keys and click Create New API Key.",
+   "Enter a Description and check Read-only API Key.",
+   "Click Create Key, copy the key (it's displayed in full only once), and click Close.",
+   "Paste the key here."
+  ],
+  "create_url": null,
+  "permissions": "General access REST API key with 'Read-only API Key' checked (GET calls only). Equivalent scoped-OAuth scopes: users.read, escalation_policies.read, services.read, oncalls.read.",
+  "plan_note": "The REST API is available on all current pricing plans; some legacy plans don't include it.",
+  "token_lifetime": "No expiry is documented; the key works until it's disabled or deleted.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Authorization: Token token=<key> with Accept: application/vnd.pagerduty+json;version=2 matches REST API v2, and GET /users, /escalation_policies, /services and /oncalls exist on https://api.pagerduty.com. EU-region keys also work because PagerDuty forwards api.pagerduty.com requests to api.eu.pagerduty.com (the EU URL is recommended)."
+  },
+  "docs_url": "https://support.pagerduty.com/main/docs/api-access-keys",
+  "sources": [
+   "https://support.pagerduty.com/main/docs/api-access-keys",
+   "https://support.pagerduty.com/main/docs/service-regions",
+   "https://raw.githubusercontent.com/PagerDuty/api-schema/main/reference/REST/openapiv3.json"
+  ],
+  "verified": true,
+  "caveats": [
+   "Use a general access key; User Token keys act with a single user's permissions.",
+   "If you lose the key, delete it and create a new one.",
+   "EU-region accounts work through PagerDuty's forwarding from api.pagerduty.com."
+  ]
+ },
+ "posthog": {
+  "credential": "Personal API key",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal API key",
+    "placeholder": "phx_EXAMPLE",
+    "help": "Starts with phx_; copy it right after creation, it isn't shown again."
+   },
+   {
+    "key": "domain",
+    "label": "PostHog host",
+    "placeholder": "us.posthog.com",
+    "help": "us.posthog.com (US Cloud), eu.posthog.com (EU Cloud) or your self-hosted domain, without https://.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to PostHog as an Admin or Owner of the organization to review.",
+   "Open the Personal API keys section of your account settings and click + Create a personal API Key.",
+   "Enter a Label and set Organization & project access to your organization, not individual projects.",
+   "Under Scopes, set Read for Organization, Organization member, Project and User; leave all other scopes unset.",
+   "Create the key and copy its value immediately."
+  ],
+  "create_url": "https://us.posthog.com/settings/user-api-keys",
+  "permissions": "Scopes user:read (GET /api/users/@me/), project:read (GET /api/projects/), organization:read (GET /api/organizations/) and organization_member:read (GET /api/organizations/@current/members/).",
+  "plan_note": "The Enforce 2FA setting this connector checks is included in the Boost, Scale and Enterprise packages.",
+  "token_lifetime": "Does not expire; deleted if the user who created it is deleted.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Host selectable (US, EU, self-hosted)."
+  },
+  "docs_url": "https://posthog.com/docs/api/personal-api-keys",
+  "sources": [
+   "https://posthog.com/docs/api/personal-api-keys",
+   "https://posthog.com/docs/api",
+   "https://us.posthog.com/api/schema/",
+   "https://posthog.com/platform-packages",
+   "https://github.com/PostHog/posthog/blob/master/posthog/api/organization_member.py",
+   "https://github.com/PostHog/posthog/blob/master/posthog/api/project.py",
+   "https://github.com/PostHog/posthog/blob/master/frontend/src/scenes/settings/user/PersonalAPIKeys.tsx",
+   "https://github.com/PostHog/posthog/blob/master/frontend/src/lib/scopes.tsx"
+  ],
+  "verified": true,
+  "caveats": [
+   "EU Cloud: create the key at eu.posthog.com; a key from one region is rejected by the other.",
+   "Organization and organization member scopes aren't available on project-scoped keys.",
+   "Member checks use your current organization; if you belong to several, switch to the right one in PostHog first.",
+   "Use an Admin or Owner: if the organization hides the member list from members, lower roles only see part of it.",
+   "Each user can create up to 10 personal API keys."
+  ]
+ },
+ "postmark": {
+  "credential": "Server API token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Server API token",
+    "placeholder": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+    "help": "Found on the API Tokens tab of the server you want to monitor."
+   }
+  ],
+  "steps": [
+   "Sign in to Postmark as the Account Owner, an Account Admin, or a Server Admin of the server.",
+   "Open Servers and select the server to monitor.",
+   "Open the server's API Tokens tab.",
+   "Copy a Server API token (a server can have up to 3; use a dedicated one for this integration if you can).",
+   "Add a separate connection for each additional server."
+  ],
+  "create_url": null,
+  "permissions": [
+   "Server API token (server-level privileges) - covers GET /server and GET /webhooks"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Does not expire (Postmark documents no expiry); valid until the token is removed from the server.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Webhook auth read from HttpAuth.Username."
+  },
+  "docs_url": "https://postmarkapp.com/developer/api/overview",
+  "sources": [
+   "https://postmarkapp.com/developer/api/overview",
+   "https://postmarkapp.com/developer/api/webhooks-api",
+   "https://postmarkapp.com/developer/api/server-api",
+   "https://postmarkapp.com/support/article/1008-what-are-the-account-and-server-api-tokens",
+   "https://postmarkapp.com/support/article/1071-how-do-i-set-a-users-permissions",
+   "https://postmarkapp.com/developer/user-guide/managing-your-account/managing-servers",
+   "https://github.com/ActiveCampaign/postmark.js/blob/main/src/client/models/webhooks/Webhook.ts"
+  ],
+  "verified": true,
+  "caveats": [
+   "Server tokens can't be made read-only; the token can also send email and change server settings.",
+   "Each connection covers one server.",
+   "Use a Server API token, not the Account API token; these endpoints need server-level privileges."
+  ]
+ },
+ "qovery": {
+  "credential": "Organization API token (Viewer role)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "qov_EXAMPLE",
+    "help": "Created in your organization's Settings > Token API section; shown only once."
+   }
+  ],
+  "steps": [
+   "Make sure you have the Owner, Admin or DevOps role in the Qovery organization (custom roles can't create API tokens).",
+   "In the Qovery Console, open your organization and click the Settings tab.",
+   "Open the Token API section and click Add new.",
+   "Enter a Name and Description, and select the Viewer role.",
+   "Copy the token (it starts with qov_); Qovery shows it only once."
+  ],
+  "create_url": null,
+  "permissions": "Qovery API tokens carry one RBAC role instead of scopes. Select Viewer: read-only access to all organization resources, clusters and projects.",
+  "plan_note": null,
+  "token_lifetime": "Does not expire (Qovery API tokens have no TTL); delete the token to revoke it.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Sends Authorization: Token; tests with /organization."
+  },
+  "docs_url": "https://www.qovery.com/docs/configuration/organization/api-token",
+  "sources": [
+   "https://www.qovery.com/docs/api-reference/introduction",
+   "https://www.qovery.com/docs/configuration/organization/api-token",
+   "https://www.qovery.com/docs/configuration/organization/members-rbac",
+   "https://www.qovery.com/docs/configuration/organization/api-policy-token",
+   "https://www.qovery.com/docs/cli/commands/token",
+   "https://www.qovery.com/docs/api-reference/openapi.yaml"
+  ],
+  "verified": false,
+  "caveats": [
+   "Qovery doesn't document whether a Viewer-role token can list members and API tokens. If those checks show HTTP 403, the token needs the DevOps or Admin role, which can also make changes.",
+   "Tokens can't be edited; delete and recreate the token to change its role.",
+   "A token belongs to the organization it was created in; add one connection per organization."
+  ]
+ },
+ "render": {
+  "credential": "API key",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "rnd_EXAMPLE",
+    "help": "Created on your Account Settings page in the Render Dashboard; starts with rnd_."
+   }
+  ],
+  "steps": [
+   "Sign in to the Render Dashboard as the user whose access the collector should use.",
+   "Open your Account Settings page (dashboard.render.com/u/settings).",
+   "Create a new API key.",
+   "Copy the key right away; Render shows it in full only when it's created."
+  ],
+  "create_url": "https://dashboard.render.com/u/settings?add-api-key",
+  "permissions": "Render API keys have no scopes or read-only option: a key provides access to all workspaces its user belongs to.",
+  "plan_note": null,
+  "token_lifetime": "Does not expire (Render API keys don't periodically expire); revoke it in the Dashboard.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Cursor paging."
+  },
+  "docs_url": "https://render.com/docs/api",
+  "sources": [
+   "https://render.com/docs/api",
+   "https://api-docs.render.com/reference/authentication",
+   "https://api-docs.render.com/openapi/render-public-api-1.json",
+   "https://render.com/docs/team-members",
+   "https://render.com/docs/cli"
+  ],
+  "verified": true,
+  "caveats": [
+   "The key isn't read-only: it can change or delete anything your user can.",
+   "It covers every workspace your user belongs to; consider a dedicated user with the least access you can give.",
+   "Revoke the key in the Render Dashboard if it's no longer needed or may be exposed."
+  ]
+ },
+ "resend": {
+  "credential": "API key with Full access permission",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "re_xxxxxxxxx",
+    "help": "Created on the API keys page in the Resend dashboard; shown only once."
+   }
+  ],
+  "steps": [
+   "In the Resend dashboard, open the API keys page.",
+   "Click Create API Key.",
+   "Enter a name (up to 50 characters), for example GRC evidence collector.",
+   "Choose Full access as the permission (Sending access can only send emails and can't list domains or API keys).",
+   "Create the key and copy it; Resend shows it only once."
+  ],
+  "create_url": "https://resend.com/api-keys",
+  "permissions": [
+   "full_access (Full access) - covers GET /domains and GET /api-keys"
+  ],
+  "plan_note": null,
+  "token_lifetime": "Does not expire; valid until you delete the key.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Bearer key, base https://api.resend.com, GET /domains and GET /api-keys match the docs; without a limit parameter both return every item in one response. Resend rejects requests that lack a User-Agent header (403); our collector sends one."
+  },
+  "docs_url": "https://resend.com/docs/create-an-api-key",
+  "sources": [
+   "https://resend.com/docs/create-an-api-key",
+   "https://resend.com/docs/dashboard/api-keys/introduction",
+   "https://resend.com/docs/api-reference/introduction",
+   "https://resend.com/docs/api-reference/api-keys/create-api-key",
+   "https://resend.com/docs/api-reference/api-keys/list-api-keys",
+   "https://resend.com/docs/api-reference/domains/list-domains",
+   "https://resend.com/docs/dashboard/settings/team"
+  ],
+  "verified": true,
+  "caveats": [
+   "Resend has no read-only key; Full access can also send email and change resources, so store the key securely.",
+   "API keys belong to one team; add a connection per team you want to monitor.",
+   "The API key inventory reads names and created/last-used times only, never key values."
+  ]
+ },
+ "rippling": {
+  "credential": "API token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "EXAMPLE",
+    "help": "Created in Tools > Developer > API Tokens; Rippling shows it only once."
+   }
+  ],
+  "steps": [
+   "Sign in to Rippling as a user with the Create and manage API Tokens permission whose permission profile covers the entire company.",
+   "From the sidebar, select Tools > Developer and open the API Tokens tab.",
+   "Click Create API token and enter a name, a unique identifier and the API version (use the latest).",
+   "Assign the scopes companies.read and workers.read.",
+   "Finish creating the token and copy it; you can't view it again."
+  ],
+  "create_url": null,
+  "permissions": [
+   "companies.read - List companies",
+   "workers.read - List workers",
+   "Token owner's permission profile must include The entire company"
+  ],
+  "plan_note": null,
+  "token_lifetime": "No fixed expiry, but Rippling revokes the token if it goes unused for more than 30 days or its owner is terminated.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Reads manager_id/department_id; pages by next_link."
+  },
+  "docs_url": "https://developer.rippling.com/documentation/rest-api/essentials/api-tokens",
+  "sources": [
+   "https://developer.rippling.com/documentation/rest-api/essentials/api-tokens",
+   "https://developer.rippling.com/documentation/rest-api/essentials/permissions",
+   "https://developer.rippling.com/documentation/rest-api/reference/list-workers",
+   "https://developer.rippling.com/documentation/rest-api/essentials/quickstart",
+   "https://developer.rippling.com/llms.txt"
+  ],
+  "verified": true,
+  "caveats": [
+   "Tokens belong to the person who created them and can't be transferred; if that person leaves, create a new token.",
+   "A manager-level profile only returns that manager's reports, and fields the owner can't see come back null.",
+   "Rippling emails the owner, API Token Admins and Super/Full Admins when a token is created.",
+   "Collection must run at least every 30 days or Rippling revokes the token."
+  ]
+ },
+ "semgrep": {
+  "credential": "API token with the Web API scope",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "EXAMPLE",
+    "help": "The Secrets value shown when you create a Semgrep API token with the Web API scope."
+   }
+  ],
+  "steps": [
+   "Sign in to Semgrep AppSec Platform as an admin.",
+   "Go to Settings > Tokens > API tokens and click Create new token.",
+   "Copy the Secrets value and store it safely; it is shown only once.",
+   "Under Token scopes, select Web API.",
+   "Optionally change the token Name, then click Save."
+  ],
+  "create_url": "https://semgrep.dev/orgs/-/settings/tokens",
+  "permissions": "Web API token scope. Semgrep has no read-only API scope: the token can call every Web API endpoint for its deployment.",
+  "plan_note": "The Semgrep API requires a Team or Enterprise tier account.",
+  "token_lifetime": "Does not expire; stays valid until revoked, even if the admin who created it leaves.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Authorization: Bearer <token> and base URL https://semgrep.dev/api/v1 match Semgrep's Web API spec, and GET /deployments, /deployments/{deploymentSlug}/projects and /deployments/{deploymentSlug}/findings?status=open all exist (pages start at 0; page_size 100 is within limits). Semgrep labels these endpoints Experimental. The findings call sends no issue_type, which defaults to sast, so the open high/critical check covers Code findings only; add issue_type=sca calls if Supply Chain findings should count."
+  },
+  "docs_url": "https://docs.semgrep.dev/deployment/tokens",
+  "sources": [
+   "https://docs.semgrep.dev/deployment/tokens",
+   "https://docs.semgrep.dev/kb/semgrep-appsec-platform/api-404-token-scope",
+   "https://docs.semgrep.dev/semgrep-appsec-platform/semgrep-api",
+   "https://docs.semgrep.dev/api-reference/v1/Introduction",
+   "https://semgrep.dev/api/v1/public_v1.openapi.yaml"
+  ],
+  "verified": true,
+  "caveats": [
+   "Only Semgrep admins can create API tokens.",
+   "A token gives access to a single Semgrep deployment (organization).",
+   "The open-findings check covers Code (SAST) findings only; Supply Chain findings are not included.",
+   "A 404 error from the API usually means the token was created without the Web API scope."
+  ]
+ },
+ "sendgrid": {
+  "credential": "API key with Custom Access (read-only scopes)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "SG.EXAMPLE.EXAMPLE",
+    "help": "Created under Settings > API Keys; SendGrid shows it only once."
+   },
+   {
+    "key": "domain",
+    "label": "API host",
+    "placeholder": "api.sendgrid.com",
+    "help": "Leave blank for global accounts; EU regional subusers: api.eu.sendgrid.com.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to the parent SendGrid account as the account owner or an admin teammate (an API key can't have more permissions than you).",
+   "Go to Settings > API Keys and click Create API Key.",
+   "Type a name in the API Key Name box and choose Custom Access.",
+   "Give read access to API Keys, Security, SSO Settings and Teammates, and no access to everything else.",
+   "Click Create & View, then click the key to copy it; it's displayed only once."
+  ],
+  "create_url": "https://app.sendgrid.com/settings/api_keys",
+  "permissions": [
+   "api_keys.read - GET /api_keys",
+   "access_settings.whitelist.read - GET /access_settings/whitelist (listed under Security in the UI)",
+   "sso.settings.read - GET /sso/integrations",
+   "teammates.read - GET /teammates",
+   "GET /scopes needs no additional scope"
+  ],
+  "plan_note": "SSO is available only on Email API Pro, Premier and Marketing Campaigns Advanced plans, so the SSO checks can't pass on other plans. Free and Essentials plans allow one teammate.",
+  "token_lifetime": "Does not expire; valid until you delete the key.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "EU host selectable."
+  },
+  "docs_url": "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys",
+  "sources": [
+   "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/api-keys",
+   "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammate-permissions",
+   "https://www.twilio.com/docs/sendgrid/api-reference/api-key-permissions",
+   "https://www.twilio.com/docs/sendgrid/api-reference/api-key-permissions/retrieve-a-list-of-scopes-for-which-this-user-has-access",
+   "https://www.twilio.com/docs/sendgrid/api-reference/teammates/retrieve-all-teammates",
+   "https://www.twilio.com/docs/sendgrid/api-reference/api-keys/retrieve-all-api-keys-belonging-to-the-authenticated-user",
+   "https://www.twilio.com/docs/sendgrid/api-reference/single-sign-on-settings/get-all-sso-integrations",
+   "https://www.twilio.com/docs/sendgrid/api-reference/ip-access-management/retrieve-a-list-of-currently-allowed-ips",
+   "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/sso",
+   "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/ip-access-management",
+   "https://www.twilio.com/docs/sendgrid/ui/account-and-settings/teammates"
+  ],
+  "verified": true,
+  "caveats": [
+   "If IP Access Management is on, add the collector's egress IP to the allow list; SendGrid blocks UI, API and SMTP access from other IPs.",
+   "SendGrid lists the API keys that belong to the authenticated user, so create this key from the parent account rather than a subuser."
+  ]
+ },
+ "sentinelone": {
+  "credential": "Service user API token",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Management console URL",
+    "placeholder": "usea1-acme.sentinelone.net",
+    "help": "Host name of your SentinelOne management console, without https://."
+   },
+   {
+    "key": "token",
+    "label": "API token",
+    "placeholder": "eyJ_EXAMPLE...",
+    "help": "The service user's API token."
+   }
+  ],
+  "steps": [
+   "Sign in to the SentinelOne Management Console as an Admin at Account (or Global) scope.",
+   "Go to Settings > Users > Service Users and select Actions > Create New Service User.",
+   "Enter a Name, choose an Expiration Date, and click Next.",
+   "Set the scope of access to your Account, select the Viewer role, and click Create User.",
+   "Copy the API token now; it is displayed only once.",
+   "Enter your console host name and the API token here."
+  ],
+  "create_url": null,
+  "permissions": "Built-in Viewer role (read-only) at Account scope. A Site-scoped token only returns that site's agents and console users.",
+  "plan_note": null,
+  "token_lifetime": "Expires on the Expiration Date set when the service user is created; the date cannot be changed afterwards.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "ApiToken prefix added by the connector; cursor paging."
+  },
+  "docs_url": "https://docs.paloaltonetworks.com/iot/integration/endpoint-protection/integrate-iot-security-with-sentinelone-singularity-endpoint/set-up-sentinelone-singularity-endpoint-for-integration",
+  "sources": [
+   "https://docs.paloaltonetworks.com/iot/integration/endpoint-protection/integrate-iot-security-with-sentinelone-singularity-endpoint/set-up-sentinelone-singularity-endpoint-for-integration",
+   "https://www.sonicwall.com/support/knowledge-base/how-to-generate-a-capture-client-sentinelone-api-key-using-a-service-user/kA1VN000001rTg10AE",
+   "https://docs.taegis.secureworks.com/integration/connectEndpoint/sentinelone/",
+   "https://www.sumologic.com/help/docs/send-data/hosted-collectors/cloud-to-cloud-integration-framework/sentinelone-mgmt-api-source/",
+   "https://support.guardz.com/en/articles/9890871-guardz-sentinelone-integration-guide-byo-s1",
+   "https://docs.cartography.dev/modules/sentinelone/config.html",
+   "https://docs.axonius.com/docs/sentinelone",
+   "https://surecloud.gitbook.io/surecloud-docs/integrations/ccm-and-evidence-collection-integrations/sentinelone",
+   "https://www.stitchflow.com/user-management/sentinelone/api",
+   "https://celerium.github.io/SentinelOne-PowerShellWrapper/site/Agents/Get-SentinelOneAgents.html",
+   "https://github.com/vmray/sentinelone-singularity-vmray-connector/blob/main/README.md",
+   "https://www.ninjaone.com/docs/integrations/antivirus/sentinelone/understanding-sentinelone-api-tokens/"
+  ],
+  "verified": false,
+  "caveats": [
+   "Not verified against SentinelOne's own documentation, which requires a console login; the steps follow current partner guides (Palo Alto Networks, SonicWall, Secureworks) and menu names can vary by console version.",
+   "Use Account scope so every site's endpoints and console users are included.",
+   "The firewall check reads whether SentinelOne Firewall Control is enabled for the agent's group, not the operating-system firewall.",
+   "Create a new service user and update the connection before the token's expiration date."
+  ]
+ },
+ "sentry": {
+  "credential": "Internal integration auth token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Auth token",
+    "placeholder": "EXAMPLE",
+    "help": "Copied from the Tokens section of your internal integration."
+   },
+   {
+    "key": "domain",
+    "label": "Sentry host",
+    "placeholder": "sentry.io",
+    "help": "sentry.io, or us.sentry.io / de.sentry.io to keep API calls in your data region; self-hosted: your Sentry host.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to Sentry with an organization role of Manager or Admin.",
+   "Click Settings in the left menu, then Custom Integrations, and press Create New Integration.",
+   "Select Internal Integration, press Next, and enter a name.",
+   "Under Permissions, set Organization, Project and Member to Read; leave the rest at No Access.",
+   "Click Save Changes, scroll down to Tokens, and copy the generated token."
+  ],
+  "create_url": null,
+  "permissions": "Organization: Read (org:read), Project: Read (project:read), Member: Read (member:read).",
+  "plan_note": null,
+  "token_lifetime": "Does not expire; revoke it manually (up to 20 tokens per internal integration).",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Projects per organization; Link-header paging; host selectable; isPublic check dropped."
+  },
+  "docs_url": "https://docs.sentry.io/api/guides/create-auth-token/",
+  "sources": [
+   "https://docs.sentry.io/api/guides/create-auth-token/",
+   "https://docs.sentry.io/account/auth-tokens/",
+   "https://docs.sentry.io/organization/integrations/integration-platform/internal-integration/",
+   "https://docs.sentry.io/organization/integrations/integration-platform/",
+   "https://docs.sentry.io/api/auth/",
+   "https://docs.sentry.io/api/permissions/",
+   "https://docs.sentry.io/api/",
+   "https://docs.sentry.io/organization/data-storage-location/",
+   "https://docs.sentry.io/api/users/list-your-organizations/",
+   "https://docs.sentry.io/api/organizations/list-an-organizations-members/",
+   "https://docs.sentry.io/api/organizations/list-an-organizations-projects/",
+   "https://github.com/getsentry/sentry/blob/master/src/sentry/core/endpoints/project_index.py",
+   "https://github.com/getsentry/sentry/blob/master/src/sentry/constants.py",
+   "https://github.com/getsentry/sentry/blob/master/src/sentry/api/helpers/deprecation.py",
+   "https://github.com/getsentry/sentry/blob/master/static/app/constants/index.tsx"
+  ],
+  "verified": true,
+  "caveats": [
+   "Internal integration tokens cover the whole organization and don't depend on a user; personal tokens only list projects on your own teams.",
+   "You can't give an integration more permissions than your own role has.",
+   "Your data region is shown on your organization's settings page.",
+   "Self-hosted Sentry must be reachable from the collector over HTTPS."
+  ]
+ },
+ "servicenow": {
+  "credential": "ServiceNow integration user (User ID and password) for Table API basic authentication",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Instance URL",
+    "placeholder": "acme.service-now.com",
+    "help": "Your instance host without https://."
+   },
+   {
+    "key": "email",
+    "label": "User ID",
+    "placeholder": "grc.evidence.reader",
+    "help": "The integration user's User ID (its login name, not an email address)."
+   },
+   {
+    "key": "token",
+    "label": "Password",
+    "placeholder": "••••••••••••••••",
+    "help": "Set with Set Password on the user record."
+   }
+  ],
+  "steps": [
+   "Sign in to your instance as an administrator (creating users requires the user_admin role).",
+   "Navigate to All > User Administration > Users and select New.",
+   "Enter a User ID and name, select Web service access only (or set Identity type to Machine), and select Submit.",
+   "Open the new user, select Set Password, and set a strong password.",
+   "Assign roles: itil, plus read access to sys_audit and sys_user_has_role (for example admin together with snc_read_only).",
+   "Enter your instance host, the User ID and the password here."
+  ],
+  "create_url": null,
+  "permissions": "Read access to sys_user, change_request, incident, sys_audit and sys_user_has_role. itil covers incidents and change requests and contains snc_platform_rest_api_access (Table API access). sys_audit and sys_user_has_role are typically restricted to admin: pair admin with snc_read_only (blocks inserts, updates and deletes on all tables) or grant table read ACLs to a custom role.",
+  "plan_note": null,
+  "token_lifetime": "Password credential with no token expiry; it stays valid until changed or expired by your instance's password policy.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Basic auth (User ID in the email field, password in the token field) against https://{domain}/api/now/table/{tableName} matches the Table API, and all five GETs use documented sysparm_query, sysparm_fields and sysparm_limit parameters. sysparm_limit is applied before ACL evaluation, so missing read access can return empty results instead of an error."
+  },
+  "docs_url": "https://www.servicenow.com/docs/r/api-reference/rest-apis/c_TableAPI.html",
+  "sources": [
+   "https://www.servicenow.com/docs/r/api-reference/rest-apis/c_TableAPI.html",
+   "https://www.servicenow.com/docs/r/platform-administration/user-administration/r_BaseSystemRoles.html",
+   "https://www.servicenow.com/docs/r/platform-administration/user-administration/c_ReadOnlyRole.html",
+   "https://www.servicenow.com/docs/r/platform-administration/user-administration/t_CreateAUser.html",
+   "https://www.servicenow.com/docs/r/api-reference/web-services/t_MarkSvcAcctsAsInternalIntegUsers.html",
+   "https://www.servicenow.com/community/platform-privacy-security-blog/demystifying-rest-api-access-policies-what-you-need-to-know-part/ba-p/3493461"
+  ],
+  "verified": false,
+  "caveats": [
+   "Not fully verified: ServiceNow's docs don't list which roles can read sys_audit and sys_user_has_role; confirm the read ACLs on your instance.",
+   "If the user can't read a table, ServiceNow can return an empty list instead of an error, so the audit-logging check may fail falsely and the admin-count check may show not assessed.",
+   "If you grant admin to this user, it is counted in the active-admin check.",
+   "snc_read_only requires the Read-Only User Role (com.snc.read_only.role) plugin.",
+   "If your instance restricts the Table API with REST API access policies, allow Basic Auth for this user."
+  ]
+ },
+ "signoz": {
+  "credential": "Service account API key",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API key",
+    "placeholder": "EXAMPLE=",
+    "help": "From the service account's Keys tab; the value is shown only once."
+   },
+   {
+    "key": "domain",
+    "label": "SigNoz URL",
+    "placeholder": "your-tenant.us.signoz.cloud",
+    "help": "Instance host without https:// (Cloud: <tenant>.<region>.signoz.cloud; self-hosted: e.g. signoz.example.com)."
+   }
+  ],
+  "steps": [
+   "Sign in to SigNoz with the signoz-admin role.",
+   "Go to Settings > Service Accounts, click New Service Account, enter a name (lowercase letters, numbers and hyphens) and click Create.",
+   "Open the service account and, in the Overview tab, assign the signoz-viewer role, then click Save.",
+   "Switch to the Keys tab, click Add Key, enter a key name, optionally set an expiration date, and click Create.",
+   "Copy the key value immediately."
+  ],
+  "create_url": null,
+  "permissions": "Managed role signoz-viewer (read-only); it covers GET /api/v1/service_accounts/me (the connection test), GET /api/v2/dashboards and GET /api/v2/rules.",
+  "plan_note": "Self-hosted SigNoz must be v0.129.0 or later (dashboards v2 API); Service Accounts were introduced in v0.118.0.",
+  "token_lifetime": "No expiry unless you set an expiration date; the date can be changed or removed later.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "The SIGNOZ-API-KEY header and https://{domain} match SigNoz's docs, and GET /api/v2/dashboards and /api/v2/rules allow signoz-viewer. /api/v2/dashboards only exists from v0.129.0 (June 2026) and /api/v2/rules from v0.120.0, so older self-hosted instances return 404 for those checks. GET /api/v1/version is unauthenticated, so the connection test passes even with an invalid key; switch it to GET /api/v1/service_accounts/me, which SigNoz documents for validating keys."
+  },
+  "docs_url": "https://signoz.io/docs/manage/administrator-guide/iam/service-accounts/",
+  "sources": [
+   "https://signoz.io/docs/manage/administrator-guide/iam/service-accounts/",
+   "https://signoz.io/docs/manage/administrator-guide/iam/reference/transactions/",
+   "https://signoz.io/docs/manage/administrator-guide/iam/user-guides/self-service-api-keys-for-viewers/",
+   "https://signoz.io/docs/metrics-management/query-range-api/",
+   "https://signoz.io/docs/metrics-management/prometheus-api-bridge/",
+   "https://signoz.io/api/api-reference-openapi/latest/",
+   "https://github.com/SigNoz/signoz/blob/main/pkg/apiserver/signozapiserver/dashboard.go",
+   "https://github.com/SigNoz/signoz/blob/main/pkg/apiserver/signozapiserver/ruler.go",
+   "https://github.com/SigNoz/signoz/blob/main/pkg/query-service/app/http_handler.go",
+   "https://github.com/SigNoz/signoz/releases"
+  ],
+  "verified": true,
+  "caveats": [
+   "Only admins can create service accounts and keys by default.",
+   "Self-hosted instances must be reachable from the collector over HTTPS."
+  ]
+ },
+ "slack": {
+  "credential": "User OAuth Token (xoxp-) from a Slack app installed by a Workspace Admin or Owner",
+  "fields": [
+   {
+    "key": "token",
+    "label": "User OAuth Token",
+    "placeholder": "xoxp-0000000000-0000000000-0000000000000-EXAMPLE",
+    "help": "Starts with xoxp-; listed under OAuth Tokens on your app's OAuth & Permissions page."
+   }
+  ],
+  "steps": [
+   "Make sure you're a Workspace Admin or Owner; Slack only shows members' 2FA status to admins.",
+   "Go to api.slack.com/apps, create an app, select Blank app and click Continue, enter an App Name, select your Workspace and click Create.",
+   "Open OAuth & Permissions; under Scopes > User Token Scopes, click Add an OAuth Scope and add users:read and users:read.email.",
+   "Click Install to Workspace and select Allow.",
+   "Copy the User OAuth Token (xoxp-) from OAuth Tokens."
+  ],
+  "create_url": "https://api.slack.com/apps?new_app=1",
+  "permissions": "User Token Scopes: users:read and users:read.email (auth.test needs no scope). The installing user must be a Workspace Admin or Owner.",
+  "plan_note": null,
+  "token_lifetime": "Does not expire unless token rotation is enabled for the app (rotated tokens expire every 12 hours).",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Admin user token required for has_2fa; members paged; deleted users and bots skipped."
+  },
+  "docs_url": "https://docs.slack.dev/reference/methods/users.list",
+  "sources": [
+   "https://docs.slack.dev/reference/methods/users.list",
+   "https://docs.slack.dev/reference/methods/auth.test",
+   "https://docs.slack.dev/reference/objects/user-object",
+   "https://docs.slack.dev/app-management/quickstart-app-settings",
+   "https://docs.slack.dev/authentication/tokens",
+   "https://docs.slack.dev/authentication/using-token-rotation",
+   "https://docs.slack.dev/apis/web-api"
+  ],
+  "verified": true,
+  "caveats": [
+   "Use the User OAuth Token (xoxp-), not the Bot User OAuth Token; bot tokens can't see 2FA status.",
+   "Don't enable token rotation for this app, or the token expires every 12 hours.",
+   "On Enterprise Grid, install the app to the workspace rather than org-wide."
+  ]
+ },
+ "snyk": {
+  "credential": "Group service account token (Group Viewer role)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Service account token",
+    "placeholder": "0a1b2c3d-4e5f-6a7b-8c9d-0e1f2a3b4c5d",
+    "help": "The token Snyk showed when you created the service account."
+   },
+   {
+    "key": "domain",
+    "label": "API host",
+    "placeholder": "api.snyk.io",
+    "help": "Leave blank for SNYK-US-01 (app.snyk.io); SNYK-US-02: api.us.snyk.io, SNYK-EU-01: api.eu.snyk.io, SNYK-AU-01: api.au.snyk.io.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to Snyk as a Group Admin.",
+   "Select your Group and go to Settings > Service accounts (new navigation: Settings > Security and access > Service accounts).",
+   "Create a service account with a unique name and the Group Viewer role; do not select OAuth 2.0 client credentials.",
+   "Copy the token as soon as it is displayed; Snyk shows it only once."
+  ],
+  "create_url": null,
+  "permissions": "Group Viewer role on a Group-level service account, the read-only option Snyk documents. It grants View Organization (org.read), View Projects (org.project.read) and View Project history (org.project.snapshot.read) in every Organization of the Group, covering GET /rest/orgs, /orgs/{org_id}/projects, /orgs/{org_id}/issues and /orgs/{org_id}/settings/sast.",
+  "plan_note": "Snyk API access and service accounts require a Snyk Enterprise plan.",
+  "token_lifetime": "Access-token service accounts expire on their expiry date (at most 1 year after creation); legacy API-key service accounts do not expire.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "token prefix added; region host selectable; links.next followed."
+  },
+  "docs_url": "https://docs.snyk.io/platform-administration/service-accounts/service-accounts",
+  "sources": [
+   "https://docs.snyk.io/platform-administration/service-accounts/service-accounts",
+   "https://docs.snyk.io/platform-administration/service-accounts/choose-a-service-account-type-to-use-with-snyk-apis",
+   "https://docs.snyk.io/platform-administration/service-accounts/manage-service-accounts-using-the-snyk-api",
+   "https://docs.snyk.io/platform-administration/service-accounts/service-accounts-using-oauth-2.0",
+   "https://docs.snyk.io/developer-tools/snyk-api/authentication-for-api",
+   "https://docs.snyk.io/developer-tools/snyk-api/authentication-for-api/personal-access-tokens-pats",
+   "https://docs.snyk.io/developer-tools/snyk-api/authentication-for-api/snyk-api-token-permissions-users-can-control",
+   "https://docs.snyk.io/platform-administration/user-management/pre-defined-roles",
+   "https://docs.snyk.io/developer-tools/snyk-api/rest-api/about-the-rest-api",
+   "https://docs.snyk.io/navigate-the-snyk-web-ui",
+   "https://api.snyk.io/rest/openapi/2024-10-15"
+  ],
+  "verified": true,
+  "caveats": [
+   "Do not use OAuth 2.0 client credentials: those access tokens are short-lived (1 hour by default) and are not supported here.",
+   "Personal access tokens also authenticate, but they expire within 90 days and carry the user's full permissions."
+  ]
+ },
+ "sonarcloud": {
+  "credential": "Personal access token",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Personal access token",
+    "placeholder": "EXAMPLE",
+    "help": "Generated in SonarQube Cloud under My account > Access Tokens; it acts with your user's permissions."
+   },
+   {
+    "key": "domain",
+    "label": "Instance",
+    "placeholder": "sonarcloud.io",
+    "help": "Leave blank for sonarcloud.io; US-region organizations: sonarqube.us.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to SonarQube Cloud (sonarcloud.io) as a user who is a member of each organization to monitor and can browse all of its projects.",
+   "Open your account menu in the top right corner and select My account > Access Tokens.",
+   "Under Generate Tokens, enter a token name and select an expiration period (7, 30, 60 or 90 days, or Custom up to 1 year).",
+   "Select Generate Token and copy the value immediately; it cannot be retrieved later."
+  ],
+  "create_url": null,
+  "permissions": "Personal access tokens have no scopes and act with all of the user's permissions, so read-only restriction is not possible. The user must be a member of each organization (api/qualitygates/list and api/organizations/search?member=true require it) and have Browse permission on its projects (api/projects/search returns only projects the user can access).",
+  "plan_note": null,
+  "token_lifetime": "Expires after the period you choose (7 to 90 days, or a custom date up to 1 year); a token without an expiration date is removed after 60 days of inactivity.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Region host selectable; connection test rejects bad tokens."
+  },
+  "docs_url": "https://docs.sonarsource.com/sonarqube-cloud/managing-your-account/managing-tokens",
+  "sources": [
+   "https://docs.sonarsource.com/sonarqube-cloud/managing-your-account/managing-tokens",
+   "https://docs.sonarsource.com/sonarqube-cloud/appendices/web-api",
+   "https://docs.sonarsource.com/sonarqube-cloud/getting-started/choosing-your-region",
+   "https://docs.sonarsource.com/sonarqube-cloud/administering-sonarcloud/managing-organization/scoped-organization-tokens",
+   "https://docs.sonarsource.com/sonarqube-cloud/standards/managing-quality-gates/introduction-to-quality-gates",
+   "https://sonarcloud.io/api/webservices/list",
+   "https://sonarcloud.io/api/webservices/response_example?controller=api/qualitygates&action=list"
+  ],
+  "verified": true,
+  "caveats": [
+   "A personal token carries all of its user's permissions; prefer a user without organization admin rights.",
+   "Projects the token's user cannot browse are left out of the checks."
+  ]
+ },
+ "stripe": {
+  "credential": "Restricted API key (live mode)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Restricted API key",
+    "placeholder": "rk_live_EXAMPLE",
+    "help": "Created on the API keys page in live mode; Stripe shows the value only once."
+   }
+  ],
+  "steps": [
+   "Sign in to the Stripe Dashboard in live mode with the Administrator or Developer role.",
+   "Open the API keys page and click Create restricted key, starting from zero permissions.",
+   "Enter a Key name, then set Read for Webhook Endpoints and Events.",
+   "Leave every other resource set to None.",
+   "Click Create key, complete the two-factor verification, and copy the key value."
+  ],
+  "create_url": "https://dashboard.stripe.com/apikeys",
+  "permissions": "Read on Webhook Endpoints (GET /v1/webhook_endpoints, also the connection test) and Events (GET /v1/events). All other resources: None.",
+  "plan_note": null,
+  "token_lifetime": "Does not expire unless you expire or rotate it in the Dashboard.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Connection test uses /webhook_endpoints."
+  },
+  "docs_url": "https://docs.stripe.com/keys/restricted-api-keys",
+  "sources": [
+   "https://docs.stripe.com/keys/restricted-api-keys",
+   "https://docs.stripe.com/keys",
+   "https://docs.stripe.com/api/authentication",
+   "https://docs.stripe.com/api/events/list",
+   "https://docs.stripe.com/api/webhook_endpoints/list",
+   "https://docs.stripe.com/stripe-apps/reference/permissions",
+   "https://docs.stripe.com/get-started/account/teams/roles",
+   "https://wordpress.org/support/topic/supporting-restricted-api-keys/",
+   "https://wordpress.org/support/topic/forminator-how-do-i-select-stripe-restricted-api-keys/"
+  ],
+  "verified": false,
+  "caveats": [
+   "Use a live-mode key; sandbox keys (rk_test_) only see test data.",
+   "If the key has an access policy (IP or ASN allowlist), allow the collector's outbound addresses.",
+   "Stripe lists events from the last 30 days only, so the event-log check fails on accounts with no recent activity."
+  ]
+ },
+ "supabase": {
+  "credential": "Personal access token (scoped, if available on your account)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Access token",
+    "placeholder": "sbp_EXAMPLE",
+    "help": "Generated on your account's Access Tokens page; starts with sbp_."
+   }
+  ],
+  "steps": [
+   "Sign in to the Supabase Dashboard with an account that has a role in each organization to monitor (Read-Only is enough).",
+   "Open your Access Tokens page (supabase.com/dashboard/account/tokens) and generate a new token.",
+   "If permission options appear, scope the token to the projects to monitor and grant Read for Projects (account-wide), SSL Enforcement, Network Restrictions and Backups.",
+   "Set the token's expiry, create it and copy the token."
+  ],
+  "create_url": "https://supabase.com/dashboard/account/tokens",
+  "permissions": "Scoped token: Projects (account-wide) - Read; SSL Enforcement - Read; Network Restrictions - Read; Backups - Read. A classic token has your account's full access, and no token can exceed your organization role.",
+  "plan_note": "Daily backups exist only for Pro, Team and Enterprise plan projects. The Read-Only organization role is only available on Team and Enterprise plans.",
+  "token_lifetime": "Expires on the custom expiry you set when generating it.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Bearer auth and https://api.supabase.com/v1 are correct. GET /projects, /projects/{ref}/ssl-enforcement, /projects/{ref}/network-restrictions and /projects/{ref}/database/backups exist and return the fields we read (ref, currentConfig.database, config.dbAllowedCidrs, walg_enabled). The SSL-enforcement and network-restrictions endpoints are flagged experimental (Beta) and may change."
+  },
+  "docs_url": "https://supabase.com/docs/guides/platform/personal-access-tokens",
+  "sources": [
+   "https://supabase.com/docs/reference/api/introduction",
+   "https://supabase.com/docs/guides/platform/personal-access-tokens",
+   "https://supabase.com/docs/guides/platform/access-control",
+   "https://supabase.com/docs/guides/platform/backups",
+   "https://api.supabase.com/api/v1-json"
+  ],
+  "verified": true,
+  "caveats": [
+   "Scoped tokens are in public alpha. If you can't choose permissions, you get a classic token with full access to all your organizations and projects.",
+   "Free plan projects have no daily backups and will fail the backup check.",
+   "Create a new token and update it here before the old one expires."
+  ]
+ },
+ "tailscale": {
+  "credential": "Tailscale API access token (tskey-api-...)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "API access token",
+    "placeholder": "tskey-api-XXXXXXXXXXXX-EXAMPLE",
+    "help": "Generated on the Keys page of the Tailscale admin console; it starts with tskey-api-."
+   }
+  ],
+  "steps": [
+   "Sign in as an Owner, Admin, IT admin or Network admin of the tailnet (a Network admin can read but not change devices).",
+   "Open the Keys page of the admin console.",
+   "In the API access tokens section, select Generate access token.",
+   "Choose the number of days until it expires (1 to 90), generate the token, and copy it.",
+   "Paste the token here and note its expiry date so you can replace it in time."
+  ],
+  "create_url": "https://login.tailscale.com/admin/settings/keys",
+  "permissions": "API access tokens can't be scoped; they have the same permissions as the user who created them. The collector only lists tailnet devices, which every admin role can read. The read-only scope devices:core:read exists only for trust credentials (OAuth clients), which this connector can't use yet.",
+  "plan_note": "The Tailscale API is available on all plans; the Network admin and IT admin roles require the Standard, Premium or Enterprise plan.",
+  "token_lifetime": "Expires after 1 to 90 days (you choose); it can't be set to never expire.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Authorization: Bearer tskey-api-... is accepted, and GET https://api.tailscale.com/api/v2/tailnet/-/devices ('-' is the token's default tailnet) returns authorized, keyExpiryDisabled, updateAvailable and isExternal in its default field set. Read-only trust credentials (OAuth client with devices:core:read) would need a client-credentials exchange at https://api.tailscale.com/api/v2/oauth/token (tokens last 1 hour), which we don't perform."
+  },
+  "docs_url": "https://tailscale.com/kb/1101/api",
+  "sources": [
+   "https://tailscale.com/kb/1101/api",
+   "https://tailscale.com/kb/1252/key-secret-management",
+   "https://tailscale.com/kb/1215/oauth-clients",
+   "https://tailscale.com/kb/1623/trust-credentials",
+   "https://tailscale.com/kb/1138/user-roles",
+   "https://api.tailscale.com/api/v2?outputOpenapiSchema=true"
+  ],
+  "verified": true,
+  "caveats": [
+   "API access tokens can't be made read-only; where your plan allows, generate the token from a Network admin account so it can't approve or remove devices.",
+   "The token stops working after the number of days you chose (90 at most); generate a new one and update it here before then.",
+   "API access tokens belong to the individual user who created them."
+  ]
+ },
+ "tenable": {
+  "credential": "API keys (Access Key and Secret Key)",
+  "fields": [
+   {
+    "key": "access_key_id",
+    "label": "Access key",
+    "placeholder": "4c1d8e0f...9a2f",
+    "help": "From the API user's API Keys section."
+   },
+   {
+    "key": "token",
+    "label": "Secret key",
+    "placeholder": "7b0a3c1e...5d6e",
+    "help": "Shown once, together with the access key."
+   },
+   {
+    "key": "domain",
+    "label": "Tenable host",
+    "placeholder": "cloud.tenable.com",
+    "help": "Leave blank for cloud.tenable.com; FedRAMP: fedcloud.tenable.com.",
+    "required": false
+   }
+  ],
+  "steps": [
+   "Sign in to Tenable Vulnerability Management as an Administrator.",
+   "In the left navigation, click Settings, then the Access Control tile, then the Users tab.",
+   "Click Create User, choose the Scan Manager role (Administrator if you need the failed-login check), select API Key under Authentication, and click Save.",
+   "Open the new user and, in the API Keys section, click Generate API Keys, then Replace & Generate.",
+   "Copy the Access Key and Secret Key before leaving the page; they cannot be shown again.",
+   "Enter the Access Key and Secret Key here."
+  ],
+  "create_url": null,
+  "permissions": "Scan Manager [40] role for GET /scanners (or the custom role privilege VM.VM_SENSOR.VM_SCANNER.READ), plus the Can View [16] scan permission on the scans to report (or the custom role privilege VM.VM_SCAN.VM_SCAN.READ) for GET /scans. GET /users needs Basic [16] but returns login_fail_count only to Administrator [64] users, so the failed-login check needs an Administrator, which is not read-only.",
+  "plan_note": null,
+  "token_lifetime": "No expiry is documented; keys stay valid until they are regenerated (which replaces them) or the user is disabled.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "X-ApiKeys built from access and secret keys; /server/properties; FedRAMP host selectable."
+  },
+  "docs_url": "https://docs.tenable.com/vulnerability-management/Content/Settings/access-control/GenerateUserAPIKey.htm",
+  "sources": [
+   "https://docs.tenable.com/vulnerability-management/Content/Settings/access-control/GenerateUserAPIKey.htm",
+   "https://docs.tenable.com/vulnerability-management/Content/Settings/my-account/GenerateAPIKey.htm",
+   "https://docs.tenable.com/vulnerability-management/Content/Settings/access-control/manage-users.htm",
+   "https://docs.tenable.com/vulnerability-management/Content/Settings/access-control/Users.htm",
+   "https://docs.tenable.com/vulnerability-management/Content/Settings/access-control/TenableRolePrivileges.htm",
+   "https://docs.tenable.com/vulnerability-management/best-practices/security/Content/APIKeys.htm",
+   "https://developer.tenable.com/docs/authorization",
+   "https://developer.tenable.com/reference/users-list",
+   "https://developer.tenable.com/reference/scanners-list",
+   "https://developer.tenable.com/reference/scans-list",
+   "https://developer.tenable.com/reference/server-properties",
+   "https://developer.tenable.com/changelog/tenableio-session-api-deprecation"
+  ],
+  "verified": true,
+  "caveats": [
+   "Generating keys replaces the user's existing keys immediately; update the connection afterwards.",
+   "If Generate API Keys is unavailable, API Key authentication is not enabled for that user.",
+   "Scans are only listed if the API user can view them; grant Can View on every scan you want covered.",
+   "The keys work across all Tenable One products your organization licenses, so store them securely."
+  ]
+ },
+ "twilio": {
+  "credential": "Main API key (API key SID and secret)",
+  "fields": [
+   {
+    "key": "email",
+    "label": "API key SID",
+    "placeholder": "EXAMPLE",
+    "help": "Starts with SK; shown with the key after you create it."
+   },
+   {
+    "key": "token",
+    "label": "API key secret",
+    "placeholder": "EXAMPLE",
+    "help": "Shown only once, when the key is created."
+   }
+  ],
+  "steps": [
+   "Sign in to the Twilio Console for your main (parent) account and use the Legacy Console; the new Console only creates Standard and Restricted keys.",
+   "Click Admin > Account management in the top right corner.",
+   "Under Keys & credentials, click API keys & tokens, then click Create API key.",
+   "Enter a Friendly name, select the United States (US1) Region and the key type Main.",
+   "Click Create, copy the SID and the secret, select the Got it! checkbox and click Done."
+  ],
+  "create_url": "https://www.twilio.com/console/project/api-keys",
+  "permissions": "Key type Main. Twilio requires a Main key (or Account SID and Auth Token) for the Accounts and Keys endpoints; Standard keys can't call them, so read-only access isn't possible for these calls.",
+  "plan_note": null,
+  "token_lifetime": "No expiry is documented; the key works until you delete it.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Pages by next_page_uri."
+  },
+  "docs_url": "https://www.twilio.com/docs/iam/api-keys/keys-in-console",
+  "sources": [
+   "https://www.twilio.com/docs/iam/api-keys",
+   "https://www.twilio.com/docs/iam/api-keys/keys-in-console",
+   "https://www.twilio.com/docs/iam/api-keys/key-resource-v2010",
+   "https://www.twilio.com/docs/iam/api-keys/key-resource-v1",
+   "https://www.twilio.com/docs/iam/api-keys/restricted-api-keys",
+   "https://docs-resources.prod.twilio.com/documents/Twilio_Restricted_API_Keys_Permissions_-_IAM_Permissons.pdf",
+   "https://www.twilio.com/docs/iam/api/account",
+   "https://www.twilio.com/docs/usage/twilios-response",
+   "https://www.twilio.com/en-us/blog/company/communications/replacing-absolute-paging-and-related-properties",
+   "https://github.com/twilio/twilio-php/issues/507"
+  ],
+  "verified": true,
+  "caveats": [
+   "A Main key has full account access, equivalent to your Auth Token; store it securely and delete it when it's no longer needed.",
+   "Create the key in your main (parent) account so its subaccounts are included.",
+   "API credentials are region-specific; use a United States (US1) key."
+  ]
+ },
+ "vercel": {
+  "credential": "Access token scoped to a team (All Projects)",
+  "fields": [
+   {
+    "key": "token",
+    "label": "Access token",
+    "placeholder": "vcp_EXAMPLE",
+    "help": "Created on the Account Tokens page; starts with vcp_ and is shown only once."
+   }
+  ],
+  "steps": [
+   "Make sure you're a member of the Vercel team to monitor.",
+   "In the dashboard's scope selector (top left), switch to your personal account, then open the Account Tokens page under Settings.",
+   "Enter a descriptive token name.",
+   "Open Scope, select the team, then select All Projects.",
+   "Choose an expiration and select Create.",
+   "Copy the token now; Vercel shows it only once."
+  ],
+  "create_url": "https://vercel.com/account/tokens",
+  "permissions": "Scope: your team with All Projects. Vercel tokens can't be read-only: they can read and write that team's resources on your behalf.",
+  "plan_note": "SAML SSO requires Enterprise, or Pro with the SAML SSO add-on.",
+  "token_lifetime": "Expires on the expiration you choose at creation.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Team-scoped token per team; projects and members paged."
+  },
+  "docs_url": "https://vercel.com/docs/accounts/access-tokens",
+  "sources": [
+   "https://vercel.com/docs/accounts/access-tokens",
+   "https://vercel.com/kb/guide/how-do-i-use-a-vercel-api-access-token",
+   "https://vercel.com/docs/rest-api/user/get-the-user",
+   "https://vercel.com/docs/rest-api/projects/retrieve-a-list-of-projects",
+   "https://vercel.com/docs/rest-api/teams/list-all-teams",
+   "https://vercel.com/docs/rest-api/teams/list-team-members",
+   "https://openapi.vercel.sh/",
+   "https://vercel.com/docs/saml",
+   "https://vercel.com/docs/cli/tokens"
+  ],
+  "verified": true,
+  "caveats": [
+   "Use Team scope with All Projects: a Full Account token misses team projects, and a single-project token can't read team data.",
+   "Add a separate connection for each Vercel team.",
+   "Teams that enforce two-factor authentication or SAML may require it before you can create a token for them.",
+   "Create a new token and update it here before the expiration date."
+  ]
+ },
+ "zendesk": {
+  "credential": "Confidential OAuth client (client credentials grant)",
+  "fields": [
+   {
+    "key": "domain",
+    "label": "Zendesk subdomain",
+    "placeholder": "yourcompany.zendesk.com",
+    "help": "Your {subdomain}.zendesk.com address, without https://."
+   },
+   {
+    "key": "access_key_id",
+    "label": "OAuth client identifier",
+    "placeholder": "grc_evidence_collector",
+    "help": "The Identifier field of the OAuth client in Admin Center."
+   },
+   {
+    "key": "token",
+    "label": "OAuth client secret",
+    "placeholder": "EXAMPLE",
+    "help": "Shown in full only once, after you save the OAuth client."
+   }
+  ],
+  "steps": [
+   "Make sure you're a Zendesk admin with permission to manage OAuth clients.",
+   "In Admin Center, go to Apps and integrations > APIs > OAuth clients and click Add OAuth client.",
+   "Enter a Name, note the Identifier, and set Client kind to Confidential.",
+   "Under Scopes, select users:read.",
+   "Save the client and copy the Secret right away; it's displayed in full only once."
+  ],
+  "create_url": null,
+  "permissions": "users:read (View users) on the OAuth client and token request. List Users is allowed for admins, agents and light agents; the token acts as the user associated with the client.",
+  "plan_note": "OAuth clients are available on all Suite plans (Team, Growth, Professional, Enterprise, Enterprise Plus) and on Support Team, Professional and Enterprise.",
+  "token_lifetime": "Access tokens from the client credentials grant expire (30 minutes by default for clients created on or after April 30, 2026; 5 minutes to 2 days if set) and have no refresh token.",
+  "compatibility": {
+   "status": "works_with_instructions",
+   "detail": "Client-credentials token exchange; Zendesk policy on customer OAuth clients applies."
+  },
+  "docs_url": "https://developer.zendesk.com/documentation/authentication/oauth-migration/",
+  "sources": [
+   "https://developer.zendesk.com/api-reference/introduction/security-and-auth/",
+   "https://developer.zendesk.com/documentation/authentication/oauth-migration/",
+   "https://developer.zendesk.com/api-reference/ticketing/oauth/grant_type_tokens/",
+   "https://developer.zendesk.com/api-reference/ticketing/oauth/oauth_tokens/",
+   "https://developer.zendesk.com/api-reference/ticketing/users/users/",
+   "https://support.zendesk.com/hc/en-us/articles/10851263566234-Announcing-the-removal-of-API-tokens-as-an-authentication-method-for-API-requests",
+   "https://support.zendesk.com/hc/en-us/articles/4408845965210-Using-OAuth-authentication-with-your-application"
+  ],
+  "verified": true,
+  "caveats": [
+   "Don't use a Zendesk API token: no new tokens after October 27, 2026, and all stop working on April 30, 2027.",
+   "Zendesk's developer policy says third-party apps must not use your API tokens or your own OAuth client; check with your Zendesk admin before connecting.",
+   "Enter your {subdomain}.zendesk.com address, as used in Zendesk's API docs."
+  ]
+ },
+ "zoom": {
+  "credential": "Server-to-Server OAuth app (Account ID, Client ID, Client secret)",
+  "fields": [
+   {
+    "key": "access_key_id",
+    "label": "Account ID",
+    "placeholder": "EXAMPLE",
+    "help": "Shown on the app's App credentials page."
+   },
+   {
+    "key": "email",
+    "label": "Client ID",
+    "placeholder": "EXAMPLE",
+    "help": "Shown on the app's App credentials page."
+   },
+   {
+    "key": "token",
+    "label": "Client secret",
+    "placeholder": "EXAMPLE",
+    "help": "Shown on the app's App credentials page; keep it secret."
+   }
+  ],
+  "steps": [
+   "Ask a Zoom admin to enable View and Edit for Server-to-Server OAuth app on your role (User Management > Roles > Role Settings > Advanced features) and to grant the admin permissions behind the scopes below.",
+   "In the Zoom App Marketplace, click Developer in the lower-left navigation, then on Created apps click Develop and select Build an app.",
+   "Select Server-to-Server OAuth app and click Create.",
+   "On App credentials, copy the Account ID, Client ID and Client secret.",
+   "Fill in Information (developer name and email are required), then under Scopes click Add Scopes and add the scopes listed below.",
+   "Activate the app."
+  ],
+  "create_url": "https://marketplace.zoom.us/",
+  "permissions": "Granular scopes: user:read:list_users:admin (List users), user:read:user:admin (Get a user), role:read:list_roles:admin (List roles).",
+  "plan_note": "List roles requires a Pro or higher plan.",
+  "token_lifetime": "Access tokens expire after 1 hour with no refresh token; a new one is requested with the app credentials. Deactivating the app invalidates existing tokens.",
+  "compatibility": {
+   "status": "ok",
+   "detail": "Server-to-Server OAuth token exchange; pending users listed separately; Master-only managed domains dropped."
+  },
+  "docs_url": "https://developers.zoom.us/docs/internal-apps/s2s-oauth/",
+  "sources": [
+   "https://developers.zoom.us/docs/internal-apps/s2s-oauth/",
+   "https://developers.zoom.us/docs/internal-apps/create/",
+   "https://developers.zoom.us/docs/internal-apps/",
+   "https://developers.zoom.us/docs/build-flow/role-permissions/",
+   "https://developers.zoom.us/docs/api/using-zoom-apis/",
+   "https://developers.zoom.us/api-hub/users/methods/endpoints.json",
+   "https://developers.zoom.us/api-hub/accounts/methods/endpoints.json"
+  ],
+  "verified": true,
+  "caveats": [
+   "Keep the app activated; deactivating it stops the connection.",
+   "If the app owner loses admin-level role permissions, Zoom removes the admin scopes from the app."
+  ]
+ }
+}

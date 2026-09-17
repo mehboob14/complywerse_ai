@@ -63,6 +63,8 @@ import {
   MessageSquare,
   Maximize2,
 } from 'lucide-react';
+import Link from 'next/link';
+import CreateControlDialog from '@/components/soc2/CreateControlDialog';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
 
@@ -1090,6 +1092,7 @@ export default function PolicyDetailPage() {
         <StatementsTab
           statements={statements}
           statementsLoading={statementsLoading}
+          documentTitle={document?.title}
           parsePolicyMutation={parsePolicyMutation}
           isParsing={isParsing}
           documentId={id}
@@ -2615,7 +2618,71 @@ function formatCategory(cat: string): string {
   return cat.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isParsing, documentId }: any) {
+/** A statement is a commitment; a control is how it is kept. This turns one
+ *  into the other without leaving the document: the new control is authored in
+ *  Common controls and linked back to this statement and this document. */
+function StatementControlButton({ stmt, documentId, documentTitle, onCreated }: {
+  stmt: any; documentId: number; documentTitle?: string; onCreated?: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [created, setCreated] = useState<string | null>(null);
+  const text: string = stmt.statement_text || stmt.text || '';
+  const name = (stmt.statement_summary || text).replace(/\s+/g, ' ').trim().slice(0, 120);
+  const links = [
+    {
+      type: 'policy_statement', type_label: 'Policy statement', id: stmt.id,
+      label: (stmt.statement_summary || text).slice(0, 80) || `Statement ${stmt.id}`,
+      code: stmt.statement_code || null, subtitle: stmt.category || null,
+      url: `/governance/documents/${documentId}?tab=statements`,
+    },
+    {
+      type: 'document', type_label: 'Document', id: documentId,
+      label: documentTitle || `Document ${documentId}`, code: null,
+      subtitle: null, url: `/governance/documents/${documentId}`,
+    },
+  ];
+  // Controls already answering this statement (from the payload), plus any
+  // created in this session before the list refetches.
+  const existing: { code: string; custom?: boolean }[] = Array.isArray(stmt.controls) ? stmt.controls : [];
+  const codes = Array.from(new Set([...existing.map((c) => c.code), ...(created ? [created] : [])]));
+
+  return (
+    <>
+      {codes.map((c) => (
+        <Link key={c} href={`/automation/soc2-controls/${encodeURIComponent(c)}`}
+          title="A control that implements this statement"
+          className="inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-1.5 py-0.5 font-mono text-[10.5px] font-semibold text-primary-700 hover:bg-primary-100">
+          {c}
+        </Link>
+      ))}
+      <button
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2 py-0.5 text-[11px] font-medium text-slate-700 transition-colors hover:border-primary-300 hover:text-primary-700"
+        title="Author a control that implements this statement"
+      >
+        <ShieldCheck className="h-3.5 w-3.5" />
+        {codes.length ? 'Add control' : 'Create control'}
+      </button>
+      <CreateControlDialog
+        open={open}
+        onClose={() => setOpen(false)}
+        title="Create a control for this statement"
+        subtitle="Prefilled from the statement. The control is created as a draft under Controls Automation → Common controls, linked to this statement and its document."
+        prefill={{
+          name,
+          statement: text,
+          priority: stmt.priority || 'medium',
+          is_key_control: !!stmt.is_mandatory,
+          regulatory_source: documentTitle || '',
+        }}
+        links={links}
+        onCreated={(code) => { setCreated(code); onCreated?.(); }}
+      />
+    </>
+  );
+}
+
+function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isParsing, documentId, documentTitle }: any) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const stmts = Array.isArray(statements) ? statements : statements?.statements || [];
@@ -3337,6 +3404,8 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                                   {Math.round((stmt.ai_confidence ?? stmt.confidence_score) * 100)}% confidence
                                 </span>
                               )}
+                              <StatementControlButton stmt={stmt} documentId={documentId} documentTitle={documentTitle}
+                                onCreated={() => queryClient.invalidateQueries({ queryKey: ['document-policy-statements', documentId] })} />
                               <button
                                 onClick={() => setVersionHistoryStmtId(stmt.id)}
                                 className="p-1 text-slate-700 hover:text-primary-700 rounded hover:bg-slate-100 transition-colors"

@@ -7,31 +7,14 @@
 // Data comes from GET /automation/soc2/catalog, so the count always matches the
 // backend PROVIDER_API — no static frontend list to drift out of sync.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2, Search, X, Plug } from 'lucide-react';
+import { ArrowLeft, Plug, Search } from 'lucide-react';
 import { automationApi } from '@/lib/api';
 import { BrandLogo } from '@/components/integrations/BrandLogo';
-
-interface CatalogConnector {
-  id: string;
-  name: string;
-  category: string;
-  categories: string[];
-  provider: string | null;
-  supported: boolean;
-  control_codes: string[];
-  syncs: string[];
-  connected: boolean;
-  connection_id: number | null;
-  last_run: { status: string; started_at?: string | null } | null;
-  steampipe_plugin: string | null;
-  /** A cloud transport authenticates as a principal in a region, so it needs
-   *  more than the single token the SaaS collectors take. */
-  needs_key_id?: boolean;
-  needs_region?: boolean;
-}
-interface Finding { control_codes?: string[]; check: string; resource?: string; status: string; detail?: string }
+import { ConnectorDialog, type CatalogConnector } from './ConnectorDialog';
 
 type Tab = 'active' | 'available';
 
@@ -77,216 +60,6 @@ function ConnectorCard({ connector, onOpen }: { connector: CatalogConnector; onO
   );
 }
 
-function ConnectDialog({
-  connector, onClose, onChanged,
-}: {
-  connector: CatalogConnector;
-  onClose: () => void;
-  onChanged: () => void;
-}) {
-  const provider = connector.provider;
-  const supported = connector.supported && Boolean(provider);
-  const connected = connector.connected;
-  const [reconfig, setReconfig] = useState(!connected);
-  const [token, setToken] = useState('');
-  const [domain, setDomain] = useState('');
-  const [email, setEmail] = useState('');
-  const [keyId, setKeyId] = useState('');
-  const [region, setRegion] = useState('');
-  const [busy, setBusy] = useState<'save' | 'test' | 'collect' | null>(null);
-  const [msg, setMsg] = useState<{ tone: 'ok' | 'err'; text: string } | null>(null);
-  const [findings, setFindings] = useState<Finding[] | null>(null);
-
-  const save = async () => {
-    if (!provider) return;
-    if (!token.trim()) {
-      setMsg({ tone: 'err', text: connector.needs_key_id ? 'Paste the secret key first.' : 'Paste an API token first.' });
-      return;
-    }
-    if (connector.needs_key_id && !keyId.trim()) {
-      setMsg({ tone: 'err', text: 'This collector also needs an access key id.' }); return;
-    }
-    setBusy('save'); setMsg(null);
-    try {
-      await automationApi.connectCollector(provider, {
-        token: token.trim(),
-        domain: domain.trim() || undefined,
-        email: email.trim() || undefined,
-        access_key_id: keyId.trim() || undefined,
-        region: region.trim() || undefined,
-      });
-      setMsg({ tone: 'ok', text: 'Credentials saved (encrypted).' });
-      setReconfig(false); setToken(''); setKeyId('');
-      onChanged();
-    } catch (e: unknown) {
-      setMsg({ tone: 'err', text: (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Could not save credentials.' });
-    } finally { setBusy(null); }
-  };
-  const test = async () => {
-    if (!provider) return;
-    setBusy('test'); setMsg(null); setFindings(null);
-    try {
-      const r = await automationApi.testCollector(provider);
-      const d = r.data as { connectivity: string; summary: string; findings: Finding[] };
-      setFindings(d.findings || []);
-      setMsg({ tone: d.connectivity === 'ok' ? 'ok' : 'err', text: `Connectivity ${d.connectivity} — ${d.summary}` });
-    } catch (e: unknown) {
-      setMsg({ tone: 'err', text: (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Test failed.' });
-    } finally { setBusy(null); }
-  };
-  const collect = async () => {
-    if (!provider) return;
-    setBusy('collect'); setMsg(null);
-    try {
-      const r = await automationApi.runCollector(provider);
-      const d = r.data as { status: string; run_id: number };
-      setMsg({ tone: d.status === 'passed' ? 'ok' : 'err', text: `Collected — run #${d.run_id}, status ${d.status}. Evidence cascaded to controls.` });
-      onChanged();
-    } catch (e: unknown) {
-      setMsg({ tone: 'err', text: (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Collection failed.' });
-    } finally { setBusy(null); }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
-      <div className="absolute inset-0 bg-slate-900/40" onClick={onClose} />
-      <div className="relative flex max-h-[88vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-start gap-3.5 border-b border-slate-100 p-5">
-          <BrandLogo id={connector.id} name={connector.name} size={48} />
-          <div className="min-w-0 flex-1">
-            <h2 className="truncate text-lg font-bold text-slate-900">{connector.name}</h2>
-            <p className="mt-0.5 text-sm text-slate-500">
-              {supported
-                ? connected ? 'Connected — collecting evidence for the mapped SOC 2 controls.' : 'Connect with a read-only API token to collect live evidence.'
-                : `In the Steampipe catalog — direct evidence collection isn't wired for ${connector.name} yet.`}
-            </p>
-          </div>
-          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
-        </div>
-
-        <div className="space-y-5 overflow-auto p-5">
-          <section className="grid grid-cols-1 divide-y divide-slate-100 rounded-xl border border-slate-200 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            <div className="px-4 py-3">
-              <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Status</h3>
-              {supported
-                ? <StatusDot connected={connected} />
-                : <span className="text-[11px] font-semibold text-sky-600">Available via Steampipe</span>}
-            </div>
-            <div className="px-4 py-3">
-              <h3 className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Categories</h3>
-              <CategoryChips categories={connector.categories} />
-            </div>
-          </section>
-
-          {supported && connector.control_codes.length > 0 && (
-            <section>
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Maps to controls</h3>
-              <span className="flex flex-wrap gap-1">
-                {connector.control_codes.map((c) => (
-                  <span key={c} className="rounded bg-primary-50 px-1.5 py-0.5 text-[10px] font-semibold text-primary-700">{c}</span>
-                ))}
-              </span>
-            </section>
-          )}
-
-          <section>
-            <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">What this collects</h3>
-            <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-              {connector.syncs.map((s) => (
-                <li key={s} className="px-3.5 py-2.5 text-sm text-slate-600">{s}</li>
-              ))}
-            </ul>
-          </section>
-
-          {supported && (
-            <section>
-              <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Credentials</h3>
-                {connected && !reconfig && (
-                  <button onClick={() => setReconfig(true)} className="text-xs font-semibold text-primary-700 hover:underline">Reconfigure</button>
-                )}
-              </div>
-              {reconfig ? (
-                <div className="space-y-2">
-                  {connector.needs_key_id && (
-                    <input value={keyId} onChange={(e) => setKeyId(e.target.value)} placeholder="Access key id (identifier, not a secret)"
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:border-primary-500 focus:outline-none" />
-                  )}
-                  <input type="password" value={token} onChange={(e) => setToken(e.target.value)}
-                    placeholder={connector.needs_key_id ? 'Secret access key (stored encrypted)' : 'Read-only API token (stored encrypted)'}
-                    className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                  {connector.needs_region ? (
-                    <input value={region} onChange={(e) => setRegion(e.target.value)} placeholder="Region (e.g. eu-west-1)"
-                      className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                  ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                      <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="Domain (Okta/Jira)"
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                      <input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="Email (Jira)"
-                        className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                    </div>
-                  )}
-                  <p className="text-[11px] text-slate-400">The token is encrypted at rest; only its scopes are ever read. Paste it here — never share it in chat.</p>
-                </div>
-              ) : (
-                <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">A token is configured. Use Reconfigure to replace it.</p>
-              )}
-            </section>
-          )}
-
-          {msg && (
-            <div className={`rounded-lg border px-3 py-2 text-sm ${msg.tone === 'ok' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700'}`}>{msg.text}</div>
-          )}
-
-          {findings && findings.length > 0 && (
-            <section>
-              <h3 className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">Findings</h3>
-              <ul className="space-y-1.5">
-                {findings.map((f, i) => (
-                  <li key={i} className="flex items-start justify-between gap-2 rounded-lg border border-slate-200 p-2.5 text-sm">
-                    <div className="min-w-0">
-                      <span className="font-medium text-slate-700">{f.check}</span>
-                      {f.detail && <p className="text-[11px] text-slate-400">{f.detail}</p>}
-                      {f.control_codes?.length ? <p className="mt-0.5 text-[10px] text-slate-400">{f.control_codes.join(' · ')}</p> : null}
-                    </div>
-                    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${f.status === 'pass' ? 'bg-emerald-100 text-emerald-700' : f.status === 'fail' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>{f.status}</span>
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-        </div>
-
-        <div className="flex items-center justify-between gap-2 border-t border-slate-100 p-4">
-          {supported ? (
-            <>
-              <p className="text-[11px] text-slate-400">{connected ? 'Live evidence collection' : 'Read-only · encrypted'}</p>
-              <div className="flex gap-2">
-                {reconfig && (
-                  <button onClick={save} disabled={busy !== null} className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3 py-2 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-50">
-                    {busy === 'save' ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save
-                  </button>
-                )}
-                <button onClick={test} disabled={busy !== null || (!connected && reconfig)} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
-                  {busy === 'test' ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Test
-                </button>
-                <button onClick={collect} disabled={busy !== null || !connected} className="inline-flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-2 text-sm font-semibold text-white hover:bg-slate-900 disabled:opacity-50">
-                  {busy === 'collect' ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Collect
-                </button>
-              </div>
-            </>
-          ) : (
-            <>
-              <p className="text-sm text-slate-400">Available as a Steampipe plugin — direct collection coming soon.</p>
-              <button disabled className="cursor-not-allowed rounded-lg bg-slate-100 px-3 py-2 text-sm font-semibold text-slate-400">Not yet wired</button>
-            </>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function AllConnectionsPage() {
   const qc = useQueryClient();
   const [tab, setTab] = useState<Tab>('available');
@@ -294,12 +67,33 @@ export default function AllConnectionsPage() {
   const [category, setCategory] = useState('all');
   const [selected, setSelected] = useState<CatalogConnector | null>(null);
 
+  // ?connector=aws opens that connector straight away; ?return= is where the
+  // person came from. Only same-site paths are followed back.
+  const searchParams = useSearchParams();
+  const wanted = searchParams.get('connector');
+  const rawReturn = searchParams.get('return');
+  const returnTo = rawReturn && rawReturn.startsWith('/') && !rawReturn.startsWith('//') ? rawReturn : null;
+  const returnLabel = returnTo ? decodeURIComponent(returnTo.split('?')[0].split('/').filter(Boolean).pop() || 'control') : null;
+  const openedFromLink = useRef(false);
+
   const { data } = useQuery({
     queryKey: ['soc2-catalog'],
     queryFn: () => automationApi.listCatalog().then((r) => r.data as { connectors: CatalogConnector[]; counts: { total: number; supported: number; connected: number; catalog: number } }),
   });
-  const connectors = data?.connectors ?? [];
+  const connectors = useMemo(() => data?.connectors ?? [], [data]);
   const counts = data?.counts;
+  // the open dialog follows the catalogue, so it sees a connection the moment it is saved
+  const current = selected ? connectors.find((c) => c.id === selected.id) ?? selected : null;
+
+  useEffect(() => {
+    if (openedFromLink.current || !wanted || !connectors.length) return;
+    const match = connectors.find((c) => c.id === wanted || c.provider === wanted);
+    if (!match) return;
+    openedFromLink.current = true;
+    setTab('available');
+    setSearch(match.name);
+    setSelected(match);
+  }, [wanted, connectors]);
 
   const categories = useMemo(
     () => Array.from(new Set(connectors.map((c) => c.category))).sort(),
@@ -329,6 +123,11 @@ export default function AllConnectionsPage() {
 
   return (
     <div className="mx-auto max-w-[1200px] px-1 py-1">
+      {returnTo && (
+        <Link href={returnTo} className="mb-3 inline-flex items-center gap-1.5 text-sm font-medium text-primary-700 hover:underline">
+          <ArrowLeft className="h-4 w-4" /> Back to {returnLabel}
+        </Link>
+      )}
       <h1 className="text-2xl font-bold text-slate-900">All Connections</h1>
       <p className="mt-1 text-sm text-slate-500">
         {counts
@@ -382,11 +181,13 @@ export default function AllConnectionsPage() {
         </>
       )}
 
-      {selected && (
-        <ConnectDialog
-          connector={selected}
+      {current && (
+        <ConnectorDialog
+          connector={current}
           onClose={() => setSelected(null)}
           onChanged={refresh}
+          returnTo={returnTo}
+          returnLabel={returnLabel}
         />
       )}
     </div>

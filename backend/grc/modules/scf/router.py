@@ -19,6 +19,7 @@ from grc.modules.scf import applicability as appl
 from grc.modules.scf import assurance as asr
 from grc.modules.scf import custom_controls as custom
 from grc.modules.scf import ownership as own
+from grc.modules.scf import record_links
 from grc.modules.scf import registry
 from grc.modules.scf import scope_service
 from grc.rich_audit import write_rich_audit_log
@@ -71,25 +72,61 @@ class BulkOwnershipBody(BaseModel):
     assigned_user_ids: Optional[List[int]] = None
 
 
-class CustomControlCreateBody(BaseModel):
-    code: str
-    name: str
-    statement: Optional[str] = None
-    domain: Optional[str] = None
-    pptdf: Optional[str] = None
-    conformity_cadence: Optional[str] = None
-    control_sub_type: Optional[str] = None
-    parsed_control_ids: Optional[List[int]] = None
-    implements_scf_ids: Optional[List[str]] = None
+class CustomControlBase(BaseModel):
+    """Everything a tenant authors about a control of its own.
 
+    Same field set as the ERM internal-control register, so a control written
+    here carries the register's classification, accountability and dates.
+    """
 
-class CustomControlUpdateBody(BaseModel):
     name: Optional[str] = None
     statement: Optional[str] = None
     domain: Optional[str] = None
     pptdf: Optional[str] = None
     conformity_cadence: Optional[str] = None
     control_sub_type: Optional[str] = None
+    # authored guidance — never AI-drafted, never copied from the SCF catalogue
+    objective: Optional[str] = None
+    implementation_guidance: Optional[str] = None
+    testing_guidance: Optional[str] = None
+    recommended_evidence: Optional[List[Any]] = None
+    # register fields
+    category: Optional[str] = None
+    sub_category: Optional[str] = None
+    control_type: Optional[str] = None
+    operating_frequency: Optional[str] = None
+    department_id: Optional[int] = None
+    backup_owner_id: Optional[int] = None
+    regulatory_source: Optional[str] = None
+    effective_date: Optional[str] = None
+    review_date: Optional[str] = None
+    # accountability + work fields (ownership state / control work item)
+    owner_user_id: Optional[int] = None
+    reviewer_user_id: Optional[int] = None
+    assigned_user_ids: Optional[List[int]] = None
+    priority: Optional[str] = None
+    is_key_control: Optional[bool] = None
+    # mappings + cross-module links ({"risk": [1,2], "asset": [7], …})
+    parsed_control_ids: Optional[List[int]] = None
+    implements_scf_ids: Optional[List[str]] = None
+    links: Optional[Dict[str, List[int]]] = None
+
+
+class CustomControlCreateBody(CustomControlBase):
+    #: Omit to have the next CTL-0001 style code allocated.
+    code: Optional[str] = None
+    name: str
+    lifecycle_status: str = "draft"
+
+
+class CustomControlUpdateBody(CustomControlBase):
+    #: Links sent on an edit replace that type's links; types left out are kept.
+    pass
+
+
+class CustomControlLifecycleBody(BaseModel):
+    action: str
+    comment: Optional[str] = None
 
 
 class CustomControlMappingsBody(BaseModel):
@@ -218,15 +255,51 @@ def update_scope(
     tenant_id = get_user_primary_tenant(current_user, db)
     scope = _get_scope_or_404(db, tenant_id, scope_id)
     data = body.model_dump(exclude_unset=True)
+    before = {key: getattr(scope, key) for key in data}
     for key, val in data.items():
         setattr(scope, key, val)
     scope.updated_at = datetime.utcnow()
+    changed = {k: v for k, v in data.items() if before.get(k) != v}
+    if changed:
+        write_rich_audit_log(
+            db=db, tenant_id=tenant_id, user_id=current_user.id, action="scope_update",
+            resource_type="scf_scope", resource_id=scope.id, resource_name=scope.name or "Default scope",
+            resource_url="/automation/soc2-controls?configure=scope",
+            summary="Updated the controls scope: " + ", ".join(k.replace("_", " ") for k in changed),
+            before={k: before.get(k) for k in changed}, after=changed,
+        )
     db.commit()
     db.refresh(scope)
     return {
         **_scope_out(scope),
         "hint": "Scope saved. Call POST /scf/scopes/{id}/recompute?commit=true to refresh applicability.",
     }
+
+
+@router.post("/scopes/{scope_id}/preview")
+def preview_scope(
+    scope_id: int,
+    body: ScopeUpdateBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _: bool = Depends(_require_fw_write),
+):
+    """What applying these answers would change, without saving them.
+
+    Previewing through recompute needed the answers saved first, and a dialog
+    closed after a preview left a saved scope that no control list reflected.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    scope = _get_scope_or_404(db, tenant_id, scope_id)
+    try:
+        for key, val in body.model_dump(exclude_unset=True).items():
+            setattr(scope, key, val)
+        result = appl.diff_recompute(db, scope)
+    finally:
+        db.rollback()  # the answers are only borrowed for the diff
+    if result.get("blocked"):
+        raise HTTPException(409, detail=result)
+    return {"commit": False, **result}
 
 
 @router.post("/scopes/{scope_id}/recompute")
@@ -262,6 +335,18 @@ def recompute_scope(
     extras["workbench"] = scope_service.sync_workbench_scope(
         db, tenant_id, scope, updated_by=getattr(current_user, "id", None),
     )
+    added = result.get("added_count", len(result.get("added") or []))
+    removed = result.get("removed_count", len(result.get("removed") or []))
+    write_rich_audit_log(
+        db=db, tenant_id=tenant_id, user_id=current_user.id, action="scope_apply",
+        resource_type="scf_scope", resource_id=scope.id, resource_name=scope.name or "Default scope",
+        resource_url="/automation/soc2-controls?configure=scope",
+        summary=f"Applied the controls scope ({', '.join(scope.framework_slugs or []) or 'no frameworks'}): "
+                f"{result.get('applicable_count', '—')} controls apply, {added} added, {removed} removed",
+        after={"framework_slugs": list(scope.framework_slugs or []), "applicable_count": result.get("applicable_count"),
+               "added": added, "removed": removed},
+    )
+    db.commit()
     return {"commit": True, **result, **extras}
 
 
@@ -488,10 +573,80 @@ def list_applicable_ids(
 
 # ── Stage D: custom controls ─────────────────────────────────────────────────
 
-def _custom_out(db: Session, nc) -> Dict[str, Any]:
-    data = custom.nc_to_dict(nc)
+#: Body fields that belong to the register profile, not the control row.
+_PROFILE_KEYS = set(custom.PROFILE_FIELDS)
+#: Body fields handled by ownership / the control work item, not the control row.
+_WORK_KEYS = {"owner_user_id", "reviewer_user_id", "assigned_user_ids",
+              "priority", "is_key_control"}
+
+
+def _custom_out(db: Session, nc, with_links: bool = True) -> Dict[str, Any]:
+    data = custom.nc_to_dict(nc, db)
     data["requirements"] = custom.requirements_for_custom(db, nc)
+    # Resolving links costs one query per record type, so the list view asks for
+    # counts instead of the rows.
+    if with_links:
+        data["links"] = record_links.list_links(db, nc.tenant_id, nc.id)
+    else:
+        data["link_counts"] = record_links.link_counts(db, nc.id)
     return data
+
+
+def _apply_work_fields(
+    db: Session,
+    tenant_id: int,
+    scope,
+    nc,
+    data: Dict[str, Any],
+    current_user: GRCUser,
+) -> None:
+    """Owner / reviewer / assignees onto the control state; priority and key-control
+    onto the work item the Assurance tab uses, so both views agree."""
+    if {"owner_user_id", "reviewer_user_id", "assigned_user_ids"} & set(data):
+        own.assign_ownership(
+            db, tenant_id=tenant_id, scope=scope, scf_id=nc.scf_id or nc.code,
+            owner_user_id=data.get("owner_user_id"),
+            reviewer_user_id=data.get("reviewer_user_id"),
+            assigned_user_ids=data.get("assigned_user_ids"),
+            actor_user_id=getattr(current_user, "id", None),
+        )
+    if {"priority", "is_key_control"} & set(data):
+        from grc.modules.control_library.routers.workbench import (
+            _get_or_create_work_item, ensure_tables,
+        )
+
+        ensure_tables(db)
+        wi = _get_or_create_work_item(db, tenant_id, "normalized", nc.id,
+                                      created_by=getattr(current_user, "id", None))
+        if wi is not None:
+            if data.get("priority"):
+                wi.priority = data["priority"]
+            if data.get("is_key_control") is not None:
+                wi.is_key_control = bool(data["is_key_control"])
+            db.flush()
+
+
+def _apply_links(
+    db: Session,
+    tenant_id: int,
+    nc,
+    links: Optional[Dict[str, List[int]]],
+    current_user: GRCUser,
+    replace: bool,
+) -> Dict[str, Any]:
+    if not links:
+        return {"created": 0, "skipped": []}
+    from grc.modules.vendor_risk.tpra.rbac import user_has_any_permission
+
+    # Per type, not per batch: holding erm:risks:edit must not also buy the right
+    # to write evidence links.
+    for key in links:
+        perms = record_links.write_permissions(key)   # ValueError on an unknown type
+        if not user_has_any_permission(db, current_user, (*perms, "controls:control_library:edit")):
+            raise HTTPException(403, f"Permission denied for linking {key.replace('_', ' ')} records")
+    if replace:
+        record_links.unlink_all_missing(db, tenant_id, nc, links, getattr(current_user, "id", None))
+    return record_links.set_links(db, tenant_id, nc, links, getattr(current_user, "id", None))
 
 
 @router.post("/custom-controls")
@@ -501,11 +656,13 @@ def create_custom_control(
     current_user: GRCUser = Depends(require_auth),
     _: bool = Depends(_require_cl_create),
 ):
+    """Author a control, its register profile, its mappings and its links in one call."""
     tenant_id = get_user_primary_tenant(current_user, db)
     try:
         scope = scope_service.ensure_default_scope(db, tenant_id)
     except RuntimeError:
         raise HTTPException(503, detail={"status": "not_provisioned"})
+    data = body.model_dump(exclude_unset=True)
     try:
         nc = custom.create_custom(
             db,
@@ -521,12 +678,60 @@ def create_custom_control(
             scope=scope,
             parsed_control_ids=body.parsed_control_ids,
             implements_scf_ids=body.implements_scf_ids,
+            objective=body.objective,
+            implementation_guidance=body.implementation_guidance,
+            testing_guidance=body.testing_guidance,
+            recommended_evidence=body.recommended_evidence,
+            profile={k: v for k, v in data.items() if k in _PROFILE_KEYS},
+            lifecycle_status=body.lifecycle_status,
         )
+        _apply_work_fields(db, tenant_id, scope, nc, data, current_user)
+        linked = _apply_links(db, tenant_id, nc, body.links, current_user, replace=False)
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(400, str(exc))
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(nc)
-    return _custom_out(db, nc)
+    return {**_custom_out(db, nc), "links_created": linked["created"],
+            "links_skipped": linked["skipped"]}
+
+
+@router.get("/custom-controls/options")
+def custom_control_options(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Vocabularies and departments for the custom-control form."""
+    from grc.models import BusinessUnit
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    departments = (db.query(BusinessUnit)
+                   .filter(BusinessUnit.tenant_id == tenant_id)
+                   .order_by(BusinessUnit.name).all())
+    return {
+        "categories": [{"value": k, "sub_categories": v}
+                       for k, v in custom.CONTROL_CATEGORIES.items()],
+        "control_types": sorted(custom.VALID_CONTROL_TYPE),
+        "control_sub_types": sorted(custom.VALID_SUB_TYPE),
+        "operating_frequencies": [
+            "continuous", "daily", "weekly", "monthly", "quarterly", "annually", "ad_hoc",
+        ],
+        "conformity_cadences": sorted(custom.VALID_CADENCE),
+        "pptdf": sorted(custom.VALID_PPTDF),
+        "priorities": ["low", "medium", "high", "critical"],
+        "lifecycle_statuses": sorted(custom.VALID_LIFECYCLE),
+        "lifecycle_actions": {
+            action: {"from": list(rule[0]), "to": rule[1]}
+            for action, rule in custom.LIFECYCLE_ACTIONS.items()
+        },
+        "departments": [{"id": d.id, "name": d.name} for d in departments],
+        "link_types": record_links.list_types(),
+        # What an unnamed control would be called, so a form can show it.
+        "next_code": custom.next_custom_code(db, tenant_id),
+    }
 
 
 @router.get("/custom-controls")
@@ -539,7 +744,7 @@ def list_custom_controls(
     rows = custom.list_custom_for_tenant(db, tenant_id, include_retired=include_retired)
     return {
         "count": len(rows),
-        "controls": [_custom_out(db, nc) for nc in rows],
+        "controls": [_custom_out(db, nc, with_links=False) for nc in rows],
     }
 
 
@@ -556,8 +761,13 @@ def get_custom_control(
     out = _custom_out(db, nc)
     try:
         scope = scope_service.ensure_default_scope(db, tenant_id)
+        # Apply the same reviewer decisions the control views apply, so a
+        # suppressed or retargeted mapping does not reappear here.
+        from grc.modules.automation.router import _mapping_reviews
+
+        suppressed, retargets = _mapping_reviews(db, tenant_id)
         inherited = custom.inherited_requirements_from_scf(
-            db, scope.release_id, nc.implements_scf_ids,
+            db, scope.release_id, nc.implements_scf_ids, suppressed, retargets,
         )
         out["requirements"] = custom.merge_requirements(out["requirements"], inherited)
         out["inherited_requirements"] = inherited
@@ -578,16 +788,69 @@ def update_custom_control(
     data = body.model_dump(exclude_unset=True)
     if not data:
         raise HTTPException(400, "No fields to update")
+    mapping_keys = {"parsed_control_ids", "implements_scf_ids"}
+    control_fields = {k: v for k, v in data.items()
+                      if k not in _PROFILE_KEYS and k not in _WORK_KEYS
+                      and k not in mapping_keys and k not in ("links", "recommended_evidence")}
     try:
         nc = custom.update_custom(
-            db, tenant_id, code, current_user.id, **data,
+            db, tenant_id, code, current_user.id,
+            recommended_evidence=data.get("recommended_evidence", None)
+            if "recommended_evidence" in data else None,
+            profile=({k: v for k, v in data.items() if k in _PROFILE_KEYS}
+                     if _PROFILE_KEYS & set(data) else None),
+            **control_fields,
         )
+        if mapping_keys & set(data):
+            custom.set_mappings(
+                db, tenant_id, code, data.get("parsed_control_ids"),
+                data.get("implements_scf_ids"), actor_id=current_user.id,
+            )
+        if _WORK_KEYS & set(data):
+            scope = scope_service.ensure_default_scope(db, tenant_id)
+            _apply_work_fields(db, tenant_id, scope, nc, data, current_user)
+        _apply_links(db, tenant_id, nc, data.get("links"), current_user, replace=True)
     except LookupError as exc:
+        db.rollback()
         raise HTTPException(404, str(exc))
     except ValueError as exc:
+        db.rollback()
         raise HTTPException(400, str(exc))
+    except HTTPException:
+        db.rollback()
+        raise
     db.commit()
     db.refresh(nc)
+    return _custom_out(db, nc)
+
+
+@router.post("/custom-controls/{code}/lifecycle")
+def set_custom_control_lifecycle(
+    code: str,
+    body: CustomControlLifecycleBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _: bool = Depends(_require_cl_edit),
+):
+    """Submit for approval, approve, reject, activate or deactivate."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    if body.action in ("approve", "reject"):
+        from grc.modules.vendor_risk.tpra.rbac import user_has_any_permission
+
+        if not user_has_any_permission(
+            db, current_user, ("controls:controls:approve", "controls:control_library:edit"),
+        ):
+            raise HTTPException(403, "Permission denied")
+    try:
+        custom.set_lifecycle(db, tenant_id, code, current_user.id, body.action, body.comment)
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(404, str(exc))
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(400, str(exc))
+    db.commit()
+    nc = custom.get_custom(db, tenant_id, code)
     return _custom_out(db, nc)
 
 
@@ -772,6 +1035,13 @@ def create_audit_period(
         status="open",
     )
     db.add(period)
+    db.flush()
+    write_rich_audit_log(
+        db=db, tenant_id=tenant_id, user_id=current_user.id, action="audit_period_create",
+        resource_type="scf_audit_period", resource_id=period.id, resource_name=name,
+        resource_url="/automation/assurance",
+        summary=f"Opened audit period {name} ({start:%Y-%m-%d} to {end:%Y-%m-%d})",
+    )
     db.commit()
     db.refresh(period)
     return asr.period_out(period)
@@ -803,6 +1073,11 @@ def freeze_audit_period_endpoint(
     if period.status == "closed":
         raise HTTPException(409, "Cannot freeze a closed audit period")
     asr.freeze_audit_period(db, period, current_user.id)
+    write_rich_audit_log(
+        db=db, tenant_id=tenant_id, user_id=current_user.id, action="audit_period_freeze",
+        resource_type="scf_audit_period", resource_id=period.id, resource_name=period.name,
+        resource_url="/automation/assurance", summary=f"Froze the statement of applicability for {period.name}",
+    )
     db.commit()
     db.refresh(period)
     return asr.period_out(period)
@@ -818,6 +1093,11 @@ def close_audit_period(
     tenant_id = get_user_primary_tenant(current_user, db)
     period = _get_period_or_404(db, tenant_id, period_id)
     period.status = "closed"
+    write_rich_audit_log(
+        db=db, tenant_id=tenant_id, user_id=current_user.id, action="audit_period_close",
+        resource_type="scf_audit_period", resource_id=period.id, resource_name=period.name,
+        resource_url="/automation/assurance", summary=f"Closed audit period {period.name}",
+    )
     db.commit()
     db.refresh(period)
     return asr.period_out(period)

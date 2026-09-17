@@ -77,7 +77,10 @@ from .modules.risk_posture import risk_posture_router
 from .modules.onboarding import onboarding_router
 from .modules.asset_discovery import asset_discovery_router
 from .modules.compliance_plugins import compliance_plugins_router
-from .modules.automation import automation_soc2_router, automation_frameworks_router, automation_common_router
+from .modules.automation import (
+    automation_soc2_router, automation_frameworks_router, automation_common_router,
+    automation_assurance_router,
+)
 from .modules.scf import scf_router
 from .routers.connect_wizard_router import router as connect_wizard_router
 from .routers.access_review_router import router as access_review_router
@@ -270,6 +273,7 @@ app.include_router(scf_router)
 # common must be registered before the {framework} router so /automation/common/*
 # matches the literal route, not the {framework} path param (framework="common").
 app.include_router(automation_common_router)
+app.include_router(automation_assurance_router)
 app.include_router(automation_frameworks_router)
 app.include_router(connect_wizard_router)
 app.include_router(access_review_router)

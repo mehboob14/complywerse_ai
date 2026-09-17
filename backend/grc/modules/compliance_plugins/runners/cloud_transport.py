@@ -150,6 +150,34 @@ CLOUD_CHECKS: Dict[str, List[Dict[str, Any]]] = {
             "pass_message": "AWS Config is recording resource configuration",
             "fail_message": "AWS Config has no recorder — configuration drift is not tracked",
         },
+        # ── backups ──────────────────────────────────────────────────────────
+        {
+            "id": "aws.backup_plans", "service": "backup", "operation": "list_backup_plans",
+            "resource": "region", "controls": ["A1.2"],
+            "title": "AWS Backup has a backup plan",
+            "expect": {"kind": "list_nonempty", "path": "BackupPlansList"},
+            "pass_message": "At least one AWS Backup plan schedules backups in this region",
+            "fail_message": "No AWS Backup plan exists in this region — nothing schedules backups centrally",
+        },
+        {
+            "id": "aws.backup_protected_resources", "service": "backup",
+            "operation": "list_protected_resources", "resource": "region", "controls": ["A1.2"],
+            "title": "Resources are protected by AWS Backup",
+            "expect": {"kind": "list_nonempty", "path": "Results"},
+            "pass_message": "AWS Backup holds recovery points for resources in this region",
+            "fail_message": "AWS Backup protects no resources in this region — no recovery point exists to restore from",
+        },
+        {
+            "id": "aws.rds_backup_retention", "service": "rds", "operation": "describe_db_instances",
+            "resource": "region", "controls": ["A1.2"],
+            "title": "RDS databases keep automated backups for 7+ days",
+            "expect": {"kind": "all_items_field_gte", "path": "DBInstances",
+                       "field": "BackupRetentionPeriod", "value": 7, "item_name": "DBInstanceIdentifier"},
+            # no databases in the region is nothing to judge, not a pass
+            "empty_is": "not_run",
+            "pass_message": "Every RDS instance retains automated backups for at least 7 days",
+            "fail_message": "An RDS instance keeps automated backups for fewer than 7 days, or has them off",
+        },
     ],
 }
 
@@ -175,7 +203,23 @@ def _expect(response: Any, spec: Dict[str, Any]) -> Tuple[bool, str]:
         items = items if isinstance(items, list) else []
         hits = [i for i in items if isinstance(i, dict) and i.get(spec["field"]) == spec["value"]]
         return bool(hits), f"{len(hits)} of {len(items)} items match {spec['field']}={spec['value']}"
+    if kind == "all_items_field_gte":
+        items = response.get(spec.get("path")) if isinstance(response, dict) else None
+        items = items if isinstance(items, list) else []
+        short = [i for i in items if not isinstance(i, dict)
+                 or not isinstance(i.get(spec["field"]), (int, float)) or i[spec["field"]] < spec["value"]]
+        names = ", ".join(str(i.get(spec.get("item_name") or "", "item")) for i in short[:5] if isinstance(i, dict))
+        return (not short), (f"{len(short)} of {len(items)} below {spec['field']} {spec['value']}"
+                             + (f": {names}" if names else ""))
     return _evaluate_expectation(response if isinstance(response, dict) else {}, spec)
+
+
+def _listed(response: Any, path: Optional[str]) -> Optional[list]:
+    """The list at `path`, or None when the expectation is not about a list."""
+    if not path or not isinstance(response, dict):
+        return None
+    value = response.get(path)
+    return value if isinstance(value, list) else None
 
 
 def _iam_mfa_sweep(creds: Dict[str, Any], factory: Optional[ClientFactory]) -> List[dict]:
@@ -215,7 +259,64 @@ def _iam_mfa_sweep(creds: Dict[str, Any], factory: Optional[ClientFactory]) -> L
     return out
 
 
-SWEEPS: Dict[str, List[Callable[..., List[dict]]]] = {"aws": [_iam_mfa_sweep]}
+def _dynamodb_pitr_sweep(creds: Dict[str, Any], factory: Optional[ClientFactory]) -> List[dict]:
+    """Point-in-time recovery per DynamoDB table.
+
+    PITR is set per table, so no single call can answer it. A table without it
+    can only be restored from whatever on-demand backup someone remembered to take.
+    """
+    codes = ["A1.2"]
+    ok, data, detail = aws_call(creds, "dynamodb", "list_tables", {"Limit": 100}, factory=factory)
+    if not ok:
+        return [_finding(codes, "aws.dynamodb_pitr", "region", "error",
+                         f"Could not list DynamoDB tables — {detail}")]
+    tables = (data or {}).get("TableNames") or []
+    if not tables:
+        return [_finding(codes, "aws.dynamodb_pitr", "region", "not_run",
+                         "Nothing to assess — no DynamoDB tables in this region")]
+    out: List[dict] = []
+    missing = checked = 0
+    for name in tables[:SWEEP_CAP]:
+        t_ok, t_data, t_detail = aws_call(creds, "dynamodb", "describe_continuous_backups",
+                                          {"TableName": name}, factory=factory)
+        if not t_ok:
+            out.append(_finding(codes, "aws.dynamodb_table_pitr", name, "error",
+                                f"Could not read backup settings — {t_detail}"))
+            continue
+        checked += 1
+        status = (((t_data or {}).get("ContinuousBackupsDescription") or {})
+                  .get("PointInTimeRecoveryDescription") or {}).get("PointInTimeRecoveryStatus")
+        if status != "ENABLED":
+            missing += 1
+            out.append(_finding(codes, "aws.dynamodb_table_pitr", name, "fail",
+                                "Point-in-time recovery is off for this table"))
+    if not checked:
+        out.append(_finding(codes, "aws.dynamodb_pitr", "region", "error",
+                            "Could not read backup settings for any DynamoDB table"))
+        return out
+    out.append(_finding(codes, "aws.dynamodb_pitr", "region", "pass" if missing == 0 else "fail",
+                        f"{missing} of {checked} DynamoDB tables lack point-in-time recovery"
+                        f"{' (first 100 tables)' if len(tables) >= 100 else ''}"))
+    return out
+
+
+SWEEPS: Dict[str, List[Callable[..., List[dict]]]] = {"aws": [_iam_mfa_sweep, _dynamodb_pitr_sweep]}
+
+# What each sweep asserts, declared like CLOUD_CHECKS so the control binder and
+# the "what does this test do" explanation read one list instead of a special case.
+SWEEP_CHECKS: Dict[str, List[Dict[str, Any]]] = {
+    "aws": [
+        {"id": "aws.iam_mfa", "service": "iam", "operation": "list_users", "resource": "directory",
+         "controls": ["CC6.1", "CC6.2"], "title": "Every console user has MFA",
+         "rule": "Lists every IAM user, skips those with no console password, and checks each "
+                 "remaining user has an MFA device enrolled.",
+         "fail_message": "Console user has no MFA device enrolled"},
+        {"id": "aws.dynamodb_pitr", "service": "dynamodb", "operation": "describe_continuous_backups",
+         "resource": "region", "controls": ["A1.2"], "title": "DynamoDB tables have point-in-time recovery",
+         "rule": "Lists the DynamoDB tables in the region and checks point-in-time recovery is enabled on each.",
+         "fail_message": "Point-in-time recovery is off for this table"},
+    ],
+}
 
 # What proves the transport can reach the account at all. Its result decides
 # `connectivity`, and nothing else in the run is attempted if it fails.
@@ -264,7 +365,13 @@ def run_cloud_provider(provider: str, spec: Dict[str, Any], creds: Dict[str, Any
                 findings.append(_finding(check["controls"], check["id"], check["resource"],
                                          "error", f"Could not collect — {c_detail}"))
             continue
-        passed, why = _expect(c_data, check.get("expect") or {})
+        expect = check.get("expect") or {}
+        listed = _listed(c_data, expect.get("path"))
+        if check.get("empty_is") and listed is not None and not listed:
+            findings.append(_finding(check["controls"], check["id"], check["resource"], check["empty_is"],
+                                     f"Nothing to assess — {expect.get('path')} is empty in this region"))
+            continue
+        passed, why = _expect(c_data, expect)
         findings.append(_finding(
             check["controls"], check["id"], check["resource"],
             "pass" if passed else "fail",
@@ -300,8 +407,6 @@ def _summarise(provider: str, conn: str, findings: List[dict]) -> dict:
 def cloud_control_codes(provider: str) -> List[str]:
     """Every SOC 2 code this transport can emit, so the seed mapping covers them."""
     codes: set = set()
-    for c in CLOUD_CHECKS.get(provider, []):
+    for c in CLOUD_CHECKS.get(provider, []) + SWEEP_CHECKS.get(provider, []):
         codes.update(c.get("controls") or [])
-    if provider == "aws":
-        codes.update(["CC6.1", "CC6.2"])          # the IAM MFA sweep
     return sorted(codes)

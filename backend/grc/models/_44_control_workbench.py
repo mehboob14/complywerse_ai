@@ -94,6 +94,25 @@ class ControlWorkTest(Base):
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+    # ── Sampling plan (Assurance tab). A test of operating effectiveness is only
+    # as good as the population it drew from and how the sample was chosen, so
+    # both are recorded — not just a sample_size an auditor cannot reproduce.
+    frequency = Column(String(30), nullable=True)            # how often the control operates
+    population_size = Column(Integer, nullable=True)
+    population_description = Column(Text, nullable=True)
+    selection_method = Column(String(20), nullable=True)     # random|systematic|all|judgmental
+    sample_seed = Column(Integer, nullable=True)             # makes a random selection reproducible
+    tolerable_exceptions = Column(Integer, default=0)
+    # ── Conclusion and sign-off. `result` above is the tester's conclusion; a
+    # departure from the rating the exceptions suggest needs a rationale.
+    conclusion_rationale = Column(Text, nullable=True)
+    # Set when the reviewer signs off. A locked test is the audit record: it is
+    # not edited or deleted, it is superseded by a new test.
+    locked_at = Column(DateTime, nullable=True)
+    # False when the reviewer is the tester. Self sign-off completes a test but
+    # never counts as independent review.
+    independent_review = Column(Boolean, nullable=True)
+
 
 class ControlWorkTestProcedure(Base):
     """A persisted, numbered test-procedure point — the saved output of the
@@ -117,6 +136,14 @@ class ControlWorkTestProcedure(Base):
     checked_at = Column(DateTime, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    # ── Assurance tab. A checkbox said a step was done, not what it found.
+    ao_ids = Column(JSON, nullable=True)                     # SCF assessment objectives this step tests
+    expected_result = Column(Text, nullable=True)
+    result = Column(String(20), nullable=True)               # pass|exception|not_applicable (null = not performed)
+    result_note = Column(Text, nullable=True)
+    tested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    tested_at = Column(DateTime, nullable=True)
 
 
 class ControlWorkEvidence(Base):
@@ -201,6 +228,31 @@ class ControlWorkRiskLink(Base):
     )
 
 
+class ControlWorkSample(Base):
+    """One item selected for testing from a test's population.
+
+    Before this, a "sample" was an uploaded file. A file cannot say which
+    population item it covers or whether that item passed, so exceptions were a
+    number typed by hand and nothing tied it to what was actually inspected.
+    """
+    __tablename__ = "grc_control_work_samples"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False)
+    work_item_id = Column(Integer, ForeignKey("grc_control_work_items.id"), nullable=False, index=True)
+    test_id = Column(Integer, ForeignKey("grc_control_work_tests.id"), nullable=False, index=True)
+    procedure_id = Column(Integer, ForeignKey("grc_control_work_test_procedures.id"), nullable=True)
+
+    seq = Column(Integer, default=0)
+    item_ref = Column(String(255), nullable=True)            # the population item: ticket, user, change id
+    result = Column(String(20), nullable=True)               # pass|exception|not_applicable (null = not tested)
+    note = Column(Text, nullable=True)
+    evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=True)
+    tested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    tested_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class ControlAssuranceSnapshot(Base):
     """A daily point-in-time snapshot of the tenant's control-assurance posture
     (overall + per-domain KPIs), so the hub can show REAL trend deltas instead of
@@ -233,6 +285,7 @@ CONTROL_WORKBENCH_MODELS = [
     ControlWorkTestProcedure,   # before ControlWorkEvidence (FK target)
     ControlWorkTest,
     ControlWorkEvidence,
+    ControlWorkSample,          # after tests and procedures (FK targets)
     ControlWorkEscalation,
     ControlWorkWorkflowAction,
     ControlWorkRiskLink,

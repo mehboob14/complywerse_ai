@@ -86,7 +86,7 @@ export default function ConfigureFrameworks() {
         <p className="font-semibold">Framework selection for the control plane moved</p>
         <p className="mt-1 text-[13px] text-primary-800/90">
           Configure which frameworks drive Common Controls under{' '}
-          <Link href="/automation/scope" className="font-semibold underline underline-offset-2 hover:text-primary-950">
+          <Link href="/automation/soc2-controls?configure=scope" className="font-semibold underline underline-offset-2 hover:text-primary-950">
             Automation → Scope
           </Link>
           . The workbench selector below remains for the Control Catalog only.

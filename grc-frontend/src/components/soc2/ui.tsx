@@ -133,7 +133,7 @@ export interface LinkedCheck {
   seeded: boolean;
   source?: string;
   /** Stage G — SCF ao_id / scf_id tokens this check covers (when bound). */
-  covers?: string[];
+  covers?: string[] | Record<string, string[]>;
   last_run: { status: string; started_at?: string | null; result_summary?: string | null } | null;
 }
 
@@ -190,6 +190,10 @@ function paletteFor(fw: string): string {
   let h = 0;
   for (let i = 0; i < fw.length; i++) h = (h * 31 + fw.charCodeAt(i)) >>> 0;
   return BADGE_PALETTE[h % BADGE_PALETTE.length];
+}
+/** The categorical colour a framework is drawn in, for dots and accents. */
+export function frameworkColor(fw: string): string {
+  return FRAMEWORK_COLOR[fw] || paletteFor(fw);
 }
 function prettyFw(fw: string): string {
   return fw.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

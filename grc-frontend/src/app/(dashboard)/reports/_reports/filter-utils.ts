@@ -109,6 +109,9 @@ export function isClientSideFilter(
     colKey.startsWith('linkpresence_')
     || colKey.startsWith('link_')
     || colKey.startsWith('xmod_')
+    // Calculated columns are evaluated per row in the browser — there is no
+    // matching SQL expression to push down.
+    || colKey.startsWith('calc_')
   ) return true;
   const col = resolveCol?.(colKey);
   if (isCountColumn(col)) return true;
