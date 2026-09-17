@@ -414,7 +414,23 @@ def windows_winrm_runner(check_definition: Dict[str, Any], credentials: Dict[str
     # set" is genuinely non-compliant for an "Ensure X is set" rule, and those
     # verdicts were confirmed correct against the live host.
     no_evidence = (rc != 0) and not (out or "").strip()
-    if ok and no_evidence:
+    # Exception: a graceful registry-value read — Get-ItemProperty with
+    # -ErrorAction SilentlyContinue (optionally piped to Select -ExpandProperty)
+    # — returns NOTHING when the value is genuinely absent. The trailing
+    # Select then exits 1, but the empty result is REAL evidence ("value not
+    # configured"), not a broken command. For such reads a negative/empty
+    # expectation ("must be absent", "must not be X", expect ^\s*$) is
+    # legitimately satisfied by absence, so let the verdict stand. The guard
+    # still fires for secedit / gpresult-style commands, where empty output on
+    # failure can mean the command itself failed (the rule-2.2.31 false-pass
+    # this protects against). Confirmed against a live Windows 11 host:
+    # NullSessionShares (2.3.10.11) and DODownloadMode (18.10.17.1) are
+    # compliant-by-absence and must read as PASS, not error.
+    cmd_l = (command or "").lower()
+    is_graceful_registry_read = (
+        "get-itemproperty" in cmd_l and "silentlycontinue" in cmd_l
+    )
+    if ok and no_evidence and not is_graceful_registry_read:
         return RunnerResult(
             status="error",
             summary=(

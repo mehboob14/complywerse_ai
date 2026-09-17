@@ -90,9 +90,18 @@ def _candidates(db: Session, tenant_id: int, obs: DiscoveryObservation) -> Tuple
         if hit:
             return "fqdn", hit
 
-    # 5 — hostname
+    # 5 — hostname. Guard against a reverse-DNS / round-robin PTR name shared by
+    # several hosts: if this observation carries a MAC, don't match an asset whose
+    # primary_mac is set AND different (that's a DIFFERENT machine that merely
+    # resolves the same name). Without this, two hosts sharing a PTR name merge
+    # into one asset and the survivor wrongly accrues the other's IP.
     if obs.host_name:
-        hit = ids(base.filter(func.lower(ITAsset.host_name) == obs.host_name.lower()))
+        from sqlalchemy import or_
+        hq = base.filter(func.lower(ITAsset.host_name) == obs.host_name.lower())
+        if obs.mac_address:
+            hq = hq.filter(or_(ITAsset.primary_mac.is_(None),
+                               func.lower(ITAsset.primary_mac) == obs.mac_address.lower()))
+        hit = ids(hq)
         if hit:
             return "hostname", hit
 

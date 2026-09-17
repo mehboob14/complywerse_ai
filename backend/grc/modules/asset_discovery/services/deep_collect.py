@@ -23,7 +23,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -62,6 +62,41 @@ def transport_for_observation(obs: DiscoveryObservation) -> Optional[str]:
     if 22 in ports:
         return "linux"
     return None
+
+
+# Login preference when a host answers on several: a real host login beats a
+# read-only one. WinRM/SSH give a full credentialed collect; WMI is the Windows
+# fallback when WinRM is off; SNMP is read-only device data.
+LOGIN_METHOD_ORDER = ("winrm", "ssh", "wmi", "snmp")
+
+
+def login_methods_from(ports, evidence=None) -> list:
+    """The login methods a set of open ports + evidence imply, best-first.
+    Pulled out so a MULTI-NIC host (one machine, several interfaces) can be
+    judged on the UNION of every NIC's ports, not one interface at a time."""
+    try:
+        pset = {int(p) for p in (ports or [])}
+    except (TypeError, ValueError):
+        pset = set()
+    ev = [str(e).lower() for e in (evidence or [])]
+    found = []
+    if pset & {5985, 5986}:
+        found.append("winrm")
+    if 22 in pset:
+        found.append("ssh")
+    if 135 in pset:
+        found.append("wmi")
+    if 161 in pset or any("snmp" in e for e in ev):
+        found.append("snmp")
+    return [m for m in LOGIN_METHOD_ORDER if m in found]
+
+
+def login_methods_for_observation(obs: DiscoveryObservation) -> list:
+    """Which login methods this device accepts, from what the sweep SAW — WinRM
+    (5985/6), SSH (22), WMI/DCOM (135) or SNMP (161 / an SNMP fingerprint).
+    Best-first; empty = no login service answered."""
+    raw = obs.raw if isinstance(obs.raw, dict) else {}
+    return login_methods_from(raw.get("open_ports"), raw.get("evidence"))
 
 
 def agentless_port_state(obs: DiscoveryObservation, transport: str) -> str:
@@ -268,6 +303,25 @@ def link_orphan_vulns_to_asset(db: Session, asset) -> int:
         return 0
 
 
+def _resolve_or_create_asset(db: Session, obs: DiscoveryObservation) -> Tuple[ITAsset, bool]:
+    """Link this observation to an EXISTING asset when identity resolution finds
+    exactly one confident match; otherwise create a fresh one. Returns
+    (asset, created). Prevents promote from blind-creating a duplicate for a host
+    already in inventory under a different identity form (a sibling observation
+    promoted first, a manual asset, or richer identity). A single candidate is
+    required — an ambiguous multi-match creates a new row rather than guess."""
+    from grc.modules.asset_discovery.services.resolver import (
+        _create_from, _candidates, _merge_into,
+    )
+    _tier, ids = _candidates(db, obs.tenant_id, obs)
+    if len(ids) == 1:
+        existing = db.get(ITAsset, ids[0])
+        if existing is not None:
+            _merge_into(db, existing, obs)
+            return existing, False
+    return _create_from(db, obs.tenant_id, obs), True
+
+
 def promote_observation(db: Session, obs: DiscoveryObservation,
                         profile: CredentialProfile, transport: str) -> ITAsset:
     """Authenticate to an unclaimed device and, ONLY on success, make it an asset.
@@ -356,6 +410,23 @@ def _cidr_match(ip: Optional[str], cidrs: Optional[List[str]]) -> bool:
         except ValueError:
             continue
     return False
+
+
+def _best_prefix(ip: Optional[str], cidrs: List[str]) -> Optional[int]:
+    """Longest prefix length among `cidrs` that actually contains `ip`, else None."""
+    try:
+        addr = ipaddress.ip_address(ip)  # type: ignore[arg-type]
+    except (ValueError, TypeError):
+        return None
+    best = None
+    for c in cidrs:
+        try:
+            net = ipaddress.ip_network(c, strict=False)
+        except ValueError:
+            continue
+        if addr in net and (best is None or net.prefixlen > best):
+            best = net.prefixlen
+    return best
 
 
 def select_credential(db: Session, tenant_id: int, ip: Optional[str],

@@ -700,6 +700,19 @@ def fingerprint_host(ip: str, open_ports: List[int], timeout_s: float = 1.0,
             if auth:
                 fp["http_auth"] = auth
 
+    # HOSTNAME without credentials. A Windows box answers its computer name over
+    # NetBIOS node-status (UDP/137); other live hosts may answer reverse DNS. This
+    # is what lets an adopted or login-failed host (e.g. WinRM creds wrong) carry a
+    # real name into inventory instead of showing only its IP — obs.host_name then
+    # flows through _display_name to the asset name. Only for hosts that answered a
+    # TCP port, so dead addresses don't pay two extra lookups.
+    if op:
+        name = netbios_name(ip, timeout_s) if (op & {135, 139, 445, 3389, 5985, 5986}) else None
+        if not name:
+            name = reverse_dns(ip, timeout_s)
+        if name:
+            fp["hostname"] = name
+
     fp.update(classify(list(op), fp))
     return fp
 

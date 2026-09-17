@@ -1,16 +1,17 @@
 import logging
 import threading
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from grc.db import open_tenant_session
-from grc.models import get_db, GRCUser, IntegrationConnection, SyncHistory, IntegrationAuditLog
+from grc.models import get_db, GRCUser, IntegrationConnection, SyncHistory, IntegrationAuditLog, HostedScanRun
 from grc.routers.auth_router import require_auth, get_user_primary_tenant, require_tenant_permission
 from .services.sync_service import SyncService
+from .services.hosted_scan import run_hosted_scan
 from .services.exception_service import ExceptionService
 from .services.scoring_service import ScoringService
 from .services.sla_integration_service import SLAIntegrationService
@@ -445,6 +446,371 @@ def trigger_sync(
         "connection_id": connection_id,
         "message": "Sync started — it runs in the background; the page updates when it finishes.",
     }
+
+
+class HostedScanRequest(BaseModel):
+    targets: str = Field(..., min_length=1, description="Comma/newline-separated hosts, CIDRs or ranges")
+    scan_name: Optional[str] = None
+    policy_id: Optional[str] = None
+    # SCAN-LEVEL credentials (from the discovery credential store) to inject so
+    # Nessus authenticates into the target hosts. Typically one winrm + one ssh
+    # profile; Nessus applies the right one per host. Empty = unauthenticated.
+    credential_profile_ids: Optional[List[int]] = None
+
+
+def _hosted_scan_to_dict(r: HostedScanRun) -> dict:
+    return {
+        "id": r.id,
+        "connection_id": r.connection_id,
+        "targets": r.targets,
+        "scan_name": r.scan_name,
+        "status": r.status,
+        "progress": r.progress,
+        "hosts_total": r.hosts_total,
+        "hosts_done": r.hosts_done,
+        "vulns_new": r.vulns_new,
+        "vulns_total": r.vulns_total,
+        "vulns_closed": r.vulns_closed,
+        "vulns_reopened": r.vulns_reopened,
+        "policy_id": r.policy_id,
+        "error": r.error,
+        "created_at": r.created_at.isoformat() if r.created_at else None,
+        "finished_at": r.finished_at.isoformat() if r.finished_at else None,
+    }
+
+
+# Severity keys as Nessus names them on the host object — read directly, no
+# per-host call needed (verified against the live /scans/{id} shape).
+_SEV_KEYS = ("critical", "high", "medium", "low", "info")
+
+
+def _nessus_live_detail(db: Session, run: HostedScanRun, tenant_id: int) -> Optional[dict]:
+    """The Nessus scan view, live: per-host severity + auth, aggregate severity,
+    and scan metadata (policy/scanner/timing). Read straight off Nessus's
+    /scans/{id} on each poll, so the ComplyVerse panel mirrors what Nessus itself shows
+    while the scan runs. Returns None (UI degrades to a simple view) on any error
+    or before a Nessus scan id exists."""
+    if not run.nessus_scan_id:
+        return None
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.id == run.connection_id,
+        IntegrationConnection.tenant_id == tenant_id,
+    ).first()
+    if not conn:
+        return None
+    try:
+        detail = SyncService.build_adapter(conn).get_scan_detail(str(run.nessus_scan_id))
+    except Exception:
+        return None
+    info = detail.get("info") or {}
+    agg = {k: 0 for k in _SEV_KEYS}
+    hosts = []
+    for h in (detail.get("hosts") or []):
+        counts = {k: int(h.get(k) or 0) for k in _SEV_KEYS}
+        for k in _SEV_KEYS:
+            agg[k] += counts[k]
+        hosts.append({
+            "host": h.get("hostname") or "",
+            # Nessus leaves `credential` null on an unauthenticated host and
+            # populates it once a login authenticates — the real per-host Auth.
+            "authenticated": bool(h.get("credential")),
+            **counts,
+            "total": sum(counts.values()),
+        })
+    # Weightiest hosts first (Nessus orders by severity, not discovery order).
+    hosts.sort(key=lambda x: -(x["critical"] * 5 + x["high"] * 4 + x["medium"] * 3 + x["low"] * 2 + x["info"]))
+    start = info.get("scan_start")
+    end = info.get("scan_end")
+    return {
+        "policy": info.get("policy") or "Basic Network Scan",
+        "scanner": info.get("scanner_name") or "Local Scanner",
+        "status": info.get("status") or run.status,
+        "severity_base": info.get("current_severity_base_display") or info.get("current_severity_base") or "CVSS v3.0",
+        "start": int(start) if start else None,
+        "end": int(end) if end else None,
+        "host_count": info.get("hostcount"),
+        "severity": agg,
+        "hosts": hosts,
+    }
+
+
+@router.post("/connections/{connection_id}/scan-and-sync")
+def trigger_hosted_scan(
+    connection_id: int,
+    body: HostedScanRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("admin:integrations:edit")),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    user_id = current_user.id
+
+    # Validate up front so a bad/inactive connection fails fast with a clear
+    # error instead of dying silently in the background worker below.
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.id == connection_id,
+        IntegrationConnection.tenant_id == tenant_id,
+    ).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    if not conn.is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="Connection is deactivated — reactivate it before scanning.",
+        )
+    if (conn.integration_type or "").lower() not in ("nessus", "tenable"):
+        raise HTTPException(status_code=400, detail="Hosted scan requires a nessus/tenable connection.")
+
+    # Validate any requested scan credentials up front, with the SAME filter the
+    # worker's resolver uses (active + host-login kind). Without matching it, an
+    # inactive or wrong-kind id passes here but is silently dropped by
+    # _resolve_credentials, downgrading an authenticated scan to unauthenticated
+    # with no error — so reject it now with a clear message instead.
+    if body.credential_profile_ids:
+        from grc.models import CredentialProfile
+        valid_ids = {
+            r[0] for r in db.query(CredentialProfile.id).filter(
+                CredentialProfile.tenant_id == tenant_id,
+                CredentialProfile.id.in_(body.credential_profile_ids),
+                CredentialProfile.is_active.is_(True),
+                CredentialProfile.kind.in_(("winrm", "ssh")),
+            ).all()
+        }
+        missing = [i for i in body.credential_profile_ids if i not in valid_ids]
+        if missing:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Credential profile id(s) not usable for a scan (must be an active Windows/SSH login): {missing}",
+            )
+
+    slug = getattr(request.state, "tenant_slug", None)
+    if not slug:
+        # A hosted scan launches + polls for up to poll_timeout_s (30 min
+        # default); running it synchronously would trip every gateway timeout.
+        # It MUST run in a background worker, which needs the slug to reopen a
+        # tenant session — so refuse rather than silently blocking.
+        raise HTTPException(status_code=400, detail="Tenant context unavailable — cannot start a background scan.")
+
+    # Create the tracking row NOW (synchronously) so the caller gets a run_id to
+    # poll; the worker only updates it from here on.
+    run = HostedScanRun(
+        tenant_id=tenant_id,
+        connection_id=connection_id,
+        targets=body.targets,
+        scan_name=body.scan_name or "ComplyVerse hosted scan",
+        policy_id=body.policy_id,
+        status="creating",
+        triggered_by_user_id=user_id,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    run_id = run.id
+
+    cred_ids = body.credential_profile_ids
+    def _run_bg():
+        bg = open_tenant_session(slug)
+        try:
+            run_hosted_scan(bg, run_id, tenant_id, credential_profile_ids=cred_ids)
+        except Exception:
+            logger.exception("Hosted scan failed for connection %s (run %s)", connection_id, run_id)
+        finally:
+            bg.close()
+
+    threading.Thread(
+        target=_run_bg, name=f"hosted-scan-run-{run_id}", daemon=True
+    ).start()
+    return {
+        "run_id": run_id,
+        "status": "running",
+        "connection_id": connection_id,
+    }
+
+
+@router.get("/connections/{connection_id}/hosted-scans")
+def list_hosted_scans(
+    connection_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("admin:integrations:view")),
+    limit: int = Query(default=20, le=100),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    runs = db.query(HostedScanRun).filter(
+        HostedScanRun.tenant_id == tenant_id,
+        HostedScanRun.connection_id == connection_id,
+    ).order_by(HostedScanRun.id.desc()).limit(limit).all()
+    return {"runs": [_hosted_scan_to_dict(r) for r in runs]}
+
+
+@router.get("/hosted-scans/{run_id}")
+def get_hosted_scan(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("admin:integrations:view")),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    run = db.query(HostedScanRun).filter(
+        HostedScanRun.id == run_id,
+        HostedScanRun.tenant_id == tenant_id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Hosted scan run not found")
+    data = _hosted_scan_to_dict(run)
+    # Live Nessus mirror (per-host severity/auth + scan metadata) — single-run
+    # only, so the recent-list endpoint never fans out one Nessus call per row.
+    data["nessus"] = _nessus_live_detail(db, run, tenant_id)
+    return data
+
+
+@router.post("/hosted-scans/{run_id}/stop")
+def stop_hosted_scan(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("admin:integrations:edit")),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    run = db.query(HostedScanRun).filter(
+        HostedScanRun.id == run_id,
+        HostedScanRun.tenant_id == tenant_id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Hosted scan run not found")
+
+    # Best-effort: tell Nessus to stop, then mark the row. The worker's poll loop
+    # sees the terminal scan state and won't clobber this 'stopped'.
+    if run.nessus_scan_id and run.status in ("creating", "running"):
+        conn = db.query(IntegrationConnection).filter(
+            IntegrationConnection.id == run.connection_id,
+            IntegrationConnection.tenant_id == tenant_id,
+        ).first()
+        if conn:
+            try:
+                SyncService.build_adapter(conn).stop_scan(run.nessus_scan_id)
+            except Exception:
+                logger.exception("stop_scan failed (run=%s scan=%s)", run_id, run.nessus_scan_id)
+
+    run.status = "stopped"
+    run.finished_at = datetime.utcnow()
+    db.commit()
+    return {"status": "stopped"}
+
+
+@router.delete("/hosted-scans/{run_id}")
+def delete_hosted_scan(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("admin:integrations:edit")),
+):
+    """Delete a scan session from history. Removes the ComplyVerse session row only —
+    findings already filed to assets stay, and the Nessus scan definition is
+    kept. A still-running scan is stopped on Nessus first so nothing keeps
+    scanning untracked; its poller sees the row gone and exits (hosted_scan)."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    run = db.query(HostedScanRun).filter(
+        HostedScanRun.id == run_id,
+        HostedScanRun.tenant_id == tenant_id,
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Hosted scan run not found")
+
+    if run.nessus_scan_id and run.status in ("creating", "running"):
+        conn = db.query(IntegrationConnection).filter(
+            IntegrationConnection.id == run.connection_id,
+            IntegrationConnection.tenant_id == tenant_id,
+        ).first()
+        if conn:
+            try:
+                SyncService.build_adapter(conn).stop_scan(run.nessus_scan_id)
+            except Exception:
+                logger.exception("stop_scan before delete failed (run=%s scan=%s)", run_id, run.nessus_scan_id)
+
+    db.delete(run)
+    db.commit()
+    return {"deleted": run_id}
+
+
+@router.get("/connections/{connection_id}/scan-policies")
+def list_scan_policies(
+    connection_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("admin:integrations:view")),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    conn = db.query(IntegrationConnection).filter(
+        IntegrationConnection.id == connection_id,
+        IntegrationConnection.tenant_id == tenant_id,
+    ).first()
+    if not conn:
+        raise HTTPException(status_code=404, detail="Connection not found")
+    # Curated built-in Nessus templates worth offering as scan profiles, mapped
+    # to friendly names (the scanner ships ~20; most aren't network vuln scans).
+    _TEMPLATE_LABELS = {
+        "basic": "Basic Network Scan",
+        "advanced": "Advanced Scan",
+        "patch_audit": "Credentialed Patch Audit",
+        "webapp": "Web Application Tests",
+        "malware": "Malware Scan",
+        "discovery": "Host Discovery",
+    }
+    try:
+        adapter = SyncService.build_adapter(conn)
+        out = []
+        # Saved user policies first (a client's own tuned recipes).
+        for p in (adapter.get_policies() or []):
+            if p.get("id") is not None:
+                out.append({"id": str(p.get("id")), "name": p.get("name"), "kind": "policy"})
+        # Then the useful built-in templates, so the picker is never empty even
+        # on a Nessus with zero saved policies. id = template uuid (create_scan
+        # resolves it); friendly name for display.
+        by_name = {str(t.get("name")): t for t in (adapter.get_scan_templates() or [])}
+        for key, label in _TEMPLATE_LABELS.items():
+            t = by_name.get(key)
+            if t and t.get("uuid"):
+                out.append({"id": str(t.get("uuid")), "name": label, "kind": "template"})
+        return {"policies": out}
+    except Exception:
+        # Never 500 a policy picker — return empty so the UI just offers the default.
+        logger.exception("scan-policies fetch failed (conn=%s)", connection_id)
+        return {"policies": [], "note": "Could not fetch policies from the scanner."}
+
+
+@router.get("/connections/{connection_id}/scan-credentials")
+def list_scan_credentials(
+    connection_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(require_tenant_permission("admin:integrations:view")),
+):
+    """Host credential profiles (winrm/ssh) available to inject into a hosted
+    scan — the picker for authenticated scanning. Reuses the discovery
+    credential store; the secret/private key is NEVER returned. Never 500s."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        from grc.models import CredentialProfile
+        profiles = db.query(CredentialProfile).filter(
+            CredentialProfile.tenant_id == tenant_id,
+            CredentialProfile.is_active.is_(True),
+            CredentialProfile.kind.in_(("winrm", "ssh")),
+        ).order_by(CredentialProfile.priority, CredentialProfile.id).all()
+        return {"credentials": [
+            {
+                "id": p.id,
+                "name": p.name,
+                "kind": p.kind,
+                "username": p.username,
+                "applies_to_cidrs": p.applies_to_cidrs,
+            }
+            for p in profiles
+        ]}
+    except Exception:
+        logger.exception("scan-credentials fetch failed (conn=%s)", connection_id)
+        return {"credentials": []}
 
 
 @router.get("/connections/{connection_id}/history")

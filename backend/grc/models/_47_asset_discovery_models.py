@@ -300,6 +300,7 @@ CREDENTIAL_KINDS = (
     "postgres", "mysql", "mssql", "oracle",   # databases
     "aws", "azure", "digitalocean",           # cloud
     "k8s", "cisco",                           # cluster / network
+    "snmp",                                   # SNMP v2c (community string) — network gear/printers
 )
 SECRET_KINDS = ("password", "ssh_key")
 
