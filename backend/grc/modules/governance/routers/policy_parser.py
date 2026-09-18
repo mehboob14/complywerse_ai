@@ -742,6 +742,44 @@ Return a JSON object with a "statements" array containing all extracted policy s
 _parsing_status = {}
 _reparse_proposals = {}
 
+#: Re-parse proposals are written by the parse job and read by the review
+#: endpoints. The job runs in a Celery worker, a different process from the API,
+#: so a module dict alone left the review screen empty ("review required", then
+#: nothing to review). Redis — the store parse status already uses — is shared.
+_PROPOSALS_NS = "policy_reparse_proposals"
+
+
+def _save_proposals(tenant_slug, document_id, data):
+    _reparse_proposals[document_id] = data
+    if tenant_slug:
+        try:
+            from ....job_status import set_status as _set
+            _set(tenant_slug, _PROPOSALS_NS, document_id, data)
+        except Exception:
+            pass  # the in-process copy still serves a thread-dispatched parse
+
+
+def _load_proposals(tenant_slug, document_id):
+    if tenant_slug:
+        try:
+            from ....job_status import get_status as _get
+            data = _get(tenant_slug, _PROPOSALS_NS, document_id, default={})
+            if data:
+                return data
+        except Exception:
+            pass
+    return _reparse_proposals.get(document_id)
+
+
+def _clear_proposals(tenant_slug, document_id):
+    _reparse_proposals.pop(document_id, None)
+    if tenant_slug:
+        try:
+            from ....job_status import delete_status as _del
+            _del(tenant_slug, _PROPOSALS_NS, document_id)
+        except Exception:
+            pass
+
 
 def serialize_statement(statement: PolicyStatement, compliance_id: Optional[int] = None) -> dict:
     current_version = 0
@@ -1014,13 +1052,13 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
 
                     proposals.append(proposal)
 
-                _reparse_proposals[document_id] = {
+                _save_proposals(tenant_slug, document_id, {
                     "proposals": proposals,
                     "created_at": datetime.utcnow().isoformat(),
                     "total": len(proposals),
                     "new_count": sum(1 for p in proposals if p["type"] == "new"),
                     "update_count": sum(1 for p in proposals if p["type"] == "update"),
-                }
+                })
 
                 _write_status({
                     "status": "review_required",
@@ -1738,6 +1776,7 @@ def compare_versions(
 @router.get("/{document_id}/reparse-proposals")
 def get_reparse_proposals(
     document_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1746,7 +1785,7 @@ def get_reparse_proposals(
         raise HTTPException(status_code=404, detail="Document not found")
     validate_document_access(current_user, document, db)
 
-    proposals = _reparse_proposals.get(document_id)
+    proposals = _load_proposals(getattr(request.state, "tenant_slug", None), document_id)
     if not proposals:
         return {"document_id": document_id, "proposals": [], "total": 0}
 
@@ -1757,6 +1796,7 @@ def get_reparse_proposals(
 def apply_reparse_proposals(
     document_id: int,
     request: ApplyReparseProposalsRequest,
+    http_request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1765,7 +1805,8 @@ def apply_reparse_proposals(
         raise HTTPException(status_code=404, detail="Document not found")
     validate_document_access(current_user, document, db)
 
-    proposals_data = _reparse_proposals.get(document_id)
+    tenant_slug = getattr(http_request.state, "tenant_slug", None)
+    proposals_data = _load_proposals(tenant_slug, document_id)
     if not proposals_data:
         raise HTTPException(status_code=404, detail="No pending proposals found")
 
@@ -1874,12 +1915,25 @@ def apply_reparse_proposals(
 
     all_resolved = all(p["status"] != "pending" for p in proposals_data["proposals"])
     if all_resolved:
-        del _reparse_proposals[document_id]
-        _parsing_status[document_id] = {
+        _clear_proposals(tenant_slug, document_id)
+        done = {
             "status": "completed",
             "total_statements": accepted,
-            "message": f"Applied {accepted} changes, rejected {rejected}"
+            "message": f"Applied {accepted} changes, rejected {rejected}",
+            "updated_at": datetime.utcnow().isoformat(),
         }
+        _parsing_status[document_id] = done
+        # The status endpoint prefers the shared copy, which still says
+        # "review_required" from the worker; overwrite it too.
+        if tenant_slug:
+            try:
+                from ....job_status import set_status as _set_redis_status
+                _set_redis_status(tenant_slug, "policy_parse", document_id, done)
+            except Exception:
+                pass
+    else:
+        # Keep the reviewer's decisions so far for the next call.
+        _save_proposals(tenant_slug, document_id, proposals_data)
 
     return {
         "message": f"Processed {accepted + rejected} proposals: {accepted} accepted, {rejected} rejected",

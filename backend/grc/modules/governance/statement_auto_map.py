@@ -182,9 +182,12 @@ def auto_map_statement(db: Session, stmt, fw_ids=None) -> dict:
     granularity; this commits its own unit of work. fw_ids scopes the candidate
     pool to the document's own frameworks (see _candidates)."""
     # Idempotent: drop prior AI-generated, non-locked rows before re-mapping.
+    # Only AI rows: a link a person made (a control authored from this
+    # statement, created_by_ai=False) must survive a re-map.
     db.query(StatementControlMapping).filter(
         StatementControlMapping.statement_id == stmt.id,
         StatementControlMapping.is_locked.is_(False),
+        StatementControlMapping.created_by_ai.isnot(False),
     ).delete(synchronize_session=False)
 
     if not _ai_available():

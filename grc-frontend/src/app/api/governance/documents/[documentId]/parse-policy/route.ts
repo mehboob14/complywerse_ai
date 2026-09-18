@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { backendGrcBase } from '@/lib/backendUrl';
 
 export const maxDuration = 300; // 5 minutes (Vercel limit, but works for dev too)
 export const dynamic = 'force-dynamic';
@@ -8,7 +9,7 @@ export async function POST(
   { params }: { params: { documentId: string } }
 ) {
   const documentId = params.documentId;
-  const backendUrl = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
+  const backendUrl = backendGrcBase();
   
   console.log(`[Parse Policy API Route] Starting for document ${documentId}`);
   
@@ -24,7 +25,7 @@ export async function POST(
                           request.headers.get('Authorization') || '';
 
     console.log(`[Parse Policy API Route] Tenant slug: ${tenantSlug}, hasAuth=${!!authorization}`);
-    console.log(`[Parse Policy API Route] Backend URL: ${backendUrl}/grc/governance/documents/${documentId}/parse-policy`);
+    console.log(`[Parse Policy API Route] Backend URL: ${backendUrl}/governance/documents/${documentId}/parse-policy`);
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => {
@@ -41,7 +42,7 @@ export async function POST(
 
     const startTime = Date.now();
     const response = await fetch(
-      `${backendUrl}/grc/governance/documents/${documentId}/parse-policy`,
+      `${backendUrl}/governance/documents/${documentId}/parse-policy`,
       {
         method: 'POST',
         headers,

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { backendGrcBase } from '@/lib/backendUrl';
 
 export const maxDuration = 300;
 
-const BACKEND_URL = (process.env.BACKEND_URL || process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:4000').replace(/\/$/, '');
+const BACKEND_URL = backendGrcBase();
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +22,7 @@ export async function POST(request: NextRequest) {
     if (authHeader) headers['Authorization'] = authHeader;
     if (tenantSlug) headers['X-Tenant-Slug'] = tenantSlug;
     
-    const backendUrl = `${BACKEND_URL}/grc/compliance/assessments/upload`;
+    const backendUrl = `${BACKEND_URL}/compliance/assessments/upload`;
     console.log(`[Assessment Upload] Attempting to connect to: ${backendUrl}`);
     
     const response = await fetch(backendUrl, {
@@ -54,7 +55,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Assessment upload proxy error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-    console.error(`Backend URL attempted: ${BACKEND_URL}/grc/compliance/assessments/upload`);
+    console.error(`Backend URL attempted: ${BACKEND_URL}/compliance/assessments/upload`);
     return NextResponse.json(
       { detail: `Upload failed: ${errorMessage}. Ensure backend is running on ${BACKEND_URL}` },
       { status: 500 }

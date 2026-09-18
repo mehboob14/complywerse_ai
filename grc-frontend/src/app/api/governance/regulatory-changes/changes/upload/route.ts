@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { backendGrcBase } from '@/lib/backendUrl';
 
 export const maxDuration = 900;
 export const dynamic = 'force-dynamic';
-
-/** Resolve backend base including /grc whether or not BACKEND_URL already has it. */
-function backendGrcBase(): string {
-  const raw = (
-    process.env.BACKEND_URL ||
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
-    'http://127.0.0.1:4000/grc'
-  ).replace(/\/$/, '');
-  if (raw.endsWith('/grc')) return raw;
-  return `${raw}/grc`;
-}
 
 /**
  * Long-running OCR + AI impact analysis. Next.js rewrite proxy drops the
