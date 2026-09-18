@@ -201,7 +201,7 @@ export default function CtemScopesRedesign() {
   const aiRun = (aiRunData as any)?.last_run ?? null;
   const mappingRunning = !!aiRun?.running;
   useEffect(() => {
-    if (aiRun && !aiRun.running) { qc.invalidateQueries({ queryKey: ['ctem-portfolio'] }); setActiveStage(null); }
+    if (aiRun && !aiRun.running) { qc.invalidateQueries({ queryKey: ['ctem-portfolio'] }); qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] }); setActiveStage(null); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [aiRun?.running]);
 
@@ -209,6 +209,7 @@ export default function CtemScopesRedesign() {
     qc.invalidateQueries({ queryKey: ['ctem-portfolio'] });
     qc.invalidateQueries({ queryKey: ['ctem-scopes'] });
     qc.invalidateQueries({ queryKey: ['ctem-command-center'] });
+    qc.invalidateQueries({ queryKey: ['ctem.scope-findings'] });
   };
   const createMutation = useMutation({
     mutationFn: () => {
@@ -344,7 +345,11 @@ export default function CtemScopesRedesign() {
   // ── Portfolio roll-up (home KPI strip + trends) ────────────────────────────
   const portfolio = useMemo(() => {
     const sum = (f: (s: Scope) => number) => SCOPES.reduce((a, s) => a + f(s), 0);
-    const controls = sum((s) => s.controls), tested = sum((s) => s.tested) + sum((s) => s.verified ?? 0);
+    // Coverage = share of REAL vulns that have an addressing control LINKED (claimed) — the
+    // same linked/analysed the Validate stage shows. NOT tested/controls: that was proven-
+    // effectiveness (0 until a re-scan), which mislabelled this "% of real vulns with a control".
+    const linkedReal = sum((s) => s.pipeline?.linked ?? 0);
+    const realVulns = sum((s) => s.pipeline?.analysed ?? s.analysable?.real_vulnerabilities ?? 0);
     const worst = [...SCOPES].sort((a, b) => (b.dangerous - a.dangerous) || (b.findings - a.findings))[0];
     // real findings-per-cycle series from the worst scope's frozen history (+ live point)
     const hist = [...(worst?.cycleHistory ?? [])].filter((h) => h.findings != null).sort((a, b) => a.no - b.no).map((h) => h.findings as number);
@@ -355,7 +360,7 @@ export default function CtemScopesRedesign() {
       overdue: SCOPES.filter((s) => s.cycleOpen && s.cycleOverdue).length,
       findings: sum((s) => s.findings), dangerous: sum((s) => s.dangerous),
       mobilised: sum((s) => s.tasks ?? 0), fixed: sum((s) => s.closedVerified ?? 0),
-      coverage: controls ? Math.round((tested / controls) * 100) : 0,
+      coverage: realVulns ? Math.round((linkedReal / realVulns) * 100) : 0,
       worst, series,
     };
   }, [SCOPES]);
@@ -481,7 +486,7 @@ export default function CtemScopesRedesign() {
     );
     return (
       <>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(236px,100%),1fr))', gap: 10, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 10, alignItems: 'stretch' }}>
         {chartCard('Findings on scope', w ? `${w.name.length > 22 ? w.name.slice(0, 22) + '…' : w.name} · per cycle` : 'per cycle',
           n >= 2 ? (
             <svg viewBox="0 0 320 118" style={{ width: '100%', height: 108, display: 'block' }}>
@@ -579,31 +584,34 @@ export default function CtemScopesRedesign() {
       (Number(!!(b.cycleOpen && b.cycleOverdue)) - Number(!!(a.cycleOpen && a.cycleOverdue)))
       || (b.dangerous - a.dangerous) || (b.findings - a.findings));
     return (
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', maxWidth: 1060, width: '100%', margin: '0 auto', padding: '4px 18px 40px' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
-          <div>
-            <h1 style={{ fontSize: 22, letterSpacing: '-.025em', fontWeight: 600 }}>Exposure program</h1>
-            <p style={{ fontSize: 12.5, color: MUTED, marginTop: 4 }}>Owned slices of the attack surface, each worked as open→close cycles.</p>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', maxWidth: 1060, width: '100%', margin: '0 auto', padding: '4px 18px 0' }}>
+        {/* pinned header — title + KPI strip stay put; only Trends/Scopes below scroll */}
+        <div style={{ flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 10, flexWrap: 'wrap' }}>
+            <div>
+              <h1 style={{ fontSize: 22, letterSpacing: '-.025em', fontWeight: 600 }}>Exposure program</h1>
+              <p style={{ fontSize: 12.5, color: MUTED, marginTop: 4 }}>Owned slices of the attack surface, each worked as open→close cycles.</p>
+            </div>
+            {canEdit && <Btn green onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> New scope</Btn>}
           </div>
-          {canEdit && <Btn green onClick={() => setShowCreate(true)}><Plus className="h-4 w-4" /> New scope</Btn>}
+          <div style={{ ...STRIP, marginBottom: 6, alignItems: 'stretch', background: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,.04)' }}>
+            {kpiCell('Scopes', portfolio.scopes)}{SEP}
+            {kpiCell('Open cycles', portfolio.openCycles, ACS)}{SEP}
+            {kpiCell('Overdue', portfolio.overdue, portfolio.overdue ? RED : GREEN)}{SEP}
+            {kpiCell('Findings', portfolio.findings)}{ARROW}
+            {kpiCell('Dangerous', portfolio.dangerous, REDD)}{ARROW}
+            {kpiCell('Mobilised', portfolio.mobilised, BLUE)}{ARROW}
+            {kpiCell('Fixed ✓', portfolio.fixed, GREEN)}
+          </div>
+          <div style={{ fontSize: 10.5, color: FAINT, margin: '0 4px 10px' }}>Findings → dangerous → mobilised → fixed ✓ across all scopes · only a re-scan closure moves the score.</div>
         </div>
-
-        <div style={{ ...STRIP, marginBottom: 6, alignItems: 'stretch', background: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,.04)' }}>
-          {kpiCell('Scopes', portfolio.scopes)}{SEP}
-          {kpiCell('Open cycles', portfolio.openCycles, ACS)}{SEP}
-          {kpiCell('Overdue', portfolio.overdue, portfolio.overdue ? RED : GREEN)}{SEP}
-          {kpiCell('Findings', portfolio.findings)}{ARROW}
-          {kpiCell('Dangerous', portfolio.dangerous, REDD)}{ARROW}
-          {kpiCell('Mobilised', portfolio.mobilised, BLUE)}{ARROW}
-          {kpiCell('Fixed ✓', portfolio.fixed, GREEN)}
+        {/* scrolling content — Scopes first (the actionable cards you open), Trends below */}
+        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px 6px' }}><b style={{ fontSize: 14 }}>Scopes</b><span style={{ fontSize: 11.5, color: MUTED }}>each runs its own cycles, in parallel · worst first</span></div>
+          {worstFirst.map(scopeCard)}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '14px 2px 6px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: MUTED }}>across closed cycles · progress is provable period over period</span></div>
+          {trends()}
         </div>
-        <div style={{ fontSize: 10.5, color: FAINT, margin: '0 4px 10px' }}>Findings → dangerous → mobilised → fixed ✓ across all scopes · only a re-scan closure moves the score.</div>
-
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '2px 2px 6px' }}><b style={{ fontSize: 14 }}>Trends</b><span style={{ fontSize: 11.5, color: MUTED }}>across closed cycles · progress is provable period over period</span></div>
-        {trends()}
-
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, margin: '10px 2px 6px' }}><b style={{ fontSize: 14 }}>Scopes</b><span style={{ fontSize: 11.5, color: MUTED }}>each runs its own cycles, in parallel · worst first</span></div>
-        {worstFirst.map(scopeCard)}
       </div>
     );
   };
@@ -1114,7 +1122,7 @@ export default function CtemScopesRedesign() {
   };
 
   const accordion = () => (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden' }}>
       {STAGES.map((st, i) => {
         const done = stageDone[st.n];
         const reachable = stageReachable(st.n);
@@ -1133,16 +1141,16 @@ export default function CtemScopesRedesign() {
           : isCurrent ? <span style={{ fontSize: 9, fontWeight: 800, letterSpacing: '.06em', color: '#fff', background: INK, borderRadius: 5, padding: '2px 7px' }}>CURRENT</span>
           : <span style={{ color: FAINT, fontSize: 14 }}>›</span>;
         return (
-          <div key={st.n} style={{ display: 'flex', gap: 14, ...(open ? { flex: 1, minHeight: 0 } : {}) }}>
+          <div key={st.n} style={{ display: 'flex', gap: 14 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 'none', width: 26, paddingTop: 14 }}>{disc}{!last && <span style={{ flex: 1, width: 2, background: done ? st.c : '#E4E8EC', marginTop: 4, borderRadius: 2 }} />}</div>
-            <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14, ...(open ? { display: 'flex', flexDirection: 'column', minHeight: 0 } : {}) }}>
-              <div style={{ ...CARD, overflow: 'hidden', ...(open ? { border: `1px solid ${st.c}`, boxShadow: '0 4px 14px rgba(2,6,23,.06)', display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 } : {}), ...(locked ? { opacity: 0.65 } : {}) }}>
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: last ? 0 : 14 }}>
+              <div style={{ ...CARD, overflow: 'hidden', ...(open ? { border: `1px solid ${st.c}`, boxShadow: '0 4px 14px rgba(2,6,23,.06)' } : {}), ...(locked ? { opacity: 0.65 } : {}) }}>
                 <div onClick={() => { if (!locked) setActiveStage(st.n); }} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 13px', cursor: locked ? 'default' : 'pointer' }}>
                   <b style={{ fontSize: 13, color: locked ? FAINT : INK, flex: 'none' }}>{st.label}</b>
                   <span style={{ fontSize: 11.5, color: locked ? FAINT : MUTED, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{stageStat(st.n)}</span>
                   {tag}
                 </div>
-                {open && <div style={{ borderTop: `1px solid ${BORDER2}`, padding: '12px 14px', flex: 1, minHeight: 0, overflowY: 'auto' }}>{stageBody(st.n)}</div>}
+                {open && <div style={{ borderTop: `1px solid ${BORDER2}`, padding: '12px 14px' }}>{stageBody(st.n)}</div>}
               </div>
             </div>
           </div>

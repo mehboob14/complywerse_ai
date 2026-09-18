@@ -779,7 +779,262 @@ class NessusAdapter(BaseAdapter):
         data = self._get("/policies")
         return data.get("policies") or []
 
+    def get_scan_templates(self) -> List[Dict[str, Any]]:
+        """Nessus's BUILT-IN scan templates (Basic Network Scan, Advanced Scan,
+        …) via /editor/scan/templates. These exist even on a Nessus with zero
+        saved user policies, so they're the fallback for resolving the template
+        uuid a scan-create requires. Best-effort: [] if the endpoint errors."""
+        try:
+            data = self._get("/editor/scan/templates")
+        except Exception as e:  # noqa: BLE001
+            logger.warning(f"Failed to list Nessus scan templates: {e}")
+            return []
+        return (data or {}).get("templates") or []
+
     def export_scan(self, scan_id: str, format: str = "nessus") -> Dict[str, Any]:
         payload = {"format": format}
         data = self._post(f"/scans/{scan_id}/export", json_body=payload)
         return data
+
+    @staticmethod
+    def _nessus_credentials(credentials: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Shape a normalized scan-level credential list into the Nessus
+        scan-create ``settings.credentials`` block (Host → Windows / SSH).
+
+        Input is the list ``create_scan(credentials=...)`` takes:
+        ``[{"type":"windows","username","password","domain"},
+           {"type":"ssh","username","password","private_key"}]``.
+        SSH prefers a private key when present, else password. Returns None
+        when nothing usable so the caller sends an unauthenticated scan.
+
+        # ponytail: the exact Nessus credential JSON is VERSION-SPECIFIC — the
+        # settings.credentials.add.Host.{Windows,SSH} category names and the
+        # auth_method / field spellings differ across Nessus releases and
+        # between local Nessus and Tenable.io. This is the documented inline
+        # form; SMOKE-TEST it against the live Nessus before trusting it.
+        """
+        windows, ssh, communities = [], [], []
+        for c in credentials or []:
+            ctype = str(c.get("type") or "").lower()
+            if ctype == "snmp":
+                # SNMP v1/v2c authenticates with a community string, no username —
+                # Nessus category "Plaintext Authentication" -> "SNMPv1/v2c"
+                # (verified against the live editor/scan credential schema).
+                comm = c.get("community") or c.get("community_string")
+                if comm and comm not in communities:
+                    communities.append(comm)
+                continue
+            username = c.get("username")
+            if not username:
+                continue
+            if ctype == "windows":
+                entry = {"auth_method": "Password", "username": username, "password": c.get("password") or ""}
+                if c.get("domain"):
+                    entry["domain"] = c["domain"]
+                windows.append(entry)
+            elif ctype == "ssh":
+                if c.get("private_key"):
+                    entry = {"auth_method": "public key", "username": username, "private_key": c["private_key"]}
+                else:
+                    entry = {"auth_method": "password", "username": username, "password": c.get("password") or ""}
+                ssh.append(entry)
+        host: Dict[str, Any] = {}
+        if windows:
+            host["Windows"] = windows
+        if ssh:
+            host["SSH"] = ssh
+        add: Dict[str, Any] = {}
+        if host:
+            add["Host"] = host
+        if communities:
+            add["Plaintext Authentication"] = {"SNMPv1/v2c": [{"community_string": cs} for cs in communities]}
+        return {"add": add} if add else None
+
+    def _scan_body(self, name: str, text_targets: str, policy_id=None, folder_id=None,
+                   credentials: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Build the shared ``{"uuid", "settings"}`` body for scan create/update.
+
+        Nessus requires a template ``uuid``. Resolution order: the chosen
+        ``policy_id``'s policy → any saved policy (a network-scan one first) →
+        Nessus's BUILT-IN scan templates (so a scanner with zero saved policies
+        still works). ``settings.policy_id`` is only sent when we actually resolved
+        a saved policy — a built-in template is not a policy. ``credentials``
+        (optional) is folded into ``settings.credentials`` for an authenticated
+        scan. Secrets are never logged.
+        """
+        policies = self.get_policies()
+
+        def _uuid(p: Dict[str, Any]) -> str:
+            return str(p.get("template_uuid") or p.get("uuid") or "")
+
+        def _networkish(name: str) -> bool:
+            return any(w in name.lower() for w in ("basic network", "network", "basic", "advanced"))
+
+        template_uuid = ""
+        settings_policy_id = None  # only set when a real saved policy is used
+        templates = None  # fetched lazily (a network call) only when needed
+
+        def _get_templates() -> List[Dict[str, Any]]:
+            nonlocal templates
+            if templates is None:
+                templates = self.get_scan_templates()
+            return templates
+
+        # 1) the explicit choice — a saved policy id, or a built-in template uuid
+        if policy_id is not None:
+            p = next((p for p in policies if str(p.get("id")) == str(policy_id) and _uuid(p)), None)
+            if p:
+                template_uuid, settings_policy_id = _uuid(p), policy_id
+            else:
+                t = next((t for t in _get_templates() if str(t.get("uuid")) == str(policy_id)), None)
+                if t:
+                    template_uuid = str(t.get("uuid"))  # a template, not a policy
+        # 2) any saved policy — a network-scan-looking one first, else the first
+        if not template_uuid and policies:
+            p = (next((p for p in policies if _uuid(p) and _networkish(str(p.get("name", "")))), None)
+                 or next((p for p in policies if _uuid(p)), None))
+            if p:
+                template_uuid, settings_policy_id = _uuid(p), p.get("id")
+        # 3) a built-in scan template (Basic Network Scan …) — no policy needed
+        if not template_uuid:
+            t = (next((t for t in _get_templates() if t.get("uuid")
+                       and _networkish(f"{t.get('name', '')} {t.get('title', '')}")), None)
+                 or next((t for t in _get_templates() if t.get("uuid")), None))
+            if t:
+                template_uuid = str(t.get("uuid"))  # a template, not a policy
+        if not template_uuid:
+            raise ValueError("Cannot create Nessus scan: this Nessus exposes no saved policy and no built-in scan template (check it is licensed and initialised).")
+
+        settings: Dict[str, Any] = {"name": name, "text_targets": text_targets, "enabled": False}
+        if settings_policy_id is not None:
+            settings["policy_id"] = settings_policy_id
+        if folder_id is not None:
+            settings["folder_id"] = folder_id
+        body: Dict[str, Any] = {"uuid": template_uuid, "settings": settings}
+        if credentials:
+            cred_block = self._nessus_credentials(credentials)
+            if cred_block:
+                # Nessus expects `credentials` at the TOP LEVEL of the POST /scans
+                # body (sibling of uuid/settings) — NOT nested under settings.
+                # Nesting it silently produces an UNAUTHENTICATED scan.
+                body["credentials"] = cred_block
+        return body
+
+    def _scan_write_error(self, e: Exception) -> ValueError:
+        """Turn a broken-read / connection failure on a scan write into an
+        actionable error. A scanner answers scan-create/launch with
+        ``412 {"error":"API is not available"}`` but truncates the body, so
+        ``requests`` surfaces only a cryptic IncompleteRead. Two real causes:
+        Nessus ESSENTIALS (free) genuinely blocks the scan-write API; on any
+        other edition (Professional, or a Tenable.sc-managed scanner — both of
+        which DO accept API scan creation) this message is almost always the
+        scanner still starting up / compiling its plugin set, i.e. transient.
+        Also flag a stale plugin feed, which silently makes results miss CVEs."""
+        props: Dict[str, Any] = {}
+        try:
+            props = self._get("/server/properties") or {}
+        except Exception:  # noqa: BLE001
+            pass
+        edition = str(props.get("nessus_type") or "")
+        plugin_set = str(props.get("loaded_plugin_set") or "")
+
+        # A stale plugin feed is the quiet killer: the scan "works" but scores
+        # against years-old plugins. Compute the feed age from the plugin set.
+        stale_note = ""
+        try:
+            from datetime import datetime, timezone
+            if len(plugin_set) >= 8:
+                fed = datetime.strptime(plugin_set[:8], "%Y%m%d").replace(tzinfo=timezone.utc)
+                days = (datetime.now(timezone.utc) - fed).days
+                if days > 60:
+                    stale_note = (f" Also: this scanner's plugin feed is ~{days} days old "
+                                  f"(last {fed.date()}), so any findings would miss everything newer — "
+                                  "update the plugin feed before trusting results.")
+        except Exception:  # noqa: BLE001
+            pass
+
+        if "essential" in edition.lower():
+            return ValueError(
+                "This scanner is Nessus Essentials, which blocks scan creation over the "
+                'API (Nessus replies "API is not available"). Managed Scanning needs '
+                "Nessus Professional. Or run the scan in the Nessus app and use "
+                '"Connect their scanner" to pull the findings in.' + stale_note)
+        msg = str(e).lower()
+        if "412" in msg or "api is not available" in msg or "incompleteread" in msg or "incomplete read" in msg:
+            return ValueError(
+                'Nessus replied "API is not available". On a Professional or Tenable.sc-managed scanner this is '
+                "almost always the scanner still starting up or compiling its plugin set — wait a minute and "
+                "retry; scan creation works once it's ready." + stale_note)
+        return ValueError(f"Nessus refused the scan operation: {str(e)[:200]}" + stale_note)
+
+    def create_scan(self, name: str, text_targets: str, policy_id=None, folder_id=None,
+                    credentials: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Create an on-demand (not auto-launching) scan; return the created scan dict.
+
+        The response nests the new scan under ``scan`` — we surface its ``id``/
+        ``uuid`` at the top level so callers can read ``result["id"]`` directly.
+        When ``credentials`` is given Nessus logs into the target hosts
+        (authenticated scan); when absent it behaves as an unauthenticated
+        network scan.
+        """
+        body = self._scan_body(name, text_targets, policy_id, folder_id, credentials)
+        try:
+            data = self._post("/scans", json_body=body)
+        except requests.exceptions.HTTPError as e:
+            # 412 is the Nessus Essentials "scan API disabled" signature — give the
+            # friendly message; let other HTTP errors surface their real reason.
+            if getattr(e.response, "status_code", None) == 412:
+                raise self._scan_write_error(e) from e
+            raise
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError) as e:
+            raise self._scan_write_error(e) from e
+        self._debug_shape("create_scan.response", data)
+        scan = data.get("scan") if isinstance(data, dict) else None
+        if isinstance(scan, dict) and "id" not in data:
+            data = {**data, "id": scan.get("id"), "uuid": scan.get("uuid")}
+        return data
+
+    def update_scan(self, scan_id, name: str, text_targets: str, policy_id=None, folder_id=None,
+                    credentials: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """Re-configure an EXISTING scan in place (PUT /scans/{id}), then the
+        caller re-launches it. Reusing the same scan_id is what makes the
+        verified-fixed auto-close loop work: the closure engine proves a finding
+        is gone by re-running the SAME scan that last reported it (a fresh scan
+        id each time would leave the old scan forever reporting the fixed
+        finding, so nothing ever closes). Same version-sensitive body as
+        create_scan — smoke-test credentials against the live Nessus."""
+        body = self._scan_body(name, text_targets, policy_id, folder_id, credentials)
+        try:
+            return self._put(f"/scans/{scan_id}", json_body=body)
+        except requests.exceptions.HTTPError as e:
+            if getattr(e.response, "status_code", None) == 412:
+                raise self._scan_write_error(e) from e
+            raise
+        except (requests.exceptions.ChunkedEncodingError, requests.exceptions.ConnectionError) as e:
+            raise self._scan_write_error(e) from e
+
+    def launch_scan(self, scan_id) -> str:
+        """Launch a scan; return the run's ``scan_uuid`` ("" if absent)."""
+        data = self._post(f"/scans/{scan_id}/launch")
+        return str((data or {}).get("scan_uuid") or "")
+
+    def get_scan_status(self, scan_id) -> str:
+        """Current run status (running/completed/canceled/aborted/empty/paused),
+        lowercased; "unknown" on failure. Reads ``info.status`` from
+        /scans/{id} directly — NOT via the cached get_scan_detail, which would
+        pin the first polled status for the life of the adapter."""
+        try:
+            detail = self._get(f"/scans/{scan_id}") or {}
+            return str((detail.get("info") or {}).get("status") or "").lower() or "unknown"
+        except Exception as e:
+            logger.warning(f"Failed to get scan {scan_id} status: {e}")
+            return "unknown"
+
+    def stop_scan(self, scan_id) -> bool:
+        """Best-effort stop; True on success, False on any error (never raises)."""
+        try:
+            self._post(f"/scans/{scan_id}/stop")
+            return True
+        except Exception as e:
+            logger.warning(f"Failed to stop scan {scan_id}: {e}")
+            return False

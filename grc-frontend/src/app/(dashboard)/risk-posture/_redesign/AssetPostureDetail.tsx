@@ -21,6 +21,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, X, RefreshCw, Sparkles, ExternalLink, SlidersHorizontal } from 'lucide-react';
 import { assetsApi, riskPostureApi } from '@/lib/api';
@@ -65,7 +66,7 @@ type Internal = {
   data_quality: number;
   known_dimensions: string[];
   components: {
-    cis: { score: number; known: boolean; passed: number; failed: number; total: number; pass_rate: number | null; errored?: number; never_scanned?: number };
+    cis: { score: number; known: boolean; passed: number; failed: number; total: number; pass_rate: number | null; errored?: number; skipped?: number; never_scanned?: number };
     vuln: { score: number; known: boolean; active_count: number; total_linked: number; by_severity: Record<string, number>; raw_points?: number; effective_risk?: { per_vuln: PerVuln[] } };
     cia: { score: number; known: boolean; confidentiality: number | null; integrity: number | null; availability: number | null; missing: boolean; auto_derived?: boolean };
     ctrl: { score: number; known: boolean; coverage_pct: number; linked_count: number; target: number };
@@ -74,7 +75,7 @@ type Internal = {
   contributions: Record<'cis' | 'vuln' | 'cia' | 'ctrl' | 'risk', number>;
 };
 // External is read loosely — same pragmatic `any` posture as EasmRiskView.
-type Easm = { mode: 'easm'; asset: any; score: number | null; band: { label: string; description?: string }; components: Record<string, any>; contributions: Record<string, number>; health?: any; probe?: any; data_quality?: number };
+type Easm = { mode: 'easm'; asset: any; score: number | null; band: { label: string; description?: string }; components: Record<string, any>; contributions: Record<string, number>; health?: any; probe?: any; data_quality?: number; subdomain_rollup?: { count: number; probed: number; weakest: string; weakest_score: number | null; own_score: number | null; total_cve: number; total_kev: number } };
 type Posture = Internal | Easm;
 const isEasm = (d: Posture): d is Easm => (d as Easm).mode === 'easm';
 
@@ -296,13 +297,21 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   };
   const reprobe = () => toast.toast({ title: 'Re-probe queued', message: 'External assets are re-scored on the next EASM discovery sweep — there is no on-demand probe.', type: 'info' });
 
+  // Back = return to wherever the user came from (usually the asset's Risk &
+  // Controls tab). Falls back to the posture dashboard on a cold deep-link.
+  const router = useRouter();
+  const goBack = () => {
+    if (typeof window !== 'undefined' && window.history.length > 1) router.back();
+    else router.push('/risk-posture');
+  };
+
   if (postureQ.isLoading || (assetId > 0 && assetQ.isLoading && !postureQ.data)) {
     return <div style={{ padding: 24, fontSize: 13, color: MUTED }}>Loading risk breakdown…</div>;
   }
   if (postureQ.isError || !postureQ.data) {
     return (
       <div style={{ padding: 16, fontFamily: 'Poppins, system-ui, sans-serif' }}>
-        <Link href="/risk-posture" style={btnSm}><ArrowLeft size={14} /> All assets</Link>
+        <button style={btnSm} onClick={goBack}><ArrowLeft size={14} /> Back</button>
         <div style={{ marginTop: 16, fontSize: 13, color: '#B23A3A' }}>Failed to load asset.</div>
       </div>
     );
@@ -317,7 +326,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   // ── shared header shell ──
   const shell = (extraPill: ReactNode, hostLine: string, subLine: string, actions: ReactNode) => (
     <>
-      <Link href="/risk-posture" style={{ ...btnSm, marginBottom: 10 }}><ArrowLeft size={14} /> All assets</Link>
+      <button style={{ ...btnSm, marginBottom: 10 }} onClick={goBack}><ArrowLeft size={14} /> Back</button>
       <div style={{ ...card, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', padding: '12px 16px', marginBottom: 12 }}>
         <Ring score={data.score ?? 0} size={66} col={b.bar} />
         <div style={{ flex: 1, minWidth: 200 }}>
@@ -344,6 +353,15 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   if (external) {
     const d = data;
     const probe = d.probe || {};
+    // DMARC comes back as a raw record (v=DMARC1; p=none; rua=mailto:…) that
+    // overflows the row — collapse it to just the policy.
+    const dmarcPolicy = (() => {
+      const raw = String(probe.dmarc || '').trim();
+      if (!raw || raw === 'none' || raw === 'missing') return 'none';
+      const m = raw.match(/p\s*=\s*(none|quarantine|reject)/i);
+      return m ? `p=${m[1].toLowerCase()}` : 'present';
+    })();
+    const dmarcWeak = dmarcPolicy === 'none' || dmarcPolicy === 'p=none';
     const comps = (Object.entries(d.components || {}) as [string, any][]).sort((a, c) => (c[1].weight || 0) - (a[1].weight || 0));
     const effW = comps.reduce((s, [, c]) => s + (c.weight || 0), 0) || 1;
     const grade = d.health?.grade ?? '—';
@@ -359,19 +377,26 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
     else if ((probe.cve_count ?? 0) > 0) contribs.push({ title: `${probe.cve_count} known CVE${probe.cve_count === 1 ? '' : 's'} on exposed service`, meta: 'patch the surface', col: '#C0682F' });
     if (probe.https_available === false) contribs.push({ title: 'No HTTPS on the public endpoint', meta: 'transport not encrypted', col: '#C0682F' });
     if (probe.spf === false || probe.spf === 'missing') contribs.push({ title: 'SPF record missing', meta: 'email spoofing risk', col: '#DB7B45' });
-    if (!probe.dmarc || probe.dmarc === 'none' || probe.dmarc === 'p=none') contribs.push({ title: 'DMARC not enforced', meta: probe.dmarc ? `${probe.dmarc}` : 'no record', col: '#E0AF33' });
+    if (dmarcWeak) contribs.push({ title: 'DMARC not enforced', meta: probe.dmarc ? dmarcPolicy : 'no record', col: '#E0AF33' });
 
     // Exposed-surface chips from real DNS/transport/email fields (no open-port list — the probe doesn't collect one).
     const surface: Array<[string, string, boolean]> = [];
     if (probe.tls_not_after) surface.push(['Cert expiry', `${String(probe.tls_not_after).slice(0, 10)}${probe.tls_days_to_expiry != null ? ` · ${probe.tls_days_to_expiry}d` : ''}`, !!probe.tls_expired || (probe.tls_days_to_expiry ?? 99) <= 30]);
     surface.push(['HTTPS', probe.https_available ? 'available' : 'not available', probe.https_available === false]);
     surface.push(['SPF', (probe.spf === false || probe.spf === 'missing') ? 'missing' : 'present', probe.spf === false || probe.spf === 'missing']);
-    surface.push(['DMARC', probe.dmarc || 'none', !probe.dmarc || probe.dmarc === 'none' || probe.dmarc === 'p=none']);
+    surface.push(['DMARC', dmarcPolicy, dmarcWeak]);
     surface.push(['DKIM', (probe.dkim === false || probe.dkim === 'missing') ? 'missing' : 'present', probe.dkim === false || probe.dkim === 'missing']);
     if (probe.cdn_waf) surface.push(['CDN/WAF', String(probe.cdn_waf), false]);
     surface.push(['Security headers', `${Object.keys(probe.security_headers || {}).length}/6`, Object.keys(probe.security_headers || {}).length < 4]);
 
-    const extraPill = <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, background: '#FBF2DF', color: '#9A6410' }}>Health {grade} · {hScore}/100</span>;
+    const extraPill = (
+      <>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, background: '#FBF2DF', color: '#9A6410' }}>Health {grade} · {hScore}/100</span>
+        {d.subdomain_rollup && d.subdomain_rollup.count > 0 && (
+          <span title="This score includes a weighted Subdomain-exposure component" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11, fontWeight: 600, padding: '2px 9px', borderRadius: 999, background: '#E4F8F2', color: '#0A5A4B' }}>+{d.subdomain_rollup.count} subdomains in score</span>
+        )}
+      </>
+    );
     const subLine = `${titleCase(d.asset?.asset_type) || 'External asset'} · criticality ${(d.asset?.criticality || 'not set')} · scored on read · signals from EASM domain discovery`;
 
     return (
@@ -385,7 +410,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
         ))}
 
         <div style={{ border: '1px solid #EAD9AE', background: '#FEFBF4', borderRadius: 11, padding: '11px 15px', fontSize: 12, color: '#7A6427', marginBottom: 12 }}>
-          This is an <b>externally-discovered</b> asset — scored on outside-in exposure hygiene (TLS, security headers, transport, email auth, known vulnerabilities), <b>not</b> CIA / CIS / control coverage, which can&apos;t be measured on an asset you only see from the internet.
+<b>Externally-discovered</b> — scored on outside-in exposure (TLS, headers, transport, email auth, known CVEs), <b>not</b> CIA / CIS / controls.
         </div>
 
         <Card title="Why this score" sub={`weighted outside-in signals · total ${data.score ?? '—'}/100 · bar = signal severity, number = points added`} grow>
@@ -415,7 +440,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
               <Kv k="Response" v={probe.response_time_ms != null ? `${probe.response_time_ms} ms` : '—'} />
               <Kv k="Cert expiry" v={probe.tls_not_after ? `${String(probe.tls_not_after).slice(0, 10)}${probe.tls_days_to_expiry != null ? ` · ${probe.tls_days_to_expiry}d` : ''}` : '—'} c={probe.tls_expired || (probe.tls_days_to_expiry ?? 99) <= 30 ? '#B23A3A' : undefined} />
               <Kv k="Security headers" v={`${Object.keys(probe.security_headers || {}).length} of 6`} />
-              <Kv k="Email auth" v={`SPF ${(probe.spf === false || probe.spf === 'missing') ? 'missing' : 'ok'} · DMARC ${probe.dmarc || 'none'}`} c={(probe.spf === false || probe.spf === 'missing') ? '#B23A3A' : undefined} />
+              <Kv k="Email auth" v={`SPF ${(probe.spf === false || probe.spf === 'missing') ? 'missing' : 'ok'} · DMARC ${dmarcPolicy}`} c={(probe.spf === false || probe.spf === 'missing') ? '#B23A3A' : undefined} />
               <Kv k="Known CVEs" v={`${probe.cve_count ?? 0}${(probe.kev_count ?? 0) > 0 ? ` · ${probe.kev_count} KEV` : ''}`} c={(probe.kev_count ?? 0) > 0 ? '#B23A3A' : undefined} />
               <Kv k="Health grade" v={`${grade} · ${hScore}/100`} c="#9A6410" />
             </div>
@@ -455,7 +480,7 @@ export default function AssetPostureDetail({ assetId }: { assetId: number }) {
   const evidence = (k: 'vuln' | 'cis' | 'cia' | 'ctrl' | 'risk'): string => {
     switch (k) {
       case 'vuln': return `${comp.vuln.active_count} active${comp.vuln.total_linked > comp.vuln.active_count ? ` of ${comp.vuln.total_linked}` : ''} · ${comp.vuln.by_severity?.critical ?? 0} crit / ${comp.vuln.by_severity?.high ?? 0} high / ${comp.vuln.by_severity?.medium ?? 0} med${kev ? ` · ${kev} KEV` : ''}${comp.vuln.raw_points != null ? ` · ${comp.vuln.raw_points} severity-weighted pts` : ''}`;
-      case 'cis': return comp.cis.total === 0 ? 'no CIS rules in the library yet' : comp.cis.pass_rate != null ? `${Math.round((comp.cis.passed / comp.cis.total) * 100)}% pass · ${comp.cis.passed}/${comp.cis.total} rules · ${comp.cis.failed} fail${comp.cis.errored ? ` · ${comp.cis.errored} errored` : ''}${comp.cis.never_scanned ? ` · ${comp.cis.never_scanned} never-scanned` : ''}` : 'not scanned yet';
+      case 'cis': return comp.cis.total === 0 ? 'no CIS rules in the library yet' : comp.cis.pass_rate != null ? `${comp.cis.pass_rate}% pass · ${comp.cis.passed}/${comp.cis.total} rules · ${comp.cis.failed} fail${comp.cis.errored ? ` · ${comp.cis.errored} errored` : ''}${comp.cis.skipped ? ` · ${comp.cis.skipped} n/a` : ''}${comp.cis.never_scanned ? ` · ${comp.cis.never_scanned} never-scanned` : ''}` : 'not scanned yet';
       case 'cia': return comp.cia.auto_derived ? 'auto · derived Medium from criticality (unconfirmed) — set explicit C/I/A to confirm' : `C${comp.cia.confidentiality ?? '–'} · I${comp.cia.integrity ?? '–'} · A${comp.cia.availability ?? '–'} · criticality ${asset.criticality || '—'}`;
       case 'ctrl': return `${comp.ctrl.coverage_pct}% covered · ${comp.ctrl.linked_count} of ${comp.ctrl.target} controls linked`;
       case 'risk': return `${comp.risk.active_count} active${comp.risk.total_linked > comp.risk.active_count ? ` of ${comp.risk.total_linked} linked` : ''}`;

@@ -1163,6 +1163,11 @@ def match_preview(
         },
         "applicable": {
             "count": len(stage2_kept),
+            # IDs of the applicable (scan-eligible) rules, so the compliance card
+            # can scope its pass/fail rollup to the SAME set the scanner + risk
+            # posture use — otherwise it counts stale runs left on non-applicable
+            # / manual rules by old broken scans and disagrees with the posture.
+            "plugin_ids": [p.id for p in stage2_kept],
             "examples": _sample(stage2_kept, n=5),
         },
     }
@@ -2964,6 +2969,120 @@ def suggest_mapping_for_asset(
     if not asset:
         raise HTTPException(404, "Asset not found")
     return suggest_for_unmapped_os(db, tenant_id, asset.os_normalized or "")
+
+
+def _cis_num_sort(v: str):
+    """Sort dotted CIS ids numerically so 2.1 precedes 10.1."""
+    try:
+        return tuple(int(p) for p in (v or "").split("."))
+    except ValueError:
+        return (9999,) + tuple(ord(c) for c in (v or ""))
+
+
+@router.get("/asset/{asset_id}/manual-checks")
+def asset_manual_checks(
+    asset_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Manual / attestation CIS rules that apply to this asset, grouped by
+    benchmark → section → subsection, each with its latest per-asset
+    attestation status.
+
+    Powers the per-asset "Manual checks" tab that sits beside the automated
+    scan. The automated pass-rate deliberately excludes these (a human, not a
+    scanner, verifies them) — so without this surface they'd be invisible.
+    Grouping is derived live from rule_id (same as /library-tree/benchmark-
+    sections); no stored section column is needed.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    asset = db.query(ITAsset).filter(
+        ITAsset.id == asset_id, ITAsset.tenant_id == tenant_id,
+    ).first()
+    if not asset:
+        raise HTTPException(404, "Asset not found")
+
+    from .services.strict_matcher import applicable_manual_plugins_for_asset
+    plugins, benchmarks = applicable_manual_plugins_for_asset(db, tenant_id, asset)
+
+    # Latest per-asset attestation status per plugin. Runs are recorded per
+    # (plugin, asset), so the newest run for this asset is that rule's status.
+    status_by_plugin: dict[int, dict] = {}
+    if plugins:
+        pids = [p.id for p in plugins]
+        runs = (
+            db.query(CompliancePluginRun)
+            .filter(
+                CompliancePluginRun.tenant_id == tenant_id,
+                CompliancePluginRun.asset_id == asset_id,
+                CompliancePluginRun.plugin_id.in_(pids),
+            )
+            .order_by(CompliancePluginRun.started_at.desc().nullslast())
+            .all()
+        )
+        for r in runs:
+            if r.plugin_id not in status_by_plugin:  # first seen = latest
+                status_by_plugin[r.plugin_id] = {
+                    "status": r.status,
+                    "note": r.result_summary,
+                    "at": (r.completed_at or r.started_at).isoformat()
+                    if (r.completed_at or r.started_at) else None,
+                }
+
+    # Group benchmark -> section (top) -> subsection -> rules.
+    by_bench: dict[str, dict] = {}
+    assessed = 0
+    for p in plugins:
+        st = status_by_plugin.get(p.id)
+        if st and st.get("status") in ("passed", "failed", "skipped", "error"):
+            assessed += 1
+        grp = by_bench.setdefault(p.benchmark, {"sections": {}})
+        parts = (p.rule_id or "").strip().split(".")
+        top = parts[0] if parts and parts[0] else "?"
+        sub = ".".join(parts[:2]) if len(parts) >= 2 else top
+        section = grp["sections"].setdefault(top, {"number": top, "label": f"Section {top}", "subsections": {}})
+        subsection = section["subsections"].setdefault(sub, {"number": sub, "label": f"Subsection {sub}", "rules": []})
+        subsection["rules"].append({
+            "id": p.id,
+            "rule_id": p.rule_id,
+            "title": p.title or "",
+            "severity": p.severity,
+            "status": (st or {}).get("status") or "not_assessed",
+            "note": (st or {}).get("note"),
+            "assessed_at": (st or {}).get("at"),
+        })
+
+    out_benches = []
+    for b in benchmarks:
+        grp = by_bench.get(b["benchmark"])
+        if not grp:
+            continue  # benchmark applied but has no manual rules
+        secs = []
+        for sec in sorted(grp["sections"].values(), key=lambda s: _cis_num_sort(s["number"])):
+            subs = sorted(sec["subsections"].values(), key=lambda s: _cis_num_sort(s["number"]))
+            for su in subs:
+                su["rules"].sort(key=lambda r: _cis_num_sort(r["rule_id"]))
+            secs.append({
+                "number": sec["number"], "label": sec["label"],
+                "rule_count": sum(len(s["rules"]) for s in subs), "subsections": subs,
+            })
+        out_benches.append({
+            "benchmark": b["benchmark"],
+            "source": b.get("source"),
+            "manual_count": b.get("manual_count", 0),
+            "sections": secs,
+        })
+
+    total = len(plugins)
+    return {
+        "asset_id": asset_id,
+        "asset_name": asset.name,
+        "os_normalized": getattr(asset, "os_normalized", None),
+        "total_manual": total,
+        "assessed": assessed,
+        "not_assessed": total - assessed,
+        "benchmarks": out_benches,
+    }
 
 
 @router.get("/{plugin_id}")

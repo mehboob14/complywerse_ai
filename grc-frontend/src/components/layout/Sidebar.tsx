@@ -211,15 +211,18 @@ const navigation: NavEntry[] = [
   {
     name: 'Cybersecurity Assurance',
     icon: ShieldCheck,
+    // Cloned from Ava (the standalone cyber product) into the /cyber-assurance
+    // namespace: these routes render Ava's UI on GRC's shell + DB + login.
+    // Mirrors Ava's own sidebar exactly. GRC's native cyber pages
+    // (/asset-discovery, /assets, /vulnerabilities, /risk-posture) stay in the
+    // codebase untouched, just no longer linked from here.
     items: [
-      // IT Asset Discovery — from feat/pdpl-ndmo-assessment.
-      // Preview UI wired into nav; confirm discovery endpoints before customer demos.
-      { name: 'IT Asset Discovery',        href: '/asset-discovery',               icon: Radar,         requiredPermissions: ['assets:asset_inventory:*'] },
-      // CIS Benchmark merged into IT Asset Inventory as a tab (/assets?tab=cis).
-      { name: 'IT Asset Inventory',        href: '/assets',                        icon: Server,        requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'Assets Risk Posture',       href: '/risk-posture',                  icon: Activity,      requiredPermissions: ['erm:risks:*'] },
-      { name: 'Criticality Assessments',   href: '/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
-      { name: 'Vulnerabilities',           href: '/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Performance',            href: '/cyber-assurance/dashboard',       icon: LayoutDashboard },
+      { name: 'IT Asset Discovery',     href: '/cyber-assurance/asset-discovery', icon: Radar,      requiredPermissions: ['assets:asset_inventory:*'] },
+      { name: 'IT Asset Inventory',     href: '/cyber-assurance/assets',          icon: Server,     requiredPermissions: ['assets:asset_inventory:*'] },
+      { name: 'Assets Risk Posture',    href: '/cyber-assurance/risk-posture',    icon: Activity,   requiredPermissions: ['erm:risks:*'] },
+      { name: 'Vulnerabilities',        href: '/cyber-assurance/vulnerabilities', icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'Vulnerability Scanning', href: '/cyber-assurance/scan-flows',      icon: Crosshair,  requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
     ],
   },
   {

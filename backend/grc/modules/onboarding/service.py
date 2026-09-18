@@ -50,9 +50,12 @@ def _probe_one(host: str, port: int, timeout_s: float = 1.0) -> Dict[str, Any]:
             out["status"] = "reachable"
     except (socket.timeout, ConnectionRefusedError, OSError):
         return out
-    # Reverse DNS (best-effort; some networks lack it)
+    # Reverse DNS (best-effort; some networks lack it). Store the SHORT label,
+    # not the FQDN — every other naming path (NetBIOS/mDNS/fingerprint.reverse_dns)
+    # stores the short form, and the resolver's hostname tier is an exact compare,
+    # so an FQDN here made the same host dedup as two separate assets.
     try:
-        out["hostname"] = socket.gethostbyaddr(host)[0]
+        out["hostname"] = (socket.gethostbyaddr(host)[0].split(".")[0] or None)
     except Exception:
         out["hostname"] = None
     return out

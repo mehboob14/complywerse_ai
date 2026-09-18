@@ -757,7 +757,8 @@ export default function AssetDetailPage() {
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
     ...(!outsideOnly ? [{ id: 'compliance' as TabType, label: 'Compliance', icon: Cpu }] : []),
     { id: 'trajectory', label: 'Trajectory', icon: Network },
-    { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
+    // Criticality Assessments tab hidden until wired to real data (was demo/seed). Panel code kept.
+    // { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
 
   // Live data mapped into the shape the delivered AssetOverview design consumes.
@@ -790,7 +791,8 @@ export default function AssetDetailPage() {
     })),
     actions: [
       ...(dbAppKind ? [{ label: collectSvc.isPending ? 'Collecting…' : 'Collect database details', primary: true, onClick: () => setCollectSvcOpen(true) }] : []),
-      { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
+      // "Assess risk" opened the now-hidden Criticality Assessments tab — hidden with it.
+      // { label: 'Assess risk', primary: !dbAppKind, onClick: () => setActiveTab('criticality') },
       ...(canEdit ? [{ label: 'Edit', onClick: () => setShowEditModal(true) }] : []),
       ...(canEdit ? [{ label: 'Lifecycle', onClick: () => setShowLifecycleModal(true) }] : []),
       { label: 'CIS scans', onClick: () => router.push(`/compliance-plugins/asset/${assetId}`) },
@@ -820,7 +822,11 @@ export default function AssetDetailPage() {
               <>
                 {/* External (EASM) assets: scanning-scope authorization sits above
                     the telemetry — passive is always allowed, active needs sign-off. */}
-                {overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
+                {/* Scanning-scope/authorization card hidden: it gated "active scanning", which is
+                    DELIBERATELY not implemented (external_probe.py) — so it exposed no extra data and
+                    only implied the passive scan was incomplete. Re-enable ONLY alongside a real
+                    active-scan feature (which the backend requires be authorization-gated). */}
+                {false && overviewData.external && <ScopeAuthorizationCard asset={asset} canManage={canEdit} />}
                 <AssetOverviewDesign A={overviewData} />
               </>
             )}
@@ -3808,10 +3814,22 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
   });
 
   const runs = Array.isArray(runsQuery.data) ? runsQuery.data : (runsQuery.data?.runs || []);
-  const lastRun = runs[0];
+  // Newest run by timestamp — runs isn't guaranteed newest-first, so runs[0]
+  // could be an old run (stale "last scan" time).
+  const lastRun = runs.length
+    ? runs.reduce((m: any, r: any) =>
+        new Date(r?.started_at || r?.created_at || 0).getTime() >
+        new Date(m?.started_at || m?.created_at || 0).getTime() ? r : m)
+    : undefined;
   const formatTime = (iso?: string | null) => {
     if (!iso) return '-';
-    try { return new Date(iso).toLocaleString(); } catch { return iso; }
+    try {
+      // Backend sends naive UTC (no 'Z'); without it new Date() parses as LOCAL
+      // and shifts by the browser offset. Force UTC.
+      const s = String(iso);
+      const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+      return new Date(hasTz ? s : s.replace(' ', 'T') + 'Z').toLocaleString();
+    } catch { return iso; }
   };
   // Each run = ONE CIS check executed. Backend stores its outcome as
   // `status` (passed | failed | error | running) — not a pass/fail count.
@@ -4649,7 +4667,12 @@ function ScanSessions({
         );
         const span = Math.max(0, session.endedAt ? (session.startedAt - session.endedAt) : 0);
         const spanSec = Math.round(span / 1000);
-        const passRate = totals.total ? Math.round((totals.passed / totals.total) * 100) : 0;
+        // CIS score basis: passed / (passed+failed) — n/a (skipped) and errored
+        // rules drop out of the denominator, same as the header/card/posture.
+        // (Was passed/total, which counted not-applicable rules and read low,
+        // e.g. 58% instead of 68% for the same session.)
+        const evaluated = totals.passed + totals.failed;
+        const passRate = evaluated ? Math.round((totals.passed / evaluated) * 100) : 0;
         const filteredRuns = session.runs.filter((r: any) => filter === 'all' ? true : (r.status || '').toLowerCase() === filter);
 
         return (

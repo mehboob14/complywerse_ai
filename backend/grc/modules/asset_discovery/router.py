@@ -509,6 +509,49 @@ def delete_campaign(
     return None
 
 
+@router.delete("/runs/{run_id}", status_code=204)
+def delete_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
+):
+    """Delete ONE discovery run (a single scan). Its jobs + observations cascade
+    (delete-orphan). Assets already adopted from it stay in inventory — deleting
+    the scan record never removes an asset."""
+    tid = get_user_primary_tenant(current_user, db)
+    run = db.query(DiscoveryRun).filter(
+        DiscoveryRun.id == run_id, DiscoveryRun.tenant_id == tid).first()
+    if run is None:
+        raise HTTPException(404, "run not found")
+    db.delete(run)  # jobs + observation_rows cascade
+    db.commit()
+    return None
+
+
+@router.post("/runs/{run_id}/cancel", status_code=200)
+def cancel_run(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
+):
+    """Stop a running scan ASAP. Cooperative: signals the in-process sweep to
+    short-circuit its remaining probes, and marks the run 'cancelled' so the UI
+    updates immediately. Still 200 (a no-op) if the run already finished."""
+    tid = get_user_primary_tenant(current_user, db)
+    run = db.query(DiscoveryRun).filter(
+        DiscoveryRun.id == run_id, DiscoveryRun.tenant_id == tid).first()
+    if run is None:
+        raise HTTPException(404, "run not found")
+    from .services.executor import request_cancel
+    signalled = request_cancel(run_id)
+    if run.status in ("running", "queued"):
+        run.status = "cancelled"
+        db.commit()
+    return {"cancelled": True, "was_active": signalled}
+
+
 # ── Scope endpoints ──────────────────────────────────────────────────────────
 
 @router.post("/campaigns/{campaign_id}/scopes", status_code=201)
@@ -848,12 +891,65 @@ def list_discovered_devices(
     if run_id is not None:
         q = q.filter(DiscoveryObservation.run_id == run_id)
     obs_rows = q.order_by(DiscoveryObservation.id.desc()).all()
-    latest: Dict[str, DiscoveryObservation] = {}
+    # Dedup a host's observations to one row, MAC-first — the strongest stable
+    # identity the rest of the pipeline already trusts (resolver tier 3, the
+    # known_ips linker). Keying on hostname/IP alone made one machine show twice
+    # when a scan missed its name or its IP drifted, and collapsed two distinct
+    # hosts that shared a hostname. Fall back to hostname, then IP, then obs id.
+    from .services.dhcp_enrich import normalize_mac as _norm_mac
+    from .services.deep_collect import login_methods_for_observation as _lm0
+
+    def _ip_shaped(sv: Optional[str]) -> bool:
+        try:
+            ipaddress.ip_address((sv or "").strip()); return True
+        except ValueError:
+            return False
+
+    def _ports_of(o: DiscoveryObservation) -> set:
+        raw = o.raw if isinstance(o.raw, dict) else {}
+        out = set()
+        for pp in (raw.get("open_ports") or []):
+            try: out.add(int(pp))
+            except (TypeError, ValueError): pass
+        return out
+
+    # Collapse a machine's observations to ONE row. Key on a REAL hostname first,
+    # so a laptop's several NICs (Wi-Fi + Ethernet = 2 MACs, same Windows name)
+    # become a single device instead of duplicating; else MAC, else IP. The
+    # representative is the most-connectable NIC, and the row carries the UNION of
+    # every NIC's open ports — so "reachable on ANY interface" shows as reachable.
+    groups: Dict[str, List[DiscoveryObservation]] = {}
     for o in obs_rows:
-        key = (o.host_name or "").lower() or (o.ip_address or f"obs-{o.id}")
-        if key not in latest:
-            latest[key] = o
-    observations = sorted(latest.values(), key=lambda o: (o.ip_address or ""))
+        rn = (o.host_name or "").strip().lower()
+        key = ("name:" + rn) if (rn and not _ip_shaped(rn)) else               (_norm_mac(o.mac_address) or (o.ip_address or f"obs-{o.id}"))
+        groups.setdefault(key, []).append(o)
+
+    merged_ports: Dict[int, list] = {}
+    other_ips_map: Dict[int, list] = {}
+    other_macs_map: Dict[int, list] = {}
+    observations: List[DiscoveryObservation] = []
+    for grp in groups.values():
+        # Only the machine's MOST RECENT sighting decides current open ports, so
+        # an old run can't resurrect a port that is now closed. Older sightings
+        # still collapse into the same row (no duplicate), they just don't add ports.
+        latest_run = max((x.run_id or 0) for x in grp)
+        cur = [x for x in grp if (x.run_id or 0) == latest_run] or grp
+        rep = max(cur, key=lambda x: (len(_lm0(x)), len(_ports_of(x)), x.id))
+        union: set = set()
+        ips: list = []
+        macs: list = []
+        for x in cur:
+            union |= _ports_of(x)
+            if x.ip_address and x.ip_address not in ips:
+                ips.append(x.ip_address)
+            m = _norm_mac(x.mac_address)
+            if m and m not in macs:
+                macs.append(m)
+        merged_ports[rep.id] = sorted(union)
+        other_ips_map[rep.id] = [i for i in ips if i != rep.ip_address]
+        other_macs_map[rep.id] = macs
+        observations.append(rep)
+    observations = sorted(observations, key=lambda o: (o.ip_address or ""))
 
     # The latest run id, so the UI can flag devices NOT seen in it as stale
     # (last seen in an older scan — machine may have been powered off).
@@ -877,14 +973,21 @@ def list_discovered_devices(
         ).all() if row[0]
     }
 
-    def _covered(ip: Optional[str]) -> bool:
+    def _covered(ip: Optional[str], transport: Optional[str] = None) -> bool:
+        # A saved login "covers" a host only if its KIND matches the host's login
+        # transport — a WinRM login does not cover a Linux/SSH host and vice
+        # versa. When the transport is unknown (unclassified device), any kind
+        # may apply, so we don't filter by kind (advisory badge, never blocks).
         if not ip:
             return False
         try:
             addr = ipaddress.ip_address(ip)
         except ValueError:
             return False
+        want_kind = {"windows": "winrm", "linux": "ssh"}.get(transport or "")
         for c in creds:
+            if want_kind and c.kind != want_kind:
+                continue
             cidrs = c.applies_to_cidrs or []
             if not cidrs:
                 return True
@@ -899,11 +1002,68 @@ def list_discovered_devices(
     from grc.modules.asset_discovery.services.deep_collect import (
         transport_for_observation, agentless_port_state,
         service_suggestions_for as _svc_suggest,
+        login_methods_for_observation, login_methods_from,
     )
+
+    # ── Recognise already-inventoried machines the moment they are re-discovered ──
+    # A PC's IP and even its shown name change between sweeps; what does not
+    # change is the identity the credentialed connect stored on the asset:
+    # primary_mac (and serial / known_ips). Match every not-yet-promoted row
+    # against those, unchangeable-first (MAC → any known IP → hostname), so the
+    # queue tags the SAME machine "In inventory" instead of offering it as a new
+    # device to adopt. Read-only annotation — a GET never writes.
+    _assets_all = db.query(ITAsset).filter(ITAsset.tenant_id == tid).all()
+    _by_mac: Dict[str, ITAsset] = {}
+    _by_ip: Dict[str, ITAsset] = {}
+    _by_name: Dict[str, ITAsset] = {}
+    def _looks_ip(sv: Optional[str]) -> bool:
+        try:
+            ipaddress.ip_address((sv or "").strip()); return True
+        except ValueError:
+            return False
+    for _a in _assets_all:
+        _m = _norm_mac(getattr(_a, "primary_mac", None))
+        if _m:
+            _by_mac.setdefault(_m, _a)
+        for _ipx in ([_a.ip_address] if _a.ip_address else []) + list(getattr(_a, "known_ips", None) or []):
+            _by_ip.setdefault(_ipx, _a)
+        for _nm in (_a.host_name, _a.name):
+            if _nm and not _looks_ip(_nm):
+                _by_name.setdefault(_nm.strip().lower(), _a)
+
+    def _match_known_asset(o: DiscoveryObservation) -> Tuple[Optional[ITAsset], Optional[str]]:
+        obs_mac = _norm_mac(o.mac_address)
+        cand = _by_mac.get(obs_mac) if obs_mac else None
+        if cand is not None:
+            return cand, "mac"
+        def _conflicts(a: ITAsset) -> bool:
+            # A DIFFERENT device holding a recycled IP/name must never be tagged
+            # as the asset: when both sides know their MAC and they disagree,
+            # the weaker tiers are lies (the .182-became-a-phone case).
+            am = _norm_mac(getattr(a, "primary_mac", None))
+            return bool(obs_mac and am and am != obs_mac)
+        cand = _by_ip.get(o.ip_address) if o.ip_address else None
+        if cand is not None and not _conflicts(cand):
+            return cand, "ip"
+        # A real, resolved hostname is a strong same-machine signal EVEN when the
+        # MAC differs: a laptop's Wi-Fi and Ethernet NICs have different MACs but
+        # the same Windows name, so a MAC-conflict guard here would split one
+        # multi-NIC PC into two rows — the exact duplication the owner hit with
+        # DESKTOP-EQ55Q8H (.54 Wi-Fi + .146 Ethernet). A recycled IP can't reach
+        # this tier: IP-only rows carry no hostname, and placeholder IP-shaped
+        # names are excluded from _by_name when it is built.
+        nm = (o.host_name or "").strip().lower()
+        cand = _by_name.get(nm) if nm else None
+        if cand is not None:
+            return cand, "hostname"
+        return None, None
 
     out = []
     for o in observations:
         asset = db.get(ITAsset, o.resolved_asset_id) if o.resolved_asset_id else None
+        identity_match = None
+        if asset is None:
+            asset, identity_match = _match_known_asset(o)
         transport = transport_for_observation(o)
         if transport is None and asset is not None:
             fam = (asset.os_family or "").lower()
@@ -914,8 +1074,18 @@ def list_discovered_devices(
         # (445) open but WinRM off is "identified, not connectable", NOT a device
         # a host login can reach. login_state: open | closed | unknown | none.
         login_state = agentless_port_state(o, transport) if transport else "none"
-        connectable = bool(transport) and login_state == "open"
         raw = o.raw if isinstance(o.raw, dict) else {}
+        # What the device itself says it accepts — decided by the sweep, not by
+        # the operator picking a method first. WinRM/SSH/WMI/SNMP are all real
+        # ways in, so any one of them makes the device connectable. Judge on the
+        # UNION of every NIC of this machine (multi-NIC merge above), so a laptop
+        # reachable on its Wi-Fi shows reachable even if the row's representative
+        # NIC is the blocked Ethernet one.
+        eff_ports = merged_ports.get(o.id)
+        if eff_ports is None:
+            eff_ports = sorted(_ports_of(o))
+        login_methods = login_methods_from(eff_ports, raw.get("evidence"))
+        connectable = bool(login_methods)
         host = o.host_name or o.ip_address
         out.append({
             "observation_id": o.id,
@@ -932,23 +1102,36 @@ def list_discovered_devices(
             "name": o.host_name or o.fqdn or o.ip_address,
             "host_name": o.host_name,
             "ip_address": o.ip_address,
+            # The unchangeable identifier — shown as its own column and used above
+            # to recognise an already-inventoried machine after its IP/name changes.
+            "mac_address": o.mac_address,
             "os_family": asset.os_family if asset else None,
             "transport": transport,
             # login_state = state of the port a host login would actually dial
             # (WinRM/SSH), NOT merely that the box looks like Windows/Linux.
             "login_state": login_state,
             "connectable": connectable,
+            # Best-first list, e.g. ["winrm"] or ["wmi","snmp"] — the UI shows
+            # WHICH door is open instead of a bare "not confirmed".
+            "login_methods": login_methods,
+            # Set when an unpromoted row was recognised as an EXISTING asset by
+            # stored identity ("mac" | "ip" | "hostname") — the anti-duplicate tag.
+            "identity_match": identity_match,
+            # Other interfaces of this SAME machine folded into this one row
+            # (multi-NIC): the extra IPs/MACs, shown so nothing looks hidden.
+            "other_ips": other_ips_map.get(o.id) or [],
+            "other_macs": [m for m in (other_macs_map.get(o.id) or []) if m != _norm_mac(o.mac_address)],
             # Discovery→kind bridge: typed connects that make sense from the open
             # ports (e.g. 5432 → connect as PostgreSQL with a postgres credential).
             "service_suggestions": _svc_suggest(raw.get("open_ports")),
-            "open_ports": raw.get("open_ports") or [],
+            "open_ports": eff_ports,
             # Where discovery saw this device (ARP/fingerprint protocols for LAN
             # scans, EASM intel sources for external ones) — same helper the
             # observation serializer uses, so "found via Shodan" shows here too.
             "discovery_sources": _discovery_sources(raw.get("evidence"), o.mac_address, raw.get("vendor_source")),
             # In inventory with a real collected profile behind it.
             "profiled": bool(asset and asset.os_family),
-            "has_credential": _covered(o.ip_address),
+            "has_credential": _covered(o.ip_address, transport),
             # "connected" requires BOTH a live connection AND an actual asset.
             # A connection that outlived its deleted asset must not read as
             # "In inventory" — that stranded the row with a Disconnect button
@@ -1080,6 +1263,45 @@ def connect_discovered_device(
             db.commit()
         result["error"] = reason
     return result
+
+
+@router.get("/devices/{observation_id}/explain")
+def explain_discovered_device(
+    observation_id: int,
+    ai: bool = Query(True, description="Reword with the AI layer; false = deterministic text only"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Plain-language 'why is this device in this state, and what do I do'.
+
+    The diagnosis + fix are computed deterministically from this device's real
+    sweep signals (transport / login-port state / open ports / last connect
+    attempt), so the advice is always correct; the AI layer only rewords it and
+    is skipped gracefully when no key is configured.
+    """
+    tid = get_user_primary_tenant(current_user, db)
+    obs = db.query(DiscoveryObservation).filter(
+        DiscoveryObservation.id == observation_id,
+        DiscoveryObservation.tenant_id == tid,
+    ).first()
+    if not obs:
+        raise HTTPException(404, "Device not found")
+    from grc.modules.asset_discovery.services import explainer
+    signals = explainer.signals_from_observation(db, obs, tid)
+    return explainer.explain(signals, use_ai=ai)
+
+
+@router.get("/explain-nameless")
+def explain_nameless_devices(
+    count: int = Query(0, ge=0, description="How many nameless devices the queue is showing"),
+    ai: bool = Query(True),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Why N discovered devices have no name, and the two ways to fix it."""
+    get_user_primary_tenant(current_user, db)  # auth/tenant guard
+    from grc.modules.asset_discovery.services import explainer
+    return explainer.explain_nameless(count, sources=[], use_ai=ai)
 
 
 class ServiceConnectBody(BaseModel):

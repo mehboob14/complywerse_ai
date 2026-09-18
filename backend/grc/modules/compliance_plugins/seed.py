@@ -708,6 +708,10 @@ PLUGIN_LIBRARY: List[Dict[str, Any]] = [
 
 _READONLY_AWS_PREFIXES = ("get_", "list_", "describe_", "head_", "lookup_", "select_", "search_")
 
+# Benchmarks kept in PLUGIN_LIBRARY for history but never (re-)seeded — see the
+# skip in seed_compliance_plugins(). Add a name here to retire it at the source.
+_RETIRED_BENCHMARKS = frozenset({"CIS_UBUNTU_22_04_v2.0"})
+
 
 def _validate_readonly_at_seed_time(spec: Dict[str, Any]) -> None:
     """Refuse to seed a plugin whose AWS check is not a read-only verb.
@@ -751,6 +755,15 @@ def seed_compliance_plugins(db: Session | None = None) -> int:
     touched = 0
     try:
         for spec in PLUGIN_LIBRARY:
+            # Retired benchmarks stay in PLUGIN_LIBRARY for history but are
+            # never (re-)seeded. CIS_UBUNTU_22_04_v2.0 is a redundant duplicate
+            # of CIS_Ubuntu_Linux_22.04_LTS_Benchmark_v3.0.0 (all 398 runnable
+            # rule_ids overlap) — disabled at the canonical source in Phase 2
+            # (F2). Seeding it here as enabled would resurrect the duplicate on
+            # every fresh tenant before the source-clone can carry the disabled
+            # flag across, so skip it.
+            if spec.get("benchmark") in _RETIRED_BENCHMARKS:
+                continue
             _validate_readonly_at_seed_time(spec)
             existing = (
                 db.query(CompliancePlugin)

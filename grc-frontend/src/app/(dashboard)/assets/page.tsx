@@ -397,14 +397,14 @@ export default function AssetsPage() {
   const noopEvent = { stopPropagation: () => {} } as unknown as React.MouseEvent;
 
   return (
-    <div className="asset-suite assets-light space-y-2 px-3 sm:px-4 pt-0" style={{ marginTop: -10 }}>
+    <div className="asset-suite assets-light space-y-2 px-3 sm:px-4 pt-0" style={{ marginTop: -10, fontSize: 13.5 }}>
       {/* Common header (mock): one title + actions on top, the Inventory | CIS
           toggle below it — so the page name appears once and the toggle sits
           left, styled like the mock (grey track, white pill, green active). */}
       <div className="inv2 as-fadeup" style={{ marginBottom: 0 }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
           <div>
-            <h1 style={{ fontSize: 22, letterSpacing: '-.025em' }}>IT Asset Inventory</h1>
+            <h1 style={{ fontSize: 19, letterSpacing: '-.025em' }}>IT Asset Inventory</h1>
             <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 3, display: 'flex', alignItems: 'center', gap: 7 }}>
               <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ac)' }} />
               Authoritative ownership, valuation &amp; assurance coverage · {(assets as ITAsset[] | undefined)?.length ?? 0} assets

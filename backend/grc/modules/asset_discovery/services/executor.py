@@ -28,6 +28,7 @@ import csv
 import ipaddress
 import logging
 import os
+import threading as _thr
 import re
 import subprocess
 import sys
@@ -46,7 +47,7 @@ from grc.services.connector_credentials import decrypt_credentials
 from grc.modules.onboarding.service import _probe_one, MAX_HOSTS
 from .fingerprint import (  # noqa: F401
     FingerprintFn, fingerprint_host, noop_fingerprint, classify as _classify_fp,
-    netbios_name, reverse_dns, mdns_name, ssdp_info,
+    netbios_name, reverse_dns, mdns_name, ssdp_info, winrm_ntlm_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -367,6 +368,76 @@ def _sweep_targets(
     return findings
 
 
+# ── Firewall / SBC SYN-proxy artifact filter ────────────────────────────────
+# A SIP ALG, IPS, or load-balancer that COMPLETES the TCP handshake on a port
+# for the whole subnet (SIP 5060 is the classic case) makes every address in a
+# routed range look "open" on that port — a scan artifact, not a real host. The
+# per-host probe can't tell the difference (the connect genuinely succeeds), so
+# we detect it at the RANGE level: any port answered by a large majority of a
+# big scope is discounted, and a host left with no genuine evidence is relabelled
+# a "firewall echo" — kept and visible, never hidden, so the operator still decides.
+_ARTIFACT_MIN_HOSTS = 24       # only engage on a big scope (a /24-ish sweep)
+_ARTIFACT_FRACTION = 0.5       # "open on > half the range" == a proxy, not a host
+
+# In-process cancel signals, keyed by run_id. Deleting the campaign/run row alone
+# never stopped a scan — the background sweep thread kept probing. A Stop button
+# now sets this event; the sweep polls it and short-circuits its remaining probes,
+# so the scan actually halts within a probe-timeout or two. The cancel endpoint
+# runs in the SAME process as the sweep, so a plain dict + threading.Event suffices.
+_CANCEL_EVENTS: "Dict[int, _thr.Event]" = {}
+
+
+def request_cancel(run_id: int) -> bool:
+    """Signal a running sweep to stop ASAP. True if a live run was signalled."""
+    ev = _CANCEL_EVENTS.get(run_id)
+    if ev is not None:
+        ev.set()
+        return True
+    return False
+
+
+def _flag_firewall_artifacts(
+    findings: List[Dict[str, Any]], hosts_swept: int
+) -> List[Dict[str, Any]]:
+    """Neutralise firewall SYN-proxy ghosts WITHOUT hiding anything. Strip the
+    range-wide artifact port, re-classify each host by its REAL ports, and tag a
+    host left with no genuine evidence as a firewall echo (device_type
+    'firewall_echo', firewall_only=True) so the UI can categorise / filter it.
+    Every address stays visible — the operator still chooses what to adopt. A
+    small/targeted scope is returned untouched (a high hit-rate is legit there)."""
+    if hosts_swept < _ARTIFACT_MIN_HOSTS:
+        return findings
+    from collections import Counter
+    port_hosts: "Counter[int]" = Counter()
+    for f in findings:
+        for p in (f.get("open_ports") or []):
+            port_hosts[p] += 1
+    artifact = {
+        p for p, n in port_hosts.items()
+        if n > hosts_swept * _ARTIFACT_FRACTION and n >= _ARTIFACT_MIN_HOSTS
+    }
+    if not artifact:
+        return findings
+    for f in findings:
+        orig = f.get("open_ports") or []
+        real = [p for p in orig if p not in artifact]
+        if real == orig:
+            continue                               # not touched by the artifact port
+        fp = f.get("fingerprint") or {}
+        f["open_ports"] = real
+        fp.update(_classify_fp(real, fp))          # re-derive type from REAL ports
+        name = f.get("hostname")
+        # Nothing a firewall can't fake for the whole subnet remains -> it was
+        # only the echo. Label it plainly so it is never mistaken for a real
+        # VoIP phone, and never auto-adopted — but keep it visible.
+        if not (real or fp.get("udp_services") or f.get("mac") or (name and name != f.get("ip"))):
+            fp["device_type"] = "firewall_echo"
+            fp["confidence"] = 0.0
+            f["firewall_only"] = True
+        f["fingerprint"] = fp
+    return findings
+
+
 def _run_job(
     db: Session, run: DiscoveryRun, job: DiscoveryJob, scope: DiscoveryScope,
     exclusions: Set[str], *, probe: ProbeFn, timeout_s: float, max_workers: int,
@@ -462,6 +533,17 @@ def _run_job(
                         fpd["device_type"] = "host"  # Bonjour host (Apple/etc.)
                         fpd["confidence"] = max(fpd.get("confidence") or 0, 0.5)
                         _ev("mdns")
+
+                # 2b) Windows box with NetBIOS/SMB firewalled off but WinRM open —
+                #     its NTLM challenge still leaks the computer name.
+                if not f.get("hostname") and set(f.get("open_ports") or []) & {5985, 5986}:
+                    wn = winrm_ntlm_name(ip, timeout_s)
+                    if wn:
+                        f["hostname"] = wn
+                        if fpd.get("device_type") in (None, "unknown"):
+                            fpd["device_type"] = "host"
+                        fpd["confidence"] = max(fpd.get("confidence") or 0, 0.5)
+                        _ev("winrm")
 
                 # 3) OS from the resolved name — DESKTOP-* -> Windows, MacBook* ->
                 #    macOS, Android-* -> Android. Never overrides a probe-proven OS.
@@ -918,3 +1000,25 @@ def start_run(
     it calls create_run then runs execute_run on a background thread."""
     run = create_run(db, campaign, trigger=trigger, user=user)
     return execute_run(db, run.id, probe=probe, timeout_s=timeout_s, max_workers=max_workers)
+
+
+if __name__ == "__main__":  # pragma: no cover — quick self-check for the ghost filter
+    # SIP-proxy ghost: 5060 "open" on the whole /24; only two hosts have real ports.
+    _n = 254
+    _fs = [{"ip": f"10.0.0.{i}", "hostname": None, "open_ports": [5060],
+            "fingerprint": {"udp_services": []}, "mac": None} for i in range(1, _n + 1)]
+    _fs[0]["open_ports"] = [5060, 22, 80]   # a real server
+    _fs[1]["open_ports"] = [5060, 445]      # a real box
+    _out = _flag_firewall_artifacts(
+        [dict(f, fingerprint=dict(f["fingerprint"])) for f in _fs], _n)
+    assert len(_out) == _n, "nothing should be dropped — everything stays visible"
+    _real = [f for f in _out if not f.get("firewall_only")]
+    _echo = [f for f in _out if f.get("firewall_only")]
+    assert len(_real) == 2 and len(_echo) == _n - 2, f"got {len(_real)} real / {len(_echo)} echo"
+    assert all(5060 not in f["open_ports"] for f in _out), "artifact 5060 not stripped"
+    assert all(f["fingerprint"].get("device_type") == "firewall_echo" for f in _echo), "echo unlabelled"
+    # A small scope with a high hit-rate is legitimate — untouched.
+    _small = [{"ip": f"10.0.0.{i}", "hostname": None, "open_ports": [445],
+               "fingerprint": {}, "mac": None} for i in range(3)]
+    assert len(_flag_firewall_artifacts(_small, 3)) == 3, "small scope must not be filtered"
+    print("executor firewall-artifact self-check OK")

@@ -595,12 +595,12 @@ function buildExternalDeep(asset: any, pr: any): any[] {
     const sans = (Array.isArray(pr?.tls_sans) ? pr.tls_sans : []).filter((h: any) => typeof h === 'string');
     const sanSubs = sans.filter((h: string) => h.toLowerCase() !== fqdn.toLowerCase() && h.toLowerCase().endsWith('.' + (apexOf || fqdn).toLowerCase()));
     const subRows = (Array.isArray(pr?.subdomains) && pr.subdomains.length
-      ? pr.subdomains.map((sd: any) => [sd?.host || '—', (Array.isArray(sd?.resolves_to) && sd.resolves_to.length ? sd.resolves_to.join(', ') : '—'), '—', '—', sd?.first_seen ? date10(sd.first_seen) : '—', '—'])
-      : Array.from(new Set([...aliases, ...sanSubs].filter(Boolean))).sort().map((a: string) => [a, '—', '—', '—', '—', '—']));
+      ? pr.subdomains.map((sd: any) => [sd?.host || '—', (Array.isArray(sd?.resolves_to) && sd.resolves_to.length ? sd.resolves_to.join(', ') : '—')])
+      : Array.from(new Set([...aliases, ...sanSubs].filter(Boolean))).sort().map((a: string) => [a, '—']));
     dnsSecs.push(subRows.length
       ? { title: 'Subdomains', status: 'discovered', blocks: [
-          { type: 'table', headers: ['Host', 'Resolves to', 'Purpose', 'Ports', 'First seen', 'Last seen'], rows: subRows },
-          { type: 'note', text: 'From the apex certificate SANs + passive DNS/CT. Each is also tracked as its own asset — expand the apex row in the register to open them.' },
+          { type: 'table', headers: ['Subdomain', 'Resolves to'], rows: subRows },
+          { type: 'note', text: 'Discovered from the apex certificate SANs + passive DNS/CT. Each is tracked as its own asset — open it from the register for its IP, exposure grade and findings. Ports/services would need active scanning, which is off.' },
         ] }
       : noteSec('Subdomains', 'No subdomains discovered by the outside-in probe.'));
   }

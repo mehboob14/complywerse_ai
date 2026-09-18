@@ -159,6 +159,17 @@ function splitBenchmark(name: string | null): { title: string; version: string |
   return { title, version: m ? m[2] : null };
 }
 
+// Backend timestamps are naive UTC (no zone). Without a 'Z', new Date() reads
+// them as LOCAL time, shifting by the browser's offset (a 40-min-old scan then
+// showed "5h ago" at UTC+5). Force UTC.
+const parseTs = (v?: string | number | null): Date => {
+  if (v == null) return new Date(NaN);
+  if (typeof v === 'number') return new Date(v);
+  const s = String(v);
+  const hasTz = /[zZ]|[+-]\d{2}:?\d{2}$/.test(s);
+  return new Date(hasTz ? s : s.replace(' ', 'T') + 'Z');
+};
+
 const relTime = (ms: number): string => {
   const s = Math.round((Date.now() - ms) / 1000);
   if (!isFinite(s) || s < 0) return 'just now';
@@ -397,7 +408,13 @@ export default function CompliancePanel({ asset }: { asset: any }) {
   });
 
   const runs = Array.isArray(runsQuery.data) ? runsQuery.data : (runsQuery.data?.runs || []);
-  const lastRun = runs[0];
+  // Newest run by timestamp — the runs array isn't guaranteed newest-first,
+  // so runs[0] could be an old run (showed a stale "last scan Xh ago").
+  const lastRun = runs.length
+    ? runs.reduce((m: any, r: any) =>
+        new Date(r?.started_at || r?.created_at || 0).getTime() >
+        new Date(m?.started_at || m?.created_at || 0).getTime() ? r : m)
+    : undefined;
   const formatTime = (iso?: string | null) => {
     if (!iso) return '-';
     try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -418,13 +435,23 @@ export default function CompliancePanel({ asset }: { asset: any }) {
     return out;
   }, [runs]);
   const scanStats = useMemo(() => {
-    const passed = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'passed').length;
-    const failed = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
-    const errored = latestByPlugin.filter((r) => (r.status || '').toLowerCase() === 'error').length;
-    const scanned = latestByPlugin.length;
-    const passRate = scanned ? Math.round((passed / scanned) * 100) : 0;
+    // Scope to the asset's APPLICABLE rules (the scanner's eligible set) so the
+    // card counts the same rules the risk posture does — not stale runs left on
+    // non-applicable / manual rules by old broken scans. Falls back to all runs
+    // until the applicable list loads.
+    const applicableIds = new Set<number>(((previewQuery.data as any)?.applicable?.plugin_ids as number[]) || []);
+    const rows = applicableIds.size ? latestByPlugin.filter((r) => applicableIds.has(r.plugin_id)) : latestByPlugin;
+    const passed = rows.filter((r) => (r.status || '').toLowerCase() === 'passed').length;
+    const failed = rows.filter((r) => (r.status || '').toLowerCase() === 'failed').length;
+    const errored = rows.filter((r) => (r.status || '').toLowerCase() === 'error').length;
+    const scanned = rows.length;
+    // CIS score = passed / evaluated (passed+failed). Not-applicable (skipped)
+    // and errored rules drop out of the denominator — same basis as the risk
+    // posture, so the % is identical on both pages.
+    const evaluated = passed + failed;
+    const passRate = evaluated ? Math.round((passed / evaluated) * 100) : 0;
     return { passed, failed, errored, scanned, passRate };
-  }, [latestByPlugin]);
+  }, [latestByPlugin, previewQuery.data]);
 
   // One session per Scan-all invocation — runs within 5 min of each other.
   const sessions = useMemo(() => {
@@ -704,7 +731,7 @@ export default function CompliancePanel({ asset }: { asset: any }) {
                 <>
                   <b className={'text-[#1F7A54] font-semibold ' + MONO}>{scanStats.passed}</b> pass ·{' '}
                   <b className={'text-[#B23A3A] font-semibold ' + MONO}>{scanStats.failed}</b> fail{scanStats.errored > 0 && <> · <b className={'text-[#9A6410] font-semibold ' + MONO}>{scanStats.errored}</b> error</>} ·{' '}
-                  <span className={MONO}>{ruleCount.toLocaleString()}</span> rules · last scan {lastRun ? relTime(new Date(lastRun.started_at || lastRun.created_at || 0).getTime()) : '—'}
+                  <span className={MONO}>{ruleCount.toLocaleString()}</span> rules · last scan {lastRun ? relTime(parseTs(lastRun.started_at || lastRun.created_at).getTime()) : '—'}
                 </>
               ) : (
                 <>
