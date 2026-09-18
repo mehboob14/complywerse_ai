@@ -81,6 +81,44 @@ def _slug_from_auth_cookie(request: Request) -> Optional[str]:
     return slug if isinstance(slug, str) and slug else None
 
 
+def _keep_own_auth_cookie(raw: bytes) -> bytes:
+    """With several `grc_auth_token` cookies, keep the last one this server signed."""
+    chunks = raw.decode("latin-1").split(";")
+    auth = [i for i, c in enumerate(chunks) if c.partition("=")[0].strip() == "grc_auth_token"]
+    if len(auth) < 2:
+        return raw
+    from ..routers.auth_router import decode_token  # type: ignore
+
+    ours = [i for i in auth if (v := chunks[i].partition("=")[2].strip()) and decode_token(v)]
+    if not ours:
+        return raw
+    drop = set(auth) - {ours[-1]}
+    return ";".join(c for i, c in enumerate(chunks) if i not in drop).encode("latin-1")
+
+
+class ForeignAuthCookieFilter:
+    """Stop another deployment's auth cookie from masking this server's session.
+
+    A sibling deployment that scopes its cookie to the parent domain (production
+    with AUTH_COOKIE_DOMAIN=.compliverse.ai) has it sent here too, under the
+    same name. Browsers list same-name cookies oldest first and Starlette keeps
+    the last, so signing in over there after signing in here left this server
+    reading a token it cannot verify: 401, then a login loop. A request with a
+    single auth cookie passes through untouched.
+    """
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            scope["headers"] = [
+                (k, _keep_own_auth_cookie(v) if k == b"cookie" else v)
+                for k, v in scope["headers"]
+            ]
+        await self.app(scope, receive, send)
+
+
 class TenantMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         host = request.headers.get("host", "")

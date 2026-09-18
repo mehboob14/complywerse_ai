@@ -87,7 +87,7 @@ from .routers.access_review_router import router as access_review_router
 from .routers.admin_ai_usage_router import router as admin_ai_usage_router
 from .routers.ai_recommendations_router import router as ai_recommendations_router
 from .routers.reporting_router import router as reporting_router
-from .middleware.subdomain import TenantMiddleware
+from .middleware.subdomain import ForeignAuthCookieFilter, TenantMiddleware
 
 app = FastAPI(
     title="Enterprise GRC Platform API's",
@@ -189,6 +189,11 @@ async def audit_log_middleware(request: Request, call_next):
     except Exception:
         write_audit_log(request, Response(status_code=500), started_at, request_payload)
         raise
+
+
+# Outermost, so tenant resolution, auth and the audit log all see the filtered
+# cookie header.
+app.add_middleware(ForeignAuthCookieFilter)
 
 # NCA routers MUST register BEFORE risks_router and vuln_management_router
 # because those expose parametric `/risks/{risk_id}` and `/vulnerabilities/{vuln_id}`
