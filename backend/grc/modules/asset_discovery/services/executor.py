@@ -47,7 +47,7 @@ from grc.services.connector_credentials import decrypt_credentials
 from grc.modules.onboarding.service import _probe_one, MAX_HOSTS
 from .fingerprint import (  # noqa: F401
     FingerprintFn, fingerprint_host, noop_fingerprint, classify as _classify_fp,
-    netbios_name, reverse_dns, mdns_name, ssdp_info,
+    netbios_name, reverse_dns, mdns_name, ssdp_info, winrm_ntlm_name,
 )
 
 logger = logging.getLogger(__name__)
@@ -533,6 +533,17 @@ def _run_job(
                         fpd["device_type"] = "host"  # Bonjour host (Apple/etc.)
                         fpd["confidence"] = max(fpd.get("confidence") or 0, 0.5)
                         _ev("mdns")
+
+                # 2b) Windows box with NetBIOS/SMB firewalled off but WinRM open —
+                #     its NTLM challenge still leaks the computer name.
+                if not f.get("hostname") and set(f.get("open_ports") or []) & {5985, 5986}:
+                    wn = winrm_ntlm_name(ip, timeout_s)
+                    if wn:
+                        f["hostname"] = wn
+                        if fpd.get("device_type") in (None, "unknown"):
+                            fpd["device_type"] = "host"
+                        fpd["confidence"] = max(fpd.get("confidence") or 0, 0.5)
+                        _ev("winrm")
 
                 # 3) OS from the resolved name — DESKTOP-* -> Windows, MacBook* ->
                 #    macOS, Android-* -> Android. Never overrides a probe-proven OS.

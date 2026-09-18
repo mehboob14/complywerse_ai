@@ -453,6 +453,71 @@ def mdns_name(ip: str, timeout: float = 1.0) -> Optional[str]:
     return None
 
 
+def winrm_ntlm_name(ip: str, timeout: float = 1.0) -> Optional[str]:
+    """Windows computer name from the WinRM (5985/5986) NTLM challenge, no creds.
+    A Windows box with WinRM open leaks its NetBIOS/DNS computer name in the
+    NTLM type-2 message it hands back to an unauthenticated Negotiate POST. This
+    is the one name source that still works when NetBIOS (137) and SMB (445) are
+    firewalled off but WinRM is not — exactly the case that otherwise lands a
+    host in inventory as a bare IP. Stdlib only; best-effort, never raises."""
+    import base64
+    import struct
+    import http.client
+    # NTLM type-1 (negotiate): request-target + unicode + NTLM + version.
+    flags = 0x1 | 0x4 | 0x200 | 0x8000 | 0x80000 | 0x2000000
+    t1 = (b"NTLMSSP\x00" + struct.pack("<I", 1) + struct.pack("<I", flags)
+          + struct.pack("<HHI", 0, 0, 0) + struct.pack("<HHI", 0, 0, 0)
+          + b"\x06\x01\xb1\x1d\x00\x00\x00\x0f")
+    for port, tls in ((5985, False), (5986, True)):
+        conn = None
+        try:
+            if tls:
+                conn = http.client.HTTPSConnection(
+                    ip, port, timeout=timeout,
+                    context=ssl._create_unverified_context())
+            else:
+                conn = http.client.HTTPConnection(ip, port, timeout=timeout)
+            conn.request("POST", "/wsman", body="", headers={
+                "Authorization": "Negotiate " + base64.b64encode(t1).decode(),
+                "Content-Type": "application/soap+xml;charset=UTF-8",
+                "Content-Length": "0"})
+            auth = conn.getresponse().getheader("WWW-Authenticate", "") or ""
+        except Exception:
+            continue
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+        m = re.search(r"Negotiate ([A-Za-z0-9+/=]+)", auth)
+        if not m:
+            continue
+        try:
+            t2 = base64.b64decode(m.group(1))
+            ti_len, _, ti_off = struct.unpack("<HHI", t2[40:48])
+            info = t2[ti_off:ti_off + ti_len]
+            nb = dns = None
+            i = 0
+            while i + 4 <= len(info):
+                av_id, av_len = struct.unpack("<HH", info[i:i + 4])
+                i += 4
+                val = info[i:i + av_len].decode("utf-16-le", "ignore")
+                i += av_len
+                if av_id == 0:
+                    break
+                if av_id == 1:      # MsvAvNbComputerName
+                    nb = val
+                elif av_id == 3:    # MsvAvDnsComputerName
+                    dns = val
+            name = (nb or dns or "").split(".")[0].strip()
+            if name:
+                return name
+        except Exception:
+            continue
+    return None
+
+
 def ssdp_info(ip: str, timeout: float = 1.0) -> Optional[str]:
     """Unicast SSDP/UPnP M-SEARCH (UDP/1900). Smart TVs, media players, routers,
     NAS and IoT answer with a SERVER string (e.g. 'Linux/3.14 UPnP/1.0 ...').
@@ -710,6 +775,10 @@ def fingerprint_host(ip: str, open_ports: List[int], timeout_s: float = 1.0,
         name = netbios_name(ip, timeout_s) if (op & {135, 139, 445, 3389, 5985, 5986}) else None
         if not name:
             name = reverse_dns(ip, timeout_s)
+        # Last resort for a Windows box with NetBIOS/SMB firewalled off but WinRM
+        # open: pull the computer name straight out of its NTLM challenge.
+        if not name and (op & {5985, 5986}):
+            name = winrm_ntlm_name(ip, timeout_s)
         if name:
             fp["hostname"] = name
 
