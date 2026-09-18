@@ -23,6 +23,7 @@ import {
   Activity,
   AlertCircle,
   Bug,
+  Crosshair,
   Clock,
   Layers,
   Workflow,
