@@ -28,6 +28,11 @@ const nextConfig = {
     memoryBasedWorkersCount: true,
     // Hard cap for small servers, e.g. NEXT_BUILD_CPUS=1 npm run build
     ...(process.env.NEXT_BUILD_CPUS ? { cpus: Number(process.env.NEXT_BUILD_CPUS) } : {}),
+    // The rewrites below proxy /api/* to the backend. Next abandons a proxied
+    // request after 30 s by default and answers a bare 500, while nginx and the
+    // browser's API client both allow 15 min — so long operations (applying a
+    // controls scope on a small server) failed with no error message.
+    proxyTimeout: 900000,
   },
   // Increase timeout for long-running API operations
   serverRuntimeConfig: {
