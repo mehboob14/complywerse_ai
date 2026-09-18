@@ -180,7 +180,7 @@ export function RegisterView({
               </div>
               {apexOf
                 ? <div style={{ fontSize: 11, color: 'var(--as-muted)' }}>under {apexOf}{a.ip_address ? ` · ${a.ip_address}` : ''}</div>
-                : (a.environment && <div className="capitalize" style={{ fontSize: 11.5, color: 'var(--as-muted)' }}>{a.environment}</div>)}
+                : ((a.ip_address || a.environment) && <div className="capitalize" style={{ fontSize: 11.5, color: 'var(--as-muted)' }}>{[a.ip_address, a.environment].filter(Boolean).join(' · ')}</div>)}
             </div>
           </div>
         );
