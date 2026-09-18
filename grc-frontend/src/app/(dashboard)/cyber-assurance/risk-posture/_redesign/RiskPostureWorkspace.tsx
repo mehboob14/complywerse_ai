@@ -11,6 +11,7 @@ import { useRouter } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Search as SearchIcon } from 'lucide-react';
 import { riskPostureApi } from '@/cyber-assurance/lib/api';
+import { registrableDomain } from '@/cyber-assurance/lib/domains';
 import WeightsPanel from '../_weights-panel';
 import { usePermissions } from '@/cyber-assurance/hooks/usePermissions';
 import { useToast } from '@/cyber-assurance/components/ui/ToastProvider';
@@ -45,6 +46,7 @@ const BAND: Record<BandKey, { label: string; bar: string; fg: string; bg: string
 const bandFromScore = (s: number | null): BandKey => s == null ? 'unknown' : s >= 75 ? 'severe' : s >= 50 ? 'elevated' : s >= 25 ? 'watch' : 'contained';
 const isExternal = (a: AssetRow) => a.mode === 'easm' || /external|easm/i.test(a.asset_type || '');
 const titleCase = (s?: string | null) => (s || '').replace(/[_-]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+const dnsName = (a: AssetRow) => (a.name || '').trim().toLowerCase().replace(/\.$/, '');
 
 // Top driver = the dimension contributing the most to this asset's score.
 const DRIVER_LABEL: Record<string, string> = { vuln: 'Vulnerabilities', cis: 'CIS hardening gap', cia: 'Business-impact value', ctrl: 'Control gap', risk: 'Linked risks', hygiene: 'Exposure hygiene', exploitability: 'Exploitability', exposure: 'Internet exposure', business: 'Business impact' };
@@ -92,6 +94,8 @@ export default function RiskPostureWorkspace() {
   const [bandF, setBandF] = useState<BandKey | ''>('');
   const [term, setTerm] = useState('');
   const [weightsOpen, setWeightsOpen] = useState(false);
+  const [openApex, setOpenApex] = useState<Set<string>>(new Set());
+  const toggleApex = (name: string) => setOpenApex((prev) => { const n = new Set(prev); if (n.has(name)) n.delete(name); else n.add(name); return n; });
 
   const q = useQuery<Dashboard>({ queryKey: ['risk-posture.dashboard'], queryFn: async () => (await riskPostureApi.dashboard()).data, refetchInterval: 30000 });
 
@@ -118,6 +122,33 @@ export default function RiskPostureWorkspace() {
     if (term.trim()) { const t = term.toLowerCase(); r = r.filter((a) => a.name.toLowerCase().includes(t) || (a.host_name || '').toLowerCase().includes(t) || (a.asset_type || '').toLowerCase().includes(t)); }
     return [...r].sort((a, b) => (b.score ?? -1) - (a.score ?? -1));
   }, [assets, typeF, bandF, term]);
+
+  // Nest EASM subdomains under their apex — the same client-side grouping the
+  // Inventory register uses (registrableDomain over the asset name). Collapsed
+  // by default: the apex shows a ▸ toggle + "N subs" badge; children appear on
+  // expand. Purely presentational — scores are unchanged (the apex score already
+  // folds in a 25%-weight subdomain-exposure component computed server-side).
+  const { display, childApex, subCount } = useMemo(() => {
+    const present = new Set(rows.map(dnsName));
+    const kids = new Map<string, AssetRow[]>();
+    const childOf = new Map<number, string>();
+    for (const a of rows) {
+      if (!isExternal(a)) continue; // internal hosts never nest
+      const name = dnsName(a); const apex = registrableDomain(name);
+      if (!apex || name === apex || !present.has(apex)) continue;
+      const arr = kids.get(apex) ?? []; arr.push(a); kids.set(apex, arr); childOf.set(a.id, apex);
+    }
+    const counts = new Map<string, number>();
+    kids.forEach((arr, apex) => counts.set(apex, arr.length));
+    const out: AssetRow[] = [];
+    for (const a of rows) {
+      if (childOf.has(a.id)) continue; // children are inserted under their apex
+      out.push(a);
+      const name = dnsName(a);
+      if (openApex.has(name) && kids.has(name)) out.push(...kids.get(name)!);
+    }
+    return { display: out, childApex: childOf, subCount: counts };
+  }, [rows, openApex]);
 
   if (q.isLoading) return <div style={{ padding: 24, fontSize: 13, color: MUTED }}>Loading risk posture…</div>;
   if (q.isError || !q.data || !summary) return <div style={{ padding: 24, fontSize: 13, color: '#B23A3A' }}>Failed to load risk posture.</div>;
@@ -240,13 +271,31 @@ export default function RiskPostureWorkspace() {
             </thead>
             <tbody>
               {rows.length === 0 && (<tr><td style={{ ...td, textAlign: 'center', color: MUTED, padding: 22 }} colSpan={9}>No assets match.</td></tr>)}
-              {rows.map((a) => {
+              {display.map((a) => {
                 const b = BAND[(a.band.label as BandKey) in BAND ? (a.band.label as BandKey) : bandFromScore(a.score)];
                 const ext = isExternal(a);
                 const sub = [titleCase(a.asset_type), a.host_name].filter(Boolean).join(' · ');
+                const apexOf = childApex.get(a.id);
+                const kidCount = subCount.get(dnsName(a)) ?? 0;
+                const expanded = openApex.has(dnsName(a));
                 return (
                   <tr key={a.id} className="rp-row" style={{ cursor: 'pointer' }} onClick={() => router.push(`/cyber-assurance/risk-posture/asset/${a.id}`)}>
-                    <td style={td}><b style={{ fontSize: 12.5 }}>{a.name}</b><div style={{ fontSize: 10.5, color: FAINT }}>{sub || '—'}</div></td>
+                    <td style={td}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, paddingLeft: apexOf ? 22 : 0 }}>
+                        {kidCount > 0 ? (
+                          <button type="button" aria-label={expanded ? 'Collapse subdomains' : 'Expand subdomains'} onClick={(e) => { e.stopPropagation(); toggleApex(dnsName(a)); }} style={{ width: 16, height: 16, flex: 'none', border: 'none', background: 'transparent', cursor: 'pointer', color: '#78838F', fontSize: 11, lineHeight: 1, transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform .12s' }}>▸</button>
+                        ) : apexOf ? (
+                          <span title={`Subdomain of ${apexOf}`} style={{ flex: 'none', color: FAINT, fontSize: 13 }}>↳</span>
+                        ) : <span style={{ width: 16, flex: 'none' }} />}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <b style={{ fontSize: 12.5 }}>{a.name}</b>
+                            {kidCount > 0 ? <span title={`${kidCount} subdomain${kidCount > 1 ? 's' : ''} under this domain`} style={{ flex: 'none', fontSize: 9, fontWeight: 700, color: '#2E5EAA', background: '#E7ECF4', borderRadius: 4, padding: '1px 5px' }}>{kidCount} sub{kidCount > 1 ? 's' : ''}</span> : null}
+                          </div>
+                          <div style={{ fontSize: 10.5, color: FAINT }}>{sub || '—'}</div>
+                        </div>
+                      </div>
+                    </td>
                     <td style={td}><span style={{ fontSize: 9, fontWeight: 700, padding: '1px 7px', borderRadius: 5, letterSpacing: '.03em', background: ext ? '#EEEBFA' : '#E9F1FB', color: ext ? '#6A54C9' : '#2E63A8' }}>{ext ? 'EXTERNAL' : 'INTERNAL'}</span></td>
                     <td style={{ ...td, color: !a.criticality || /not assessed/i.test(a.criticality) ? FAINT : SEC }}>{a.criticality ? titleCase(a.criticality) : 'Not assessed'}</td>
                     <td style={td}>
