@@ -19,6 +19,15 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '50mb',
     },
+    // Compile client, server and edge in a separate worker, one after another.
+    // Next only does this by default when there is no custom `webpack` hook —
+    // and this config has one, so a build ran everything in one process and
+    // peaked above 4 GB: a 2 GB server swapped until it looked hung.
+    webpackBuildWorker: true,
+    // Size page-generation workers to free memory, not to the CPU count.
+    memoryBasedWorkersCount: true,
+    // Hard cap for small servers, e.g. NEXT_BUILD_CPUS=1 npm run build
+    ...(process.env.NEXT_BUILD_CPUS ? { cpus: Number(process.env.NEXT_BUILD_CPUS) } : {}),
   },
   // Increase timeout for long-running API operations
   serverRuntimeConfig: {

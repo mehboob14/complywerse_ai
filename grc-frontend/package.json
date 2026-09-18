@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "set NODE_OPTIONS=--max-old-space-size=4096&& next dev -p 3000",
-    "build": "next build",
+    "dev": "node scripts/next.mjs dev -p 3000",
+    "build": "node scripts/next.mjs build",
     "start": "next start",
     "lint": "next lint",
     "test": "node --test \"src/**/*.test.ts\""
