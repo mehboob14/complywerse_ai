@@ -234,7 +234,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const onDeleteDoc = async (doc: GovDoc) => {
     if (!window.confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
     try { await governanceApi.deleteDocument(doc.id); toast({ title: 'Document deleted', type: 'success' }); refreshAll(); }
-    catch { toast({ title: 'Delete failed', type: 'error' }); }
+    catch (e: any) {
+      const detail = e?.response?.data?.detail;  // e.g. "Cannot delete document with 2 child documents…"
+      toast({ title: 'Delete failed', message: typeof detail === 'string' ? detail : undefined, type: 'error' });
+    }
   };
 
   // ── toolbar bits ──

@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_
+from sqlalchemy import or_, and_, select
+from sqlalchemy.exc import IntegrityError
 from pydantic import BaseModel, Field
 from openai import OpenAI
 
@@ -22,6 +23,13 @@ from ....models import (
     DocumentApprovalStep, DocumentAuditLog, DocumentAnnotation, GRCUser,
     Tenant, PolicyStatement, InternalControl, ParsedFrameworkControl,
     UploadedFramework, CertificationJourney, PolicyReviewHistory, get_db
+)
+from ....models import (
+    AttestationCampaign, AuditObservationDocumentLink, BcmPlan, BcmRecoveryStrategy,
+    DocumentAttestationAcknowledgment, DocumentAttestationCampaign, DocumentAttestationRecipient,
+    DocumentSignature, DocumentSignoffAssignment, DocumentWorkflowAction, DocumentWorkflowInstance,
+    IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
+    PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ..action_logger import log_governance_action
@@ -1040,6 +1048,77 @@ def signoff_document(
     return serialize_document(document, db)
 
 
+# Deleting a document. Its ORM cascade already removes versions, reviewers,
+# approval steps, audit logs, control/risk/regulatory/asset links, the workflow
+# instance and the statements (with their compliance records, evidence links and
+# versions). Every other row that points at the document or at those rows is
+# listed here: a row that exists only for this document goes with it, and a
+# record that merely links to it is kept and unlinked, the way unlinking a
+# control from a document already works (mappings.py). Without this, deleting a
+# parsed document failed on its statements' control mappings.
+# tests/test_governance_document_delete.py fails when a new table points at any
+# of these rows without being listed.
+_DELETE_WITH_DOCUMENT = (  # a table goes before the tables it points at
+    StatementControlMapping.statement_id,
+    IssueGovernanceLink.governance_document_id,
+    IssueGovernanceLink.policy_statement_id,
+    PolicyGapFinding.document_id,
+    PolicyGapFinding.analysis_run_id,
+    PolicyGapAnalysisRun.document_id,
+    DocumentAttestationAcknowledgment.campaign_id,
+    DocumentAttestationRecipient.campaign_id,
+    DocumentAttestationCampaign.document_id,
+    PolicyAttestation.document_id,
+    DocumentSignature.document_id,
+    DocumentSignoffAssignment.document_id,
+    DocumentAnnotation.document_id,
+    PolicyReviewHistory.document_id,
+    AuditObservationDocumentLink.document_id,
+    DocumentWorkflowAction.instance_id,
+)
+_UNLINK_FROM_DOCUMENT = (
+    InternalControl.source_document_id,
+    InternalControl.source_statement_id,
+    PolicyGapFinding.applied_statement_id,
+    PolicyGapFinding.applied_version_id,
+    PolicyAttestation.parent_attestation_id,
+    PolicyAttestation.document_version_id,
+    DocumentSignature.version_id,
+    PolicyException.document_id,
+    AttestationCampaign.linked_document_id,
+    RegulatoryImplementationTask.linked_policy_id,
+    MeetingAgendaItem.linked_document_id,
+    OversightAction.linked_policy_id,
+    BcmPlan.document_ref_id,
+    BcmRecoveryStrategy.activation_procedure_ref,
+)
+
+
+def _clear_document_references(db: Session, document_id: int) -> None:
+    """Delete or unlink every row that would stop ``document_id`` from being deleted."""
+    def ids(model):
+        return select(model.id).where(model.document_id == document_id)
+
+    owned = {  # table -> ids of its rows that go with the document
+        GovernanceDocument.__tablename__: [document_id],
+        PolicyStatement.__tablename__: ids(PolicyStatement),
+        GovernanceDocumentVersion.__tablename__: ids(GovernanceDocumentVersion),
+        PolicyGapAnalysisRun.__tablename__: ids(PolicyGapAnalysisRun),
+        PolicyAttestation.__tablename__: ids(PolicyAttestation),
+        DocumentAttestationCampaign.__tablename__: ids(DocumentAttestationCampaign),
+        DocumentWorkflowInstance.__tablename__: ids(DocumentWorkflowInstance),
+    }
+
+    def rows(column):
+        target = next(iter(column.expression.foreign_keys)).column.table.name
+        return db.query(column.class_).filter(column.in_(owned[target]))
+
+    for column in _UNLINK_FROM_DOCUMENT:
+        rows(column).update({column: None}, synchronize_session=False)
+    for column in _DELETE_WITH_DOCUMENT:
+        rows(column).delete(synchronize_session=False)
+
+
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_document(
     document_id: int,
@@ -1069,11 +1148,18 @@ def delete_document(
             detail=f"Cannot delete document with {child_count} child documents. Delete or reassign child documents first."
         )
     
-    db.query(InternalControl).filter(InternalControl.source_document_id == document_id).delete()
-    
+    _clear_document_references(db, document_id)
     db.delete(document)
-    db.commit()
-    
+    try:
+        db.commit()
+    except IntegrityError as exc:  # a reference the lists above do not know about yet
+        db.rollback()
+        table = getattr(getattr(exc.orig, "diag", None), "table_name", None) or "another record"
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"This document is still referenced by {table.removeprefix('grc_').replace('_', ' ')}; remove that link first.",
+        )
+
     return None
 
 
