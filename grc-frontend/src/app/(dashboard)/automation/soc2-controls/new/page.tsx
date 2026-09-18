@@ -18,7 +18,7 @@ export default function NewCustomControlPage() {
 
   const create = useMutation({
     mutationFn: async (v: CustomControlFormValues) => {
-      const body = { ...toWriteBody(v), code: v.code.trim(), name: v.name.trim() };
+      const body = { ...toWriteBody(v), name: v.name.trim() };
       return (await scfApi.createCustomControl(body)).data;
     },
     onSuccess: async (data) => {
@@ -36,7 +36,7 @@ export default function NewCustomControlPage() {
   });
 
   return (
-    <div className="mx-auto max-w-3xl px-1 py-1">
+    <div className="mx-auto max-w-6xl px-1 py-1">
       <nav aria-label="Breadcrumb" className="mb-3 flex items-center gap-1.5 text-sm">
         <Link href="/automation/soc2-controls" className="text-slate-400 hover:text-slate-700">Controls</Link>
         <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
@@ -49,7 +49,7 @@ export default function NewCustomControlPage() {
         and everything it is linked to. It is created as a draft — submit it for approval when it is ready.
       </p>
 
-      <div className="mt-5">
+      <div className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
         <CustomControlForm
           submitLabel="Create control"
           pending={create.isPending}

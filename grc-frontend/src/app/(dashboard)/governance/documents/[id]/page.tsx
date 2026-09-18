@@ -2667,7 +2667,14 @@ function StatementControlButton({ stmt, documentId, documentTitle, onCreated }: 
         open={open}
         onClose={() => setOpen(false)}
         title="Create a control for this statement"
-        subtitle="Prefilled from the statement. The control is created as a draft under Controls Automation → Common controls, linked to this statement and its document."
+        subtitle={[stmt.statement_code, documentTitle].filter(Boolean).join(' · ') || undefined}
+        source={{
+          kind: 'Policy statement',
+          code: stmt.statement_code || null,
+          text,
+          parent: documentTitle || null,
+          tags: [stmt.category, stmt.priority, stmt.is_mandatory ? 'mandatory' : ''].filter(Boolean),
+        }}
         prefill={{
           name,
           statement: text,

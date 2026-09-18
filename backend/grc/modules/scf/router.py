@@ -699,6 +699,92 @@ def create_custom_control(
             "links_skipped": linked["skipped"]}
 
 
+def _current_release(db: Session):
+    from grc.models import SCFRelease
+
+    return (db.query(SCFRelease)
+            .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True))
+            .first())
+
+
+def _scf_domains(db: Session) -> List[str]:
+    """The catalogue's own domain names, for the Domain picker."""
+    from grc.models import SCFControl
+
+    release = _current_release(db)
+    if release is None:
+        return []
+    return sorted({d for (d,) in db.query(SCFControl.domain_name)
+                   .filter(SCFControl.release_id == release.id).distinct().all() if d})
+
+
+def _regulatory_sources(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
+    """Where a control's obligation comes from: the frameworks this tenant holds,
+    the regulatory publications it tracks, and its own governance documents."""
+    from sqlalchemy import or_
+    from grc.models import GovernanceDocument, RegulatoryChange, UploadedFramework
+
+    out: List[Dict[str, Any]] = []
+    seen: set = set()
+
+    def add(label: Optional[str], group: str, detail: Optional[str] = None) -> None:
+        text = (label or "").strip()
+        if not text or text.lower() in seen:
+            return
+        seen.add(text.lower())
+        out.append({"value": text[:255], "label": text, "group": group, "detail": detail})
+
+    for (name,) in (db.query(UploadedFramework.name)
+                    .filter(or_(UploadedFramework.tenant_id == tenant_id,
+                                UploadedFramework.tenant_id.is_(None)),
+                            UploadedFramework.is_active.is_(True))
+                    .order_by(UploadedFramework.name).all()):
+        add(name, "Framework")
+    for title, source, ref in (db.query(RegulatoryChange.title, RegulatoryChange.source,
+                                        RegulatoryChange.regulation_reference)
+                               .filter(RegulatoryChange.tenant_id == tenant_id)
+                               .order_by(RegulatoryChange.published_date.desc().nullslast())
+                               .limit(200).all()):
+        add(title, "Regulatory publication", " · ".join(x for x in (source, ref) if x) or None)
+    for title, doc_type in (db.query(GovernanceDocument.title, GovernanceDocument.doc_type)
+                            .filter(GovernanceDocument.tenant_id == tenant_id)
+                            .order_by(GovernanceDocument.title).limit(300).all()):
+        add(title, "Internal document", (doc_type or "").replace("_", " ") or None)
+    return out
+
+
+@router.get("/controls/search")
+def search_scf_controls(
+    q: str = Query("", max_length=100),
+    ids: Optional[str] = Query(None, description="Comma-separated SCF ids to resolve"),
+    limit: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """SCF controls by id or name, for pickers. Names are shown as published."""
+    from sqlalchemy import or_
+    from grc.models import SCFControl
+
+    release = _current_release(db)
+    if release is None:
+        return {"items": []}
+    query = (db.query(SCFControl.scf_id, SCFControl.name, SCFControl.domain_name)
+             .filter(SCFControl.release_id == release.id))
+    if ids:
+        wanted = [x.strip().upper() for x in ids.split(",") if x.strip()][:100]
+        rows = query.filter(SCFControl.scf_id.in_(wanted)).order_by(SCFControl.sort_key).all()
+    else:
+        term = q.strip()
+        if term:
+            like = f"%{term}%"
+            query = query.filter(or_(SCFControl.scf_id.ilike(like), SCFControl.name.ilike(like)))
+        rows = query.order_by(SCFControl.sort_key).limit(limit).all()
+    term = q.strip().upper()
+    # An id typed exactly, or its prefix, belongs at the top.
+    rows.sort(key=lambda r: (not r[0].upper().startswith(term) if term else False))
+    return {"items": [{"scf_id": s, "name": n, "domain": d} for s, n, d in rows]}
+
+
 @router.get("/custom-controls/options")
 def custom_control_options(
     db: Session = Depends(get_db),
@@ -731,6 +817,8 @@ def custom_control_options(
         "link_types": record_links.list_types(),
         # What an unnamed control would be called, so a form can show it.
         "next_code": custom.next_custom_code(db, tenant_id),
+        "domains": _scf_domains(db),
+        "regulatory_sources": _regulatory_sources(db, tenant_id),
     }
 
 

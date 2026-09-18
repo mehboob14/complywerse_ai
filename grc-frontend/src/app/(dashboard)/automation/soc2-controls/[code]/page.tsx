@@ -2397,10 +2397,26 @@ export default function ControlDetailPage() {
         isOpen={editOpen}
         onClose={() => setEditOpen(false)}
         title="Edit custom control"
-        size="lg"
+        subtitle={`${control.control_id} · ${control.title}`}
+        size="3xl"
+        footer={(
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => setEditOpen(false)}
+              className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit" form="edit-custom-control" disabled={updateCustom.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-5 py-2 text-[13px] font-semibold text-white shadow-sm hover:bg-primary-700 disabled:opacity-50">
+              {updateCustom.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {updateCustom.isPending ? 'Saving…' : 'Save changes'}
+            </button>
+          </div>
+        )}
       >
         <CustomControlForm
           key={editOpen ? 'open' : 'closed'}
+          formId="edit-custom-control"
+          hideActions
           initial={editInitial}
           codeLocked
           showImplements

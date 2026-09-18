@@ -41,6 +41,10 @@ export interface MultiSelectDropdownProps {
   dropdownClassName?: string;
   listClassName?: string;
   showSelectionInTrigger?: boolean;
+  /** Render the initials circle for items with a subLabel (people). Off for plain option lists. */
+  showAvatars?: boolean;
+  /** Greyed-out trigger that does not open. */
+  disabled?: boolean;
 }
 
 const sizeStyles = {
@@ -67,6 +71,8 @@ export function MultiSelectDropdown({
   dropdownClassName,
   listClassName,
   showSelectionInTrigger = true,
+  showAvatars = true,
+  disabled = false,
 }: MultiSelectDropdownProps) {
   const getInitials = (text: string) => {
     const cleaned = text.trim();
@@ -215,7 +221,10 @@ export function MultiSelectDropdown({
       <button
         ref={triggerRef}
         type="button"
-        onClick={() => setIsOpen((current) => !current)}
+        onClick={() => { if (!disabled) setIsOpen((current) => !current); }}
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={isOpen}
         className={clsx(
           'inline-flex items-center gap-2 rounded-full border bg-white px-3 text-left text-slate-900 transition-colors',
           sizeStyles[size],
@@ -224,6 +233,7 @@ export function MultiSelectDropdown({
             : 'border-slate-300 hover:border-slate-400',
           triggerVariant === 'input' && 'rounded-lg',
           triggerVariant !== 'input' && 'whitespace-nowrap',
+          disabled && 'cursor-not-allowed bg-slate-50 opacity-60',
           triggerClassName
         )}
       >
@@ -238,7 +248,7 @@ export function MultiSelectDropdown({
           </>
         )}
 
-        {hasAppliedFilter && (
+        {hasAppliedFilter && (multiSelect || triggerVariant !== 'input') && (
           <span className="inline-flex min-w-5 items-center justify-center rounded-full bg-primary-100 px-1.5 text-[11px] font-medium text-primary-700">
             {selectedValues.length}
           </span>
@@ -290,7 +300,7 @@ export function MultiSelectDropdown({
             ) : (
               filteredItems.map((item) => {
                 const checked = draftSet.has(item.value);
-                const hasAvatar = Boolean(item.avatarInitials || item.subLabel);
+                const hasAvatar = showAvatars && Boolean(item.avatarInitials || item.subLabel);
                 const initials = item.avatarInitials || getInitials(item.label);
                 const handleClick = () => {
                   if (item.disabled) return;

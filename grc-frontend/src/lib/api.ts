@@ -5382,7 +5382,8 @@ export type ScfCustomControlWriteBody = {
 };
 
 export type ScfCustomControlCreateBody = ScfCustomControlWriteBody & {
-  code: string;
+  /** Omit to have the server allocate the next CTL-0001 style ID. */
+  code?: string;
   name: string;
   lifecycle_status?: string;
 };
@@ -5403,7 +5404,13 @@ export type CustomControlOptions = {
   link_types: { key: string; label: string; plural: string; url: string }[];
   /** What an unnamed control would be called (CTL-0001 style). */
   next_code?: string;
+  /** SCF catalogue domain names. */
+  domains?: string[];
+  /** Frameworks, regulatory publications and internal documents a control can cite. */
+  regulatory_sources?: { value: string; label: string; group: string; detail?: string | null }[];
 };
+
+export type ScfControlHit = { scf_id: string; name: string | null; domain: string | null };
 
 export type ScfCustomControlMappingsBody = {
   parsed_control_ids?: number[];
@@ -5498,6 +5505,11 @@ export const scfApi = {
     apiClient.post<ScfCustomControl>(`/scf/custom-controls/${encodeURIComponent(code)}/retire`),
   getCustomControlOptions: () =>
     apiClient.get<CustomControlOptions>('/scf/custom-controls/options'),
+  /** SCF controls by id or name (q), or resolve specific ids. Names shown as published. */
+  searchControls: (params: { q?: string; ids?: string[]; limit?: number }) =>
+    apiClient.get<{ items: ScfControlHit[] }>('/scf/controls/search', {
+      params: { q: params.q || undefined, ids: params.ids?.length ? params.ids.join(',') : undefined, limit: params.limit },
+    }),
   setCustomControlLifecycle: (code: string, body: { action: string; comment?: string }) =>
     apiClient.post<ScfCustomControl>(
       `/scf/custom-controls/${encodeURIComponent(code)}/lifecycle`, body,
