@@ -317,6 +317,25 @@ export const STATUS_COLORS: Record<string, string> = {
   cancelled: 'bg-gray-100 text-gray-600 border-gray-300',
 };
 
+// The Audit Issue Register's triggers (backend: trigger_dispatcher _EVENT_MAP
+// "audit-register", catalog.py) — key, label, palette description.
+const AUDIT_REGISTER_TRIGGERS: Array<[string, string, string]> = [
+  ['audit_register_imported', 'Audit Register Imported', 'Fires when the monthly register workbook is imported'],
+  ['audit_finding_added', 'Audit Finding Added', 'Fires when a finding is added to the register by hand'],
+  ['audit_finding_updated', 'Audit Finding Edited', 'Fires when any column of a register finding is edited'],
+  ['audit_finding_deleted', 'Audit Finding Deleted', 'Fires when a finding is deleted from the register'],
+  ['audit_finding_restored', 'Audit Finding Restored', 'Fires when a deleted finding is restored'],
+  ['audit_finding_submitted_for_validation', 'Audit Finding Submitted for Validation', 'Fires when an owner submits a finding and its materials to Audit Services'],
+  ['audit_finding_validated', 'Audit Finding Validated', 'Fires when Audit Services pass a finding, closing it'],
+  ['audit_finding_returned', 'Audit Finding Sent Back', 'Fires when validation needs more materials (Delayed) or fails (Past Due)'],
+  ['audit_extension_requested', 'Audit Extension Requested', 'Fires when a new target date is requested; it goes on the Audit Committee agenda'],
+  ['audit_extension_decided', 'Audit Extension Decided', 'Fires when the Audit Committee decides an extension, either way'],
+  ['audit_extension_approved', 'Audit Extension Approved', 'Fires when the Audit Committee approves an extension'],
+  ['audit_extension_rejected', 'Audit Extension Not Approved', 'Fires when the Audit Committee does not approve an extension'],
+  ['audit_regulator_status_changed', 'MRA Regulator Status Changed', 'Fires when an MRA is submitted to, accepted by or closed by the regulator'],
+  ['audit_reminders_sent', 'Audit Register Reminders Sent', 'Fires when owners are reminded of findings coming due or past due'],
+];
+
 export const TRIGGER_KEYS = new Set([
   // Core triggers
   'manual_trigger',
@@ -449,6 +468,8 @@ export const TRIGGER_KEYS = new Set([
   'issue_assigned',
   'capa_action_created',
   'capa_action_completed',
+  // Audit Issue Register
+  ...AUDIT_REGISTER_TRIGGERS.map(([key]) => key),
   // Assets / BCM / Administration / Tasks
   'asset_criticality_changed',
   'bcm_plan_created',
@@ -666,6 +687,8 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   issue_assigned: { domains: ['workflow'], module: 'Issue Management' },
   capa_action_created: { domains: ['workflow'], module: 'Issue Management' },
   capa_action_completed: { domains: ['workflow'], module: 'Issue Management' },
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key]): [string, NodeDefinitionMeta] =>
+    [key, { domains: ['workflow'], module: 'Audit Register' }])),
   control_group_created: { domains: ['compliance', 'control'], module: 'Control Library' },
   control_group_updated: { domains: ['compliance', 'control'], module: 'Control Library' },
   control_group_deleted: { domains: ['compliance', 'control'], module: 'Control Library' },
@@ -1419,6 +1442,7 @@ export const TRIGGER_EVENT_MAP: Record<string, string> = {
   issue_assigned: 'issue_assigned',
   capa_action_created: 'capa_action_created',
   capa_action_completed: 'capa_action_completed',
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key]) => [key, key])),
   // Assets / BCM / Administration / Tasks
   asset_criticality_changed: 'asset_criticality_changed',
   bcm_plan_created: 'bcm_plan_created',
@@ -1569,6 +1593,7 @@ export const NODE_TYPE_LABELS: Record<string, string> = {
   issue_assigned: 'Issue Assigned',
   capa_action_created: 'CAPA Action Created',
   capa_action_completed: 'CAPA Action Completed',
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key, label]) => [key, label])),
   // Assets / BCM / Administration / Tasks
   asset_criticality_changed: 'Asset Criticality Changed',
   bcm_plan_created: 'BCM Plan Created',
@@ -1710,6 +1735,8 @@ export const PALETTE_DESCRIPTIONS: Record<string, string> = {
   new_vulnerability_detected: 'Fires when a new vulnerability is detected',
   vulnerability_sla_breach: 'Fires when a vulnerability SLA deadline has been breached',
   vulnerability_sla_warning: 'Fires when a vulnerability SLA deadline is approaching',
+  // Audit Issue Register triggers
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key, , description]) => [key, description])),
   // Governance triggers
   policy_submitted_for_review: 'Fires when a policy is submitted for review',
   policy_review_due: 'Fires when a policy is due for review',
@@ -1923,6 +1950,42 @@ const _ASSET: TemplateVar[] = [
   { key: 'owner_email',            label: 'Asset Owner (Email)' },
 ];
 
+// A register finding (action_handlers: resource_type "audit-register"), plus
+// what the action itself carried — a reason, a requested date, a result.
+const _FINDING: TemplateVar[] = [
+  { key: 'code',             label: 'Issue Code'              },
+  { key: 'reference',        label: 'Issue # (Reference)'     },
+  { key: 'title',            label: 'Issue Name'              },
+  { key: 'source',           label: 'Source'                  },
+  { key: 'sheet',            label: 'Workbook Sheet'          },
+  { key: 'report',           label: 'Report'                  },
+  { key: 'regulator',        label: 'Regulator'               },
+  { key: 'register_status',  label: 'Status (NS/IP/DE/PD/EXT)'},
+  { key: 'due_date',         label: 'Target Date'             },
+  { key: 'days_past_due',    label: 'Days Past Due'           },
+  { key: 'owner_name',       label: 'Owner (Name)'            },
+  { key: 'owner_email',      label: 'Owner (Email)'           },
+  { key: 'lob',              label: 'LOB'                     },
+  { key: 'regulator_status', label: 'Regulator Status'        },
+  { key: 'reason',           label: 'Reason / Note'           },
+  { key: 'requested_date',   label: 'Requested Date'          },
+  { key: 'result',           label: 'Validation Result'       },
+];
+const _REGISTER_IMPORT: TemplateVar[] = [
+  { key: 'file_name',        label: 'Workbook'                },
+  { key: 'summary_month',    label: 'Pack Month'              },
+  { key: 'created',          label: 'Findings Created'        },
+  { key: 'updated',          label: 'Findings Updated'        },
+  { key: 'skipped',          label: 'Rows Skipped'            },
+  { key: 'unmatched_owners', label: 'Unmatched Owner Names'   },
+];
+const _REGISTER_REMINDERS: TemplateVar[] = [
+  { key: 'owners',           label: 'Owners Reminded'         },
+  { key: 'due_soon',         label: 'Coming Due'              },
+  { key: 'past_due',         label: 'Past Due'                },
+  { key: 'escalated',        label: 'Escalated'               },
+];
+
 export const TRIGGER_TEMPLATE_VARS: Record<string, TemplateSections[]> = {
   // Core
   manual_trigger:   [{ section: 'Common', vars: _COMMON }],
@@ -1965,4 +2028,10 @@ export const TRIGGER_TEMPLATE_VARS: Record<string, TemplateSections[]> = {
   asset_created: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
   asset_updated: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
   asset_deleted: [{ section: 'Asset Fields', vars: _ASSET }, { section: 'Common', vars: _COMMON }],
+  // Audit Issue Register
+  ...Object.fromEntries(AUDIT_REGISTER_TRIGGERS.map(([key]) => [key, key === 'audit_register_imported'
+    ? [{ section: 'Import Fields', vars: _REGISTER_IMPORT }, { section: 'Common', vars: _COMMON }]
+    : key === 'audit_reminders_sent'
+      ? [{ section: 'Reminder Fields', vars: _REGISTER_REMINDERS }, { section: 'Common', vars: _COMMON }]
+      : [{ section: 'Finding Fields', vars: _FINDING }, { section: 'Common', vars: _COMMON }]])),
 };

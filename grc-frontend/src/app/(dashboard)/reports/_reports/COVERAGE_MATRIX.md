@@ -47,6 +47,7 @@ Status: `covered` | `thin` | `missing` | `N/A` (dashboard / tool / meta / admin)
 | Vulnerabilities | `/vulnerabilities` | `vulnerabilities` | covered | server; FE/BE field alignment (Wave 1): affected_host, assigned_to, discovered_at, resolved_at, vuln_id |
 | Auditor Portal › Portal | `/auditor-portal` | `journeys`, `audit_packages` | covered | No dedicated list API — the portal picks a framework from the same certification-journey list (`journeys`) then drills into per-framework tabs; reused rather than duplicated |
 | Internal Audit | `/auditor-portal/internal-audit` | `internal_audit` | covered | Wave 3 — GET `/compliance/assessments?assessment_format=ubl_audit_master_tracking` |
+| Issue Register | `/auditor-portal/issue-register` | `audit_register`, `audit_register_reports`, `audit_register_extensions` | covered | Client mode — GET `/issue-management/issues/audit-register/rows`, `/reports`, `/extensions`; status and days past due are computed server-side. The monthly SUMMARY pack exports from the register itself |
 | Critical Tasks | `/tasks` | `tasks` | covered | server Wave 5; limit raised to 5000 (Wave 2) |
 | Reports › Workspace | `/reports` | — | N/A | Meta |
 | Reports › Saved reports | `/reports/saved` | — | N/A | Meta |

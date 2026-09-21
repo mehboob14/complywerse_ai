@@ -62,6 +62,7 @@ EVIDENCE_TYPES = [
     "backup_log",
     "change_record",
     "incident_report",
+    "validation_material",   # an owner's materials for an audit-register validation
     "other"
 ]
 

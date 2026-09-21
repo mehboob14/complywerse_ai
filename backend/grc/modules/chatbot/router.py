@@ -62,16 +62,16 @@ VECTOR_SEMANTIC_TERMS = (
 )
 # IMPORTANT: Terms for the retired Audit Management product module.
 # These route to the deprecated_audit response instead of SQL generation.
+# Audit findings, recommendations, reports, action plans, follow-up and the
+# committee pack are live again in the Audit Issue Register (Auditor Portal),
+# so only what stayed retired is listed.
 AUDIT_QUERY_TERMS: tuple = (
-    "audit finding", "audit findings", "audit plan", "audit plans",
+    "audit plan", "audit plans",
     "audit engagement", "audit engagements", "audit workpaper", "workpaper",
     "workpapers", "audit workpapers", "pbc list", "prepared by client",
-    "qaip", "audit quality", "audit maturity", "audit recommendation",
-    "audit recommendations", "audit universe", "auditable entity",
-    "audit board pack", "board pack", "audit follow up", "audit follow-up",
-    "audit management", "audit action plan", "audit template",
-    "audit finding theme", "audit report opinion",
-    "audit report", "audit reports",
+    "qaip", "audit quality", "audit maturity",
+    "audit universe", "auditable entity",
+    "audit management", "audit template", "audit report opinion",
 )
 GRC_RELEVANT_TERMS = (
     # Platform modules

@@ -417,6 +417,26 @@ ENTRY_TEMPLATES: List[Tuple[str, str, str, str, str]] = [
     ("self_id", "Self ID", "Self ID", "self_id", "issue"),
     ("credit_review", "Credit Reviews", "Credit Review", "credit_review", "issue"),
 ]
+# What each finding type is, in the words of someone adding one.
+ENTRY_TITLES: Dict[str, Tuple[str, str]] = {
+    "regulatory": ("Regulatory exam finding (MRA)",
+                   "A matter requiring attention or other finding from a regulator's exam."),
+    "ia_mercadien": ("Internal audit issue — Mercadien", "An issue from an internal audit performed by Mercadien."),
+    "ia_ey_issue": ("Internal audit issue — EY", "An issue from an internal audit performed by EY."),
+    "ia_ey_recommendation": ("Internal audit recommendation — EY",
+                             "A recommendation from an EY internal audit; the pack counts these apart."),
+    "it_pen": ("IT / penetration test finding", "A finding from a penetration test or an IT security review."),
+    "self_id": ("Self-identified event",
+                "An event the bank identified itself; it also becomes an incident in ERM."),
+    "credit_review": ("Credit review finding", "A finding from a credit review."),
+}
+# Columns a finding type already answers ("Source (Mercadien/ EY)" on the
+# Mercadien sheet is Mercadien).
+ENTRY_DEFAULTS: Dict[str, Dict[str, str]] = {
+    "ia_mercadien": {"source_label": "Mercadien"},
+    "ia_ey_issue": {"source_label": "EY"},
+    "ia_ey_recommendation": {"source_label": "EY"},
+}
 # Worked out from the dates, or by the extension step, rather than typed in.
 ENTRY_COMPUTED = {"days_past_due", "aged_days_from_target", "aged_status", "extensions_count"}
 # Which entry form a source's findings are added on.

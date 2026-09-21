@@ -120,6 +120,10 @@ const MODULE_LABELS: Record<string, string> = {
   // Issue Management — URL prefix `/issue-management/...` from the
   // issue_management module routers.
   'issue-management': 'Issue Management',
+  // Audit Issue Register — its own rows (resource_type) and its requests
+  // under /issue-management/issues/audit-register (see deriveModuleContext).
+  'audit-register': 'Audit Register',
+  'audit-register-import': 'Audit Register',
   // Criticality Assessments — `/criticality-assessments/...` for the
   // ISCA + IACA endpoints under Asset Management.
   'criticality-assessments': 'Criticality Assessments',
@@ -307,6 +311,9 @@ function deriveModuleContext(log: AuditLogEntry): { module: string; submodule: s
   if (parts.length === 0) {
     const fallback = log.resource_type ? MODULE_LABELS[log.resource_type] || titleCase(log.resource_type) : 'System';
     return { module: fallback, submodule: null };
+  }
+  if (normalized.startsWith('issue-management/issues/audit-register')) {
+    return { module: MODULE_LABELS['audit-register'], submodule: null };
   }
   const moduleKey = parts[0];
   const moduleLabel = MODULE_LABELS[moduleKey] || titleCase(moduleKey);

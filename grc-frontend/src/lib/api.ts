@@ -4671,8 +4671,8 @@ export const auditRegisterApi = {
     apiClient.get('/issue-management/issues/audit-register/findings-for', { params: { kind, record_id: recordId } }),
   // Adding a finding by hand, on one of their sheets.
   templates: () => apiClient.get('/issue-management/issues/audit-register/templates'),
-  addFinding: (template: string, values: Record<string, unknown>) =>
-    apiClient.post('/issue-management/issues/audit-register/findings', { template, values }),
+  addFinding: (template: string, values: Record<string, unknown>, reportId?: number | null) =>
+    apiClient.post('/issue-management/issues/audit-register/findings', { template, values, report_id: reportId || undefined }),
   status: () => apiClient.get('/issue-management/issues/audit-register/status'),
   // The monthly pack (their SUMMARY sheet) and the reports view.
   pack: (month?: string) =>
@@ -4718,6 +4718,21 @@ export const auditRegisterApi = {
   lobMappings: () => apiClient.get('/issue-management/issues/audit-register/mappings/lobs'),
   setLobMapping: (name: string, body: { business_unit_id?: number | null; create?: boolean }) =>
     apiClient.put('/issue-management/issues/audit-register/mappings/lobs', { name, ...body }),
+  // Settings: SLAs per status, dropdown lists, audit reports and exams, numbering.
+  settings: () => apiClient.get('/issue-management/issues/audit-register/settings'),
+  saveSettings: (patch: Record<string, unknown>) =>
+    apiClient.put('/issue-management/issues/audit-register/settings', patch),
+  reportCatalog: () => apiClient.get('/issue-management/issues/audit-register/report-catalog'),
+  addReport: (source: string, values: Record<string, unknown>) =>
+    apiClient.post('/issue-management/issues/audit-register/report-catalog', { ...values, source }),
+  updateReport: (id: number, values: Record<string, unknown>) =>
+    apiClient.put(`/issue-management/issues/audit-register/report-catalog/${id}`, values),
+  deleteReport: (id: number) =>
+    apiClient.delete(`/issue-management/issues/audit-register/report-catalog/${id}`),
+  nextReference: (template: string, reportKey?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/next-reference', {
+      params: { template, report_key: reportKey || undefined },
+    }),
 };
 
 export const issuesApi = {

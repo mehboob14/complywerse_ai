@@ -27,11 +27,21 @@ logger = logging.getLogger(__name__)
 def reminders_for_tenant(self, tenant_slug: str, db: Session = None) -> dict:
     from grc.models import AuditIssueProfile, Tenant
     from grc.modules.issue_management.audit_register.workflow import send_reminders
+    from grc.rich_audit import write_rich_audit_log
 
     if not db.query(AuditIssueProfile.id).first():
         return {"status": "ok", "tenant_slug": tenant_slug, "skipped": "no register"}
     tenant = db.query(Tenant).first()
     result = send_reminders(db, tenant.id)
+    if result["owners"]:
+        write_rich_audit_log(
+            db=db, tenant_id=tenant.id, user_id=None, action="reminders_sent",
+            resource_type="audit-register", actor_type="system", actor_source="scheduler",
+            actor_display="Scheduler (daily reminders)",
+            summary=(f"Daily reminders: {result['owners']} owner(s) told about "
+                     f"{result['due_soon'] + result['past_due']} finding(s)"
+                     + (f"; {result['escalated']} escalated to Audit Services" if result["escalated"] else "")),
+            after={k: result[k] for k in ("due_soon", "past_due", "owners", "escalated")})
     db.commit()
     logger.info("audit_register.reminders tenant=%s due_soon=%s past_due=%s escalated=%s",
                 tenant_slug, result["due_soon"], result["past_due"], result["escalated"])

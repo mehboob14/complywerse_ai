@@ -35,9 +35,6 @@ from .summary import days_past_due, due_date_of, effective_status
 VALIDATED_LAYOUTS = ("regulatory", "internal_audit", "archive")
 DECISIONS = ("pass", "more_info", "fail")
 MAX_FILE_BYTES = 25 * 1024 * 1024
-REMIND_BEFORE_DAYS = 14        # "coming due" window
-REMIND_EVERY_DAYS = 7          # an owner hears about a finding at most weekly
-ESCALATE_AFTER_DAYS = 30       # past due this long, Audit Services hear too
 
 
 def _name(user: Optional[GRCUser]) -> Optional[str]:
@@ -59,7 +56,13 @@ def _notify(db: Session, tenant_id: int, user_ids: Iterable[Optional[int]], subj
 
 
 def audit_services(db: Session, tenant_id: int) -> List[int]:
-    """Who runs the register: whoever uploaded the latest workbooks."""
+    """Who Audit Services are: the team named in Settings, else whoever
+    uploaded the latest workbooks."""
+    from .settings import get_settings
+
+    named = get_settings(db, tenant_id).get("audit_services") or []
+    if named:
+        return sorted(named)
     rows = (db.query(AuditRegisterImport.created_by)
             .filter(AuditRegisterImport.tenant_id == tenant_id,
                     AuditRegisterImport.created_by.isnot(None))
@@ -383,62 +386,137 @@ def extension_payload(db: Session, request: AuditExtensionRequest) -> Dict[str, 
 
 # ── reminders ────────────────────────────────────────────────────────────────
 
-def reminder_candidates(db: Session, tenant_id: int, today: date) -> List[Dict[str, Any]]:
-    out = []
-    rows = (db.query(AuditIssueProfile, Issue)
+def _open_findings(db: Session, tenant_id: int):
+    return (db.query(AuditIssueProfile, Issue)
             .join(Issue, Issue.id == AuditIssueProfile.issue_id)
             .filter(AuditIssueProfile.tenant_id == tenant_id,
                     AuditIssueProfile.deleted_at.is_(None),
                     AuditIssueProfile.record_type != "recommendation",
-                    # Submitted and waiting on Audit Services: the owner has done their part.
-                    Issue.workflow_state.notin_(("closed", "closure_review"))).all())
-    for profile, issue in rows:
+                    Issue.workflow_state.notin_(("closed", "cancelled"))).all())
+
+
+def _due_again(profile: AuditIssueProfile, today: date, every: Optional[int]) -> bool:
+    last = profile.last_reminded_on
+    return not last or (today - last).days >= (every or 7)
+
+
+def reminder_candidates(db: Session, tenant_id: int, today: date,
+                        sla: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """Findings whose owner should hear from us today, by the status SLAs in
+    Settings: coming due, past due, delayed (materials needed), or not
+    started long after the report. Each rule says how often to repeat."""
+    from .settings import get_settings
+    from .summary import timeline
+
+    sla = sla or get_settings(db, tenant_id)["sla"]
+    out = []
+    for profile, issue in _open_findings(db, tenant_id):
+        if issue.workflow_state == "closure_review" or not issue.owner_id:
+            continue          # submitted: Audit Services' move (validation_waiting)
+        status = effective_status(profile, issue, today)
+        rule = sla.get("IP" if status == "unstated" else status) or {}
+        if not rule.get("enabled") or not _due_again(profile, today, rule.get("repeat_every")):
+            continue
         due = due_date_of(profile, issue)
-        if not due or not issue.owner_id:
-            continue
-        if profile.last_reminded_on and (today - profile.last_reminded_on).days < REMIND_EVERY_DAYS:
-            continue
-        left = (due - today).days
-        if left > REMIND_BEFORE_DAYS:
-            continue
-        out.append({"profile": profile, "issue": issue, "due": due,
-                    "past_due": max(-left, 0), "kind": "past_due" if left < 0 else "due_soon"})
+        left = (due - today).days if due else None
+        window = rule.get("remind_before_due")
+        kind = None
+        if status == "PD":
+            kind = "past_due"
+        elif status == "DE":
+            kind = "delayed"
+        elif left is not None and window is not None and 0 <= left <= window:
+            kind = "due_soon"
+        elif status == "NS" and rule.get("start_within") is not None:
+            opened, _ = timeline(profile, issue, today)
+            if (today - opened).days >= rule["start_within"]:
+                kind = "not_started"
+        if kind:
+            out.append({"profile": profile, "issue": issue, "due": due, "kind": kind,
+                        "past_due": max(-left, 0) if left is not None else 0})
     return out
 
 
-def send_reminders(db: Session, tenant_id: int, *, today: Optional[date] = None, email: bool = False,
-                   dry_run: bool = False) -> Dict[str, Any]:
+def validation_waiting(db: Session, tenant_id: int, today: date,
+                       rule: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Findings submitted for validation longer ago than Audit Services' SLA."""
+    within = rule.get("validate_within")
+    if not rule.get("enabled") or within is None:
+        return []
+    out = []
+    for profile, issue in _open_findings(db, tenant_id):
+        if issue.workflow_state != "closure_review" or not _due_again(profile, today, rule.get("repeat_every")):
+            continue
+        submitted = (db.query(func.max(IssueActivity.created_at))
+                     .filter(IssueActivity.issue_id == issue.id,
+                             IssueActivity.type == "validation_submitted").scalar())
+        # Imported already reported done: waiting at least since the register first had it.
+        since = (submitted.date() if submitted else profile.validation_started_on
+                 or (profile.created_at.date() if profile.created_at else None))
+        if since and (today - since).days >= within:
+            out.append({"profile": profile, "issue": issue, "waited": (today - since).days})
+    return out
+
+
+def send_reminders(db: Session, tenant_id: int, *, today: Optional[date] = None,
+                   email: Optional[bool] = None, dry_run: bool = False) -> Dict[str, Any]:
+    from .settings import get_settings
+
     today = today or date.today()
-    items = reminder_candidates(db, tenant_id, today)
+    settings = get_settings(db, tenant_id)
+    sla = settings["sla"]
+    email = settings.get("email", False) if email is None else email
+    items = reminder_candidates(db, tenant_id, today, sla)
+    waiting = validation_waiting(db, tenant_id, today, sla["validation"])
     by_owner: Dict[int, List[Dict[str, Any]]] = {}
     for item in items:
         by_owner.setdefault(item["issue"].owner_id, []).append(item)
 
     def line(item):
-        text = f"- {_label(item['issue'], item['profile'])} — due {item['due'].isoformat()}"
+        text = f"- {_label(item['issue'], item['profile'])}"
+        if item["kind"] == "delayed":
+            return text + " — validation needs more materials from you"
+        if item["kind"] == "not_started":
+            return text + " — not started yet"
+        text += f" — due {item['due'].isoformat()}" if item["due"] else ""
         return text + (f" ({item['past_due']} days past due)" if item["past_due"] else "")
 
-    escalate = [i for i in items if i["past_due"] >= ESCALATE_AFTER_DAYS]
-    summary = {"due_soon": sum(i["kind"] == "due_soon" for i in items),
-               "past_due": sum(i["kind"] == "past_due" for i in items),
-               "owners": len(by_owner), "escalated": len(escalate),
+    escalate_after = sla["PD"].get("escalate_after")
+    escalate = [i for i in items if i["kind"] == "past_due" and escalate_after is not None
+                and i["past_due"] >= escalate_after]
+    count = lambda kind: sum(i["kind"] == kind for i in items)  # noqa: E731
+    summary = {"due_soon": count("due_soon"), "past_due": count("past_due"),
+               "delayed": count("delayed"), "not_started": count("not_started"),
+               "validation_waiting": len(waiting), "owners": len(by_owner), "escalated": len(escalate),
+               "email": email,
                "items": [{"issue_id": i["issue"].id, "reference": i["profile"].issue_ref,
                           "title": i["issue"].title, "owner_id": i["issue"].owner_id,
-                          "due": i["due"].isoformat(), "past_due": i["past_due"], "kind": i["kind"]}
-                         for i in items]}
+                          "due": i["due"].isoformat() if i["due"] else None,
+                          "past_due": i["past_due"], "kind": i["kind"]} for i in items]
+               + [{"issue_id": w["issue"].id, "reference": w["profile"].issue_ref,
+                   "title": w["issue"].title, "owner_id": None, "due": None, "past_due": 0,
+                   "kind": "validation_waiting", "waited": w["waited"]} for w in waiting]}
     if dry_run:
         return summary
     for owner_id, mine in by_owner.items():
-        overdue = any(i["past_due"] for i in mine)
+        overdue = any(i["kind"] == "past_due" for i in mine)
+        acting = any(i["kind"] in ("delayed", "not_started") for i in mine)
         _notify(db, tenant_id, [owner_id],
-                f"Audit findings {'past due' if overdue else 'coming due'}: {len(mine)}",
+                f"Audit findings {'past due' if overdue else 'need your action' if acting else 'coming due'}: {len(mine)}",
                 "These audit findings need your action plan completed and submitted for "
                 "validation:\n" + "\n".join(line(i) for i in mine),
-                email=email, kind="warning" if overdue else "info")
+                email=email, kind="warning" if overdue or acting else "info")
+    team = audit_services(db, tenant_id)
     if escalate:
-        _notify(db, tenant_id, audit_services(db, tenant_id),
-                f"Escalation: {len(escalate)} audit finding(s) {ESCALATE_AFTER_DAYS}+ days past due",
+        _notify(db, tenant_id, team,
+                f"Escalation: {len(escalate)} audit finding(s) {escalate_after}+ days past due",
                 "\n".join(line(i) for i in escalate), email=email, kind="warning")
-    for item in items:
+    if waiting:
+        _notify(db, tenant_id, team,
+                f"Validation waiting: {len(waiting)} finding(s) submitted "
+                f"{sla['validation']['validate_within']}+ days ago",
+                "\n".join(f"- {_label(w['issue'], w['profile'])} — waiting {w['waited']} days"
+                          for w in waiting), email=email, kind="warning")
+    for item in [*items, *waiting]:
         item["profile"].last_reminded_on = today
     return summary

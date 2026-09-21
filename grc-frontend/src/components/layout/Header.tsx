@@ -51,6 +51,7 @@ const PAGE_TITLES: Record<string, { title: string; subtitle?: string; section?: 
   '/control-library': { title: 'Control Library' },
   '/auditor-portal': { title: 'Auditor Portal', subtitle: 'Review certification journeys, evidence, and compliance progress' },
   '/auditor-portal/statutory-audit': { title: 'Statutory Audit', subtitle: 'Register and track regulator requirements and audit observations' },
+  '/auditor-portal/issue-register': { title: 'Issue Register', section: 'Auditor Portal' },
   '/assets': { title: 'IT Asset Inventory', subtitle: 'Manage and track IT assets with CIA ratings and valuations.', section: 'Cybersecurity Assurance' },
   '/asset-discovery': { title: 'IT Asset Discovery', subtitle: 'Find devices on the network, decide what to adopt, and see what changed.', section: 'Cybersecurity Assurance' },
   '/integrations': { title: 'Integrations', subtitle: 'Configure and manage third-party integrations.' },

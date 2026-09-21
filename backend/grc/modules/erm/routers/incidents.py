@@ -616,7 +616,30 @@ def delete_incident(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Incident not found"
         )
-    
+
+    _clear_incident_references(db, incident_id)
     db.delete(incident)
     db.commit()
     return {"message": "Incident deleted successfully", "id": incident_id}
+
+
+def _clear_incident_references(db: Session, incident_id: int) -> None:
+    """Remove what stops an incident from being deleted.
+
+    Link rows (risk, asset, vulnerability, evidence, risk-assessment links) go
+    with it; records that merely point at it (a risk's source incident, a BCM
+    drill, an audit-register finding) stay and are unlinked. Found from the
+    models, so a table added later that references incidents is covered too.
+    """
+    from sqlalchemy import inspect as sa_inspect
+    from ....models import Base
+
+    existing = set(sa_inspect(db.get_bind()).get_table_names())
+    for table in Base.metadata.tables.values():
+        if table.name not in existing:
+            continue
+        for column in table.columns:
+            if any(fk.target_fullname == "grc_risk_incidents.id" for fk in column.foreign_keys):
+                statement = (table.update().values({column.name: None}) if column.nullable
+                             else table.delete())
+                db.execute(statement.where(column == incident_id))

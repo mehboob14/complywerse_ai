@@ -204,6 +204,43 @@ class AuditExtensionRequest(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class AuditRegisterSettings(Base):
+    """The register's own settings, one row per tenant: status SLAs and who is
+    notified, the dropdown lists, and how new findings are numbered. Stored as
+    one JSON document; defaults fill anything not set (audit_register/settings.py)."""
+    __tablename__ = "grc_audit_register_settings"
+    __table_args__ = (UniqueConstraint("tenant_id", name="uq_audit_register_settings_tenant"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    config = Column(JSON, default=dict)
+    updated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AuditRegisterReport(Base):
+    """An audit report or exam findings belong to — defined once, picked from a
+    dropdown when a finding is added. Kept in step with the reports the
+    register's findings name; ``report_key`` is how findings refer to it."""
+    __tablename__ = "grc_audit_register_reports"
+    __table_args__ = (UniqueConstraint("tenant_id", "source", "report_key", name="uq_audit_register_report"),)
+
+    id = Column(Integer, primary_key=True, index=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
+    source = Column(String(30), nullable=False)       # regulator | mercadien | ey | it_pen | …
+    report_key = Column(String(255), nullable=False)
+    source_label = Column(Text, nullable=True)        # the regulator or firm, e.g. OCC, EY
+    report_number = Column(Text, nullable=True)
+    report_name = Column(Text, nullable=True)
+    report_date = Column(Date, nullable=True)
+    engagement_year = Column(Text, nullable=True)
+    project_name = Column(Text, nullable=True)        # the IT Pen sheet's "Project name-year"
+    notes = Column(Text, nullable=True)
+    created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class AuditRegisterAlias(Base):
     """A name the workbook uses, mapped once to a platform record and used by
     every import after: an owner ("Rivera, P" → a user) or a line of business

@@ -50,10 +50,11 @@ const STATUS_NAME: Record<string, string> = {
 };
 const smallBtn = 'inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50';
 
-export function RegisterReports({ onOpen, onAddFinding, onShowInRegister }: {
+export function RegisterReports({ onOpen, onAddFinding, onShowInRegister, onManageReports }: {
   onOpen: (issueId: number) => void;
   onAddFinding: (template?: string | null, prefill?: Record<string, unknown>) => void;
   onShowInRegister: (source: string, report: { key: string | null; label: string }) => void;
+  onManageReports: () => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
   const q = useQuery<ReportLine[]>({
@@ -74,9 +75,10 @@ export function RegisterReports({ onOpen, onAddFinding, onShowInRegister }: {
         <p className="mr-auto text-xs text-slate-600">
           Every audit report and exam, with how its findings stand. Open a report to see and add to its findings.
         </p>
+        <button onClick={onManageReports} className={smallBtn}>Manage reports</button>
         <button onClick={() => onAddFinding(null)}
                 className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-2.5 py-1 text-xs font-semibold text-[#0a0a0a] hover:bg-primary-700">
-          <Plus className="h-3 w-3" /> Add report
+          <Plus className="h-3 w-3" /> Add finding
         </button>
       </div>
       {!q.data?.length ? (

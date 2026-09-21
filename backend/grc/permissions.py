@@ -487,7 +487,11 @@ PERMISSION_MATRIX = [
         "submodules": [
             {
                 "name": "issues",
-                "display_name": "Issues, CAPA, Links & Audit Log",
+                # Also the Audit Issue Register: view = read it; create =
+                # Audit Services (import, edit, validate, decide extensions,
+                # mappings, reminders); edit = owners (submit for validation,
+                # request an extension); delete = delete/restore findings.
+                "display_name": "Issues, CAPA, Audit Register, Links & Audit Log",
                 "actions": ["view", "create", "edit", "delete"]
             }
         ]

@@ -10,15 +10,17 @@ from __future__ import annotations
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from ....rich_audit import write_rich_audit_log
+
 from ....models import (AuditExtensionRequest, AuditIssueProfile, AuditRegisterImport,
-                        BusinessUnit, GRCUser, IssueActivity, IssueAssetLink,
+                        AuditRegisterReport, BusinessUnit, GRCUser, IssueActivity, IssueAssetLink,
                         IssueVulnerabilityLink, RiskIncident, Tenant, get_db)
 from ....routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
-from ..audit_register import mappings, workflow
+from ..audit_register import mappings, settings as register_settings, template as T, workflow
 from ..audit_register.crosslinks import REGULATOR_STATUSES, observation_for, sync_crosslinks
 from ..audit_register.export import build_workbook
 from ..audit_register.parser import ParsedWorkbook, parse_workbook
@@ -43,6 +45,45 @@ _require_delete = require_tenant_permission("issue_management:issues:delete")
 _ACCEPTED = (".xlsb", ".xlsx", ".xlsm")
 _LINKS = {"asset": (IssueAssetLink, IssueAssetLink.asset_id),
           "vulnerability": (IssueVulnerabilityLink, IssueVulnerabilityLink.vulnerability_id)}
+
+
+def _audit(request: Request, db: Session, tenant_id: int, user: GRCUser, action: str,
+           summary: str, *, resource_id: Optional[int] = None, resource_name: Optional[str] = None,
+           resource_type: str = "audit-register", before: Optional[Dict[str, Any]] = None,
+           after: Optional[Dict[str, Any]] = None) -> None:
+    """One readable Audit Log row per register action, in the caller's
+    transaction. The request's own generic row is then skipped (the middleware
+    checks request.state.audit_recorded), and the workflow engine turns this
+    row into the register's named trigger events."""
+    write_rich_audit_log(db=db, tenant_id=tenant_id, user_id=user.id, action=action,
+                         resource_type=resource_type, resource_id=resource_id,
+                         resource_name=resource_name, summary=summary, before=before, after=after,
+                         ip_address=request.client.host if request.client else None)
+    request.state.audit_recorded = True
+
+
+def _named(profile: AuditIssueProfile) -> str:
+    """"MRA-1 · Wire controls (ISS-0012)" — how a finding reads in the log."""
+    issue = profile.issue
+    label = " · ".join(x for x in (profile.issue_ref, issue.title if issue else None) if x)
+    return f"{label} ({issue.code})" if issue is not None and issue.code else label
+
+
+def _change_text(db: Session, changed: Dict[str, List[Any]]) -> str:
+    from ..audit_register import template as T
+
+    def shown(field: str, value: Any) -> str:
+        if value in (None, ""):
+            return "blank"
+        if field == "owner":
+            user = db.get(GRCUser, value)
+            return (getattr(user, "display_name", None) or getattr(user, "username", None)) if user else f"user {value}"
+        text = str(value)
+        return text if len(text) <= 40 else text[:37] + "…"
+
+    parts = [f"{T.FIELD_SPEC.get(f, (f,))[0]}: {shown(f, a)} → {shown(f, b)}"
+             for f, (a, b) in list(changed.items())[:4]]
+    return "; ".join(parts) + (f"; +{len(changed) - 4} more" if len(changed) > 4 else "")
 
 
 async def _read(file: UploadFile) -> ParsedWorkbook:
@@ -99,6 +140,7 @@ async def preview_register(
 
 @router.post("/import", dependencies=[Depends(_require_create)])
 async def import_register(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
@@ -110,6 +152,16 @@ async def import_register(
                             detail="User is not assigned to any tenant")
     book = await _read(file)
     result = apply_workbook(db, tenant_id, book, actor_id=current_user.id)
+    _audit(request, db, tenant_id, current_user, "import",
+           f'Imported the register workbook "{book.file_name}"'
+           + (f" ({book.summary_month} pack)" if book.summary_month else "")
+           + f": {result.created} created, {result.updated} updated, {result.skipped} skipped"
+           + (f", {len(result.unmatched_owners)} owner name(s) unmatched" if result.unmatched_owners else ""),
+           resource_type="audit-register-import", resource_id=result.import_id,
+           resource_name=book.file_name,
+           after={"file_name": book.file_name, "summary_month": book.summary_month,
+                  "created": result.created, "updated": result.updated,
+                  "skipped": result.skipped, "sheets": book.sheet_counts})
     db.commit()
     return {
         "import_id": result.import_id,
@@ -168,7 +220,7 @@ def list_register_rows(
         query = query.filter(AuditIssueProfile.source == source)
     out = []
     today = date.today()
-    for profile in query.limit(1000).all():
+    for profile in query.limit(5000).all():                  # the Reports module's cap too
         issue = profile.issue
         out.append({
             "issue_id": profile.issue_id,
@@ -297,6 +349,7 @@ def register_profile(
 def edit_profile(
     issue_id: int,
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -309,6 +362,12 @@ def edit_profile(
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if changed:
+        _audit(request, db, tenant_id, current_user, "update",
+               f"Edited {_named(profile)} — {_change_text(db, changed)}",
+               resource_id=issue_id, resource_name=_named(profile),
+               before={f: v[0] for f, v in changed.items()},
+               after={f: v[1] for f, v in changed.items()})
     db.commit()
     db.refresh(profile)
     return {"changed": changed, **_finding_payload(profile, db)}
@@ -326,6 +385,7 @@ def register_options(
 
 @router.post("/relink", dependencies=[Depends(_require_create)])
 def relink_register(
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -344,8 +404,13 @@ def relink_register(
                                       vulnerabilities=vulnerabilities,
                                       actor_id=current_user.id).items():
             made[kind] += count
-        for kind, count in sync_crosslinks(db, profile.issue, profile, actor_id=current_user.id).items():
+        for kind, count in sync_crosslinks(db, profile.issue, profile, actor_id=current_user.id,
+                                           create=True).items():
             made[kind] = made.get(kind, 0) + count
+    made_text = ", ".join(f"{n} {kind.replace('_', ' ')}" for kind, n in made.items() if n)
+    _audit(request, db, tenant_id, current_user, "relink",
+           f"Re-linked the register to the rest of the platform: {made_text or 'nothing new'}",
+           after=made)
     db.commit()
     return {"linked": made}
 
@@ -474,6 +539,7 @@ def register_templates(
 @router.post("/findings", dependencies=[Depends(_require_create)])
 def add_finding(
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -483,10 +549,15 @@ def add_finding(
     if not isinstance(values, dict):
         raise HTTPException(status_code=400, detail="values must be an object of the sheet's columns")
     try:
-        profile = create_finding(db, tenant_id, str(body.get("template") or ""), values, current_user)
-    except ValueError as exc:
+        profile = create_finding(db, tenant_id, str(body.get("template") or ""), values, current_user,
+                                 report_id=int(body["report_id"]) if body.get("report_id") else None)
+    except (ValueError, TypeError) as exc:
         db.rollback()
         _bad_request(exc)
+    _audit(request, db, tenant_id, current_user, "create",
+           f'Added {_named(profile)} on the "{(profile.source_sheet or "").strip()}" sheet',
+           resource_id=profile.issue_id, resource_name=_named(profile),
+           after={k: v for k, v in values.items() if v not in (None, "")})
     db.commit()
     db.refresh(profile)
     return _finding_payload(profile, db)
@@ -495,6 +566,7 @@ def add_finding(
 @router.delete("/findings/{issue_id}", dependencies=[Depends(_require_delete)])
 def remove_finding(
     issue_id: int,
+    request: Request,
     body: Optional[Dict[str, Any]] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
@@ -502,11 +574,15 @@ def remove_finding(
     """Take a finding out of the register — kept as a cancelled issue, restorable."""
     tenant_id = get_user_primary_tenant(current_user, db)
     profile = _profile_or_404(db, tenant_id, issue_id)
+    reason = str((body or {}).get("reason") or "").strip()
     try:
-        delete_finding(db, profile.issue, profile, current_user, str((body or {}).get("reason") or ""))
+        delete_finding(db, profile.issue, profile, current_user, reason)
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    _audit(request, db, tenant_id, current_user, "delete",
+           f"Deleted {_named(profile)} from the register" + (f" — {reason}" if reason else ""),
+           resource_id=issue_id, resource_name=_named(profile), after={"reason": reason or None})
     db.commit()
     return {"deleted": True, "issue_id": issue_id}
 
@@ -514,6 +590,7 @@ def remove_finding(
 @router.post("/findings/{issue_id}/restore", dependencies=[Depends(_require_delete)])
 def restore_deleted_finding(
     issue_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -524,6 +601,9 @@ def restore_deleted_finding(
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    _audit(request, db, tenant_id, current_user, "restore",
+           f"Restored {_named(profile)} to the register",
+           resource_id=issue_id, resource_name=_named(profile))
     db.commit()
     db.refresh(profile)
     return _finding_payload(profile, db)
@@ -594,6 +674,7 @@ def validation_state(
 @router.post("/validation/{issue_id}/submit", dependencies=[Depends(_require_edit)])
 async def submit_validation(
     issue_id: int,
+    request: Request,
     note: str = Form(""),
     files: List[UploadFile] = File(default=[]),
     db: Session = Depends(get_db),
@@ -614,26 +695,45 @@ async def submit_validation(
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    names = ", ".join(name for name, _, _ in uploads)
+    _audit(request, db, tenant_id, current_user, "submit_validation",
+           f"Submitted {_named(profile)} for validation"
+           + (f" with {len(uploads)} file(s): {names}" if uploads else "")
+           + (f" — {note.strip()}" if note.strip() else ""),
+           resource_id=issue_id, resource_name=_named(profile),
+           after={"note": note.strip() or None, "files": [n for n, _, _ in uploads],
+                  "evidence_ids": result["evidence_ids"]})
     db.commit()
     return {**result, **workflow.validation_state(db, profile.issue, profile)}
+
+
+_VALIDATION_ACTIONS = {"pass": ("validation_passed", "Validation passed — closed"),
+                       "more_info": ("validation_more_info", "More materials asked for"),
+                       "fail": ("validation_failed", "Validation failed")}
 
 
 @router.post("/validation/{issue_id}/decide", dependencies=[Depends(_require_create)])
 def decide_validation(
     issue_id: int,
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Audit Services: pass (close), more materials needed (DE), or fail (PD)."""
     tenant_id = get_user_primary_tenant(current_user, db)
     profile = _profile_or_404(db, tenant_id, issue_id, live=True)
+    result, reason = str(body.get("result") or ""), str(body.get("reason") or "").strip()
     try:
-        workflow.decide_validation(db, profile.issue, profile, current_user,
-                                   str(body.get("result") or ""), str(body.get("reason") or ""))
+        workflow.decide_validation(db, profile.issue, profile, current_user, result, reason)
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    action, words = _VALIDATION_ACTIONS[result]
+    _audit(request, db, tenant_id, current_user, action,
+           f"{words}: {_named(profile)}" + (f" — {reason}" if reason else ""),
+           resource_id=issue_id, resource_name=_named(profile),
+           after={"result": result, "reason": reason or None})
     db.commit()
     return workflow.validation_state(db, profile.issue, profile)
 
@@ -651,10 +751,10 @@ def list_extensions(
     if issue_id:
         query = query.filter(AuditExtensionRequest.issue_id == issue_id)
     out = []
-    for request in query.order_by(AuditExtensionRequest.id.desc()).limit(200).all():
+    for ext in query.order_by(AuditExtensionRequest.id.desc()).limit(200).all():
         profile = (db.query(AuditIssueProfile)
-                   .filter(AuditIssueProfile.issue_id == request.issue_id).first())
-        out.append({**workflow.extension_payload(db, request),
+                   .filter(AuditIssueProfile.issue_id == ext.issue_id).first())
+        out.append({**workflow.extension_payload(db, ext),
                     "reference": profile.issue_ref if profile else None,
                     "title": profile.issue.title if profile else None,
                     "source": profile.source if profile else None})
@@ -674,6 +774,7 @@ def extension_meetings(
 def request_extension(
     issue_id: int,
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -683,63 +784,93 @@ def request_extension(
     if not requested:
         raise HTTPException(status_code=400, detail="requested_date is required")
     try:
-        request = workflow.request_extension(db, profile.issue, profile, current_user, requested,
-                                             str(body.get("reason") or ""),
-                                             int(body["meeting_id"]) if body.get("meeting_id") else None)
+        ext = workflow.request_extension(db, profile.issue, profile, current_user, requested,
+                                         str(body.get("reason") or ""),
+                                         int(body["meeting_id"]) if body.get("meeting_id") else None)
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    payload = workflow.extension_payload(db, ext)
+    _audit(request, db, tenant_id, current_user, "extension_requested",
+           f"Requested an extension of {_named(profile)} to {requested.isoformat()}"
+           + (f" — on the agenda of {payload['meeting']['title']}" if payload["meeting"] else " — no committee meeting scheduled yet"),
+           resource_id=issue_id, resource_name=_named(profile),
+           after={"request_id": ext.id, "previous_date": payload["previous_date"],
+                  "requested_date": requested.isoformat(), "reason": ext.reason,
+                  "meeting": (payload["meeting"] or {}).get("title")})
     db.commit()
-    return workflow.extension_payload(db, request)
+    return workflow.extension_payload(db, ext)
 
 
 def _extension_or_404(db: Session, tenant_id: int, request_id: int) -> AuditExtensionRequest:
-    request = (db.query(AuditExtensionRequest)
-               .filter(AuditExtensionRequest.id == request_id,
-                       AuditExtensionRequest.tenant_id == tenant_id).first())
-    if not request:
+    ext = (db.query(AuditExtensionRequest)
+           .filter(AuditExtensionRequest.id == request_id,
+                   AuditExtensionRequest.tenant_id == tenant_id).first())
+    if not ext:
         raise HTTPException(status_code=404, detail="Extension request not found")
-    return request
+    return ext
+
+
+def _extension_profile(db: Session, ext: AuditExtensionRequest) -> Optional[AuditIssueProfile]:
+    return db.query(AuditIssueProfile).filter(AuditIssueProfile.issue_id == ext.issue_id).first()
 
 
 @router.post("/extensions/decide/{request_id}", dependencies=[Depends(_require_create)])
 def decide_extension(
     request_id: int,
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Record the Audit Committee's decision; approval moves the target date."""
     tenant_id = get_user_primary_tenant(current_user, db)
-    request = _extension_or_404(db, tenant_id, request_id)
+    ext = _extension_or_404(db, tenant_id, request_id)
+    approve = bool(body.get("approve"))
     try:
-        workflow.decide_extension(db, request, current_user, bool(body.get("approve")),
-                                  str(body.get("notes") or ""),
+        workflow.decide_extension(db, ext, current_user, approve, str(body.get("notes") or ""),
                                   _parse_date(body.get("regulator_notified_on"), "regulator_notified_on"))
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    profile = _extension_profile(db, ext)
+    named = _named(profile) if profile else f"issue {ext.issue_id}"
+    _audit(request, db, tenant_id, current_user,
+           "extension_approved" if approve else "extension_rejected",
+           f"Audit Committee {'approved' if approve else 'did not approve'} the extension of {named} "
+           f"to {ext.requested_date.isoformat()}" + (f" — {ext.decision_notes}" if ext.decision_notes else ""),
+           resource_id=ext.issue_id, resource_name=named,
+           after={"request_id": ext.id, "approved": approve, "requested_date": ext.requested_date.isoformat(),
+                  "notes": ext.decision_notes})
     db.commit()
-    return workflow.extension_payload(db, request)
+    return workflow.extension_payload(db, ext)
 
 
 @router.post("/extensions/regulator-notice/{request_id}", dependencies=[Depends(_require_create)])
 def record_regulator_notice(
     request_id: int,
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """For an MRA: the date the regulator was told about the approved extension."""
     tenant_id = get_user_primary_tenant(current_user, db)
-    request = _extension_or_404(db, tenant_id, request_id)
-    request.regulator_notified_on = _parse_date(body.get("date"), "date") or date.today()
-    db.add(IssueActivity(issue_id=request.issue_id, user_id=current_user.id,
+    ext = _extension_or_404(db, tenant_id, request_id)
+    ext.regulator_notified_on = _parse_date(body.get("date"), "date") or date.today()
+    db.add(IssueActivity(issue_id=ext.issue_id, user_id=current_user.id,
                          type="extension_regulator_notified",
-                         payload={"request_id": request.id,
-                                  "date": request.regulator_notified_on.isoformat()}))
+                         payload={"request_id": ext.id,
+                                  "date": ext.regulator_notified_on.isoformat()}))
+    profile = _extension_profile(db, ext)
+    named = _named(profile) if profile else f"issue {ext.issue_id}"
+    _audit(request, db, tenant_id, current_user, "regulator_notified",
+           f"Recorded that the regulator was told on {ext.regulator_notified_on.isoformat()} "
+           f"of the extension of {named}",
+           resource_id=ext.issue_id, resource_name=named,
+           after={"request_id": ext.id, "regulator_notified_on": ext.regulator_notified_on.isoformat()})
     db.commit()
-    return workflow.extension_payload(db, request)
+    return workflow.extension_payload(db, ext)
 
 
 # ── reminders ────────────────────────────────────────────────────────────────
@@ -755,13 +886,26 @@ def preview_reminders(
 
 @router.post("/reminders", dependencies=[Depends(_require_create)])
 def send_reminders(
+    request: Request,
     body: Dict[str, Any] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Remind owners now (the daily sweep does this too). In-app, email if asked."""
-    result = workflow.send_reminders(db, get_user_primary_tenant(current_user, db),
-                                     email=bool((body or {}).get("email")))
+    tenant_id = get_user_primary_tenant(current_user, db)
+    asked = (body or {}).get("email")
+    result = workflow.send_reminders(db, tenant_id, email=None if asked is None else bool(asked))
+    email = result["email"]
+    _audit(request, db, tenant_id, current_user, "reminders_sent",
+           f"Reminded {result['owners']} owner(s) about "
+           f"{result['due_soon'] + result['past_due'] + result['delayed'] + result['not_started']} finding(s) "
+           f"({result['due_soon']} coming due, {result['past_due']} past due, {result['delayed']} delayed, "
+           f"{result['not_started']} not started)"
+           + (f"; {result['escalated']} escalated to Audit Services" if result["escalated"] else "")
+           + (f"; {result['validation_waiting']} waiting on validation" if result["validation_waiting"] else "")
+           + (" — in-app and email" if email else " — in-app"),
+           after={k: result[k] for k in ("due_soon", "past_due", "delayed", "not_started",
+                                         "validation_waiting", "owners", "escalated")})
     db.commit()
     return result
 
@@ -772,6 +916,7 @@ def send_reminders(
 def set_regulator_status(
     issue_id: int,
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -790,6 +935,10 @@ def set_regulator_status(
                          payload={"changes": {"regulator_status": [before, value]},
                                   "date": (_parse_date(body.get("date"), "date") or date.today()).isoformat()}))
     sync_crosslinks(db, profile.issue, profile, actor_id=current_user.id)
+    _audit(request, db, tenant_id, current_user, "regulator_status_changed",
+           f"Regulator status of {_named(profile)}: {before or 'not submitted'} → {value or 'not submitted'}",
+           resource_id=issue_id, resource_name=_named(profile),
+           before={"regulator_status": before}, after={"regulator_status": value})
     db.commit()
     return _links_payload(db, profile)
 
@@ -804,17 +953,23 @@ def owner_mappings(db: Session = Depends(get_db), current_user: GRCUser = Depend
 @router.put("/mappings/owners", dependencies=[Depends(_require_create)])
 def set_owner_mapping(
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
+    name = str(body.get("name") or "")
+    user_id = int(body["user_id"]) if body.get("user_id") else None
     try:
-        moved = mappings.set_owner_mapping(db, tenant_id, str(body.get("name") or ""),
-                                           int(body["user_id"]) if body.get("user_id") else None,
-                                           current_user)
+        moved = mappings.set_owner_mapping(db, tenant_id, name, user_id, current_user)
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    target = db.get(GRCUser, user_id) if user_id else None
+    who = (getattr(target, "display_name", None) or getattr(target, "username", None)) if target else "no one"
+    _audit(request, db, tenant_id, current_user, "owner_mapped",
+           f'Mapped the workbook owner "{name}" to {who} — {moved} finding(s) reassigned',
+           resource_name=name, after={"name": name, "user_id": user_id, "findings_updated": moved})
     db.commit()
     return {"findings_updated": moved, **mappings.owner_mappings(db, tenant_id)}
 
@@ -827,17 +982,172 @@ def lob_mappings(db: Session = Depends(get_db), current_user: GRCUser = Depends(
 @router.put("/mappings/lobs", dependencies=[Depends(_require_create)])
 def set_lob_mapping(
     body: Dict[str, Any],
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
+    name = str(body.get("name") or "")
     try:
         result = mappings.set_lob_mapping(
-            db, tenant_id, str(body.get("name") or ""),
+            db, tenant_id, name,
             int(body["business_unit_id"]) if body.get("business_unit_id") else None,
             create=bool(body.get("create")), actor=current_user)
     except ValueError as exc:
         db.rollback()
         _bad_request(exc)
+    unit = db.get(BusinessUnit, result["business_unit_id"]) if result["business_unit_id"] else None
+    _audit(request, db, tenant_id, current_user, "lob_mapped",
+           f'Mapped the LOB "{name}" to {("the new business unit " if body.get("create") else "")}'
+           f'{unit.name if unit else "no business unit"} — {result["findings"]} finding(s) moved',
+           resource_name=name, after={"name": name, **result, "created": bool(body.get("create"))})
     db.commit()
     return {**result, **mappings.lob_mappings(db, tenant_id)}
+
+
+# ── settings: SLAs, dropdown lists, reports and exams, numbering ─────────────
+
+def _settings_payload(db: Session, tenant_id: int, current: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        **current,
+        "values": register_settings.list_values(db, tenant_id, current),
+    }
+
+
+@router.get("/settings", dependencies=[Depends(_require_view)])
+def read_settings(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    return _settings_payload(db, tenant_id, register_settings.get_settings(db, tenant_id))
+
+
+@router.put("/settings", dependencies=[Depends(_require_create)])
+def write_settings(
+    body: Dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Save the parts of the settings that changed (sla, email, audit_services,
+    lists, numbering)."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    before = register_settings.get_settings(db, tenant_id)
+    try:
+        current = register_settings.save_settings(db, tenant_id, body or {}, current_user)
+    except (ValueError, TypeError) as exc:
+        db.rollback()
+        _bad_request(exc)
+    changed = sorted(k for k in (body or {}) if before.get(k) != current.get(k))
+    _audit(request, db, tenant_id, current_user, "settings_updated",
+           f"Changed the register settings: {', '.join(changed) or 'no change'}",
+           before={k: before.get(k) for k in changed}, after={k: current.get(k) for k in changed})
+    db.commit()
+    return _settings_payload(db, tenant_id, current)
+
+
+@router.get("/report-catalog", dependencies=[Depends(_require_view)])
+def list_report_catalog(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The audit reports and exams findings are picked against."""
+    from sqlalchemy.exc import IntegrityError
+
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        rows = register_settings.report_catalog(db, tenant_id)
+        db.commit()                                  # the sync may have added some
+    except IntegrityError:                           # another request added the same one first
+        db.rollback()
+        rows = register_settings.report_catalog(db, tenant_id)
+    return rows
+
+
+@router.post("/report-catalog", dependencies=[Depends(_require_create)])
+def add_report(
+    body: Dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        report = register_settings.create_report(db, tenant_id, str(body.get("source") or ""),
+                                                 body, current_user)
+    except ValueError as exc:
+        db.rollback()
+        _bad_request(exc)
+    _audit(request, db, tenant_id, current_user, "report_added",
+           f"Added the audit report \"{report.report_name or report.report_number}\" "
+           f"({T.SOURCE_TITLES.get(report.source, report.source)})",
+           resource_name=report.report_name or report.report_number,
+           after=register_settings.report_payload(report))
+    db.commit()
+    return register_settings.report_payload(report)
+
+
+def _report_or_404(db: Session, tenant_id: int, report_id: int) -> AuditRegisterReport:
+    report = (db.query(AuditRegisterReport)
+              .filter(AuditRegisterReport.id == report_id,
+                      AuditRegisterReport.tenant_id == tenant_id).first())
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found")
+    return report
+
+
+@router.put("/report-catalog/{report_id}", dependencies=[Depends(_require_create)])
+def edit_report(
+    report_id: int,
+    body: Dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Correct a report once; every finding on it follows."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    report = _report_or_404(db, tenant_id, report_id)
+    before = register_settings.report_payload(report)
+    try:
+        moved = register_settings.update_report(db, report, body or {})
+    except (ValueError, TypeError) as exc:
+        db.rollback()
+        _bad_request(exc)
+    after = register_settings.report_payload(report)
+    _audit(request, db, tenant_id, current_user, "report_updated",
+           f"Updated the audit report \"{report.report_name or report.report_number}\" — "
+           f"{moved} finding(s) updated",
+           resource_name=report.report_name or report.report_number, before=before, after=after)
+    db.commit()
+    return {**after, "findings_updated": moved}
+
+
+@router.delete("/report-catalog/{report_id}", dependencies=[Depends(_require_create)])
+def remove_report(
+    report_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    report = _report_or_404(db, tenant_id, report_id)
+    name = report.report_name or report.report_number
+    try:
+        register_settings.delete_report(db, report)
+    except ValueError as exc:
+        db.rollback()
+        _bad_request(exc)
+    _audit(request, db, tenant_id, current_user, "report_deleted",
+           f"Removed the audit report \"{name}\" from the list", resource_name=name)
+    db.commit()
+    return {"deleted": True}
+
+
+@router.get("/next-reference", dependencies=[Depends(_require_view)])
+def suggest_reference(
+    template: str,
+    report_key: str = None,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The Issue # a new finding on this report would get."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        return {"reference": register_settings.next_reference(db, tenant_id, template, report_key or None)}
+    except ValueError as exc:
+        _bad_request(exc)

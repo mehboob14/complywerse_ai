@@ -291,9 +291,11 @@ _REPORT_FIELDS = ("regulator", "source_label", "report_number", "report_name", "
 
 
 def report_prefill(profile: AuditIssueProfile) -> Dict[str, Any]:
-    """What another finding on the same report starts from, in the sheet's columns."""
-    return {f: (v.isoformat() if isinstance(v, date) else v) for f in _REPORT_FIELDS
-            if (v := getattr(profile, f)) not in (None, "")}
+    """What another finding on the same report starts from, in the sheet's columns,
+    plus the report's key so the form picks the same report from the list."""
+    return {**{f: (v.isoformat() if isinstance(v, date) else v) for f in _REPORT_FIELDS
+               if (v := getattr(profile, f)) not in (None, "")},
+            **({"report_key": profile.report_key} if profile.report_key else {})}
 
 
 def reports(db: Session, tenant_id: int) -> List[Dict[str, Any]]:

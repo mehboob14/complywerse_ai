@@ -157,6 +157,8 @@ def write_rich_audit_log(
     # workflow-written rows when polling for new platform events. When None,
     # inherited from the active workflow_actor_context (else "user").
     actor_source: Optional[str] = None,
+    # Who to show when there is no user, e.g. "Scheduler" for a nightly job.
+    actor_display: Optional[str] = None,
 ) -> None:
     """Append one audit-log row from non-HTTP code (workflows, schedulers).
 
@@ -195,7 +197,7 @@ def write_rich_audit_log(
             "user_agent": None,
             "request": None,
             "actor": None,
-            "actor_display": None,
+            "actor_display": actor_display,
             "actor_type": resolved_actor_type,
             "actor_source": resolved_actor_source,
             "resource_name": resource_name,

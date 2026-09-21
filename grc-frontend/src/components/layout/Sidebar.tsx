@@ -230,7 +230,9 @@ const navigation: NavEntry[] = [
   {
     name: 'Auditor Portal',
     icon: Gavel,
-    requiredModules: ['frameworks', 'compliance'],
+    // issue_management: a role with only issue permissions still reaches the
+    // Issue Register; the other items keep their own permission gates.
+    requiredModules: ['frameworks', 'compliance', 'issue_management'],
     items: [
       { name: 'Portal', href: '/auditor-portal', icon: Gavel, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Internal Audit', href: '/auditor-portal/internal-audit', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },

@@ -112,6 +112,29 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
                    "issue-management.issues.update"],
         "delete": ["issue-management.issues.delete"],
     },
+    # ── Audit Issue Register ────────────────────────────────────────────
+    # One readable row per register action (routers/audit_register.py
+    # _audit); resource_id is the finding's issue id. A finding added by
+    # hand is a new issue, and one that passes validation is closed, so
+    # those also fire the generic issue events.
+    "audit-register": {
+        "create": ["audit_finding_added", "issue_created"],
+        "update": ["audit_finding_updated"],
+        "delete": ["audit_finding_deleted"],
+        "restore": ["audit_finding_restored"],
+        "submit_validation": ["audit_finding_submitted_for_validation"],
+        "validation_passed": ["audit_finding_validated", "issue_closed"],
+        "validation_more_info": ["audit_finding_returned"],
+        "validation_failed": ["audit_finding_returned"],
+        "extension_requested": ["audit_extension_requested"],
+        "extension_approved": ["audit_extension_decided", "audit_extension_approved"],
+        "extension_rejected": ["audit_extension_decided", "audit_extension_rejected"],
+        "regulator_status_changed": ["audit_regulator_status_changed"],
+        "reminders_sent": ["audit_reminders_sent"],
+    },
+    "audit-register-import": {
+        "import": ["audit_register_imported"],
+    },
     # ── ERM / Risk sub-entity resource types ─────────────────────────────
     "mitigation-actions": {
         "create": ["mitigation_action_created"],

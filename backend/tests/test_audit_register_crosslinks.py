@@ -121,3 +121,27 @@ def test_an_owner_mapped_once_is_used_by_every_import(db, tmp_path):
     db.commit()
     issue, _ = _mra(db)
     assert issue.owner_id == 9                                       # the import used the mapping
+
+
+def test_an_incident_deleted_in_erm_is_unlinked_and_not_brought_back(db, tmp_path):
+    from grc.modules.erm.routers.incidents import _clear_incident_references
+
+    profile = db.query(m.AuditIssueProfile).filter(m.AuditIssueProfile.source == "self_id").one()
+    incident_id = profile.incident_id
+    db.add(m.Risk(id=41, tenant_id=1, title="Wire risk", category="operational",
+                  source_incident_id=incident_id))
+    db.add(m.IncidentRiskLink(incident_id=incident_id, risk_id=41))
+    db.commit()
+
+    _clear_incident_references(db, incident_id)            # what the delete endpoint runs first
+    db.delete(db.get(m.RiskIncident, incident_id))
+    db.commit()
+
+    assert db.get(m.Risk, 41).source_incident_id is None   # the risk stays, unlinked
+    assert db.query(m.IncidentRiskLink).count() == 0       # the link row goes
+    db.refresh(profile)
+    assert profile.incident_id is None                     # the register finding stays
+
+    apply_workbook(db, 1, parse_workbook(_book(tmp_path, "oct.xlsx")), actor_id=7)
+    db.commit()
+    assert db.query(m.RiskIncident).count() == 0           # next month's upload leaves it deleted

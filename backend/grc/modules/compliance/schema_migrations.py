@@ -281,6 +281,7 @@ _COLUMN_ADDS = [
     ("grc_audit_register_imports", "sheet_headers", "JSON DEFAULT '{}'::json", None),
     ("grc_audit_issue_profiles", "deleted_at", "TIMESTAMP", None),
     ("grc_audit_issue_profiles", "deleted_by", "INTEGER", None),
+    ("grc_audit_register_reports", "project_name", "TEXT", None),
     # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
     # a stage's numbers/actions unlock only after the previous stage is stamped.
     ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),
@@ -1020,6 +1021,21 @@ _COLUMN_ADDS = [
 ]
 
 
+def _backfill_audit_register_source_type(engine: Engine) -> None:
+    """Register findings (issue_type 'audit_finding') with no source → 'audit'."""
+    try:
+        if not inspect(engine).has_table("grc_issues"):
+            return
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE grc_issues SET source_type = 'audit' "
+                "WHERE issue_type = 'audit_finding' AND source_type IS NULL"
+            ))
+    except Exception:
+        logger.exception("audit register source_type backfill failed on %s",
+                         getattr(engine.url, "database", "?"))
+
+
 def _backfill_framework_assessment_register_type(engine: Engine) -> None:
     """One-shot data backfill.
 
@@ -1187,6 +1203,10 @@ def _ensure_for_engine(engine: Engine) -> None:
         # find them. Idempotent — rows already migrated have a non-legacy
         # `register_type` and are skipped on subsequent runs.
         _backfill_framework_assessment_register_type(engine)
+
+        # Audit register findings imported before the importer set the issue's
+        # source show as "Manual" in Issues; tag them "audit". Idempotent.
+        _backfill_audit_register_source_type(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

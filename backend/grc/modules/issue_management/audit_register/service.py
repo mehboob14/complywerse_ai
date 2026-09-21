@@ -210,6 +210,7 @@ def _issue_fields(row: RegisterRow, owner_id: Optional[int],
         "severity": T.SEVERITY_BY_RISK_RATING.get(
             str(values.get("risk_rating") or "").strip().upper(), "medium"),
         "issue_type": "audit_finding",
+        "source_type": "audit",        # Issues' own "Audit" source: its chip, filter and rollup
         "category": category or _SOURCE_CATEGORY.get(row.source or ""),
         "owner_id": owner_id,
         "due_date": datetime.combine(due, datetime.min.time()) if due else None,
@@ -312,7 +313,9 @@ def apply_workbook(db: Session, tenant_id: int, book: ParsedWorkbook, *,
                                         title_key=title_key)
             db.add(profile)
             result.created += 1
+            is_new = True
         else:
+            is_new = False
             issue = db.get(Issue, profile.issue_id)
             # A field someone edited in the platform wins over this file: the
             # edit is newer than the month-end pack it would be reverted from.
@@ -353,7 +356,7 @@ def apply_workbook(db: Session, tenant_id: int, book: ParsedWorkbook, *,
                                       vulnerabilities=vulnerabilities, actor_id=actor_id).items():
             result.linked[kind] += count
         for kind, count in sync_crosslinks(db, issue, profile, actor_id=actor_id,
-                                           as_of=book.as_of).items():
+                                           as_of=book.as_of, create=is_new).items():
             result.linked[kind] = result.linked.get(kind, 0) + count
 
     record.created_count = result.created

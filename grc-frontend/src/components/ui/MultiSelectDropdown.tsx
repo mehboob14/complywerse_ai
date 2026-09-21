@@ -45,6 +45,8 @@ export interface MultiSelectDropdownProps {
   showAvatars?: boolean;
   /** Greyed-out trigger that does not open. */
   disabled?: boolean;
+  /** Offer "+ Add “typed text”" when the search matches no item exactly. */
+  onCreate?: (text: string) => void;
 }
 
 const sizeStyles = {
@@ -73,6 +75,7 @@ export function MultiSelectDropdown({
   showSelectionInTrigger = true,
   showAvatars = true,
   disabled = false,
+  onCreate,
 }: MultiSelectDropdownProps) {
   const getInitials = (text: string) => {
     const cleaned = text.trim();
@@ -177,6 +180,10 @@ export function MultiSelectDropdown({
       return inLabel || Boolean(inSubLabel);
     });
   }, [items, query]);
+
+  const typed = query.trim();
+  const canCreate = Boolean(onCreate && typed
+    && !items.some((item) => item.label.toLowerCase() === typed.toLowerCase()));
 
   const hasAppliedFilter = selectedValues.length > 0;
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
@@ -295,8 +302,17 @@ export function MultiSelectDropdown({
           <div
             className={clsx('scrollbar-primary-thin max-h-64 overflow-auto overflow-x-auto p-2', listClassName)}
           >
+            {canCreate && (
+              <button
+                type="button"
+                onClick={() => { onCreate?.(typed); setIsOpen(false); setQuery(''); }}
+                className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm font-medium text-primary-700 hover:bg-primary-50"
+              >
+                + Add “{typed}”
+              </button>
+            )}
             {filteredItems.length === 0 ? (
-              <div className="px-2 py-3 text-sm text-slate-500">No items found</div>
+              !canCreate && <div className="px-2 py-3 text-sm text-slate-500">No items found</div>
             ) : (
               filteredItems.map((item) => {
                 const checked = draftSet.has(item.value);

@@ -7,7 +7,7 @@
  * and the table below shows the register in their own columns and words, while
  * every row is a real issue underneath with an owner, actions and links.
  */
-import { Fragment, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Bell, CheckCircle2, ClipboardCheck, Download, ExternalLink, Eye, FileSpreadsheet,
@@ -21,6 +21,7 @@ import Link from 'next/link';
 import { auditRegisterApi } from '@/lib/api';
 import { RegisterSummary } from './RegisterSummary';
 import { RegisterExtensions, RegisterMappings, RegisterReports } from './RegisterViews';
+import { RegisterSettings } from './RegisterSettings';
 
 type Preview = {
   file_name: string;
@@ -40,14 +41,23 @@ type ImportResult = {
 };
 
 type Reminders = {
-  due_soon: number; past_due: number; owners: number; escalated: number;
-  items: Array<{ issue_id: number; reference: string | null; title: string; due: string; past_due: number; kind: string }>;
+  due_soon: number; past_due: number; delayed: number; not_started: number; validation_waiting: number;
+  owners: number; escalated: number; email: boolean;
+  items: Array<{ issue_id: number; reference: string | null; title: string; due: string | null;
+    past_due: number; kind: string; waited?: number }>;
+};
+const REMINDER_KIND: Record<string, (i: Reminders['items'][number]) => string> = {
+  past_due: (i) => `${i.past_due}d past due`,
+  due_soon: (i) => `due ${i.due}`,
+  delayed: () => 'validation needs more from the owner',
+  not_started: () => 'not started yet',
+  validation_waiting: (i) => `waiting on validation ${i.waited}d · to Audit Services`,
 };
 
-type View = 'register' | 'summary' | 'reports' | 'extensions' | 'mappings' | 'imports';
+type View = 'register' | 'summary' | 'reports' | 'extensions' | 'mappings' | 'imports' | 'settings';
 const VIEWS: Array<[View, string]> = [
   ['register', 'Register'], ['summary', 'Issue Summary'], ['reports', 'Reports'],
-  ['extensions', 'Extensions'], ['mappings', 'Mappings'], ['imports', 'Imports'],
+  ['extensions', 'Extensions'], ['mappings', 'Mappings'], ['imports', 'Imports'], ['settings', 'Settings'],
 ];
 
 // Status as the client defines it; Past Due applied once the agreed date passes.
@@ -113,6 +123,8 @@ export function AuditRegister({ initialSource = '' }: { initialSource?: string }
   const [newFinding, setNewFinding] = useState<{ template: string | null; prefill?: Record<string, unknown> } | null>(null);
   const [rowMenu, setRowMenu] = useState<number | null>(null);
   const [view, setView] = useState<View>('register');
+  const [settingsSection, setSettingsSection] = useState<'sla' | 'reports'>('sla');
+  const openSettings = (section: 'sla' | 'reports') => { setSettingsSection(section); setView('settings'); };
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [reportFilter, setReportFilter] = useState<{ key: string | null; label: string } | null>(null);
@@ -219,11 +231,16 @@ export function AuditRegister({ initialSource = '' }: { initialSource?: string }
     queryFn: async () => (await auditRegisterApi.previewReminders()).data,
     enabled: remindOpen,
   });
+  // Email or not starts from Settings; the box here decides for this send.
+  useEffect(() => {
+    if (reminderPreview.data) setRemindEmail(!!reminderPreview.data.email);
+  }, [reminderPreview.data]);
   const remind = useMutation({
     mutationFn: async () => (await auditRegisterApi.sendReminders(remindEmail)).data as Reminders,
     onSuccess: (data) => {
-      setRemindNote(`Reminded ${data.owners} owner(s) about ${data.due_soon + data.past_due} finding(s)`
-        + (data.escalated ? `; ${data.escalated} escalated to Audit Services.` : '.'));
+      setRemindNote(`Reminded ${data.owners} owner(s) about ${data.due_soon + data.past_due + data.delayed + data.not_started} finding(s)`
+        + (data.escalated ? `; ${data.escalated} escalated to Audit Services` : '')
+        + (data.validation_waiting ? `; ${data.validation_waiting} waiting validation(s) flagged` : '') + '.');
       setRemindOpen(false);
       queryClient.invalidateQueries({ queryKey: ['audit-register-reminders'] });
     },
@@ -414,10 +431,12 @@ export function AuditRegister({ initialSource = '' }: { initialSource?: string }
           onOpen={(id) => { setNewFinding(null); setOpenIssue({ id, edit: false }); }}
           onAddFinding={addFinding}
           onShowInRegister={(s, report) => drill({ source: s, report })}
+          onManageReports={() => openSettings('reports')}
         />
       )}
       {view === 'extensions' && <RegisterExtensions onOpen={(id) => { setNewFinding(null); setOpenIssue({ id, edit: false, focus: 'workflow' }); }} />}
       {view === 'mappings' && <RegisterMappings />}
+      {view === 'settings' && <RegisterSettings key={settingsSection} initial={settingsSection} />}
 
       {view === 'imports' && (
         <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -510,17 +529,22 @@ export function AuditRegister({ initialSource = '' }: { initialSource?: string }
                 ) : reminderPreview.data ? (
                   <>
                     <p className="font-semibold text-slate-900">
-                      {reminderPreview.data.due_soon} coming due (14 days) · {reminderPreview.data.past_due} past due
+                      {([[reminderPreview.data.due_soon, 'coming due'], [reminderPreview.data.past_due, 'past due'],
+                        [reminderPreview.data.delayed, 'delayed'], [reminderPreview.data.not_started, 'not started'],
+                        [reminderPreview.data.validation_waiting, 'waiting on validation']] as Array<[number, string]>)
+                        .filter(([n]) => n).map(([n, label]) => `${n} ${label}`).join(' · ') || 'Nothing due today'}
                     </p>
                     <p className="mt-0.5 text-[11px] text-slate-500">
                       {reminderPreview.data.owners} owner(s), one message each
-                      {reminderPreview.data.escalated ? `; ${reminderPreview.data.escalated} 30+ days past due escalate to Audit Services` : ''}.
-                      Each finding is reminded at most weekly.
+                      {reminderPreview.data.escalated ? `; ${reminderPreview.data.escalated} escalate to Audit Services` : ''}.
+                      When and how often follow the SLAs in{' '}
+                      <button onClick={() => { setRemindOpen(false); openSettings('sla'); }}
+                              className="font-semibold text-primary-700 hover:underline">Settings</button>.
                     </p>
                     <ul className="mt-2 max-h-40 space-y-0.5 overflow-y-auto text-[11px] text-slate-600">
                       {reminderPreview.data.items.slice(0, 30).map((i) => (
-                        <li key={i.issue_id} className="truncate">
-                          {i.reference ? `${i.reference} · ` : ''}{i.title} — {i.past_due ? `${i.past_due}d past due` : `due ${i.due}`}
+                        <li key={`${i.kind}-${i.issue_id}`} className="truncate">
+                          {i.reference ? `${i.reference} · ` : ''}{i.title} — {(REMINDER_KIND[i.kind] || REMINDER_KIND.due_soon)(i)}
                         </li>
                       ))}
                     </ul>
@@ -743,7 +767,7 @@ export function AuditRegister({ initialSource = '' }: { initialSource?: string }
         isOpen={!!openIssue || !!newFinding}
         onClose={() => { setOpenIssue(null); setNewFinding(null); }}
         title={newFinding ? 'Add a finding' : rows.data?.find((r) => r.issue_id === openIssue?.id)?.title || 'Finding'}
-        subtitle={newFinding ? 'On one of the workbook’s sheets, in its columns' : (() => {
+        subtitle={newFinding ? 'Pick the kind of finding and the report it came from' : (() => {
           const r = rows.data?.find((x) => x.issue_id === openIssue?.id);
           return r ? `${SOURCE_LABELS[r.source] || r.source}${r.reference ? ` · ${r.reference}` : ''}${r.code ? ` · ${r.code}` : ''}` : undefined;
         })()}

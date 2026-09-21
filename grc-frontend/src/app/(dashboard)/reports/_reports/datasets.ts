@@ -7,7 +7,7 @@ import apiClient, {
   vulnManagementApi, issuesApi, ermApi, criticalTasksApi, bcmApi, isProjectsApi,
   criticalityApi, discoveryApi, regulatoryApi, frameworksApi,
   committeeApi, policyExceptionApi,
-  rcsaApi, complianceApi, tpraApi, aiRiskAssessmentApi,
+  rcsaApi, complianceApi, tpraApi, aiRiskAssessmentApi, auditRegisterApi,
 } from '@/lib/api';
 import { asRows } from './grid-utils';
 import type { ColumnDef, ReportDataset } from './types';
@@ -61,6 +61,26 @@ const boolTrue = (v: unknown): boolean => {
   return s === 'true' || s === '1' || s === 'yes';
 };
 const boolFmt = (v: unknown) => (v == null || v === '' ? '' : boolTrue(v) ? 'Yes' : 'No');
+
+// Audit Issue Register: the client's own status codes and source headings.
+const REGISTER_STATUS: Record<string, string> = {
+  NS: 'Not Started', IP: 'In Progress', DE: 'Delayed', PD: 'Past Due', EXT: 'Extension', CD: 'Closed',
+  unstated: 'No status',
+};
+const registerTone = (v: unknown): string => {
+  const s = String(v ?? '');
+  if (s === 'PD') return TONE.red;
+  if (s === 'DE' || s === 'EXT') return TONE.amber;
+  if (s === 'CD') return TONE.green;
+  if (s === 'IP') return TONE.teal;
+  return TONE.slate;
+};
+const REGISTER_SOURCE: Record<string, string> = {
+  regulator: 'Regulator', mercadien: 'CFSB Audit-Mercadien', ey: 'CFSB Audit-EY',
+  internal_audit: 'Internal Audit', self_id: 'Self Identified', it_pen: 'IT Pen Test',
+  credit_review: 'Credit Reviews',
+};
+const registerSource = (v: unknown) => REGISTER_SOURCE[String(v ?? '')] || titleCase(v);
 
 const fetchAssessmentsByFormats = async (formats: string[]) => {
   const results = await Promise.all(
@@ -852,6 +872,77 @@ export const DATASETS: ReportDataset[] = [
     description: 'Internal audit master-tracking assessments (UBL audit format).',
     fetch: async () => fetchAssessmentsByFormats(['ubl_audit_master_tracking']),
     columns: ASSESSMENT_COLUMNS,
+  },
+  // Auditor Portal › Issue Register. Client mode: status and days past due are
+  // worked out on the server from the client's definitions, not stored columns.
+  // The monthly SUMMARY pack is a sectioned document; it exports from Issue
+  // Register → Issue Summary rather than as a flat dataset.
+  {
+    key: 'audit_register', permissions: ['issue_management:issues:*'], module: 'Auditor Portal', label: 'Issue Register',
+    description: 'Regulatory, internal audit, pen-test and self-identified findings in the client\'s template: status, aging, validation, owner.',
+    fetch: async () => asRows((await auditRegisterApi.rows()).data).map((r) => ({ id: r.issue_id, ...r })),
+    columns: [
+      { key: 'code', label: 'Code', type: 'text', width: 100, href: (r) => `/issues/${r.issue_id}` },
+      { key: 'reference', label: 'Issue #', type: 'text', width: 110 },
+      { key: 'title', label: 'Issue name', type: 'text', width: 280, href: (r) => `/issues/${r.issue_id}` },
+      { key: 'source', label: 'Source', type: 'badge', width: 170, badgeTone: () => TONE.slate, format: registerSource },
+      { key: 'record_type', label: 'Issue / Recommendation', type: 'badge', width: 140, badgeTone: () => TONE.slate, format: titleCase },
+      { key: 'report', label: 'Report', type: 'text', width: 220 },
+      { key: 'regulator', label: 'Regulator', type: 'text', width: 100 },
+      { key: 'risk_rating', label: 'Risk rating', type: 'badge', width: 110, badgeTone: sevTone },
+      { key: 'lob', label: 'LOB', type: 'text', width: 110 },
+      { key: 'owner', label: 'Owner', type: 'text', width: 170, accessor: (r) => r.owner_name ?? r.owner },
+      { key: 'target_date', label: 'Target date', type: 'date', width: 120 },
+      { key: 'revised_target_date', label: 'Revised target', type: 'date', width: 120 },
+      { key: 'status', label: 'Status', type: 'badge', width: 120, badgeTone: registerTone, format: (v) => REGISTER_STATUS[String(v ?? '')] || titleCase(v) },
+      { key: 'ia_status', label: 'Recorded status', type: 'text', width: 110 },
+      { key: 'days_past_due', label: 'Days past due', type: 'number', width: 110, align: 'right', agg: 'avg' },
+      { key: 'validation_pass_fail', label: 'Validation', type: 'badge', width: 110, badgeTone: statusTone, accessor: (r) => r.validation_pass_fail ?? r.validation_status },
+      { key: 'workflow_state', label: 'Issue state', type: 'badge', width: 130, badgeTone: statusTone, format: titleCase },
+      { key: 'added_in_platform', label: 'Added in platform', type: 'badge', width: 120, badgeTone: (v) => (boolTrue(v) ? TONE.teal : TONE.slate), format: boolFmt },
+    ],
+  },
+  {
+    key: 'audit_register_reports', permissions: ['issue_management:issues:*'], module: 'Auditor Portal', label: 'Issue Register — by report',
+    description: 'One line per audit report or exam: findings, open, past due, closed, next due date and owners.',
+    fetch: async () => asRows((await auditRegisterApi.reports()).data).map((r) => ({
+      ...r,
+      id: `${r.source}|${r.key ?? r.report}`,
+      owners: Array.isArray(r.owners) ? (r.owners as string[]).join(', ') : r.owners,
+    })),
+    columns: [
+      { key: 'source', label: 'Source', type: 'badge', width: 170, badgeTone: () => TONE.slate, format: registerSource },
+      { key: 'report', label: 'Report', type: 'text', width: 280 },
+      { key: 'report_number', label: 'Report #', type: 'text', width: 110 },
+      { key: 'report_date', label: 'Report date', type: 'date', width: 120 },
+      { key: 'regulator', label: 'Regulator', type: 'text', width: 100 },
+      { key: 'issues', label: 'Issues', type: 'number', width: 90, align: 'right', agg: 'sum' },
+      { key: 'recommendations', label: 'Recommendations', type: 'number', width: 130, align: 'right', agg: 'sum' },
+      { key: 'open', label: 'Open', type: 'number', width: 80, align: 'right', agg: 'sum' },
+      { key: 'past_due', label: 'Past due', type: 'number', width: 90, align: 'right', agg: 'sum' },
+      { key: 'closed', label: 'Closed', type: 'number', width: 90, align: 'right', agg: 'sum' },
+      { key: 'next_due', label: 'Next due', type: 'date', width: 120 },
+      { key: 'owners', label: 'Owners', type: 'text', width: 260 },
+    ],
+  },
+  {
+    key: 'audit_register_extensions', permissions: ['issue_management:issues:*'], module: 'Auditor Portal', label: 'Issue Register — extensions',
+    description: 'Extension requests put to the Audit Committee, the dates asked for and what was decided.',
+    fetch: async () => asRows((await auditRegisterApi.extensions()).data),
+    columns: [
+      { key: 'reference', label: 'Issue #', type: 'text', width: 110, href: (r) => `/issues/${r.issue_id}` },
+      { key: 'title', label: 'Finding', type: 'text', width: 260, href: (r) => `/issues/${r.issue_id}` },
+      { key: 'source', label: 'Source', type: 'badge', width: 170, badgeTone: () => TONE.slate, format: registerSource },
+      { key: 'previous_date', label: 'Target before', type: 'date', width: 120 },
+      { key: 'requested_date', label: 'Requested date', type: 'date', width: 120 },
+      { key: 'reason', label: 'Reason', type: 'text', width: 260 },
+      { key: 'meeting', label: 'Committee meeting', type: 'text', width: 200, accessor: (r) => (r.meeting as { title?: string } | null)?.title },
+      { key: 'status', label: 'Decision', type: 'badge', width: 110, badgeTone: statusTone, format: titleCase },
+      { key: 'decided_on', label: 'Decided on', type: 'date', width: 120 },
+      { key: 'decision_notes', label: 'Minutes', type: 'text', width: 240 },
+      { key: 'needs_regulator_notice', label: 'Regulator to be told', type: 'badge', width: 140, badgeTone: (v) => (boolTrue(v) ? TONE.red : TONE.slate), format: boolFmt },
+      { key: 'requested_by', label: 'Requested by', type: 'text', width: 150 },
+    ],
   },
   // `auditor_packages` (Sidebar: Auditor Portal › Portal) has no dedicated list
   // API of its own — the page picks a framework via the same certification-journey

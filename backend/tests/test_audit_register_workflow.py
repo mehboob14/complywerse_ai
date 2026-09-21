@@ -41,7 +41,7 @@ def _book(tmp_path, name="sep.xlsx"):
                 "Detail", "Rivera, P", "TPRM", TODAY - timedelta(days=40), "", "IP", "", ""])
     pen = wb.create_sheet("IT Pen")
     pen.append(PEN)
-    pen.append(["CLD-2024", "CLDCA.01", "Issue", "Open", "Independent Review",
+    pen.append(["CLD-2024", "CLDCA.01", "Issue", "Open", "Outside Assessor",
                 "IAM password policy", "Moderate", "Rivera, P", TODAY + timedelta(days=60)])
     self_id = wb.create_sheet("Self ID")
     self_id.append(SELF)

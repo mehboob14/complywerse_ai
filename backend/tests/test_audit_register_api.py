@@ -194,3 +194,39 @@ def test_a_finding_is_deleted_restored_and_the_template_downloads(client, workbo
     blank = http.get(f"{base}/template")
     assert blank.status_code == 200 and blank.content[:2] == b"PK"
     assert "register - blank.xlsx" in blank.headers["content-disposition"]
+
+
+def test_settings_reports_and_numbering_are_served_and_a_picked_report_fills_the_finding(client, workbook):
+    http, session = client
+    base = "/issue-management/issues/audit-register"
+    _upload(http, workbook, "import")
+
+    settings = http.get(f"{base}/settings").json()
+    assert settings["sla"]["PD"]["escalate_after"] == 30 and "OCC" in settings["values"]["regulator"]
+    saved = http.put(f"{base}/settings", json={"sla": {"PD": {"escalate_after": 45}},
+                                                "lists": {"regulator": ["FDIC"]}})
+    assert saved.status_code == 200 and saved.json()["values"]["regulator"] == ["FDIC", "OCC"]
+    bad = http.put(f"{base}/settings", json={"numbering": {"regulatory": "MRA"}})
+    assert bad.status_code == 400 and "{n}" in bad.json()["detail"]
+
+    catalog = http.get(f"{base}/report-catalog").json()
+    exam = next(r for r in catalog if r["report_key"] == "R-1")
+    assert exam["findings"] == 2 and exam["source_label"] == "OCC"
+    assert http.get(f"{base}/next-reference", params={"template": "regulatory",
+                                                       "report_key": "R-1"}).json() == {"reference": "MRA-3"}
+
+    moved = http.put(f"{base}/report-catalog/{exam['id']}", json={"report_date": "2024-06-01"}).json()
+    assert moved["findings_updated"] == 2 and moved["report_date"] == "2024-06-01"
+    assert http.delete(f"{base}/report-catalog/{exam['id']}").status_code == 400    # findings use it
+
+    made = http.post(f"{base}/findings", json={"template": "regulatory", "report_id": exam["id"],
+                                                "values": {"title": "Board reporting", "issue_ref": "MRA-3"}})
+    assert made.status_code == 200, made.text
+    profile = session.query(m.AuditIssueProfile).filter(m.AuditIssueProfile.issue_ref == "MRA-3").one()
+    assert (profile.report_key, profile.regulator, profile.report_date) == ("R-1", "OCC", date(2024, 6, 1))
+
+    spare = http.post(f"{base}/report-catalog", json={"source": "regulator", "source_label": "FDIC",
+                                                       "report_name": "Cyber exam"}).json()
+    assert http.delete(f"{base}/report-catalog/{spare['id']}").json() == {"deleted": True}
+    actions = {r.action for r in session.query(m.AuditLog).filter(m.AuditLog.resource_type == "audit-register")}
+    assert {"settings_updated", "report_updated", "report_added", "report_deleted"} <= actions

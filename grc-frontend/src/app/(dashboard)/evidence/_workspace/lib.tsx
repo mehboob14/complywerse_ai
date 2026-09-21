@@ -137,7 +137,7 @@ export const TYPE_ICONS: Record<string, typeof FileText> = {
   log: FileSpreadsheet, policy: FileText, procedure: ClipboardList, configuration: Settings,
   attestation: ShieldCheck, training_record: ClipboardList, access_review: Eye,
   vulnerability_scan: AlertTriangle, penetration_test: ShieldCheck, backup_log: FileSpreadsheet,
-  change_record: Edit2, incident_report: AlertCircle, other: FileCheck,
+  change_record: Edit2, incident_report: AlertCircle, validation_material: ClipboardList, other: FileCheck,
 };
 export function getTypeIcon(t: string | null) {
   return TYPE_ICONS[t || 'other'] || FileCheck;

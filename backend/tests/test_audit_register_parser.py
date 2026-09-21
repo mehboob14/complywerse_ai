@@ -86,7 +86,7 @@ def workbook_path(tmp_path):
     pen = wb.create_sheet("IT Pen")
     pen.append(ARCHIVE)
     pen.append(["Cloud Console Review", "CLDCA.01", "Recommendation", "Closed-Pending Validation",
-                "Independent Review", "2023", date(2024, 1, 24), "IAM password length",
+                "Outside Assessor", "2023", date(2024, 1, 24), "IAM password length",
                 "Password policies enforce complexity", "Moderate", "Require 14 characters",
                 "Set the policy", "Policy updated", date(2024, 4, 5), "", 748, ">90", "IT/IS",
                 "Information Technology", "ZEPHYR", "SELF ID", "COMPLETED", "REMEDIATION",

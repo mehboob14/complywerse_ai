@@ -39,7 +39,7 @@ def db(tmp_path):
         sheet = wb.active
         sheet.title = "IT Pen"
         sheet.append(PEN)
-        sheet.append(["Cloud Console Review", "CLDCA.01", "Issue", "Independent Review",
+        sheet.append(["Cloud Console Review", "CLDCA.01", "Issue", "Outside Assessor",
                       "IAM password policy is too short", "Moderate", "ZEPHYR",
                       "VULNERABILITY", "web-api-prod"])
         path = tmp_path / "pen.xlsx"

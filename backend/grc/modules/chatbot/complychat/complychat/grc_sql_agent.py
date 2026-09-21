@@ -775,9 +775,11 @@ assessment_period_start, assessment_period_end, status, lead_assessor_id,
 business_unit_id, framework_id, approved_by, approved_at, notes, created_at, updated_at
 
 **grc_issues**:
-id, tenant_id, title, description, severity, status, owner_id, due_date, created_at, closed_at
+id, tenant_id, code, title, description, severity, status, workflow_state, issue_type, source_type, owner_id, due_date, created_at, closed_at
   — severity: 'low','medium','high','critical'
   — status: 'open','in_progress','resolved','closed'
+  — workflow_state: 'new','triage','in_progress','resolution','closure_review','closed','cancelled'
+  — audit register findings have issue_type 'audit_finding' (details in grc_audit_issue_profiles, Domain 17B)
 
 **QUERY EXAMPLES**:
 ```sql
@@ -1491,6 +1493,51 @@ be queried.
 - Do not generate SQL against Audit Management tables.
 - Redirect users toward governance, compliance, evidence, risk, certification,
   Auditor Portal / evidence audit packages, and vulnerability workflows.
+- Audit FINDINGS, MRAs, recommendations, extensions and the monthly issue
+  summary are NOT retired: they live in the Audit Issue Register (Domain 17B).
+
+=================================================================================
+📂 DOMAIN 17B: AUDIT ISSUE REGISTER (ACTIVE — always generate SQL)
+=================================================================================
+Audit Services' register of regulatory MRAs, internal audit (Mercadien, EY)
+issues and recommendations, IT pen-test and self-identified findings, imported
+from the monthly workbook. Every finding is one row here PLUS one grc_issues row.
+
+**grc_audit_issue_profiles** (one per finding; JOIN grc_issues i ON i.id = p.issue_id):
+id, tenant_id, issue_id, source, record_type, source_sheet, issue_ref, regulator,
+report_name, report_number, report_date, project_name, risk_rating, lob,
+owner_name_raw, target_date, revised_target_date, extensions_count, ia_status,
+recommendation_state, remediation_status, validation_status, validation_pass_fail,
+validated_on, regulator_status, management_action_plan, deleted_at
+  — ALWAYS filter p.deleted_at IS NULL (deleted findings are kept, not live)
+  — source: 'regulator','mercadien','ey','internal_audit','self_id','it_pen','credit_review'
+  — record_type: 'issue','recommendation' (recommendations are "not tracked" in the pack)
+  — ia_status codes: NS=Not Started, IP=In Progress, DE=Delayed, PD=Past Due, EXT=Extension, CD=Closed
+  — issue_ref is the client's reference (e.g. 'MRA-1'); title, owner and state come from grc_issues
+  — past due: i.workflow_state <> 'closed' AND COALESCE(p.revised_target_date, p.target_date) < CURRENT_DATE
+
+**grc_audit_extension_requests** (Audit Committee extension requests):
+id, tenant_id, issue_id, previous_date, requested_date, reason, status, decided_on, decision_notes, regulator_notified_on
+  — status: 'requested','approved','rejected','withdrawn'
+
+**grc_audit_register_imports** (each monthly workbook upload):
+id, tenant_id, file_name, as_of_date, summary_month, created_count, updated_count, skipped_count, applied_at
+
+**QUERY EXAMPLES**:
+```sql
+-- "Open audit findings by source"
+SELECT p.source, COUNT(*) AS open_findings
+FROM grc_audit_issue_profiles p JOIN grc_issues i ON i.id = p.issue_id
+WHERE p.deleted_at IS NULL AND p.record_type = 'issue' AND i.workflow_state <> 'closed'
+GROUP BY p.source ORDER BY open_findings DESC
+
+-- "Which MRAs are past due?"
+SELECT p.issue_ref, i.title, COALESCE(p.revised_target_date, p.target_date) AS due_date
+FROM grc_audit_issue_profiles p JOIN grc_issues i ON i.id = p.issue_id
+WHERE p.deleted_at IS NULL AND p.source = 'regulator' AND i.workflow_state <> 'closed'
+  AND COALESCE(p.revised_target_date, p.target_date) < CURRENT_DATE
+ORDER BY due_date
+```
 
 =================================================================================
 📂 DOMAIN 18: CCM - CONTINUOUS CONTROL MONITORING
@@ -1932,7 +1979,8 @@ DOMAIN DECISION TREE:
 - Scan record / vulnerability scan / scan job questions [>] INTEGRATION (Domain 19) — table: grc_scan_records
 - Scanner exception / vuln exception questions [>] INTEGRATION (Domain 19) — table: grc_integration_exceptions
 - Vulnerability + asset linkage questions [>] JOIN grc_it_assets + grc_vulnerability_asset_links + grc_vulnerabilities
-- Audit Management questions (audit findings/plans/engagements/PBC/QAIP) [>] REMOVED — do not generate SQL; redirect politely
+- Audit findings / MRAs / audit recommendations / extensions / issue register questions [>] AUDIT ISSUE REGISTER (Domain 17B)
+- Audit Management questions (audit plans/engagements/workpapers/PBC/QAIP) [>] REMOVED — do not generate SQL; redirect politely
 - CCM / continuous control monitoring / ccm rule / ccm anomaly / ccm exception questions [>] CCM (Domain 18)
 - Multiple domains [>] Use link tables and JOINs to combine them
 
@@ -2452,8 +2500,10 @@ def extract_table_hints(question: str) -> list:
         'waiver': ['grc_exceptions'],
         
         # === FINDINGS ===
-        'finding': ['findings'],
-        'issue': ['findings'],
+        # Audit findings are the Audit Issue Register (in the base schema,
+        # Domain 17B), not the legacy findings table.
+        'finding': ['grc_audit_issue_profiles', 'grc_issues'],
+        'issue': ['grc_issues'],
         'deficiency': ['findings'],
         
         # === SCANS ===
@@ -2509,12 +2559,13 @@ def is_deprecated_audit_query(question: str) -> bool:
     instead of generating SQL against removed product surfaces.
     """
     lowered = (question or "").lower()
+    # Audit findings and recommendations are live in the Audit Issue Register
+    # (grc_audit_issue_profiles, Domain 17B); only the retired module stays here.
     terms = (
-        "audit finding", "audit findings", "audit plan", "audit plans",
+        "audit plan", "audit plans",
         "audit engagement", "audit engagements", "audit workpaper", "workpaper",
         "pbc list", "prepared by client", "qaip", "audit universe",
-        "auditable entity", "audit recommendation", "audit board pack",
-        "audit follow up", "audit follow-up", "audit management",
+        "auditable entity", "audit management",
         "grc_audit_plans", "grc_audit_engagements", "grc_audit_findings",
         "grc_audit_recommendations", "grc_pbc_list_items", "grc_qaip_reviews",
     )

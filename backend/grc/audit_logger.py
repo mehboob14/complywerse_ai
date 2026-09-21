@@ -113,7 +113,54 @@ _MODULE_RESOURCE_ALIASES: dict[str, str] = {
 }
 
 
+# The audit register sits three segments deep (/issue-management/issues/
+# audit-register/<route>/<id>), where the positional rules below see every call
+# as a generic "issues" create/update with no id — and fire issue workflows on
+# clicks like "Remind owners". Its routes are named here instead.
+_AUDIT_REGISTER_PREFIX = "issue-management/issues/audit-register"
+_AUDIT_REGISTER_ACTIONS = {
+    ("POST", "preview"): "preview",
+    ("POST", "import"): "import",
+    ("POST", "findings"): "create",
+    ("DELETE", "findings"): "delete",
+    ("POST", "findings/restore"): "restore",
+    ("PATCH", "profile"): "update",
+    ("POST", "validation/submit"): "submit_validation",
+    ("POST", "validation/decide"): "decide_validation",
+    ("POST", "extensions"): "request_extension",
+    ("POST", "extensions/decide"): "decide_extension",
+    ("POST", "extensions/regulator-notice"): "regulator_notice",
+    ("PATCH", "regulator-status"): "regulator_status",
+    ("POST", "reminders"): "send_reminders",
+    ("POST", "relink"): "relink",
+    ("PUT", "mappings/owners"): "map_owner",
+    ("PUT", "mappings/lobs"): "map_lob",
+    ("GET", "template"): "download_template",
+    ("GET", "pack/export"): "export_pack",
+    ("PUT", "settings"): "update_settings",
+    ("POST", "report-catalog"): "add_report",
+    ("PUT", "report-catalog"): "update_report",
+    ("DELETE", "report-catalog"): "delete_report",
+}
+
+
+def _audit_register_route(method: str, path: str) -> Optional[tuple[str, Optional[int], str]]:
+    """(resource_type, resource_id, action) for an audit-register URL, else None."""
+    normalized = path.replace("/grc", "", 1).strip("/")
+    if not normalized.startswith(_AUDIT_REGISTER_PREFIX):
+        return None
+    rest = [p for p in normalized[len(_AUDIT_REGISTER_PREFIX):].split("/") if p]
+    ids = [int(p) for p in rest if p.isdigit()]
+    route = "/".join(p for p in rest if not p.isdigit())
+    method = method.upper()
+    action = _AUDIT_REGISTER_ACTIONS.get((method, route)) or ("read" if method == "GET" else method.lower())
+    return "audit-register", (ids[0] if ids else None), action
+
+
 def _extract_resource(path: str) -> tuple[str, Optional[int]]:
+    register = _audit_register_route("GET", path)
+    if register:
+        return register[0], register[1]
     normalized = path.replace("/grc", "", 1).strip("/")
     if not normalized:
         return "system", None
@@ -215,6 +262,10 @@ def _extract_sub_action(path: str) -> Optional[str]:
 def _action_from_method(method: str, status_code: int, path: str = "") -> str:
     method_upper = method.upper()
     failed_suffix = "_failed" if status_code >= 400 else ""
+
+    register = _audit_register_route(method_upper, path) if path else None
+    if register:
+        return register[2] if register[2] == "read" else f"{register[2]}{failed_suffix}"
 
     # Sub-action detection: prefer accurate verb over generic create/update
     if method_upper in {"POST", "PUT", "PATCH"} and path:
@@ -479,6 +530,11 @@ def write_audit_log(
     response_error: Optional[Any] = None,
 ) -> None:
     try:
+        # The endpoint already wrote its own readable row (write_rich_audit_log)
+        # and flagged it: a second, generic row for the same action is noise.
+        # Failures are still written, since the endpoint's row rolled back.
+        if getattr(request.state, "audit_recorded", False) and getattr(response, "status_code", 200) < 400:
+            return
         path = request.url.path or ""
         # TenantMiddleware stashes a lightweight DICT on request.state.tenant
         # ({"id":..,"slug":..}) and ALSO sets request.state.tenant_id directly.

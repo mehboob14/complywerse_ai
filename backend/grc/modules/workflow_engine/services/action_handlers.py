@@ -416,6 +416,67 @@ def _build_template_context(db, instance, definition) -> Dict[str, Any]:
                     except Exception:
                         pass
 
+        # ── Audit Issue Register: a finding is an Issue plus its register row ──
+        elif resource_type == "audit-register":
+            from ....models import AuditIssueProfile
+            from ...issue_management.audit_register.summary import (
+                days_past_due, due_date_of, effective_status)
+            from ...issue_management.audit_register.template import SOURCE_TITLES, STATUS_LABELS
+
+            obj = db.query(Issue).filter(Issue.id == rid, Issue.tenant_id == tid).first()
+            profile = (db.query(AuditIssueProfile).filter(AuditIssueProfile.issue_id == rid).first()
+                       if obj else None)
+            if obj and profile:
+                today = datetime.utcnow().date()
+                due = due_date_of(profile, obj)
+                code = effective_status(profile, obj, today)
+                ctx.update({
+                    "title":            obj.title or "",
+                    "code":             obj.code or "",
+                    "severity":         obj.severity or "",
+                    "workflow_state":   obj.workflow_state or "",
+                    "reference":        profile.issue_ref or "",
+                    "source":           SOURCE_TITLES.get(profile.source, profile.source or ""),
+                    "sheet":            (profile.source_sheet or "").strip(),
+                    "report":           profile.report_name or profile.project_name or profile.report_number or "",
+                    "regulator":        profile.regulator or "",
+                    "register_status":  "Closed" if code == "CD" else STATUS_LABELS.get(code, code),
+                    "recorded_status":  profile.ia_status or profile.recommendation_state or profile.remediation_status or "",
+                    "due_date":         due.isoformat() if due else "",
+                    "days_past_due":    str(days_past_due(profile, obj, today)),
+                    "lob":              profile.lob or "",
+                    "regulator_status": profile.regulator_status or "",
+                })
+                if obj.owner_id:
+                    try:
+                        u = db.query(GRCUser).filter(GRCUser.id == obj.owner_id).first()
+                        if u:
+                            ctx["owner_name"] = u.display_name or u.username or ""
+                            ctx["owner_email"] = u.email or ""
+                    except Exception:
+                        pass
+            # What this action carried: the reason, the requested date, the result…
+            _after = ((payload.get("changes") or {}).get("snapshot") or {}).get("after") or {}
+            if isinstance(_after, dict):
+                for k, v in _after.items():
+                    if v is not None and not ctx.get(k):
+                        ctx[k] = str(v)
+
+        elif resource_type == "audit-register-import":
+            from ....models import AuditRegisterImport
+
+            rec = db.query(AuditRegisterImport).filter(AuditRegisterImport.id == rid).first()
+            if rec:
+                ctx.update({
+                    "file_name":     rec.file_name or "",
+                    "summary_month": rec.summary_month or "",
+                    "as_of":         rec.as_of_date.isoformat() if rec.as_of_date else "",
+                    "created":       str(rec.created_count or 0),
+                    "updated":       str(rec.updated_count or 0),
+                    "skipped":       str(rec.skipped_count or 0),
+                    "unmatched_owners": str(len(rec.unmatched_owners or [])),
+                })
+
         # ── CIS Compliance plugin runs ──────────────────────────────────
         elif resource_type == "runs":
             obj = db.query(CompliancePluginRun).filter(

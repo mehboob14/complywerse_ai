@@ -51,10 +51,12 @@ export function FieldInput({ field, value, onChange, options, autoFocus }: {
   options?: Options; autoFocus?: boolean;
 }) {
   const text = value === null || value === undefined ? '' : String(value);
-  if (field.kind === 'choice' || field.kind === 'user') {
+  if (field.kind === 'choice' || field.kind === 'user' || field.kind === 'pick') {
+    // pick: the Settings list plus what the register already uses; a new value is one "+ Add" away.
     const items: MultiSelectDropdownItem[] = field.kind === 'user'
       ? (options?.users || []).map((u) => ({ value: String(u.id), label: u.name, subLabel: u.email || undefined }))
-      : (options?.choices[field.name] || []).map((c) => ({ value: c, label: c }));
+      : ((field.kind === 'pick' ? options?.picks : options?.choices)?.[field.name] || [])
+        .map((c) => ({ value: c, label: c }));
     // A code the file used that is not in today's list still shows.
     const all = text && !items.some((i) => i.value === text) ? [{ value: text, label: text }, ...items] : items;
     return (
@@ -69,24 +71,11 @@ export function FieldInput({ field, value, onChange, options, autoFocus }: {
         searchPlaceholder={`Search ${field.label.toLowerCase()}…`}
         forceSearch
         showAvatars={field.kind === 'user'}
+        onCreate={field.kind === 'pick' ? (v) => onChange(v) : undefined}
         size="sm"
         className="w-full"
         triggerClassName="w-full"
       />
-    );
-  }
-  if (field.kind === 'pick') {
-    // Native combobox: pick a value the register already uses, or type a new one.
-    const listId = `pick-${field.name}`;
-    return (
-      <>
-        <input list={listId} value={text} autoFocus={autoFocus} className={inputCls}
-               placeholder={`Choose or type ${field.label.toLowerCase()}`}
-               onChange={(e) => onChange(e.target.value)} />
-        <datalist id={listId}>
-          {(options?.picks[field.name] || []).map((v) => <option key={v} value={v} />)}
-        </datalist>
-      </>
     );
   }
   if (field.kind === 'long') {

@@ -1179,6 +1179,17 @@ const ACTIVITY_META: Record<
   linked:            { label: 'Linked a related item',   icon: ExternalLink,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
   unlinked:          { label: 'Unlinked a related item', icon: ExternalLink,   tone: 'bg-slate-50 text-slate-700 border-slate-200' },
   action_promoted_to_task: { label: 'Promoted action to task', icon: Rocket,   tone: 'bg-primary-50 text-primary-700 border-primary-200' },
+  // Audit Issue Register
+  register_created:       { label: 'Added to the audit register',       icon: Plus,          tone: 'bg-primary-50 text-primary-700 border-primary-200' },
+  register_edit:          { label: 'Edited register columns',          icon: ListChecks,    tone: 'bg-slate-50 text-slate-700 border-slate-200' },
+  register_deleted:       { label: 'Deleted from the register',        icon: Trash2,        tone: 'bg-rose-50 text-rose-700 border-rose-200' },
+  register_restored:      { label: 'Restored to the register',         icon: Rocket,        tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  validation_submitted:   { label: 'Submitted for validation',         icon: ClipboardList, tone: 'bg-primary-50 text-primary-700 border-primary-200' },
+  validation_decision:    { label: 'Recorded the validation decision', icon: ShieldCheck,   tone: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  extension_requested:    { label: 'Requested an extension',           icon: ActivityIcon,  tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+  extension_decided:      { label: 'Audit Committee decided the extension', icon: CheckCircle2, tone: 'bg-amber-50 text-amber-700 border-amber-200' },
+  extension_regulator_notified: { label: 'Recorded the regulator was told', icon: ExternalLink, tone: 'bg-slate-50 text-slate-700 border-slate-200' },
+  regulator_status:       { label: 'Changed the regulator status',     icon: ActivityIcon,  tone: 'bg-primary-50 text-primary-700 border-primary-200' },
 };
 
 function activityMeta(type: string) {

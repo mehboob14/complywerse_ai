@@ -165,8 +165,10 @@ def entry_templates(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
             defaults["recommendation_state"] = "Open"
         if "record_type" in names:
             defaults["record_type"] = record_type
+        defaults.update({k: v for k, v in T.ENTRY_DEFAULTS.get(key, {}).items() if k in names})
+        title, hint = T.ENTRY_TITLES.get(key, (label, ""))
         out.append({
-            "key": key, "label": label, "sheet": sheet, "source": source,
+            "key": key, "label": label, "title": title, "hint": hint, "sheet": sheet, "source": source,
             "record_type": record_type, "layout": layout, "defaults": defaults,
             "fields": [{"name": n, "label": T.FIELD_SPEC[n][0], "group": T.FIELD_SPEC[n][1],
                         "kind": T.FIELD_SPEC[n][2]} for n in names],
@@ -175,7 +177,7 @@ def entry_templates(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
 
 
 def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, Any],
-                   actor: Optional[GRCUser] = None) -> AuditIssueProfile:
+                   actor: Optional[GRCUser] = None, report_id: Optional[int] = None) -> AuditIssueProfile:
     """Add one finding by hand, on one of the client's sheets, in its columns.
 
     It becomes an issue exactly as an imported row does — status to workflow,
@@ -183,11 +185,16 @@ def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, An
     vendors, Statutory Audit, Incidents — so the register cannot tell the two
     apart. If next month's workbook carries the same finding, the import finds
     it by its reference and title and updates it rather than adding it twice.
+
+    ``report_id`` is a report from the Settings list: its details fill the
+    finding's report columns and the finding joins that report exactly.
     """
+    from ....models import AuditRegisterReport
     from ..services.code_generator import next_issue_code
     from .linkage import (build_asset_index, build_vendor_index, build_vulnerability_index,
                           link_issue)
     from .service import PROFILE_FIELDS, _issue_fields, _sync_action, register_key
+    from .settings import REPORT_FIELDS
 
     spec = next((t for t in entry_templates(db, tenant_id) if t["key"] == template), None)
     if spec is None:
@@ -196,6 +203,18 @@ def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, An
     unknown = sorted(set(raw) - allowed)
     if unknown:
         raise ValueError(f"not a column of the {spec['label']} sheet: {', '.join(unknown)}")
+    report = None
+    if report_id:
+        report = (db.query(AuditRegisterReport)
+                  .filter(AuditRegisterReport.id == report_id,
+                          AuditRegisterReport.tenant_id == tenant_id).first())
+        if report is None or report.source != spec["source"]:
+            raise ValueError(f"That report is not one of the {spec['label']} reports")
+        raw = dict(raw)
+        for field in ("source_label", *REPORT_FIELDS):
+            target = "regulator" if field == "source_label" and "regulator" in allowed else field
+            if target in allowed:
+                raw[target] = getattr(report, field)
 
     values: Dict[str, Any] = {}
     owner_id = None
@@ -220,6 +239,8 @@ def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, An
     record_type = values.pop("record_type", None) or spec["record_type"]
     row = RegisterRow(spec["sheet"], 0, record_type, spec["source"], values)
     report_key, reference, title_key = register_key(row)
+    if report is not None:
+        report_key = report.report_key            # stays put even after the report is renamed
     existing = (db.query(AuditIssueProfile)
                 .filter(AuditIssueProfile.tenant_id == tenant_id,
                         AuditIssueProfile.source == spec["source"],
@@ -247,7 +268,8 @@ def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, An
     _sync_action(db, issue, row, owner_id)
     link_issue(db, issue, profile, assets=build_asset_index(db), vendors=build_vendor_index(db),
                vulnerabilities=build_vulnerability_index(db), actor_id=getattr(actor, "id", None))
-    sync_crosslinks(db, issue, profile, actor_id=getattr(actor, "id", None), as_of=today)
+    sync_crosslinks(db, issue, profile, actor_id=getattr(actor, "id", None), as_of=today,
+                    create=True)
     db.add(IssueActivity(issue_id=issue.id, user_id=getattr(actor, "id", None),
                          type="register_created",
                          payload={"template": template, "fields": sorted(values)}))
@@ -316,15 +338,22 @@ def form_for(issue: Issue, profile: AuditIssueProfile) -> Dict[str, Any]:
 
 
 def options(db: Session, tenant_id: int) -> Dict[str, Any]:
-    """Everything the edit form's dropdowns offer."""
-    picks: Dict[str, List[str]] = {}
-    for field in ("regulator", "source_label", "type_of_audit", "report_name", "project_name",
-                  "owner_title", "lob", "business_unit", "remediation_type",
-                  "current_internal_status"):
+    """Everything the edit form's dropdowns offer: the template's codes, the
+    Settings lists, the values the register already uses, business units for
+    the LOB, and the tenant's users."""
+    from ....models import BusinessUnit
+    from .settings import get_settings, list_values
+
+    picks: Dict[str, List[str]] = dict(list_values(db, tenant_id, get_settings(db, tenant_id)))
+    units = [u.name for u in db.query(BusinessUnit).filter(BusinessUnit.tenant_id == tenant_id)]
+    for field in ("report_name", "project_name", "lob", "business_unit"):
         column = getattr(AuditIssueProfile, field)
         rows = (db.query(column).filter(AuditIssueProfile.tenant_id == tenant_id,
                                         column.isnot(None)).distinct().all())
-        picks[field] = sorted({str(v).strip() for (v,) in rows if str(v or "").strip()})
+        values = {str(v).strip() for (v,) in rows if str(v or "").strip()}
+        if field in ("lob", "business_unit"):
+            values |= {u for u in units if u}
+        picks[field] = sorted(values, key=str.lower)
     users = [{"id": u.id, "name": getattr(u, "display_name", None) or u.username, "email": u.email}
              for u in db.query(GRCUser).order_by(GRCUser.id).all()
              if getattr(u, "is_active", True) is not False]

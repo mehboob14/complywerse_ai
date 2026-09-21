@@ -48,8 +48,9 @@ def observation_status(profile: AuditIssueProfile, issue: Issue) -> str:
 
 
 def sync_observation(db: Session, issue: Issue, profile: AuditIssueProfile,
-                     actor_id: Optional[int] = None) -> int:
-    """Create or refresh the MRA's observation. Returns 1 when one was created."""
+                     actor_id: Optional[int] = None, create: bool = False) -> int:
+    """Refresh the MRA's observation, or create it when ``create``. Returns 1
+    when one was created."""
     if profile.source != "regulator":
         return 0
     # Not its _ensure_tables guard: on failure that rolls the whole session back,
@@ -60,6 +61,8 @@ def sync_observation(db: Session, issue: Issue, profile: AuditIssueProfile,
     link =(db.query(AuditObservationIssueLink)
             .filter(AuditObservationIssueLink.issue_id == issue.id).first())
     observation = db.get(AuditObservation, link.observation_id) if link else None
+    if observation is None and not create:
+        return 0          # removed in Statutory Audit: not brought back behind its back
     created = observation is None
     if created:
         observation = AuditObservation(tenant_id=issue.tenant_id,
@@ -104,11 +107,14 @@ def observation_for(db: Session, issue_id: int) -> Optional[AuditObservation]:
 # ── Self ID → Incidents ──────────────────────────────────────────────────────
 
 def sync_incident(db: Session, issue: Issue, profile: AuditIssueProfile,
-                  as_of=None) -> int:
-    """The self-identified event as an ERM incident. Returns 1 when created."""
+                  as_of=None, create: bool = False) -> int:
+    """The self-identified event as an ERM incident: refreshed, or created when
+    ``create``. Returns 1 when created."""
     if profile.source != "self_id":
         return 0
     incident = db.get(RiskIncident, profile.incident_id) if profile.incident_id else None
+    if incident is None and not create:
+        return 0          # deleted in ERM → Incidents: left deleted
     created = incident is None
     if created:
         incident = RiskIncident(tenant_id=issue.tenant_id, status="open")
@@ -162,9 +168,14 @@ def sync_business_unit(db: Session, profile: AuditIssueProfile) -> int:
 
 
 def sync_crosslinks(db: Session, issue: Issue, profile: AuditIssueProfile, *,
-                    actor_id: Optional[int] = None, as_of=None) -> Dict[str, int]:
+                    actor_id: Optional[int] = None, as_of=None,
+                    create: bool = False) -> Dict[str, int]:
+    """Keep the finding's Statutory Audit observation, incident and business
+    unit in step. ``create`` (a new finding, or Re-link) also makes the
+    observation or incident when there is none; otherwise one deleted in its
+    own module stays deleted."""
     return {
-        "observations": sync_observation(db, issue, profile, actor_id),
-        "incidents": sync_incident(db, issue, profile, as_of),
+        "observations": sync_observation(db, issue, profile, actor_id, create),
+        "incidents": sync_incident(db, issue, profile, as_of, create),
         "business_units": sync_business_unit(db, profile),
     }

@@ -30,7 +30,7 @@ def _pen_workbook(tmp_path, name="pen.xlsx", *, hosts="web-api-prod", subject="I
     sheet = wb.active
     sheet.title = "IT Pen"
     sheet.append(PEN_HEADERS)
-    sheet.append(["Cloud Console Review", "CLDCA.01", "Issue", "Independent Review",
+    sheet.append(["Cloud Console Review", "CLDCA.01", "Issue", "Outside Assessor",
                   date(2026, 1, 24), subject,
                   "Reviewed with Northwind Systems during the assessment", "Moderate", "IT/IS",
                   "ZEPHYR", "SELF ID", "IN PROGRESS", "VULNERABILITY", "NOT STARTED",
