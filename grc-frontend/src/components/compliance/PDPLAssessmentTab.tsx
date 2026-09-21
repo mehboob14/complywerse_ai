@@ -58,6 +58,7 @@ function inferArtifactType(name: string): string {
 }
 
 const PDPL_FORMAT = 'pdpl_assessment_toolkit';
+const BUNDLED_TOOLKIT = '/reference/PDPL-Assessment-Toolkit.xlsx';
 const PDPL_DOMAINS = [
   'Governance & Accountability', 'Lawful Basis & Consent', 'Collection & Purpose Limitation',
   'Transparency & Notice', 'Data Subject Rights', 'Disclosure Controls', 'Retention & Destruction',
@@ -808,9 +809,24 @@ export default function PDPLAssessmentTab() {
   // controls from the file (uses the PDPL template on the backend).
   const reuploadRef = useRef<HTMLInputElement>(null);
   const [reuploading, setReuploading] = useState(false);
-  const onReupload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const onReupload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (file) importToolkit(file);
+  };
+  // The toolkit ships with the app (public/reference), so a tenant can start its
+  // PDPL assessment from it without finding and uploading the workbook first.
+  const startFromBundledToolkit = async () => {
+    setReuploading(true);
+    try {
+      const res = await fetch(BUNDLED_TOOLKIT);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await importToolkit(new File([await res.blob()], 'PDPL Assessment.xlsx'));
+    } catch {
+      alert('Could not load the built-in PDPL toolkit. Upload the workbook instead.');
+      setReuploading(false);
+    }
+  };
+  const importToolkit = async (file: File) => {
     setReuploading(true);
     try {
       const fd = new FormData();
@@ -878,8 +894,19 @@ export default function PDPLAssessmentTab() {
     return (
       <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-gray-200 py-20 text-center">
         <ShieldCheck className="mb-3 h-10 w-10 text-gray-300" />
-        <p className="text-sm font-medium text-gray-700">No PDPL assessment uploaded yet.</p>
-        <p className="mt-1 max-w-md text-xs text-gray-400">Upload the Saudi PDPL Assessment Toolkit (.xlsx) from the Assessment tab. Once imported, its dashboard, controls and remediation plan appear here.</p>
+        <p className="text-sm font-medium text-gray-700">No PDPL assessment yet.</p>
+        <p className="mt-1 max-w-md text-xs text-gray-400">Start from the built-in Saudi PDPL Assessment Toolkit (47 controls across 13 domains), or upload your own copy of the workbook. Its dashboard, controls and remediation plan then appear here.</p>
+        {/* The toolbar's buttons only render once an assessment exists, so the
+            first one is created here; importToolkit creates it when none exists. */}
+        <input ref={reuploadRef} type="file" accept=".xlsx,.xls,.csv" className="hidden" onChange={onReupload} />
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+          <button onClick={startFromBundledToolkit} disabled={reuploading} className="inline-flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
+            {reuploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ShieldCheck className="h-3.5 w-3.5" />} {reuploading ? 'Importing…' : 'Start PDPL assessment'}
+          </button>
+          <button onClick={() => reuploadRef.current?.click()} disabled={reuploading} className="inline-flex items-center gap-1.5 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+            <Upload className="h-3.5 w-3.5" /> Upload your own (.xlsx)
+          </button>
+        </div>
       </div>
     );
   }

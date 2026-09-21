@@ -20,7 +20,7 @@ import { SearchInput, PageLoader } from '@/components/ui';
 import {
   FileStack, Loader2, AlertCircle, Shield, Play, ArrowRight,
   Calendar, Target, CheckCircle2, Clock, Trash2, X, Tag,
-  RefreshCw, FileText, Sparkles, CheckCircle, Eye,
+  RefreshCw, FileText, Sparkles, CheckCircle, Eye, Upload,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -292,7 +292,11 @@ export default function FrameworksManagePage() {
       <FrameworksTabs />
 
       {/* Search bar for filtering library + journeys */}
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-end gap-3">
+        {/* The upload page has no sidebar entry; this is the way in. */}
+        <Link href="/framework-upload" className="cw-btn-primary inline-flex items-center gap-2 whitespace-nowrap px-3 py-2">
+          <Upload className="h-4 w-4" /> Upload framework
+        </Link>
         <div className="w-full sm:w-72">
           <SearchInput
             value={frameworkSearch}
@@ -621,7 +625,7 @@ export default function FrameworksManagePage() {
           <div className="cw-card p-12 shadow-sm flex flex-col items-center justify-center text-center">
             <FileStack className="mb-4 h-12 w-12 text-slate-400" />
             <h3 className="text-lg font-medium text-slate-900">No frameworks available</h3>
-            <p className="mt-1 text-slate-500">No frameworks uploaded yet. Use Upload New Framework to add your first framework.</p>
+            <p className="mt-1 text-slate-500">No frameworks uploaded yet. <Link href="/framework-upload" className="font-medium text-primary-700 hover:underline">Upload a framework</Link> to add your first one.</p>
           </div>
         )}
 
