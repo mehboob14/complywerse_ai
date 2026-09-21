@@ -8,6 +8,7 @@ from .auto_create import router as auto_create_router
 from .by_source import router as by_source_router
 from .automation_flags import router as automation_flags_router
 from .import_export import router as import_export_router
+from .audit_register import router as audit_register_router
 
 __all__ = [
     "issues_router",

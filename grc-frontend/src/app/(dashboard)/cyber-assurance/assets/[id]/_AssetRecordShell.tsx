@@ -9,6 +9,7 @@
 
 import Link from 'next/link';
 import '../inventory-redesign.css'; // .inv2 tokens (Poppins, mint-teal)
+import { AuditFindingTags } from '@/components/audit-register/AuditFindingTags';
 
 type Sig = { label?: string; value?: string; text?: string; tone?: string };
 
@@ -97,6 +98,8 @@ export default function AssetRecordShell({
               </div>
             </div>
           )}
+
+          {asset?.id != null && <AuditFindingTags kind="asset" recordId={Number(asset.id)} />}
 
           {/* ownership (real asset fields only) */}
           <div style={CARD}>

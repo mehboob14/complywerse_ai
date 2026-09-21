@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
+  FileSpreadsheet,
   Shield,
   ScrollText,
   FileText,
@@ -234,6 +235,8 @@ const navigation: NavEntry[] = [
       { name: 'Portal', href: '/auditor-portal', icon: Gavel, requiredPermissions: ['compliance:frameworks:*'] },
       { name: 'Internal Audit', href: '/auditor-portal/internal-audit', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Statutory Audit', href: '/auditor-portal/statutory-audit', icon: ScrollText, requiredPermissions: ['compliance:assessments:*'] },
+      // Audit Services' register — the client's monthly issue workbook, validated and reported.
+      { name: 'Issue Register', href: '/auditor-portal/issue-register', icon: FileSpreadsheet, requiredPermissions: ['issue_management:issues:*'] },
     ],
   },
   {

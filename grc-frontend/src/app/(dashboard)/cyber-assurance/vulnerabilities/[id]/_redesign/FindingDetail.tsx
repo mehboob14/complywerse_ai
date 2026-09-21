@@ -23,6 +23,7 @@ import { exploitMaturity } from '../_components/RiskAnalysisPanel';
 import RemediationPlanCard from '../_components/RemediationPlanCard';
 import { shortenVulnTitle } from '../../_workspace/lib';
 import { NotesPanel } from '@/cyber-assurance/components/shared/EntityExtras';
+import { AuditFindingTags } from '@/components/audit-register/AuditFindingTags';
 
 // ── mock palette ──
 const AC = '#005B96', ACS = '#014A81', BORDER = '#E8ECEE', BORDER2 = '#F0F3F5', INK = '#0F1F2B', SEC = '#3A4653', MUTED = '#8A95A1', FAINT = '#AEB8C2';
@@ -195,6 +196,7 @@ export default function FindingDetail({ vulnId }: { vulnId: number }) {
 
         {/* rail */}
         <aside style={{ position: 'sticky', top: 14, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <AuditFindingTags kind="vulnerability" recordId={vulnId} />
           <RailCard title="Identity">
             <Row k="CWE" v={v.cwe_id || '—'} mono />
             <Row k="Severity" v={sm.label} />

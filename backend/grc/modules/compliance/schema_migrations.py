@@ -263,6 +263,24 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # Audit register — columns added after the first tenants already had the
+    # tables (the local cfsb tenant was provisioned in between).
+    ("grc_audit_register_imports", "client_summary", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_issue_profiles", "title_key", "VARCHAR(120)", None),
+    ("grc_audit_issue_profiles", "validation_owner", "TEXT", None),
+    ("grc_audit_issue_profiles", "edited_fields", "JSON DEFAULT '[]'::json", None),
+    # Statutory Audit adds this lazily on its own endpoints; the register writes
+    # observations from imports, so the column is healed here as well.
+    ("grc_audit_observations", "category", "VARCHAR(120)", None),
+    ("grc_audit_register_imports", "summary_month", "VARCHAR(7)", None),
+    ("grc_audit_register_imports", "status_definitions", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_issue_profiles", "incident_id", "INTEGER", None),
+    ("grc_audit_issue_profiles", "business_unit_id", "INTEGER", None),
+    ("grc_audit_issue_profiles", "regulator_status", "TEXT", None),
+    ("grc_audit_issue_profiles", "last_reminded_on", "DATE", None),
+    ("grc_audit_register_imports", "sheet_headers", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_issue_profiles", "deleted_at", "TIMESTAMP", None),
+    ("grc_audit_issue_profiles", "deleted_by", "INTEGER", None),
     # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
     # a stage's numbers/actions unlock only after the previous stage is stamped.
     ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),

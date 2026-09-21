@@ -29,3 +29,4 @@ from ._54_itsm_ticket_link_models import *  # noqa: F401,F403 - ITSM ticket link
 from ._55_ai_control_proposal_models import *  # noqa: F401,F403 - AI control proposals (P5)
 from ._56_scf_catalog_models import *  # noqa: F401,F403 - SCF canonical catalog + tenant overlay
 from ._57_custom_control_models import *  # noqa: F401,F403 - custom control profile + cross-module record links
+from ._58_audit_register_models import *  # noqa: F401,F403 - audit issue register profile + workbook imports

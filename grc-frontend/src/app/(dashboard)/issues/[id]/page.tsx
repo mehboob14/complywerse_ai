@@ -15,6 +15,7 @@ import {
 import { apiClient, issuesApi } from '@/lib/api';
 import { InlineLinkPicker } from '@/components/ui';
 import { SeverityChip, StateChip, SourceChip, formatDate, timeAgo } from '../_components/shared';
+import { RegisterPanel } from '@/components/audit-register/RegisterPanel';
 
 interface IssueDetail {
   id: number;
@@ -233,6 +234,9 @@ export default function IssueDetailPage() {
           popup — keeps the record short instead of one long scroll. */}
       <div className="space-y-4">
         <OverviewTab data={data} />
+
+        {/* Renders only when this issue came from the client's register workbook. */}
+        <RegisterPanel issueId={issueId} />
 
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
           {([

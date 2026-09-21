@@ -4630,6 +4630,96 @@ export type IssueCreateLinkages = {
   linked_task_ids?: number[];
 };
 
+/** The client's audit register workbook: preview, import, and the register itself. */
+export const auditRegisterApi = {
+  preview: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post('/issue-management/issues/audit-register/preview', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000,
+    });
+  },
+  import: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post('/issue-management/issues/audit-register/import', fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 900000,
+    });
+  },
+  rows: (source?: string, deleted?: boolean) =>
+    apiClient.get('/issue-management/issues/audit-register/rows', {
+      params: { ...(source ? { source } : {}), ...(deleted ? { deleted: true } : {}) },
+    }),
+  downloadTemplate: () =>
+    apiClient.get('/issue-management/issues/audit-register/template', { responseType: 'blob', timeout: 120000 }),
+  deleteFinding: (issueId: number, reason: string) =>
+    apiClient.delete(`/issue-management/issues/audit-register/findings/${issueId}`, { data: { reason } }),
+  restoreFinding: (issueId: number) =>
+    apiClient.post(`/issue-management/issues/audit-register/findings/${issueId}/restore`),
+  imports: () => apiClient.get('/issue-management/issues/audit-register/imports'),
+  summary: (month?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/summary', { params: month ? { month } : {} }),
+  profile: (issueId: number) =>
+    apiClient.get(`/issue-management/issues/audit-register/profile/${issueId}`),
+  editProfile: (issueId: number, changes: Record<string, unknown>) =>
+    apiClient.patch(`/issue-management/issues/audit-register/profile/${issueId}`, { changes }),
+  options: () => apiClient.get('/issue-management/issues/audit-register/options'),
+  relink: () => apiClient.post('/issue-management/issues/audit-register/relink'),
+  suggestions: (issueId: number) =>
+    apiClient.get(`/issue-management/issues/audit-register/suggestions/${issueId}`, { timeout: 120000 }),
+  findingsFor: (kind: 'asset' | 'vulnerability', recordId: number) =>
+    apiClient.get('/issue-management/issues/audit-register/findings-for', { params: { kind, record_id: recordId } }),
+  // Adding a finding by hand, on one of their sheets.
+  templates: () => apiClient.get('/issue-management/issues/audit-register/templates'),
+  addFinding: (template: string, values: Record<string, unknown>) =>
+    apiClient.post('/issue-management/issues/audit-register/findings', { template, values }),
+  status: () => apiClient.get('/issue-management/issues/audit-register/status'),
+  // The monthly pack (their SUMMARY sheet) and the reports view.
+  pack: (month?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/pack', { params: month ? { month } : {} }),
+  exportPack: (month?: string) =>
+    apiClient.get('/issue-management/issues/audit-register/pack/export', {
+      params: month ? { month } : {}, responseType: 'blob', timeout: 120000,
+    }),
+  reports: () => apiClient.get('/issue-management/issues/audit-register/reports'),
+  // Validation: owner submits, Audit Services decide.
+  validation: (issueId: number) =>
+    apiClient.get(`/issue-management/issues/audit-register/validation/${issueId}`),
+  submitValidation: (issueId: number, note: string, files: File[]) => {
+    const fd = new FormData();
+    fd.append('note', note);
+    files.forEach((f) => fd.append('files', f));
+    return apiClient.post(`/issue-management/issues/audit-register/validation/${issueId}/submit`, fd, {
+      headers: { 'Content-Type': 'multipart/form-data' }, timeout: 300000,
+    });
+  },
+  decideValidation: (issueId: number, result: 'pass' | 'more_info' | 'fail', reason: string) =>
+    apiClient.post(`/issue-management/issues/audit-register/validation/${issueId}/decide`, { result, reason }),
+  // Extensions, decided by the Audit Committee.
+  extensions: (issueId?: number) =>
+    apiClient.get('/issue-management/issues/audit-register/extensions', { params: issueId ? { issue_id: issueId } : {} }),
+  extensionMeetings: () => apiClient.get('/issue-management/issues/audit-register/extensions/meetings'),
+  requestExtension: (issueId: number, body: { requested_date: string; reason: string; meeting_id?: number }) =>
+    apiClient.post(`/issue-management/issues/audit-register/extensions/${issueId}`, body),
+  decideExtension: (requestId: number, body: { approve: boolean; notes?: string; regulator_notified_on?: string }) =>
+    apiClient.post(`/issue-management/issues/audit-register/extensions/decide/${requestId}`, body),
+  regulatorNotice: (requestId: number, date: string) =>
+    apiClient.post(`/issue-management/issues/audit-register/extensions/regulator-notice/${requestId}`, { date }),
+  // Reminders and the regulator's word on an MRA.
+  previewReminders: () => apiClient.get('/issue-management/issues/audit-register/reminders'),
+  sendReminders: (email: boolean) =>
+    apiClient.post('/issue-management/issues/audit-register/reminders', { email }),
+  setRegulatorStatus: (issueId: number, status: string) =>
+    apiClient.patch(`/issue-management/issues/audit-register/regulator-status/${issueId}`, { status }),
+  // Mappings: workbook owner names → users, LOBs → business units.
+  ownerMappings: () => apiClient.get('/issue-management/issues/audit-register/mappings/owners'),
+  setOwnerMapping: (name: string, userId: number | null) =>
+    apiClient.put('/issue-management/issues/audit-register/mappings/owners', { name, user_id: userId }),
+  lobMappings: () => apiClient.get('/issue-management/issues/audit-register/mappings/lobs'),
+  setLobMapping: (name: string, body: { business_unit_id?: number | null; create?: boolean }) =>
+    apiClient.put('/issue-management/issues/audit-register/mappings/lobs', { name, ...body }),
+};
+
 export const issuesApi = {
   list: (params?: {
     search?: string;

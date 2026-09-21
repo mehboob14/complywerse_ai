@@ -71,6 +71,8 @@ celery_app = Celery(
         "grc.tasks.exceptions",
         # SCF Stage C — attestation due/overdue reminders (Celery beat).
         "grc.tasks.scf",
+        # Audit issue register — due / past-due reminders and escalation.
+        "grc.tasks.audit_register",
         # Connected evidence collectors, collected daily (hourly sweep, 20h due window).
         "grc.tasks.evidence_collectors",
         "grc.tasks.tprm",
@@ -214,6 +216,12 @@ celery_app.conf.update(
         # SCF Stage C — daily attestation reminders for due/overdue controls.
         "scf-attestation-daily-sweep": {
             "task": "grc.tasks.scf.daily_attestation_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Audit issue register — owners reminded of findings coming due / past due.
+        "audit-register-daily-reminders": {
+            "task": "grc.tasks.audit_register.daily_reminder_sweep",
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },

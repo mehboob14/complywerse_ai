@@ -25,6 +25,7 @@ from .routers import (
     by_source_router,
     automation_flags_router,
     import_export_router,
+    audit_register_router,
 )
 
 router = APIRouter(prefix="/issue-management", tags=["Issue Management"])
@@ -34,6 +35,7 @@ router = APIRouter(prefix="/issue-management", tags=["Issue Management"])
 # router (which has `POST /issues`) to avoid the parametric `/issues/{id}`
 # in any router catching `from-source` as an id.
 router.include_router(auto_create_router)
+router.include_router(audit_register_router)   # /issues/audit-register/* before /issues/{id}
 router.include_router(import_export_router)
 router.include_router(issues_router)
 router.include_router(actions_per_issue_router)

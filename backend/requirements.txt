@@ -82,6 +82,8 @@ mypy_extensions==1.1.0
 numpy==1.26.4
 openai==2.16.0
 openpyxl==3.1.2
+# reads the client's .xlsb register workbook (openpyxl cannot); also handles .xlsx
+python-calamine==0.8.2
 orjson==3.11.6
 ormsgpack==1.12.2
 packaging==25.0
