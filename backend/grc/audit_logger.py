@@ -122,6 +122,7 @@ _AUDIT_REGISTER_ACTIONS = {
     ("POST", "preview"): "preview",
     ("POST", "import"): "import",
     ("POST", "findings"): "create",
+    ("POST", "assist"): "ai_assist",
     ("DELETE", "findings"): "delete",
     ("POST", "findings/restore"): "restore",
     ("PATCH", "profile"): "update",

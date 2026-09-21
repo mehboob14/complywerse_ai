@@ -9,6 +9,7 @@
 - The audit reports and exams findings belong to, defined once and picked
   when a finding is added (AuditRegisterReport, kept in step with findings).
 - How a new finding's Issue # is numbered (Self ID has no Issue # column).
+- Remediation windows by risk rating: the target date AI Assist suggests.
 """
 from __future__ import annotations
 
@@ -41,6 +42,8 @@ DEFAULTS: Dict[str, Any] = {
         "validation": {"enabled": True, "validate_within": 10, "repeat_every": 7},
     },
     "email": False,
+    # Days from the report date to the target date a new finding is given, by rating.
+    "target_days": {"High": 90, "Moderate": 180, "Medium": 180, "Low": 365},
     "audit_services": [],                      # user ids; none set → whoever uploads the workbook
     "lists": {field: [] for field in LIST_FIELDS},
     "numbering": {
@@ -64,6 +67,8 @@ def _merged(stored: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         if field in out["lists"]:
             out["lists"][field] = values
     out["numbering"].update(stored.get("numbering") or {})
+    out["target_days"].update({k: v for k, v in (stored.get("target_days") or {}).items()
+                                if k in out["target_days"]})
     return out
 
 
@@ -96,6 +101,17 @@ def save_settings(db: Session, tenant_id: int, patch: Dict[str, Any],
                     raise ValueError(f"unknown sla setting: {key}")
     if "email" in patch:
         current["email"] = bool(patch["email"])
+    if "target_days" in patch:
+        for rating, days in (patch["target_days"] or {}).items():
+            if rating not in current["target_days"]:
+                raise ValueError(f"unknown risk rating: {rating}")
+            if days in (None, ""):
+                current["target_days"][rating] = None
+                continue
+            number = int(days)
+            if not 1 <= number <= 3650:
+                raise ValueError("A remediation window must be between 1 and 3650 days")
+            current["target_days"][rating] = number
     if "audit_services" in patch:
         ids = sorted({int(u) for u in patch["audit_services"] or []})
         found = {u.id for u in db.query(GRCUser).filter(GRCUser.id.in_(ids)).all()} if ids else set()

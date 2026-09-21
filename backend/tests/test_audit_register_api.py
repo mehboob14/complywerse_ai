@@ -230,3 +230,30 @@ def test_settings_reports_and_numbering_are_served_and_a_picked_report_fills_the
     assert http.delete(f"{base}/report-catalog/{spare['id']}").json() == {"deleted": True}
     actions = {r.action for r in session.query(m.AuditLog).filter(m.AuditLog.resource_type == "audit-register")}
     assert {"settings_updated", "report_updated", "report_added", "report_deleted"} <= actions
+
+
+def test_ai_assist_suggests_and_the_finding_records_what_ai_drafted(client, workbook, monkeypatch):
+    import json as _json
+
+    from grc.modules.issue_management.audit_register import assist
+
+    http, session = client
+    base = "/issue-management/issues/audit-register"
+    _upload(http, workbook, "import")
+    monkeypatch.setattr(assist, "openai_complete", lambda messages: _json.dumps({"fields": {
+        "risk_rating": {"value": "Moderate", "reason": "Control gap, no loss"},
+        "causes": {"value": "1. No owner for the procedure", "reason": "Common cause"}}}))
+
+    body = http.post(f"{base}/assist", json={"template": "regulatory",
+                                             "values": {"title": "Board reporting gaps"}}).json()
+    got = {s["field"]: s["value"] for s in body["suggestions"]}
+    assert got["risk_rating"] == "Moderate" and got["causes"] == "1. No owner for the procedure"
+    assert "target_date" in got and body["notice"] is None
+    assert http.post(f"{base}/assist", json={"template": "regulatory", "values": {}}).status_code == 400
+
+    made = http.post(f"{base}/findings", json={"template": "regulatory", "ai_fields": ["causes", "risk_rating"],
+                                                "values": {"title": "Board reporting gaps", "causes": got["causes"]}})
+    assert made.status_code == 200, made.text
+    row = session.query(m.AuditLog).filter(m.AuditLog.action == "create",
+                                           m.AuditLog.resource_type == "audit-register").all()[-1]
+    assert "AI-drafted and accepted: Causes" in row.changes["summary"]

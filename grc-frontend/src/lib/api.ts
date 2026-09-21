@@ -4671,8 +4671,13 @@ export const auditRegisterApi = {
     apiClient.get('/issue-management/issues/audit-register/findings-for', { params: { kind, record_id: recordId } }),
   // Adding a finding by hand, on one of their sheets.
   templates: () => apiClient.get('/issue-management/issues/audit-register/templates'),
-  addFinding: (template: string, values: Record<string, unknown>, reportId?: number | null) =>
-    apiClient.post('/issue-management/issues/audit-register/findings', { template, values, report_id: reportId || undefined }),
+  addFinding: (template: string, values: Record<string, unknown>, reportId?: number | null, aiFields?: string[]) =>
+    apiClient.post('/issue-management/issues/audit-register/findings', {
+      template, values, report_id: reportId || undefined, ai_fields: aiFields?.length ? aiFields : undefined,
+    }),
+  // AI Assist: values for the empty columns of a finding being added. Saves nothing.
+  assist: (template: string, values: Record<string, unknown>, reportId?: number | null) =>
+    apiClient.post('/issue-management/issues/audit-register/assist', { template, values, report_id: reportId || undefined }),
   status: () => apiClient.get('/issue-management/issues/audit-register/status'),
   // The monthly pack (their SUMMARY sheet) and the reports view.
   pack: (month?: string) =>

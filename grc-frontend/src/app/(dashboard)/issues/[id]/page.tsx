@@ -1254,6 +1254,22 @@ function renderPayloadDetails(type: string, payload: Record<string, unknown> | n
     return <p className="mt-1 text-[11px] text-slate-600 italic">“{reasonLike}”</p>;
   }
 
+  // Added to the audit register by hand: how many columns, and which AI drafted.
+  if (type === 'register_created') {
+    const filledCount = Array.isArray(payload.fields) ? payload.fields.length : 0;
+    const drafted = Array.isArray(payload.ai_fields) ? (payload.ai_fields as string[]) : [];
+    return (
+      <p className="mt-1 text-[11px] text-slate-600">
+        {filledCount} column{filledCount === 1 ? '' : 's'} filled in
+        {drafted.length > 0 && (
+          <span className="text-primary-700">
+            {' · '}drafted by AI Assist and accepted: {drafted.map((f) => f.replace(/_/g, ' ')).join(', ')}
+          </span>
+        )}
+      </p>
+    );
+  }
+
   // Link / unlink — denormalised name + ref
   if (type === 'linked' || type === 'unlinked') {
     const name = (payload.name ?? payload.title ?? payload.code) as string | undefined;

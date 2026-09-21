@@ -177,7 +177,8 @@ def entry_templates(db: Session, tenant_id: int) -> List[Dict[str, Any]]:
 
 
 def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, Any],
-                   actor: Optional[GRCUser] = None, report_id: Optional[int] = None) -> AuditIssueProfile:
+                   actor: Optional[GRCUser] = None, report_id: Optional[int] = None,
+                   ai_fields: Optional[List[str]] = None) -> AuditIssueProfile:
     """Add one finding by hand, on one of the client's sheets, in its columns.
 
     It becomes an issue exactly as an imported row does — status to workflow,
@@ -188,6 +189,7 @@ def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, An
 
     ``report_id`` is a report from the Settings list: its details fill the
     finding's report columns and the finding joins that report exactly.
+    ``ai_fields`` are the columns taken from AI Assist; the history says so.
     """
     from ....models import AuditRegisterReport
     from ..services.code_generator import next_issue_code
@@ -270,9 +272,12 @@ def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, An
                vulnerabilities=build_vulnerability_index(db), actor_id=getattr(actor, "id", None))
     sync_crosslinks(db, issue, profile, actor_id=getattr(actor, "id", None), as_of=today,
                     create=True)
+    saved = set(values) | ({"owner"} if owner_id else set())
+    drafted = sorted(set(ai_fields or []) & saved)
     db.add(IssueActivity(issue_id=issue.id, user_id=getattr(actor, "id", None),
                          type="register_created",
-                         payload={"template": template, "fields": sorted(values)}))
+                         payload={"template": template, "fields": sorted(values),
+                                  **({"ai_fields": drafted} if drafted else {})}))
     return profile
 
 

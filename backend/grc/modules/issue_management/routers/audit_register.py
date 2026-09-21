@@ -20,7 +20,7 @@ from ....models import (AuditExtensionRequest, AuditIssueProfile, AuditRegisterI
                         AuditRegisterReport, BusinessUnit, GRCUser, IssueActivity, IssueAssetLink,
                         IssueVulnerabilityLink, RiskIncident, Tenant, get_db)
 from ....routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
-from ..audit_register import mappings, settings as register_settings, template as T, workflow
+from ..audit_register import assist, mappings, settings as register_settings, template as T, workflow
 from ..audit_register.crosslinks import REGULATOR_STATUSES, observation_for, sync_crosslinks
 from ..audit_register.export import build_workbook
 from ..audit_register.parser import ParsedWorkbook, parse_workbook
@@ -548,19 +548,44 @@ def add_finding(
     values = body.get("values")
     if not isinstance(values, dict):
         raise HTTPException(status_code=400, detail="values must be an object of the sheet's columns")
+    # The columns the person took from AI Assist and kept as it wrote them.
+    asked = body.get("ai_fields") if isinstance(body.get("ai_fields"), list) else []
+    drafted = sorted({str(f) for f in asked} & {k for k, v in values.items() if v not in (None, "")}
+                     & set(T.FIELD_SPEC))
     try:
         profile = create_finding(db, tenant_id, str(body.get("template") or ""), values, current_user,
-                                 report_id=int(body["report_id"]) if body.get("report_id") else None)
+                                 report_id=int(body["report_id"]) if body.get("report_id") else None,
+                                 ai_fields=drafted)
     except (ValueError, TypeError) as exc:
         db.rollback()
         _bad_request(exc)
     _audit(request, db, tenant_id, current_user, "create",
-           f'Added {_named(profile)} on the "{(profile.source_sheet or "").strip()}" sheet',
+           f'Added {_named(profile)} on the "{(profile.source_sheet or "").strip()}" sheet'
+           + (f" (AI-drafted and accepted: {', '.join(T.FIELD_SPEC[f][0] for f in drafted)})" if drafted else ""),
            resource_id=profile.issue_id, resource_name=_named(profile),
-           after={k: v for k, v in values.items() if v not in (None, "")})
+           after={**{k: v for k, v in values.items() if v not in (None, "")},
+                  **({"ai_fields": drafted} if drafted else {})})
     db.commit()
     db.refresh(profile)
     return _finding_payload(profile, db)
+
+
+@router.post("/assist", dependencies=[Depends(_require_create)])
+def assist_finding(
+    body: Dict[str, Any],
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """AI Assist on the add-a-finding form: values for the columns still empty,
+    each with its reason, list columns only from the platform's own lists.
+    Saves nothing; the person applies what they want."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    values = body.get("values") if isinstance(body.get("values"), dict) else {}
+    try:
+        return assist.suggest(db, tenant_id, str(body.get("template") or ""), values,
+                              report_id=int(body["report_id"]) if body.get("report_id") else None)
+    except (ValueError, TypeError) as exc:
+        _bad_request(exc)
 
 
 @router.delete("/findings/{issue_id}", dependencies=[Depends(_require_delete)])

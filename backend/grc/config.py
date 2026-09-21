@@ -76,7 +76,9 @@ def get_openai_base_url() -> str | None:
     read that was inlined in many client factories; callers keep their own
     error handling and any extra fallbacks (e.g. ``or OPENAI_BASE_URL``).
     """
-    return os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL")
+    # An empty ``AI_INTEGRATIONS_OPENAI_BASE_URL=`` (as .env.example ships it) is
+    # "not set": the SDK would otherwise send every request to an empty URL.
+    return os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_URL") or None
 
 
 # ----- gpt-5.x / o-series compatibility shim --------------------------------

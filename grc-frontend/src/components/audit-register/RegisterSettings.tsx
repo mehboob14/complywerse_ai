@@ -22,6 +22,7 @@ type Rule = {
 };
 type Settings = {
   sla: Record<string, Rule>; email: boolean; audit_services: number[];
+  target_days: Record<string, number | null>;
   lists: Record<string, string[]>; numbering: Record<string, string>;
   values: Record<string, string[]>;
 };
@@ -111,10 +112,14 @@ function SlaSettings({ settings, users }: { settings: Settings; users: Options['
   const [sla, setSla] = useState(settings.sla);
   const [email, setEmail] = useState(settings.email);
   const [team, setTeam] = useState(settings.audit_services);
-  const reset = () => { setSla(settings.sla); setEmail(settings.email); setTeam(settings.audit_services); };
+  const [days, setDays] = useState(settings.target_days);
+  const reset = () => {
+    setSla(settings.sla); setEmail(settings.email); setTeam(settings.audit_services); setDays(settings.target_days);
+  };
   useEffect(reset, [settings]); // eslint-disable-line react-hooks/exhaustive-deps
   const { save, note, setNote } = useSave();
-  const dirty = JSON.stringify([sla, email, team]) !== JSON.stringify([settings.sla, settings.email, settings.audit_services]);
+  const dirty = JSON.stringify([sla, email, team, days])
+    !== JSON.stringify([settings.sla, settings.email, settings.audit_services, settings.target_days]);
   const setRule = (status: string, key: keyof Rule, value: any) => {
     setNote('');
     setSla((s) => ({ ...s, [status]: { ...s[status], [key]: value } }));
@@ -158,6 +163,29 @@ function SlaSettings({ settings, users }: { settings: Settings; users: Options['
         })}
         <div className="grid gap-2 px-4 py-3 md:grid-cols-[220px_1fr]">
           <span>
+            <span className="block text-xs font-semibold text-slate-900">Remediation windows</span>
+            <span className="block text-[11px] text-slate-500">
+              The target date AI Assist suggests for a new finding: this many days from the report date
+              (from today, when that date is already past).
+            </span>
+          </span>
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
+            {Object.keys(days).map((rating) => (
+              <label key={rating} className="inline-flex items-center gap-1.5 text-xs text-slate-700">
+                {rating}
+                <input type="number" min={1} max={3650} className={numberCls} placeholder="off"
+                       value={days[rating] === null || days[rating] === undefined ? '' : String(days[rating])}
+                       onChange={(e) => {
+                         setNote('');
+                         setDays((d) => ({ ...d, [rating]: e.target.value === '' ? null : Number(e.target.value) }));
+                       }} />
+                days
+              </label>
+            ))}
+          </div>
+        </div>
+        <div className="grid gap-2 px-4 py-3 md:grid-cols-[220px_1fr]">
+          <span>
             <span className="block text-xs font-semibold text-slate-900">Audit Services</span>
             <span className="block text-[11px] text-slate-500">Hear of escalations and validations waiting.</span>
           </span>
@@ -183,7 +211,7 @@ function SlaSettings({ settings, users }: { settings: Settings; users: Options['
         </label>
       </div>
       <SaveBar dirty={dirty} note={note} onReset={() => { reset(); setNote(''); }}
-               save={() => save.mutate({ sla, email, audit_services: team })} />
+               save={() => save.mutate({ sla, email, audit_services: team, target_days: days })} />
     </div>
   );
 }

@@ -5,16 +5,18 @@
  * exam it came from — reports are kept once under Settings, or added here — and
  * the report's details, its source and the next Issue # fill themselves in.
  * The rest are that kind of finding's own columns, with a dropdown wherever the
- * register keeps a list. It becomes a register finding like any imported row
+ * register keeps a list, and AI Assist can propose the empty ones from what
+ * has been entered. It becomes a register finding like any imported row
  * (issue, action plan, links, Statutory Audit for an MRA), and next month's
  * workbook updates it rather than adding it twice.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Plus } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
 import { auditRegisterApi } from '@/lib/api';
 import { FieldInput, GROUP_ORDER, inputCls, type Options } from './FindingForm';
+import { AiAssistBar, type AiAssistResult, type AiSuggestion } from './AiAssist';
 
 export type EntryTemplate = {
   key: string; label: string; title: string; hint: string; sheet: string; source: string;
@@ -32,6 +34,8 @@ export type CatalogReport = {
 const REPORT_COLUMNS = new Set(['regulator', 'source_label', 'report_number', 'report_name', 'report_date',
   'engagement_year', 'project_name']);
 const SOURCE_GROUP = 'Where it came from';
+// AI Assist sits under the last of these a finding type has: what it reads from.
+const AI_READS = ['title', 'issue_text', 'condition'];
 
 export const reportTitle = (r: CatalogReport) =>
   r.report_name || r.project_name || r.report_number || r.report_key;
@@ -117,6 +121,10 @@ export function NewFindingForm({ template, prefill, onCreated, onCancel }: {
   const [addingReport, setAddingReport] = useState<string | null>(null);   // the new report's name so far
   const [refTyped, setRefTyped] = useState(false);
   const [error, setError] = useState('');
+  const [ai, setAi] = useState<AiAssistResult | null>(null);
+  const [aiError, setAiError] = useState('');
+  // Fields filled from AI Assist, with the value it gave: marked until changed.
+  const [applied, setApplied] = useState<Record<string, { value: any; source: AiSuggestion['source'] }>>({});
 
   const templates = useQuery<EntryTemplate[]>({
     queryKey: ['audit-register-templates'],
@@ -148,6 +156,9 @@ export function NewFindingForm({ template, prefill, onCreated, onCancel }: {
     setAddingReport(null);
     setRefTyped(false);
     setError('');
+    setAi(null);
+    setAiError('');
+    setApplied({});
   }, [spec?.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Added from a report's row: start on that report.
@@ -179,11 +190,31 @@ export function NewFindingForm({ template, prefill, onCreated, onCancel }: {
     ];
   }, [spec, hasReport, hasRef]);
 
+  const filled = () => Object.fromEntries(Object.entries(values)
+    .filter(([k, v]) => v !== '' && v != null && !(report && REPORT_COLUMNS.has(k))));
+  const same = (a: unknown, b: unknown) => String(a ?? '') === String(b ?? '');
+
+  const assist = useMutation({
+    mutationFn: async () => (await auditRegisterApi.assist(key, filled(), report?.id)).data as AiAssistResult,
+    onSuccess: (data) => { setAi(data); setAiError(''); },
+    onError: (e: any) => setAiError(e?.response?.data?.detail || 'AI Assist could not run. Try again.'),
+  });
+  const said = (spec?.fields || []).filter((f) => f.kind === 'title' || f.kind === 'long')
+    .map((f) => String(values[f.name] ?? '')).join(' ').trim();
+  const pending = (ai?.suggestions || []).filter((s) => !(applied[s.field] && same(applied[s.field].value, s.value)));
+  const use = (s: AiSuggestion) => {
+    setValues((d) => ({ ...d, [s.field]: s.value }));
+    setApplied((a) => ({ ...a, [s.field]: { value: s.value, source: s.source } }));
+  };
+  // Use all never writes over what the person typed after asking.
+  const useAll = () => pending.filter((s) => !String(values[s.field] ?? '').trim()).forEach(use);
+  const labelOf = (name: string) => spec?.fields.find((f) => f.name === name)?.label || name;
+
   const create = useMutation({
     mutationFn: async () => {
-      const filled = Object.fromEntries(Object.entries(values)
-        .filter(([k, v]) => v !== '' && v != null && !(report && REPORT_COLUMNS.has(k))));
-      return (await auditRegisterApi.addFinding(key, filled, report?.id)).data as { issue_id: number };
+      const aiFields = Object.entries(applied)
+        .filter(([k, a]) => a.source === 'ai' && same(values[k], a.value)).map(([k]) => k);
+      return (await auditRegisterApi.addFinding(key, filled(), report?.id, aiFields)).data as { issue_id: number };
     },
     onSuccess: (data) => {
       REGISTER_QUERIES.forEach((k) => queryClient.invalidateQueries({ queryKey: [k] }));
@@ -196,15 +227,32 @@ export function NewFindingForm({ template, prefill, onCreated, onCancel }: {
     return <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin text-slate-300" /></div>;
   }
 
-  const row = (field: { name: string; label: string; kind: string }) => (
+  const row = (field: { name: string; label: string; kind: string }) => {
+    const mark = applied[field.name];
+    const marked = mark && same(values[field.name], mark.value);
+    return (
     <label key={field.name} className="grid grid-cols-[150px_1fr] items-start gap-2 px-3 py-2">
       <span className="pt-1 text-[11px] text-slate-500">
         {field.label}{field.name === 'title' && <span className="text-red-500"> *</span>}
+        {marked && (
+          <span title={mark.source === 'ai' ? 'Drafted by AI Assist. Review it.' : 'Filled in from your settings and register'}
+                className="ml-1 rounded bg-primary-50 px-1 text-[9px] font-semibold uppercase text-primary-700 ring-1 ring-primary-200">
+            {mark.source === 'ai' ? 'AI' : 'Auto'}
+          </span>
+        )}
       </span>
       <FieldInput field={field} value={values[field.name] ?? ''} options={options.data}
                   onChange={(v) => setValues((d) => ({ ...d, [field.name]: v }))} />
     </label>
+    );
+  };
+
+  const aiBar = (
+    <AiAssistBar canRun={said.length >= 3} running={assist.isPending} error={aiError} result={ai}
+                 pending={pending} appliedCount={Object.keys(applied).length} labelOf={labelOf}
+                 onRun={() => assist.mutate()} onUse={use} onUseAll={useAll} onClose={() => setAi(null)} />
   );
+  const aiAnchor = [...(spec?.fields || [])].reverse().find((f) => AI_READS.includes(f.name))?.name;
 
   return (
     <div className="space-y-3">
@@ -293,7 +341,11 @@ export function NewFindingForm({ template, prefill, onCreated, onCancel }: {
           <h4 className="border-b border-slate-100 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
             {group.title}
           </h4>
-          <div className="divide-y divide-slate-50">{group.fields.map(row)}</div>
+          <div className="divide-y divide-slate-50">
+            {group.fields.map((f) => (
+              <Fragment key={f.name}>{row(f)}{f.name === aiAnchor && aiBar}</Fragment>
+            ))}
+          </div>
         </section>
       ))}
 
