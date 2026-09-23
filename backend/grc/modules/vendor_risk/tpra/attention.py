@@ -47,6 +47,7 @@ CONDITIONS: Dict[str, tuple] = {
     "reassessment_overdue": ("Reassessment overdue", 65),
     "certificate_expiring": ("Certificate expiring", 55),
     "contract_expiring": ("Contract expiring", 55),
+    "questionnaire_to_review": ("Questionnaire to review", 50),
     "questionnaire_untouched": ("Questionnaire not started", 40),
 }
 _LAPSED_BONUS = 15              # a date that has passed outranks one that is coming
@@ -57,6 +58,7 @@ _ASSESSMENT_DONE = ("approved", "completed", "rejected", "cancelled", "canceled"
 _POST_APPROVAL_STAGES = ("onboarding", "monitoring", "reassessment", "offboarding")
 _EVIDENCE_RETIRED = ("archived", "superseded", "rejected", "deleted")
 UNTOUCHED_AFTER_DAYS = 7        # a questionnaire nobody has opened for a week
+REVIEW_AFTER_DAYS = 2           # answers sitting unreviewed for two days
 DROP_LOOKBACK_DAYS = 30         # a worsened rating stays news for a month
 _SNAPSHOT_HISTORY_DAYS = 120
 ACTIONS = ("note", "assign", "snooze", "unsnooze", "close", "reopen")
@@ -270,6 +272,21 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             "Link expired" if lapsed else f"Sent {_days((today - sent).days)} ago",
             f"/vendor-risk/assessments/{qr.assessment_id}?tab=questionnaire" if qr.assessment_id
             else f"/vendor-risk/vendors/{v.id}?stage=questionnaire")
+
+    # Questionnaires the vendor has answered that nobody has finished reviewing.
+    for qr in db.query(VendorQuestionnaireResponse).filter(
+            VendorQuestionnaireResponse.tenant_id == tenant_id,
+            VendorQuestionnaireResponse.status.in_(("submitted", "under_review")),
+            VendorQuestionnaireResponse.submitted_at.isnot(None)):
+        v = vendors.get(qr.vendor_id)
+        submitted = _day(qr.submitted_at)
+        if v is None or submitted + timedelta(days=REVIEW_AFTER_DAYS) > today:
+            continue
+        add("questionnaire_to_review", "questionnaire", qr.id, v, submitted + timedelta(days=REVIEW_AFTER_DAYS),
+            f"{v.name} submitted a questionnaire on {submitted:%d %b %Y} that is waiting for review",
+            f"Submitted {_days((today - submitted).days)} ago",
+            f"/vendor-risk/assessments/{qr.assessment_id}?tab=questionnaire" if qr.assessment_id
+            else "/vendor-risk/questionnaires")
 
     return items
 

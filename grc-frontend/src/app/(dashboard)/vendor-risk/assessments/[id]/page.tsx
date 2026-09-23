@@ -32,6 +32,7 @@ import {
 import Link from 'next/link';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
+import { QuestionReview, ReviewBar, type ReviewableResponse } from './_review';
 
 interface Assessment {
   id: number;
@@ -81,7 +82,7 @@ interface EvidenceFile {
   file_path?: string | null;
 }
 
-interface QuestionnaireResponse {
+interface QuestionnaireResponse extends ReviewableResponse {
   id: number;
   respondent_name: string | null;
   respondent_email: string | null;
@@ -117,6 +118,11 @@ const getStatusPill = (status: string) => {
     submitted: 'bg-yellow-50 text-yellow-700 border-yellow-200',
     reviewed: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     approved: 'bg-green-50 text-green-700 border-green-200',
+    // questionnaire review states
+    pending: 'bg-gray-50 text-gray-700 border-gray-200',
+    under_review: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    returned: 'bg-amber-50 text-amber-800 border-amber-200',
+    accepted: 'bg-green-50 text-green-700 border-green-200',
   };
   return styles[status?.toLowerCase()] || 'bg-gray-50 text-gray-700 border-gray-200';
 };
@@ -863,7 +869,7 @@ export default function AssessmentDetailPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getStatusPill(qr.status)}`}>
-                          {qr.status}
+                          {qr.status.replace('_', ' ')}
                         </span>
                         {qr.submitted_at && (
                           <span className="text-xs text-gray-400">
@@ -888,6 +894,7 @@ export default function AssessmentDetailPage() {
                         </div>
                       </div>
                     )}
+                    <ReviewBar qr={qr} assessmentId={assessmentId} canEdit={canEdit} />
                   </div>
 
                   {/* Questions + Answers */}
@@ -973,6 +980,7 @@ export default function AssessmentDetailPage() {
                                         ))}
                                       </div>
                                     )}
+                                    <QuestionReview qr={qr} questionKey={String(q.id)} assessmentId={assessmentId} canEdit={canEdit} />
                                   </div>
                                 </div>
                               </div>

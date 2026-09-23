@@ -3,7 +3,7 @@
 import logging
 import os
 import uuid
-from typing import List, Optional
+from typing import List, Literal, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
@@ -15,7 +15,8 @@ from ....models import (
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import rbac, versions
+from ..tpra import portal, rbac, versions
+from ..tpra.service import write_audit
 
 logger = logging.getLogger(__name__)
 
@@ -59,14 +60,33 @@ class SendQuestionnaireRequest(BaseModel):
     template_id: Optional[int] = None
     respondent_name: Optional[str] = None
     respondent_email: Optional[str] = None
-    expires_in_days: Optional[int] = 30
+    expires_in_days: Optional[int] = 30     # the link stops working
+    due_in_days: Optional[int] = 14         # the answers are due; reminders run on this
 
 
 class ExternalSubmitRequest(BaseModel):
     respondent_name: Optional[str] = None
     respondent_email: Optional[str] = None
     responses: dict = {}
+    comments: dict = {}                     # {question key: comment}
+    # Required to submit: {name, email, title?, confirm: true}
+    attestation: Optional[dict] = None
     submit: bool = True  # False = save draft, True = final submit
+
+
+class ReviewRequest(BaseModel):
+    question_key: str
+    decision: Literal["accept", "clarify", "clear"]
+    note: Optional[str] = None
+
+
+class ReturnRequest(BaseModel):
+    due_in_days: int = Field(7, ge=1, le=90)
+
+
+class ResendRequest(BaseModel):
+    expires_in_days: int = Field(30, ge=1, le=365)
+    due_in_days: int = Field(14, ge=1, le=365)
 
 
 # ── Serializers ───────────────────────────────────────────────────
@@ -100,9 +120,18 @@ def serialize_questionnaire_response(qr: VendorQuestionnaireResponse) -> dict:
         "respondent_email": qr.respondent_email,
         "responses": qr.responses or {},
         "status": qr.status,
-        "token": qr.token,
+        # An accepted questionnaire's link is closed; there is nothing to share.
+        "token": None if qr.status == "accepted" else qr.token,
+        "template_version_id": qr.template_version_id,
         "expires_at": qr.expires_at.isoformat() if qr.expires_at else None,
+        "due_date": qr.due_date.isoformat() if qr.due_date else None,
+        "last_sent_at": qr.last_sent_at.isoformat() if qr.last_sent_at else None,
         "submitted_at": qr.submitted_at.isoformat() if qr.submitted_at else None,
+        "attested_by": {"name": qr.attested_name, "title": qr.attested_title, "email": qr.attested_email,
+                        "at": qr.attested_at.isoformat() if qr.attested_at else None} if qr.attested_name else None,
+        "comments": qr.vendor_comments or {},
+        "review": qr.review or {},
+        "accepted_at": qr.accepted_at.isoformat() if qr.accepted_at else None,
         "created_at": qr.created_at.isoformat() if qr.created_at else None,
     }
 
@@ -276,7 +305,7 @@ def update_questionnaire_response(
         raise HTTPException(status_code=404, detail="Questionnaire response not found")
     if payload.assessment_id is not None:
         qr.assessment_id = payload.assessment_id
-        if qr.status == "submitted":
+        if qr.status in portal.ANSWERED:
             _materialise(db, db.query(VendorAssessment).filter(
                 VendorAssessment.id == qr.assessment_id).first(), qr)
     db.commit()
@@ -285,6 +314,22 @@ def update_questionnaire_response(
 
 
 # ── Send questionnaire (authenticated) ───────────────────────────
+
+def _email_link(db: Session, qr: VendorQuestionnaireResponse, is_reminder: bool = False) -> None:
+    """Best effort: the analyst always has the copyable link, and this does
+    nothing when email is not configured."""
+    if not qr.respondent_email:
+        return
+    try:
+        from ....tasks.tprm import send_questionnaire_invite
+        from ....models import Tenant as _Tenant
+        tenant = db.query(_Tenant).filter(_Tenant.id == qr.tenant_id).first()
+        if tenant and tenant.slug:
+            send_questionnaire_invite.delay(tenant_slug=tenant.slug, response_id=qr.id,
+                                            base_url=portal.base_url(), is_reminder=is_reminder)
+    except Exception:  # noqa: BLE001
+        logger.warning("could not queue the questionnaire email for response %s", qr.id)
+
 
 @router.post("/questionnaires/send", status_code=status.HTTP_201_CREATED)
 def send_questionnaire(
@@ -326,9 +371,9 @@ def send_questionnaire(
             raise HTTPException(status_code=404, detail="Template not found")
         version = versions.publish(db, template, current_user.id)
 
-    token = str(uuid.uuid4())
-    expires_at = datetime.utcnow() + timedelta(days=payload.expires_in_days)
-
+    expires_in = max(1, min(int(payload.expires_in_days or 30), 365))
+    due_in = max(1, min(int(payload.due_in_days or 14), expires_in))
+    now = datetime.utcnow()
     qr = VendorQuestionnaireResponse(
         tenant_id=vendor.tenant_id,
         vendor_id=payload.vendor_id,
@@ -337,39 +382,181 @@ def send_questionnaire(
         template_version_id=version.id if version else None,
         respondent_name=payload.respondent_name or vendor.primary_contact_name,
         respondent_email=payload.respondent_email or vendor.primary_contact_email,
-        token=token,
-        expires_at=expires_at,
+        token=str(uuid.uuid4()),
+        expires_at=now + timedelta(days=expires_in),
+        due_date=now + timedelta(days=due_in),
+        last_sent_at=now,
         status="pending",
     )
     db.add(qr)
     db.commit()
     db.refresh(qr)
-
-    # Best-effort email invite (Wave 4) — 'Generate link' never depends on it; the
-    # analyst always has the copyable link, and this no-ops gracefully if SMTP is unset.
-    if qr.respondent_email:
-        try:
-            import os as _os
-            from ....tasks.tprm import send_questionnaire_invite
-            from ....models import Tenant as _Tenant
-            _t = db.query(_Tenant).filter(_Tenant.id == vendor.tenant_id).first()
-            if _t and _t.slug:
-                send_questionnaire_invite.delay(
-                    tenant_slug=_t.slug, response_id=qr.id,
-                    base_url=_os.environ.get("FRONTEND_URL", ""),
-                )
-        except Exception:
-            pass
+    _email_link(db, qr)
 
     return {
         "message": "Vendor questionnaire link generated",
-        "token": token,
-        "expires_at": expires_at.isoformat(),
+        "token": qr.token,
+        "expires_at": qr.expires_at.isoformat(),
+        "due_date": qr.due_date.isoformat(),
         "questionnaire_response": serialize_questionnaire_response(qr),
     }
 
 
+# ── Review (authenticated) ────────────────────────────────────────
+# Per question: accept, or ask the vendor to clarify. Then either return the
+# questionnaire to the vendor, who can change only what was asked about, or
+# accept it, which closes the link for good.
+
+def _response_or_404(db: Session, user: GRCUser, response_id: int) -> VendorQuestionnaireResponse:
+    qr = db.query(VendorQuestionnaireResponse).filter(
+        VendorQuestionnaireResponse.id == response_id,
+        VendorQuestionnaireResponse.tenant_id.in_(get_user_tenants(user, db) or [-1]),
+    ).first()
+    if not qr:
+        raise HTTPException(status_code=404, detail="Questionnaire response not found")
+    return qr
+
+
+def _audit(db: Session, qr: VendorQuestionnaireResponse, user: GRCUser, action: str,
+           to_value=None, reason: Optional[str] = None, **extra) -> None:
+    write_audit(db, qr.tenant_id, entity="questionnaire", action=action, vendor_id=qr.vendor_id,
+                assessment_id=qr.assessment_id, entity_id=qr.id, actor_id=user.id,
+                to_value=to_value, reason=reason, extra=extra)
+
+
+@router.post("/questionnaire-responses/{response_id}/review")
+def review_question(
+    response_id: int,
+    payload: ReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    rbac.require_write(db, current_user, "assessments", "edit")
+    qr = _response_or_404(db, current_user, response_id)
+    if qr.status not in portal.REVIEWABLE:
+        raise HTTPException(status_code=409, detail="Only a submitted questionnaire can be reviewed")
+    key = payload.question_key
+    if key not in {str(q.get("id")) for q in versions.questions_for(db, qr)}:
+        raise HTTPException(status_code=404, detail="That question is not in this questionnaire")
+    note = " ".join((payload.note or "").split())[:4000] or None
+    if payload.decision == "clarify" and not note:
+        raise HTTPException(status_code=400, detail="Say what the vendor needs to clarify")
+
+    review = dict(qr.review or {})
+    if payload.decision == "clear":
+        review.pop(key, None)
+    else:
+        review[key] = {"status": "accepted" if payload.decision == "accept" else "clarify", "note": note,
+                       "by": current_user.id, "at": datetime.utcnow().isoformat()}
+    qr.review = review
+    qr.status = "under_review"
+    _audit(db, qr, current_user, "review", to_value=payload.decision, reason=note, question_key=key)
+    db.commit()
+    return serialize_questionnaire_response(qr)
+
+
+@router.post("/questionnaire-responses/{response_id}/return")
+def return_to_vendor(
+    response_id: int,
+    payload: ReturnRequest = ReturnRequest(),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    rbac.require_write(db, current_user, "assessments", "edit")
+    qr = _response_or_404(db, current_user, response_id)
+    if qr.status not in portal.REVIEWABLE:
+        raise HTTPException(status_code=409, detail="Only a submitted questionnaire can be returned")
+    asks = portal.clarifications(qr.review)
+    if not asks:
+        raise HTTPException(status_code=400, detail="Ask the vendor about at least one question first")
+    now = datetime.utcnow()
+    qr.status = "returned"
+    qr.due_date = now + timedelta(days=payload.due_in_days)
+    if qr.expires_at is None or qr.expires_at < qr.due_date + timedelta(days=7):
+        qr.expires_at = qr.due_date + timedelta(days=7)          # the link outlives the new due date
+    _audit(db, qr, current_user, "return", to_value="returned", questions=sorted(asks))
+    db.commit()
+    _email_link(db, qr, is_reminder=True)
+    return serialize_questionnaire_response(qr)
+
+
+@router.post("/questionnaire-responses/{response_id}/accept")
+def accept_questionnaire(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    rbac.require_write(db, current_user, "assessments", "edit")
+    qr = _response_or_404(db, current_user, response_id)
+    if qr.status not in portal.REVIEWABLE:
+        raise HTTPException(status_code=409, detail="Only a submitted questionnaire can be accepted")
+    waiting = portal.clarifications(qr.review)
+    if waiting:
+        raise HTTPException(status_code=409, detail=(
+            f"{len(waiting)} question{'s are' if len(waiting) != 1 else ' is'} marked for clarification. "
+            "Return the questionnaire to the vendor, or clear those first."))
+    now = datetime.utcnow()
+    questions = versions.questions_for(db, qr)
+    review = dict(qr.review or {})
+    for q in portal.visible_questions(questions, qr.responses or {}):
+        key = str(q.get("id"))
+        if (review.get(key) or {}).get("status") != "accepted":
+            review[key] = {**(review.get(key) or {}), "status": "accepted", "by": current_user.id, "at": now.isoformat()}
+    qr.review = review
+    qr.status = "accepted"
+    qr.accepted_by, qr.accepted_at = current_user.id, now
+    qr.token = f"closed-{uuid.uuid4().hex}"                     # the vendor's link stops working
+    if qr.assessment_id:
+        _materialise(db, db.query(VendorAssessment).filter(VendorAssessment.id == qr.assessment_id).first(), qr)
+    _audit(db, qr, current_user, "accept", to_value="accepted")
+    db.commit()
+    return serialize_questionnaire_response(qr)
+
+
+@router.post("/questionnaire-responses/{response_id}/resend")
+def resend_questionnaire(
+    response_id: int,
+    payload: ResendRequest = ResendRequest(),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """A new link, and the old one stops working."""
+    rbac.require_write(db, current_user, "assessments", "edit")
+    qr = _response_or_404(db, current_user, response_id)
+    if qr.status not in portal.WAITING_ON_VENDOR:
+        raise HTTPException(status_code=409, detail="Only a questionnaire still waiting on the vendor can be resent")
+    now = datetime.utcnow()
+    qr.token = str(uuid.uuid4())
+    qr.expires_at = now + timedelta(days=payload.expires_in_days)
+    qr.due_date = now + timedelta(days=min(payload.due_in_days, payload.expires_in_days))
+    qr.last_sent_at = now
+    _audit(db, qr, current_user, "resend", to_value="resent")
+    db.commit()
+    _email_link(db, qr, is_reminder=True)
+    return serialize_questionnaire_response(qr)
+
+
 # ── External vendor access (NO AUTH) ─────────────────────────────
+
+_GONE = "This questionnaire link is no longer valid. Ask your contact for a new one."
+
+
+def _validate_external_token(token: str, db: Session, allow_submitted: bool = False) -> VendorQuestionnaireResponse:
+    """The questionnaire behind a vendor's link, if the link still works."""
+    qr = db.query(VendorQuestionnaireResponse).filter(
+        VendorQuestionnaireResponse.token == token,
+    ).first()
+    if not qr:
+        raise HTTPException(status_code=404, detail=_GONE)
+    if not portal.throttle.allow(token):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            detail="Too many requests for this questionnaire. Wait a few minutes and try again.")
+    if qr.expires_at and qr.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=410, detail="This questionnaire link has expired. Ask your contact to send a new one.")
+    if not allow_submitted and qr.status not in portal.WAITING_ON_VENDOR:
+        raise HTTPException(status_code=400, detail="This questionnaire has already been submitted")
+    return qr
+
 
 @router.get("/questionnaires/external/{token}")
 def external_load_questionnaire(
@@ -377,36 +564,16 @@ def external_load_questionnaire(
     db: Session = Depends(get_db),
 ):
     """External vendor loads the questionnaire by token. No authentication required."""
-    qr = db.query(VendorQuestionnaireResponse).filter(
-        VendorQuestionnaireResponse.token == token,
-    ).first()
-    if not qr:
-        raise HTTPException(status_code=404, detail="Questionnaire not found or invalid token")
-
-    # Check expiry
-    if qr.expires_at and qr.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=410, detail="This questionnaire link has expired")
-
-    # Check if already submitted
-    if qr.status == "submitted":
-        raise HTTPException(status_code=400, detail="This questionnaire has already been submitted")
+    qr = _validate_external_token(token, db)
 
     # The questions as they were sent, whatever has happened to the template since.
     questions = versions.questions_for(db, qr)
     db.commit()                      # a link sent before versions existed is pinned now
 
-    # Load vendor name
     vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
-
-    # Load evidence files
-    evidence_list = db.query(VendorQuestionnaireEvidence).filter(
-        VendorQuestionnaireEvidence.response_id == qr.id,
-    ).all()
     evidence_by_question: dict = {}
-    for ev in evidence_list:
-        if ev.question_id not in evidence_by_question:
-            evidence_by_question[ev.question_id] = []
-        evidence_by_question[ev.question_id].append({
+    for ev in db.query(VendorQuestionnaireEvidence).filter(VendorQuestionnaireEvidence.response_id == qr.id):
+        evidence_by_question.setdefault(ev.question_id, []).append({
             "id": ev.id,
             "file_name": ev.file_name,
             "file_type": ev.file_type,
@@ -421,8 +588,13 @@ def external_load_questionnaire(
         "respondent_email": qr.respondent_email,
         "status": qr.status,
         "expires_at": qr.expires_at.isoformat() if qr.expires_at else None,
+        "due_date": qr.due_date.isoformat() if qr.due_date else None,
         "questions": questions,
         "existing_responses": qr.responses or {},
+        "comments": qr.vendor_comments or {},
+        # While returned, only these can change: {question key: what the reviewer asked}.
+        "clarifications": portal.clarifications(qr.review) if qr.status == "returned" else {},
+        "attestation": {"name": qr.attested_name, "title": qr.attested_title, "email": qr.attested_email},
         "evidence": evidence_by_question,
     }
 
@@ -448,46 +620,61 @@ def external_submit_questionnaire(
     payload: ExternalSubmitRequest,
     db: Session = Depends(get_db),
 ):
-    """External vendor submits questionnaire responses. No authentication required."""
-    qr = db.query(VendorQuestionnaireResponse).filter(
-        VendorQuestionnaireResponse.token == token,
-    ).first()
-    if not qr:
-        raise HTTPException(status_code=404, detail="Questionnaire not found or invalid token")
+    """External vendor saves or submits answers. No authentication required.
 
-    # Check expiry
-    if qr.expires_at and qr.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=410, detail="This questionnaire link has expired")
-
-    # Check if already submitted
-    if qr.status == "submitted":
-        raise HTTPException(status_code=400, detail="This questionnaire has already been submitted")
-
-    # Update response
-    qr.responses = payload.responses
+    Which questions apply is worked out again here, so an answer to one the
+    vendor could not see neither counts nor blocks. While a questionnaire is
+    returned, only the questions the reviewer asked about can change. Submitting
+    takes a named person attesting to the answers."""
+    qr = _validate_external_token(token, db)
+    questions = versions.questions_for(db, qr)
+    answers = portal.merge(qr.status, questions, qr.responses or {}, payload.responses or {}, qr.review)
+    open_to_comment = (set(portal.clarifications(qr.review)) if qr.status == "returned"
+                       else {str(q.get("id")) for q in questions})
+    comments = dict(qr.vendor_comments or {})
+    for key, text in (payload.comments or {}).items():
+        if key in open_to_comment:
+            text = str(text or "").strip()[:4000]
+            if text:
+                comments[key] = text
+            else:
+                comments.pop(key, None)
 
     if payload.respondent_name:
-        qr.respondent_name = payload.respondent_name
+        qr.respondent_name = payload.respondent_name[:255]
     if payload.respondent_email:
-        qr.respondent_email = payload.respondent_email
+        qr.respondent_email = payload.respondent_email[:255]
 
+    now = datetime.utcnow()
     if payload.submit:
-        # Final submission
+        missing = portal.missing_required(questions, answers)
+        if missing:
+            raise HTTPException(status_code=400, detail=(
+                f"{len(missing)} required question{'s' if len(missing) != 1 else ''} still need an answer"))
+        try:
+            who = portal.clean_attestation(payload.attestation)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        qr.attested_name, qr.attested_email, qr.attested_title, qr.attested_at = (
+            who["name"], who["email"], who["title"], who["at"])
+        if qr.status == "returned":
+            review = dict(qr.review or {})
+            for key in portal.clarifications(review):
+                review[key] = {**review[key], "status": "answered", "answered_at": now.isoformat()}
+            qr.review = review
         qr.status = "submitted"
-        qr.submitted_at = datetime.utcnow()
-
-        # Also update the linked assessment status if applicable
-        if qr.assessment_id:
-            assessment = db.query(VendorAssessment).filter(
-                VendorAssessment.id == qr.assessment_id,
-            ).first()
-            if assessment and assessment.status == "draft":
-                assessment.status = "submitted"
-                assessment.updated_at = datetime.utcnow()
-            _materialise(db, assessment, qr)
-    else:
-        # Save draft
+        qr.submitted_at = now
+    elif qr.status != "returned":
         qr.status = "in_progress"
+    qr.responses = answers
+    qr.vendor_comments = comments
+
+    if payload.submit and qr.assessment_id:
+        assessment = db.query(VendorAssessment).filter(VendorAssessment.id == qr.assessment_id).first()
+        if assessment and assessment.status == "draft":
+            assessment.status = "submitted"
+            assessment.updated_at = now
+        _materialise(db, assessment, qr)
 
     db.commit()
     db.refresh(qr)
@@ -501,20 +688,6 @@ def external_submit_questionnaire(
 
 
 # ── Evidence upload (NO AUTH — token-validated) ──────────────────
-
-def _validate_external_token(token: str, db: Session, allow_submitted: bool = False) -> VendorQuestionnaireResponse:
-    """Validate external token and return the questionnaire response."""
-    qr = db.query(VendorQuestionnaireResponse).filter(
-        VendorQuestionnaireResponse.token == token,
-    ).first()
-    if not qr:
-        raise HTTPException(status_code=404, detail="Questionnaire not found or invalid token")
-    if qr.expires_at and qr.expires_at < datetime.utcnow():
-        raise HTTPException(status_code=410, detail="This questionnaire link has expired")
-    if not allow_submitted and qr.status == "submitted":
-        raise HTTPException(status_code=400, detail="This questionnaire has already been submitted")
-    return qr
-
 
 @router.post("/questionnaires/external/{token}/evidence/{question_id}")
 async def external_upload_evidence(

@@ -25,6 +25,7 @@ import {
   Eye,
   ExternalLink,
   Link2 as LinkIcon,
+  RotateCw,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -73,8 +74,9 @@ interface QuestionnaireResponseRecord {
   respondent_email: string | null;
   responses: Record<string, unknown>;
   status: string;
-  token: string;
+  token: string | null;               // null once accepted: the vendor's link is closed
   expires_at: string | null;
+  due_date?: string | null;
   submitted_at: string | null;
   created_at: string | null;
 }
@@ -107,6 +109,9 @@ const getResponseStatusPill = (status: string) => {
     pending: 'bg-amber-50 text-amber-700 border-amber-200',
     in_progress: 'bg-primary-50 text-primary-700 border-primary-200',
     submitted: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    under_review: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+    returned: 'bg-amber-50 text-amber-800 border-amber-200',
+    accepted: 'bg-green-50 text-green-700 border-green-200',
     expired: 'bg-gray-100 text-gray-600 border-gray-200',
   };
   return tones[status?.toLowerCase()] || 'bg-gray-100 text-gray-600 border-gray-200';
@@ -212,6 +217,8 @@ export default function VendorQuestionnairesPage() {
     assessment_id: '',
     respondent_email: '',
     respondent_name: '',
+    due_in_days: 14,
+    expires_in_days: 30,
   });
 
 
@@ -278,6 +285,15 @@ export default function VendorQuestionnairesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['questionnaire-templates'] });
+    },
+  });
+
+  // A resend issues a new link; the old one stops working.
+  const resendMutation = useMutation({
+    mutationFn: async (id: number) => (await vendorRiskApi.resendQuestionnaire(id)).data,
+    onSuccess: (data: { token?: string | null }) => {
+      queryClient.invalidateQueries({ queryKey: ['questionnaire-responses'] });
+      if (data?.token) copyLink(buildQuestionnaireLink(data.token));
     },
   });
 
@@ -371,6 +387,8 @@ export default function VendorQuestionnairesPage() {
       assessment_id: sendForm.assessment_id ? Number(sendForm.assessment_id) : undefined,
       respondent_email: sendForm.respondent_email || undefined,
       respondent_name: sendForm.respondent_name || undefined,
+      due_in_days: sendForm.due_in_days,
+      expires_in_days: Math.max(sendForm.expires_in_days, sendForm.due_in_days),
     });
   };
 
@@ -602,7 +620,7 @@ export default function VendorQuestionnairesPage() {
                     onClick={() => {
                       setSelectedTemplateId(template.id);
                       setSendSuccess(null);
-                      setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
+                      setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30 });
                       setShowSendModal(true);
                     }}
                     className="w-full px-3 py-1.5 bg-primary-50 text-primary-700 rounded-md text-xs font-medium hover:bg-primary-100 flex items-center justify-center gap-1.5"
@@ -656,7 +674,8 @@ export default function VendorQuestionnairesPage() {
                     const assessment = response.assessment_id ? assessmentsById.get(response.assessment_id) : undefined;
                     const answeredCount = Object.keys(response.responses || {}).length;
                     const questionCount = template?.questions?.length || answeredCount;
-                    const responseLink = buildQuestionnaireLink(response.token);
+                    const responseLink = response.token ? buildQuestionnaireLink(response.token) : null;
+                    const waitingOnVendor = ['pending', 'in_progress', 'returned'].includes(response.status);
 
                     return (
                       <tr key={response.id} className="hover:bg-gray-50">
@@ -686,6 +705,9 @@ export default function VendorQuestionnairesPage() {
                           <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium capitalize border ${getResponseStatusPill(response.status)}`}>
                             {response.status?.replace(/_/g, ' ')}
                           </span>
+                          {waitingOnVendor && response.due_date && (
+                            <div className="mt-0.5 text-[11px] text-gray-500">Due {new Date(response.due_date).toLocaleDateString()}</div>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {questionCount > 0 ? `${answeredCount}/${questionCount}` : `${answeredCount}`}
@@ -703,24 +725,45 @@ export default function VendorQuestionnairesPage() {
                             >
                               <Eye className="h-4 w-4" strokeWidth={1.75} />
                             </button>
-                            <button
-                              onClick={() => navigator.clipboard.writeText(responseLink)}
-                              aria-label={`Copy response link for response #${response.id}`}
-                              className="p-1.5 text-gray-500 hover:text-gray-700 rounded"
-                              title="Copy response link"
-                            >
-                              <Copy className="h-4 w-4" strokeWidth={1.75} />
-                            </button>
-                            <a
-                              href={responseLink}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              aria-label={`Open response link for response #${response.id} in a new tab`}
-                              className="p-1.5 text-gray-500 hover:text-primary-700 rounded"
-                              title="Open response link"
-                            >
-                              <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
-                            </a>
+                            {responseLink && (
+                              <>
+                                <button
+                                  onClick={() => navigator.clipboard.writeText(responseLink)}
+                                  aria-label={`Copy response link for response #${response.id}`}
+                                  className="p-1.5 text-gray-500 hover:text-gray-700 rounded"
+                                  title="Copy response link"
+                                >
+                                  <Copy className="h-4 w-4" strokeWidth={1.75} />
+                                </button>
+                                <a
+                                  href={responseLink}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  aria-label={`Open response link for response #${response.id} in a new tab`}
+                                  className="p-1.5 text-gray-500 hover:text-primary-700 rounded"
+                                  title="Open response link"
+                                >
+                                  <ExternalLink className="h-4 w-4" strokeWidth={1.75} />
+                                </a>
+                              </>
+                            )}
+                            {canCreate && waitingOnVendor && (
+                              <button
+                                onClick={() => {
+                                  if (window.confirm('Send a new link? The current link stops working, and the new one is copied for you.')) {
+                                    resendMutation.mutate(response.id);
+                                  }
+                                }}
+                                disabled={resendMutation.isPending}
+                                aria-label={`Send a new link for response #${response.id}`}
+                                className="p-1.5 text-gray-500 hover:text-primary-700 rounded disabled:opacity-50"
+                                title="Send a new link (the old one stops working)"
+                              >
+                                {resendMutation.isPending && resendMutation.variables === response.id
+                                  ? <Loader2 className="h-4 w-4 animate-spin" />
+                                  : <RotateCw className="h-4 w-4" strokeWidth={1.75} />}
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -1082,7 +1125,7 @@ export default function VendorQuestionnairesPage() {
         onClose={() => {
           setShowSendModal(false);
           setSendSuccess(null);
-          setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
+          setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30 });
         }}
         title="Generate vendor link"
         subtitle="Mints a private response link — no email is sent automatically."
@@ -1095,7 +1138,7 @@ export default function VendorQuestionnairesPage() {
                 onClick={() => {
                   setShowSendModal(false);
                   setSendSuccess(null);
-                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
+                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30 });
                 }}
                 className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
               >
@@ -1109,7 +1152,7 @@ export default function VendorQuestionnairesPage() {
                 onClick={() => {
                   setShowSendModal(false);
                   setSendSuccess(null);
-                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '' });
+                  setSendForm({ vendor_id: '', assessment_id: '', respondent_email: '', respondent_name: '', due_in_days: 14, expires_in_days: 30 });
                 }}
                 className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
               >
@@ -1245,6 +1288,31 @@ export default function VendorQuestionnairesPage() {
                   className={inputClass}
                   placeholder="vendor-contact@example.com"
                 />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="send-due-days">Answers due in (days)</label>
+                <input
+                  id="send-due-days"
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={sendForm.due_in_days}
+                  onChange={(e) => setSendForm({ ...sendForm, due_in_days: Math.max(1, Number(e.target.value) || 1) })}
+                  className={inputClass}
+                />
+              </div>
+              <div>
+                <label className={labelClass} htmlFor="send-expiry-days">Link expires in (days)</label>
+                <input
+                  id="send-expiry-days"
+                  type="number"
+                  min={1}
+                  max={365}
+                  value={sendForm.expires_in_days}
+                  onChange={(e) => setSendForm({ ...sendForm, expires_in_days: Math.max(1, Number(e.target.value) || 1) })}
+                  className={inputClass}
+                />
+                <p className="mt-1 text-[11px] text-gray-500">The vendor is reminded before and after the due date until the link expires.</p>
               </div>
               {sendMutation.isError && (
                 <div className="text-xs text-red-600 bg-red-50 p-2 rounded-lg md:col-span-2">

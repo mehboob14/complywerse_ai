@@ -183,8 +183,20 @@ class VendorQuestionnaireResponse(Base):
     responses = Column(JSON, default={})
     status = Column(String(50), default="pending")
     token = Column(String(255), nullable=False, unique=True, index=True)
-    expires_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=True)             # the link stops working
+    due_date = Column(DateTime, nullable=True)               # the answers are due (reminders run on this)
+    last_sent_at = Column(DateTime, nullable=True)           # a resend issues a new link
     submitted_at = Column(DateTime, nullable=True)
+    # The named person who attested to the answers on submitting them.
+    attested_name = Column(String(255), nullable=True)
+    attested_title = Column(String(255), nullable=True)
+    attested_email = Column(String(255), nullable=True)
+    attested_at = Column(DateTime, nullable=True)
+    vendor_comments = Column(JSON, default=dict)             # {question key: the vendor's comment}
+    # The reviewer's call per question: {key: {status: accepted|clarify|answered, note, by, at}}
+    review = Column(JSON, default=dict)
+    accepted_by = Column(Integer, nullable=True)
+    accepted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant")

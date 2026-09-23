@@ -30,6 +30,7 @@ from .engine_scoring import (
     score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity,
 )
 from . import versions
+from .portal import ANSWERED
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
 from .bootstrap import get_tiering_config
@@ -507,7 +508,7 @@ def _latest_submitted_questionnaire(db: Session, assessment_id: int):
         db.query(VendorQuestionnaireResponse)
         .filter(
             VendorQuestionnaireResponse.assessment_id == assessment_id,
-            VendorQuestionnaireResponse.status == "submitted",
+            VendorQuestionnaireResponse.status.in_(ANSWERED),
         )
         .order_by(VendorQuestionnaireResponse.id.desc())
         .first()

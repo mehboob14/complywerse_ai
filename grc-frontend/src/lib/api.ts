@@ -2270,11 +2270,21 @@ export const vendorRiskApi = {
     respondent_name?: string;
     respondent_email?: string;
     expires_in_days?: number;
+    due_in_days?: number;
   }) => apiClient.post('/vendor-risk/questionnaires/send', data),
   getQuestionnaireResponses: (params?: { vendor_id?: number; assessment_id?: number }) =>
     apiClient.get('/vendor-risk/questionnaire-responses', { params }),
   updateQuestionnaireResponse: (responseId: number, data: { assessment_id?: number }) =>
     apiClient.patch(`/vendor-risk/questionnaire-responses/${responseId}`, data),
+  // Review a submitted questionnaire: per question, then return it or accept it.
+  reviewQuestion: (responseId: number, data: { question_key: string; decision: 'accept' | 'clarify' | 'clear'; note?: string }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/review`, data),
+  returnQuestionnaire: (responseId: number, data?: { due_in_days?: number }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/return`, data || {}),
+  acceptQuestionnaire: (responseId: number) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/accept`),
+  resendQuestionnaire: (responseId: number, data?: { expires_in_days?: number; due_in_days?: number }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/resend`, data || {}),
 
   // ── TPRA 8-stage lifecycle ──
   getLifecycleStages: () => apiClient.get('/vendor-risk/lifecycle/stages'),

@@ -17,6 +17,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import rbac
+from ..tpra.portal import ANSWERED
 
 router = APIRouter(prefix="/ai", tags=["Vendor AI Analysis"])
 
@@ -114,7 +115,7 @@ def ai_score_assessment(
     # Load questionnaire response
     resp_query = db.query(VendorQuestionnaireResponse).filter(
         VendorQuestionnaireResponse.assessment_id == payload.assessment_id,
-        VendorQuestionnaireResponse.status == "submitted",
+        VendorQuestionnaireResponse.status.in_(ANSWERED),
     )
     if payload.response_id:
         resp_query = resp_query.filter(VendorQuestionnaireResponse.id == payload.response_id)

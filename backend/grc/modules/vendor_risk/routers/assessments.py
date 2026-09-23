@@ -14,7 +14,8 @@ from ....models import (
     TPRAFinding,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import rbac, versions
+from ..tpra import portal, rbac, versions
+from .questionnaires import serialize_questionnaire_response
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Assessments"])
@@ -301,12 +302,8 @@ def get_assessment(
             })
 
         qr_data.append({
-            "id": r.id,
-            "respondent_name": r.respondent_name,
-            "respondent_email": r.respondent_email,
-            "responses": r.responses or {},
-            "status": r.status,
-            "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
+            # status, due date, attester, the vendor's comments and the review per question
+            **serialize_questionnaire_response(r),
             "questions": questions,
             "template_version": version.version_no if version else None,
             "evidence": evidence_by_q,
@@ -397,7 +394,7 @@ def score_assessment(
     # Find the questionnaire response to score
     resp_query = db.query(VendorQuestionnaireResponse).filter(
         VendorQuestionnaireResponse.assessment_id == assessment_id,
-        VendorQuestionnaireResponse.status == "submitted",
+        VendorQuestionnaireResponse.status.in_(portal.ANSWERED),
     )
     if payload.response_id:
         resp_query = resp_query.filter(VendorQuestionnaireResponse.id == payload.response_id)

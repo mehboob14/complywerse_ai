@@ -909,6 +909,17 @@ _COLUMN_ADDS = [
     ("grc_tpra_findings", "question_key", "VARCHAR(100)", None),
     ("grc_tpra_findings", "answer_value", "VARCHAR(255)", None),
     ("grc_tpra_tiering_config", "scoring_policy", "JSON DEFAULT '{}'::json", None),
+    # The questionnaire reviewer loop and a hardened vendor portal (tpra/portal.py).
+    ("grc_vendor_questionnaire_responses", "due_date", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_responses", "last_sent_at", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_responses", "attested_name", "VARCHAR(255)", None),
+    ("grc_vendor_questionnaire_responses", "attested_title", "VARCHAR(255)", None),
+    ("grc_vendor_questionnaire_responses", "attested_email", "VARCHAR(255)", None),
+    ("grc_vendor_questionnaire_responses", "attested_at", "TIMESTAMP", None),
+    ("grc_vendor_questionnaire_responses", "vendor_comments", "JSON DEFAULT '{}'::json", None),
+    ("grc_vendor_questionnaire_responses", "review", "JSON DEFAULT '{}'::json", None),
+    ("grc_vendor_questionnaire_responses", "accepted_by", "INTEGER", None),
+    ("grc_vendor_questionnaire_responses", "accepted_at", "TIMESTAMP", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

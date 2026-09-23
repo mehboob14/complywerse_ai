@@ -3,7 +3,8 @@
 Five dates in this module carry a promise, and until now nothing acted on any of
 them: a vendor's reassessment date, a questionnaire waiting on the vendor, a
 remediation's due date, a risk acceptance's expiry, and a contract's renewal or
-expiry. The platform clock queues this sweep daily.
+expiry. The platform clock queues this sweep daily. A questionnaire's respondent,
+who has no account, is emailed on the same rhythm until the link expires.
 
 The rhythm is one notice when the reminder window opens, then — once overdue —
 one every repeat period: weekly by default, not daily nagging. Past the
@@ -25,6 +26,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
+from sqlalchemy import or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -32,12 +34,12 @@ from ....models import (
     Role, TPRAContract, TPRAFinding, TPRAReminder, TPRARemediation, TPRARiskAcceptance,
     UserRole, Vendor, VendorQuestionnaireResponse,
 )
+from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
 
 logger = logging.getLogger(__name__)
 
 _INACTIVE_VENDOR = ("retired", "offboarded", "inactive", "terminated")
 _REMEDIATION_DONE = ("completed", "complete", "closed", "verified", "cancelled", "canceled", "done")
-_WAITING_ON_VENDOR = ("pending", "in_progress")
 _MAX_DAYS = 3650
 
 
@@ -110,6 +112,7 @@ class Notice:
     title: str
     link: str
     recipients: List[int] = field(default_factory=list)
+    email: Optional[str] = None      # someone outside the platform: a vendor's respondent
 
 
 def _day(value) -> Optional[date]:
@@ -136,7 +139,7 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
     every = int(policy.get("repeat_every_days", 7))
     notices: List[Notice] = []
 
-    def add(kind, subject_type, subject_id, vendor_id, due, title, link, recipients, once=False):
+    def add(kind, subject_type, subject_id, vendor_id, due, title, link, recipients, once=False, email=None):
         if due is None:
             return
         period = reminder_period(due, today, before, every, once_overdue=once)
@@ -144,7 +147,7 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             return
         notices.append(Notice(kind, subject_type, subject_id, vendor_id, due, period,
                               max(0, (today - due).days), title, link,
-                              [int(r) for r in dict.fromkeys(recipients) if r]))
+                              [int(r) for r in dict.fromkeys(recipients) if r], email))
 
     vendors = {v.id: v for v in db.query(Vendor).filter(
         Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None))}
@@ -158,20 +161,30 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"Reassessment of {v.name} is {_when(due, today)}",
             f"/vendor-risk/vendors/{v.id}", [v.owner_id])
 
-    # 2. Questionnaires still waiting on the vendor.
+    # 2. Questionnaires still waiting on the vendor: the owner hears as the due date
+    #    nears and once when it passes; the respondent is emailed on the usual
+    #    rhythm until the link stops working.
     for qr in db.query(VendorQuestionnaireResponse).filter(
             VendorQuestionnaireResponse.tenant_id == tenant_id,
             VendorQuestionnaireResponse.status.in_(_WAITING_ON_VENDOR),
-            VendorQuestionnaireResponse.expires_at.isnot(None)):
+            or_(VendorQuestionnaireResponse.due_date.isnot(None),
+                VendorQuestionnaireResponse.expires_at.isnot(None))):
         v = vendors.get(qr.vendor_id)
         if v is None:
             continue
-        due = _day(qr.expires_at)
-        state = (f"expired {(today - due).days} days ago unanswered" if due < today
-                 else f"still unanswered; the link expires {_when(due, today)}")
+        due = _day(qr.due_date or qr.expires_at)
+        state = (f"{(today - due).days} days overdue" if due < today
+                 else f"still unanswered and due {_when(due, today)}")
         add("questionnaire_waiting", "questionnaire", qr.id, v.id, due,
             f"Questionnaire for {v.name} is {state}",
             f"/vendor-risk/vendors/{v.id}", [v.owner_id], once=True)
+        expires = _day(qr.expires_at)
+        if qr.respondent_email and (expires is None or expires >= today):
+            returned = qr.status == "returned"
+            add("questionnaire_vendor", "questionnaire", qr.id, v.id, due,
+                f"{'Clarification needed on' if returned else 'Reminder:'} the questionnaire for {v.name}, "
+                f"{_when(due, today)}",
+                portal_link(qr.token) or "", [], email=qr.respondent_email)
 
     findings: Dict[int, TPRAFinding] = {}
 
@@ -252,8 +265,18 @@ def _deliver(db: Session, tenant_id: int, user_id: int, subject: str, message: s
                                channels=["in_app", "email"], notification_type="reminder")
 
 
+def _deliver_external(db: Session, tenant_id: int, email: str, subject: str, message: str) -> None:
+    from ...workflow_engine.services.email_service import send_email
+
+    html = "".join(f"<p>{line}</p>" for line in message.split("\n\n"))
+    result = send_email(db, tenant_id, email, subject[:500], html, message)
+    if not result.get("success"):
+        raise RuntimeError(result.get("message") or "email is not configured")
+
+
 def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
-        deliver: Callable[[Session, int, int, str, str], None] = _deliver) -> Dict[str, int]:
+        deliver: Callable[[Session, int, int, str, str], None] = _deliver,
+        deliver_external: Callable[[Session, int, str, str, str], None] = _deliver_external) -> Dict[str, int]:
     """Send every reminder owed today, once. Returns counts."""
     today = today or datetime.utcnow().date()
     counts = {"owed": 0, "sent": 0, "already_sent": 0, "failed": 0, "no_recipient": 0}
@@ -264,6 +287,28 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
 
     for notice in due_notices(db, tenant_id, today, policy):
         counts["owed"] += 1
+        if notice.email:
+            # The respondent has no account: recipient 0 stands for them, and the
+            # notice id keeps it to one email per questionnaire per period.
+            message = (f"{notice.title}.\n\n"
+                       + (f"Open the questionnaire: {notice.link}" if notice.link
+                          else "Use the link in your original invitation."))
+            try:
+                with db.begin_nested():
+                    db.add(TPRAReminder(
+                        tenant_id=tenant_id, kind=notice.kind, subject_type=notice.subject_type,
+                        subject_id=notice.subject_id, vendor_id=notice.vendor_id, recipient_id=0,
+                        period=notice.period, escalation=0, due_on=notice.due_on, detail=notice.email[:255],
+                    ))
+                    db.flush()
+                    deliver_external(db, tenant_id, notice.email, notice.title, message)
+                counts["sent"] += 1
+            except IntegrityError:
+                counts["already_sent"] += 1
+            except Exception as exc:  # noqa: BLE001 — no row is kept, so the next run retries
+                logger.warning("tprm vendor reminder for questionnaire %s not sent: %s", notice.subject_id, exc)
+                counts["failed"] += 1
+            continue
         people: List[Tuple[int, int]] = [(uid, 0) for uid in notice.recipients]
         if notice.overdue_days and notice.overdue_days >= escalate_after:
             people += [(uid, 1) for uid in escalation if uid not in notice.recipients]
