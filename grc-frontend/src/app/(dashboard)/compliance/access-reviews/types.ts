@@ -145,7 +145,10 @@ export interface FrameworkRef {
 }
 
 export interface RuleCatalogView {
-  summary: { total: number; runnable: number; enabled_active: number; frameworks_covered?: number };
+  summary: { total: number; catalog_total?: number; runnable: number; enabled_active: number; frameworks_covered?: number };
+  /** every framework the catalog evidences, from the tenant's own crosswalk */
+  frameworks?: { slug: string; name: string; rules: number }[];
+  framework?: string | null;
   domains: { domain: string; rules: CatalogRule[] }[];
 }
 

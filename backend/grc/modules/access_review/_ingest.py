@@ -67,6 +67,12 @@ def ingest(tenant_db: Session, *, tenant_id: int, records: List[Dict[str, Any]],
         user.department = m.get("department") or user.department
         user.designation = m.get("designation") or user.designation
         user.account_enabled = m["account_enabled"]
+        # Only when the source actually reports them — a source that is silent
+        # about MFA must not overwrite what one that knows has recorded.
+        if m.get("mfa") is not None:
+            user.mfa_enabled = bool(m["mfa"])
+        if m.get("last_sign_in") is not None:
+            user.entra_last_sign_in = m["last_sign_in"]
         if m.get("terminated") and not user.termination_date:
             user.termination_date = date.today()
         user.access_synced_at = now

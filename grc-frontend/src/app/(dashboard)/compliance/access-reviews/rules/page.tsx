@@ -18,7 +18,6 @@ function shortFramework(name: string): string {
     .replace(/\s*\(used for SOC 2\)/, '').slice(0, 22);
 }
 
-const REGS = ['All', 'SOX', 'PCI', 'GDPR', 'SAMA'] as const;
 const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
 const statusMeta: Record<CatalogRule['status'], { label: string; cls: string }> = {
   runnable: { label: 'Runnable', cls: 'text-emerald-600' },
@@ -28,16 +27,13 @@ const statusMeta: Record<CatalogRule['status'], { label: string; cls: string }> 
 
 export default function RuleLibraryPage() {
   const router = useRouter();
-  const { data, isLoading } = useRuleCatalog();
+  const [framework, setFramework] = useState('');
+  const { data, isLoading } = useRuleCatalog(framework || undefined);
   const update = useUpdateRule();
-  const [reg, setReg] = useState<(typeof REGS)[number]>('All');
 
-  const domains = useMemo(() => {
-    if (!data) return [];
-    return data.domains
-      .map((d) => ({ ...d, rules: reg === 'All' ? d.rules : d.rules.filter((r) => r.regulation.includes(reg)) }))
-      .filter((d) => d.rules.length);
-  }, [data, reg]);
+  // The catalog already comes filtered; the framework's own codes ride along.
+  const domains = useMemo(() => (data?.domains ?? []).filter((d) => d.rules.length), [data]);
+  const frameworks = data?.frameworks ?? [];
 
   if (isLoading || !data) return <PageLoader />;
   const filteredCount = domains.reduce((n, d) => n + d.rules.length, 0);
@@ -49,7 +45,7 @@ export default function RuleLibraryPage() {
       <p className="mb-5 mt-1 text-[13.5px] text-slate-500">Checks that run during Stage 3. Enabled, runnable rules fire on the next review.</p>
 
       <div className="mb-4 grid grid-cols-3 gap-3.5">
-        {[['Catalog', data.summary.total, 'rules across all domains'], ['Runnable now', data.summary.runnable, 'with connected data'], ['Frameworks', data.summary.frameworks_covered ?? 0, 'evidenced from your library']].map(([k, v, s]) => (
+        {[['Catalog', data.summary.total, framework ? `of ${data.summary.catalog_total ?? data.summary.total} that evidence this framework` : 'rules across all domains'], ['Runnable now', data.summary.runnable, 'with connected data'], ['Frameworks', data.summary.frameworks_covered ?? 0, 'evidenced from your library']].map(([k, v, s]) => (
           <div key={k as string} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-1.5 text-[11.5px] font-medium text-slate-500">{k}</div>
             <div className="font-mono text-[25px] font-bold tracking-tight text-slate-900">{v}</div>
@@ -58,15 +54,19 @@ export default function RuleLibraryPage() {
         ))}
       </div>
 
-      <div className="mb-5 flex items-center gap-3">
-        <span className="text-xs font-semibold text-slate-600">Regulation</span>
-        <div className="flex gap-0.5 rounded-lg border border-slate-200 bg-slate-50 p-1">
-          {REGS.map((k) => (
-            <button key={k} onClick={() => setReg(k)} style={reg === k ? ACCENT : undefined}
-              className={`rounded-md px-3 py-1.5 text-xs font-semibold ${reg === k ? 'shadow-sm' : 'text-slate-500'}`}>{k}</button>
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <span className="text-xs font-semibold text-slate-600">Framework</span>
+        <select value={framework} onChange={(e) => setFramework(e.target.value)}
+          className="min-w-[280px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] outline-none focus:border-[color:var(--color-base)]">
+          <option value="">Every framework ({frameworks.length} in your library)</option>
+          {frameworks.map((f) => (
+            <option key={f.slug} value={f.slug}>{f.name} — {f.rules} rule{f.rules === 1 ? '' : 's'}</option>
           ))}
-        </div>
+        </select>
         <span className="font-mono text-[11.5px] text-slate-400">{filteredCount} rules</span>
+        {framework && (
+          <span className="text-[11.5px] text-slate-400">showing each rule&apos;s clause in this framework</span>
+        )}
       </div>
 
       {domains.map((d) => (

@@ -14,6 +14,7 @@ new is kept here, and every call is a read.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy import desc
@@ -39,6 +40,8 @@ class People:
     skip_if: Tuple[str, ...] = ()                # truthy → not a person (bots)
     role_fields: Tuple[str, ...] = ()            # value becomes an entitlement
     flags: Dict[str, str] = field(default_factory=dict)   # field → entitlement when truthy
+    mfa: Optional[str] = None                    # field saying whether MFA is on
+    last_sign_in: Optional[str] = None           # field holding the last login
     inline: Optional[Dict[str, Any]] = None      # a resource definition of our own
     parents: Tuple[str, ...] = ()                # resources to collect first (for_each)
 
@@ -47,18 +50,18 @@ class People:
 #: under Administration → Evidence Collectors.
 PEOPLE: Dict[str, People] = {
     "slack": People("users", "Slack", name="real_name", external_id="name",
-                    disabled_if=("deleted",), skip_if=("is_bot",),
+                    disabled_if=("deleted",), skip_if=("is_bot",), mfa="has_2fa",
                     flags={"is_owner": "Slack: workspace owner", "is_admin": "Slack: workspace admin",
                            "is_restricted": "Slack: guest"}),
     "google_workspace": People("users", "Google Workspace", name="email",
-                               disabled_if=("suspended",),
+                               disabled_if=("suspended",), mfa="twoStepEnrolled",
                                flags={"admin": "Google Workspace: super admin"}),
     "microsoft_365": People("users", "Microsoft 365", email="upn", name="name",
                             enabled_if=("enabled",)),
     "okta": People("active_users", "Okta", email="login", name="login", external_id="id"),
-    "jumpcloud": People("systemusers", "JumpCloud", name="username",
+    "jumpcloud": People("systemusers", "JumpCloud", name="username", mfa="mfa_configured",
                         disabled_if=("suspended", "account_locked")),
-    "onelogin": People("users", "OneLogin", name="username", external_id="id",
+    "onelogin": People("users", "OneLogin", name="username", external_id="id", last_sign_in="last_login",
                        role_fields=("status",)),
     "jira": People("users", "Jira", name="displayName", external_id="accountId",
                    enabled_if=("active",), skip_if=("accountType",),
@@ -91,24 +94,24 @@ PEOPLE: Dict[str, People] = {
     "hubspot": People("users", "HubSpot", flags={"superAdmin": "HubSpot: super admin"}),
     "intercom": People("admins", "Intercom", external_id="admin_id",
                        flags={"has_inbox_seat": "Intercom: inbox seat"}),
-    "sentry": People("members", "Sentry", role_fields=("role",),
+    "sentry": People("members", "Sentry", role_fields=("role",), mfa="has2fa",
                      flags={"pending": "Sentry: invitation pending"}),
     "grafana": People("org_users", "Grafana", name="login", role_fields=("role",)),
-    "posthog": People("members", "PostHog", email="user_email", name="user_name",
+    "posthog": People("members", "PostHog", email="user_email", name="user_name", mfa="mfa_enabled",
                       role_fields=("level",)),
     "opsgenie": People("users", "Opsgenie", email="username", name="username",
                        role_fields=("role",), disabled_if=("blocked",)),
     "openai": People("org_users", "OpenAI", external_id="id", role_fields=("role",)),
-    "cloudflare": People("members", "Cloudflare", role_fields=("status",), parents=("accounts",)),
+    "cloudflare": People("members", "Cloudflare", role_fields=("status",), mfa="mfa", parents=("accounts",)),
     "netlify": People("members", "Netlify", name="full_name", role_fields=("role",), parents=("accounts",)),
     "vercel": People("team_members", "Vercel", name="username", role_fields=("role",)),
-    "heroku": People("team_members", "Heroku", external_id="id", role_fields=("role",)),
-    "qovery": People("member", "Qovery", external_id="id", role_fields=("role_name",)),
+    "heroku": People("team_members", "Heroku", external_id="id", role_fields=("role",), mfa="mfa"),
+    "qovery": People("member", "Qovery", external_id="id", role_fields=("role_name",), last_sign_in="last_activity"),
     "dropbox": People("members", "Dropbox", external_id="tmid"),
     "databricks": People("users", "Databricks", email="user", name="user", enabled_if=("active",)),
     "clerk": People("users", "Clerk", email="id", name="id", external_id="id",
-                    disabled_if=("banned", "locked")),
-    "sentinelone": People("users", "SentinelOne"),
+                    mfa="two_factor_enabled", disabled_if=("banned", "locked")),
+    "sentinelone": People("users", "SentinelOne", mfa="mfa"),
     "tenable": People("users", "Tenable", email="username", name="username",
                       enabled_if=("enabled",), role_fields=("permissions",)),
     "calendly": People("members", "Calendly", role_fields=("role",)),
@@ -128,6 +131,17 @@ def _truthy(row: Dict[str, Any], keys: Tuple[str, ...]) -> bool:
     return False
 
 
+def _timestamp(value: Any) -> Optional[datetime]:
+    if not value:
+        return None
+    text = str(value).strip().replace("Z", "+00:00")
+    try:
+        stamp = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return stamp.astimezone(timezone.utc).replace(tzinfo=None) if stamp.tzinfo else stamp
+
+
 def map_person(row: Dict[str, Any], spec: People, provider: str) -> Optional[Dict[str, Any]]:
     """One collected row → a population record."""
     email = str(row.get(spec.email) or "").strip().lower()
@@ -142,6 +156,10 @@ def map_person(row: Dict[str, Any], spec: People, provider: str) -> Optional[Dic
     if spec.disabled_if and _truthy(row, spec.disabled_if):
         enabled = False
 
+    mfa: Optional[bool] = None
+    if spec.mfa and row.get(spec.mfa) is not None:
+        mfa = _truthy(row, (spec.mfa,))
+
     entitlements = [f"{spec.label}: {str(row[f]).strip()}"[:ROLE_NAME_MAX]
                     for f in spec.role_fields if row.get(f) not in (None, "", [])]
     entitlements += [text[:ROLE_NAME_MAX] for flag, text in spec.flags.items() if _truthy(row, (flag,))]
@@ -153,6 +171,7 @@ def map_person(row: Dict[str, Any], spec: People, provider: str) -> Optional[Dic
         "department": None, "designation": f"{spec.label} account",
         "account_enabled": enabled, "terminated": False,
         "entitlements": entitlements, "is_person": True,
+        "mfa": mfa, "last_sign_in": _timestamp(row.get(spec.last_sign_in) if spec.last_sign_in else None),
     }
 
 

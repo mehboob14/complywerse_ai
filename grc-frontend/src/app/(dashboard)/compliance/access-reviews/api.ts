@@ -79,10 +79,14 @@ export function useReport(id: number, enabled = true) {
   });
 }
 
-export function useRuleCatalog() {
+export function useRuleCatalog(framework?: string) {
   return useQuery<RuleCatalogView>({
-    queryKey: arKeys.rules(),
-    queryFn: () => authedFetch(`${API}/rules/catalog`).then(json<RuleCatalogView>),
+    // A framework slug narrows the catalog to the rules that evidence it,
+    // each carrying that framework's own requirement codes.
+    queryKey: [...arKeys.rules(), framework ?? 'all'],
+    queryFn: () => authedFetch(`${API}/rules/catalog${framework ? `?framework=${encodeURIComponent(framework)}` : ''}`)
+      .then(json<RuleCatalogView>),
+    placeholderData: (prev) => prev,
   });
 }
 

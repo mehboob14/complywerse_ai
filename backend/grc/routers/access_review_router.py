@@ -1331,13 +1331,16 @@ class RuleConfigIn(BaseModel):
 
 @router.get("/rules/catalog")
 def rules_catalog(
+    framework: Optional[str] = None,
     tenant_db: Session = Depends(get_tenant_db),
     grc_auth_token: Optional[str] = Cookie(None),
     authorization: Optional[str] = Header(None, alias="Authorization"),
 ):
+    """The rule catalog. `framework` (a crosswalk source slug) narrows it to the
+    rules that evidence that framework, with its own requirement codes."""
     _require_admin(tenant_db, grc_auth_token, authorization)
     tid = _tenant_id(tenant_db)
-    return rules_mod.catalog_view(tenant_db, tid)
+    return rules_mod.catalog_view(tenant_db, tid, framework=framework)
 
 
 @router.patch("/rules/{rule_id}")
