@@ -339,6 +339,7 @@ class ConfigIn(BaseModel):
     weights: Optional[dict] = None        # {factor_key: float} — normalized to sum 1.0
     thresholds: Optional[dict] = None     # {critical, high, medium} on 0..100, descending
     cadence_days: Optional[dict] = None   # {critical, high, medium, low} in days
+    reminder_policy: Optional[dict] = None  # see bootstrap.DEFAULT_TIERING_CONFIG["reminder_policy"]
 
 class PlanIn(BaseModel):
     """Persist the Due-Diligence Planning selections onto the assessment so the
@@ -1590,6 +1591,7 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
     cfg = get_tiering_config(db, tenant_id)
     return {
         "weights": cfg["weights"], "thresholds": cfg["thresholds"], "cadence_days": cfg["cadence_days"],
+        "reminder_policy": cfg["reminder_policy"],
         "defaults": DEFAULT_TIERING_CONFIG,
         "meta": {
             "factor_keys": _FACTOR_KEYS, "factor_labels": _FACTOR_LABELS,
@@ -1643,11 +1645,21 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
         cur = row.cadence_days or DEFAULT_TIERING_CONFIG["cadence_days"]
         row.cadence_days = {k: max(1, int(_num(body.cadence_days, k, cur.get(k, 365)))) for k in _CADENCE_KEYS}
 
+    if body.reminder_policy is not None:
+        from .reminders import clean_policy
+        try:
+            row.reminder_policy = clean_policy(
+                body.reminder_policy, {**DEFAULT_TIERING_CONFIG["reminder_policy"],
+                                       **(getattr(row, "reminder_policy", None) or {})})
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
     row.row_version = (row.row_version or 1) + 1
     service.write_audit(db, tenant_id, entity="config", action="update", actor_id=user.id,
                         reason="TPRM program config updated")
     db.commit()
-    return {"weights": row.weights, "thresholds": row.thresholds, "cadence_days": row.cadence_days}
+    return {"weights": row.weights, "thresholds": row.thresholds, "cadence_days": row.cadence_days,
+            "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"], **(row.reminder_policy or {})}}
 
 
 # ── Compliance framework coverage (TPRM-007b) ────────────────────────────────

@@ -32,6 +32,16 @@ DEFAULT_TIERING_CONFIG = {
         "medium": 25.0,
     },
     "cadence_days": dict(DEFAULT_CADENCE_DAYS),
+    # When the reminder sweep tells people about a date, and whom it escalates to.
+    # One notice when the window opens, then one every repeat period once overdue:
+    # a weekly rhythm, not daily nagging.
+    "reminder_policy": {
+        "enabled": True,
+        "remind_before_days": 14,
+        "repeat_every_days": 7,
+        "escalate_after_days": 14,
+        "escalate_to": [],          # ["role:<role name>", "user:<id>"]
+    },
 }
 
 
@@ -98,4 +108,6 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
         "weights": row.weights or DEFAULT_TIERING_CONFIG["weights"],
         "thresholds": row.thresholds or DEFAULT_TIERING_CONFIG["thresholds"],
         "cadence_days": row.cadence_days or DEFAULT_TIERING_CONFIG["cadence_days"],
+        "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"],
+                            **(getattr(row, "reminder_policy", None) or {})},
     }

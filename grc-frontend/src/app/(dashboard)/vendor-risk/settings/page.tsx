@@ -6,18 +6,27 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock } from 'lucide-react';
+import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 
+interface ReminderPolicy {
+  enabled: boolean;
+  remind_before_days: number;
+  repeat_every_days: number;
+  escalate_after_days: number;
+  escalate_to: string[];
+}
+
 interface ConfigResp {
   weights: Record<string, number>;
   thresholds: Record<string, number>;
   cadence_days: Record<string, number>;
-  defaults: { weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number> };
+  reminder_policy: ReminderPolicy;
+  defaults: { weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number>; reminder_policy: ReminderPolicy };
   meta: { factor_keys: string[]; factor_labels: Record<string, string>; tier_keys: string[]; cadence_keys: string[] };
 }
 
@@ -44,11 +53,13 @@ export default function VendorRiskSettingsPage() {
   const [weights, setWeights] = useState<Record<string, number>>({});
   const [thresholds, setThresholds] = useState<Record<string, number>>({});
   const [cadence, setCadence] = useState<Record<string, number>>({});
+  const [reminders, setReminders] = useState<ReminderPolicy | null>(null);
 
   const hydrate = (c: ConfigResp) => {
     setWeights(Object.fromEntries(c.meta.factor_keys.map((k) => [k, Math.round((c.weights[k] ?? 0) * 100)])));
     setThresholds({ ...c.thresholds });
     setCadence({ ...c.cadence_days });
+    setReminders(c.reminder_policy ? { ...c.reminder_policy, escalate_to: [...(c.reminder_policy.escalate_to || [])] } : null);
   };
   useEffect(() => { if (data) hydrate(data); }, [data]);
 
@@ -57,8 +68,9 @@ export default function VendorRiskSettingsPage() {
       weights,           // percentages — backend normalizes to sum 1.0
       thresholds,
       cadence_days: cadence,
+      ...(reminders ? { reminder_policy: reminders } : {}),
     }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-config'] }); toast({ type: 'success', title: 'Settings saved', message: 'New tiering runs use these values.' }); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-config'] }); toast({ type: 'success', title: 'Settings saved', message: 'Tiering, scoring and the next reminder run use these values.' }); },
     onError: (e) => toast({ type: 'error', title: 'Could not save', message: errMsg(e, 'Try again.') }),
   });
 
@@ -84,7 +96,7 @@ export default function VendorRiskSettingsPage() {
         </div>
         {canEdit && (
           <div className="flex items-center gap-2">
-            <button onClick={() => data && hydrate({ ...data, weights: data.defaults.weights, thresholds: data.defaults.thresholds, cadence_days: data.defaults.cadence_days })}
+            <button onClick={() => data && hydrate({ ...data, weights: data.defaults.weights, thresholds: data.defaults.thresholds, cadence_days: data.defaults.cadence_days, reminder_policy: data.defaults.reminder_policy })}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
               <RotateCcw className="h-3.5 w-3.5" /> Reset to defaults
             </button>
@@ -168,6 +180,57 @@ export default function VendorRiskSettingsPage() {
           ))}
         </div>
       </section>
+
+      {/* Reminders & escalation */}
+      {reminders && (
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-1 flex items-center gap-2">
+            <BellRing className="h-4 w-4 text-primary-600" />
+            <h3 className="text-sm font-semibold text-slate-900">Reminders &amp; escalation</h3>
+            <label className="ml-auto flex items-center gap-1.5 text-xs text-slate-600">
+              <input type="checkbox" disabled={!canEdit} checked={reminders.enabled}
+                onChange={(e) => setReminders({ ...reminders, enabled: e.target.checked })} />
+              Send reminders
+            </label>
+          </div>
+          <p className="mb-3 text-[11px] text-gray-500">
+            Covers reassessments, questionnaires waiting on a vendor, remediation, risk acceptances and contracts.
+            One notice when the window opens, then one per repeat period once overdue. An expired risk acceptance
+            is marked expired and stops mitigating its finding.
+          </p>
+          <div className="space-y-2">
+            {([
+              ['remind_before_days', 'Remind this many days before a date'],
+              ['repeat_every_days', 'Once overdue, remind every'],
+              ['escalate_after_days', 'Escalate when this many days overdue'],
+            ] as const).map(([key, label]) => (
+              <div key={key} className="flex items-center justify-between gap-3">
+                <span className="text-sm text-slate-700">{label}</span>
+                <div className="flex items-center gap-1.5">
+                  <input type="number" min={key === 'repeat_every_days' ? 1 : 0} className={inputCls}
+                    disabled={!canEdit || !reminders.enabled}
+                    value={reminders[key]}
+                    onChange={(e) => setReminders({ ...reminders, [key]: Number(e.target.value) })} />
+                  <span className="text-xs text-gray-400">days</span>
+                </div>
+              </div>
+            ))}
+            <div>
+              <label htmlFor="tprm-escalate-to" className="text-sm text-slate-700">Escalate to</label>
+              <input id="tprm-escalate-to"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
+                disabled={!canEdit || !reminders.enabled}
+                placeholder="role:Head of Third-Party Risk, user:12"
+                value={reminders.escalate_to.join(', ')}
+                onChange={(e) => setReminders({ ...reminders, escalate_to: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} />
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                Each entry is <b>role:</b> followed by a role name, or <b>user:</b> followed by a user id.
+                The owner is always told; these people are added once the escalation point passes.
+              </p>
+            </div>
+          </div>
+        </section>
+      )}
 
       <p className="text-[11px] text-gray-400">Integrations &amp; template defaults are managed elsewhere; questionnaire templates live under the Questionnaires tab.</p>
     </div>

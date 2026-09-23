@@ -384,6 +384,9 @@ class TPRATieringConfig(Base):
     thresholds = Column(JSON, default=dict)
     # {critical: days, high: days, medium: days, low: days}
     cadence_days = Column(JSON, default=dict)
+    # When to remind and whom to escalate to: {enabled, remind_before_days,
+    # repeat_every_days, escalate_after_days, escalate_to: ["role:<name>" | "user:<id>"]}
+    reminder_policy = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)

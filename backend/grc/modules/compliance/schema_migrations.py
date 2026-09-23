@@ -899,6 +899,8 @@ _COLUMN_ADDS = [
     # own list (vendor_risk/routers/ai_analysis.py used to overwrite it).
     ("grc_vendor_assessments", "ai_findings", "JSON DEFAULT '[]'::json", None),
     ("grc_vendor_assessments", "ai_recommendations", "JSON DEFAULT '[]'::json", None),
+    # When to remind about third-party risk dates and whom to escalate to.
+    ("grc_tpra_tiering_config", "reminder_policy", "JSON DEFAULT '{}'::json", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

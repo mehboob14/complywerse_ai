@@ -234,6 +234,13 @@ celery_app.conf.update(
         },
         # TPRM — daily portfolio + per-vendor risk snapshot so the dashboard
         # "risk over time" trend keeps moving between assessments.
+        # Third-party risk reminders: reassessments, questionnaires, remediation,
+        # risk acceptances and contracts, once per reminder period.
+        "tprm-daily-reminder-sweep": {
+            "task": "grc.tasks.tprm.daily_reminder_sweep",
+            "schedule": 24 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
         "tprm-daily-snapshot-sweep": {
             "task": "grc.tasks.tprm.daily_tprm_snapshot_sweep",
             "schedule": 24 * 60 * 60,

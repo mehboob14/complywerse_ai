@@ -90,6 +90,56 @@ def daily_tprm_snapshot_sweep(self) -> dict:
     return {"status": "ok", "tenants_dispatched": dispatched}
 
 
+# ── Reminders: reassessments, questionnaires, remediation, acceptances, contracts ──
+
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.tprm.send_reminders_for_tenant",
+    queue="parsing",
+    max_retries=0,
+)
+def send_reminders_for_tenant(self, tenant_slug: str, db: Session = None) -> dict:
+    """Tell people about third-party risk dates coming due or overdue — once per
+    reminder period, however often this runs (modules/vendor_risk/tpra/reminders.py)."""
+    from ..models import Tenant
+    from ..modules.vendor_risk.tpra.bootstrap import get_tiering_config
+    from ..modules.vendor_risk.tpra.reminders import run
+
+    tenant = db.query(Tenant).first()
+    if not tenant:
+        return {"status": "skipped", "tenant_slug": tenant_slug, "reason": "no_tenant"}
+    counts = run(db, tenant.id, get_tiering_config(db, tenant.id)["reminder_policy"])
+    logger.info("tprm reminders tenant=%s %s", tenant_slug, counts)
+    return {"status": "ok", "tenant_slug": tenant_slug, **counts}
+
+
+@celery_app.task(
+    bind=True,
+    name="grc.tasks.tprm.daily_reminder_sweep",
+    queue="parsing",
+    max_retries=0,
+)
+def daily_reminder_sweep(self) -> dict:
+    """Scheduled fan-out: one reminder task per active tenant."""
+    from ..db import MasterSession
+    from ..models import Tenant
+
+    master = MasterSession()
+    try:
+        slugs = [t.slug for t in master.query(Tenant.slug).filter(Tenant.is_active.is_(True)).all() if t.slug]
+    finally:
+        master.close()
+    dispatched = 0
+    for slug in slugs:
+        try:
+            send_reminders_for_tenant.delay(tenant_slug=slug)
+            dispatched += 1
+        except Exception:
+            logger.exception("daily_reminder_sweep: dispatch failed for tenant=%s", slug)
+    return {"status": "ok", "tenants_dispatched": dispatched}
+
+
 # ── Continuous-monitoring connector poll (Wave 4 scaffolding) ─────────────────
 
 @celery_app.task(

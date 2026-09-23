@@ -32,3 +32,4 @@ from ._57_custom_control_models import *  # noqa: F401,F403 - custom control pro
 from ._58_audit_register_models import *  # noqa: F401,F403 - audit issue register profile + workbook imports
 from ._59_evidence_quality_models import *  # noqa: F401,F403 - does this file prove the item it was attached to
 from ._60_module_settings import *  # noqa: F401,F403 - per-tenant status levels, SLA days and extra fields
+from ._62_vendor_reminders import *  # noqa: F401,F403 - third-party risk reminders, one row per notice
