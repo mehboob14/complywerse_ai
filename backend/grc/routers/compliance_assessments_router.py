@@ -52,32 +52,6 @@ CIS_WS2012R2_CONTROLS_JSON = os.path.abspath(
     )
 )
 
-EVIDENCE_RECOMMENDATION_PROMPT = """Analyze this assessment item/control requirement and recommend what specific evidence would demonstrate compliance or completion.
-
-Assessment: {assessment_name}
-Assessment Type: {assessment_type}
-Item Reference: {item_number}
-Area/Domain: {area_domain}
-Control/Requirement: {control_description}
-Current Status: {compliance_status}
-Gaps Identified: {gaps_identified}
-
-Based on this requirement, provide specific evidence recommendations in JSON format:
-{{
-    "recommendations": [
-        {{
-            "evidence_type": "<specific type e.g., Policy Document, Audit Log, Screenshot, Report>",
-            "description": "<detailed description of what this evidence should contain>",
-            "priority": "<high|medium|low>",
-            "example_files": ["<example1.pdf>", "<example2.xlsx>"]
-        }}
-    ],
-    "summary": "<brief summary of why these evidence types are appropriate>"
-}}
-
-Provide 2-5 relevant evidence types prioritized by importance."""
-
-
 class WorkflowCreate(BaseModel):
     name: str
     description: Optional[str] = None
@@ -6388,55 +6362,35 @@ def generate_ai_recommendation(
     
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
-    
+
+    # What evidence proves the item, how to collect it, and which records in the
+    # Evidence library already fit (services/assessment_evidence_ai).
+    from ..services.assessment_evidence_ai import AIUnavailable, recommend_evidence
+    from ..services.licence_guard import LicenceRestrictedContent
+
     try:
-        client = get_openai_client()
-        
-        assessment = item.assessment
-        prompt = EVIDENCE_RECOMMENDATION_PROMPT.format(
-            assessment_name=assessment.name if assessment else "Unknown",
-            assessment_type=assessment.assessment_type if assessment else "Unknown",
-            item_number=item.item_number or "N/A",
-            area_domain=item.area_domain or "General",
-            control_description=item.control_description or "No description",
-            compliance_status=item.compliance_status or "Unknown",
-            gaps_identified=item.gaps_identified or "None specified"
-        )
-        
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a compliance expert recommending evidence for assessment items. Respond only with valid JSON."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=2000,
-            temperature=0.3
-        )
-        
-        result = parse_ai_response(response.choices[0].message.content or '{"recommendations": []}')
-        
-        item.ai_evidence_recommendation = json.dumps(result)
-        item.ai_recommendation_generated_at = datetime.utcnow()
-        db.commit()
-        
-        return {
-            "item_id": item_id,
-            "assessment_id": assessment_id,
-            "recommendation": result,
-            "generated_at": item.ai_recommendation_generated_at.isoformat()
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI recommendation generation failed: {str(e)}"
-        )
+        result = recommend_evidence(db, item)
+    except AIUnavailable as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except LicenceRestrictedContent:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                            detail="This item's text is licence-restricted control wording, so it was not "
+                                   "sent to the AI.")
+    except Exception as exc:  # provider down, timeout, auth, rate limit
+        logging.getLogger(__name__).warning("AI evidence recommendation failed for item %s", item_id, exc_info=True)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail=f"The AI service did not answer ({type(exc).__name__}). Try again.")
+
+    item.ai_evidence_recommendation = json.dumps(result)
+    item.ai_recommendation_generated_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "item_id": item_id,
+        "assessment_id": assessment_id,
+        "recommendation": result,
+        "generated_at": item.ai_recommendation_generated_at.isoformat()
+    }
 
 
 @router.post("/{assessment_id}/items/{item_id}/ai-assess")

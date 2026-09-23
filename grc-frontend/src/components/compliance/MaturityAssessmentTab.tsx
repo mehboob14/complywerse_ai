@@ -12,8 +12,9 @@
 import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Gauge, Loader2, Upload, ChevronRight, Search, Paperclip, FileText, Trash2, Target,
+  Gauge, Loader2, Upload, ChevronRight, Search, Paperclip, FileText, Trash2, Target, Sparkles,
 } from 'lucide-react';
+import { AiEvidenceAdvisor } from './AiEvidenceAdvisor';
 import apiClient from '@/lib/api';
 
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
@@ -60,7 +61,7 @@ function meta(remarks: string | null) {
 
 const scoreColor = (v: number) => (v >= 4 ? '#059669' : v >= 3 ? '#0d9488' : v >= 2 ? '#d97706' : '#dc2626');
 
-function EvidencePanel({ assessmentId, itemId }: { assessmentId: number; itemId: number }) {
+function EvidencePanel({ assessmentId, itemId, aiAuto = false }: { assessmentId: number; itemId: number; aiAuto?: boolean }) {
   const qc = useQueryClient();
   const ref = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -85,6 +86,11 @@ function EvidencePanel({ assessmentId, itemId }: { assessmentId: number; itemId:
   const list = Array.isArray(ev) ? ev : [];
   return (
     <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+      {/* What evidence proves this item, and records you already have that fit. */}
+      <AiEvidenceAdvisor assessmentId={assessmentId} itemId={itemId} autoRun={aiAuto} onLinked={() => {
+        qc.invalidateQueries({ queryKey: ['maturity-ev', itemId] });
+        qc.invalidateQueries({ queryKey: ['maturity-detail', assessmentId] });
+      }} />
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Evidence</span>
         <input ref={ref} type="file" className="hidden" onChange={onFile} />
@@ -108,6 +114,7 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
   const [uploading, setUploading] = useState(false);
   const [openDom, setOpenDom] = useState<string | null>(null);
   const [evOpen, setEvOpen] = useState<number | null>(null);
+  const [aiFor, setAiFor] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const m = META[format] || { title: 'Cyber Maturity', subtitle: 'Maturity assessment' };
 
@@ -332,6 +339,11 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
                               </div>
                               <div className="flex shrink-0 flex-col items-end gap-1">
                                 <div className="flex items-center gap-1">
+                                  <button onClick={() => { setAiFor(it.id); setEvOpen(it.id); }} title="AI evidence recommendations for this item"
+                                    className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
+                                    style={evActive && aiFor === it.id ? { borderColor: '#7c3aed', color: '#6d28d9', backgroundColor: '#f5f3ff' } : { borderColor: '#ddd6fe', color: '#7c3aed' }}>
+                                    <Sparkles className="h-3 w-3" /> AI
+                                  </button>
                                   <button onClick={() => setEvOpen(evActive ? null : it.id)} title="Evidence"
                                     className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
                                     style={evActive || evc > 0 ? { borderColor: '#0f766e', color: '#0f766e', backgroundColor: '#e7faf5' } : { borderColor: '#e2e8f0', color: '#64748b' }}>
@@ -364,7 +376,7 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
                                 </div>
                               </div>
                             </div>
-                            {evActive && <EvidencePanel assessmentId={activeId!} itemId={it.id} />}
+                            {evActive && <EvidencePanel assessmentId={activeId!} itemId={it.id} aiAuto={aiFor === it.id} />}
                           </div>
                         );
                       })}

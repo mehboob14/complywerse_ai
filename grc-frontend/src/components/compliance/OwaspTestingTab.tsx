@@ -13,8 +13,9 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Bug, Loader2, Upload, CheckCircle2, XCircle, MinusCircle, Clock,
-  ChevronRight, Search, Server, Plus, X, Paperclip, FileText, Wrench, Trash2,
+  ChevronRight, Search, Server, Plus, X, Paperclip, FileText, Wrench, Trash2, Sparkles,
 } from 'lucide-react';
+import { AiEvidenceAdvisor } from './AiEvidenceAdvisor';
 import apiClient, { assetsApi } from '@/lib/api';
 
 const OWASP_FORMAT = 'owasp_v4_testing_checklist';
@@ -59,7 +60,7 @@ type StatusKey = keyof typeof STATUS;
 
 // Per-test evidence: list + upload. Uploading marks the test Pass ("based on
 // evidence it will pass") via the onUploaded callback.
-function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: number; itemId: number; onUploaded: () => void }) {
+function EvidencePanel({ assessmentId, itemId, onUploaded, aiAuto = false }: { assessmentId: number; itemId: number; onUploaded: () => void; aiAuto?: boolean }) {
   const qc = useQueryClient();
   const ref = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -87,6 +88,12 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
   const list = Array.isArray(ev) ? ev : [];
   return (
     <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
+      {/* What evidence proves this item, and records you already have that fit. */}
+      <AiEvidenceAdvisor assessmentId={assessmentId} itemId={itemId} autoRun={aiAuto} onLinked={() => {
+        qc.invalidateQueries({ queryKey: ['owasp-ev', itemId] });
+        qc.invalidateQueries({ queryKey: ['owasp-detail', assessmentId] });
+        onUploaded();
+      }} />
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Evidence</span>
         <input ref={ref} type="file" className="hidden" onChange={onFile} />
@@ -120,6 +127,7 @@ export default function OwaspTestingTab() {
   const [uploading, setUploading] = useState(false);
   const [openCat, setOpenCat] = useState<string | null>(null);
   const [evOpen, setEvOpen] = useState<number | null>(null);
+  const [aiFor, setAiFor] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'issues' | 'untested'>('all');
 
@@ -400,6 +408,11 @@ export default function OwaspTestingTab() {
                                 )}
                               </div>
                               <div className="flex shrink-0 items-center gap-1">
+                                <button onClick={() => { setAiFor(it.id); setEvOpen(it.id); }} title="AI evidence recommendations for this item"
+                                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
+                                  style={evActive && aiFor === it.id ? { borderColor: '#7c3aed', color: '#6d28d9', backgroundColor: '#f5f3ff' } : { borderColor: '#ddd6fe', color: '#7c3aed' }}>
+                                  <Sparkles className="h-3 w-3" /> AI
+                                </button>
                                 <button onClick={() => setEvOpen(evActive ? null : it.id)} title="Evidence — attaching evidence marks this Pass"
                                   className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
                                   style={evActive || evc > 0 ? { borderColor: '#0f766e', color: '#0f766e', backgroundColor: '#e7faf5' } : { borderColor: '#e2e8f0', color: '#64748b' }}>
@@ -421,7 +434,7 @@ export default function OwaspTestingTab() {
                             {evActive && (
                               <EvidencePanel
                                 assessmentId={activeId!}
-                                itemId={it.id}
+                                itemId={it.id} aiAuto={aiFor === it.id}
                                 onUploaded={() => setStatus.mutate({ itemId: it.id, status: 'complied' })}
                               />
                             )}
