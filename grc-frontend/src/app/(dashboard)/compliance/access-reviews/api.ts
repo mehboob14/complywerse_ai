@@ -6,7 +6,7 @@
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { authedFetch } from '@/lib/auth-fetch';
 import type {
-  Campaign, CampaignDetail, ReviewItem, Report, DashboardSummary, RuleCatalogView, Decision,
+  Campaign, CampaignDetail, ConnectorSource, ReviewItem, Report, DashboardSummary, RuleCatalogView, Decision,
 } from './types';
 
 const API = '/api/access-reviews';
@@ -41,6 +41,14 @@ export function useCampaigns(opts?: Partial<UseQueryOptions<Campaign[]>>) {
     // Backend wraps the list as { campaigns: [...] }; unwrap to a plain array.
     queryFn: () => authedFetch(API).then(json<{ campaigns: Campaign[] }>).then((d) => d.campaigns ?? []),
     ...opts,
+  });
+}
+
+/** Connected sources — what a review can be scoped to. */
+export function useConnectors() {
+  return useQuery<{ sources: ConnectorSource[]; user_count: number }>({
+    queryKey: arKeys.connectors(),
+    queryFn: () => authedFetch(`${API}/connectors`).then(json<{ sources: ConnectorSource[]; user_count: number }>),
   });
 }
 
@@ -84,7 +92,7 @@ export function useCreateCampaign() {
   return useMutation({
     mutationFn: (body: {
       name: string; review_type: string; sampling_method: string; requested_sample_size: number;
-      description?: string;
+      source?: string | null; description?: string;
     }) => authedFetch(API, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) }).then(json<Campaign>),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: arKeys.list() });

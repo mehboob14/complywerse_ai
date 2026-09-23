@@ -78,5 +78,7 @@ export function riskClass(score: number | null | undefined): string {
 }
 
 export const scopeLabel: Record<string, string> = {
+  user_access: 'All users', privileged_access: 'Privileged', terminated_access: 'Terminated',
+  // what campaigns created before the UI spoke the backend's words carry
   all: 'All users', privileged: 'Privileged', terminated: 'Terminated',
 };

@@ -137,7 +137,7 @@ export default function AccessReviewsPage() {
 function ReviewRow({ c, onOpen }: { c: Campaign; onOpen: () => void }) {
   const stage = statusToStage(c.status);
   const closed = isClosed(c.status);
-  const pct = c.requested_sample_size ? Math.round((c.items_reviewed / c.requested_sample_size) * 100) : 0;
+  const pct = c.sample_size ? Math.round((c.items_reviewed_live / c.sample_size) * 100) : 0;
   return (
     <button onClick={onOpen} className="grid w-full grid-cols-[2.4fr_1fr_2.1fr_1fr] items-center gap-4 border-b border-slate-100 px-5 py-3.5 text-left hover:bg-slate-50">
       <div className="min-w-0">
@@ -155,7 +155,7 @@ function ReviewRow({ c, onOpen }: { c: Campaign; onOpen: () => void }) {
         <div className="text-[11.5px] font-medium text-slate-600">Stage {Math.min(stage, 6)} · {STAGES[Math.min(stage, 6) - 1].label}</div>
       </div>
       <div>
-        <div className="font-mono text-[13px] font-semibold text-slate-700">{c.items_reviewed}/{c.requested_sample_size}</div>
+        <div className="font-mono text-[13px] font-semibold text-slate-700">{c.items_reviewed_live}/{c.sample_size}</div>
         <div className="mt-1.5 h-1 w-[84px] overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--color-base)' }} /></div>
       </div>
     </button>

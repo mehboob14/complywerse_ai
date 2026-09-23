@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from ...models import (
     AccessReviewFinding,
     AccessReviewItem,
+    GRCUser,
     Role,
     SoDRule,
     UserRole,
@@ -56,6 +57,10 @@ def _chk_ghost(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Finding]:
 
 def _chk_stale(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Finding]:
     if not item.account_enabled:
+        return []
+    # A key or a database user has no sign-in by nature; flagging every one of
+    # them as "no sign-in on record" would bury the people who really are dormant.
+    if _is_cloud_account(item) or _is_db_account(item):
         return []
     if item.last_sign_in is None:
         return [{"finding_type": "stale_account", "severity": "medium",
@@ -143,6 +148,12 @@ def _is_db_account(item: AccessReviewItem) -> bool:
     return bool(item.email) and item.email.endswith(".db")
 
 
+def _is_cloud_account(item: AccessReviewItem) -> bool:
+    """A cloud credential rather than a person: a key, a token, a database user
+    (DigitalOcean synthesises addresses ending `.do` for these)."""
+    return bool(item.email) and item.email.endswith(".do")
+
+
 def _item_role_names(item: AccessReviewItem) -> set:
     return set(item.roles_snapshot or [])
 
@@ -162,6 +173,51 @@ def _chk_db_default(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Finding
             return [{"finding_type": "db_default_account", "severity": "high",
                      "title": "Default / shared database account",
                      "detail": f"{item.email} is a default/shared DB account and can log in."}]
+    return []
+
+
+# ---- Cloud (DigitalOcean today; any source that names cloud credentials) ----
+_OLD_KEY_MARK = "older than"
+
+
+def _chk_cloud_wildcard(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Finding]:
+    """A credential with no scope at all — the cloud equivalent of *:*."""
+    if not _is_cloud_account(item):
+        return []
+    hits = [r for r in _item_role_names(item)
+            if "full access" in r.lower() or "read-write" in r.lower()]
+    if hits:
+        return [{"finding_type": "cloud_wildcard", "severity": "critical",
+                 "title": "Unscoped cloud credential",
+                 "detail": f"{item.email} holds \"{sorted(hits)[0]}\" — no bucket or scope limit. "
+                           "Confirm it needs everything, or re-issue it scoped."}]
+    return []
+
+
+def _chk_cloud_key_age(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Finding]:
+    """The key's age is banded at sync time and carried as an entitlement, so
+    the reviewer sees it in the roles column as well."""
+    if not _is_cloud_account(item):
+        return []
+    old = [r for r in _item_role_names(item) if _OLD_KEY_MARK in r.lower()]
+    if old:
+        return [{"finding_type": "cloud_stale_key", "severity": "high",
+                 "title": "Long-lived cloud key",
+                 "detail": f"{item.email} was issued more than 90 days ago and has not been rotated."}]
+    return []
+
+
+def _chk_cloud_orphan(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Finding]:
+    """A cloud credential named after somebody who has left."""
+    if not _is_cloud_account(item) or not item.account_enabled:
+        return []
+    local = (item.email or "").split("@")[0].lower()
+    leaver = next((t for t in local.split("-") if len(t) > 3 and t in ctx["terminated_locals"]), None)
+    if leaver:
+        return [{"finding_type": "cloud_orphan", "severity": "high",
+                 "title": "Cloud credential for a terminated user",
+                 "detail": f"{item.email} is named after '{leaver}', who has a termination date, "
+                           "but the credential is still live."}]
     return []
 
 
@@ -238,14 +294,15 @@ RULE_CATALOG: List[Dict[str, Any]] = [
     # ---- Cloud ----
     _rule("CLD-01", "Cloud", "Root used / no MFA on root", "critical", NEEDS_CONNECTOR,
           "root activity + MFA", "root login OR root MFA off", "SOX·PCI"),
-    _rule("CLD-02", "Cloud", "Wildcard IAM policy", "critical", NEEDS_CONNECTOR,
-          "IAM policies", "*:* or Owner-equivalent", "SOX"),
-    _rule("CLD-03", "Cloud", "Long-lived access key", "high", NEEDS_CONNECTOR,
-          "access keys + age", "key not rotated > 90 days", "PCI"),
+    _rule("CLD-02", "Cloud", "Wildcard IAM policy", "critical", RUNNABLE,
+          "cloud credentials + their scope", "a credential with no bucket or scope limit", "SOX",
+          _chk_cloud_wildcard),
+    _rule("CLD-03", "Cloud", "Long-lived access key", "high", RUNNABLE,
+          "access keys + age", "key not rotated > 90 days", "PCI", _chk_cloud_key_age),
     _rule("CLD-04", "Cloud", "Public storage / open SG", "high", NEEDS_CONNECTOR,
           "bucket ACL + security groups", "public bucket OR 0.0.0.0/0 ingress", "PCI·GDPR"),
-    _rule("CLD-05", "Cloud", "Orphaned cloud user", "high", NEEDS_CONNECTOR,
-          "cloud users ↔ HR", "active cloud user for a leaver", "SOX"),
+    _rule("CLD-05", "Cloud", "Orphaned cloud user", "high", RUNNABLE,
+          "cloud users ↔ HR", "active cloud user for a leaver", "SOX", _chk_cloud_orphan),
     # ---- Finance ERP ----
     _rule("ERP-01", "Finance ERP", "SoD: create vendor + run payment", "critical", NEEDS_CONNECTOR,
           "ERP roles", "same user holds both entitlements", "SOX·SAMA"),
@@ -330,8 +387,18 @@ def _build_context(tenant_db: Session, tenant_id: int, items: List[AccessReviewI
     dept_avg = {d: (sum(v) / len(v) if v else 0) for d, v in dept_counts.items()}
     global_avg = (sum(all_counts) / len(all_counts)) if all_counts else 0
 
+    # Local-parts of everybody with a termination date — CLD-05 matches cloud
+    # credentials named after a leaver.
+    terminated_locals = {
+        (email or "").split("@")[0].lower()
+        for (email,) in tenant_db.query(GRCUser.email)
+        .filter(GRCUser.termination_date.isnot(None)).all()
+        if email
+    }
+
     return {
         "now": datetime.utcnow(),
+        "terminated_locals": terminated_locals,
         "sod_rules": sod_rules,
         "role_names": role_names,
         "user_role_ids": user_role_ids,

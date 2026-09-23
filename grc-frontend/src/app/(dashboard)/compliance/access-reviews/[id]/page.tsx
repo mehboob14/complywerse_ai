@@ -42,9 +42,9 @@ export default function ReviewDetailPage() {
 
   const stats = [
     { k: 'Population', v: c.population_size, s: 'in scope' },
-    { k: 'Sample', v: stage >= 2 || closed ? c.requested_sample_size : '—', s: stage >= 2 || closed ? 'frozen snapshot' : 'not drawn' },
+    { k: 'Sample', v: stage >= 2 || closed ? c.sample_size : '—', s: stage >= 2 || closed ? 'frozen snapshot' : 'not drawn' },
     { k: 'Findings', v: stage >= 3 || closed ? c.exceptions_found : '—', s: stage >= 3 || closed ? 'across sample' : 'not run' },
-    { k: 'Certified', v: stage >= 4 || closed ? `${reviewedCount}/${c.requested_sample_size}` : '—', s: stage >= 4 || closed ? 'reviewed' : 'pending' },
+    { k: 'Certified', v: stage >= 4 || closed ? `${reviewedCount}/${c.sample_size}` : '—', s: stage >= 4 || closed ? 'reviewed' : 'pending' },
   ];
 
   const advance = () => {
@@ -113,7 +113,7 @@ export default function ReviewDetailPage() {
 
       {/* stage 4 — certify */}
       {!closed && stage === 4 && !wantReport && (
-        <CertifyBlock campaignId={id} items={c.items} sampleSize={c.requested_sample_size} sel={sel} setSel={setSel} onContinue={() => router.push(`/compliance/access-reviews/${id}?stage=report`)} />
+        <CertifyBlock campaignId={id} items={c.items} sampleSize={c.sample_size} sel={sel} setSel={setSel} onContinue={() => router.push(`/compliance/access-reviews/${id}?stage=report`)} />
       )}
 
       {/* stage 5/6 — report (also reachable from certify via ?stage=report) */}

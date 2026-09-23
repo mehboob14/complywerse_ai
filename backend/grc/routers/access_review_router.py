@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Cookie, Depends, File, Form, Header, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from ..db import get_tenant_db
@@ -33,7 +34,7 @@ from ..models import (
     UserRole,
 )
 from ..models import IdentityProviderConfig
-from ..modules.access_review import checks as checks_mod
+from ..modules.access_review import digitalocean as do_mod
 from ..modules.access_review import rule_catalog as rules_mod
 from ..modules.access_review import enrichment as enrichment_mod
 from ..modules.access_review import export as export_mod
@@ -99,10 +100,18 @@ def _assert_not_completed(c: AccessReviewCampaign) -> None:
 # Schemas
 # ---------------------------------------------------------------------------
 
+# The UI used to send its own words for these; accept both so campaigns saved
+# by an older build keep the scope and method they were created with.
+_REVIEW_TYPES = {"all": "user_access", "privileged": "privileged_access",
+                 "terminated": "terminated_access"}
+_SAMPLING_METHODS = {"risk": "risk_based"}
+
+
 class CampaignCreate(BaseModel):
     name: str
     description: Optional[str] = None
     review_type: str = "user_access"
+    source: Optional[str] = None
     sampling_method: str = "random"
     requested_sample_size: int = 25
     risk_filters: Dict[str, Any] = {}
@@ -133,12 +142,35 @@ class FindingUpdate(BaseModel):
 # Serializers
 # ---------------------------------------------------------------------------
 
-def _campaign_dict(c: AccessReviewCampaign) -> Dict[str, Any]:
+def _item_counts(tenant_db: Session, campaign_ids: List[int]) -> Dict[int, tuple]:
+    """(sampled, decided) per campaign. `items_reviewed` on the row is only
+    written when a campaign closes, so progress read 0 until then."""
+    if not campaign_ids:
+        return {}
+    rows = (
+        tenant_db.query(
+            AccessReviewItem.campaign_id,
+            func.count(AccessReviewItem.id),
+            func.sum(case((AccessReviewItem.decision != "pending", 1), else_=0)),
+        )
+        .filter(AccessReviewItem.campaign_id.in_(campaign_ids))
+        .group_by(AccessReviewItem.campaign_id)
+        .all()
+    )
+    return {cid: (int(total or 0), int(decided or 0)) for cid, total, decided in rows}
+
+
+def _campaign_dict(c: AccessReviewCampaign, counts: tuple = (0, 0)) -> Dict[str, Any]:
+    sampled, decided = counts
     return {
+        # What the review actually drew, and how far certification has got.
+        "sample_size": sampled or c.requested_sample_size,
+        "items_reviewed_live": decided or c.items_reviewed,
         "id": c.id,
         "name": c.name,
         "description": c.description,
         "review_type": c.review_type,
+        "source": c.source,
         "status": c.status,
         "population_size": c.population_size,
         "sampling_method": c.sampling_method,
@@ -215,7 +247,8 @@ def list_campaigns(
         .order_by(AccessReviewCampaign.created_at.desc())
         .all()
     )
-    return {"campaigns": [_campaign_dict(c) for c in rows]}
+    counts = _item_counts(tenant_db, [c.id for c in rows])
+    return {"campaigns": [_campaign_dict(c, counts.get(c.id, (0, 0))) for c in rows]}
 
 
 @router.post("")
@@ -231,8 +264,9 @@ def create_campaign(
         tenant_id=tid,
         name=payload.name,
         description=payload.description,
-        review_type=payload.review_type,
-        sampling_method=payload.sampling_method,
+        review_type=_REVIEW_TYPES.get(payload.review_type, payload.review_type),
+        source=(payload.source or None),
+        sampling_method=_SAMPLING_METHODS.get(payload.sampling_method, payload.sampling_method),
         requested_sample_size=payload.requested_sample_size,
         risk_filters=payload.risk_filters or {},
         period_start=payload.period_start,
@@ -639,6 +673,11 @@ async def import_spreadsheet(
 # Same "two faucets, one tank" pattern; all fill grc_users. Before /{campaign_id}.
 # ---------------------------------------------------------------------------
 
+class DigitalOceanSyncIn(BaseModel):
+    # Omit to use the token DigitalOcean is already connected with.
+    token: Optional[str] = None
+
+
 class OktaSyncIn(BaseModel):
     domain: str
     token: str
@@ -680,6 +719,30 @@ class AppSyncIn(BaseModel):
     sample: Optional[bool] = False
 
 
+_SOURCE_LABELS = {
+    "digitalocean": "DigitalOcean", "okta": "Okta", "google": "Google Workspace",
+    "ldap": "Active Directory / LDAP", "sailpoint": "SailPoint",
+    "entra_id": "Microsoft Entra ID", "entra": "Microsoft Entra ID",
+}
+
+
+def _source_options(tenant_db: Session) -> List[Dict[str, str]]:
+    """Every source that has put somebody in the population — the choices for
+    scoping a review to one system."""
+    tags = {t for (t,) in tenant_db.query(GRCUser.external_provider).distinct().all() if t}
+    tags |= {t for (t,) in tenant_db.query(UserRole.source).distinct().all() if t}
+
+    def label(tag: str) -> str:
+        if tag in _SOURCE_LABELS:
+            return _SOURCE_LABELS[tag]
+        if ":" in tag:
+            kind, name = tag.split(":", 1)
+            return f"{name.replace('_', ' ').title()} ({'IGA' if kind == 'iga' else 'App'})"
+        return tag.replace("_", " ").title()
+
+    return sorted(({"key": t, "label": label(t)} for t in tags), key=lambda s: s["label"])
+
+
 @router.get("/connectors")
 def list_connectors(
     tenant_db: Session = Depends(get_tenant_db),
@@ -696,9 +759,20 @@ def list_connectors(
             .first()
         )
     okta, google, ldap, sp = _row("okta"), _row("google"), _row("ldap"), _row("sailpoint")
-    iga, app = _row("iga"), _row("app")
+    iga, app, do = _row("iga"), _row("app"), _row("digitalocean")
     return {
         "user_count": tenant_db.query(GRCUser).count(),
+        # The sources a campaign can be scoped to — whatever has actually put
+        # people or accounts in the population.
+        "sources": _source_options(tenant_db),
+        "digitalocean": {
+            "connected": bool(do and do.is_enabled),
+            # A token is already on file (Evidence Collectors / asset discovery),
+            # so a re-sync needs nobody to paste one.
+            "token_on_file": bool(do_mod.token_for_tenant(tenant_db, tid)),
+            "team": do.iga_vendor if do else None,
+            "last_synced": do.last_tested_at.isoformat() if do and do.last_tested_at else None,
+        },
         "entra": {
             "connected": bool(entra and entra.entra_directory_id),
             "directory_id": entra.entra_directory_id if entra else None,
@@ -736,6 +810,47 @@ def list_connectors(
             "last_synced": app.last_tested_at.isoformat() if app and app.last_tested_at else None,
         },
     }
+
+
+@router.post("/connectors/digitalocean/sync")
+def digitalocean_sync(
+    payload: DigitalOceanSyncIn,
+    tenant_db: Session = Depends(get_tenant_db),
+    grc_auth_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Pull DigitalOcean's access-bearing objects — SSH keys, Spaces keys,
+    database users, API tokens and the account the token belongs to — into the
+    review population. Leave the token out to use the one DigitalOcean is
+    already connected with. Nothing is stored here either way."""
+    admin = _require_admin(tenant_db, grc_auth_token, authorization)
+    tid = _tenant_id(tenant_db)
+    try:
+        result = do_mod.sync_digitalocean_population(tenant_db, tenant_id=tid, token=payload.token)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"DigitalOcean sync failed: {str(e)[:180]}")
+
+    cfg = (
+        tenant_db.query(IdentityProviderConfig)
+        .filter(IdentityProviderConfig.tenant_id == tid,
+                IdentityProviderConfig.provider == "digitalocean")
+        .first()
+    )
+    if not cfg:
+        cfg = IdentityProviderConfig(tenant_id=tid, provider="digitalocean", created_by_id=admin.id)
+        tenant_db.add(cfg)
+    cfg.iga_vendor = (result.get("team") or "DigitalOcean")[:32]
+    cfg.iga_base_url = do_mod.API
+    cfg.is_enabled = True
+    cfg.connected_at = cfg.connected_at or datetime.utcnow()
+    cfg.connected_by_id = admin.id
+    cfg.last_tested_at = datetime.utcnow()
+    cfg.last_test_status = "ok"
+    cfg.last_test_message = f"Synced {result['created'] + result['updated']} access records"
+    tenant_db.commit()
+    return result
 
 
 @router.post("/connectors/okta/sync")
@@ -1107,7 +1222,7 @@ def get_campaign(
     ):
         findings_by_item.setdefault(f.item_id, []).append(f)
     return {
-        "campaign": _campaign_dict(c),
+        "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0))),
         "items": [_item_dict(it, findings_by_item.get(it.id, [])) for it in items],
     }
 
@@ -1134,7 +1249,9 @@ def sync_population(
     # from grc_users. This keeps Stage 1 working for ALL sources, not just Entra.
     cfg = _get_config(tenant_db)
     result: Dict[str, Any] = {}
-    if cfg and cfg.entra_directory_id:
+    # A campaign scoped to another source must not re-pull the whole Entra
+    # directory on its way to building a population of, say, cloud keys.
+    if cfg and cfg.entra_directory_id and c.source in (None, "", "entra"):
         try:
             result = enrichment_mod.sync_population(tenant_db, cfg)
         except ValueError as e:
@@ -1142,7 +1259,7 @@ def sync_population(
     else:
         result = {"source": "existing population"}
 
-    population = sampling_mod.build_population(tenant_db, tid, c.review_type)
+    population = sampling_mod.build_population(tenant_db, tid, c.review_type, source=c.source)
     if not population:
         raise HTTPException(status_code=400,
                             detail="No users yet — connect a source (or load test data) first.")
@@ -1165,7 +1282,7 @@ def draw_sample(
     c = _campaign_or_404(tenant_db, campaign_id, tid)
     _assert_not_completed(c)
 
-    population = sampling_mod.build_population(tenant_db, tid, c.review_type)
+    population = sampling_mod.build_population(tenant_db, tid, c.review_type, source=c.source)
     if not population:
         raise HTTPException(status_code=400, detail="Population is empty — sync first")
     c.population_size = len(population)
@@ -1538,7 +1655,7 @@ def _build_report(tenant_db: Session, c: AccessReviewCampaign, campaign_id: int)
         "deficient" if users_with_exceptions <= max(1, sample_size // 10) else "material_weakness"
     )
     return {
-        "campaign": _campaign_dict(c),
+        "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0))),
         "population_size": c.population_size,
         "sample_size": sample_size,
         "exceptions_total": len(findings),

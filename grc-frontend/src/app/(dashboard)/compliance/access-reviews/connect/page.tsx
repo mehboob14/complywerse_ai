@@ -51,8 +51,13 @@ const TIERS: Tier[] = [
     ],
   },
   {
-    tier: 3, title: 'Business apps', sub: 'App-level permissions where the real risk sits',
+    tier: 3, title: 'Business apps & cloud', sub: 'App-level permissions where the real risk sits',
     vendors: [
+      // DigitalOcean publishes no team-member endpoint, so this pulls what it
+      // does expose: the keys, tokens and database users that reach the estate.
+      { key: 'digitalocean', name: 'DigitalOcean', sub: 'SSH keys, Spaces keys, database users', initials: 'DO', color: '#0080FF',
+        kind: 'form', endpoint: 'digitalocean',
+        fields: [{ name: 'token', label: 'Read-only API token', secret: true, ph: 'leave blank to use the connected token' }] },
       { key: 'core_banking', name: 'Core Banking', sub: 'REST API', initials: 'CB', color: '#0F172A', kind: 'app' },
       { key: 'sap', name: 'SAP', sub: 'Roles & profiles', initials: 'SAP', color: '#0EA5E9', kind: 'app' },
       { key: 'salesforce', name: 'Salesforce', sub: 'Permission sets', initials: 'SF', color: '#2563EB', kind: 'app' },
@@ -183,7 +188,15 @@ function ConnectDrawer({ vendor, fields, onClose, onDone }: {
       } else { setBusy(false); return; }
       const d = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(d.detail || 'Sync failed');
-      setMsg({ ok: true, text: `Connected. Pulled ${(d.created ?? 0) + (d.updated ?? 0)} users${d.entitlements_linked != null ? `, ${d.entitlements_linked} entitlements` : ''}.` });
+      // A source can be partly readable — a token scoped to some resources and
+      // not others. Say what was left out rather than reporting a clean pull.
+      const left = (d.skipped ?? []).map((s: { resource: string }) => s.resource).join(', ');
+      setMsg({
+        ok: true,
+        text: `Connected. Pulled ${(d.created ?? 0) + (d.updated ?? 0)} accounts`
+          + `${d.entitlements_linked != null ? `, ${d.entitlements_linked} entitlements` : ''}.`
+          + (left ? ` Not readable with this token: ${left}.` : ''),
+      });
       setTimeout(onDone, 900);
     } catch (e) { setMsg({ ok: false, text: e instanceof Error ? e.message : 'Sync failed' }); }
     finally { setBusy(false); }

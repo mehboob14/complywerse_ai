@@ -2,20 +2,25 @@
 // src/app/(dashboard)/compliance/access-reviews/_components/CreateReviewModal.tsx
 import { useState } from 'react';
 import { X, Search } from 'lucide-react';
-import { useCreateCampaign } from '../api';
+import { useConnectors, useCreateCampaign } from '../api';
 import type { Campaign } from '../types';
 
-const SCOPES = [['all', 'All users'], ['privileged', 'Privileged only'], ['terminated', 'Terminated only']] as const;
-const METHODS = [['random', 'Random'], ['risk', 'Risk-weighted'], ['full', 'Full population']] as const;
+// These are the backend's own words (sampling.build_population / draw_sample).
+// They used to be the UI's — 'privileged' fell through to "everyone" silently.
+const SCOPES = [['user_access', 'All users'], ['privileged_access', 'Privileged only'], ['terminated_access', 'Terminated only']] as const;
+const METHODS = [['random', 'Random'], ['risk_based', 'Risk-weighted'], ['full', 'Full population']] as const;
 const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
 
 export function CreateReviewModal({ onClose, onCreated }: { onClose: () => void; onCreated: (c: Campaign) => void }) {
   const create = useCreateCampaign();
   const [name, setName] = useState('Q3 2026 Privileged Access Review');
-  const [scope, setScope] = useState<string>('privileged');
-  const [method, setMethod] = useState<string>('risk');
+  const [scope, setScope] = useState<string>('privileged_access');
+  const [method, setMethod] = useState<string>('risk_based');
+  const [source, setSource] = useState<string>('');
   const [size, setSize] = useState(25);
   const full = method === 'full';
+  const connectors = useConnectors();
+  const sources = connectors.data?.sources ?? [];
 
   const seg = (val: string, set: (v: string) => void, opts: readonly (readonly [string, string])[]) => (
     <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
@@ -28,7 +33,7 @@ export function CreateReviewModal({ onClose, onCreated }: { onClose: () => void;
 
   const submit = () =>
     create.mutate(
-      { name, review_type: scope, sampling_method: method, requested_sample_size: full ? 0 : size },
+      { name, review_type: scope, sampling_method: method, source: source || null, requested_sample_size: size },
       { onSuccess: (c) => onCreated(c) }
     );
 
@@ -49,6 +54,17 @@ export function CreateReviewModal({ onClose, onCreated }: { onClose: () => void;
               className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13.5px] outline-none focus:border-[color:var(--color-base)] focus:ring-2 focus:ring-[color:var(--color-base-soft)]" />
           </div>
           <div><label className="mb-1.5 block text-xs font-semibold text-slate-600">Scope</label>{seg(scope, setScope, SCOPES)}</div>
+          {sources.length > 0 && (
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-slate-600">Source</label>
+              <select value={source} onChange={(e) => setSource(e.target.value)}
+                className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13.5px] outline-none focus:border-[color:var(--color-base)]">
+                <option value="">Every connected source</option>
+                {sources.map((s) => <option key={s.key} value={s.key}>{s.label}</option>)}
+              </select>
+              <p className="mt-1 text-[11.5px] text-slate-400">Review one system on its own — its keys and accounts only.</p>
+            </div>
+          )}
           <div><label className="mb-1.5 block text-xs font-semibold text-slate-600">Sampling method</label>{seg(method, setMethod, METHODS)}</div>
           <div>
             <div className="mb-1.5 flex items-center justify-between"><label className="text-xs font-semibold text-slate-600">Sample size</label><span className="font-mono text-[13px] font-semibold" style={{ color: 'var(--color-base-strong)' }}>{full ? 'all' : size}</span></div>

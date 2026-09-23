@@ -13,14 +13,22 @@ export interface Campaign {
   id: number;
   name: string;
   description?: string | null;
-  review_type: string;            // scope: 'all' | 'privileged' | 'terminated'
+  review_type: string;            // 'user_access' | 'privileged_access' | 'terminated_access'
+  source?: string | null;         // one connected source, e.g. 'digitalocean'; null = all
   status: CampaignStatus;
   population_size: number;
-  sampling_method: string;        // 'random' | 'risk' | 'full'
+  sampling_method: string;        // 'random' | 'risk_based' | 'full'
   requested_sample_size: number;
+  sample_size: number;            // what was actually drawn (falls back to requested)
+  items_reviewed_live: number;    // decided so far, without waiting for the close
   exceptions_found: number;
   items_reviewed: number;
   created_at?: string | null;
+}
+
+export interface ConnectorSource {
+  key: string;
+  label: string;
 }
 
 export interface Finding {

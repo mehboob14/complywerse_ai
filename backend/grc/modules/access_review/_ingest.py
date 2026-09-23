@@ -10,8 +10,13 @@ from sqlalchemy.orm import Session
 
 from ...models import GRCUser, Role, UserRole
 
+# grc_roles.name is VARCHAR(100): an entitlement longer than that (a long SAP
+# role, a long Spaces bucket) would fail the whole sync on insert.
+ROLE_NAME_MAX = 100
+
 
 def _get_or_create_role(db: Session, tenant_id: int, name: str, cache: Dict[str, Role]) -> Role:
+    name = (name or "")[:ROLE_NAME_MAX]
     if name in cache:
         return cache[name]
     role = db.query(Role).filter(Role.tenant_id == tenant_id, Role.name == name).first()
@@ -41,8 +46,13 @@ def ingest(tenant_db: Session, *, tenant_id: int, records: List[Dict[str, Any]],
             .first()
         )
         if user is None:
+            # A record that is an account rather than a person (a cloud key, a
+            # PAM account) is created inactive: it belongs in the review
+            # population, not in the app's owner/assignee pickers, which list
+            # active users. Its standing in the source is `account_enabled`.
             user = GRCUser(username=m["email"], email=m["email"],
-                           password_hash=_make_unloginable_hash(), is_active=True,
+                           password_hash=_make_unloginable_hash(),
+                           is_active=m.get("is_person", True),
                            external_provider=provider_tag, external_id=m["external_id"])
             tenant_db.add(user); tenant_db.flush()
             created += 1
@@ -50,6 +60,8 @@ def ingest(tenant_db: Session, *, tenant_id: int, records: List[Dict[str, Any]],
             if not user.external_id:
                 user.external_provider = provider_tag
                 user.external_id = m["external_id"]
+            if not m.get("is_person", True):
+                user.is_active = False      # heals rows an earlier sync left active
             updated += 1
         user.display_name = m["display_name"] or user.display_name
         user.department = m.get("department") or user.department

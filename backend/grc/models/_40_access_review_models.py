@@ -29,6 +29,9 @@ class AccessReviewCampaign(Base):
 
     # user_access | privileged_access | terminated_access
     review_type = Column(String(40), nullable=False, default="user_access")
+    # One connected source (a grc_user_roles.source tag, e.g. "digitalocean"),
+    # so a review of one system doesn't sample the whole directory. NULL = all.
+    source = Column(String(32), nullable=True)
     # draft | population_built | sampled | in_review | completed | archived
     status = Column(String(30), nullable=False, default="draft")
 
