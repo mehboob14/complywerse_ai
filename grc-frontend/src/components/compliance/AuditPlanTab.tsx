@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import {
   Plus, Edit2, Trash2, Sparkles, ChevronDown, ChevronRight,
   X, Save, Loader2, ClipboardList, Search, AlertCircle,
@@ -321,6 +322,8 @@ export default function AuditPlanTab({ assessmentId, tenantUsers }: Props) {
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [generatingAI, setGeneratingAI] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  // The plan, or the tenant's own status levels / SLA / extra fields for audits.
+  const [view, setView] = useState<'plan' | 'settings'>('plan');
 
   const { data, isLoading, isError } = useQuery<{ entries: AuditPlanEntry[]; summary: Summary }>({
     queryKey: ['audit-plan-entries', assessmentId],
@@ -381,8 +384,39 @@ export default function AuditPlanTab({ assessmentId, tenantUsers }: Props) {
     );
   }
 
+  const viewTabs = (
+    <div className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white p-0.5">
+      {([['plan', 'Audit plan'], ['settings', 'Settings']] as const).map(([key, label]) => (
+        <button
+          key={key}
+          onClick={() => setView(key)}
+          className={`rounded-md px-3 py-1 text-sm font-medium ${view === key
+            ? 'bg-blue-600 text-white'
+            : 'text-gray-600 hover:bg-gray-50'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (view === 'settings') {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {viewTabs}
+          <p className="text-xs text-gray-500">
+            Status levels, SLA days and extra fields for audits and reviews in the plan.
+          </p>
+        </div>
+        <ModuleSettingsPanel moduleKey="internal_audit" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-4">
+      {viewTabs}
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[

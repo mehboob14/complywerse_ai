@@ -891,6 +891,10 @@ _COLUMN_ADDS = [
     ("grc_clause_applicability", "owner_name", "VARCHAR(255)", None),
     ("grc_clause_applicability", "implementation_status", "VARCHAR(50)", None),
     ("grc_clause_applicability", "linked_evidence_id", "INTEGER", None),
+    # A tenant's own extra fields on an audit record (services/module_settings.py
+    # holds their definitions; the values live here).
+    ("grc_audit_observations", "custom_values", "JSON DEFAULT '{}'::json", None),
+    ("grc_audit_plan_entries", "custom_values", "JSON DEFAULT '{}'::json", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

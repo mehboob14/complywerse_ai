@@ -10,6 +10,8 @@ import {
   AlertCircle, Search,
 } from 'lucide-react';
 import { statutoryAuditApi } from '@/lib/api';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
+import { CustomFieldsSection, type CustomFieldDef } from '@/components/settings/CustomFieldsSection';
 import {
   MultiSelectDropdown, AnimatedModal, PageLoader, DataTable,
   RightSlidePanel, type ColumnDef,
@@ -65,6 +67,8 @@ export default function StatutoryAuditListPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<ObsRow | null>(null);
+  // Observations, or the tenant's own status levels / SLA / extra fields.
+  const [view, setView] = useState<'observations' | 'settings'>('observations');
 
   const { data: meta } = useQuery({
     queryKey: ['statutory-audit-meta'],
@@ -248,8 +252,39 @@ export default function StatutoryAuditListPage() {
 
   const statusCounts = meta?.counts_by_status || {};
 
+  const ViewTabs = (
+    <div className="flex items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5">
+      {([['observations', 'Observations'], ['settings', 'Settings']] as const).map(([key, label]) => (
+        <button
+          key={key}
+          onClick={() => setView(key)}
+          className={`rounded-md px-3 py-1 text-sm font-medium ${view === key
+            ? 'bg-primary-600 text-white'
+            : 'text-slate-600 hover:bg-slate-50'}`}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (view === 'settings') {
+    return (
+      <div className="governance-light space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          {ViewTabs}
+          <p className="text-xs text-slate-500">
+            Status levels, SLA days and extra fields for statutory audit observations.
+          </p>
+        </div>
+        <ModuleSettingsPanel moduleKey="statutory_audit" />
+      </div>
+    );
+  }
+
   return (
     <div className="governance-light space-y-4">
+      <div className="flex items-center gap-3">{ViewTabs}</div>
       {/* Toolbar — single dense row matching Documents */}
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-thin">
         <div className="relative w-40 shrink-0 sm:w-52 xl:w-72">
@@ -471,6 +506,11 @@ function CreatePanel({
     area_domain: '',
     category: '',
   });
+  const [customValues, setCustomValues] = useState<Record<string, unknown>>({});
+  const { data: fieldMeta } = useQuery({
+    queryKey: ['statutory-audit-meta'],
+    queryFn: async () => (await statutoryAuditApi.meta()).data as { custom_fields?: CustomFieldDef[] },
+  });
   const [error, setError] = useState<string | null>(null);
 
   const mut = useMutation({
@@ -483,6 +523,7 @@ function CreatePanel({
         audit_period: form.audit_period || null,
         area_domain: form.area_domain || null,
         category: form.category.trim() || null,
+        custom_values: customValues,
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['statutory-audit-obs'] });
@@ -636,6 +677,13 @@ function CreatePanel({
             <span>{error}</span>
           </div>
         )}
+
+        {/* Whatever this tenant added in Settings. */}
+        <CustomFieldsSection
+          fields={fieldMeta?.custom_fields || []}
+          values={customValues}
+          onChange={setCustomValues}
+        />
       </form>
     </RightSlidePanel>
   );

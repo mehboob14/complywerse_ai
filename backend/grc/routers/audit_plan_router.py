@@ -43,6 +43,7 @@ class AuditPlanEntryIn(BaseModel):
     comment: Optional[str] = None
     status: Optional[str] = "planned"
     priority: Optional[str] = None
+    custom_values: Optional[Dict[str, Any]] = None
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -66,8 +67,37 @@ def _next_audit_id(assessment_id: int, entry_type: str, db: Session) -> str:
     return f"{prefix}{(count + 1):03d}"
 
 
-def _entry_to_dict(e: AuditPlanEntry) -> Dict[str, Any]:
-    return {
+MODULE = "internal_audit"
+
+
+def _settings(db: Session, tenant_id: int) -> Dict[str, Any]:
+    from ..services.module_settings import get_settings
+
+    return get_settings(db, tenant_id, MODULE)
+
+
+def _check_status(settings: Dict[str, Any], value: Optional[str]) -> str:
+    """Against the tenant's own status levels, not a constant in this file."""
+    from ..services.module_settings import status_keys
+
+    allowed = status_keys(settings)
+    status_value = (value or allowed[0]).strip().lower()
+    if status_value not in allowed:
+        raise HTTPException(status_code=400, detail=f"Invalid status. One of {sorted(allowed)}")
+    return status_value
+
+
+def _clean_values(settings: Dict[str, Any], values: Any, *, partial: bool) -> Dict[str, Any]:
+    from ..services.module_settings import validate_custom_values
+
+    try:
+        return validate_custom_values(settings, values, partial=partial)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+def _entry_to_dict(e: AuditPlanEntry, settings: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    data = {
         "id": e.id,
         "assessment_id": e.assessment_id,
         "entry_type": e.entry_type,
@@ -93,7 +123,18 @@ def _entry_to_dict(e: AuditPlanEntry) -> Dict[str, Any]:
         "ai_recommendation_generated_at": e.ai_recommendation_generated_at.isoformat() if e.ai_recommendation_generated_at else None,
         "created_at": e.created_at.isoformat() if e.created_at else None,
         "updated_at": e.updated_at.isoformat() if e.updated_at else None,
+        "custom_values": getattr(e, "custom_values", None) or {},
     }
+    if settings is not None:
+        from ..services.module_settings import sla_state
+        from datetime import datetime as _dt
+
+        # An audit is late when it runs past its end date; with no end date the
+        # SLA days for its priority run from when it was planned.
+        end = _dt.combine(e.audit_end, _dt.min.time()) if e.audit_end else None
+        data["sla"] = sla_state(settings, status=e.status, due_date=end,
+                                priority=e.priority, opened_at=e.created_at)
+    return data
 
 
 def _summary(entries: List[AuditPlanEntry]) -> Dict[str, int]:
@@ -120,7 +161,12 @@ def list_entries(
     entries = db.query(AuditPlanEntry).filter(
         AuditPlanEntry.assessment_id == assessment_id,
     ).order_by(AuditPlanEntry.id.desc()).all()
-    return {"entries": [_entry_to_dict(e) for e in entries], "summary": _summary(entries)}
+    settings = _settings(db, tenant_id)          # once for the page, not per row
+    return {"entries": [_entry_to_dict(e, settings) for e in entries],
+            "summary": _summary(entries),
+            "status_levels": settings["statuses"],
+            "custom_fields": [f for f in settings["fields"] if not f.get("archived")],
+            "sla": settings["sla"]}
 
 
 @router.post("/{assessment_id}/audit-plan")
@@ -133,8 +179,11 @@ def create_entry(
     tenant_id = get_user_primary_tenant(user, db)
     _get_assessment(assessment_id, tenant_id, db)
 
+    settings = _settings(db, tenant_id)
     entry_type = body.entry_type or "Audit"
     payload = body.model_dump(exclude={"entry_type"}, exclude_unset=True)
+    payload["status"] = _check_status(settings, payload.get("status"))
+    payload["custom_values"] = _clean_values(settings, payload.get("custom_values"), partial=False)
     entry = AuditPlanEntry(
         assessment_id=assessment_id,
         tenant_id=tenant_id,
@@ -145,7 +194,7 @@ def create_entry(
     db.add(entry)
     db.commit()
     db.refresh(entry)
-    return _entry_to_dict(entry)
+    return _entry_to_dict(entry, settings)
 
 
 @router.put("/{assessment_id}/audit-plan/{entry_id}")
@@ -165,12 +214,19 @@ def update_entry(
     if not entry:
         raise HTTPException(status_code=404, detail="Audit plan entry not found")
 
-    for k, v in body.model_dump(exclude_unset=True).items():
+    settings = _settings(db, tenant_id)
+    changes = body.model_dump(exclude_unset=True)
+    if "status" in changes:
+        changes["status"] = _check_status(settings, changes["status"])
+    if "custom_values" in changes:
+        cleaned = _clean_values(settings, changes["custom_values"], partial=True)
+        changes["custom_values"] = {**(entry.custom_values or {}), **cleaned}
+    for k, v in changes.items():
         setattr(entry, k, v)
     entry.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(entry)
-    return _entry_to_dict(entry)
+    return _entry_to_dict(entry, settings)
 
 
 @router.delete("/{assessment_id}/audit-plan/{entry_id}")

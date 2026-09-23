@@ -62,6 +62,9 @@ class AuditPlanEntry(Base):
     priority         = Column(String(20),  nullable=True)      # critical | high | medium | low
     ai_recommendation              = Column(Text,     nullable=True)
     ai_recommendation_generated_at = Column(DateTime, nullable=True)
+    # The tenant's own extra fields for an audit, validated against its
+    # definitions in services/module_settings.py before they land here.
+    custom_values                  = Column(JSON,     default=dict)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

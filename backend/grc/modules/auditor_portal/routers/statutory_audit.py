@@ -201,7 +201,36 @@ def _get_obs(obs_id: int, tenant_ids: List[int], db: Session) -> AuditObservatio
     return obs
 
 
-def serialize_observation(db: Session, obs: AuditObservation, *, with_links: bool = False) -> dict:
+def _sla_for(db: Session, obs: AuditObservation, settings: Optional[dict]) -> Optional[dict]:
+    from ....services.module_settings import get_settings, sla_state
+
+    if settings is None:
+        settings = get_settings(db, obs.tenant_id, "statutory_audit")
+    return sla_state(settings, status=obs.status, due_date=obs.due_date,
+                     priority=obs.priority, opened_at=obs.created_at)
+
+
+def _settings(db: Session, current_user: GRCUser, tenant_ids) -> dict:
+    """The tenant's status levels, SLA days and extra fields for this module."""
+    from ....services.module_settings import get_settings
+
+    tenant_id = get_user_primary_tenant(current_user, db) or (tenant_ids[0] if tenant_ids else None)
+    return get_settings(db, tenant_id, "statutory_audit")
+
+
+def _check_status(settings: dict, value: str) -> str:
+    """Against the tenant's own status levels, not a constant in this file."""
+    from ....services.module_settings import status_keys
+
+    allowed = status_keys(settings)
+    status_value = (value or "").strip().lower()
+    if status_value not in allowed:
+        raise HTTPException(status_code=400, detail=f"Invalid status. One of {sorted(allowed)}")
+    return status_value
+
+
+def serialize_observation(db: Session, obs: AuditObservation, *, with_links: bool = False,
+                          settings: Optional[dict] = None) -> dict:
     data = {
         "id": obs.id,
         "code": obs.code,
@@ -228,6 +257,10 @@ def serialize_observation(db: Session, obs: AuditObservation, *, with_links: boo
         "import_batch_id": obs.import_batch_id,
         "created_at": _iso(obs.created_at),
         "updated_at": _iso(obs.updated_at),
+        "custom_values": getattr(obs, "custom_values", None) or {},
+        # Where it stands against the tenant's SLA, computed now: editing an SLA
+        # must change every open row without a backfill.
+        "sla": _sla_for(db, obs, settings),
         "evidence_count": len(obs.evidence_links or []),
         "control_count": len(obs.control_links or []),
         "risk_count": len(obs.risk_links or []),
@@ -313,6 +346,7 @@ def serialize_observation(db: Session, obs: AuditObservation, *, with_links: boo
 
 # ── Schemas ──────────────────────────────────────────────────────────────────
 class ObservationCreate(BaseModel):
+    custom_values: Optional[Dict[str, Any]] = None
     title: str
     description: Optional[str] = None
     observation_type: str = "observation"
@@ -330,6 +364,8 @@ class ObservationCreate(BaseModel):
 
 
 class ObservationUpdate(BaseModel):
+    custom_values: Optional[Dict[str, Any]] = None
+    status: Optional[str] = None
     title: Optional[str] = None
     description: Optional[str] = None
     observation_type: Optional[str] = None
@@ -437,8 +473,9 @@ def list_observations(
         .limit(min(limit, 500))
         .all()
     )
+    page_settings = _settings(db, current_user, tenant_ids)   # once for the page, not per row
     return {
-        "items": [serialize_observation(db, o) for o in items],
+        "items": [serialize_observation(db, o, settings=page_settings) for o in items],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -493,8 +530,12 @@ def observations_meta(
         .group_by(AuditObservation.status)
         .all()
     }
+    settings = _settings(db, current_user, tenant_ids)
     return {
-        "statuses": sorted(STATUSES),
+        "statuses": [s["key"] for s in settings["statuses"]],
+        "status_levels": settings["statuses"],
+        "custom_fields": [f for f in settings["fields"] if not f.get("archived")],
+        "sla": settings["sla"],
         "priorities": sorted(PRIORITIES),
         "observation_types": sorted(OBS_TYPES),
         "regulator_sources": sorted(sources),
@@ -520,12 +561,17 @@ def create_observation(
     priority = (payload.priority or "medium").lower()
     if priority not in PRIORITIES:
         raise HTTPException(status_code=400, detail=f"Invalid priority. One of {sorted(PRIORITIES)}")
-    st = (payload.status or "open").lower()
-    if st not in STATUSES:
-        raise HTTPException(status_code=400, detail=f"Invalid status. One of {sorted(STATUSES)}")
+    settings = _settings(db, current_user, tenant_ids)
+    st = _check_status(settings, payload.status or "open")
+    from ....services.module_settings import validate_custom_values
+    try:
+        custom_values = validate_custom_values(settings, payload.custom_values)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     obs = AuditObservation(
         tenant_id=tenant_id,
+        custom_values=custom_values,
         code=_next_code(db, tenant_id),
         title=payload.title.strip(),
         description=payload.description,
@@ -969,6 +1015,16 @@ def update_observation(
     if "category" in data:
         cat = (data["category"] or "").strip()
         data["category"] = cat or None
+    if "custom_values" in data:
+        from ....services.module_settings import validate_custom_values
+        try:
+            cleaned = validate_custom_values(_settings(db, current_user, tenant_ids),
+                                             data["custom_values"], partial=True)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        data["custom_values"] = {**(obs.custom_values or {}), **cleaned}
+    if "status" in data:
+        data["status"] = _check_status(_settings(db, current_user, tenant_ids), data["status"])
     for k, v in data.items():
         setattr(obs, k, v)
     obs.updated_at = datetime.utcnow()
@@ -988,10 +1044,12 @@ def transition_status(
     _ensure_tables(db)
     tenant_ids = _tenant_ids(current_user, db)
     obs = _get_obs(obs_id, tenant_ids, db)
-    new_status = (payload.status or "").lower()
-    if new_status not in STATUSES:
-        raise HTTPException(status_code=400, detail=f"Invalid status. One of {sorted(STATUSES)}")
+    settings = _settings(db, current_user, tenant_ids)
+    new_status = _check_status(settings, payload.status)
     allowed = STATUS_TRANSITIONS.get(obs.status, set())
+    if obs.status not in STATUS_TRANSITIONS or new_status not in STATUSES:
+        from ....services.module_settings import status_keys
+        allowed = set(status_keys(settings))              # a level this tenant added
     if new_status not in allowed and new_status != obs.status:
         raise HTTPException(
             status_code=400,

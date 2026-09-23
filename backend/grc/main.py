@@ -38,6 +38,8 @@ from .routers import criticality_assessments_router
 from .routers import search_router
 # Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
 from .routers import teams_router
+# Per-tenant status levels, SLA days and extra fields for a module.
+from .routers import module_settings_router
 # Notes / History / derived Alerts for assets + vulnerabilities.
 from .routers import entity_extras_router
 
@@ -270,6 +272,8 @@ app.include_router(connectors_router)
 app.include_router(search_router)
 # Teams — admin CRUD for org teams + asset owning-team dropdown.
 app.include_router(teams_router)
+# Status levels, SLA days and extra fields a tenant sets per module.
+app.include_router(module_settings_router)
 # Notes, History, derived Alerts for assets + vulnerabilities.
 app.include_router(entity_extras_router.router)
 

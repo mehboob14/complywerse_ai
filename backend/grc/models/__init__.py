@@ -31,3 +31,4 @@ from ._56_scf_catalog_models import *  # noqa: F401,F403 - SCF canonical catalog
 from ._57_custom_control_models import *  # noqa: F401,F403 - custom control profile + cross-module record links
 from ._58_audit_register_models import *  # noqa: F401,F403 - audit issue register profile + workbook imports
 from ._59_evidence_quality_models import *  # noqa: F401,F403 - does this file prove the item it was attached to
+from ._60_module_settings import *  # noqa: F401,F403 - per-tenant status levels, SLA days and extra fields

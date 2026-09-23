@@ -30,6 +30,7 @@ from .nca_kpi_router import router as nca_kpi_router
 from .search_router import router as search_router
 # Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
 from .teams_router import router as teams_router
+from .module_settings_router import router as module_settings_router
 
 __all__ = [
     "auth_router",
@@ -55,4 +56,5 @@ __all__ = [
     "artifacts_router",
     "search_router",
     "teams_router",
+    "module_settings_router",
 ]
