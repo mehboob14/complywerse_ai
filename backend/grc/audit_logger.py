@@ -1,7 +1,8 @@
 import json
 import time
+from contextlib import contextmanager
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Iterator, Optional
 
 from fastapi import Request
 from sqlalchemy.orm import Session
@@ -529,6 +530,7 @@ def write_audit_log(
     started_at: float,
     request_payload: Optional[Dict[str, Any]] = None,
     response_error: Optional[Any] = None,
+    db_changes: Optional[Dict[str, Any]] = None,
 ) -> None:
     try:
         # The endpoint already wrote its own readable row (write_rich_audit_log)
@@ -614,10 +616,26 @@ def write_audit_log(
                         resource_name = v.strip()
                         break
 
+            from .feature_map import place
+            from .modules.workflow_engine.services.catalog import ENDPOINT_LABELS
+            from .modules.workflow_engine.services.route_events import endpoint_of
+
+            endpoint = endpoint_of(request.scope)
+            query = dict(request.query_params)
+            module, submodule = place(endpoint, path, db=db, slug=slug, payload=request_payload, query=query)
             details = {
                 "method": method,
                 "path": path,
-                "query": dict(request.query_params),
+                # The function that handled it — the workflow engine raises
+                # that endpoint's own trigger event from this row.
+                "endpoint": endpoint,
+                # The sidebar module and page it belongs to, and what was done
+                # in the workflow builder's words — Audit Logs names and
+                # filters rows by these.
+                "module": module,
+                "submodule": submodule,
+                "feature": ENDPOINT_LABELS.get(endpoint or ""),
+                "query": query,
                 "status_code": status_code,
                 "duration_ms": duration_ms,
                 "user_agent": request.headers.get("user-agent"),
@@ -633,6 +651,10 @@ def write_audit_log(
             # HTTP status code. Only populated when middleware passed it in.
             if response_error is not None:
                 details["response_error"] = _sanitize_value(response_error)
+            # Records the request committed, old → new (audit_changes). A failed
+            # request's writes were rolled back, so it has none to show.
+            if db_changes and status_code < 400:
+                details["db_changes"] = db_changes
 
             log = AuditLog(
                 tenant_id=tenant_id,
@@ -644,6 +666,60 @@ def write_audit_log(
                 ip_address=request.client.host if request.client else None,
             )
             db.add(log)
+            db.commit()
+        finally:
+            db.close()
+    except Exception:
+        return
+
+
+@contextmanager
+def background_job(tenant_slug: str, job: Any) -> Iterator[None]:
+    """Around a background job (Celery task): what it commits is written to
+    the audit log as one "Background job" row, if it changed anything — the
+    middleware only sees web requests."""
+    from . import audit_changes
+
+    token = audit_changes.start()
+    try:
+        yield
+    finally:
+        changes = audit_changes.finish(token)
+        if changes:
+            write_job_audit_log(tenant_slug, job, changes)
+
+
+def write_job_audit_log(tenant_slug: str, job: Any, db_changes: Dict[str, Any]) -> None:
+    try:
+        from .db import open_tenant_session
+        from .feature_map import JOB_PLACES
+        from .models import Tenant
+        from .modules.workflow_engine.services.catalog import _humanize_slug
+
+        module_path = getattr(job, "__module__", "") or ""
+        name = getattr(job, "__name__", "") or "job"
+        module, submodule = JOB_PLACES.get(module_path, ("Administration", "Background Jobs"))
+        label = _humanize_slug(name)
+        count = len(db_changes.get("records") or []) + int(db_changes.get("more") or 0)
+        db = open_tenant_session(tenant_slug)
+        try:
+            tenant_id = db.query(Tenant.id).filter(Tenant.slug == tenant_slug).scalar() \
+                or db.query(Tenant.id).order_by(Tenant.id).limit(1).scalar()
+            if tenant_id is None:
+                return
+            db.add(AuditLog(
+                tenant_id=tenant_id, user_id=None, action="background_job", resource_type="background_job",
+                changes=_sanitize_value({
+                    "actor_type": "system",
+                    "actor_display": "Background job",
+                    "summary": f"Background job: {label} ({count} record{'' if count == 1 else 's'} changed)",
+                    "module": module,
+                    "submodule": submodule,
+                    "feature": label,
+                    "job": f"{module_path}.{name}",
+                    "db_changes": db_changes,
+                }),
+            ))
             db.commit()
         finally:
             db.close()

@@ -6,7 +6,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Cookie
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy.orm import Session
-from sqlalchemy import text, or_, func, desc, case
+from sqlalchemy import text, or_, and_, not_, func, desc, case
 from pydantic import BaseModel, EmailStr
 import bcrypt
 
@@ -23,6 +23,7 @@ from ..models import (
     get_db,
 )
 from ..db import open_tenant_session
+from .. import feature_map
 
 # Per-database-per-tenant: each tenant DB carries the full schema. The legacy
 # `OrganizationProfile` model lived in a now-deleted per-schema base; the
@@ -39,8 +40,11 @@ def _generate_audit_description(
     resource_id: Optional[int],
     path: str,
     request_payload: Optional[dict],
+    feature: Optional[str] = None,
 ) -> str:
-    """Return a plain-English summary of an audit log action."""
+    """Return a plain-English summary of an audit log action. `feature` is what
+    the endpoint does in the workflow builder's words ("Edit Risk"); it names
+    the action wherever the sentence would otherwise be generic."""
     payload = request_payload or {}
     path_lower = (path or "").lower()
     segments = [s for s in (path or "").replace("/grc", "", 1).strip("/").split("/") if s]
@@ -112,12 +116,20 @@ def _generate_audit_description(
     # Auth events
     if "login" in path_lower and action == "create":
         return "User logged in"
+    if "login" in path_lower and action.endswith("_failed"):
+        who = payload.get("username") or payload.get("email")
+        return f'Sign-in failed for "{who}"' if isinstance(who, str) and who.strip() else "Sign-in failed"
     if "logout" in path_lower:
         return "User logged out"
 
     # Cross-link / relationship
     if "cross-link" in path_lower or "crosslink" in path_lower:
         return f"Linked {rt}{id_part} to another record"
+
+    if feature:
+        if action.endswith("_failed"):
+            return f"Failed: {feature}{nm_part or id_part}"
+        return f"{feature}{nm_part or id_part}"
 
     # Generic action-based
     if action == "create":
@@ -1112,6 +1124,7 @@ def list_audit_logs(
     offset: int = 0,
     action: Optional[str] = None,
     module: Optional[str] = None,
+    submodule: Optional[str] = None,
     user_id: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
@@ -1125,7 +1138,10 @@ def list_audit_logs(
 
     if action:
         query = query.filter(GlobalAuditLog.action.ilike(f"%{action}%"))
-    if module:
+    if module and module in feature_map.MODULE_ORDER:
+        query = query.filter(_module_filter(module, submodule))
+    elif module:
+        # A resource type, as this filter took before rows named their module.
         query = query.filter(GlobalAuditLog.resource_type.ilike(f"%{module}%"))
     if user_id:
         query = query.filter(GlobalAuditLog.user_id == user_id)
@@ -1175,7 +1191,11 @@ def list_audit_logs(
                 resource_id=log.resource_id,
                 path=changes.get("path", ""),
                 request_payload=changes.get("request"),
+                feature=changes.get("feature"),
             )
+        # Rows written before rows named their module are placed by their URL.
+        row_module, row_submodule = (changes.get("module"), changes.get("submodule")) if changes.get("module") \
+            else feature_map.place(None, changes.get("path") or "") if changes.get("path") else (None, None)
 
         result.append({
             "id": log.id,
@@ -1184,6 +1204,9 @@ def list_audit_logs(
             "action": log.action,
             "resource_type": log.resource_type,
             "resource_id": log.resource_id,
+            "module": row_module,
+            "submodule": row_submodule,
+            "feature": changes.get("feature"),
             "description": description,
             "details": changes,
             "method": changes.get("method"),
@@ -1212,16 +1235,37 @@ def get_audit_log_filters(
         row[0] for row in base_query.with_entities(GlobalAuditLog.action).distinct().order_by(GlobalAuditLog.action).all()
         if row[0]
     ]
-    modules = [
-        row[0] for row in base_query.with_entities(GlobalAuditLog.resource_type).distinct().order_by(GlobalAuditLog.resource_type).all()
-        if row[0]
-    ]
+    # Every sidebar module and its sub-modules, whether or not anything has
+    # happened there yet.
+    places = feature_map.modules()
 
     return {
         "actions": actions,
-        "modules": modules,
+        "modules": [p["module"] for p in places],
+        "submodules": {p["module"]: p["submodules"] for p in places},
         "date_presets": ["all", "today", "last_7_days", "last_30_days"],
     }
+
+
+def _module_filter(module: str, submodule: Optional[str]):
+    """Rows of a sidebar module (or one of its sub-modules): those that name it,
+    and older rows whose URL falls under it."""
+    named_module = GlobalAuditLog.changes["module"].as_string()
+    named = named_module == module
+    if submodule:
+        named = and_(named, GlobalAuditLog.changes["submodule"].as_string() == submodule)
+    include, exclude = feature_map.legacy_prefixes(module, submodule)
+    if not include:
+        return named
+    path = GlobalAuditLog.changes["path"].as_string()
+
+    def under(prefix: str):
+        return or_(path == prefix, path == f"/grc{prefix}", path.like(f"{prefix}/%"), path.like(f"/grc{prefix}/%"))
+
+    legacy = and_(named_module.is_(None), or_(*[under(p) for p in include]))
+    if exclude:
+        legacy = and_(legacy, not_(or_(*[under(p) for p in exclude])))
+    return or_(named, legacy)
 
 
 # ---------------------------------------------------------------------------

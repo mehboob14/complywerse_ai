@@ -47,6 +47,7 @@ import {
   NodeParamSchemas,
   PaletteItem,
   TRIGGER_KEYS,
+  registerCatalogNodeTypes,
   WorkflowDefinition,
   WorkflowTemplate,
   WorkflowVersion,
@@ -503,6 +504,7 @@ function WorkflowEngineContent() {
         workflowEngineApi.analytics.overview(),
       ]);
       setDefinitions(defsRes.data || []);
+      registerCatalogNodeTypes(catalogRes.data);
       setCatalog(catalogRes.data || {});
       setTemplates(templatesRes.data || []);
       setOverview(overviewRes.data || {});

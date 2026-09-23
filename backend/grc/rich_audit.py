@@ -159,6 +159,11 @@ def write_rich_audit_log(
     actor_source: Optional[str] = None,
     # Who to show when there is no user, e.g. "Scheduler" for a nightly job.
     actor_display: Optional[str] = None,
+    # For a row written in place of the request's own (HTTP endpoints): the
+    # method and the endpoint ("module:function"), so the workflow engine
+    # raises the endpoint's trigger event from this row too.
+    method: Optional[str] = None,
+    endpoint: Optional[str] = None,
 ) -> None:
     """Append one audit-log row from non-HTTP code (workflows, schedulers).
 
@@ -189,7 +194,8 @@ def write_rich_audit_log(
             "user" if user_id else "workflow"
         )
         changes: Dict[str, Any] = {
-            "method": None,
+            "method": method,
+            "endpoint": endpoint,
             "path": resource_url,
             "query": {},
             "status_code": None,

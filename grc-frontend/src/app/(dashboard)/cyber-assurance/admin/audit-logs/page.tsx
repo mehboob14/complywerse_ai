@@ -15,6 +15,9 @@ interface AuditLogEntry {
   action: string;
   resource_type: string;
   resource_id: number | null;
+  // Sidebar module / sub-module from the backend (feature_map).
+  module?: string | null;
+  submodule?: string | null;
   description: string;
   details: Record<string, unknown>;
   method?: string;
@@ -283,6 +286,9 @@ function titleCase(s: string): string {
 }
 
 function deriveModuleContext(log: AuditLogEntry): { module: string; submodule: string | null } {
+  if (log.module) {
+    return { module: log.module, submodule: log.submodule && log.submodule !== log.module ? log.submodule : null };
+  }
   const path = log.path || '';
   const normalized = path.replace(/^\/grc/, '').replace(/^\//, '');
   const parts = normalized.split('/').filter(Boolean);

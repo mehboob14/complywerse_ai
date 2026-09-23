@@ -1,6 +1,9 @@
 import json
 from pathlib import Path
 import re
+from typing import Optional
+
+from .route_events import event_name
 
 
 TRIGGER_NODE_TYPES = [
@@ -487,6 +490,8 @@ ROUTER_MODULE_OVERRIDE: dict[tuple[str, str], tuple[str, str]] = {
     ("vuln_management", "escalations"):             ("Vulnerability Management", "SLA Config"),
     # ── Vulnerability Management: dashboard is read-only overview — hide ─────
     ("vuln_management", "dashboard"):               ("Internal", "Vulnerability Dashboard"),
+    # ── Issue Management: corrective actions on an issue ────────────────────
+    ("issue_management", "actions"):                ("Issue Management", "CAPA Actions"),
 }
 
 # (module_dir.name, fn_name) → (module_display_name, submodule_display_name)
@@ -596,6 +601,14 @@ LABEL_OVERRIDE: dict[tuple[str, str, str], str] = {
     ("governance", "workflows", "advance_workflow"):            "Advance Governance Workflow",
     ("governance", "document_workflow", "start_workflow"):      "Start Document Workflow",
     ("governance", "workflows", "start_workflow"):              "Start Governance Workflow",
+
+    # Issue Management: CAPA actions (routes on router_issue / router_actions)
+    ("issue_management", "actions", "create_action"):           "Add CAPA Action To Issue",
+    ("issue_management", "actions", "update_action"):           "Edit CAPA Action",
+    ("issue_management", "actions", "verify_action"):           "Verify CAPA Action",
+    ("issue_management", "actions", "delete_action"):           "Delete CAPA Action",
+    ("issue_management", "actions", "promote_action_to_task"):  "Promote CAPA Action To Critical Task",
+    ("erm", "mitigation_actions", "create_risk_action"):        "Add Mitigation Action To Risk",
 }
 
 
@@ -685,20 +698,154 @@ def _extract_router_prefix(py_text: str) -> str:
     return m.group(1) if m else ""
 
 
-def _extract_route_entries(py_text: str) -> list[tuple[str, str, str]]:
-    entries: list[tuple[str, str, str]] = []
-    route_pattern = re.compile(r"@router\.(get|post|put|patch|delete)\(\s*['\"]([^'\"]*)['\"]", flags=re.IGNORECASE)
+def _extract_route_entries(py_text: str) -> list[tuple[str, str, str, str]]:
+    """(method, path, function, prefix) per route. `router` routes take the
+    file's first prefix, as they always have; a file's other routers (CAPA's
+    router_issue and router_actions) take their own."""
+    entries: list[tuple[str, str, str, str]] = []
+    own_prefixes = {var: "" for var in re.findall(r"^(\w+)\s*=\s*APIRouter\(", py_text, flags=re.MULTILINE)}
+    own_prefixes.update(re.findall(
+        r"^(\w+)\s*=\s*APIRouter\([^\)]*?prefix\s*=\s*['\"]([^'\"]+)['\"]", py_text, flags=re.MULTILINE))
+    first_prefix = _extract_router_prefix(py_text)
+    route_pattern = re.compile(r"@(\w+)\.(get|post|put|patch|delete)\(\s*['\"]([^'\"]*)['\"]", flags=re.IGNORECASE)
     def_pattern = re.compile(r"^\s*(?:async\s+)?def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(", flags=re.MULTILINE)
 
     for match in route_pattern.finditer(py_text):
-        method = match.group(1).lower()
-        path = match.group(2) or ""
+        router_var = match.group(1)
+        if router_var == "router":
+            prefix = first_prefix
+        elif router_var in own_prefixes:
+            prefix = own_prefixes[router_var]
+        else:
+            continue  # not a router of this file (e.g. @app.get)
+        method = match.group(2).lower()
+        path = match.group(3) or ""
         fn_name = "handler"
         def_match = def_pattern.search(py_text, pos=match.end())
         if def_match:
             fn_name = def_match.group(1)
-        entries.append((method, path, fn_name))
+        entries.append((method, path, fn_name, prefix))
     return entries
+
+
+def _label_for(action: str, fn_name: str, override_key: tuple) -> tuple[str, str]:
+    """(label, base_label) the palette shows for an endpoint function."""
+    # Words that, when appearing at the start of a function name,
+    # make the action verb prefix redundant.
+    _SELF_DESCRIBING_VERBS = {
+        # Original set
+        "accept", "activate", "advance", "ai", "apply", "assign", "auto",
+        "analyze", "batch", "bulk", "cancel", "change", "check", "classify",
+        "close", "complete", "confirm", "convert", "delegate", "draft",
+        "enhance", "escalate", "expire", "extract", "finalize",
+        "generate", "infer", "link", "lock", "log", "move", "override",
+        "parse", "perform", "poll", "populate", "process", "publish",
+        "quick", "reparse", "remove", "request", "renew", "retry",
+        "reword", "rollback", "schedule", "score", "seed", "send", "set",
+        "side", "skip", "start", "submit", "suggest", "summarize",
+        "sync", "add", "unassign", "unlock", "unlink", "upload", "verify",
+        # Additional action verbs missing from original set
+        "aggregate", "assess", "calculate", "cascade", "clone", "collect",
+        "compare", "count", "dedupe", "download", "evaluate", "export",
+        "flag", "gather", "import", "increment", "map", "normalize",
+        "notify", "raise", "record", "reject", "reopen", "resolve",
+        "revoke", "review", "sanitize", "save", "split",
+    }
+
+    # For trigger actions use the ORIGINAL fn name so that stripped
+    # prefixes like "generate_" aren't lost.
+    orig_first = fn_name.split("_")[0].lower() if fn_name else ""
+
+    cleaned_fn = fn_name
+    # Collapse upsert-style prefix "create_or_update_" → keep just the subject
+    if cleaned_fn.startswith("create_or_update_"):
+        cleaned_fn = cleaned_fn[len("create_or_update_"):]
+    # Strip generic HTTP-verb prefixes (only for non-trigger to keep
+    # semantic verbs like "generate_" intact)
+    elif action != "trigger" or orig_first not in _SELF_DESCRIBING_VERBS:
+        for p in ["list_", "get_", "create_", "update_", "delete_",
+                  "post_", "put_", "patch_", "generate_", "run_", "do_"]:
+            if cleaned_fn.startswith(p):
+                cleaned_fn = cleaned_fn[len(p):]
+                break
+    # Strip the action verb itself if the fn still leads with it
+    # (prevents "Approve Approve X", "Upload Upload X", etc.)
+    if cleaned_fn.lower().startswith(action + "_"):
+        cleaned_fn = cleaned_fn[len(action) + 1:]
+    # Also strip the action verb if it appears embedded in the middle
+    # e.g. "external_delete_evidence" with action="delete" → "external_evidence"
+    # (prevents "Delete External Delete Evidence")
+    _embedded = f"_{action}_"
+    if _embedded in cleaned_fn.lower() and not cleaned_fn.lower().startswith(action + "_"):
+        cleaned_fn = re.sub(re.escape(_embedded), "_", cleaned_fn, flags=re.IGNORECASE)
+    base_label = _humanize_slug(cleaned_fn)
+    # Fix common acronym capitalisations
+    base_label = re.sub(r"\bAi\b", "AI", base_label)
+
+    # Plain-language verbs so labels read naturally for tech and
+    # non-tech users ("Edit …" rather than "Update …"). Falls back
+    # to a capitalised action for anything not mapped here.
+    _LABEL_VERBS = {
+        "create": "Create",
+        "update": "Edit",
+        "delete": "Delete",
+        "upload": "Upload",
+        "assign": "Assign",
+        "approve": "Approve",
+        "reject": "Reject",
+        "submit": "Submit",
+        "publish": "Publish",
+        "export": "Export",
+        "read": "View",
+        "trigger": "Run",
+    }
+    action_verb = _LABEL_VERBS.get(action, action.capitalize())
+    first_word = (base_label.split()[0].lower()) if base_label else ""
+
+    # Use the fn-derived label directly when it already encodes the
+    # action verb — avoids "Create Link …", "Delete Unlink …", etc.
+    # Exception: for "update" actions always prepend "Update" so that
+    # e.g. update_review → "Update Review" (not just "Review").
+    # For "trigger" actions whose name doesn't start with a self-describing
+    # verb, also use the base label directly — "Trigger" is an internal
+    # implementation detail and should not appear in the UI palette.
+    if first_word in _SELF_DESCRIBING_VERBS and action != "update":
+        label = base_label
+    elif action == "trigger" and first_word not in _SELF_DESCRIBING_VERBS:
+        label = base_label
+    else:
+        label = f"{action_verb} {base_label}"
+
+    # Apply per-function label override if defined
+    _lbl_override = LABEL_OVERRIDE.get(override_key)
+    if _lbl_override:
+        label = _lbl_override
+
+    # ── Normalize AI-related labels to "AI: …" format ──
+    # Detects AI-powered actions by function name patterns and
+    # ensures consistent "AI: " prefix so users can instantly
+    # distinguish AI actions from manual/system ones.
+    _fn_lower = (fn_name or "").lower()
+    _is_ai_fn = (
+        _fn_lower.startswith("ai_")
+        or "_ai_" in _fn_lower
+        or _fn_lower.endswith("_with_ai")
+        or _fn_lower.endswith("_ai")
+        or "ai_draft" in _fn_lower
+        or "ai_suggest" in _fn_lower
+        or "ai_score" in _fn_lower
+        or "ai_prioritize" in _fn_lower
+        or "ai_map" in _fn_lower
+        or "ai_explain" in _fn_lower
+        or "ai_reword" in _fn_lower
+    )
+    if _is_ai_fn and not label.startswith("AI:") and not label.startswith("AI :"):
+        _label_no_ai = re.sub(r"^AI\s+", "", label)
+        _label_no_ai = re.sub(r"\s+AI\b", "", _label_no_ai)
+        _label_no_ai = re.sub(r"\bWith\s*$", "", _label_no_ai).strip()
+        _label_no_ai = re.sub(r"\bFrom AI\b", "From", _label_no_ai)
+        label = f"AI: {_label_no_ai}"
+    return label, base_label
 
 
 def _generate_functionality_nodes_from_router_code() -> list[dict]:
@@ -731,7 +878,6 @@ def _generate_functionality_nodes_from_router_code() -> list[dict]:
             except Exception:
                 continue
 
-            sub_prefix = _extract_router_prefix(text)
             submodule_name = _humanize_slug(router_file.stem)
 
             # Allow per-router module/submodule override
@@ -739,7 +885,7 @@ def _generate_functionality_nodes_from_router_code() -> list[dict]:
             _router_eff_module = _override[0] if _override else module_name
             _router_eff_submodule = _override[1] if _override else submodule_name
 
-            for method, route_path, fn_name in _extract_route_entries(text):
+            for method, route_path, fn_name, sub_prefix in _extract_route_entries(text):
                 full_route_path = (sub_prefix or "") + (route_path or "")
                 action = _action_from_http_method_and_path(method, full_route_path)
                 if action not in AUTOMATION_RELEVANT_PLATFORM_ACTIONS:
@@ -754,122 +900,8 @@ def _generate_functionality_nodes_from_router_code() -> list[dict]:
                     _eff_module = _router_eff_module
                     _eff_submodule = _router_eff_submodule
 
-                # Words that, when appearing at the start of a function name,
-                # make the action verb prefix redundant.
-                _SELF_DESCRIBING_VERBS = {
-                    # Original set
-                    "accept", "activate", "advance", "ai", "apply", "assign", "auto",
-                    "analyze", "batch", "bulk", "cancel", "change", "check", "classify",
-                    "close", "complete", "confirm", "convert", "delegate", "draft",
-                    "enhance", "escalate", "expire", "extract", "finalize",
-                    "generate", "infer", "link", "lock", "log", "move", "override",
-                    "parse", "perform", "poll", "populate", "process", "publish",
-                    "quick", "reparse", "remove", "request", "renew", "retry",
-                    "reword", "rollback", "schedule", "score", "seed", "send", "set",
-                    "side", "skip", "start", "submit", "suggest", "summarize",
-                    "sync", "add", "unassign", "unlock", "unlink", "upload", "verify",
-                    # Additional action verbs missing from original set
-                    "aggregate", "assess", "calculate", "cascade", "clone", "collect",
-                    "compare", "count", "dedupe", "download", "evaluate", "export",
-                    "flag", "gather", "import", "increment", "map", "normalize",
-                    "notify", "raise", "record", "reject", "reopen", "resolve",
-                    "revoke", "review", "sanitize", "save", "split",
-                }
-
-                # For trigger actions use the ORIGINAL fn name so that stripped
-                # prefixes like "generate_" aren't lost.
-                orig_first = fn_name.split("_")[0].lower() if fn_name else ""
-
-                cleaned_fn = fn_name
-                # Collapse upsert-style prefix "create_or_update_" → keep just the subject
-                if cleaned_fn.startswith("create_or_update_"):
-                    cleaned_fn = cleaned_fn[len("create_or_update_"):]
-                # Strip generic HTTP-verb prefixes (only for non-trigger to keep
-                # semantic verbs like "generate_" intact)
-                elif action != "trigger" or orig_first not in _SELF_DESCRIBING_VERBS:
-                    for p in ["list_", "get_", "create_", "update_", "delete_",
-                              "post_", "put_", "patch_", "generate_", "run_", "do_"]:
-                        if cleaned_fn.startswith(p):
-                            cleaned_fn = cleaned_fn[len(p):]
-                            break
-                # Strip the action verb itself if the fn still leads with it
-                # (prevents "Approve Approve X", "Upload Upload X", etc.)
-                if cleaned_fn.lower().startswith(action + "_"):
-                    cleaned_fn = cleaned_fn[len(action) + 1:]
-                # Also strip the action verb if it appears embedded in the middle
-                # e.g. "external_delete_evidence" with action="delete" → "external_evidence"
-                # (prevents "Delete External Delete Evidence")
-                _embedded = f"_{action}_"
-                if _embedded in cleaned_fn.lower() and not cleaned_fn.lower().startswith(action + "_"):
-                    cleaned_fn = re.sub(re.escape(_embedded), "_", cleaned_fn, flags=re.IGNORECASE)
-                base_label = _humanize_slug(cleaned_fn)
-                # Fix common acronym capitalisations
-                base_label = re.sub(r"\bAi\b", "AI", base_label)
-
-                # Plain-language verbs so labels read naturally for tech and
-                # non-tech users ("Edit …" rather than "Update …"). Falls back
-                # to a capitalised action for anything not mapped here.
-                _LABEL_VERBS = {
-                    "create": "Create",
-                    "update": "Edit",
-                    "delete": "Delete",
-                    "upload": "Upload",
-                    "assign": "Assign",
-                    "approve": "Approve",
-                    "reject": "Reject",
-                    "submit": "Submit",
-                    "publish": "Publish",
-                    "export": "Export",
-                    "read": "View",
-                    "trigger": "Run",
-                }
-                action_verb = _LABEL_VERBS.get(action, action.capitalize())
-                first_word = (base_label.split()[0].lower()) if base_label else ""
-
-                # Use the fn-derived label directly when it already encodes the
-                # action verb — avoids "Create Link …", "Delete Unlink …", etc.
-                # Exception: for "update" actions always prepend "Update" so that
-                # e.g. update_review → "Update Review" (not just "Review").
-                # For "trigger" actions whose name doesn't start with a self-describing
-                # verb, also use the base label directly — "Trigger" is an internal
-                # implementation detail and should not appear in the UI palette.
-                if first_word in _SELF_DESCRIBING_VERBS and action != "update":
-                    label = base_label
-                elif action == "trigger" and first_word not in _SELF_DESCRIBING_VERBS:
-                    label = base_label
-                else:
-                    label = f"{action_verb} {base_label}"
-
-                # Apply per-function label override if defined
-                _lbl_override = LABEL_OVERRIDE.get((module_dir.name, router_file.stem, fn_name))
-                if _lbl_override:
-                    label = _lbl_override
-
-                # ── Normalize AI-related labels to "AI: …" format ──
-                # Detects AI-powered actions by function name patterns and
-                # ensures consistent "AI: " prefix so users can instantly
-                # distinguish AI actions from manual/system ones.
-                _fn_lower = (fn_name or "").lower()
-                _router_stem = router_file.stem.lower()
-                _is_ai_fn = (
-                    _fn_lower.startswith("ai_")
-                    or "_ai_" in _fn_lower
-                    or _fn_lower.endswith("_with_ai")
-                    or _fn_lower.endswith("_ai")
-                    or "ai_draft" in _fn_lower
-                    or "ai_suggest" in _fn_lower
-                    or "ai_score" in _fn_lower
-                    or "ai_prioritize" in _fn_lower
-                    or "ai_map" in _fn_lower
-                    or "ai_explain" in _fn_lower
-                    or "ai_reword" in _fn_lower
-                )
-                if _is_ai_fn and not label.startswith("AI:") and not label.startswith("AI :"):
-                    _label_no_ai = re.sub(r"^AI\s+", "", label)
-                    _label_no_ai = re.sub(r"\s+AI\b", "", _label_no_ai)
-                    _label_no_ai = re.sub(r"\bWith\s*$", "", _label_no_ai).strip()
-                    _label_no_ai = re.sub(r"\bFrom AI\b", "From", _label_no_ai)
-                    label = f"AI: {_label_no_ai}"
+                label, base_label = _label_for(
+                    action, fn_name, (module_dir.name, router_file.stem, fn_name))
 
                 # Auto-generate a human-readable description
                 _action_verbs = {
@@ -913,6 +945,11 @@ def _generate_functionality_nodes_from_router_code() -> list[dict]:
                         "router_stem": router_file.stem,
                         "module_dir": module_dir.name,
                         "route_path": full_route_path,
+                        "endpoint_module": f"grc.modules.{module_dir.name}.routers.{router_file.stem}",
+                        # The event its own endpoint raises (route_events), so
+                        # the node used as a trigger fires on exactly that call.
+                        "trigger_event": _trigger_event_for(
+                            method, fn_name, f"grc.modules.{module_dir.name}.routers.{router_file.stem}", label),
                     }
                 )
 
@@ -932,6 +969,25 @@ def get_platform_functions_grouped_by_module() -> dict[str, list[dict]]:
     return grouped
 
 
+# POSTs that read or compute (a dataset query, a preview, an AI suggestion)
+# change nothing, so they never start a workflow.
+_READ_LIKE_PREFIXES = (
+    "query_", "aggregate_", "preview_", "search_", "list_", "get_", "lookup_", "count_",
+    "estimate_", "compare_", "enrich_", "metabase_", "export_", "download_",
+)
+_MUTATING_METHODS = {"post", "put", "patch", "delete"}
+
+
+def _trigger_event_for(method: str, fn_name: str, module_path: str, label: str) -> Optional[str]:
+    """The endpoint event a write raises, or None for reads, read-like POSTs
+    and AI helpers (they suggest; a person then saves)."""
+    if (method or "").lower() not in _MUTATING_METHODS or (fn_name or "").startswith(_READ_LIKE_PREFIXES):
+        return None
+    if label.startswith("AI:"):
+        return None
+    return event_name(module_path, fn_name)
+
+
 _json_platform_nodes = _generate_functionality_action_nodes()
 _code_platform_nodes = _generate_functionality_nodes_from_router_code()
 
@@ -945,6 +1001,495 @@ for n in [*_code_platform_nodes, *_json_platform_nodes]:
     _merged.append(n)
 
 PLATFORM_FUNCTION_NODE_TYPES = _merged
+
+
+# ── Route files outside modules/*/routers ────────────────────────────────────
+# The scanner above only reads modules/<module>/routers/*.py. These are the
+# platform's other route files, by the sidebar module and sub-module their pages
+# sit under. Their write endpoints are added from the live app's routes
+# (extend_with_app_routes, called once the app has all its routers), so every
+# module's functions are in the builder and each can start a workflow. A None
+# sub-module is taken from the path (Administration → Users, Roles, …).
+ROUTE_FILE_MODULES: dict[str, tuple[str, Optional[str]]] = {
+    # Controls Automation
+    "grc.modules.automation.router": ("Controls Automation", "Common Controls"),
+    "grc.modules.automation.assurance": ("Controls Automation", "Control Assurance"),
+    "grc.modules.scf.router": ("Controls Automation", "Scope & Custom Controls"),
+    # Reports
+    "grc.routers.reporting_router": ("Reports", "Reports"),
+    # Cybersecurity Assurance
+    "grc.routers.assets_router": ("Cybersecurity Assurance", "IT Asset Inventory"),
+    "grc.routers.entity_extras_router": ("Cybersecurity Assurance", "IT Asset Inventory"),
+    "grc.modules.asset_discovery.router": ("Cybersecurity Assurance", "IT Asset Discovery"),
+    "grc.modules.onboarding.router": ("Cybersecurity Assurance", "IT Asset Discovery"),
+    "grc.modules.risk_posture.router": ("Cybersecurity Assurance", "Assets Risk Posture"),
+    "grc.routers.criticality_assessments_router": ("Cybersecurity Assurance", "Criticality Assessments"),
+    "grc.modules.integrations.router": ("Cybersecurity Assurance", "Vulnerability Scanning"),
+    "grc.routers.nca_vuln_router": ("Cybersecurity Assurance", "NCA Vulnerabilities"),
+    # Governance
+    "grc.routers.is_projects_router": ("Governance", "Projects"),
+    "grc.routers.nca_kpi_router": ("Governance", "KPI Report"),
+    "grc.routers.documents_router": ("Governance", "Document Library"),
+    "grc.routers.governance_router": ("Governance", "Exceptions"),
+    "grc.routers.policy_exception_router": ("Governance", "Policy Exceptions"),
+    "grc.routers.nca_templates_router": ("Governance", "Document Templates"),
+    "grc.routers.reference_laws_router": ("Governance", "Document Templates"),
+    # Risk Management
+    "grc.routers.risks_router": ("Risk Management", "Risks"),
+    "grc.routers.advanced_erm_router": ("Risk Management", "Advanced ERM"),
+    "grc.routers.ai_risk_assessment_router": ("Risk Management", "AI Risk Assessment"),
+    "grc.routers.nca_risk_router": ("Risk Management", "NCA Risks"),
+    # Third-Party Vendor Risk
+    "grc.modules.vendor_risk.tpra.api": ("Third-Party Vendor Risk", "Third-Party Risk Assessments"),
+    # Compliance
+    "grc.routers.compliance_assessments_router": ("Compliance", "Compliance Assessments"),
+    "grc.routers.dcc_router": ("Compliance", "Compliance Assessments"),
+    "grc.routers.certification_router": ("Compliance", "Certifications"),
+    "grc.routers.access_review_router": ("Compliance", "Access Reviews"),
+    "grc.routers.controls_router": ("Compliance", "Framework Controls"),
+    "grc.routers.evidence_router": ("Compliance", "Evidence Library"),
+    "grc.routers.frameworks_router": ("Compliance", "Framework Catalog"),
+    "grc.routers.artifacts_router": ("Compliance", "Artifacts"),
+    # Auditor Portal
+    "grc.routers.audit_plan_router": ("Auditor Portal", "Internal Audit"),
+    # Critical Tasks
+    "grc.routers.critical_tasks_router": ("Critical Tasks", "Critical Tasks"),
+    # Administration
+    "grc.routers.admin_router": ("Administration", None),
+    "grc.routers.teams_router": ("Administration", "Teams"),
+    "grc.routers.tenants_router": ("Administration", "Company"),
+    "grc.routers.sso_router": ("Administration", "Identity Providers"),
+    "grc.modules.integrations.cloud.router": ("Administration", "Cloud Connectors"),
+    "grc.modules.connectors.router": ("Administration", "Connectors"),
+    "grc.modules.compliance_plugins.router": ("Administration", "Connections"),
+    "grc.modules.agents.router": ("Administration", "Compliance Agents"),
+    "grc.routers.connect_wizard_router": ("Administration", "Connect Wizard"),
+}
+# Machine traffic, not something a person does.
+_SKIPPED_ENDPOINTS = {"agent_heartbeat", "agent_results"}
+_ROUTES_EXTENDED = False
+
+# "<file>:<function>" (route_events.endpoint_of) → what it does, in the words
+# the builder uses ("Edit Risk", "View Risks"), for every route, reads too. An
+# audit row names its action with it.
+ENDPOINT_LABELS: dict[str, str] = {}
+
+
+def _label_override_key(module_path: str, fn_name: str) -> tuple:
+    parts = module_path.split(".")
+    if len(parts) == 5 and parts[:2] == ["grc", "modules"] and parts[3] == "routers":
+        return (parts[2], parts[4], fn_name)
+    return (module_path, "", fn_name)
+
+
+def _record_endpoint_labels(app) -> None:
+    from fastapi.routing import APIRoute
+
+    node_labels = {f"{n.get('endpoint_module')}:{n.get('fn_name')}": str(n.get("label"))
+                   for n in PLATFORM_FUNCTION_NODE_TYPES if n.get("endpoint_module") and n.get("fn_name")}
+    for route in getattr(app, "routes", []):
+        if not isinstance(route, APIRoute):
+            continue
+        module_path = getattr(route.endpoint, "__module__", "") or ""
+        fn_name = getattr(route.endpoint, "__name__", "") or ""
+        endpoint = f"{module_path}:{fn_name}"
+        if endpoint in ENDPOINT_LABELS:
+            continue
+        methods = sorted(m.lower() for m in (route.methods or ()))
+        method = next((m for m in methods if m in _MUTATING_METHODS), "get")
+        ENDPOINT_LABELS[endpoint] = node_labels.get(endpoint) or _label_for(
+            _action_from_http_method_and_path(method, route.path), fn_name,
+            _label_override_key(module_path, fn_name))[0]
+
+
+def _submodule_from_path(path: str) -> str:
+    segments = [s for s in (path or "").split("/") if s and not s.startswith("{")]
+    return _humanize_slug(segments[1] if len(segments) > 1 else (segments[0] if segments else "general"))
+
+
+def extend_with_app_routes(app) -> int:
+    """Add the write endpoints of the route files in ROUTE_FILE_MODULES, from the
+    live app's routes, to the Platform Function nodes. Idempotent; returns how
+    many were added."""
+    global _ROUTES_EXTENDED
+    if _ROUTES_EXTENDED:
+        return 0
+    from fastapi.routing import APIRoute
+
+    seen = {str(n.get("key")) for n in PLATFORM_FUNCTION_NODE_TYPES}
+    seen_labels = {(n.get("module"), n.get("submodule"), n.get("label")) for n in PLATFORM_FUNCTION_NODE_TYPES}
+    added = 0
+    for route in getattr(app, "routes", []):
+        if not isinstance(route, APIRoute):
+            continue
+        module_path = getattr(route.endpoint, "__module__", "") or ""
+        fn_name = getattr(route.endpoint, "__name__", "") or ""
+        placed = ROUTE_FILE_MODULES.get(module_path)
+        if not placed or fn_name in _SKIPPED_ENDPOINTS or fn_name.startswith(_READ_LIKE_PREFIXES):
+            continue
+        for method in sorted(m.lower() for m in (route.methods or ()) if m.lower() in _MUTATING_METHODS):
+            action = _action_from_http_method_and_path(method, route.path)
+            if action not in AUTOMATION_RELEVANT_PLATFORM_ACTIONS:
+                continue
+            module_name, submodule = placed
+            submodule = submodule or _submodule_from_path(route.path)
+            label, base_label = _label_for(action, fn_name, (module_path, "", fn_name))
+            key = (f"platform_action.{_slugify(action)}.{_slugify(module_name)}."
+                   f"{_slugify(submodule)}.{_slugify(base_label)}")
+            if key in seen or (module_name, submodule, label) in seen_labels:
+                continue
+            seen.add(key)
+            seen_labels.add((module_name, submodule, label))
+            verb = {"create": "Creates", "update": "Updates", "trigger": "Triggers", "upload": "Uploads / imports",
+                    "approve": "Approves", "reject": "Rejects", "delete": "Deletes"}.get(action, "Executes")
+            PLATFORM_FUNCTION_NODE_TYPES.append({
+                "key": key, "label": label, "description": f"{verb} {base_label.lower()} in {submodule}",
+                "endpoint": route.path, "action": action, "module": module_name, "submodule": submodule,
+                "functionality_name": label, "source": "app_routes", "fn_name": fn_name, "method": method,
+                "route_path": route.path, "endpoint_module": module_path,
+                "trigger_event": _trigger_event_for(method, fn_name, module_path, label),
+            })
+            added += 1
+    _record_endpoint_labels(app)
+    _ROUTES_EXTENDED = True
+    return added
+
+
+# ── Named platform events raised by specific endpoints ───────────────────────
+# (key, label, module, endpoints, when). An endpoint is "<file>.<function>" as
+# route_events names it; `when` narrows it to a request-field value. Keys new
+# here are added to TRIGGER_NODE_TYPES; existing ones that nothing raised
+# (or raised only from another path) get their endpoints wired.
+_EndpointEvent = tuple[str, str, str, tuple[str, ...], Optional[tuple[str, frozenset]]]
+ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
+    # ── Controls Automation ───────────────────────────────────────────────
+    ("control_test_started", "Control test started", "Controls Automation",
+     ("automation.assurance.start_test",), None),
+    ("control_test_recorded", "Control test recorded", "Controls Automation",
+     ("automation.assurance.record_test",), None),
+    ("control_test_concluded", "Control test concluded", "Controls Automation",
+     ("automation.assurance.conclude_test",), None),
+    ("control_test_signed_off", "Control test signed off", "Controls Automation",
+     ("automation.assurance.sign_off_test",), None),
+    ("control_test_reopened", "Control test reopened", "Controls Automation",
+     ("automation.assurance.reopen_test",), None),
+    ("control_maturity_changed", "Control maturity changed", "Controls Automation",
+     ("automation.assurance.set_control_maturity",), None),
+    ("common_control_evidence_linked", "Evidence linked to a common control", "Controls Automation",
+     ("automation.assurance.link_artifact_evidence", "automation.router.link_control_evidence"), None),
+    ("common_control_risk_linked", "Risk linked to a common control", "Controls Automation",
+     ("automation.router.link_control_risk", "automation.router.create_and_link_control_risk"), None),
+    ("common_control_asset_linked", "Asset linked to a common control", "Controls Automation",
+     ("automation.router.link_control_asset",), None),
+    ("control_mapping_reviewed", "Control mapping reviewed", "Controls Automation",
+     ("automation.router.record_mapping_review",), None),
+    ("automated_check_run", "Automated control check run", "Controls Automation",
+     ("automation.router.run_check", "automation.router.run_all", "automation.router.run_collector"), None),
+    ("evidence_collector_connected", "Evidence collector connected", "Controls Automation",
+     ("automation.router.connect_collector",), None),
+    ("control_applicability_changed", "Control applicability changed", "Controls Automation",
+     ("scf.router.set_applicability_override", "scf.router.review_applicability"), None),
+    ("control_owner_assigned", "Control owner assigned", "Controls Automation",
+     ("scf.router.put_ownership", "scf.router.bulk_ownership"), None),
+    ("custom_control_created", "Custom control created", "Controls Automation",
+     ("scf.router.create_custom_control",), None),
+    ("custom_control_retired", "Custom control retired", "Controls Automation",
+     ("scf.router.retire_custom_control",), None),
+    ("audit_period_created", "Audit period created", "Controls Automation",
+     ("scf.router.create_audit_period",), None),
+    ("audit_period_frozen", "Audit period frozen", "Controls Automation",
+     ("scf.router.freeze_audit_period_endpoint",), None),
+    ("audit_period_closed", "Audit period closed", "Controls Automation",
+     ("scf.router.close_audit_period",), None),
+    # ── Reports ───────────────────────────────────────────────────────────
+    ("report_saved", "Report saved", "Reports", ("reporting_router.upsert_report",), None),
+    ("report_deleted", "Saved report deleted", "Reports", ("reporting_router.delete_report",), None),
+    ("report_snapshot_captured", "Report trend snapshot captured", "Reports",
+     ("reporting_router.capture_snapshot",), None),
+    ("report_target_changed", "Report target changed", "Reports",
+     ("reporting_router.set_target", "reporting_router.reset_target"), None),
+    # ── Cybersecurity Assurance ───────────────────────────────────────────
+    ("discovery_campaign_created", "Discovery campaign created", "IT Asset Management",
+     ("asset_discovery.router.create_campaign",), None),
+    ("discovery_run_started", "Discovery run started", "IT Asset Management",
+     ("asset_discovery.router.trigger_run",), None),
+    ("discovery_run_cancelled", "Discovery run cancelled", "IT Asset Management",
+     ("asset_discovery.router.cancel_run",), None),
+    ("discovered_asset_onboarded", "Discovered asset onboarded", "IT Asset Management",
+     ("asset_discovery.router.connect_discovered_device", "asset_discovery.router.connect_discovered_service",
+      "asset_discovery.router.connect_all_discovered", "asset_discovery.router.connect_selected"), None),
+    ("discovered_asset_disconnected", "Discovered asset disconnected", "IT Asset Management",
+     ("asset_discovery.router.disconnect_discovered_device",), None),
+    ("assets_imported", "Assets imported", "IT Asset Management",
+     ("assets_router.upload_assets_file", "onboarding.router.bulk_import", "onboarding.router.ad_onboard"), None),
+    ("asset_lifecycle_changed", "Asset lifecycle changed", "IT Asset Management",
+     ("assets_router.transition_asset_lifecycle",), None),
+    ("asset_risk_assessed", "Asset risk assessed", "IT Asset Management",
+     ("assets_router.perform_risk_assessment", "assets_router.assess_asset"), None),
+    ("asset_alert_acknowledged", "Asset alert acknowledged", "IT Asset Management",
+     ("entity_extras_router.acknowledge_alert",), None),
+    ("asset_alert_resolved", "Asset alert resolved", "IT Asset Management",
+     ("entity_extras_router.resolve_alert",), None),
+    ("criticality_assessment_submitted", "Criticality assessment submitted", "IT Asset Management",
+     ("criticality_assessments_router.submit_for_review",), None),
+    ("criticality_assessment_approved", "Criticality assessment approved", "IT Asset Management",
+     ("criticality_assessments_router.approve_business_owner", "criticality_assessments_router.approve_ciso"), None),
+    ("criticality_assessment_returned", "Criticality assessment rejected or returned", "IT Asset Management",
+     ("criticality_assessments_router.reject_assessment", "criticality_assessments_router.return_assessment"), None),
+    ("vulnerability_scan_started", "Vulnerability scan started", "Vulnerability Management",
+     ("integrations.router.trigger_hosted_scan", "integrations.router.trigger_sync"), None),
+    ("vulnerability_scan_stopped", "Vulnerability scan stopped", "Vulnerability Management",
+     ("integrations.router.stop_hosted_scan",), None),
+    ("vulnerability_exception_requested", "Vulnerability exception requested", "Vulnerability Management",
+     ("integrations.router.create_exception",), None),
+    ("vulnerability_exception_approved", "Vulnerability exception approved", "Vulnerability Management",
+     ("integrations.router.approve_exception",), None),
+    ("vulnerability_exception_rejected", "Vulnerability exception rejected", "Vulnerability Management",
+     ("integrations.router.reject_exception",), None),
+    # ── Governance ────────────────────────────────────────────────────────
+    ("governance_document_created", "Governance document created", "Governance",
+     ("governance.documents.create_document", "governance.documents.create_document_with_file"), None),
+    ("governance_document_published", "Governance document published", "Governance",
+     ("governance.documents.publish_document",), None),
+    ("governance_document_published", "Governance document published", "Governance",
+     ("governance.documents.update_document_status",), ("status", frozenset({"published"}))),
+    ("project_created", "Project created", "Governance", ("is_projects_router.create_project",), None),
+    ("project_updated", "Project updated", "Governance", ("is_projects_router.update_project",), None),
+    ("project_deleted", "Project deleted", "Governance", ("is_projects_router.delete_project",), None),
+    ("project_status_reported", "Project status update posted", "Governance",
+     ("is_projects_router.create_status_update",), None),
+    ("project_risk_raised", "Project risk raised", "Governance", ("is_projects_router.create_risk",), None),
+    ("project_milestone_added", "Project milestone added", "Governance",
+     ("is_projects_router.create_milestone",), None),
+    ("project_milestone_updated", "Project milestone updated", "Governance",
+     ("is_projects_router.update_milestone",), None),
+    ("project_task_created", "Project task created", "Governance", ("is_projects_router.create_task",), None),
+    # ── Third-Party Vendor Risk ───────────────────────────────────────────
+    ("tpra_lifecycle_started", "Vendor assessment lifecycle started", "Third-Party Risk",
+     ("vendor_risk.tpra.api.init_lifecycle",), None),
+    ("tpra_stage_advanced", "Vendor assessment moved to the next stage", "Third-Party Risk",
+     ("vendor_risk.tpra.api.advance",), None),
+    ("tpra_stage_sent_back", "Vendor assessment sent back", "Third-Party Risk",
+     ("vendor_risk.tpra.api.send_back",), None),
+    ("tpra_gate_decided", "Vendor assessment gate decision", "Third-Party Risk",
+     ("vendor_risk.tpra.api.gate_decision",), None),
+    ("tpra_finding_raised", "Vendor assessment finding raised", "Third-Party Risk",
+     ("vendor_risk.tpra.api.create_finding",), None),
+    ("tpra_finding_promoted", "Vendor finding promoted to the risk register", "Third-Party Risk",
+     ("vendor_risk.tpra.api.promote_finding",), None),
+    ("tpra_remediation_created", "Vendor finding remediation created", "Third-Party Risk",
+     ("vendor_risk.tpra.api.create_remediation",), None),
+    ("tpra_risk_accepted", "Vendor risk accepted", "Third-Party Risk",
+     ("vendor_risk.tpra.api.create_acceptance",), None),
+    ("tpra_approval_recorded", "Vendor assessment approval recorded", "Third-Party Risk",
+     ("vendor_risk.tpra.api.create_approval",), None),
+    ("vendor_contract_created", "Vendor contract created", "Third-Party Risk",
+     ("vendor_risk.tpra.api.create_contract",), None),
+    ("vendor_monitoring_signal", "Vendor monitoring signal recorded", "Third-Party Risk",
+     ("vendor_risk.tpra.api.create_signal",), None),
+    ("vendor_reassessment_started", "Vendor reassessment started", "Third-Party Risk",
+     ("vendor_risk.tpra.api.reassess",), None),
+    # ── Compliance ────────────────────────────────────────────────────────
+    ("compliance_assessment_created", "Compliance assessment created", "Compliance",
+     ("compliance_assessments_router.upload_assessment", "framework_upload.assessment.create_assessment",
+      "dcc_router.initialize_dcc_assessment"), None),
+    ("compliance_assessment_completed", "Compliance assessment completed", "Compliance",
+     ("compliance_assessments_router.update_assessment", "framework_upload.assessment.update_assessment"),
+     ("status", frozenset({"completed", "complete", "closed"}))),
+    ("assessment_item_updated", "Assessment item updated", "Compliance",
+     ("compliance_assessments_router.update_assessment_item",), None),
+    ("assessment_evidence_decided", "Assessment evidence approved or rejected", "Compliance",
+     ("compliance_assessments_router.perform_approval_action",), None),
+    ("assessment_remediation_updated", "Assessment remediation item updated", "Compliance",
+     ("compliance_assessments_router.update_remediation_item",), None),
+    ("certification_created", "Certification journey started", "Compliance",
+     ("certification_router.create_certification",), None),
+    ("certification_updated", "Certification journey updated", "Compliance",
+     ("certification_router.update_certification",), None),
+    ("certification_control_updated", "Certification control updated", "Compliance",
+     ("certification_router.update_control_implementation", "certification_router.update_control_criteria_status"),
+     None),
+    ("certification_control_assigned", "Certification control assigned", "Compliance",
+     ("certification_router.assign_control_implementation",), None),
+    ("certification_evidence_reviewed", "Certification evidence reviewed", "Compliance",
+     ("certification_router.review_evidence", "certification_router.review_evidence_by_impl_id",
+      "certification_router.review_implementation_evidence"), None),
+    ("certification_snapshot_taken", "Certification snapshot taken", "Compliance",
+     ("certification_router.create_snapshot",), None),
+    ("access_review_population_synced", "Access review population synced", "Compliance",
+     ("access_review_router.sync_population", "access_review_router.okta_sync", "access_review_router.google_sync",
+      "access_review_router.ldap_sync", "access_review_router.sailpoint_sync", "access_review_router.iga_sync",
+      "access_review_router.apps_sync", "access_review_router.import_spreadsheet"), None),
+    ("access_review_checks_run", "Access review checks run", "Compliance",
+     ("access_review_router.run_checks",), None),
+    ("access_review_finding_updated", "Access review finding updated", "Compliance",
+     ("access_review_router.update_finding",), None),
+    ("sod_rule_created", "Segregation-of-duties rule created", "Compliance",
+     ("access_review_router.create_sod_rule",), None),
+    # ── Auditor Portal ────────────────────────────────────────────────────
+    ("audit_plan_entry_created", "Internal audit plan entry added", "Auditor Portal",
+     ("audit_plan_router.create_entry",), None),
+    ("audit_plan_entry_updated", "Internal audit plan entry updated", "Auditor Portal",
+     ("audit_plan_router.update_entry",), None),
+    ("audit_observation_created", "Statutory audit observation created", "Auditor Portal",
+     ("auditor_portal.statutory_audit.create_observation", "auditor_portal.statutory_audit.confirm_import"), None),
+    ("audit_observation_updated", "Statutory audit observation updated", "Auditor Portal",
+     ("auditor_portal.statutory_audit.update_observation",), None),
+    ("audit_observation_status_changed", "Statutory audit observation status changed", "Auditor Portal",
+     ("auditor_portal.statutory_audit.transition_status",), None),
+    # ── Critical Tasks ────────────────────────────────────────────────────
+    ("critical_task_created", "Critical task created", "Administration",
+     ("critical_tasks_router.create_task", "critical_tasks_router.create_task_from_module",
+      "critical_tasks_router.create_from_template"), None),
+    ("critical_task_status_changed", "Critical task status changed", "Administration",
+     ("critical_tasks_router.transition_status",), None),
+    ("critical_task_completed", "Critical task completed", "Administration",
+     ("critical_tasks_router.transition_status",), ("new_status", frozenset({"completed", "verified"}))),
+    ("critical_task_approval_requested", "Critical task approval requested", "Administration",
+     ("critical_tasks_router.request_approval",), None),
+    ("critical_task_approved", "Critical task approved", "Administration",
+     ("critical_tasks_router.approve_task",), None),
+    ("critical_task_rejected", "Critical task rejected", "Administration",
+     ("critical_tasks_router.reject_task",), None),
+    # ── Administration ────────────────────────────────────────────────────
+    ("user_deleted", "User deleted", "Administration", ("admin_router.delete_user",), None),
+    ("role_deleted", "Role deleted", "Administration", ("admin_router.delete_role",), None),
+    ("team_created", "Team created", "Administration", ("teams_router.create_team",), None),
+    ("team_updated", "Team updated", "Administration", ("teams_router.update_team",), None),
+    ("team_member_added", "Team member added", "Administration", ("teams_router.add_member",), None),
+    ("team_member_removed", "Team member removed", "Administration", ("teams_router.remove_member",), None),
+    ("company_settings_updated", "Company settings updated", "Administration",
+     ("admin_router.update_organization_profile", "tenants_router.update_tenant"), None),
+    ("business_unit_created", "Business unit created", "Administration",
+     ("tenants_router.create_business_unit",), None),
+    ("ai_budget_updated", "AI token budget changed", "Administration",
+     ("admin_router.update_ai_usage_budgets",), None),
+    ("identity_provider_configured", "Identity provider configured", "Administration",
+     ("sso_router.update_config",), None),
+    ("identity_provider_removed", "Identity provider removed", "Administration",
+     ("sso_router.delete_config",), None),
+    ("sso_users_provisioned", "Users provisioned from the identity provider", "Administration",
+     ("sso_router.provision_users",), None),
+    ("integration_connected", "Integration connection added", "Administration",
+     ("integrations.router.create_connection",), None),
+    ("integration_removed", "Integration connection removed", "Administration",
+     ("integrations.router.delete_connection",), None),
+    ("cloud_connector_added", "Cloud connector added", "Administration",
+     ("integrations.cloud.router.create_connector",), None),
+    ("cloud_connector_synced", "Cloud connector synced", "Administration",
+     ("integrations.cloud.router.sync_connector_now", "integrations.cloud.router.sync_all_connectors"), None),
+    ("connector_added", "Connector added", "Administration", ("connectors.router.create_connector",), None),
+    ("connector_synced", "Connector synced", "Administration", ("connectors.router.sync_connector",), None),
+    ("connection_scope_changed", "Evidence connection scope changed", "Administration",
+     ("compliance_plugins.router.update_connection_scope",), None),
+    ("agent_revoked", "Compliance agent revoked", "Administration", ("agents.router.revoke_agent",), None),
+    # Sign-in. A refused sign-in is a failed request, which never raises an
+    # endpoint event: the dispatcher raises sign_in_failed for it.
+    ("user_signed_in", "User signed in", "Administration", ("auth_router.login",), None),
+    ("user_signed_out", "User signed out", "Administration", ("auth_router.logout",), None),
+    # ── Issue Management: CAPA ────────────────────────────────────────────
+    ("capa_action_created", "CAPA action created", "Issue Management",
+     ("issue_management.actions.create_action",), None),
+    ("capa_action_completed", "CAPA action completed", "Issue Management",
+     ("issue_management.actions.verify_action",), None),
+    ("capa_action_promoted", "CAPA action promoted to a critical task", "Issue Management",
+     ("issue_management.actions.promote_action_to_task",), None),
+]
+
+# "api.<endpoint>" → [(trigger key, (request field, values) or None)] for the dispatcher.
+ENDPOINT_TRIGGERS: dict[str, list[tuple[str, Optional[tuple[str, frozenset]]]]] = {}
+for _key, _label, _module, _endpoints, _when in ENDPOINT_EVENT_TYPES:
+    for _endpoint in _endpoints:
+        ENDPOINT_TRIGGERS.setdefault(f"api.{_endpoint}", []).append((_key, _when))
+
+_known_triggers = {t["key"] for t in TRIGGER_NODE_TYPES}
+for _key, _label, _module, _endpoints, _when in ENDPOINT_EVENT_TYPES:
+    if _key not in _known_triggers:
+        _known_triggers.add(_key)
+        TRIGGER_NODE_TYPES.append({"key": _key, "label": _label, "module": _module})
+
+
+# ── Dates reached ────────────────────────────────────────────────────────────
+# Events nothing writes: a due, expiry or review date arriving. The dispatcher
+# checks each once a minute (_check_due_dates) and raises the event once per
+# record and date. `when`: "overdue" — the date has passed; "soon" — it falls
+# within `days` and hasn't passed; "upcoming" — within `days`, or passed.
+# `done` are status values (lower-cased) that end the wait.
+_WORK_DONE = frozenset({
+    "completed", "complete", "done", "closed", "cancelled", "canceled", "verified", "resolved", "fixed",
+    "remediated", "accepted", "risk_accepted", "false_positive", "approved", "rejected", "archived",
+    "deprecated", "inactive", "not_applicable", "skipped", "retired", "superseded", "achieved", "met",
+})
+_LAPSE_DONE = frozenset({
+    "archived", "retired", "superseded", "revoked", "rejected", "expired", "cancelled", "canceled",
+    "closed", "inactive", "deleted", "deprecated", "offboarded", "terminated",
+})
+_DueEvent = tuple[str, str, Optional[str], str, str, str, int, frozenset]
+DUE_DATE_EVENTS: list[_DueEvent] = [
+    # (key, label, module, model, date column, when, days, done statuses)
+    ("evidence_expires", "Evidence expires", None, "Evidence", "expiry_date", "upcoming", 30, _LAPSE_DONE),
+    ("control_review_due", "Control effectiveness review due", None,
+     "InternalControl", "review_date", "upcoming", 14, _LAPSE_DONE),
+    ("internal_control_test_due", "Internal control test due", "Risk Management",
+     "InternalControl", "next_test_date", "upcoming", 14, _LAPSE_DONE),
+    ("attestation_overdue", "Attestation campaign overdue", None,
+     "AttestationCampaign", "due_date", "overdue", 0, _WORK_DONE),
+    ("committee_action_overdue", "Committee action overdue", None,
+     "OversightAction", "due_date", "overdue", 0, _WORK_DONE),
+    ("mitigation_action_overdue", "Mitigation action overdue", None,
+     "RiskMitigationAction", "due_date", "overdue", 0, _WORK_DONE),
+    ("critical_task_overdue", "Critical task overdue", None, "CriticalTask", "due_date", "overdue", 0, _WORK_DONE),
+    ("vulnerability_sla_warning", "Vulnerability SLA warning (approaching)", None,
+     "Vulnerability", "due_date", "soon", 7, _WORK_DONE),
+    ("vulnerability_sla_breach", "Vulnerability SLA breached", None,
+     "Vulnerability", "due_date", "overdue", 0, _WORK_DONE),
+    ("capa_action_overdue", "CAPA action overdue", "Issue Management", "IssueAction", "due_date", "overdue", 0, _WORK_DONE),
+    ("risk_review_due", "Risk review date approaching", "Risk Management", "Risk", "review_date", "upcoming", 14,
+     frozenset({"closed", "archived", "retired"})),
+    ("risk_review_overdue", "Risk review overdue", "Risk Management", "RiskReview", "due_date", "overdue", 0, _WORK_DONE),
+    ("rcsa_campaign_overdue", "RCSA campaign overdue", "Risk Management", "RCSACampaign", "due_date", "overdue", 0, _WORK_DONE),
+    ("kri_measurement_due", "KRI measurement due", "Risk Management", "RiskKRI", "next_due_date", "upcoming", 3, frozenset()),
+    ("policy_exception_expiring", "Policy exception expiring", "Governance",
+     "PolicyException", "expiry_date", "upcoming", 30, _LAPSE_DONE | {"draft"}),
+    ("policy_exception_expiring", "Policy exception expiring", "Governance",
+     "Exception", "expiry_date", "upcoming", 30, _LAPSE_DONE | {"pending"}),
+    ("committee_charter_expiring", "Committee charter expiring", "Governance",
+     "CommitteeCharter", "expiry_date", "upcoming", 30, _LAPSE_DONE | {"draft"}),
+    ("project_task_overdue", "Project task overdue", "Governance", "ISProjectTask", "due_date", "overdue", 0, _WORK_DONE),
+    ("project_milestone_overdue", "Project milestone overdue", "Governance",
+     "ISProjectMilestone", "target_date", "overdue", 0, _WORK_DONE),
+    ("vendor_reassessment_due", "Vendor reassessment due", "Third-Party Risk",
+     "Vendor", "next_reassessment_date", "upcoming", 30, _LAPSE_DONE),
+    ("vendor_contract_expiring", "Vendor contract ending", "Third-Party Risk",
+     "Vendor", "contract_end_date", "upcoming", 30, _LAPSE_DONE),
+    ("vendor_assessment_overdue", "Vendor assessment overdue", "Third-Party Risk",
+     "VendorAssessment", "due_date", "overdue", 0, _WORK_DONE),
+    ("tpra_contract_expiring", "Third-party contract expiring", "Third-Party Risk",
+     "TPRAContract", "expiry_date", "upcoming", 30, _LAPSE_DONE | {"draft"}),
+    ("tpra_remediation_overdue", "Third-party remediation overdue", "Third-Party Risk",
+     "TPRARemediation", "due_date", "overdue", 0, _WORK_DONE),
+    ("access_review_overdue", "Access review campaign overdue", "Compliance",
+     "AccessReviewCampaign", "due_date", "overdue", 0, _WORK_DONE | {"draft"}),
+    ("regulatory_task_overdue", "Regulatory task overdue", "Compliance",
+     "RegulatoryImplementationTask", "due_date", "overdue", 0, _WORK_DONE),
+    ("compliance_assessment_due", "Compliance assessment due date approaching", "Compliance",
+     "ComplianceAssessmentDocument", "due_date", "upcoming", 14, _WORK_DONE),
+    ("nca_vulnerability_overdue", "NCA vulnerability overdue", "Compliance", "NcaVulnEntry", "due_date", "overdue", 0,
+     _WORK_DONE),
+    ("audit_observation_overdue", "Statutory audit observation overdue", "Auditor Portal",
+     "AuditObservation", "due_date", "overdue", 0, _WORK_DONE),
+    ("bcm_plan_review_due", "BCM plan review due", "BCM", "BcmPlan", "next_review_due", "upcoming", 30, _LAPSE_DONE),
+    ("control_test_due", "Common control test due", "Controls Automation",
+     "SCFControlState", "next_due_at", "upcoming", 14, _LAPSE_DONE | {"not_applicable", "out_of_scope"}),
+]
+for _key, _label, _module, *_rest in DUE_DATE_EVENTS:
+    if _key not in _known_triggers:
+        _known_triggers.add(_key)
+        TRIGGER_NODE_TYPES.append({"key": _key, "label": _label, **({"module": _module} if _module else {})})
+
+# Raised by the dispatcher from a refused sign-in's audit row (a failed request
+# never raises its endpoint's event).
+TRIGGER_NODE_TYPES.append({"key": "sign_in_failed", "label": "Sign-in failed", "module": "Administration"})
 
 CONDITION_NODE_TYPES = [
     # ── Risk conditions ───────────────────────────────────────────────────────

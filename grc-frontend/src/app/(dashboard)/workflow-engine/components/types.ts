@@ -1191,6 +1191,36 @@ const PRIMARY_TRIGGER_FRONTEND: Record<string, string> = {
   'audit.reviews:create':    'audit_review_submitted',
 };
 
+// ─── Exact endpoint events (backend services/route_events) ───────────────────
+// Each Platform Function node in the catalog carries `trigger_event`: the event
+// its own API endpoint raises. Registered when the catalog loads and preferred
+// over the prefix tables above — the order the backend's _infer_trigger_event
+// resolves in — so a node used as a trigger fires on exactly that endpoint, in
+// any module. The catalog's curated events are registered too, so events the
+// backend added (with their module) show in every palette.
+const ENDPOINT_TRIGGER_EVENTS = new Map<string, string>();
+
+export type CatalogNodeTypesPayload = {
+  triggers?: Array<{ key: string; label?: string; module?: string }>;
+  platform_functions?: Record<string, Array<{ key: string; trigger_event?: string | null }>>;
+};
+
+export function registerCatalogNodeTypes(catalog: CatalogNodeTypesPayload | null | undefined): void {
+  if (!catalog) return;
+  for (const nodes of Object.values(catalog.platform_functions || {})) {
+    for (const node of nodes || []) {
+      if (node?.key && node.trigger_event) ENDPOINT_TRIGGER_EVENTS.set(node.key, node.trigger_event);
+    }
+  }
+  for (const trig of catalog.triggers || []) {
+    if (!trig?.key) continue;
+    TRIGGER_KEYS.add(trig.key);
+    if (!CURATED_NODE_METADATA[trig.key] && trig.module) {
+      CURATED_NODE_METADATA[trig.key] = { domains: inferWorkflowDomainsFromModuleName(trig.module), module: trig.module };
+    }
+  }
+}
+
 /**
  * Given an action_name like "platform_action.create.erm.risk.create_risk",
  * return the canonical trigger event the backend would infer, or null when
@@ -1198,6 +1228,8 @@ const PRIMARY_TRIGGER_FRONTEND: Record<string, string> = {
  */
 export function inferTriggerEventFromActionName(actionName?: string): string | null {
   if (!actionName || !actionName.startsWith('platform_action.')) return null;
+  const exact = ENDPOINT_TRIGGER_EVENTS.get(actionName);
+  if (exact) return exact;
   const parts = actionName.split('.');
   if (parts.length < 3) return null;
   const verb = parts[1];

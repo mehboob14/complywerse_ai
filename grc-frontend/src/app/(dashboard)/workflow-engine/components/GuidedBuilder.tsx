@@ -28,6 +28,7 @@ import {
   formatNodeLabel,
   inferTriggerEventFromActionName,
   inferWorkflowDomainsFromModuleName,
+  registerCatalogNodeTypes,
   type NodeParamField,
   type NodeParamSchemas,
   type WorkflowDomain,
@@ -127,7 +128,7 @@ type NotificationItem = {
 };
 
 type CatalogPF = { key: string; label?: string; module?: string; submodule?: string };
-type CatalogTrigger = { key: string; label?: string };
+type CatalogTrigger = { key: string; label?: string; module?: string };
 type CatalogResponse = {
   platform_functions?: Record<string, CatalogPF[]>;
   triggers?: CatalogTrigger[];
@@ -139,7 +140,9 @@ const EXCLUDED_CURATED_TRIGGERS = new Set(['manual_trigger', 'schedule_recurring
 
 // Bucket a curated event key into a display group + escalation domain so the
 // picker can present platform events hierarchically alongside CRUD functions.
-function curatedTriggerGroup(key: string): { group: string; domain: WorkflowDomain } {
+function curatedTriggerGroup(key: string, module?: string): { group: string; domain: WorkflowDomain } {
+  // Events the catalog gives a module (Controls Automation, Reports, …) group under it.
+  if (module) return { group: module, domain: inferWorkflowDomainsFromModuleName(module)[0] || 'workflow' };
   const k = (key || '').toLowerCase();
   if (k.startsWith('vendor_')) return { group: 'Third-Party Risk', domain: 'risk' };
   if (k.startsWith('bcm_') || k.startsWith('bia_')) return { group: 'BCM', domain: 'workflow' };
@@ -262,6 +265,7 @@ export default function GuidedBuilder({
           workflowEngineApi.catalog.users().catch(() => ({ data: { users: [] } })),
         ]);
         if (cancelled) return;
+        registerCatalogNodeTypes(catRes.data as CatalogResponse);
         setCatalog((catRes.data as CatalogResponse) || {});
         setParamSchemas((schemaRes.data as NodeParamSchemas) || {});
 
@@ -321,7 +325,7 @@ export default function GuidedBuilder({
       if (cfg.is_workflow_trigger || action.startsWith('platform_action.') || eventName) {
         const moduleName = (cfg.module as string) || undefined;
         if (isEventTrigger) {
-          const grp = curatedTriggerGroup(eventName);
+          const grp = curatedTriggerGroup(eventName, moduleName);
           trg.push({
             uid: uid('t'), kind: 'event', key: eventName,
             label: String(n.name || formatNodeLabel(eventName)),
@@ -385,7 +389,7 @@ export default function GuidedBuilder({
 
   // Curated platform-event trigger — the event key IS the trigger event.
   const addEventTrigger = useCallback((trig: CatalogTrigger, group: string) => {
-    const grp = curatedTriggerGroup(trig.key);
+    const grp = curatedTriggerGroup(trig.key, trig.module);
     const item: TriggerItem = {
       uid: uid('t'), kind: 'event', key: trig.key,
       label: trig.label || formatNodeLabel(trig.key),
@@ -509,7 +513,7 @@ export default function GuidedBuilder({
     const byGroup: Record<string, CatalogTrigger[]> = {};
     for (const t of catalog.triggers || []) {
       if (!t?.key || EXCLUDED_CURATED_TRIGGERS.has(t.key)) continue;
-      const { group } = curatedTriggerGroup(t.key);
+      const { group } = curatedTriggerGroup(t.key, t.module);
       (byGroup[group] ||= []).push(t);
     }
     return Object.entries(byGroup).sort(([a], [b]) => a.localeCompare(b));

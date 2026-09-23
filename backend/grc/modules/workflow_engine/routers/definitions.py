@@ -235,6 +235,16 @@ def _infer_trigger_event(nodes: List[dict], edges: List[dict]) -> Optional[str]:
     if not action_name.startswith("platform_action."):
         return None
 
+    # Exact: the node's own endpoint event (route_events), which fires on
+    # precisely that endpoint in any module. The tables below are the fallback
+    # for nodes without one; the builder resolves in the same order.
+    from ..services.catalog import PLATFORM_FUNCTION_NODE_TYPES
+    exact = next((n.get("trigger_event") for n in PLATFORM_FUNCTION_NODE_TYPES
+                  if n.get("key") == action_name and n.get("trigger_event")), None)
+    if exact:
+        logger.info("workflow.auto_trigger action=%s → endpoint event %s", action_name, exact)
+        return exact
+
     # Parse: platform_action.{verb}.{module_path...}
     parts = action_name.split(".")
     if len(parts) < 3:

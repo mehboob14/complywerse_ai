@@ -55,10 +55,13 @@ def _audit(request: Request, db: Session, tenant_id: int, user: GRCUser, action:
     transaction. The request's own generic row is then skipped (the middleware
     checks request.state.audit_recorded), and the workflow engine turns this
     row into the register's named trigger events."""
+    from ...workflow_engine.services.route_events import endpoint_of
+
     write_rich_audit_log(db=db, tenant_id=tenant_id, user_id=user.id, action=action,
                          resource_type=resource_type, resource_id=resource_id,
                          resource_name=resource_name, summary=summary, before=before, after=after,
-                         ip_address=request.client.host if request.client else None)
+                         ip_address=request.client.host if request.client else None,
+                         method=request.method, endpoint=endpoint_of(request.scope))
     request.state.audit_recorded = True
 
 

@@ -166,21 +166,28 @@ def _fields_from_operation(op: Dict[str, Any], components: Dict[str, Any], max_f
     return fields[:max_fields]
 
 
-def _route_identity(route: Any) -> Optional[tuple[str, str, str, str]]:
-    """(module_dir, router_stem, fn_name, method) for a grc.modules.* route."""
+def _route_identity(route: Any) -> Optional[tuple[str, str, str]]:
+    """(endpoint module, fn_name, method) for a platform route — any grc.* file,
+    so nodes from outside modules/*/routers get their fields too."""
     ep = getattr(route, "endpoint", None)
     if ep is None:
         return None
     mod = getattr(ep, "__module__", "") or ""
-    m = re.match(r"grc\.modules\.([^.]+)\.routers\.([^.]+)$", mod)
-    if not m:
+    if not mod.startswith("grc."):
         return None
     methods = getattr(route, "methods", None) or set()
     method = next((x.lower() for x in methods if x.upper() in
                    {"GET", "POST", "PUT", "PATCH", "DELETE"}), None)
     if not method:
         return None
-    return (m.group(1), m.group(2), getattr(ep, "__name__", ""), method)
+    return (mod, getattr(ep, "__name__", ""), method)
+
+
+def _node_identity(node: Dict[str, Any]) -> tuple[str, str, str]:
+    module = node.get("endpoint_module") or (
+        f"grc.modules.{node.get('module_dir')}.routers.{node.get('router_stem')}"
+        if node.get("module_dir") and node.get("router_stem") else "")
+    return (str(module), str(node.get("fn_name") or ""), str(node.get("method") or ""))
 
 
 _CACHE: Optional[Dict[str, List[Dict[str, Any]]]] = None
@@ -197,7 +204,7 @@ def build_node_param_schemas(app: Any) -> Dict[str, List[Dict[str, Any]]]:
     from fastapi.routing import APIRoute
 
     # Index live routes by identity, and capture the full mounted path.
-    route_index: Dict[tuple[str, str, str, str], Any] = {}
+    route_index: Dict[tuple[str, str, str], Any] = {}
     for route in getattr(app, "routes", []):
         if not isinstance(route, APIRoute):
             continue
@@ -216,16 +223,11 @@ def build_node_param_schemas(app: Any) -> Dict[str, List[Dict[str, Any]]]:
 
     result: Dict[str, List[Dict[str, Any]]] = {}
     for node in PLATFORM_FUNCTION_NODE_TYPES:
-        ident = (
-            str(node.get("module_dir") or ""),
-            str(node.get("router_stem") or ""),
-            str(node.get("fn_name") or ""),
-            str(node.get("method") or ""),
-        )
+        ident = _node_identity(node)
         route = route_index.get(ident)
         if route is None:
             continue
-        op = (paths.get(route.path, {}) or {}).get(ident[3], {})
+        op = (paths.get(route.path, {}) or {}).get(ident[2], {})
         if not op:
             continue
         try:

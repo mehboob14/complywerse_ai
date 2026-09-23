@@ -7,7 +7,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ....models import AuditLog, WorkflowDefinition
+from .catalog import DUE_DATE_EVENTS, ENDPOINT_TRIGGERS
 from .condition_evaluator import ConditionEvaluator
+from .route_events import event_for_audit
 
 
 logger = logging.getLogger(__name__)
@@ -35,17 +37,18 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
                    "risks.status_changed", "risks.score_threshold_exceeded"],
         "delete": ["risk_deleted", "risks.delete"],
     },
+    # Date events (evidence_expires, vulnerability SLA, control_review_due,
+    # attestation_overdue) come from _check_due_dates when the date arrives,
+    # not from every edit of the record.
     "evidence": {
         "create": ["evidence_uploaded", "evidence.create", "evidence.uploaded"],
-        "update": ["evidence_approved", "evidence_expires", "evidence.update",
-                   "evidence.approved", "evidence.expires"],
+        "update": ["evidence_approved", "evidence.update", "evidence.approved"],
         "submit": ["evidence_submitted", "evidence.submit"],
         "delete": ["evidence.delete"],
     },
     "vulnerabilities": {
         "create": ["vulnerability_created", "new_vulnerability_detected", "vulnerabilities.create", "vulnerabilities.detected"],
-        "update": ["vulnerability_updated", "vulnerability_sla_breach", "vulnerability_sla_warning", "vulnerabilities.update",
-                   "vulnerabilities.sla_breach", "vulnerabilities.sla_warning"],
+        "update": ["vulnerability_updated", "vulnerabilities.update"],
         "delete": ["vulnerability_deleted", "vulnerabilities.delete"],
     },
     "kri": {
@@ -66,9 +69,7 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
     },
     "governance": {
         "create": ["governance.create"],
-        "update": ["assessment_status_change", "control_review_due", "attestation_overdue",
-                   "governance.update", "compliance.assessment_status_change",
-                   "governance.control_review_due", "governance.attestation_overdue"],
+        "update": ["assessment_status_change", "governance.update", "compliance.assessment_status_change"],
         # Governance documents / sign-off are driven by action sub-keys that
         # audit_logger derives directly from the trailing path segments or from
         # internal create_audit_log calls.
@@ -82,8 +83,7 @@ _EVENT_MAP: Dict[str, Dict[str, List[str]]] = {
     "compliance": {
         "create": ["compliance.create", "compliance_gap_detected", "compliance.gap_detected"],
         "update": ["assessment_status_change", "compliance.update",
-                   "compliance.assessment_status_change", "compliance_gap_detected",
-                   "compliance.certification_expiry_approaching"],
+                   "compliance.assessment_status_change", "compliance_gap_detected"],
     },
     "assets": {
         "create": ["asset_created", "assets.create"],
@@ -295,6 +295,25 @@ _CANONICAL_RESOURCE_MAP: Dict[tuple, tuple] = {
 }
 
 
+# Correlation ids naming a record and its date (or threshold episode): a
+# workflow starts once per id, across workers and restarts (_first_start).
+_ONCE_PER_DATE = ("due:", "sla_breach:", "offline:", "pass_rate_drop:", "doc_expiry:", "framework_deadline:")
+
+# Older names workflows may use for a date event; raised alongside it.
+_DUE_ALIASES: Dict[str, tuple] = {
+    "evidence_expires": ("evidence.expires",),
+    "vulnerability_sla_warning": ("vulnerabilities.sla_warning",),
+    "vulnerability_sla_breach": ("vulnerabilities.sla_breach",),
+    "control_review_due": ("governance.control_review_due",),
+    "attestation_overdue": ("governance.attestation_overdue",),
+}
+
+
+def _listens(listening: set, event_name: str) -> bool:
+    return event_name in listening or any(
+        t.endswith(".*") and event_name.startswith(t[:-2]) for t in listening)
+
+
 def _resolve_canonical_resource(module: str, entity: str) -> tuple:
     """Return (canonical_module, canonical_entity) for a (URL module, URL entity).
 
@@ -396,6 +415,9 @@ class TriggerDispatcher:
         self._alerted_offline_agents: Dict[int, set] = {}
         self._alerted_sla_breached_issues: Dict[int, set] = {}
         self._alerted_pass_rate_drop_tenants: set = set()
+        # (record id, due date) already alerted — a new date re-arms it.
+        self._alerted_document_expiry: Dict[int, set] = {}
+        self._alerted_framework_deadlines: Dict[int, set] = {}
 
     def poll_platform_events(self, db: Session) -> int:
         """Poll every active tenant's audit log for new platform events.
@@ -517,6 +539,18 @@ class TriggerDispatcher:
             fired += self._check_cis_pass_rate_dropped()
         except Exception:  # noqa: BLE001
             logger.exception("threshold-check: cis_pass_rate_dropped failed")
+        try:
+            fired += self._check_governance_document_expiry()
+        except Exception:  # noqa: BLE001
+            logger.exception("threshold-check: governance_document_expires failed")
+        try:
+            fired += self._check_framework_deadlines()
+        except Exception:  # noqa: BLE001
+            logger.exception("threshold-check: framework_deadline_approaching failed")
+        try:
+            fired += self._check_due_dates()
+        except Exception:  # noqa: BLE001
+            logger.exception("threshold-check: due dates failed")
         if fired:
             logger.info("workflow.dispatcher.threshold_cycle fired_events=%s", fired)
         return fired
@@ -567,7 +601,7 @@ class TriggerDispatcher:
                         "target_closure_date": issue.target_closure_date.isoformat() if issue.target_closure_date else None,
                         "owner_id": issue.owner_id,
                     },
-                    correlation_id=f"sla_breach:issue:{issue.id}",
+                    correlation_id=f"sla_breach:issue:{issue.id}:{str(issue.target_closure_date)[:10]}",
                 )
             # Recovered (closed / cancelled) issues drop out of memo
             self._alerted_sla_breached_issues[tenant_id] = current_ids & seen
@@ -611,7 +645,7 @@ class TriggerDispatcher:
                         "last_heartbeat_at": agent.last_heartbeat_at.isoformat() if agent.last_heartbeat_at else None,
                         "threshold_min": threshold_min,
                     },
-                    correlation_id=f"offline:agent:{agent.id}",
+                    correlation_id=f"offline:agent:{agent.id}:{agent.last_heartbeat_at.isoformat()}",
                 )
             # Agents that have come back online (no longer in offline set)
             # drop out so they can re-alert next time they stall.
@@ -665,12 +699,195 @@ class TriggerDispatcher:
                         "failed": failed,
                         "evaluated": evaluated,
                     },
-                    correlation_id=f"pass_rate_drop:tenant:{tenant_id}",
+                    correlation_id=f"pass_rate_drop:tenant:{tenant_id}:{datetime.utcnow().date().isoformat()}",
                 )
             else:
                 # Tenant recovered → clear memo so a future drop re-fires.
                 self._alerted_pass_rate_drop_tenants.discard(tenant_key)
         return fired
+
+    def _check_governance_document_expiry(self) -> int:
+        """Fire ``governance_document_expires`` for a document whose expiry or
+        next review date falls within WORKFLOW_DOCUMENT_EXPIRY_WARNING_DAYS
+        (default 30) or has passed — once per document and date."""
+        from datetime import timedelta
+        from sqlalchemy import or_
+        from grc.models import GovernanceDocument
+        days = int(os.environ.get("WORKFLOW_DOCUMENT_EXPIRY_WARNING_DAYS", "30"))
+        horizon = datetime.utcnow() + timedelta(days=days)
+        fired = 0
+        for tenant_id, _slug, sess in self._iter_tenant_sessions():
+            try:
+                docs = sess.query(GovernanceDocument).filter(
+                    GovernanceDocument.status.notin_(("archived", "retired", "superseded")),
+                    or_(GovernanceDocument.expiry_date <= horizon, GovernanceDocument.next_review_date <= horizon),
+                ).all()
+            except Exception:  # noqa: BLE001
+                continue
+            seen = self._alerted_document_expiry.setdefault(tenant_id, set())
+            current = set()
+            for doc in docs:
+                dates = [d for d in (doc.expiry_date, doc.next_review_date) if d is not None and d <= horizon]
+                if not dates:
+                    continue
+                due = min(dates)
+                token = (doc.id, due.isoformat())
+                current.add(token)
+                if token in seen:
+                    continue
+                seen.add(token)
+                fired += 1
+                self.publish_event(
+                    event_name="governance_document_expires",
+                    tenant_id=tenant_id,
+                    payload={
+                        "resource_type": "governance",
+                        "resource_id": doc.id,
+                        "title": doc.title,
+                        "status": doc.status,
+                        "doc_type": doc.doc_type,
+                        "owner_id": doc.owner_id,
+                        "expiry_date": doc.expiry_date.isoformat() if doc.expiry_date else None,
+                        "next_review_date": doc.next_review_date.isoformat() if doc.next_review_date else None,
+                        "days_left": (due - datetime.utcnow()).days,
+                    },
+                    correlation_id=f"doc_expiry:{doc.id}:{due.date().isoformat()}",
+                )
+            self._alerted_document_expiry[tenant_id] = current & seen
+        return fired
+
+    def _check_framework_deadlines(self) -> int:
+        """Fire ``framework_deadline_approaching`` for a certification journey
+        whose target date falls within WORKFLOW_FRAMEWORK_DEADLINE_WARNING_DAYS
+        (default 30) and that is not finished — once per journey and date."""
+        from datetime import timedelta
+        from grc.models import CertificationJourney
+        days = int(os.environ.get("WORKFLOW_FRAMEWORK_DEADLINE_WARNING_DAYS", "30"))
+        now = datetime.utcnow()
+        fired = 0
+        for tenant_id, _slug, sess in self._iter_tenant_sessions():
+            try:
+                journeys = sess.query(CertificationJourney).filter(
+                    CertificationJourney.target_date.isnot(None),
+                    CertificationJourney.target_date <= now + timedelta(days=days),
+                    CertificationJourney.status.notin_(("completed", "certified", "cancelled", "archived")),
+                ).all()
+            except Exception:  # noqa: BLE001
+                continue
+            seen = self._alerted_framework_deadlines.setdefault(tenant_id, set())
+            current = set()
+            for journey in journeys:
+                token = (journey.id, journey.target_date.isoformat())
+                current.add(token)
+                if token in seen:
+                    continue
+                seen.add(token)
+                fired += 1
+                self.publish_event(
+                    event_name="framework_deadline_approaching",
+                    tenant_id=tenant_id,
+                    payload={
+                        "resource_type": "certifications",
+                        "resource_id": journey.id,
+                        "status": journey.status,
+                        "target_date": journey.target_date.isoformat(),
+                        "days_left": (journey.target_date - now).days,
+                    },
+                    correlation_id=f"framework_deadline:{journey.id}:{journey.target_date.date().isoformat()}",
+                )
+            self._alerted_framework_deadlines[tenant_id] = current & seen
+        return fired
+
+    def _check_due_dates(self) -> int:
+        """Raise catalog.DUE_DATE_EVENTS as their dates arrive: once per record
+        and date (a moved date re-arms it). Only for events an active workflow
+        listens to, and only for dates that arrived within the last
+        WORKFLOW_DUE_LOOKBACK_DAYS (default 7), so switching this on doesn't
+        replay every record that went overdue months ago."""
+        from datetime import date as _date, timedelta
+        from sqlalchemy import Date as _Date, or_
+        import grc.models as models
+        lookback = int(os.environ.get("WORKFLOW_DUE_LOOKBACK_DAYS", "7"))
+        now = datetime.utcnow()
+        fired = 0
+        seen_all = getattr(self, "_alerted_due", None)
+        if seen_all is None:
+            seen_all = self._alerted_due = {}
+        for tenant_id, _slug, sess in self._iter_tenant_sessions():
+            try:
+                listening = self._listened_events(sess, tenant_id)
+            except Exception:  # noqa: BLE001
+                continue
+            seen = seen_all.setdefault(tenant_id, set())
+            current = set()
+            for key, _label, _module, model_name, field, when, days, done in DUE_DATE_EVENTS:
+                names = [key, *_DUE_ALIASES.get(key, ())]
+                if not any(_listens(listening, n) for n in names):
+                    continue
+                model = getattr(models, model_name, None)
+                col = getattr(model, field, None) if model is not None else None
+                if col is None:
+                    continue
+                # A Date column compares with today's date, a DateTime with now.
+                today = now.date() if isinstance(getattr(col, "type", None), _Date) else now
+                earliest = today - timedelta(days=lookback)
+                latest = today if when == "overdue" else today + timedelta(days=days)
+                q = sess.query(model).filter(col.isnot(None), col >= earliest, col <= latest)
+                if when == "overdue":
+                    q = q.filter(col < today)
+                elif when == "soon":
+                    q = q.filter(col >= today)
+                status_col = getattr(model, "status", None) or getattr(model, "lifecycle_status", None)
+                if status_col is not None and done:
+                    q = q.filter(or_(status_col.is_(None), func.lower(status_col).notin_(sorted(done))))
+                elif status_col is None and hasattr(model, "is_active"):
+                    q = q.filter(model.is_active.is_(True))
+                try:
+                    rows = q.limit(500).all()
+                except Exception:  # noqa: BLE001 — a missing table in one tenant must not stop the rest
+                    sess.rollback()
+                    continue
+                for row in rows:
+                    due = getattr(row, field)
+                    due_day = due.isoformat()[:10] if isinstance(due, (datetime, _date)) else str(due)
+                    token = f"due:{key}:{model_name}:{row.id}:{due_day}"
+                    current.add(token)
+                    if token in seen:
+                        continue
+                    seen.add(token)
+                    due_dt = due if isinstance(due, datetime) else datetime(due.year, due.month, due.day)
+                    payload = {
+                        "resource_type": getattr(model, "__tablename__", model_name),
+                        "resource_id": row.id,
+                        "title": next((getattr(row, a) for a in ("title", "name", "display_name")
+                                       if isinstance(getattr(row, a, None), str)), None),
+                        "status": getattr(row, "status", None) or getattr(row, "lifecycle_status", None),
+                        "owner_id": next((getattr(row, a) for a in ("owner_id", "assignee_id", "assigned_to",
+                                                                     "owner_user_id") if getattr(row, a, None)), None),
+                        field: due_day,
+                        "due_date": due_day,
+                        "days_left": (due_dt - now).days,
+                        "overdue": due_dt < now,
+                    }
+                    for name in names:
+                        fired += 1
+                        self.publish_event(event_name=name, tenant_id=tenant_id, payload=payload, correlation_id=token)
+            seen_all[tenant_id] = current & seen
+        return fired
+
+    @staticmethod
+    def _listened_events(sess: Session, tenant_id: int) -> set:
+        """Trigger names (and "x.*" patterns) the tenant's active workflows use."""
+        names: set = set()
+        rows = sess.query(WorkflowDefinition.trigger_event, WorkflowDefinition.trigger_events).filter(
+            WorkflowDefinition.tenant_id == tenant_id, WorkflowDefinition.is_active == True,  # noqa: E712
+        ).all()
+        for primary, extra in rows:
+            if primary:
+                names.add(str(primary))
+            if isinstance(extra, list):
+                names.update(str(t) for t in extra if t)
+        return names
 
     @staticmethod
     def _derive_event_names(log: AuditLog) -> List[str]:
@@ -684,6 +901,30 @@ class TriggerDispatcher:
         for mapped_event in resource_map.get(action, []):
             if mapped_event not in event_names:
                 event_names.append(mapped_event)
+
+        # One event per API endpoint (route_events): the row names the function
+        # that handled the request, and a Platform Function node used as a
+        # trigger carries the same name. The named platform events that
+        # endpoint raises (catalog.ENDPOINT_EVENT_TYPES) come with it.
+        changes_all = log.changes if isinstance(log.changes, dict) else {}
+        endpoint_event = event_for_audit(changes_all, action)
+        if endpoint_event:
+            if endpoint_event not in event_names:
+                event_names.append(endpoint_event)
+            body = changes_all.get("request") if isinstance(changes_all.get("request"), dict) else {}
+            query = changes_all.get("query") if isinstance(changes_all.get("query"), dict) else {}
+            for trigger_key, when in ENDPOINT_TRIGGERS.get(endpoint_event, ()):
+                if when:
+                    field, values = when
+                    value = body.get(field, query.get(field))
+                    if str(value or "").strip().lower() not in values:
+                        continue
+                if trigger_key not in event_names:
+                    event_names.append(trigger_key)
+        # A refused sign-in is a failed request, so it raises no endpoint event.
+        if changes_all.get("endpoint") == "grc.routers.auth_router:login" and \
+                changes_all.get("status_code") in (400, 401, 403, 423, 429):
+            event_names.append("sign_in_failed")
 
         # Special: governance document submitted for review
         # Fires when PUT /{doc_id}/status is called with {"status": "pending_review"}
@@ -1097,6 +1338,39 @@ class TriggerDispatcher:
             }
         )
 
+    def _first_start(self, definition_id: int, correlation_id: Optional[str]) -> bool:
+        """True the first time a workflow starts for one audit row, or for one
+        record reaching one date or threshold. Each event name a row raises is
+        dispatched on its own, so a workflow listening to several of them (a
+        named event and its endpoint's) must still run once; and each app
+        worker runs a dispatcher, and a restart forgets what was alerted, so a
+        date must not start it twice either. Shared across processes through
+        the queue's Redis when it has one."""
+        cid = str(correlation_id or "")
+        if cid.startswith("audit:"):
+            ttl = 3600
+        elif cid.startswith(_ONCE_PER_DATE):
+            ttl = 400 * 86400
+        else:
+            return True
+        token = f"{definition_id}:{cid}"
+        redis = getattr(self.event_queue, "_redis", None) if getattr(self.event_queue, "_use_redis", False) else None
+        if redis is not None:
+            try:
+                return bool(redis.set(f"workflow:started:{token}", "1", nx=True, ex=ttl))
+            except Exception:  # noqa: BLE001 — fall back to this process's memory
+                pass
+        started = getattr(self, "_started_tokens", None)
+        if started is None:
+            from collections import OrderedDict
+            started = self._started_tokens = OrderedDict()
+        if token in started:
+            return False
+        started[token] = True
+        if len(started) > 10000:
+            started.popitem(last=False)
+        return True
+
     def dispatch_event(self, db: Session, event: Dict[str, Any]) -> int:
         event_name = event.get("event_name")
         tenant_id = event.get("tenant_id")
@@ -1134,6 +1408,12 @@ class TriggerDispatcher:
                 candidate_triggers.extend(str(t) for t in extra if t)
             if any(_matches(t) for t in candidate_triggers):
                 if ConditionEvaluator.evaluate(definition.trigger_conditions or {}, payload):
+                    if not self._first_start(definition.id, event.get("correlation_id")):
+                        logger.info(
+                            "workflow.dispatcher.dispatch_event.already_started workflow_definition_id=%s "
+                            "event_name=%s correlation_id=%s", definition.id, event_name, event.get("correlation_id"),
+                        )
+                        continue
                     self.event_queue.publish(
                         {
                             "kind": "start_instance",

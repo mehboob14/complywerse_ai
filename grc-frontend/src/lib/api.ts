@@ -458,6 +458,12 @@ export const governanceApi = {
     apiClient.post('/governance/workflows/templates/seed-defaults', null, { params: { tenant_id: tenantId } }),
   getDocumentMappings: (documentId: number) =>
     apiClient.get(`/governance/mappings/document/${documentId}`),
+  // Map the document's statements against its applicable + linked frameworks and
+  // any others picked on its Mappings tab (kept on the document). Background job.
+  runDocumentMapping: (documentId: number, extraFrameworkIds: number[]) =>
+    apiClient.post(`/governance/mappings/document/${documentId}/run`, { extra_framework_ids: extraFrameworkIds }),
+  getDocumentMappingRunStatus: (documentId: number) =>
+    apiClient.get(`/governance/mappings/document/${documentId}/run-status`),
   // Control coverage of a document vs its applicable frameworks: per-framework
   // mapped / recommended / missing (gap) controls.
   getDocumentCoverage: (documentId: number, frameworkIds?: number[]) =>
@@ -4308,9 +4314,9 @@ export const adminApi = {
   getPermissions: () => apiClient.get<{ name: string; module: string; submodule: string; action: string; description: string }[]>('/admin/permissions'),
   getPermissionMatrix: () => apiClient.get<PermissionModule[]>('/admin/permissions/matrix'),
 
-  getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; user_id?: number; start_date?: string; end_date?: string }) =>
+  getAuditLogs: (params?: { limit?: number; offset?: number; action?: string; module?: string; submodule?: string; user_id?: number; start_date?: string; end_date?: string }) =>
     apiClient.get('/admin/audit-logs', { params }),
-  getAuditLogFilters: () => apiClient.get<{ actions: string[]; modules: string[]; date_presets: string[] }>('/admin/audit-logs/filters'),
+  getAuditLogFilters: () => apiClient.get<{ actions: string[]; modules: string[]; submodules?: Record<string, string[]>; date_presets: string[] }>('/admin/audit-logs/filters'),
   // v2 audit-AI: lazily generate (or fetch cached) a human-readable summary
   // for one audit-log row. Set force=true to bypass the server-side cache and
   // re-generate. Backend caches the result on the row's `changes.ai_summary`.

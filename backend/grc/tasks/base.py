@@ -186,11 +186,15 @@ class TenantTask(Task):
         if "db" in kwargs and kwargs["db"] is not None:
             return super().__call__(*args, **kwargs)
 
+        from ..audit_logger import background_job
+
         db: Session = open_tenant_session(tenant_slug)
         try:
-            kwargs["db"] = db
-            result = super().__call__(*args, **kwargs)
-            db.commit()
+            # What the job commits goes to the audit log (one row per run).
+            with background_job(tenant_slug, self.run):
+                kwargs["db"] = db
+                result = super().__call__(*args, **kwargs)
+                db.commit()
             return result
         except Exception:
             db.rollback()

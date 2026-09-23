@@ -7,6 +7,7 @@ from starlette.responses import Response
 from .models import init_master_db
 from .startup_seed import ensure_startup_seed_data
 from .audit_logger import should_audit_request, parse_request_payload, write_audit_log
+from . import audit_changes
 from .routers import (
     auth_router,
     tenants_router,
@@ -163,8 +164,12 @@ async def audit_log_middleware(request: Request, call_next):
         request._receive = receive
         request_payload = await parse_request_payload(request, body)
 
+    # What the request commits to the database, old → new, for its audit row.
+    changes_token = audit_changes.start()
     try:
         response = await call_next(request)
+        db_changes = audit_changes.finish(changes_token)
+        changes_token = None
         response_error = None
         try:
             status = getattr(response, "status_code", 200)
@@ -184,9 +189,11 @@ async def audit_log_middleware(request: Request, call_next):
         except Exception:
             response_error = None
 
-        write_audit_log(request, response, started_at, request_payload, response_error)
+        write_audit_log(request, response, started_at, request_payload, response_error, db_changes)
         return response
     except Exception:
+        if changes_token is not None:
+            audit_changes.finish(changes_token)
         write_audit_log(request, Response(status_code=500), started_at, request_payload)
         raise
 
@@ -283,6 +290,13 @@ app.include_router(automation_frameworks_router)
 app.include_router(connect_wizard_router)
 app.include_router(access_review_router)
 app.include_router(admin_ai_usage_router)
+
+# Every route is in: put the write endpoints of route files the workflow
+# catalog's scanner does not read (Controls Automation, Reports, IT assets,
+# Administration, …) into the builder, so each one can start a workflow.
+from .modules.workflow_engine.services.catalog import extend_with_app_routes  # noqa: E402
+
+extend_with_app_routes(app)
 
 
 @app.on_event("startup")

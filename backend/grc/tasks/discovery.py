@@ -96,10 +96,12 @@ def run_discovery_campaign(db: Session, campaign_id: int) -> dict:
     max_retries=0,
 )
 def run_discovery_campaign_task(self, tenant_slug: str, campaign_id: int) -> dict:
+    from ..audit_logger import background_job
     from ..db import get_tenant_session_factory
     db = get_tenant_session_factory(tenant_slug)()
     try:
-        return run_discovery_campaign(db, campaign_id)
+        with background_job(tenant_slug, run_discovery_campaign):
+            return run_discovery_campaign(db, campaign_id)
     except Exception:
         logger.exception("scheduled discovery run failed slug=%s campaign=%s",
                          tenant_slug, campaign_id)
