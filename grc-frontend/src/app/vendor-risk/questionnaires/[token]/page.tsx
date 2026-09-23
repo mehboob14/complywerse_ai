@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AlertCircle, CheckCircle, Clock, FileText, Loader2, Lock, MessageSquare, Paperclip, Save, Send, Shield, Trash2 } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, Download, FileSpreadsheet, FileText, Loader2, Lock, MessageSquare, Paperclip, Save, Send, Shield, Trash2, Upload } from 'lucide-react';
 import apiClient from '@/lib/api';
 
 type QuestionType = 'text' | 'yes_no' | 'multiple_choice' | 'rating';
@@ -95,35 +95,70 @@ export default function ExternalQuestionnairePage() {
   const [uploading, setUploading] = useState<string | null>(null);
   const [expiresOn, setExpiresOn] = useState<Record<string, string>>({});
 
+  const loadQuestionnaire = async (quiet = false) => {
+    if (!quiet) setLoading(true);
+    setError(null);
+    try {
+      const response = await apiClient.get(`/vendor-risk/questionnaires/external/${token}`);
+      const payload = response.data as QuestionnaireResponseData;
+      setData(payload);
+      setRespondentName(payload.respondent_name || '');
+      setRespondentEmail(payload.respondent_email || '');
+      setResponses(emptyFormState(payload.questions || [], payload.existing_responses || {}));
+      setComments(payload.comments || {});
+      setEvidence(payload.evidence || {});
+      setAttestation((prev) => ({
+        name: payload.attestation?.name || prev.name || payload.respondent_name || '',
+        title: payload.attestation?.title || prev.title || '',
+        email: payload.attestation?.email || prev.email || payload.respondent_email || '',
+      }));
+    } catch (loadError: any) {
+      setError(loadError?.response?.data?.detail || 'Unable to load questionnaire. The link may be invalid or expired.');
+    } finally {
+      if (!quiet) setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    if (!token) return;
-
-    const loadQuestionnaire = async () => {
-      setLoading(true);
-      setError(null);
-      try {
-        const response = await apiClient.get(`/vendor-risk/questionnaires/external/${token}`);
-        const payload = response.data as QuestionnaireResponseData;
-        setData(payload);
-        setRespondentName(payload.respondent_name || '');
-        setRespondentEmail(payload.respondent_email || '');
-        setResponses(emptyFormState(payload.questions || [], payload.existing_responses || {}));
-        setComments(payload.comments || {});
-        setEvidence(payload.evidence || {});
-        setAttestation({
-          name: payload.attestation?.name || payload.respondent_name || '',
-          title: payload.attestation?.title || '',
-          email: payload.attestation?.email || payload.respondent_email || '',
-        });
-      } catch (loadError: any) {
-        setError(loadError?.response?.data?.detail || 'Unable to load questionnaire. The link may be invalid or expired.');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadQuestionnaire();
+    if (token) loadQuestionnaire();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // Offline: download the questionnaire as a workbook, answer it, upload it back.
+  const [importing, setImporting] = useState(false);
+  const downloadWorkbook = async () => {
+    setError(null);
+    try {
+      const res = await apiClient.get(`/vendor-risk/questionnaires/external/${token}/workbook`, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `questionnaire-${data?.questionnaire_id ?? ''}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setError('The workbook could not be downloaded.');
+    }
+  };
+  const importWorkbook = async (file: File) => {
+    setImporting(true);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      const res = await apiClient.post(`/vendor-risk/questionnaires/external/${token}/workbook`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      await loadQuestionnaire(true);
+      const who = res.data?.attestation as { name?: string; title?: string; email?: string; confirm?: boolean } | undefined;
+      if (who?.name) setAttestation({ name: who.name || '', title: who.title || '', email: who.email || '' });
+      setSubmitSuccess(`${res.data?.imported ?? 0} answers imported. Check them, confirm the attestation and submit.`);
+    } catch (importError: any) {
+      setError(importError?.response?.data?.detail || 'The workbook could not be imported.');
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const reloadEvidence = async () => {
     const res = await apiClient.get(`/vendor-risk/questionnaires/external/${token}/evidence`);
@@ -490,6 +525,28 @@ export default function ExternalQuestionnairePage() {
           </div>
 
           <aside className="space-y-6">
+            {!done && (
+              <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                  <FileSpreadsheet className="h-4 w-4 text-primary-600" /> Prefer a spreadsheet?
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-gray-600">
+                  Download the questionnaire, answer it offline, and upload it here. Your answers are saved as a draft to
+                  check before you submit.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" onClick={downloadWorkbook}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    <Download className="h-3.5 w-3.5" /> Download workbook
+                  </button>
+                  <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Upload completed workbook
+                    <input type="file" accept=".xlsx" className="sr-only" disabled={importing}
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) importWorkbook(f); e.target.value = ''; }} />
+                  </label>
+                </div>
+              </section>
+            )}
             <section className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sticky top-6">
               <h2 className="text-lg font-semibold text-gray-900">Summary</h2>
 

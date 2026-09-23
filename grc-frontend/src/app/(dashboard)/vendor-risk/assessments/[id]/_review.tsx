@@ -6,7 +6,7 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, FileSearch, HelpCircle, Library, Loader2, MessageSquare, RotateCcw, Send, ShieldCheck, Undo2, X } from 'lucide-react';
+import { CheckCircle2, Download, FileSearch, HelpCircle, Library, Loader2, MessageSquare, RotateCcw, Send, ShieldCheck, Undo2, Upload, X } from 'lucide-react';
 import { vendorRiskApi } from '@/lib/api';
 
 export interface ReviewEntry { status: 'accepted' | 'clarify' | 'answered'; note?: string | null; at?: string }
@@ -32,9 +32,11 @@ export interface ReviewableResponse {
   attested_by?: { name: string; title: string | null; email: string | null; at: string | null } | null;
   accepted_at?: string | null;
   template_version?: number | null;
+  parent_response_id?: number | null;     // a follow-up another answer called for
 }
 
 const REVIEWABLE = ['submitted', 'under_review'];
+const WAITING = ['pending', 'in_progress', 'returned'];
 const btn = 'inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs font-medium disabled:opacity-60';
 
 function errorText(e: unknown): string {
@@ -61,9 +63,31 @@ export function ReviewBar({ qr, assessmentId, canEdit }: { qr: ReviewableRespons
     onError: (e) => setError(errorText(e)),
   });
 
+  // A workbook the vendor filled in offline and sent back by email.
+  const [submitImport, setSubmitImport] = useState(true);
+  const importBook = useMutation({
+    mutationFn: async (file: File) => vendorRiskApi.importQuestionnaireWorkbook(qr.id, file, submitImport),
+    onSuccess: () => { setError(null); refresh(); },
+    onError: (e) => setError(errorText(e)),
+  });
+  const downloadBook = async () => {
+    try {
+      const res = await vendorRiskApi.downloadQuestionnaireWorkbook(qr.id);
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `questionnaire-${qr.id}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      setError(errorText(e));
+    }
+  };
+
   return (
     <div className="mt-3 space-y-2 text-xs">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-gray-600">
+        {qr.parent_response_id && <span className="text-indigo-700">Follow-up to response #{qr.parent_response_id}</span>}
         {qr.template_version && <span>Template version {qr.template_version}</span>}
         {qr.due_date && <span>Due {new Date(qr.due_date).toLocaleDateString()}</span>}
         {qr.attested_by ? (
@@ -89,6 +113,24 @@ export function ReviewBar({ qr, assessmentId, canEdit }: { qr: ReviewableRespons
             title={asked > 0 ? 'Clear or return the questions marked for clarification first' : 'Accept every answer and close the vendor\'s link'}>
             {act.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />} Accept questionnaire
           </button>
+        </div>
+      )}
+      {canEdit && WAITING.includes(qr.status) && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={downloadBook} className={`${btn} border-gray-200 text-gray-600 hover:bg-gray-50`}>
+            <Download className="h-3.5 w-3.5" /> Download workbook
+          </button>
+          <label className={`${btn} cursor-pointer border-gray-200 text-gray-600 hover:bg-gray-50`}>
+            {importBook.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
+            Import the vendor&apos;s workbook
+            <input type="file" accept=".xlsx" className="sr-only" disabled={importBook.isPending}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) importBook.mutate(f); e.target.value = ''; }} />
+          </label>
+          <label className="inline-flex items-center gap-1.5 text-gray-600"
+            title="Submitting needs the vendor's own attestation, filled in on the workbook's Attestation sheet">
+            <input type="checkbox" checked={submitImport} onChange={(e) => setSubmitImport(e.target.checked)} />
+            and submit it on the vendor&apos;s attestation
+          </label>
         </div>
       )}
       {error && <p role="alert" className="text-red-600">{error}</p>}

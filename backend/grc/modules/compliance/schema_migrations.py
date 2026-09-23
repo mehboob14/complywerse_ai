@@ -926,6 +926,9 @@ _COLUMN_ADDS = [
     ("grc_vendor_questionnaire_evidence", "evidence_id", "INTEGER", None),
     ("grc_tpra_evidence_links", "questionnaire_id", "INTEGER", "ix_tpra_evlink_questionnaire"),
     ("grc_tpra_evidence_links", "question_key", "VARCHAR(100)", None),
+    # Follow-up questionnaires an answer called for (tpra/follow_ups.py).
+    ("grc_vendor_questionnaire_responses", "parent_response_id", "INTEGER", None),
+    ("grc_vendor_questionnaire_responses", "trigger_key", "VARCHAR(200)", "ix_vqr_trigger_key"),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

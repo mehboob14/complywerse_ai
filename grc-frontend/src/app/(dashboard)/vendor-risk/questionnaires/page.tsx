@@ -47,6 +47,8 @@ interface Question {
   certificate_covers?: boolean;
   // Ask only when an earlier question was answered with one of these values.
   show_if?: { question: string; in: string[] };
+  // When answered one of these, accepting the questionnaire sends this follow-up questionnaire.
+  follow_up?: { when: string[]; template_id: number };
 }
 
 const optLabel = (o: string | OptionDef) => (typeof o === 'string' ? o : o.label ?? o.value);
@@ -1170,6 +1172,41 @@ export default function VendorQuestionnairesPage() {
                           </div>
                         );
                       })()}
+
+                      {/* Follow-up: this answer calls for another questionnaire, sent when this one is accepted */}
+                      {(q.type === 'yes_no' || q.type === 'multiple_choice') && (templates || []).length > 1 && (
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                          <span>Follow up when answered</span>
+                          <select
+                            aria-label={`Answer to question ${idx + 1} that calls for a follow-up`}
+                            value={q.follow_up?.when[0] || ''}
+                            onChange={(e) => updateQuestion(idx, 'follow_up', e.target.value
+                              ? { when: [e.target.value], template_id: q.follow_up?.template_id || 0 } : undefined)}
+                            className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs"
+                          >
+                            <option value="">never</option>
+                            {(q.type === 'yes_no' ? ['yes', 'partial', 'no'] : (q.options || []).map(optLabel)).map((v) => (
+                              <option key={v} value={v}>{v}</option>
+                            ))}
+                          </select>
+                          {q.follow_up && (
+                            <>
+                              <span>by sending</span>
+                              <select
+                                aria-label={`Follow-up questionnaire for question ${idx + 1}`}
+                                value={q.follow_up.template_id || ''}
+                                onChange={(e) => updateQuestion(idx, 'follow_up', { when: q.follow_up!.when, template_id: Number(e.target.value) || 0 })}
+                                className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs"
+                              >
+                                <option value="">choose a questionnaire</option>
+                                {(templates || []).filter((t) => t.id !== editingTemplate?.id).map((t) => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                              </select>
+                            </>
+                          )}
+                        </div>
+                      )}
 
                       {/* Options for multiple choice */}
                       {q.type === 'multiple_choice' && (

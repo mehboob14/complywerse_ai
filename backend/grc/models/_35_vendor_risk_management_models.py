@@ -200,6 +200,10 @@ class VendorQuestionnaireResponse(Base):
     # A certificate answering the questions its template lets it: off | prefill | skip.
     certificate_evidence_id = Column(Integer, nullable=True)
     certificate_mode = Column(String(12), nullable=True)
+    # A follow-up another answer called for: its parent, and the trigger
+    # "<parent>:<question>:<template>" that stops it being sent twice.
+    parent_response_id = Column(Integer, nullable=True)
+    trigger_key = Column(String(200), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant")

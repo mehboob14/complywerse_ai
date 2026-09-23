@@ -7,6 +7,7 @@ from typing import List, Literal, Optional
 from datetime import date, datetime, timedelta
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi.responses import Response
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
@@ -18,6 +19,7 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import portal, rbac, versions
 from ..tpra import questionnaire_evidence as qevidence
+from ..tpra import follow_ups, workbook
 from ..tpra.service import write_audit
 
 logger = logging.getLogger(__name__)
@@ -144,6 +146,8 @@ def serialize_questionnaire_response(qr: VendorQuestionnaireResponse) -> dict:
         "accepted_at": qr.accepted_at.isoformat() if qr.accepted_at else None,
         "certificate": {"evidence_id": qr.certificate_evidence_id, "mode": qr.certificate_mode}
         if qr.certificate_evidence_id else None,
+        "parent_response_id": qr.parent_response_id,           # set on a follow-up
+        "trigger_key": qr.trigger_key,
         "created_at": qr.created_at.isoformat() if qr.created_at else None,
     }
 
@@ -538,8 +542,14 @@ def accept_questionnaire(
     if qr.assessment_id:
         _materialise(db, db.query(VendorAssessment).filter(VendorAssessment.id == qr.assessment_id).first(), qr)
     _audit(db, qr, current_user, "accept", to_value="accepted")
+    children = follow_ups.send(db, qr, questions, current_user.id, now=now)
+    for child in children:
+        _audit(db, qr, current_user, "follow_up", to_value=child.template_id, trigger=child.trigger_key,
+               follow_up_id=child.id)
     db.commit()
-    return serialize_questionnaire_response(qr)
+    for child in children:
+        _email_link(db, child)
+    return {**serialize_questionnaire_response(qr), "follow_ups": [c.id for c in children]}
 
 
 @router.post("/questionnaire-responses/{response_id}/resend")
@@ -657,13 +667,18 @@ def external_submit_questionnaire(
     payload: ExternalSubmitRequest,
     db: Session = Depends(get_db),
 ):
-    """External vendor saves or submits answers. No authentication required.
+    """External vendor saves or submits answers. No authentication required."""
+    qr = _validate_external_token(token, db)
+    return _save_answers(db, qr, payload)
+
+
+def _save_answers(db: Session, qr: VendorQuestionnaireResponse, payload: ExternalSubmitRequest) -> dict:
+    """Save a vendor's answers, from the portal or a workbook.
 
     Which questions apply is worked out again here, so an answer to one the
     vendor could not see neither counts nor blocks. While a questionnaire is
     returned, only the questions the reviewer asked about can change. Submitting
     takes a named person attesting to the answers."""
-    qr = _validate_external_token(token, db)
     questions = versions.questions_for(db, qr)
     answers = portal.merge(qr.status, questions, qr.responses or {}, payload.responses or {}, qr.review)
     answers.update(qevidence.locked(qr, questions))
@@ -945,6 +960,85 @@ def detach_evidence(
            evidence_id=link.evidence_id)
     db.commit()
     return {"ok": True}
+
+
+# ── Offline: a workbook out and back (portal and analyst) ────────
+
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def _workbook_file(db: Session, qr: VendorQuestionnaireResponse) -> Response:
+    questions = versions.questions_for(db, qr)
+    db.commit()                      # a link sent before versions existed is pinned now
+    vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
+    content = workbook.build(qr, questions, vendor.name if vendor else "your organisation",
+                             qevidence.locked(qr, questions))
+    return Response(content=content, media_type=_XLSX, headers={
+        "Content-Disposition": f'attachment; filename="questionnaire-{qr.id}.xlsx"'})
+
+
+async def _read_workbook(db: Session, qr: VendorQuestionnaireResponse, file: UploadFile) -> dict:
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status_code=415, detail="Upload the .xlsx workbook downloaded for this questionnaire")
+    content = await file.read(workbook.MAX_BYTES + 1)
+    try:
+        return workbook.read(content, qr, versions.questions_for(db, qr))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/questionnaires/external/{token}/workbook")
+def external_workbook(token: str, db: Session = Depends(get_db)):
+    """The questionnaire as a workbook, to answer offline. No auth — token validated."""
+    return _workbook_file(db, _validate_external_token(token, db))
+
+
+@router.post("/questionnaires/external/{token}/workbook")
+async def external_import_workbook(
+    token: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+):
+    """A completed workbook, saved as a draft. The vendor then checks it and
+    submits in the portal, where the attestation is confirmed."""
+    qr = _validate_external_token(token, db)
+    parsed = await _read_workbook(db, qr, file)
+    saved = _save_answers(db, qr, ExternalSubmitRequest(
+        responses=parsed["responses"], comments=parsed["comments"], submit=False))
+    return {**saved, "imported": len(parsed["responses"]), "attestation": parsed["attestation"]}
+
+
+@router.get("/questionnaire-responses/{response_id}/workbook")
+def download_workbook(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    return _workbook_file(db, _response_or_404(db, current_user, response_id))
+
+
+@router.post("/questionnaire-responses/{response_id}/workbook")
+async def import_workbook(
+    response_id: int,
+    file: UploadFile = File(...),
+    submit: bool = Form(False),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """A workbook the vendor sent back by email. Submitting it needs the vendor's
+    own attestation, filled in on the workbook's Attestation sheet."""
+    rbac.require_write(db, current_user, "assessments", "edit")
+    qr = _response_or_404(db, current_user, response_id)
+    if qr.status not in portal.WAITING_ON_VENDOR:
+        raise HTTPException(status_code=409, detail="Only a questionnaire still waiting on the vendor can take answers")
+    parsed = await _read_workbook(db, qr, file)
+    saved = _save_answers(db, qr, ExternalSubmitRequest(
+        responses=parsed["responses"], comments=parsed["comments"],
+        attestation=parsed["attestation"] if submit else None, submit=submit))
+    _audit(db, qr, current_user, "import", to_value="submitted" if submit else "draft",
+           answers=len(parsed["responses"]))
+    db.commit()
+    return {**saved, "imported": len(parsed["responses"])}
 
 
 @router.get("/questionnaires/certificates")

@@ -2296,6 +2296,17 @@ export const vendorRiskApi = {
     apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/evidence`, data),
   detachQuestionEvidence: (responseId: number, linkId: number) =>
     apiClient.delete(`/vendor-risk/questionnaire-responses/${responseId}/evidence/${linkId}`),
+  // Offline: the questionnaire as a workbook, and a completed one back in.
+  downloadQuestionnaireWorkbook: (responseId: number) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/workbook`, { responseType: 'blob' }),
+  importQuestionnaireWorkbook: (responseId: number, file: File, submit: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('submit', submit ? 'true' : 'false');
+    return apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/workbook`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
   // In-date evidence held for a vendor that can answer questions for it.
   vendorCertificates: (vendorId: number) =>
     apiClient.get('/vendor-risk/questionnaires/certificates', { params: { vendor_id: vendorId } }),

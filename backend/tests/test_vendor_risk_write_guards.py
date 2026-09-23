@@ -21,6 +21,7 @@ TOKEN_AUTHENTICATED = {
     "external_submit_questionnaire",
     "external_upload_evidence",
     "external_delete_evidence",
+    "external_import_workbook",     # the offline route: a completed workbook, saved as a draft
 }
 
 
