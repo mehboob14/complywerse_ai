@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 from typing import Optional
 
+from ....feature_map import place as place_in_sidebar
 from .route_events import event_name
 
 
@@ -278,6 +279,8 @@ _MANUAL_PLATFORM_ACTIONS: list[dict] = [
         "key": "platform_action.create.compliance.plugin_runs.execute",
         "label": "CIS Plugin: execute check",
         "endpoint": "/grc/compliance-plugins/{plugin_id}/runs",
+        # so it is named after its sidebar page like every other node
+        "route_path": "/grc/compliance-plugins/{plugin_id}/runs",
         "action": "create",
         "module": "Compliance",
         "submodule": "Plugin Engine",
@@ -288,6 +291,8 @@ _MANUAL_PLATFORM_ACTIONS: list[dict] = [
         "key": "platform_action.trigger.compliance.plugin_runs.failed",
         "label": "CIS Plugin: failed check",
         "endpoint": "/grc/compliance-plugins/{plugin_id}/runs",
+        # so it is named after its sidebar page like every other node
+        "route_path": "/grc/compliance-plugins/{plugin_id}/runs",
         "action": "trigger",
         "module": "Compliance",
         "submodule": "Plugin Engine",
@@ -1004,12 +1009,12 @@ PLATFORM_FUNCTION_NODE_TYPES = _merged
 
 
 # ── Route files outside modules/*/routers ────────────────────────────────────
-# The scanner above only reads modules/<module>/routers/*.py. These are the
-# platform's other route files, by the sidebar module and sub-module their pages
-# sit under. Their write endpoints are added from the live app's routes
-# (extend_with_app_routes, called once the app has all its routers), so every
-# module's functions are in the builder and each can start a workflow. A None
-# sub-module is taken from the path (Administration → Users, Roles, …).
+# The scanner above only reads modules/<module>/routers/*.py; extend_with_app_routes
+# adds the platform's other write endpoints from the live app's routes, and
+# feature_map.place() names them after the sidebar page they serve.
+# These entries are kept for one reason: a node key is generated from the names
+# below, and saved workflow graphs store keys, so they must not move. Displayed
+# names come from feature_map — add nothing here for new routes.
 ROUTE_FILE_MODULES: dict[str, tuple[str, Optional[str]]] = {
     # Controls Automation
     "grc.modules.automation.router": ("Controls Automation", "Common Controls"),
@@ -1107,49 +1112,109 @@ def _submodule_from_path(path: str) -> str:
     return _humanize_slug(segments[1] if len(segments) > 1 else (segments[0] if segments else "general"))
 
 
+# Sign-in is nobody's workflow, and it is the one route file whose writes are
+# not a person doing something to a record.
+_SKIPPED_ROUTE_FILES = {"grc.routers.auth_router", "grc.routers.sso_router"}
+
+_ACTION_VERBS = {"create": "Creates", "update": "Updates", "trigger": "Triggers",
+                 "upload": "Uploads / imports", "approve": "Approves", "reject": "Rejects",
+                 "delete": "Deletes"}
+
+
+def _sidebar_place(module_path: str, route_path: str,
+                   fallback: tuple[str, str]) -> tuple[str, str]:
+    """The sidebar page this endpoint serves, from the one map that already
+    names audit rows (grc/feature_map.py), so the builder groups its nodes
+    exactly like the menu. The fallback covers nodes with no route of their own."""
+    module, submodule = place_in_sidebar(module_path, route_path)
+    if module == "System":
+        return (fallback[0] or "General"), (fallback[1] or _submodule_from_path(route_path))
+    return module, submodule
+
+
 def extend_with_app_routes(app) -> int:
-    """Add the write endpoints of the route files in ROUTE_FILE_MODULES, from the
-    live app's routes, to the Platform Function nodes. Idempotent; returns how
-    many were added."""
+    """Name every Platform Function node after its sidebar page, and add the
+    write endpoints the source scanner never saw. Idempotent; returns how many
+    were added.
+
+    A node key is an identifier saved workflow graphs store, so keys keep the
+    names they were first built from; only what the builder displays moves.
+    """
     global _ROUTES_EXTENDED
     if _ROUTES_EXTENDED:
         return 0
     from fastapi.routing import APIRoute
 
-    seen = {str(n.get("key")) for n in PLATFORM_FUNCTION_NODE_TYPES}
-    seen_labels = {(n.get("module"), n.get("submodule"), n.get("label")) for n in PLATFORM_FUNCTION_NODE_TYPES}
-    added = 0
+    # (route file, function) → (write method, URL) for every live route.
+    routes: dict[tuple[str, str], tuple[str, str]] = {}
     for route in getattr(app, "routes", []):
         if not isinstance(route, APIRoute):
             continue
         module_path = getattr(route.endpoint, "__module__", "") or ""
         fn_name = getattr(route.endpoint, "__name__", "") or ""
-        placed = ROUTE_FILE_MODULES.get(module_path)
-        if not placed or fn_name in _SKIPPED_ENDPOINTS or fn_name.startswith(_READ_LIKE_PREFIXES):
+        method = next((m.lower() for m in sorted(route.methods or ())
+                       if m.lower() in _MUTATING_METHODS), "")
+        routes.setdefault((module_path, fn_name), (method, route.path))
+
+    # 1. Re-name what the scanner produced. Two route files can serve one page
+    #    (a legacy API beside its replacement), so drop the second node that
+    #    ends up saying the same thing on the same page.
+    kept: list[dict] = []
+    seen_labels: set[tuple[str, str, str]] = set()
+    for node in PLATFORM_FUNCTION_NODE_TYPES:
+        endpoint_module = str(node.get("endpoint_module") or "")
+        _, path = routes.get((endpoint_module, str(node.get("fn_name") or "")),
+                             ("", str(node.get("route_path") or "")))
+        node["module"], node["submodule"] = _sidebar_place(
+            endpoint_module, path,
+            (str(node.get("module") or ""), str(node.get("submodule") or "")))
+        trio = (node["module"], node["submodule"], str(node.get("label") or ""))
+        if trio in seen_labels:
             continue
-        for method in sorted(m.lower() for m in (route.methods or ()) if m.lower() in _MUTATING_METHODS):
-            action = _action_from_http_method_and_path(method, route.path)
-            if action not in AUTOMATION_RELEVANT_PLATFORM_ACTIONS:
-                continue
-            module_name, submodule = placed
-            submodule = submodule or _submodule_from_path(route.path)
-            label, base_label = _label_for(action, fn_name, (module_path, "", fn_name))
-            key = (f"platform_action.{_slugify(action)}.{_slugify(module_name)}."
-                   f"{_slugify(submodule)}.{_slugify(base_label)}")
-            if key in seen or (module_name, submodule, label) in seen_labels:
-                continue
-            seen.add(key)
-            seen_labels.add((module_name, submodule, label))
-            verb = {"create": "Creates", "update": "Updates", "trigger": "Triggers", "upload": "Uploads / imports",
-                    "approve": "Approves", "reject": "Rejects", "delete": "Deletes"}.get(action, "Executes")
-            PLATFORM_FUNCTION_NODE_TYPES.append({
-                "key": key, "label": label, "description": f"{verb} {base_label.lower()} in {submodule}",
-                "endpoint": route.path, "action": action, "module": module_name, "submodule": submodule,
-                "functionality_name": label, "source": "app_routes", "fn_name": fn_name, "method": method,
-                "route_path": route.path, "endpoint_module": module_path,
-                "trigger_event": _trigger_event_for(method, fn_name, module_path, label),
-            })
-            added += 1
+        seen_labels.add(trio)
+        kept.append(node)
+    PLATFORM_FUNCTION_NODE_TYPES[:] = kept
+
+    # 2. Add the rest of the platform's writes, so every sidebar page has its
+    #    actions in the builder.
+    seen = {str(n.get("key")) for n in PLATFORM_FUNCTION_NODE_TYPES}
+    covered = {(str(n.get("endpoint_module")), str(n.get("fn_name")))
+               for n in PLATFORM_FUNCTION_NODE_TYPES}
+    added = 0
+    for (module_path, fn_name), (method, path) in routes.items():
+        if not method or (module_path, fn_name) in covered:
+            continue
+        if not module_path.startswith("grc.") or "workflow_engine" in module_path:
+            continue
+        if module_path in _SKIPPED_ROUTE_FILES or fn_name in _SKIPPED_ENDPOINTS \
+                or fn_name.startswith(_READ_LIKE_PREFIXES):
+            continue
+        action = _action_from_http_method_and_path(method, path)
+        if action not in AUTOMATION_RELEVANT_PLATFORM_ACTIONS:
+            continue
+        frozen = ROUTE_FILE_MODULES.get(module_path)
+        module_name, submodule = _sidebar_place(module_path, path, frozen or ("", ""))
+        if module_name == "General":
+            continue
+        label, base_label = _label_for(action, fn_name, (module_path, "", fn_name))
+        if (module_name, submodule, label) in seen_labels:
+            continue
+        key_module, key_sub = frozen or (module_name, submodule)
+        key = (f"platform_action.{_slugify(action)}.{_slugify(key_module)}."
+               f"{_slugify(key_sub or _submodule_from_path(path))}.{_slugify(base_label)}")
+        if key in seen:
+            continue
+        seen.add(key)
+        seen_labels.add((module_name, submodule, label))
+        PLATFORM_FUNCTION_NODE_TYPES.append({
+            "key": key, "label": label,
+            "description": f"{_ACTION_VERBS.get(action, 'Executes')} {base_label.lower()} in {submodule}",
+            "endpoint": path, "action": action, "module": module_name, "submodule": submodule,
+            "functionality_name": label, "source": "app_routes", "fn_name": fn_name, "method": method,
+            "route_path": path, "endpoint_module": module_path,
+            "trigger_event": _trigger_event_for(method, fn_name, module_path, label),
+        })
+        added += 1
     _record_endpoint_labels(app)
     _ROUTES_EXTENDED = True
     return added
@@ -1394,6 +1459,55 @@ ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
      ("issue_management.actions.verify_action",), None),
     ("capa_action_promoted", "CAPA action promoted to a critical task", "Issue Management",
      ("issue_management.actions.promote_action_to_task",), None),
+    # ── Assessments ───────────────────────────────────────────────────────────
+    # Every assessment page posts to the same three endpoints and differs only by
+    # the assessment's format, so these are gated on the page the audit row was
+    # already placed under (feature_map.assessment_place) — a workflow can then
+    # run for Cyber Security assessments without firing for NCA or DPIA.
+    ("assessment_status_change", "Assessment approval recorded (any type)", "Assessments",
+     ("compliance_assessments_router.perform_approval_action",), None),
+    ("cyber_security_assessment_created", "Cyber Security assessment created", "Assessments",
+     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"cyber security"}))),
+    ("cyber_security_assessment_updated", "Cyber Security assessment updated", "Assessments",
+     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"cyber security"}))),
+    ("cyber_security_assessment_approval", "Cyber Security assessment approval recorded", "Assessments",
+     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"cyber security"}))),
+    ("nca_assessment_created", "NCA assessment created", "Assessments",
+     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"nca"}))),
+    ("nca_assessment_updated", "NCA assessment updated", "Assessments",
+     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"nca"}))),
+    ("nca_assessment_approval", "NCA assessment approval recorded", "Assessments",
+     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"nca"}))),
+    ("dpia_assessment_created", "DPIA / PIA created", "Assessments",
+     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"dpia / pia"}))),
+    ("dpia_assessment_updated", "DPIA / PIA updated", "Assessments",
+     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"dpia / pia"}))),
+    ("dpia_assessment_approval", "DPIA / PIA approval recorded", "Assessments",
+     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"dpia / pia"}))),
+    ("pdpl_assessment_created", "Saudi PDPL assessment created", "Assessments",
+     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"saudi pdpl"}))),
+    ("pdpl_assessment_updated", "Saudi PDPL assessment updated", "Assessments",
+     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"saudi pdpl"}))),
+    ("pdpl_assessment_approval", "Saudi PDPL assessment approval recorded", "Assessments",
+     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"saudi pdpl"}))),
+    ("digital_ops_assessment_created", "Digital Operations Maturity assessment created", "Assessments",
+     ("compliance_assessments_router.upload_assessment",),
+     ("submodule", frozenset({"digital operations maturity"}))),
+    ("digital_ops_assessment_updated", "Digital Operations Maturity assessment updated", "Assessments",
+     ("compliance_assessments_router.update_assessment",),
+     ("submodule", frozenset({"digital operations maturity"}))),
+    ("digital_ops_assessment_approval", "Digital Operations Maturity approval recorded", "Assessments",
+     ("compliance_assessments_router.perform_approval_action",),
+     ("submodule", frozenset({"digital operations maturity"}))),
+    ("other_assessment_created", "Other assessment created", "Assessments",
+     ("compliance_assessments_router.upload_assessment",),
+     ("submodule", frozenset({"other assessments", "overview"}))),
+    ("other_assessment_updated", "Other assessment updated", "Assessments",
+     ("compliance_assessments_router.update_assessment",),
+     ("submodule", frozenset({"other assessments", "overview"}))),
+    ("other_assessment_approval", "Other assessment approval recorded", "Assessments",
+     ("compliance_assessments_router.perform_approval_action",),
+     ("submodule", frozenset({"other assessments", "overview"}))),
 ]
 
 # "api.<endpoint>" → [(trigger key, (request field, values) or None)] for the dispatcher.

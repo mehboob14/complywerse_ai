@@ -7,12 +7,32 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ....models import AuditLog, WorkflowDefinition
+from ....feature_map import assessment_place
 from .catalog import DUE_DATE_EVENTS, ENDPOINT_TRIGGERS
 from .condition_evaluator import ConditionEvaluator
 from .route_events import event_for_audit
 
 
 logger = logging.getLogger(__name__)
+
+
+def _matches_when(when: tuple, changes_all: dict, body: dict, query: dict) -> bool:
+    """A named event's narrowing test. "module" and "submodule" read the sidebar
+    page the audit row was placed under, which is how one event can name a single
+    assessment type; any other field reads the request itself."""
+    field, values = when
+    if field in ("module", "submodule"):
+        value = changes_all.get(field)
+        if field == "submodule" and str(value or "").strip().lower() in ("", "overview"):
+            # An upload names its format in the request, not in the URL, so the
+            # row can still say Overview.
+            fmt = body.get("assessment_format") or query.get("assessment_format")
+            placed = assessment_place(fmt) if fmt else None
+            if placed:
+                value = placed[1]
+    else:
+        value = body.get(field, query.get(field))
+    return str(value or "").strip().lower() in values
 
 
 def _env_bool(name: str, default: bool) -> bool:
@@ -914,11 +934,8 @@ class TriggerDispatcher:
             body = changes_all.get("request") if isinstance(changes_all.get("request"), dict) else {}
             query = changes_all.get("query") if isinstance(changes_all.get("query"), dict) else {}
             for trigger_key, when in ENDPOINT_TRIGGERS.get(endpoint_event, ()):
-                if when:
-                    field, values = when
-                    value = body.get(field, query.get(field))
-                    if str(value or "").strip().lower() not in values:
-                        continue
+                if when and not _matches_when(when, changes_all, body, query):
+                    continue
                 if trigger_key not in event_names:
                     event_names.append(trigger_key)
         # A refused sign-in is a failed request, so it raises no endpoint event.

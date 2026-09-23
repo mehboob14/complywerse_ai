@@ -16,6 +16,9 @@ type Props = {
   onDragStart: (event: React.DragEvent, item: PaletteItem) => void;
   onAddNode: (item: PaletteItem) => void;
   locked?: boolean;
+  /** Sidebar modules and their pages, in menu order, from the catalog. Platform
+   *  functions are listed in this order so the palette reads like the menu. */
+  moduleOrder?: { module: string; submodules: string[] }[];
 };
 
 const GROUP_ORDER = ['triggers', 'actions', 'platform_functions', 'conditions', 'approvals', 'timers', 'control'];
@@ -62,7 +65,7 @@ function highlightMatch(text: string, query: string): React.ReactNode {
   );
 }
 
-export function NodePalette({ palette, onDragStart, onAddNode, locked = false }: Props) {
+export function NodePalette({ palette, onDragStart, onAddNode, locked = false, moduleOrder = [] }: Props) {
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [moduleCollapsed, setModuleCollapsed] = useState<Record<string, boolean>>({});
   const [subgroupCollapsed, setSubgroupCollapsed] = useState<Record<string, boolean>>({});
@@ -219,19 +222,13 @@ export function NodePalette({ palette, onDragStart, onAddNode, locked = false }:
                   )}
 
                   {group.key === 'platform_functions' && (() => {
-                    const PF_MODULE_ORDER = ['Compliance', 'Control Library', 'Evidence', 'Framework Upload', 'Governance', 'Risk Management', 'Vulnerability Management', 'Chatbot', 'General'];
-                    const GOVERNANCE_SUBMODULE_ORDER = [
-                      'Documents', 'Attestations', 'Regulatory Changes', 'Regulatory Feeds', 'Committees',
-                    ];
-                    const RISK_MANAGEMENT_SUBMODULE_ORDER = ['Risk Framework', 'Risk Assessments', 'Risk Register', 'Appetite', 'Mitigation Actions', 'Internal Controls', 'KRIs', 'Incidents', 'Reviews', 'Dependencies', 'RCSA', 'Vendor Risk', 'Advanced Analytics'];
-                    const COMPLIANCE_SUBMODULE_ORDER = ['Frameworks', 'Controls', 'Evidence Requirements', 'Statements', 'Assessments', 'Evidence', 'Control Library'];
-                    const VULNERABILITY_MANAGEMENT_SUBMODULE_ORDER = ['Vulnerabilities', 'Departments', 'Reports', 'SLA Config'];
-                    const SUBMODULE_ORDER: Record<string, string[]> = {
-                      'Governance': GOVERNANCE_SUBMODULE_ORDER,
-                      'Risk Management': RISK_MANAGEMENT_SUBMODULE_ORDER,
-                      'Compliance': COMPLIANCE_SUBMODULE_ORDER,
-                      'Vulnerability Management': VULNERABILITY_MANAGEMENT_SUBMODULE_ORDER,
-                    };
+                    // Menu order comes from the catalog (the same map that names
+                    // audit rows), so a module added to the sidebar shows up here
+                    // without editing this file.
+                    const PF_MODULE_ORDER = moduleOrder.map((m) => m.module);
+                    const SUBMODULE_ORDER: Record<string, string[]> = Object.fromEntries(
+                      moduleOrder.map((m) => [m.module, m.submodules]),
+                    );
 
                     const sortSubgroups = (moduleName: string, pairs: [string, PaletteItem[]][]) => {
                       const order = SUBMODULE_ORDER[moduleName];

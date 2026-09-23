@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import Optional
 
+from ....feature_map import modules as sidebar_modules
 from ....models import get_db, Framework, VulnerabilitySLAConfig, GRCUser, TenantUser, Role
 from ....routers.auth_router import require_tenant_permission, require_auth, get_user_primary_tenant, get_user_tenants
 
@@ -36,7 +37,17 @@ def list_node_types(
         "conditions": CONDITION_NODE_TYPES,
         "approvals": APPROVAL_NODE_TYPES,
         "timers": TIMER_NODE_TYPES,
+        # Sidebar order, so the builder lists modules the way the menu does.
+        "modules": sidebar_modules(),
     }
+
+
+@router.get("/modules")
+def list_modules(
+    _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
+):
+    """Every sidebar module with its pages, in menu order."""
+    return {"modules": sidebar_modules()}
 
 
 @router.get("/node-param-schemas")

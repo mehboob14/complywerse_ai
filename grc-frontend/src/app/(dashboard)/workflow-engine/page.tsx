@@ -1476,6 +1476,7 @@ function WorkflowEngineContent() {
         <div className="w-48 shrink-0 flex flex-col min-h-0">
           <NodePalette
             palette={palette}
+            moduleOrder={(catalog as { modules?: { module: string; submodules: string[] }[] })?.modules || []}
             locked={WORKFLOW_CREATION_LOCKED}
             onDragStart={onDragStart}
             onAddNode={(item) => {
