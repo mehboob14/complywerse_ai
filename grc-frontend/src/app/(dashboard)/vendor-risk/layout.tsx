@@ -3,12 +3,13 @@
 import { useRef } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, Building2, ClipboardList, AlertTriangle, Radio, FileQuestion, Shield, Share2, Settings } from 'lucide-react';
+import { LayoutDashboard, BellRing, Building2, ClipboardList, AlertTriangle, Radio, FileQuestion, Shield, Share2, Settings } from 'lucide-react';
 import { clsx } from 'clsx';
 
 // Primary working set — the tabs a TPRM analyst lives in day to day.
 const vendorRiskNavigation = [
   { name: 'Dashboard', href: '/vendor-risk', icon: LayoutDashboard, exact: true },
+  { name: 'Attention', href: '/vendor-risk/attention', icon: BellRing },
   { name: 'Vendors', href: '/vendor-risk/vendors', icon: Building2 },
   { name: 'Assessments', href: '/vendor-risk/assessments', icon: ClipboardList },
   { name: 'Findings', href: '/vendor-risk/findings', icon: AlertTriangle },

@@ -2422,6 +2422,16 @@ export const tpraApi = {
   getVendorAudit: (vendorId: number, limit = 100) =>
     apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/audit`, { params: { limit } }),
   getCoverage: () => apiClient.get('/vendor-risk/tpra/coverage'),
+  // Attention queue — what needs somebody today, computed from current data
+  attention: (params?: { scope?: 'portfolio' | 'mine'; view?: 'open' | 'snoozed' | 'closed' }) =>
+    apiClient.get('/vendor-risk/tpra/attention', { params: params || {} }),
+  attentionHistory: (item: { condition: string; record_type: string; record_id: number }) =>
+    apiClient.get('/vendor-risk/tpra/attention/history', { params: item }),
+  attentionAct: (data: {
+    condition: string; record_type: string; record_id: number;
+    action: 'note' | 'assign' | 'snooze' | 'unsnooze' | 'close' | 'reopen';
+    text?: string; until?: string; assignee_id?: number | null;
+  }) => apiClient.post('/vendor-risk/tpra/attention/act', data),
 
   // Monitoring signals
   listSignals: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/signals`),

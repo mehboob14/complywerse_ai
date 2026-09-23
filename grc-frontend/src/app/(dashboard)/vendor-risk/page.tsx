@@ -14,7 +14,7 @@ import {
 } from 'recharts';
 import {
   Building2, ShieldCheck, AlertTriangle, CalendarClock, TrendingDown, Plus,
-  AlertCircle, ArrowUpRight, Radio, ArrowRight, ShieldAlert, CheckCircle2,
+  AlertCircle, ArrowUpRight, Radio, ArrowRight, ShieldAlert, CheckCircle2, BellRing,
 } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
@@ -29,6 +29,7 @@ interface Kpis {
   critical_count: number; critical_covered: number; portfolio_inherent: number;
   portfolio_residual: number; open_critical_findings: number; open_critical_overdue: number;
   closure_rate: number; reviews_due_30d: number; overdue_reviews: number; new_signals: number;
+  attention_open?: number; attention_urgent?: number;
 }
 interface Signal {
   id: number; vendor_id: number; vendor_name: string | null; signal_type: string;
@@ -327,7 +328,13 @@ export default function VendorRiskDashboardPage() {
       />
 
       {/* KPI cards */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+        {/* Same question as the attention queue, so the two counts always agree */}
+        <Link href="/vendor-risk/attention" className="block rounded-xl hover:ring-2 hover:ring-slate-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-600">
+          <KpiCard label="Needs attention" value={k.attention_open ?? 0} icon={BellRing}
+            tone={k.attention_urgent ? 'red' : 'emerald'}
+            foot={k.attention_urgent ? <span className="text-red-600">{k.attention_urgent} urgent · open queue</span> : 'Open queue'} />
+        </Link>
         <KpiCard label="Active vendors" value={k.active_vendors} icon={Building2} tone="blue"
           foot={k.onboarded_this_period > 0 ? <span className="text-emerald-600">+{k.onboarded_this_period} onboarded · 30d</span> : 'No new onboards · 30d'} />
         <KpiCard label="Critical coverage" value={`${k.critical_coverage}%`} icon={ShieldCheck}

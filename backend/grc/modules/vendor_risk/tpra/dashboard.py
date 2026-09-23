@@ -23,6 +23,7 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from .engine_scoring import residual_to_grade
 from .bootstrap import get_tiering_config, ensure_tpra_tenant_defaults
 from .schema_migrations import ensure_tpra_columns
+from .attention import queue as attention_queue
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Dashboard"])
 
@@ -157,6 +158,9 @@ def program_dashboard(
         if v.residual_risk_score is not None else None,
     } for v in top]
 
+    # The attention tile asks the queue itself, so the two always agree.
+    attention = attention_queue(db, tids[0], user.id, scope=scope)["counts"] if tids[0] > 0 else {}
+
     return {
         "scope": scope,
         "kpis": {
@@ -173,6 +177,8 @@ def program_dashboard(
             "reviews_due_30d": reviews_due,
             "overdue_reviews": overdue_reviews,
             "new_signals": new_signals,
+            "attention_open": attention.get("open", 0),
+            "attention_urgent": attention.get("urgent", 0),
         },
         "tier_distribution": tiers,
         "inherent_vs_residual": inherent_vs_residual,
