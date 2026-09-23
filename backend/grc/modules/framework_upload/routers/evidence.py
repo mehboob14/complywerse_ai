@@ -127,8 +127,13 @@ def get_evidence_types(
     }
 
 
-def trigger_ocr_and_assessment_background(evidence_id: int, user_id: int):
-    """Background task to run OCR and then AI assessment on evidence."""
+def trigger_ocr_and_assessment_background(evidence_id: int, user_id: int, target=None):
+    """Background task to run OCR and then AI assessment on evidence.
+
+    `target` is a `services.evidence_quality.QualityTarget` when the upload knows
+    what the file is meant to prove; the file is then also reviewed against that
+    one requirement, which the library assessment does not do.
+    """
     from ....models import get_db as get_db_session
     
     db = next(get_db_session())
@@ -160,6 +165,14 @@ def trigger_ocr_and_assessment_background(evidence_id: int, user_id: int):
                 logger.error(f"AI assessment failed for evidence {evidence_id}: {str(e)}")
         else:
             logger.warning(f"Cannot run AI assessment for evidence {evidence_id} - no OCR content extracted")
+
+        if target is not None:
+            try:
+                from ....services.evidence_quality import check_and_save
+
+                check_and_save(db, evidence.tenant_id, evidence, target, user_id=user_id)
+            except Exception:
+                logger.exception("Evidence quality check failed for evidence %s", evidence_id)
     finally:
         db.close()
 

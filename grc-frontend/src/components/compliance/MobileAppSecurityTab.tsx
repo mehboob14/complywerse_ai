@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { AiEvidenceAdvisor } from './AiEvidenceAdvisor';
 import apiClient, { assetsApi } from '@/lib/api';
+import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
 
 const MASVS_FORMAT = 'mobile_app_security';
 
@@ -78,6 +79,10 @@ function EvidencePanel({ assessmentId, itemId, onUploaded, aiAuto = false }: { a
   const [uploading, setUploading] = useState(false);
   const { data: ev = [], isLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['masvs-ev', itemId],
+    // The review runs in the background on upload, so poll until every file
+    // has a verdict, then stop.
+    refetchInterval: (q) => (((q.state.data as Record<string, unknown>[] | undefined) || [])
+      .some((row) => !row.quality) ? 4000 : false),
     queryFn: async () => {
       const r = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${itemId}/evidence`);
       return (r.data?.evidence || r.data || []) as Record<string, unknown>[];
@@ -122,8 +127,19 @@ function EvidencePanel({ assessmentId, itemId, onUploaded, aiAuto = false }: { a
           {list.map((e, i) => {
             const name = (e.evidence_name || (e.evidence as Record<string, unknown>)?.name || e.file_name || e.evidence_file_name || `Evidence ${i + 1}`) as string;
             return (
-              <li key={(e.id as number) ?? i} className="flex items-center gap-2 text-[12px] text-slate-700">
-                <FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span>
+              <li key={(e.id as number) ?? i} className="text-[12px] text-slate-700">
+                <div className="flex items-center gap-2">
+                  <FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span>
+                </div>
+                {typeof e.evidence_id === 'number' && (
+                  <EvidenceQualityNote
+                    assessmentId={assessmentId}
+                    itemId={itemId}
+                    evidenceId={e.evidence_id as number}
+                    quality={(e.quality as EvidenceQuality | null) ?? null}
+                    onRechecked={() => qc.invalidateQueries({ queryKey: ['masvs-ev', itemId] })}
+                  />
+                )}
               </li>
             );
           })}

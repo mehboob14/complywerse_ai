@@ -30,3 +30,4 @@ from ._55_ai_control_proposal_models import *  # noqa: F401,F403 - AI control pr
 from ._56_scf_catalog_models import *  # noqa: F401,F403 - SCF canonical catalog + tenant overlay
 from ._57_custom_control_models import *  # noqa: F401,F403 - custom control profile + cross-module record links
 from ._58_audit_register_models import *  # noqa: F401,F403 - audit issue register profile + workbook imports
+from ._59_evidence_quality_models import *  # noqa: F401,F403 - does this file prove the item it was attached to

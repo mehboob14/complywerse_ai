@@ -78,12 +78,18 @@ OCR_PROCESSABLE_TYPES = {
 logger = logging.getLogger(__name__)
 
 
-def process_evidence_background(evidence_id: int, tenant_slug: str):
+def process_evidence_background(evidence_id: int, tenant_slug: str, target=None):
     """Background task to process OCR and AI assessment for uploaded evidence.
 
     Runs on upload for OCR-processable files: OCR first, then (once OCR has
     content) the AI assessment. Failures are LOGGED (not swallowed) so a
     non-running AI assessment can be diagnosed from the backend logs.
+
+    `target` is a `services.evidence_quality.QualityTarget` when the upload knows
+    what the file is meant to prove — an assessment item, a requirement, a
+    control. Then the file is also reviewed against that one thing, which is the
+    question the library assessment above cannot answer. Uploads with no target
+    behave exactly as before.
 
     IMPORTANT: this is database-per-tenant, so the thread MUST open a
     tenant-scoped session (`open_tenant_session(slug)`). Binding to the master
@@ -151,6 +157,17 @@ def process_evidence_background(evidence_id: int, tenant_slug: str):
                     db.commit()
                 except Exception:
                     db.rollback()
+
+        if target is not None:
+            # Against the one thing it was attached to. Its own failures are
+            # recorded on the row, so this only guards the unexpected.
+            try:
+                from ....services.evidence_quality import check_and_save
+
+                check_and_save(db, evidence.tenant_id, evidence, target,
+                               user_id=getattr(evidence, "uploaded_by", None))
+            except Exception:
+                logger.exception("Evidence quality check failed for evidence %s", evidence_id)
     except Exception:
         logger.exception("Background OCR/assessment task crashed for evidence %s", evidence_id)
     finally:

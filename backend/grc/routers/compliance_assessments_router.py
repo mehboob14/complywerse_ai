@@ -6165,6 +6165,14 @@ def get_item_evidence(
                 "matching_rationale": mapping.matching_rationale,
             })
 
+    # What each file proves about THIS item, as the review left it.
+    from ..services.evidence_quality import for_evidence
+
+    verdicts = for_evidence(db, item.tenant_id, [row["evidence_id"] for row in result],
+                            _item_quality_target(item))
+    for row in result:
+        row["quality"] = verdicts.get(row["evidence_id"])
+
     return {
         "item_id": item_id,
         "assessment_id": assessment_id,
@@ -6244,6 +6252,9 @@ def link_existing_item_evidence(
     db.commit()
     db.refresh(evidence_link)
 
+    # A file linked from the library was never judged against this item either.
+    _review_evidence_against_item(db, evidence.id, item)
+
     return {
         "id": evidence_link.id,
         "evidence_id": evidence.id,
@@ -6256,8 +6267,78 @@ def link_existing_item_evidence(
         "current_tier": evidence_link.current_tier,
         "approval_status": evidence_link.status,
         "already_linked": False,
+        "quality_pending": True,
         "message": "Evidence linked successfully"
     }
+
+
+def _item_quality_target(item: ComplianceAssessmentDocumentItem):
+    """What this item asks of its evidence, for the quality review."""
+    from ..services.evidence_quality import QualityTarget
+
+    where = " / ".join(x for x in (item.area_domain, item.subdomain_name) if x)
+    return QualityTarget(
+        kind="assessment_item",
+        ref=str(item.id),
+        label=" — ".join(x for x in (item.item_number, where) if x) or f"Item {item.id}",
+        requirement=item.control_description or "",
+        guidance=item.remarks or "",
+    )
+
+
+def _review_evidence_against_item(db: Session, evidence_id: int,
+                                  item: ComplianceAssessmentDocumentItem) -> None:
+    """Extract the file's text, then review it against this item — in a thread,
+    so an upload is never held up by its own review, nor failed by it."""
+    import threading
+
+    from ..models import Tenant
+    from ..modules.evidence.routers.evidence import process_evidence_background
+
+    slug = db.query(Tenant.slug).filter(Tenant.id == item.tenant_id).scalar()
+    if not slug:
+        logger.warning("No tenant slug for item %s; evidence %s not reviewed", item.id, evidence_id)
+        return
+    threading.Thread(target=process_evidence_background,
+                     args=(evidence_id, slug, _item_quality_target(item)),
+                     daemon=True).start()
+
+
+@router.post("/{assessment_id}/items/{item_id}/evidence/{evidence_id}/quality")
+def recheck_item_evidence_quality(
+    assessment_id: int,
+    item_id: int,
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Review one file against this item again, and wait for the answer."""
+    user_tenants = get_user_tenants(current_user, db)
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.assessment_id == assessment_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+    evidence = db.query(Evidence).filter(
+        Evidence.id == evidence_id, Evidence.tenant_id == item.tenant_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+
+    if not (evidence.ocr_content or "").strip():
+        try:
+            from ..modules.evidence.routers.ocr import process_evidence_ocr
+
+            process_evidence_ocr(evidence, db)
+        except Exception:
+            logger.exception("OCR failed for evidence %s before its quality review", evidence_id)
+
+    from ..services.evidence_quality import check_and_save, out
+
+    row = check_and_save(db, item.tenant_id, evidence, _item_quality_target(item),
+                         user_id=current_user.id, force=True)
+    return {"item_id": item_id, "evidence_id": evidence_id, "quality": out(row)}
 
 
 @router.post("/{assessment_id}/items/{item_id}/evidence/upload")
@@ -6328,7 +6409,9 @@ async def upload_item_evidence(
     db.add(evidence_link)
     db.commit()
     db.refresh(evidence_link)
-    
+
+    _review_evidence_against_item(db, evidence.id, item)
+
     return {
         "id": evidence_link.id,
         "evidence_id": evidence.id,
@@ -6339,6 +6422,7 @@ async def upload_item_evidence(
         "workflow_id": evidence_link.workflow_id,
         "current_tier": evidence_link.current_tier,
         "approval_status": evidence_link.status,
+        "quality_pending": True,
         "message": "Evidence uploaded successfully"
     }
 

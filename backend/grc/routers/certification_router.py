@@ -1966,7 +1966,21 @@ async def upload_control_evidence(
     db.refresh(impl_evidence)
 
     if library_evidence and ocr_status_val == "pending":
-        background_tasks.add_task(trigger_ocr_and_assessment_background, library_evidence.id, current_user.id)
+        # Reviewed against this requirement too, not just mapped to clauses.
+        from ..services.evidence_quality import QualityTarget
+
+        pc, fc = implementation.parsed_control, implementation.framework_control
+        target = QualityTarget(
+            kind="framework_requirement",
+            ref=str(getattr(pc, "original_reference", None) or getattr(pc, "control_id", None)
+                    or getattr(fc, "control_id", None) or implementation.id),
+            label=getattr(pc, "title", None) or getattr(fc, "name", None) or "",
+            requirement=(getattr(pc, "description", None) or getattr(pc, "full_text", None)
+                         or getattr(fc, "statement", None) or ""),
+            guidance=implementation.implementation_notes or "",
+        )
+        background_tasks.add_task(trigger_ocr_and_assessment_background,
+                                  library_evidence.id, current_user.id, target)
 
     return impl_evidence
 

@@ -2985,9 +2985,18 @@ async def upload_evidence_to_control(
         # process_evidence_background needs the tenant slug to open the tenant DB;
         # called without it, the thread raised TypeError and OCR never ran.
         from ....models import Tenant
+        from ....services.evidence_quality import QualityTarget
         slug = db.query(Tenant.slug).filter(Tenant.id == tenant_id).scalar()
         if slug:
-            _th.Thread(target=process_evidence_background, args=(ev.id, slug), daemon=True).start()
+            # Also review the file against this control. SCF wording is licensed,
+            # so a restricted control is judged on its code alone.
+            target = QualityTarget(
+                kind="control", ref=info["code"] or str(ctrl_id), label=info["name"] or "",
+                requirement="" if info.get("restricted") else (info.get("text") or ""),
+                restricted=bool(info.get("restricted")),
+            )
+            _th.Thread(target=process_evidence_background, args=(ev.id, slug, target),
+                       daemon=True).start()
     return {
         "evidence_id": ev.id, "linked_controls": created,
         "ocr_processing": ocr == "pending",
