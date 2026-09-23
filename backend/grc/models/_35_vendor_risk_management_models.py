@@ -117,6 +117,11 @@ class VendorAssessment(Base):
     risk_rating = Column(String(20), nullable=True)
     findings = Column(JSON, default=[])
     recommendations = Column(JSON, default=[])
+    # What the AI suggested, kept apart from the analyst's own list above, which it
+    # used to overwrite. A suggestion becomes a governed finding (grc_tpra_findings)
+    # only when a person raises it.
+    ai_findings = Column(JSON, default=list)
+    ai_recommendations = Column(JSON, default=list)
     # Stage 4 — AI gap analysis output (residual vs inherent delta): list of
     # {gap, control_ref, severity, inherent_contribution, residual_after_controls}.
     gap_analysis = Column(JSON, default=list)

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { vendorRiskApi } from '@/lib/api';
+import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
@@ -27,6 +27,7 @@ import {
   Star,
   Paperclip,
   FileText,
+  Sparkles,
 } from 'lucide-react';
 import Link from 'next/link';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
@@ -173,6 +174,117 @@ const getQuestionCategory = (q: TemplateQuestion, assessmentType?: string): stri
 };
 
 // â”€â”€â”€ Component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+
+type AiSuggestion = { finding?: string; title?: string; description?: string; severity?: string; category?: string };
+const SEVERITIES = ['critical', 'high', 'medium', 'low'] as const;
+const SEV_CLS: Record<string, string> = {
+  critical: 'bg-red-50 text-red-700 border-red-200',
+  high: 'bg-orange-50 text-orange-700 border-orange-200',
+  medium: 'bg-amber-50 text-amber-800 border-amber-200',
+  low: 'bg-slate-50 text-slate-600 border-slate-200',
+};
+
+/** What the AI suggested, kept apart from the analyst's own findings above.
+ *
+ *  A suggestion is not a finding: governed findings gate the lifecycle, feed the
+ *  risk register and — when critical — suspend an onboarded vendor. So a person
+ *  raises each one deliberately, choosing its severity.
+ */
+function AiSuggestions({ assessmentId, items, canRaise }: {
+  assessmentId: number;
+  items: unknown[];
+  canRaise: boolean;
+}) {
+  const qc = useQueryClient();
+  const [raised, setRaised] = useState<Record<number, boolean>>({});
+  const [severity, setSeverity] = useState<Record<number, string>>({});
+  const [error, setError] = useState<string | null>(null);
+
+  const raise = useMutation({
+    mutationFn: async ({ index, item }: { index: number; item: AiSuggestion }) => {
+      const text = item.finding || item.title || item.description || 'AI-suggested finding';
+      const sev = severity[index] || (SEVERITIES as readonly string[]).find((x) => x === (item.severity || '').toLowerCase()) || 'medium';
+      if (sev === 'critical' && !confirm('A critical finding suspends an onboarded vendor until it is resolved. Raise it as critical?')) {
+        return null;
+      }
+      await tpraApi.createFinding(assessmentId, {
+        title: text.slice(0, 255),
+        severity: sev,
+        domain: 'cybersecurity',
+        description: [item.description && item.description !== text ? item.description : null,
+          item.category ? `Area: ${item.category}` : null, 'Raised from an AI suggestion.']
+          .filter(Boolean).join(' · '),
+      });
+      return index;
+    },
+    onSuccess: (index) => {
+      if (index === null) return;
+      setError(null);
+      setRaised((r) => ({ ...r, [index]: true }));
+      qc.invalidateQueries({ queryKey: ['assessment', assessmentId] });
+    },
+    onError: (e: unknown) => {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(detail || 'Could not raise that finding.');
+    },
+  });
+
+  const list = (Array.isArray(items) ? items : []).filter((x) => x && typeof x === 'object') as AiSuggestion[];
+  if (list.length === 0) return null;
+
+  return (
+    <div className="bg-white rounded-xl border border-violet-200 p-3 sm:p-4">
+      <div className="mb-1 flex items-center gap-1.5">
+        <Sparkles className="h-4 w-4 text-violet-600" />
+        <h3 className="text-sm font-semibold text-slate-900">AI suggestions ({list.length})</h3>
+      </div>
+      <p className="mb-3 text-xs text-slate-500">
+        Not findings yet. Raise the ones you agree with — they then gate the lifecycle and reach the risk register.
+      </p>
+      {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
+      <ul className="space-y-2">
+        {list.map((item, index) => {
+          const text = item.finding || item.title || item.description || 'Suggestion';
+          const suggested = (item.severity || 'medium').toLowerCase();
+          const chosen = severity[index] || suggested;
+          return (
+            <li key={index} className="rounded-lg border border-slate-200 px-3 py-2">
+              <div className="flex flex-wrap items-start gap-2">
+                <span className={`mt-0.5 rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase ${SEV_CLS[suggested] || SEV_CLS.medium}`}>
+                  {suggested}
+                </span>
+                <span className="min-w-0 flex-1 text-sm text-slate-700">{text}</span>
+                {raised[index] ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> Raised
+                  </span>
+                ) : canRaise ? (
+                  <span className="flex items-center gap-1.5">
+                    <select
+                      aria-label="Severity"
+                      value={chosen}
+                      onChange={(e) => setSeverity((s) => ({ ...s, [index]: e.target.value }))}
+                      className="rounded border border-slate-300 px-1.5 py-1 text-xs"
+                    >
+                      {SEVERITIES.map((x) => <option key={x} value={x}>{x}</option>)}
+                    </select>
+                    <button
+                      onClick={() => raise.mutate({ index, item })}
+                      disabled={raise.isPending}
+                      className="rounded-md border border-violet-300 bg-violet-50 px-2 py-1 text-xs font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-60"
+                    >
+                      Raise as finding
+                    </button>
+                  </span>
+                ) : null}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 export default function AssessmentDetailPage() {
   const params = useParams();
@@ -623,6 +735,12 @@ export default function AssessmentDetailPage() {
               </div>
             )}
           </div>
+
+          <AiSuggestions
+            assessmentId={assessmentId}
+            items={(assessment as { ai_findings?: unknown[] }).ai_findings || []}
+            canRaise={canEdit && !isApproved}
+          />
 
           {/* Recommendations */}
           <div className="bg-white rounded-xl border border-gray-200 p-3 sm:p-4">

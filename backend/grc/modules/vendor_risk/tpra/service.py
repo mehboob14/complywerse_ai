@@ -529,6 +529,85 @@ def _collect_from_questionnaire(db: Session, assessment: VendorAssessment) -> Li
     return build_responses_from_answers(questions, qr.responses or {})
 
 
+_ANSWER_LABEL = {"yes": "Yes", "partial": "Partial", "no": "No", "n-a": "N-A"}
+
+
+def materialise_responses(db: Session, assessment: VendorAssessment, qr) -> int:
+    """Write a submitted questionnaire as one normalized row per question.
+
+    The vendor portal stores a single JSON blob, so grc_tpra_question_responses
+    stayed empty and per-question review had nothing to hang off. Scoring already
+    prefers these rows over the blob, so they must score identically: one row per
+    template question, answered or not, because the blob path scores unanswered
+    questions too.
+
+    The template's questions are written to grc_tpra_questions first. Scoring takes
+    domain, weight and the critical-control flag from that join, so an answer with
+    no question row would score as a plain cybersecurity question and a failed
+    critical control would pass unnoticed. Custom templates were never backfilled
+    there; this does it on first submission.
+
+    Idempotent: re-running with the same answers changes nothing, and a changed
+    answer bumps its row version. Returns how many answers it holds.
+    """
+    if assessment is None or qr is None or not assessment.template_id:
+        return 0
+    template = (db.query(VendorQuestionnaireTemplate)
+                .filter(VendorQuestionnaireTemplate.id == assessment.template_id).first())
+    defs = list((template.questions or []) if template else [])
+    if not defs:
+        return 0
+
+    questions = {
+        q.question_key: q for q in db.query(TPRAQuestion).filter(
+            TPRAQuestion.template_id == assessment.template_id,
+            TPRAQuestion.tenant_id == assessment.tenant_id,
+        )
+    }
+    answers = {
+        r.question_key: r for r in db.query(TPRAQuestionResponse).filter(
+            TPRAQuestionResponse.assessment_id == assessment.id,
+            TPRAQuestionResponse.deleted_at.is_(None),
+        )
+    }
+    written = 0
+    for order, (definition, scored) in enumerate(zip(defs, build_responses_from_answers(defs, qr.responses or {}))):
+        key = str(scored["question_key"])
+        question = questions.get(key)
+        if question is None:
+            question = TPRAQuestion(tenant_id=assessment.tenant_id, template_id=assessment.template_id,
+                                    question_key=key, text=key)
+            db.add(question)
+            questions[key] = question
+        # In step with the template as the vendor answered it.
+        question.text = str(definition.get("text") or question.text or key)
+        question.domain = scored["domain"]
+        question.weight = scored["weight"]
+        question.critical_control = scored["critical_control"]
+        question.evidence_required = bool(definition.get("evidence_required") or definition.get("evidence"))
+        question.qtype = definition.get("type") or question.qtype or "yes_no"
+        question.options = definition.get("options") or []
+        question.order = order
+        db.flush()
+
+        label = _ANSWER_LABEL.get(normalize_answer(scored["answer"]) or "")
+        raw = None if scored["answer"] is None else str(scored["answer"])
+        row = answers.get(key)
+        if row is None:
+            row = TPRAQuestionResponse(tenant_id=assessment.tenant_id, assessment_id=assessment.id,
+                                       question_key=key, row_version=1)
+            db.add(row)
+            answers[key] = row
+        elif (row.question_id, row.answer, row.raw_value) != (question.id, label, raw):
+            row.row_version = (row.row_version or 1) + 1
+        row.question_id = question.id
+        row.answer = label
+        row.raw_value = raw
+        row.legacy_response_id = qr.id
+        written += 1
+    return written
+
+
 def _count_required_evidence_missing(db: Session, assessment: VendorAssessment) -> int:
     """How many evidence-required, affirmatively-answered questions lack ANY attached
     evidence. Approximate (evidence isn't matched per-question in the blob) but makes

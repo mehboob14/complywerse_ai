@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session, joinedload
 from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireResponse,
     VendorQuestionnaireTemplate, VendorIncident, VendorSLARecord,
-    GRCUser, get_db,
+    GRCUser, get_db, TPRAFinding,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import rbac
@@ -190,8 +190,10 @@ Be specific and actionable in your findings and recommendations. Base scores on 
         # engine_scoring (which clamp residual <= inherent and apply the critical
         # floor); here we persist just the AI narrative for an analyst to weigh and
         # leave the governed scores + status untouched.
-        assessment.findings = result.get("findings", [])
-        assessment.recommendations = result.get("recommendations", [])
+        # Into the AI's own columns: the analyst's list beside them is theirs,
+        # and this used to overwrite it.
+        assessment.ai_findings = result.get("findings", []) or []
+        assessment.ai_recommendations = result.get("recommendations", []) or []
         assessment.updated_at = datetime.utcnow()
         db.commit()
 
@@ -434,7 +436,16 @@ def ai_gap_analysis(
     if not assessment:
         raise HTTPException(status_code=404, detail="Assessment not found")
 
-    findings = assessment.findings or []
+    # The governed findings on this assessment. The JSON list this used to read
+    # mixed the analyst's strings with the AI's dicts, and `.get` on a string
+    # crashed the endpoint the moment anyone typed a finding by hand.
+    findings = [
+        {"finding": f.title or f.description or "Control gap", "severity": f.severity or "medium",
+         "category": f.domain or ""}
+        for f in db.query(TPRAFinding).filter(
+            TPRAFinding.assessment_id == assessment.id, TPRAFinding.deleted_at.is_(None),
+        ).order_by(TPRAFinding.id).all()
+    ]
     inherent = assessment.inherent_score if assessment.inherent_score is not None else 50.0
     sev_weight = {"critical": 12, "high": 8, "medium": 4, "low": 2}
     penalty = sum(sev_weight.get(str(f.get("severity") or "medium").lower(), 4) for f in findings)

@@ -11,6 +11,7 @@ from sqlalchemy import func
 from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireTemplate,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
+    TPRAFinding,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import rbac
@@ -59,6 +60,28 @@ class ApproveRequest(BaseModel):
 
 # ── Serializers ───────────────────────────────────────────────────
 
+def _split(items) -> tuple:
+    """The analyst types plain text into these lists. Before the AI had columns of
+    its own it wrote dicts into the same ones, which is how a string and a dict
+    came to share a list. Returns (analyst's, the AI's)."""
+    analyst, ai = [], []
+    for item in items or []:
+        (ai if isinstance(item, dict) else analyst).append(item)
+    return analyst, ai
+
+
+OPEN_FINDING = ("open", "in_remediation")
+
+
+def _open_findings(db: Session, assessment_id: int) -> int:
+    """Governed findings still open on this assessment."""
+    return db.query(TPRAFinding).filter(
+        TPRAFinding.assessment_id == assessment_id,
+        TPRAFinding.deleted_at.is_(None),
+        TPRAFinding.status.in_(OPEN_FINDING),
+    ).count()
+
+
 def serialize_assessment(a: VendorAssessment) -> dict:
     data = {
         "id": a.id,
@@ -70,8 +93,14 @@ def serialize_assessment(a: VendorAssessment) -> dict:
         "inherent_score": a.inherent_score,
         "residual_score": a.residual_score,
         "risk_rating": a.risk_rating,
-        "findings": a.findings or [],
-        "recommendations": a.recommendations or [],
+        # The analyst's own notes. Governed findings — the ones that gate the
+        # lifecycle — live in grc_tpra_findings, not here.
+        "findings": _split(a.findings)[0],
+        "recommendations": _split(a.recommendations)[0],
+        # What the AI suggested; a person raises one to make it a governed finding.
+        "ai_findings": list(getattr(a, "ai_findings", None) or []) + _split(a.findings)[1],
+        "ai_recommendations": (list(getattr(a, "ai_recommendations", None) or [])
+                               + _split(a.recommendations)[1]),
         "gap_analysis": getattr(a, "gap_analysis", None) or [],
         "linked_risk_id": getattr(a, "linked_risk_id", None),
         "assessed_by": a.assessed_by,
@@ -306,6 +335,13 @@ def update_assessment(
     assessment = get_assessment_or_404(assessment_id, tenant_ids, db)
 
     update_data = payload.model_dump(exclude_unset=True)
+    # Saving the analyst's list must not drop what the AI once wrote into it:
+    # move those entries to the AI's own column first.
+    for column, ai_column in (("findings", "ai_findings"), ("recommendations", "ai_recommendations")):
+        if column in update_data:
+            _, legacy = _split(getattr(assessment, column))
+            if legacy:
+                setattr(assessment, ai_column, list(getattr(assessment, ai_column, None) or []) + legacy)
     for key, value in update_data.items():
         setattr(assessment, key, value)
 
@@ -483,7 +519,7 @@ def approve_assessment(
             desc = (
                 f"Residual third-party risk from the {assessment.assessment_type} assessment of "
                 f"vendor '{vendor.name}'. Rating: {assessment.risk_rating or 'n/a'}. "
-                f"Open findings: {len(assessment.findings or [])}."
+                f"Open findings: {_open_findings(db, assessment.id)}."
             )
             existing = None
             if getattr(assessment, "linked_risk_id", None):

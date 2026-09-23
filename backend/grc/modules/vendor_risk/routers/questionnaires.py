@@ -1,5 +1,6 @@
 """Questionnaire template management + external vendor questionnaire access."""
 
+import logging
 import os
 import uuid
 from typing import List, Optional
@@ -14,6 +15,8 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import rbac
+
+logger = logging.getLogger(__name__)
 
 EVIDENCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "uploads", "questionnaire-evidence")
 os.makedirs(EVIDENCE_UPLOAD_DIR, exist_ok=True)
@@ -262,6 +265,9 @@ def update_questionnaire_response(
         raise HTTPException(status_code=404, detail="Questionnaire response not found")
     if payload.assessment_id is not None:
         qr.assessment_id = payload.assessment_id
+        if qr.status == "submitted":
+            _materialise(db, db.query(VendorAssessment).filter(
+                VendorAssessment.id == qr.assessment_id).first(), qr)
     db.commit()
     db.refresh(qr)
     return serialize_questionnaire_response(qr)
@@ -412,6 +418,21 @@ def external_load_questionnaire(
     }
 
 
+def _materialise(db: Session, assessment, qr) -> None:
+    """Write the answers as per-question rows for review and scoring. A vendor's
+    submission must never fail over this: the answers are already saved, and
+    scoring reads them from the questionnaire itself until the rows exist."""
+    if assessment is None:
+        return
+    try:
+        with db.begin_nested():
+            from ..tpra.service import materialise_responses
+
+            materialise_responses(db, assessment, qr)
+    except Exception:  # noqa: BLE001
+        logger.exception("Could not write per-question answers for questionnaire %s", qr.id)
+
+
 @router.post("/questionnaires/external/{token}")
 def external_submit_questionnaire(
     token: str,
@@ -454,6 +475,7 @@ def external_submit_questionnaire(
             if assessment and assessment.status == "draft":
                 assessment.status = "submitted"
                 assessment.updated_at = datetime.utcnow()
+            _materialise(db, assessment, qr)
     else:
         # Save draft
         qr.status = "in_progress"

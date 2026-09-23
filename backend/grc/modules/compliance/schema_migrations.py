@@ -895,6 +895,10 @@ _COLUMN_ADDS = [
     # holds their definitions; the values live here).
     ("grc_audit_observations", "custom_values", "JSON DEFAULT '{}'::json", None),
     ("grc_audit_plan_entries", "custom_values", "JSON DEFAULT '{}'::json", None),
+    # AI-suggested findings on a vendor assessment, kept apart from the analyst's
+    # own list (vendor_risk/routers/ai_analysis.py used to overwrite it).
+    ("grc_vendor_assessments", "ai_findings", "JSON DEFAULT '[]'::json", None),
+    ("grc_vendor_assessments", "ai_recommendations", "JSON DEFAULT '[]'::json", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat
