@@ -319,6 +319,11 @@ def on_startup():
         import logging
         logging.getLogger(__name__).exception("compliance schema self-heal failed")
 
+    # The scheduled jobs in celery_app.beat_schedule: no VM runs celery beat, so
+    # the web app queues them itself (services/platform_clock.py).
+    from .services import platform_clock
+    platform_clock.start()
+
     _disable_embedded = os.getenv("DISABLE_EMBEDDED_WORKFLOW_RUNTIME", "").strip().lower()
     if _disable_embedded not in ("1", "true", "yes", "on"):
         start_workflow_engine_runtime()
@@ -331,6 +336,8 @@ def on_startup():
 
 @app.on_event("shutdown")
 def on_shutdown():
+    from .services import platform_clock
+    platform_clock.stop()
     stop_workflow_engine_runtime()
     stop_complychat_embedding_worker()
 
