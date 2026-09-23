@@ -40,6 +40,8 @@ from .routers import search_router
 from .routers import teams_router
 # Per-tenant status levels, SLA days and extra fields for a module.
 from .routers import module_settings_router
+# Administration → Scheduler: the recurring jobs the platform clock queues.
+from .routers import scheduler_router
 # Notes / History / derived Alerts for assets + vulnerabilities.
 from .routers import entity_extras_router
 
@@ -274,6 +276,7 @@ app.include_router(search_router)
 app.include_router(teams_router)
 # Status levels, SLA days and extra fields a tenant sets per module.
 app.include_router(module_settings_router)
+app.include_router(scheduler_router)
 # Notes, History, derived Alerts for assets + vulnerabilities.
 app.include_router(entity_extras_router.router)
 

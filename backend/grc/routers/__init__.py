@@ -31,6 +31,7 @@ from .search_router import router as search_router
 # Teams — admin CRUD for org teams used by the asset ownership-chain dropdown.
 from .teams_router import router as teams_router
 from .module_settings_router import router as module_settings_router
+from .scheduler_router import router as scheduler_router
 
 __all__ = [
     "auth_router",
@@ -57,4 +58,5 @@ __all__ = [
     "search_router",
     "teams_router",
     "module_settings_router",
+    "scheduler_router",
 ]

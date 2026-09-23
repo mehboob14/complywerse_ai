@@ -519,6 +519,7 @@ const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; 
   { id: 'workflow',         label: 'Workflow Engine',    icon: GitPullRequest },
   { id: 'usage',            label: 'Usage Monitoring',   icon: Activity, href: '/admin/usage' },
   { id: 'audit',            label: 'Audit Logs',         icon: ScrollText },
+  { id: 'scheduler',        label: 'Scheduler',          icon: CalendarClock, href: '/admin/scheduler' },
 ];
 
 function AdministrationPopover({

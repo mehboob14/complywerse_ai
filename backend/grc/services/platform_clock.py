@@ -137,6 +137,22 @@ def tick(now: Optional[datetime] = None, db: Optional[Session] = None,
     return queued
 
 
+def run_now(db: Session, key: str, send: Callable[[Dict], str] = _send) -> Dict:
+    """Queue one job immediately, outside its cadence — for an operator who needs
+    the feed refreshed now rather than tomorrow. It counts as a run, so the next
+    scheduled one is a full cadence later."""
+    job = next((j for j in schedule() if j["key"] == key), None)
+    if job is None:
+        raise KeyError(key)
+    now = datetime.utcnow()
+    task_id = send(job)
+    db.add(ScheduledJobRun(job_key=key, task=job["task"], status="queued", queued_at=now,
+                           task_id=task_id, detail="queued by hand",
+                           host=socket.gethostname()[:120], pid=os.getpid()))
+    db.commit()
+    return {"key": key, "task_id": task_id, "queued_at": now.isoformat()}
+
+
 def status(db: Session, now: Optional[datetime] = None) -> List[Dict]:
     """Each job, when it last went on the queue, when it is next due, and its last failure."""
     now = now or datetime.utcnow()

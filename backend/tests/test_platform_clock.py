@@ -109,3 +109,18 @@ def test_status_reports_the_last_queue_and_clears_a_failure_once_it_succeeds(db)
     report = {r["key"]: r for r in clock.status(db, now=NOW + timedelta(minutes=1))}
     assert report["daily"]["last_failure"] is None
     assert report["daily"]["overdue"] is False
+
+
+def test_run_now_queues_one_job_and_resets_its_clock(db):
+    calls, send = _sent()
+    clock.run_now(db, "daily", send=send)
+    assert calls == ["daily"]
+    # it counts as a run: a tick straight afterwards leaves it alone
+    calls2, send2 = _sent()
+    clock.tick(now=datetime.utcnow(), db=db, send=send2)
+    assert "daily" not in calls2
+
+
+def test_run_now_refuses_a_job_that_does_not_exist(db):
+    with pytest.raises(KeyError):
+        clock.run_now(db, "no-such-job", send=lambda job: "x")
