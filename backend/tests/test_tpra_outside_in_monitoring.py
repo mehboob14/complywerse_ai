@@ -18,7 +18,7 @@ from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAExternalRating, TPRAFinding,
     TPRAMonitoringCursor, TPRAMonitoringSignal, TPRARiskAcceptance, TPRARiskSnapshot, TPRASignalRejection,
-    TPRATieringConfig, Vendor, VendorAssessment, VendorQuestionnaireResponse,
+    TPRATieringConfig, TPRAVendorProduct, Vendor, VendorAssessment, VendorQuestionnaireResponse,
 )
 from grc.modules.vendor_risk.tpra import adverse_media, attention, monitoring, ratings, service
 from grc.modules.vendor_risk.tpra import monitoring_connectors as feeds
@@ -27,7 +27,7 @@ NOW = datetime(2026, 9, 24, 12, 0)
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireResponse, TPRAFinding, TPRAAuditLog,
            TPRATieringConfig, Evidence, TPRAEvidenceLink, TPRAMonitoringSignal, TPRAMonitoringCursor,
            TPRASignalRejection, TPRAExternalRating, TPRAContract, TPRAControlObligation, TPRAApproval,
-           TPRARiskAcceptance, TPRARiskSnapshot, AttentionState, AttentionActivity]
+           TPRARiskAcceptance, TPRARiskSnapshot, AttentionState, AttentionActivity, TPRAVendorProduct]
 
 
 @pytest.fixture()
@@ -114,7 +114,8 @@ def test_articles_pass_four_checks_and_one_publisher_is_not_enough():
 # ── the runner ───────────────────────────────────────────────────────────────
 
 def test_news_monitoring_is_off_until_a_tenant_turns_it_on(db):
-    assert [p["configured"] for p in feeds.providers(db, 1)] == [True, False]
+    # the certificate feed always; news once turned on; product watch once a product is watched
+    assert [p["configured"] for p in feeds.providers(db, 1)] == [True, False, False]
 
 
 def test_a_feed_fills_the_queue_dedupes_and_is_corroborated_later(db, monkeypatch):

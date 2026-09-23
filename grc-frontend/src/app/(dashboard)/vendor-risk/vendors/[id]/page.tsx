@@ -24,6 +24,7 @@ import {
 import Link from 'next/link';
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import TpraLifecycle from './_tpra/TpraLifecycle';
+import DependenciesPanel from './_tpra/DependenciesPanel';
 
 interface Vendor {
   id: number;
@@ -146,7 +147,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
-type TabType = 'lifecycle' | 'overview' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'overview' | 'dependencies' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -180,13 +181,17 @@ export default function VendorDetailPage() {
   const deepLinkFindingRaw = searchParams?.get('finding');
   const deepLinkFinding = deepLinkFindingRaw && !Number.isNaN(Number(deepLinkFindingRaw)) ? Number(deepLinkFindingRaw) : null;
   const deepLinkApplied = useRef(false);
+  const deepLinkTab = searchParams?.get('tab') as TabType | null;
   useEffect(() => {
     if (deepLinkApplied.current) return;
     if (deepLinkStage || deepLinkFinding != null) {
       setActiveTab('lifecycle');
       deepLinkApplied.current = true;
+    } else if (deepLinkTab && ['lifecycle', 'overview', 'dependencies', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
+      setActiveTab(deepLinkTab);                       // ?tab=dependencies from Concentration
+      deepLinkApplied.current = true;
     }
-  }, [deepLinkStage, deepLinkFinding]);
+  }, [deepLinkStage, deepLinkFinding, deepLinkTab]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -302,6 +307,7 @@ export default function VendorDetailPage() {
   const tabs: { key: TabType; label: string; count?: number }[] = [
     { key: 'lifecycle', label: 'Lifecycle' },
     { key: 'overview', label: 'Overview' },
+    { key: 'dependencies', label: 'Dependencies' },
     { key: 'assessments', label: 'Assessments', count: vendor.assessments_count },
     { key: 'sla', label: 'SLA Tracking', count: vendor.sla_records_count },
     { key: 'incidents', label: 'Incidents', count: vendor.incidents_count },
@@ -574,6 +580,13 @@ export default function VendorDetailPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Dependencies Tab — what breaks if this vendor fails */}
+      {activeTab === 'dependencies' && (
+        <div role="tabpanel" id="vendor-tabpanel-dependencies" aria-labelledby="vendor-tab-dependencies" tabIndex={0} className="focus:outline-none">
+          <DependenciesPanel vendorId={vendorId} />
         </div>
       )}
 

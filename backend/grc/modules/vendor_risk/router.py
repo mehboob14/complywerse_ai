@@ -10,6 +10,7 @@ from .routers import (
 from .tpra.api import router as tpra_router
 from .tpra.dashboard import router as tpra_dashboard_router
 from .tpra.attention import router as tpra_attention_router
+from .tpra.graph import router as tpra_graph_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -26,6 +27,8 @@ router.include_router(tpra_router)
 router.include_router(tpra_dashboard_router)
 # What needs somebody today, computed from current data.
 router.include_router(tpra_attention_router)
+# Fourth parties, concentration and what depends on each vendor.
+router.include_router(tpra_graph_router)
 
 
 @router.get("")

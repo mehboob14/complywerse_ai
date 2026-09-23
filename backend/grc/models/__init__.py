@@ -36,3 +36,4 @@ from ._62_vendor_reminders import *  # noqa: F401,F403 - third-party risk remind
 from ._63_attention import *  # noqa: F401,F403 - snoozes, assignments and notes on attention-queue items
 from ._64_tpra_template_versions import *  # noqa: F401,F403 - questionnaire templates frozen as sent
 from ._65_tpra_monitoring import *  # noqa: F401,F403 - monitoring cursors, ruled-out alerts, external ratings
+from ._66_tpra_vendor_graph import *  # noqa: F401,F403 - fourth parties, platform aliases, vendor links and products

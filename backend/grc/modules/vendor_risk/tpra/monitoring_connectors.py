@@ -14,6 +14,9 @@ Feeds today:
   * GDELT news — breach and adverse-media coverage, through the four checks in
     adverse_media.py. Off until a tenant turns it on (it queries the internet
     with vendor names).
+  * CISA KEV — a known-exploited vulnerability in a product on a vendor's
+    watchlist. On once any vendor has a watched product; it reads the catalogue
+    the vulnerability module already downloads daily, every vendor every day.
 A security-ratings provider is a paid feed (decision 2): it plugs in as another
 connector when a client asks for one; until then ratings arrive by import
 (ratings.py).
@@ -21,13 +24,14 @@ connector when a client asks for one; until then ratings arrive by import
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from ....models import Evidence, TPRAEvidenceLink, Vendor
+from ....models import Evidence, TPRAEvidenceLink, TPRAVendorProduct, Vendor
 from . import adverse_media, monitoring
 from .bootstrap import get_tiering_config
 
@@ -54,8 +58,9 @@ class MonitoringConnector:
 
     provider: str = "base"
     label: str = ""
-    kind: str = ""                     # certificates | adverse_media | ratings | exposure
+    kind: str = ""                     # certificates | adverse_media | ratings | vulnerabilities
     reaches_internet: bool = False
+    every_days: Optional[int] = None   # one cadence for every vendor, instead of the tier's
 
     def is_configured(self, db: Session, tenant_id: int) -> bool:
         return False
@@ -108,7 +113,66 @@ class AdverseMediaConnector(MonitoringConnector):
         return [SignalDraft(**draft) for draft in found]
 
 
-CONNECTORS: List[MonitoringConnector] = [CertificateLapseConnector(), AdverseMediaConnector()]
+def _words(text) -> str:
+    return " ".join(w for w in re.split(r"[^a-z0-9]+", str(text or "").lower().replace("_", " ")) if w)
+
+
+def product_matches(product: TPRAVendorProduct, vendor_name: str, entry: dict) -> bool:
+    """Does a catalogue entry concern this watched product? The vendor must match
+    (its CPE vendor, or the vendor's own name); then the product, if one is named."""
+    wanted_vendors = {_words(product.cpe_vendor), _words(adverse_media.core_name(vendor_name))} - {""}
+    if _words(entry.get("vendor_project")) not in wanted_vendors:
+        return False
+    wanted = _words(product.cpe_product) or _words(product.name)
+    found = _words(entry.get("product"))
+    return not wanted or wanted in found or (bool(found) and found in wanted)
+
+
+def _kev_catalogue() -> dict:
+    from ...vuln_management.enrichment.kev_cache import all_kev_cves, kev_metadata
+
+    return {cve: kev_metadata(cve) or {} for cve in all_kev_cves()}
+
+
+class ProductWatchConnector(MonitoringConnector):
+    provider = "CISA KEV"
+    label = "Known exploited vulnerabilities in watched products"
+    kind = "vulnerabilities"
+    reaches_internet = True            # the CISA catalogue, already fetched for vulnerability enrichment
+    every_days = 1
+    catalogue = staticmethod(_kev_catalogue)
+
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
+        return db.query(TPRAVendorProduct.id).filter(TPRAVendorProduct.tenant_id == tenant_id).first() is not None
+
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        products = db.query(TPRAVendorProduct).filter(TPRAVendorProduct.vendor_id == vendor.id).all()
+        if not products:
+            return []
+        start = (since or now - timedelta(days=30)) - timedelta(days=3)
+        drafts = []
+        for cve, entry in self.catalogue().items():
+            added = entry.get("date_added")
+            if not added or added < start or not any(product_matches(p, vendor.name, entry) for p in products):
+                continue
+            ransomware = str(entry.get("known_ransomware_campaign_use") or "").lower() == "known"
+            action = entry.get("required_action")
+            due = entry.get("due_date")
+            drafts.append(SignalDraft(
+                signal_type="vulnerability", severity="high" if ransomware else "medium",
+                title=f"{cve}: {entry.get('vulnerability_name') or entry.get('product') or 'known exploited vulnerability'}"[:255],
+                detail=(f"{entry.get('short_description') or ''}"
+                        + (f"\n\nRequired action: {action}" if action else "")
+                        + (f" (CISA due date {due:%d %b %Y})" if due else "")
+                        + ("\n\nKnown to be used in ransomware campaigns." if ransomware else "")).strip(),
+                external_id=f"kev:{cve}", occurred_at=added,
+                sources=[{"url": f"https://nvd.nist.gov/vuln/detail/{cve}", "title": cve, "domain": "nvd.nist.gov"}],
+                verification={"verified": True, "checks": {"catalogue": "CISA Known Exploited Vulnerabilities"}},
+            ))
+        return drafts
+
+
+CONNECTORS: List[MonitoringConnector] = [CertificateLapseConnector(), AdverseMediaConnector(), ProductWatchConnector()]
 
 
 def providers(db: Session, tenant_id: int) -> List[dict]:
@@ -133,7 +197,8 @@ def run_connectors(db: Session, tenant_id: int, now: Optional[datetime] = None, 
         if not connector.is_configured(db, tenant_id):
             continue
         tally = {"polled": 0, "failed": 0, "new_signals": 0, "verified": 0}
-        for vendor, last in monitoring.due_vendors(db, tenant_id, connector.provider, now, batch):
+        for vendor, last in monitoring.due_vendors(db, tenant_id, connector.provider, now, batch,
+                                                   every_days=connector.every_days):
             try:
                 with db.begin_nested():
                     for draft in connector.poll(db, vendor, last, now):

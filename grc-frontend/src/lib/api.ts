@@ -2491,6 +2491,25 @@ export const tpraApi = {
   rejectSignal: (signalId: number, reason?: string) =>
     apiClient.post(`/vendor-risk/tpra/signals/${signalId}/reject`, { reason }),
   monitoringProviders: () => apiClient.get('/vendor-risk/tpra/monitoring/providers'),
+  // Stage 6: the vendor graph — what depends on a vendor, fourth parties, concentration.
+  vendorImpact: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/impact`),
+  linkTargets: (type: 'asset' | 'bia_process', search: string) =>
+    apiClient.get('/vendor-risk/tpra/link-targets', { params: { type, search } }),
+  addVendorLinks: (vendorId: number, data: { target_type: 'asset' | 'bia_process'; target_ids: number[]; relation?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/links`, data),
+  removeVendorLink: (linkId: number) => apiClient.delete(`/vendor-risk/tpra/vendor-links/${linkId}`),
+  addFourthParty: (vendorId: number, data: { name: string; service?: string; data_shared?: string[]; location?: string; critical?: boolean }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/fourth-parties`, data),
+  removeFourthParty: (id: number) => apiClient.delete(`/vendor-risk/tpra/fourth-parties/${id}`),
+  watchProduct: (vendorId: number, data: { name: string; cpe_vendor?: string; cpe_product?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/products`, data),
+  unwatchProduct: (id: number) => apiClient.delete(`/vendor-risk/tpra/vendor-products/${id}`),
+  concentration: (minVendors = 2) => apiClient.get('/vendor-risk/tpra/concentration', { params: { min_vendors: minVendors } }),
+  sharedVulnerabilities: (days = 90) => apiClient.get('/vendor-risk/tpra/concentration/vulnerabilities', { params: { days } }),
+  platformAliases: () => apiClient.get('/vendor-risk/tpra/platform-aliases'),
+  addPlatformAlias: (data: { alias: string; platform?: string; excluded?: boolean }) =>
+    apiClient.post('/vendor-risk/tpra/platform-aliases', data),
+  removePlatformAlias: (id: number) => apiClient.delete(`/vendor-risk/tpra/platform-aliases/${id}`),
   vendorRatings: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/ratings`),
   importRatings: (form: FormData) => apiClient.post('/vendor-risk/tpra/ratings/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
