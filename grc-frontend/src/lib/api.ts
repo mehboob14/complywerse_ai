@@ -2271,6 +2271,8 @@ export const vendorRiskApi = {
     respondent_email?: string;
     expires_in_days?: number;
     due_in_days?: number;
+    certificate_evidence_id?: number;
+    certificate_mode?: 'off' | 'prefill' | 'skip';
   }) => apiClient.post('/vendor-risk/questionnaires/send', data),
   getQuestionnaireResponses: (params?: { vendor_id?: number; assessment_id?: number }) =>
     apiClient.get('/vendor-risk/questionnaire-responses', { params }),
@@ -2285,6 +2287,18 @@ export const vendorRiskApi = {
     apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/accept`),
   resendQuestionnaire: (responseId: number, data?: { expires_in_days?: number; due_in_days?: number }) =>
     apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/resend`, data || {}),
+  // Evidence behind the answers: library records, attached once, reviewed against each question.
+  questionnaireEvidence: (responseId: number) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/evidence`),
+  searchEvidenceLibrary: (responseId: number, search: string) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/library`, { params: { search } }),
+  attachQuestionEvidence: (responseId: number, data: { question_key: string; evidence_id: number }) =>
+    apiClient.post(`/vendor-risk/questionnaire-responses/${responseId}/evidence`, data),
+  detachQuestionEvidence: (responseId: number, linkId: number) =>
+    apiClient.delete(`/vendor-risk/questionnaire-responses/${responseId}/evidence/${linkId}`),
+  // In-date evidence held for a vendor that can answer questions for it.
+  vendorCertificates: (vendorId: number) =>
+    apiClient.get('/vendor-risk/questionnaires/certificates', { params: { vendor_id: vendorId } }),
 
   // ── TPRA 8-stage lifecycle ──
   getLifecycleStages: () => apiClient.get('/vendor-risk/lifecycle/stages'),

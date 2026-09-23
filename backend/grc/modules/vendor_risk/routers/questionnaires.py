@@ -4,18 +4,20 @@ import logging
 import os
 import uuid
 from typing import List, Literal, Optional
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pydantic import BaseModel, Field
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireTemplate, TPRATemplateVersion,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
+    Evidence, TPRAEvidenceLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import portal, rbac, versions
+from ..tpra import questionnaire_evidence as qevidence
 from ..tpra.service import write_audit
 
 logger = logging.getLogger(__name__)
@@ -62,6 +64,9 @@ class SendQuestionnaireRequest(BaseModel):
     respondent_email: Optional[str] = None
     expires_in_days: Optional[int] = 30     # the link stops working
     due_in_days: Optional[int] = 14         # the answers are due; reminders run on this
+    # A certificate in the library answering the questions the template lets it.
+    certificate_evidence_id: Optional[int] = None
+    certificate_mode: Literal["off", "prefill", "skip"] = "off"
 
 
 class ExternalSubmitRequest(BaseModel):
@@ -82,6 +87,11 @@ class ReviewRequest(BaseModel):
 
 class ReturnRequest(BaseModel):
     due_in_days: int = Field(7, ge=1, le=90)
+
+
+class AttachEvidenceRequest(BaseModel):
+    question_key: str
+    evidence_id: int
 
 
 class ResendRequest(BaseModel):
@@ -132,6 +142,8 @@ def serialize_questionnaire_response(qr: VendorQuestionnaireResponse) -> dict:
         "comments": qr.vendor_comments or {},
         "review": qr.review or {},
         "accepted_at": qr.accepted_at.isoformat() if qr.accepted_at else None,
+        "certificate": {"evidence_id": qr.certificate_evidence_id, "mode": qr.certificate_mode}
+        if qr.certificate_evidence_id else None,
         "created_at": qr.created_at.isoformat() if qr.created_at else None,
     }
 
@@ -371,6 +383,19 @@ def send_questionnaire(
             raise HTTPException(status_code=404, detail="Template not found")
         version = versions.publish(db, template, current_user.id)
 
+    certificate = None
+    if payload.certificate_mode != "off":
+        if version is None:
+            raise HTTPException(status_code=400, detail="A certificate can only answer a template's questions")
+        certificate = db.query(Evidence).filter(
+            Evidence.id == payload.certificate_evidence_id, Evidence.tenant_id.in_(tenant_ids)).first()
+        problem = qevidence.certificate_problem(db, certificate, vendor)
+        if problem is None and not qevidence.covered(version.questions or []):
+            problem = ("None of this template's questions can be answered by a certificate. "
+                       "Mark them in the template first.")
+        if problem:
+            raise HTTPException(status_code=400, detail=problem)
+
     expires_in = max(1, min(int(payload.expires_in_days or 30), 365))
     due_in = max(1, min(int(payload.due_in_days or 14), expires_in))
     now = datetime.utcnow()
@@ -389,6 +414,10 @@ def send_questionnaire(
         status="pending",
     )
     db.add(qr)
+    db.flush()
+    if certificate is not None:
+        qevidence.apply_certificate(db, qr, version.questions or [], certificate, payload.certificate_mode,
+                                    current_user.id)
     db.commit()
     db.refresh(qr)
     _email_link(db, qr)
@@ -569,6 +598,10 @@ def external_load_questionnaire(
     # The questions as they were sent, whatever has happened to the template since.
     questions = versions.questions_for(db, qr)
     db.commit()                      # a link sent before versions existed is pinned now
+    fixed = qevidence.locked(qr, questions)
+    if fixed:
+        questions = [{**q, "locked": True} if str(q.get("id")) in fixed else q for q in questions]
+    certificate = db.get(Evidence, qr.certificate_evidence_id) if qr.certificate_evidence_id else None
 
     vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
     evidence_by_question: dict = {}
@@ -595,6 +628,10 @@ def external_load_questionnaire(
         # While returned, only these can change: {question key: what the reviewer asked}.
         "clarifications": portal.clarifications(qr.review) if qr.status == "returned" else {},
         "attestation": {"name": qr.attested_name, "title": qr.attested_title, "email": qr.attested_email},
+        # A certificate answered some questions: in skip mode they cannot be changed.
+        "certificate": {"name": certificate.name, "mode": qr.certificate_mode,
+                        "expires": certificate.expiry_date.isoformat() if certificate.expiry_date else None}
+        if certificate else None,
         "evidence": evidence_by_question,
     }
 
@@ -629,6 +666,7 @@ def external_submit_questionnaire(
     qr = _validate_external_token(token, db)
     questions = versions.questions_for(db, qr)
     answers = portal.merge(qr.status, questions, qr.responses or {}, payload.responses or {}, qr.review)
+    answers.update(qevidence.locked(qr, questions))
     open_to_comment = (set(portal.clarifications(qr.review)) if qr.status == "returned"
                        else {str(q.get("id")) for q in questions})
     comments = dict(qr.vendor_comments or {})
@@ -694,14 +732,24 @@ async def external_upload_evidence(
     token: str,
     question_id: str,
     file: UploadFile = File(...),
+    expires_on: Optional[date] = Form(None),
     db: Session = Depends(get_db),
 ):
     """Upload evidence file for a specific question. No auth — token validated.
 
     Hardened (TPRM-009): extension allow-list, 25 MB size cap (bounded read),
     per-questionnaire file cap, and a UUID-based on-disk name derived only from the
-    validated extension (no path traversal from the client filename)."""
+    validated extension (no path traversal from the client filename).
+
+    The file also becomes an evidence-library record linked to the question, with
+    the expiry the vendor gives (a certificate's), and is reviewed against the
+    question in the background."""
     qr = _validate_external_token(token, db)
+    question = next((q for q in versions.questions_for(db, qr) if str(q.get("id")) == question_id), None)
+    if question is None:
+        raise HTTPException(status_code=404, detail="That question is not in this questionnaire")
+    if qr.status == "returned" and question_id not in portal.clarifications(qr.review):
+        raise HTTPException(status_code=409, detail="Only the questions your contact asked about can change now")
 
     # Extension allow-list — reject executables/scripts/unknown types.
     filename = (file.filename or "").strip()
@@ -735,17 +783,23 @@ async def external_upload_evidence(
     with open(file_path, "wb") as f:
         f.write(contents)
 
+    display_name = (os.path.basename(filename) or unique_name)[:255]
+    library = qevidence.attach_upload(
+        db, qr, question, db.query(Vendor).filter(Vendor.id == qr.vendor_id).first(),
+        file_path=file_path, file_name=display_name, file_type=file.content_type, expires_on=expires_on)
     evidence = VendorQuestionnaireEvidence(
         response_id=qr.id,
         question_id=(question_id or "")[:100],
-        file_name=(os.path.basename(filename) or unique_name)[:255],
+        file_name=display_name,
         file_path=file_path,
         file_type=file.content_type,
         file_size=len(contents),
+        evidence_id=library.id,
     )
     db.add(evidence)
     db.commit()
     db.refresh(evidence)
+    qevidence.review(db, qr, question, library)
 
     return {
         "id": evidence.id,
@@ -800,6 +854,15 @@ def external_delete_evidence(
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidence not found")
 
+    # The vendor withdrew it before submitting: its library record goes too.
+    if evidence.evidence_id:
+        library = db.get(Evidence, evidence.evidence_id)
+        if library is not None:
+            library.status = "archived"
+        for link in db.query(TPRAEvidenceLink).filter(TPRAEvidenceLink.evidence_id == evidence.evidence_id,
+                                                      TPRAEvidenceLink.deleted_at.is_(None)):
+            link.deleted_at = datetime.utcnow()
+
     # Remove file from disk
     if evidence.file_path and os.path.exists(evidence.file_path):
         os.remove(evidence.file_path)
@@ -808,3 +871,95 @@ def external_delete_evidence(
     db.commit()
 
     return {"message": "Evidence deleted successfully"}
+
+
+# ── Evidence behind the answers (authenticated) ──────────────────
+
+@router.get("/questionnaire-responses/{response_id}/evidence")
+def questionnaire_evidence(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The library evidence behind each answer, with its review against that question."""
+    return qevidence.by_question(db, _response_or_404(db, current_user, response_id))
+
+
+@router.get("/questionnaire-responses/{response_id}/library")
+def search_library(
+    response_id: int,
+    search: str = Query("", max_length=100),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Library evidence an analyst could attach to an answer instead of asking for it again."""
+    qr = _response_or_404(db, current_user, response_id)
+    q = db.query(Evidence).filter(Evidence.tenant_id == qr.tenant_id,
+                                  ~Evidence.status.in_(("archived", "superseded", "rejected")))
+    if search.strip():
+        q = q.filter(Evidence.name.ilike(f"%{search.strip()}%"))
+    return [{"id": e.id, "name": e.name, "evidence_type": e.evidence_type,
+             "expiry_date": e.expiry_date.isoformat() if e.expiry_date else None}
+            for e in q.order_by(Evidence.uploaded_at.desc()).limit(20)]
+
+
+@router.post("/questionnaire-responses/{response_id}/evidence")
+def attach_library_evidence(
+    response_id: int,
+    payload: AttachEvidenceRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    rbac.require_write(db, current_user, "assessments", "edit")
+    qr = _response_or_404(db, current_user, response_id)
+    question = next((q for q in versions.questions_for(db, qr) if str(q.get("id")) == payload.question_key), None)
+    if question is None:
+        raise HTTPException(status_code=404, detail="That question is not in this questionnaire")
+    evidence = db.query(Evidence).filter(Evidence.id == payload.evidence_id,
+                                         Evidence.tenant_id == qr.tenant_id).first()
+    if evidence is None:
+        raise HTTPException(status_code=404, detail="That evidence is not in the library")
+    link = qevidence.attach_library(db, qr, question, evidence, current_user.id)
+    _audit(db, qr, current_user, "evidence", to_value="attached", question_key=payload.question_key,
+           evidence_id=evidence.id)
+    db.commit()
+    qevidence.review(db, qr, question, evidence)
+    return {"link_id": link.id}
+
+
+@router.delete("/questionnaire-responses/{response_id}/evidence/{link_id}")
+def detach_evidence(
+    response_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    rbac.require_write(db, current_user, "assessments", "edit")
+    qr = _response_or_404(db, current_user, response_id)
+    link = db.query(TPRAEvidenceLink).filter(TPRAEvidenceLink.id == link_id, TPRAEvidenceLink.questionnaire_id == qr.id,
+                                             TPRAEvidenceLink.deleted_at.is_(None)).first()
+    if link is None:
+        raise HTTPException(status_code=404, detail="Evidence link not found")
+    link.deleted_at = datetime.utcnow()
+    _audit(db, qr, current_user, "evidence", to_value="detached", question_key=link.question_key,
+           evidence_id=link.evidence_id)
+    db.commit()
+    return {"ok": True}
+
+
+@router.get("/questionnaires/certificates")
+def vendor_certificates(
+    vendor_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """In-date evidence already held for a vendor: what can answer questions for it."""
+    tenant_ids = get_user_tenants(current_user, db) or [-1]
+    ids = {i for (i,) in db.query(TPRAEvidenceLink.evidence_id).filter(
+        TPRAEvidenceLink.vendor_id == vendor_id, TPRAEvidenceLink.tenant_id.in_(tenant_ids),
+        TPRAEvidenceLink.deleted_at.is_(None))}
+    rows = db.query(Evidence).filter(Evidence.id.in_(ids or [-1]), Evidence.expiry_date.isnot(None),
+                                     Evidence.expiry_date >= datetime.utcnow(),
+                                     ~Evidence.status.in_(("archived", "superseded", "rejected"))).all()
+    return [{"id": e.id, "name": e.name, "expiry_date": e.expiry_date.isoformat(),
+             "read": bool((e.ocr_content or "").strip())} for e in rows]

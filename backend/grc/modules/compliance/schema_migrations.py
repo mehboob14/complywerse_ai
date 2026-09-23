@@ -920,6 +920,12 @@ _COLUMN_ADDS = [
     ("grc_vendor_questionnaire_responses", "review", "JSON DEFAULT '{}'::json", None),
     ("grc_vendor_questionnaire_responses", "accepted_by", "INTEGER", None),
     ("grc_vendor_questionnaire_responses", "accepted_at", "TIMESTAMP", None),
+    # Questionnaire evidence in the library, once (tpra/questionnaire_evidence.py).
+    ("grc_vendor_questionnaire_responses", "certificate_evidence_id", "INTEGER", None),
+    ("grc_vendor_questionnaire_responses", "certificate_mode", "VARCHAR(12)", None),
+    ("grc_vendor_questionnaire_evidence", "evidence_id", "INTEGER", None),
+    ("grc_tpra_evidence_links", "questionnaire_id", "INTEGER", "ix_tpra_evlink_questionnaire"),
+    ("grc_tpra_evidence_links", "question_key", "VARCHAR(100)", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

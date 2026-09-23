@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'next/navigation';
-import { AlertCircle, CheckCircle, Clock, FileText, Loader2, MessageSquare, Save, Send, Shield } from 'lucide-react';
+import { AlertCircle, CheckCircle, Clock, FileText, Loader2, Lock, MessageSquare, Paperclip, Save, Send, Shield, Trash2 } from 'lucide-react';
 import apiClient from '@/lib/api';
 
 type QuestionType = 'text' | 'yes_no' | 'multiple_choice' | 'rating';
@@ -18,7 +18,11 @@ interface Question {
   options?: Array<string | { value: string; label?: string }>;
   // Shown only when an earlier question was answered with one of these values.
   show_if?: { question: string; in: string[] };
+  // Answered by a certificate the requester already holds; cannot be changed.
+  locked?: boolean;
 }
+
+type EvidenceFile = { id: number; file_name: string; file_type: string | null; file_size: number | null };
 
 interface Attestation { name: string; title: string; email: string }
 
@@ -35,7 +39,8 @@ interface QuestionnaireResponseData {
   comments: Record<string, string>;
   clarifications: Record<string, string | null>;
   attestation: { name: string | null; title: string | null; email: string | null };
-  evidence: Record<string, Array<{ id: number; file_name: string; file_type: string | null; file_size: number | null }>>;
+  certificate: { name: string; mode: string; expires: string | null } | null;
+  evidence: Record<string, EvidenceFile[]>;
 }
 
 const optionsOf = (question: Question) =>
@@ -86,6 +91,9 @@ export default function ExternalQuestionnairePage() {
   const [attestation, setAttestation] = useState<Attestation>({ name: '', title: '', email: '' });
   const [confirmed, setConfirmed] = useState(false);
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<Record<string, EvidenceFile[]>>({});
+  const [uploading, setUploading] = useState<string | null>(null);
+  const [expiresOn, setExpiresOn] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!token) return;
@@ -101,6 +109,7 @@ export default function ExternalQuestionnairePage() {
         setRespondentEmail(payload.respondent_email || '');
         setResponses(emptyFormState(payload.questions || [], payload.existing_responses || {}));
         setComments(payload.comments || {});
+        setEvidence(payload.evidence || {});
         setAttestation({
           name: payload.attestation?.name || payload.respondent_name || '',
           title: payload.attestation?.title || '',
@@ -116,9 +125,44 @@ export default function ExternalQuestionnairePage() {
     loadQuestionnaire();
   }, [token]);
 
+  const reloadEvidence = async () => {
+    const res = await apiClient.get(`/vendor-risk/questionnaires/external/${token}/evidence`);
+    setEvidence((res.data || {}) as Record<string, EvidenceFile[]>);
+  };
+
+  // The file goes into the requester's evidence library against this question,
+  // with the expiry date the vendor gives (for a certificate or a report).
+  const uploadFile = async (questionId: string, file: File) => {
+    setUploading(questionId);
+    setError(null);
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      if (expiresOn[questionId]) form.append('expires_on', expiresOn[questionId]);
+      await apiClient.post(`/vendor-risk/questionnaires/external/${token}/evidence/${encodeURIComponent(questionId)}`, form, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      await reloadEvidence();
+    } catch (uploadError: any) {
+      setError(uploadError?.response?.data?.detail || 'The file could not be uploaded.');
+    } finally {
+      setUploading(null);
+    }
+  };
+
+  const deleteFile = async (fileId: number) => {
+    setError(null);
+    try {
+      await apiClient.delete(`/vendor-risk/questionnaires/external/${token}/evidence/${fileId}`);
+      await reloadEvidence();
+    } catch (deleteError: any) {
+      setError(deleteError?.response?.data?.detail || 'The file could not be removed.');
+    }
+  };
+
   const returned = data?.status === 'returned';
   const clarifications = data?.clarifications || {};
-  const canEdit = (question: Question) => !returned || question.id in clarifications;
+  const canEdit = (question: Question) => !question.locked && (!returned || question.id in clarifications);
 
   const shownQuestions = useMemo(() => applicable(data?.questions || [], responses), [data, responses]);
 
@@ -231,6 +275,14 @@ export default function ExternalQuestionnairePage() {
           </div>
         </div>
 
+        {data?.certificate && !done && (
+          <div className="mb-6 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            Some questions were answered from <span className="font-medium">{data.certificate.name}</span>
+            {data.certificate.expires ? `, valid until ${new Date(data.certificate.expires).toLocaleDateString()}` : ''}.
+            {data.certificate.mode === 'skip' ? ' Those answers are fixed.' : ' Check them and change any that are wrong.'}
+          </div>
+        )}
+
         {returned && !done && (
           <div className="mb-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             <p className="font-medium">
@@ -328,6 +380,11 @@ export default function ExternalQuestionnairePage() {
                           {question.text}
                           {question.required && <span className="ml-1 text-rose-600" aria-hidden="true">*</span>}
                         </p>
+                        {question.locked && (
+                          <p className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 px-3 py-1.5 text-xs text-emerald-800">
+                            <Lock className="h-3.5 w-3.5" /> Answered by your certificate
+                          </p>
+                        )}
                         {isAsked && (
                           <p className="mt-2 rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-900">
                             <span className="font-medium">Your contact asks: </span>{asked || 'Please review this answer.'}
@@ -351,6 +408,39 @@ export default function ExternalQuestionnairePage() {
                           ).map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
                       )}
+
+                      {(evidence[question.id]?.length || (question.evidence_required && editable)) ? (
+                        <div className="mt-3 space-y-2">
+                          {(evidence[question.id] || []).map((file) => (
+                            <div key={file.id} className="flex items-center gap-2 text-xs text-gray-700">
+                              <Paperclip className="h-3.5 w-3.5 text-gray-400" />
+                              <span className="truncate">{file.file_name}</span>
+                              {editable && (
+                                <button type="button" onClick={() => deleteFile(file.id)} aria-label={`Remove ${file.file_name}`}
+                                  className="rounded p-1 text-gray-400 hover:text-rose-600">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                          {editable && (
+                            <div className="flex flex-wrap items-end gap-3">
+                              <label className="text-xs font-medium text-gray-600">
+                                Attach a file
+                                <input type="file" className="mt-1 block text-xs" disabled={uploading === question.id}
+                                  onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(question.id, f); e.target.value = ''; }} />
+                              </label>
+                              <label className="text-xs font-medium text-gray-600">
+                                Expires on (certificates, reports)
+                                <input type="date" value={expiresOn[question.id] || ''}
+                                  onChange={(e) => setExpiresOn((prev) => ({ ...prev, [question.id]: e.target.value }))}
+                                  className="mt-1 block rounded-lg border border-gray-300 px-2 py-1 text-xs" />
+                              </label>
+                              {uploading === question.id && <Loader2 className="h-4 w-4 animate-spin text-primary-600" />}
+                            </div>
+                          )}
+                        </div>
+                      ) : null}
 
                       {commentOpen ? (
                         <label className="mt-3 block">

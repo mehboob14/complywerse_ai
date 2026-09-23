@@ -32,7 +32,7 @@ import {
 import Link from 'next/link';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 import EvidencePreviewButton from '@/components/evidence/EvidencePreviewButton';
-import { QuestionReview, ReviewBar, type ReviewableResponse } from './_review';
+import { QuestionEvidence, QuestionReview, ReviewBar, type ReviewableResponse } from './_review';
 
 interface Assessment {
   id: number;
@@ -980,6 +980,7 @@ export default function AssessmentDetailPage() {
                                         ))}
                                       </div>
                                     )}
+                                    <QuestionEvidence qr={qr} questionKey={String(q.id)} assessmentId={assessmentId} canEdit={canEdit} />
                                     <QuestionReview qr={qr} questionKey={String(q.id)} assessmentId={assessmentId} canEdit={canEdit} />
                                   </div>
                                 </div>

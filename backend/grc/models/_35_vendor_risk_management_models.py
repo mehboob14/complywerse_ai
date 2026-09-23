@@ -197,6 +197,9 @@ class VendorQuestionnaireResponse(Base):
     review = Column(JSON, default=dict)
     accepted_by = Column(Integer, nullable=True)
     accepted_at = Column(DateTime, nullable=True)
+    # A certificate answering the questions its template lets it: off | prefill | skip.
+    certificate_evidence_id = Column(Integer, nullable=True)
+    certificate_mode = Column(String(12), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     tenant = relationship("Tenant")
@@ -224,6 +227,8 @@ class VendorQuestionnaireEvidence(Base):
     file_path = Column(String(1000), nullable=False)
     file_type = Column(String(255), nullable=True)
     file_size = Column(Integer, nullable=True)
+    # The evidence-library record the upload became (tpra/questionnaire_evidence.py).
+    evidence_id = Column(Integer, nullable=True)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
 
     response = relationship("VendorQuestionnaireResponse", back_populates="evidence_files")

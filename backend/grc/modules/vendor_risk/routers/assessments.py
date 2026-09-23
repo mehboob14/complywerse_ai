@@ -16,6 +16,7 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import portal, rbac, versions
 from .questionnaires import serialize_questionnaire_response
+from ..tpra import questionnaire_evidence as qevidence
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Assessments"])
@@ -307,6 +308,8 @@ def get_assessment(
             "questions": questions,
             "template_version": version.version_no if version else None,
             "evidence": evidence_by_q,
+            # library evidence behind each answer, with its review against the question
+            "library_evidence": qevidence.by_question(db, r),
         })
     result["questionnaire_responses"] = qr_data
     db.commit()                      # links sent before versions existed are pinned now

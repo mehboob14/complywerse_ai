@@ -476,6 +476,9 @@ class TPRAEvidenceLink(Base):
     assessment_id = Column(Integer, ForeignKey("grc_vendor_assessments.id"), nullable=True, index=True)
     finding_id = Column(Integer, ForeignKey("grc_tpra_findings.id"), nullable=True, index=True)
     response_id = Column(Integer, nullable=True, index=True)   # optional: per-question response
+    # The questionnaire and question this evidence answers, when it answers one.
+    questionnaire_id = Column(Integer, nullable=True)
+    question_key = Column(String(100), nullable=True)
     evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
     note = Column(Text, nullable=True)
     created_by = Column(Integer, nullable=True)
