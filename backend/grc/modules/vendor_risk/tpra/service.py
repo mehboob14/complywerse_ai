@@ -29,7 +29,7 @@ from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
 from .engine_scoring import (
     score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity,
 )
-from . import versions
+from . import tier_policy, versions
 from .portal import ANSWERED
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
@@ -275,6 +275,8 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         )
         ctx["required_reviewers"] = len(required_reviewers_for(tier))
         ctx["reviewers_assigned"] = 1 if assessment.reviewed_by else 0
+        wanted = tier_policy.requirements(db, vendor, assessment, get_tiering_config(db, assessment.tenant_id))
+        ctx["tier_templates_unsent"] = [q["name"] for q in wanted["questionnaires"] if q["status"] == "unsent"]
     elif stage_key == "questionnaire":
         # Compute completeness from the REAL responses (normalized rows if present,
         # else the vendor-submitted questionnaire blob) — not the empty normalized
@@ -282,9 +284,12 @@ def build_stage_context(db: Session, vendor: Vendor, assessment: VendorAssessmen
         resp = collect_responses_for_scoring(db, assessment.id)
         total = len(resp)
         answered = sum(1 for r in resp if normalize_answer(r.get("answer")) is not None)
+        wanted = tier_policy.requirements(db, vendor, assessment, get_tiering_config(db, assessment.tenant_id))
         ctx.update(
             responses_total=total, responses_answered=answered,
             required_evidence_missing=_count_required_evidence_missing(db, assessment),
+            tier_questionnaires_unanswered=[q["name"] for q in wanted["questionnaires"] if q["status"] != "answered"],
+            tier_evidence_missing=[e["label"] for e in wanted["evidence"] if not e["satisfied"]],
         )
     elif stage_key == "scoring":
         ctx["residual_computed"] = assessment.residual_score is not None
@@ -478,6 +483,9 @@ def run_tiering(
             "business_criticality": vendor.tier,
         })
     result = compute_inherent_tier(factors, cfg)
+    # Recorded to notice when the facts move past it (tier_policy.retier_reasons).
+    assessment.tiering_basis = tier_policy.basis(vendor)
+    assessment.tier_override = None
     assessment.inherent_tier = result["tier"]
     assessment.inherent_score = result["score"]
     vendor.inherent_risk_score = result["score"]
@@ -674,6 +682,24 @@ def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]
     # REAL submitted answers instead of scoring nothing (which yields residual==inherent).
     assessment = db.query(VendorAssessment).filter(VendorAssessment.id == assessment_id).first()
     return _collect_from_questionnaire(db, assessment) if assessment else []
+
+
+def record_tier_override(db: Session, vendor: Vendor, assessment: VendorAssessment, tier: str,
+                         justification: str, actor_id: Optional[int]) -> None:
+    """A tier set by hand instead of computed: kept with who set it, why, and what
+    the engine had computed, and written to the vendor's audit trail."""
+    previous = assessment.inherent_tier or vendor.tier
+    computed = (assessment.tier_override or {}).get("computed") or assessment.inherent_tier
+    assessment.tier_override = {
+        "from": previous, "to": tier, "computed": computed, "justification": justification,
+        "by": actor_id, "at": datetime.utcnow().isoformat(),
+    }
+    assessment.inherent_tier = tier
+    assessment.row_version = (assessment.row_version or 1) + 1
+    vendor.tier = tier
+    write_audit(db, assessment.tenant_id, entity="tiering", action="override", vendor_id=vendor.id,
+                assessment_id=assessment.id, actor_id=actor_id, from_value=previous, to_value=tier,
+                reason=justification, extra={"computed": computed})
 
 
 def raise_answer_findings(db: Session, vendor: Vendor, assessment: VendorAssessment,

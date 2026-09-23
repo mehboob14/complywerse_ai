@@ -929,6 +929,11 @@ _COLUMN_ADDS = [
     # Follow-up questionnaires an answer called for (tpra/follow_ups.py).
     ("grc_vendor_questionnaire_responses", "parent_response_id", "INTEGER", None),
     ("grc_vendor_questionnaire_responses", "trigger_key", "VARCHAR(200)", "ix_vqr_trigger_key"),
+    # What a vendor's tier asks for, and keeping the tier true (tpra/tier_policy.py).
+    ("grc_tpra_tiering_config", "tier_policy", "JSON DEFAULT '{}'::json", None),
+    ("grc_tpra_evidence_links", "requirement", "VARCHAR(40)", None),
+    ("grc_vendor_assessments", "tiering_basis", "JSON", None),
+    ("grc_vendor_assessments", "tier_override", "JSON", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

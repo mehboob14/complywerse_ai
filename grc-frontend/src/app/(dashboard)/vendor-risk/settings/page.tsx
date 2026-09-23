@@ -6,8 +6,8 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing, ListChecks } from 'lucide-react';
-import { tpraApi } from '@/lib/api';
+import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing, ListChecks, Layers } from 'lucide-react';
+import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -21,17 +21,23 @@ interface ReminderPolicy {
   escalate_to: string[];
 }
 
+interface TierRules { template_ids: number[]; evidence: string[]; approver_role: string | null; reassess_on: string }
+
 interface ConfigResp {
   weights: Record<string, number>;
   thresholds: Record<string, number>;
   cadence_days: Record<string, number>;
   reminder_policy: ReminderPolicy;
   scoring_policy?: { partial_credit: number };
+  tier_policy?: Record<string, TierRules>;
   defaults: {
     weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number>;
-    reminder_policy: ReminderPolicy; scoring_policy?: { partial_credit: number };
+    reminder_policy: ReminderPolicy; scoring_policy?: { partial_credit: number }; tier_policy?: Record<string, TierRules>;
   };
-  meta: { factor_keys: string[]; factor_labels: Record<string, string>; tier_keys: string[]; cadence_keys: string[] };
+  meta: {
+    factor_keys: string[]; factor_labels: Record<string, string>; tier_keys: string[]; cadence_keys: string[];
+    evidence_kinds?: Record<string, string>; severities?: string[];
+  };
 }
 
 const inputCls = 'w-24 rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500 disabled:bg-gray-50';
@@ -59,6 +65,20 @@ export default function VendorRiskSettingsPage() {
   const [cadence, setCadence] = useState<Record<string, number>>({});
   const [reminders, setReminders] = useState<ReminderPolicy | null>(null);
   const [partialPct, setPartialPct] = useState<number | null>(null);
+  const [tierPolicy, setTierPolicy] = useState<Record<string, TierRules> | null>(null);
+
+  const { data: templates } = useQuery({
+    queryKey: ['questionnaire-templates-for-tier-policy'],
+    queryFn: async () => {
+      const res = await vendorRiskApi.getTemplates({ limit: 200 });
+      return ((Array.isArray(res.data) ? res.data : res.data?.items) || []) as Array<{ id: number; name: string }>;
+    },
+    ...TPRM_QUERY_OPTS,
+  });
+  const setTierRule = (tier: string, patch: Partial<TierRules>) =>
+    setTierPolicy((prev) => (prev ? { ...prev, [tier]: { ...prev[tier], ...patch } } : prev));
+  const toggle = (list: Array<string | number>, value: string | number) =>
+    list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
   const hydrate = (c: ConfigResp) => {
     setWeights(Object.fromEntries(c.meta.factor_keys.map((k) => [k, Math.round((c.weights[k] ?? 0) * 100)])));
@@ -66,6 +86,7 @@ export default function VendorRiskSettingsPage() {
     setCadence({ ...c.cadence_days });
     setReminders(c.reminder_policy ? { ...c.reminder_policy, escalate_to: [...(c.reminder_policy.escalate_to || [])] } : null);
     setPartialPct(c.scoring_policy ? Math.round(c.scoring_policy.partial_credit * 100) : null);
+    setTierPolicy(c.tier_policy ? JSON.parse(JSON.stringify(c.tier_policy)) : null);
   };
   useEffect(() => { if (data) hydrate(data); }, [data]);
 
@@ -76,6 +97,7 @@ export default function VendorRiskSettingsPage() {
       cadence_days: cadence,
       ...(reminders ? { reminder_policy: reminders } : {}),
       ...(partialPct !== null ? { scoring_policy: { partial_credit: partialPct / 100 } } : {}),
+      ...(tierPolicy ? { tier_policy: tierPolicy } : {}),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-config'] }); toast({ type: 'success', title: 'Settings saved', message: 'Tiering, scoring and the next reminder run use these values.' }); },
     onError: (e) => toast({ type: 'error', title: 'Could not save', message: errMsg(e, 'Try again.') }),
@@ -103,7 +125,7 @@ export default function VendorRiskSettingsPage() {
         </div>
         {canEdit && (
           <div className="flex items-center gap-2">
-            <button onClick={() => data && hydrate({ ...data, weights: data.defaults.weights, thresholds: data.defaults.thresholds, cadence_days: data.defaults.cadence_days, reminder_policy: data.defaults.reminder_policy, scoring_policy: data.defaults.scoring_policy })}
+            <button onClick={() => data && hydrate({ ...data, weights: data.defaults.weights, thresholds: data.defaults.thresholds, cadence_days: data.defaults.cadence_days, reminder_policy: data.defaults.reminder_policy, scoring_policy: data.defaults.scoring_policy, tier_policy: data.defaults.tier_policy })}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
               <RotateCcw className="h-3.5 w-3.5" /> Reset to defaults
             </button>
@@ -235,6 +257,73 @@ export default function VendorRiskSettingsPage() {
                 The owner is always told; these people are added once the escalation point passes.
               </p>
             </div>
+          </div>
+        </section>
+      )}
+
+      {/* What each tier asks for */}
+      {tierPolicy && data.meta.evidence_kinds && (
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-1 flex items-center gap-2">
+            <Layers className="h-4 w-4 text-primary-600" />
+            <h3 className="text-sm font-semibold text-slate-900">What each tier asks for</h3>
+          </div>
+          <p className="mb-3 text-[11px] text-gray-500">
+            A vendor&apos;s tier decides the questionnaires it answers, the evidence it must supply, who may approve it, and how
+            serious a monitoring signal must be to reopen its assessment. Questionnaires left unchosen fall back to the
+            built-in ones suggested for the tier.
+          </p>
+          <div className="space-y-3">
+            {(['critical', 'high', 'medium', 'low'] as const).map((tier) => {
+              const rules = tierPolicy[tier];
+              if (!rules) return null;
+              return (
+                <fieldset key={tier} className="rounded-lg border border-gray-200 p-3" disabled={!canEdit}>
+                  <legend className="px-1 text-xs font-semibold text-slate-800">{TIER_LABEL[tier]}</legend>
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <div>
+                      <p className="text-[11px] font-medium text-gray-600">Questionnaires</p>
+                      <div className="mt-1 max-h-28 space-y-0.5 overflow-y-auto">
+                        {(templates || []).map((t) => (
+                          <label key={t.id} className="flex items-center gap-1.5 text-xs text-slate-700">
+                            <input type="checkbox" checked={rules.template_ids.includes(t.id)}
+                              onChange={() => setTierRule(tier, { template_ids: toggle(rules.template_ids, t.id) as number[] })} />
+                            {t.name}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium text-gray-600">Evidence</p>
+                      <div className="mt-1 space-y-0.5">
+                        {Object.entries(data.meta.evidence_kinds!).map(([kind, label]) => (
+                          <label key={kind} className="flex items-start gap-1.5 text-xs text-slate-700">
+                            <input type="checkbox" className="mt-0.5" checked={rules.evidence.includes(kind)}
+                              onChange={() => setTierRule(tier, { evidence: toggle(rules.evidence, kind) as string[] })} />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <label className="text-[11px] font-medium text-gray-600">
+                      Approved only by someone with the role
+                      <input value={rules.approver_role || ''} placeholder="Anyone who may approve vendors"
+                        onChange={(e) => setTierRule(tier, { approver_role: e.target.value || null })}
+                        className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-normal disabled:bg-gray-50" />
+                    </label>
+                    <label className="text-[11px] font-medium text-gray-600">
+                      A monitoring signal reopens the assessment from
+                      <select value={rules.reassess_on} onChange={(e) => setTierRule(tier, { reassess_on: e.target.value })}
+                        className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-normal capitalize disabled:bg-gray-50">
+                        {(data.meta.severities || ['low', 'medium', 'high', 'critical']).map((sv) => (
+                          <option key={sv} value={sv}>{sv} severity up (a breach always does)</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                </fieldset>
+              );
+            })}
           </div>
         </section>
       )}

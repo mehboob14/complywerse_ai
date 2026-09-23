@@ -51,6 +51,8 @@ class VendorUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     tier: Optional[str] = None
+    # Needed to change the tier of a vendor whose tier was computed (an override).
+    tier_justification: Optional[str] = None
     status: Optional[str] = None
     vendor_type: Optional[str] = None
     industry: Optional[str] = None
@@ -406,6 +408,19 @@ def update_vendor(
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
 
     update_data = payload.model_dump(exclude_unset=True)
+    justification = " ".join((update_data.pop("tier_justification", None) or "").split())
+    # Changing the tier of a vendor whose tier was computed is an override: it
+    # needs a reason, and goes on the audit trail with what the engine said.
+    new_tier = update_data.get("tier")
+    if new_tier and new_tier != vendor.tier and vendor.inherent_risk_score is not None:
+        from ..tpra import service as tpra_service
+        active = tpra_service.get_active_assessment(db, vendor)
+        if active is not None and active.inherent_tier:
+            if len(justification) < 10:
+                raise HTTPException(status_code=400,
+                                    detail="This vendor's tier was computed. Explain why it should change.")
+            tpra_service.record_tier_override(db, vendor, active, new_tier, justification, current_user.id)
+            update_data.pop("tier")
     for key, value in update_data.items():
         setattr(vendor, key, value)
 

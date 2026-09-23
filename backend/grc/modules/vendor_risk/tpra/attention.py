@@ -29,7 +29,7 @@ from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
-from . import rbac
+from . import rbac, tier_policy
 from .bootstrap import get_tiering_config
 from .reminders import _INACTIVE_VENDOR, _day
 from .schema_migrations import ensure_tpra_columns
@@ -41,6 +41,7 @@ CONDITIONS: Dict[str, tuple] = {
     "critical_finding_past_sla": ("Critical finding past its SLA", 90),
     "obligation_breached": ("Contract obligation breached", 85),
     "rating_dropped": ("Risk rating worsened", 75),
+    "retier_needed": ("Due a re-tier", 72),
     "approved_never_tiered": ("Approved but never tiered", 70),
     "acceptance_expiring": ("Risk acceptance expiring", 65),
     "assessment_overdue": ("Assessment overdue", 65),
@@ -48,6 +49,7 @@ CONDITIONS: Dict[str, tuple] = {
     "certificate_expiring": ("Certificate expiring", 55),
     "contract_expiring": ("Contract expiring", 55),
     "questionnaire_to_review": ("Questionnaire to review", 50),
+    "tier_overridden": ("Tier set by hand", 45),
     "questionnaire_untouched": ("Questionnaire not started", 40),
 }
 _LAPSED_BONUS = 15              # a date that has passed outranks one that is coming
@@ -272,6 +274,27 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             "Link expired" if lapsed else f"Sent {_days((today - sent).days)} ago",
             f"/vendor-risk/assessments/{qr.assessment_id}?tab=questionnaire" if qr.assessment_id
             else f"/vendor-risk/vendors/{v.id}?stage=questionnaire")
+
+    # Tiers that have stopped being true, and tiers set by hand, for someone to look at.
+    for a in db.query(VendorAssessment).filter(
+            VendorAssessment.tenant_id == tenant_id, VendorAssessment.deleted_at.is_(None),
+            VendorAssessment.inherent_tier.isnot(None),
+            or_(VendorAssessment.lifecycle_status == "active", VendorAssessment.lifecycle_status.is_(None))):
+        v = vendors.get(a.vendor_id)
+        if v is None:
+            continue
+        reasons = tier_policy.retier_reasons(db, v, a)
+        if reasons:
+            add("retier_needed", "assessment", a.id, v, _day(v.updated_at) or today,
+                f"{v.name} may need re-tiering: {'; '.join(reasons)}", "Re-tier",
+                f"/vendor-risk/vendors/{v.id}?stage=tiering", tone="red")
+        override = a.tier_override or {}
+        if override.get("at"):
+            add("tier_overridden", "assessment", a.id, v, _day(datetime.fromisoformat(override["at"])),
+                f"{v.name}'s tier was set to {override.get('to')} by hand "
+                f"(computed {override.get('computed') or 'nothing'}): {override.get('justification')}",
+                f"{str(override.get('computed') or '?').title()} → {str(override.get('to')).title()}",
+                f"/vendor-risk/vendors/{v.id}?stage=tiering")
 
     # Questionnaires the vendor has answered that nobody has finished reviewing.
     for qr in db.query(VendorQuestionnaireResponse).filter(

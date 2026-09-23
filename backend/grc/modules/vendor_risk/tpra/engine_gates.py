@@ -67,6 +67,9 @@ def evaluate_stage_exit(stage_key: str, ctx: Dict) -> dict:
     elif stage_key == "dd_planning":
         if int(ctx.get("templates_selected", 0)) < 1:
             blockers.append("Select at least one questionnaire template.")
+        unsent = ctx.get("tier_templates_unsent") or []
+        if unsent:
+            blockers.append(f"Send the questionnaires this tier requires: {', '.join(unsent)}.")
         required = int(ctx.get("required_reviewers", 0))
         if int(ctx.get("reviewers_assigned", 0)) < required:
             blockers.append(f"Assign at least {required} reviewer(s) for this tier.")
@@ -81,6 +84,12 @@ def evaluate_stage_exit(stage_key: str, ctx: Dict) -> dict:
         missing = int(ctx.get("required_evidence_missing", 0))
         if missing > 0:
             blockers.append(f"{missing} required evidence item(s) missing.")
+        unanswered = ctx.get("tier_questionnaires_unanswered") or []
+        if unanswered:
+            blockers.append(f"Questionnaires this tier requires are not answered yet: {', '.join(unanswered)}.")
+        lacking = ctx.get("tier_evidence_missing") or []
+        if lacking:
+            blockers.append(f"Evidence this tier requires is missing or expired: {'; '.join(lacking)}.")
 
     elif stage_key == "scoring":
         if not _b(ctx, "residual_computed"):

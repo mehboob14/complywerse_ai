@@ -396,6 +396,9 @@ class TPRATieringConfig(Base):
     reminder_policy = Column(JSON, default=dict)
     # How answers score: {partial_credit: 0..1}. Frozen into each template version.
     scoring_policy = Column(JSON, default=dict)
+    # What each tier asks for: {tier: {template_ids, evidence, approver_role, reassess_on}}
+    # (tpra/tier_policy.py; its defaults apply to any tier left unset).
+    tier_policy = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -479,6 +482,8 @@ class TPRAEvidenceLink(Base):
     # The questionnaire and question this evidence answers, when it answers one.
     questionnaire_id = Column(Integer, nullable=True)
     question_key = Column(String(100), nullable=True)
+    # The evidence the vendor's tier asks for that this satisfies (tier_policy.EVIDENCE_KINDS).
+    requirement = Column(String(40), nullable=True)
     evidence_id = Column(Integer, ForeignKey("grc_evidence.id"), nullable=False, index=True)
     note = Column(Text, nullable=True)
     created_by = Column(Integer, nullable=True)

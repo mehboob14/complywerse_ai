@@ -22,7 +22,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import service, rbac, exchange
+from . import service, rbac, exchange, tier_policy
 from .stages import stages_payload, is_valid_stage
 from .engine_monitoring import should_trigger_reassessment
 from .schema_migrations import ensure_tpra_columns
@@ -219,6 +219,15 @@ class GateDecisionIn(BaseModel):
 class TieringIn(BaseModel):
     factors: Optional[dict] = None
 
+
+class TierOverrideIn(BaseModel):
+    tier: Literal["critical", "high", "medium", "low"]
+    justification: str
+
+
+class EvidenceRequirementIn(BaseModel):
+    requirement: Optional[str] = None       # a tier_policy.EVIDENCE_KINDS key, or None to clear
+
 class ReassessIn(BaseModel):
     reason: str
     assessment_type: Optional[str] = "reassessment"
@@ -341,6 +350,7 @@ class ConfigIn(BaseModel):
     cadence_days: Optional[dict] = None   # {critical, high, medium, low} in days
     reminder_policy: Optional[dict] = None  # see bootstrap.DEFAULT_TIERING_CONFIG["reminder_policy"]
     scoring_policy: Optional[dict] = None   # {partial_credit: 0..1}, frozen into each questionnaire version
+    tier_policy: Optional[dict] = None      # {tier: {template_ids, evidence, approver_role, reassess_on}}
 
 class PlanIn(BaseModel):
     """Persist the Due-Diligence Planning selections onto the assessment so the
@@ -748,7 +758,8 @@ def s_evlink(link: TPRAEvidenceLink, ev: Optional[Evidence]) -> dict:
     return {
         "id": link.id, "evidence_id": link.evidence_id,
         "assessment_id": link.assessment_id, "finding_id": link.finding_id,
-        "note": link.note,
+        "note": link.note, "requirement": link.requirement,
+        "expiry_date": ev.expiry_date.isoformat() if ev is not None and ev.expiry_date else None,
         "name": ev.name if ev else None, "file_name": getattr(ev, "file_name", None),
         "file_type": getattr(ev, "file_type", None), "evidence_type": getattr(ev, "evidence_type", None),
         "status": getattr(ev, "status", None), "has_file": bool(getattr(ev, "file_path", None)) if ev else False,
@@ -787,6 +798,14 @@ class EvidenceLinkIn(BaseModel):
     finding_id: Optional[int] = None
     response_id: Optional[int] = None
     note: Optional[str] = None
+    requirement: Optional[str] = None       # the evidence the tier asks for that this satisfies
+
+
+def _requirement(value: Optional[str]) -> Optional[str]:
+    if value and value not in tier_policy.EVIDENCE_KINDS:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            f"Requirement must be one of: {', '.join(tier_policy.EVIDENCE_KINDS)}")
+    return value or None
 
 
 @router.get("/assessments/{assessment_id}/evidence")
@@ -816,16 +835,19 @@ async def upload_assessment_evidence(
     note: Optional[str] = Form(None),
     finding_id: Optional[int] = Form(None),
     response_id: Optional[int] = Form(None),
+    requirement: Optional[str] = Form(None),
     file: UploadFile = File(...),
     db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
 ):
     tids = _tids(user, db)
     a = _assessment(db, assessment_id, tids)
     rbac.require_write(db, user, "assessments", "edit")
+    requirement = _requirement(requirement)
     ev = await _save_evidence_file(db, a.tenant_id, name, evidence_type, file, user.id)
     link = TPRAEvidenceLink(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
         finding_id=finding_id, response_id=response_id, evidence_id=ev.id, note=note, created_by=user.id,
+        requirement=requirement,
     )
     db.add(link)
     db.flush()
@@ -850,6 +872,7 @@ def link_assessment_evidence(
     link = TPRAEvidenceLink(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
         finding_id=body.finding_id, response_id=body.response_id, evidence_id=ev.id, note=body.note, created_by=user.id,
+        requirement=_requirement(body.requirement),
     )
     db.add(link)
     db.flush()
@@ -858,6 +881,48 @@ def link_assessment_evidence(
                         to_value=ev.name, extra={"evidence_id": ev.id, "linked_existing": True})
     db.commit()
     return s_evlink(link, ev)
+
+
+@router.patch("/evidence-links/{link_id}")
+def tag_evidence(link_id: int, body: EvidenceRequirementIn, db: Session = Depends(get_db),
+                 user: GRCUser = Depends(require_auth)):
+    """Say which of the tier's evidence requirements this evidence satisfies."""
+    tids = _tids(user, db)
+    link = _get(db, TPRAEvidenceLink, link_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    previous, link.requirement = link.requirement, _requirement(body.requirement)
+    service.write_audit(db, link.tenant_id, entity="evidence", action="update", vendor_id=link.vendor_id,
+                        assessment_id=link.assessment_id, entity_id=link.id, actor_id=user.id,
+                        from_value=previous, to_value=link.requirement, reason="Evidence requirement")
+    db.commit()
+    return s_evlink(link, db.get(Evidence, link.evidence_id))
+
+
+# ── What the tier asks for (Stage 4) ─────────────────────────────────────────
+
+@router.get("/assessments/{assessment_id}/tier-requirements")
+def tier_requirements(assessment_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    v = _vendor(db, a.vendor_id, tids)
+    return tier_policy.requirements(db, v, a, service.get_tiering_config(db, a.tenant_id))
+
+
+@router.post("/assessments/{assessment_id}/tier-override")
+def override_tier(assessment_id: int, body: TierOverrideIn, db: Session = Depends(get_db),
+                  user: GRCUser = Depends(require_auth)):
+    """Set the tier by hand instead of computing it. The justification goes on the
+    audit trail, and the override waits in the attention queue until acknowledged."""
+    tids = _tids(user, db)
+    a = _assessment(db, assessment_id, tids)
+    v = _vendor(db, a.vendor_id, tids)
+    rbac.require_write(db, user, "assessments", "edit")
+    reason = " ".join((body.justification or "").split())
+    if len(reason) < 10:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Explain why the tier should be overridden")
+    service.record_tier_override(db, v, a, body.tier, reason, user.id)
+    db.commit()
+    return tier_policy.requirements(db, v, a, service.get_tiering_config(db, a.tenant_id))
 
 
 @router.delete("/evidence-links/{link_id}")
@@ -1149,6 +1214,14 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
                 status_code=403,
                 detail="Segregation of duties: the assessor/reviewer cannot approve their own assessment — an independent approver is required.",
             )
+        # Approval authority follows the tier.
+        _vendor_row = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
+        _problem = tier_policy.approver_problem(
+            db, user, a.inherent_tier or (_vendor_row.tier if _vendor_row else None),
+            tier_policy.merged(service.get_tiering_config(db, a.tenant_id).get("tier_policy")),
+            is_admin=rbac._is_admin_or_primary(db, user))
+        if _problem:
+            raise HTTPException(status_code=403, detail=_problem)
         # Preconditions — a positive decision requires a computed residual and no
         # unmitigated critical findings (the gate can otherwise be pre-stamped).
         if a.residual_score is None:
@@ -1368,7 +1441,9 @@ def create_signal(vendor_id: int, body: SignalIn, db: Session = Depends(get_db),
     db.add(sig)
     db.flush()
     triggered = None
-    if should_trigger_reassessment(sig.signal_type, sig.severity):
+    _threshold = tier_policy.reassess_threshold(
+        v.tier, tier_policy.merged(service.get_tiering_config(db, v.tenant_id).get("tier_policy")))
+    if should_trigger_reassessment(sig.signal_type, sig.severity, _threshold):
         # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
         # version already open in the diligence phase), attach this signal to it
         # rather than superseding + restarting, which would discard in-flight
@@ -1594,10 +1669,12 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
         "weights": cfg["weights"], "thresholds": cfg["thresholds"], "cadence_days": cfg["cadence_days"],
         "reminder_policy": cfg["reminder_policy"],
         "scoring_policy": cfg["scoring_policy"],
-        "defaults": DEFAULT_TIERING_CONFIG,
+        "tier_policy": tier_policy.merged(cfg.get("tier_policy")),
+        "defaults": {**DEFAULT_TIERING_CONFIG, "tier_policy": tier_policy.DEFAULT_TIER_POLICY},
         "meta": {
             "factor_keys": _FACTOR_KEYS, "factor_labels": _FACTOR_LABELS,
             "tier_keys": _TIER_KEYS, "cadence_keys": _CADENCE_KEYS,
+            "evidence_kinds": tier_policy.EVIDENCE_KINDS, "severities": tier_policy.SEVERITIES,
         },
     }
 
@@ -1656,6 +1733,13 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
+    if body.tier_policy is not None:
+        try:
+            row.tier_policy = tier_policy.clean(body.tier_policy,
+                                                tier_policy.merged(getattr(row, "tier_policy", None)))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
     if body.scoring_policy is not None:
         credit = body.scoring_policy.get("partial_credit")
         if not isinstance(credit, (int, float)) or isinstance(credit, bool) or not 0 <= credit <= 1:
@@ -1668,7 +1752,8 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
     db.commit()
     return {"weights": row.weights, "thresholds": row.thresholds, "cadence_days": row.cadence_days,
             "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"], **(row.reminder_policy or {})},
-            "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"], **(row.scoring_policy or {})}}
+            "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"], **(row.scoring_policy or {})},
+            "tier_policy": tier_policy.merged(getattr(row, "tier_policy", None))}
 
 
 # ── Compliance framework coverage (TPRM-007b) ────────────────────────────────

@@ -2408,9 +2408,16 @@ export const tpraApi = {
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/upload`, data, {
       headers: { 'Content-Type': 'multipart/form-data' },
     }),
-  linkEvidence: (assessmentId: number, data: { evidence_id: number; finding_id?: number; response_id?: number; note?: string }) =>
+  linkEvidence: (assessmentId: number, data: { evidence_id: number; finding_id?: number; response_id?: number; note?: string; requirement?: string }) =>
     apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/evidence/link`, data),
   unlinkEvidence: (linkId: number) => apiClient.delete(`/vendor-risk/tpra/evidence-links/${linkId}`),
+  // Stage 4: what the vendor's tier asks for, overriding the tier, tagging evidence.
+  tierRequirements: (assessmentId: number) =>
+    apiClient.get(`/vendor-risk/tpra/assessments/${assessmentId}/tier-requirements`),
+  overrideTier: (assessmentId: number, data: { tier: string; justification: string }) =>
+    apiClient.post(`/vendor-risk/tpra/assessments/${assessmentId}/tier-override`, data),
+  tagEvidence: (linkId: number, requirement: string | null) =>
+    apiClient.patch(`/vendor-risk/tpra/evidence-links/${linkId}`, { requirement }),
 
   // Contracts + obligations
   listContracts: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/contracts`),
@@ -2454,7 +2461,7 @@ export const tpraApi = {
   getConfig: () => apiClient.get('/vendor-risk/tpra/config'),
   saveConfig: (data: {
     weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number>;
-    reminder_policy?: object; scoring_policy?: { partial_credit: number };
+    reminder_policy?: object; scoring_policy?: { partial_credit: number }; tier_policy?: object;
   }) =>
     apiClient.put('/vendor-risk/tpra/config', data),
   getVendorAudit: (vendorId: number, limit = 100) =>

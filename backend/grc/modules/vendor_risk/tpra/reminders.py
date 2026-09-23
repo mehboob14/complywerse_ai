@@ -32,9 +32,10 @@ from sqlalchemy.orm import Session
 
 from ....models import (
     Role, TPRAContract, TPRAFinding, TPRAReminder, TPRARemediation, TPRARiskAcceptance,
-    UserRole, Vendor, VendorQuestionnaireResponse,
+    UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
 )
 from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
+from . import tier_policy
 
 logger = logging.getLogger(__name__)
 
@@ -235,6 +236,19 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
         add("contract_expiring", "contract", c.id, v.id, due,
             f"Contract '{c.title or 'contract'}' with {v.name} is {_when(due, today, 'past its date')}",
             f"/vendor-risk/vendors/{v.id}", [v.owner_id], once=True)
+
+    # 6. A tier the vendor's facts have moved past: its owner hears once.
+    for a in db.query(VendorAssessment).filter(
+            VendorAssessment.tenant_id == tenant_id, VendorAssessment.deleted_at.is_(None),
+            VendorAssessment.inherent_tier.isnot(None), VendorAssessment.lifecycle_status == "active"):
+        v = vendors.get(a.vendor_id)
+        if v is None or (v.status or "").lower() in _INACTIVE_VENDOR:
+            continue
+        reasons = tier_policy.retier_reasons(db, v, a)
+        if reasons:
+            add("retier_needed", "assessment", a.id, v.id, _day(v.updated_at) or today,
+                f"{v.name} may need re-tiering: {'; '.join(reasons)}",
+                f"/vendor-risk/vendors/{v.id}?stage=tiering", [v.owner_id], once=True)
 
     return notices
 

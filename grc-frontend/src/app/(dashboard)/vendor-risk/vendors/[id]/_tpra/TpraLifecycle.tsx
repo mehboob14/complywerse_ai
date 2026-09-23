@@ -30,6 +30,7 @@ import IntakePanel from './IntakePanel';
 import PlanningPanel from './PlanningPanel';
 import QuestionnaireReviewPanel from './QuestionnaireReviewPanel';
 import OffboardingPanel from './OffboardingPanel';
+import TierRequirementsPanel from './TierRequirementsPanel';
 import StageWorkspace from './StageWorkspace';
 import { useUnsavedGuard } from './useUnsavedGuard';
 
@@ -394,6 +395,10 @@ function StageBody({
               </button>
             )}
           </div>
+          {assessment?.inherent_tier && (
+            <TierRequirementsPanel vendorId={vendorId} assessmentId={assessmentId} canEdit={canRunEngines}
+              onRunTiering={onRunTiering} tieringBusy={tieringBusy} onChanged={onChanged} />
+          )}
         </div>
       );
     case 'scoring':
@@ -415,9 +420,13 @@ function StageBody({
         </div>
       );
     case 'dd_planning':
-      return assessment
-        ? <PlanningPanel vendorId={vendorId} assessmentId={assessmentId} assessment={assessment} />
-        : null;
+      return assessment ? (
+        <div className="space-y-3">
+          <TierRequirementsPanel vendorId={vendorId} assessmentId={assessmentId} canEdit={canRunEngines}
+            onRunTiering={onRunTiering} tieringBusy={tieringBusy} onChanged={onChanged} />
+          <PlanningPanel vendorId={vendorId} assessmentId={assessmentId} assessment={assessment} />
+        </div>
+      ) : null;
     case 'questionnaire':
       return <QuestionnaireReviewPanel vendorId={vendorId} assessmentId={assessmentId} />;
     case 'findings':
@@ -446,7 +455,7 @@ function StageBody({
       return (
         <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-500">
           <Shield className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-400" />
-          <p>Work this stage's activities in the checklist below, then advance.</p>
+          <p>Work this stage&apos;s activities in the checklist below, then advance.</p>
         </div>
       );
   }

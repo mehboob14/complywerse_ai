@@ -45,6 +45,8 @@ DEFAULT_TIERING_CONFIG = {
     # What a "Partial" answer is worth, 0..1. Frozen into each questionnaire
     # version when it is sent, so changing it never rescores old answers.
     "scoring_policy": {"partial_credit": 0.5},
+    # What each tier asks for; empty means tier_policy.DEFAULT_TIER_POLICY.
+    "tier_policy": {},
 }
 
 
@@ -115,4 +117,5 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
                             **(getattr(row, "reminder_policy", None) or {})},
         "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"],
                            **(getattr(row, "scoring_policy", None) or {})},
+        "tier_policy": getattr(row, "tier_policy", None) or {},
     }

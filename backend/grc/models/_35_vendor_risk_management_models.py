@@ -140,6 +140,10 @@ class VendorAssessment(Base):
     # Current stage key (mirrors the latest in-progress TPRAStageInstance).
     current_stage = Column(String(40), default="intake", index=True)
     inherent_tier = Column(String(20), nullable=True)     # critical | high | medium | low
+    # The vendor facts the tier was computed from, to notice when they change,
+    # and a tier set by hand instead: {from, to, computed, justification, by, at}.
+    tiering_basis = Column(JSON, nullable=True)
+    tier_override = Column(JSON, nullable=True)
     residual_rating = Column(String(20), nullable=True)
     rating_grade = Column(String(2), nullable=True)       # A–F at-a-glance grade
     # Per-domain residual breakdown: {domain_key: {inherent, residual, score}}.
