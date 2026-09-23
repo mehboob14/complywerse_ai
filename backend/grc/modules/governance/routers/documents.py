@@ -2000,6 +2000,9 @@ async def create_document_with_file(
     # consistently supported across FastAPI versions and front-end
     # FormData encoders. Parsed below; safe if absent or malformed.
     framework_ids: Optional[str] = Form(None),
+    # The frameworks it is audited against, the same JSON form; defaults to the
+    # linked ones, as creating a document does.
+    applicable_framework_ids: Optional[str] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2040,14 +2043,15 @@ async def create_document_with_file(
     # Decode framework_ids JSON if the client supplied any. Tolerant of
     # missing / malformed input — the upload still succeeds, the doc
     # just isn't framework-tagged in that case.
-    parsed_framework_ids: List[int] = []
-    if framework_ids:
+    def _ids(value: Optional[str]) -> List[int]:
         try:
-            raw = json.loads(framework_ids)
-            if isinstance(raw, list):
-                parsed_framework_ids = [int(v) for v in raw if v is not None]
+            raw = json.loads(value) if value else []
+            return [int(v) for v in raw if v is not None] if isinstance(raw, list) else []
         except (json.JSONDecodeError, TypeError, ValueError):
-            parsed_framework_ids = []
+            return []
+
+    parsed_framework_ids = _ids(framework_ids)
+    parsed_applicable_ids = _ids(applicable_framework_ids) or parsed_framework_ids
 
     document = GovernanceDocument(
         tenant_id=tenant_id,
@@ -2065,10 +2069,11 @@ async def create_document_with_file(
         status="draft",
         current_version="1.0",
         framework_ids=parsed_framework_ids,
+        applicable_framework_ids=parsed_applicable_ids,
     )
     db.add(document)
     db.flush()
-    
+
     version = GovernanceDocumentVersion(
         document_id=document.id,
         version_number="1.0",

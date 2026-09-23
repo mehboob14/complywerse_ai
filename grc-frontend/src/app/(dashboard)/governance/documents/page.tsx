@@ -1032,6 +1032,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
     doc_type: 'policy',
     classification: 'internal',
     framework_ids: [] as number[],
+    applicable_framework_ids: [] as number[],
   });
   const [file, setFile] = useState<File | null>(null);
   const [dragActive, setDragActive] = useState(false);
@@ -1125,6 +1126,10 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
       // JSON-encoded so the backend can rehydrate the list with one
       // parse call (more reliable than repeated form keys here).
       data.append('framework_ids', JSON.stringify(formData.framework_ids));
+    }
+    // Left empty, the document is audited against its linked frameworks.
+    if (formData.applicable_framework_ids.length > 0) {
+      data.append('applicable_framework_ids', JSON.stringify(formData.applicable_framework_ids));
     }
 
     onSubmit(data);
@@ -1315,6 +1320,36 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
             />
             <p className="mt-1 text-xs text-gray-500">
               Linked documents appear under each framework&apos;s Documents tab in the auditor portal.
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1">
+              Applicable Frameworks <span className="text-xs font-normal text-gray-500">— audited against (optional)</span>
+            </label>
+            <MultiSelectDropdown
+              title="Applicable Frameworks"
+              items={(frameworkOptions || []).map((f: any) => ({
+                value: String(f.id),
+                label: f.name || `Framework ${f.id}`,
+              }))}
+              selectedValues={formData.applicable_framework_ids.map(String)}
+              onApply={(vals) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  applicable_framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
+                }))
+              }
+              multiSelect={true}
+              triggerVariant="input"
+              triggerClassName="w-full"
+              placeholder="Frameworks this document must comply with…"
+              size="md"
+              forceSearch
+            />
+            <p className="mt-1 text-xs text-gray-500">
+              The document&apos;s statements are mapped against these and the linked frameworks. Left empty, the
+              linked frameworks are used.
             </p>
           </div>
 

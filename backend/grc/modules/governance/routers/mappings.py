@@ -1,8 +1,8 @@
 from typing import List, Optional
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from pydantic import BaseModel
 
 from ....models import (
@@ -13,6 +13,7 @@ from ....models import (
     ParsedFrameworkControl, NormalizedControl, NormalizedControlLink, UploadedFramework,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..statement_auto_map import framework_scope
 
 router = APIRouter(prefix="/mappings", tags=["Governance - Mappings"])
 
@@ -264,14 +265,13 @@ def get_document_mappings(
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(document_id, user_tenants, db)
 
-    # Scope the AI recommendations to the document's OWN frameworks — the union of
-    # its in-scope (applicable_framework_ids) and referenced (framework_ids) sets —
-    # so the Mappings tab never surfaces the whole tenant catalog. Empty union → the
-    # helper returns nothing (the UI shows the "set applicable frameworks" prompt).
-    doc_fw_ids = sorted(
-        {int(x) for x in (getattr(document, "applicable_framework_ids", None) or [])}
-        | {int(x) for x in (getattr(document, "framework_ids", None) or [])}
-    )
+    # Scope the AI recommendations to the document's OWN frameworks (applicable ∪
+    # linked ∪ any picked on its Mappings tab), so the tab never surfaces the whole
+    # tenant catalog. Empty → the helper returns nothing (the UI asks for frameworks).
+    scope = framework_scope(document)
+    doc_fw_ids = scope["all"]
+    fw_names = {fid: name for fid, name in db.query(UploadedFramework.id, UploadedFramework.name)
+                .filter(UploadedFramework.id.in_(doc_fw_ids)).all()} if doc_fw_ids else {}
 
     control_links = db.query(InternalControl).filter(
         InternalControl.tenant_id.in_(user_tenants),
@@ -346,6 +346,9 @@ def get_document_mappings(
         "recommended_controls": _recommended_controls_for_document(db, document_id, user_tenants, fw_ids=doc_fw_ids),
         # The framework scope actually applied (for the UI's "in-scope frameworks" header + empty state).
         "framework_scope_ids": doc_fw_ids,
+        # Where each came from: applicable / linked at creation, extra = picked on the Mappings tab.
+        "framework_scope": {k: [{"id": fid, "name": fw_names.get(fid, f"Framework #{fid}")} for fid in scope[k]]
+                            for k in ("applicable", "linked", "extra")},
     }
 
 
@@ -371,12 +374,9 @@ def get_document_control_coverage(
     if framework_ids:
         fw_ids = [int(x) for x in framework_ids.split(",") if x.strip().lstrip("-").isdigit()]
     else:
-        # Default to the UNION of the document's in-scope (applicable) and
-        # referenced (citation) frameworks — the same scope the Mappings tab uses.
-        fw_ids = sorted(
-            {int(x) for x in (getattr(document, "applicable_framework_ids", None) or [])}
-            | {int(x) for x in (getattr(document, "framework_ids", None) or [])}
-        )
+        # Default to the same scope the Mappings tab uses: applicable ∪ linked ∪
+        # any picked on the Mappings tab.
+        fw_ids = framework_scope(document)["all"]
 
     recommended = _recommended_controls_for_document(db, document_id, user_tenants)
     mapped_all = [r for r in recommended if r.get("is_linked")]
@@ -446,6 +446,112 @@ def get_document_control_coverage(
             "frameworks": len(frameworks_out),
         },
     }
+
+
+class MappingRun(BaseModel):
+    # Frameworks to map against beyond the document's applicable and linked ones.
+    extra_framework_ids: List[int] = []
+
+
+_RUN_NAMESPACE = "statement_auto_map"
+_RUN_STALE_SECONDS = 1800          # the run's own lock expires then too
+
+
+def _run_state(request: Request, document_id: int) -> dict:
+    """The document's mapping run as the background job last wrote it. A run
+    still 'queued' or 'running' after the job's lock has expired belongs to a
+    worker that died, and counts as idle."""
+    tenant_slug = getattr(request.state, "tenant_slug", None)
+    if not tenant_slug:
+        return {"status": "idle"}
+    from ....job_status import get_status
+
+    state = get_status(tenant_slug, _RUN_NAMESPACE, document_id, default={}) or {"status": "idle"}
+    if state.get("status") in ("queued", "running"):
+        try:
+            age = (datetime.utcnow() - datetime.fromisoformat(state.get("updated_at") or "")).total_seconds()
+        except ValueError:
+            age = _RUN_STALE_SECONDS + 1
+        if age > _RUN_STALE_SECONDS:
+            return {"status": "idle", "stale_cleared": True}
+    return state
+
+
+@router.post("/document/{document_id}/run")
+def run_document_mapping(
+    document_id: int,
+    body: MappingRun,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Map the document's statements against its frameworks: the applicable and
+    linked ones it was created with, plus any others picked here. The extra ones
+    are kept on the document, so later runs, re-parses and the Mappings tab use
+    them too. Runs in the background; poll run-status. Links a person confirmed
+    survive the re-run."""
+    from ..statement_auto_map import _ai_available, auto_map_document
+
+    user_tenants = get_user_tenants(current_user, db)
+    document = get_document_or_404(document_id, user_tenants, db)
+    if _run_state(request, document_id).get("status") in ("queued", "running"):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="Mapping is already running for this document. Wait for it to finish.")
+
+    wanted = sorted({int(x) for x in body.extra_framework_ids})
+    if wanted:
+        found = {fid for (fid,) in db.query(UploadedFramework.id).filter(
+            UploadedFramework.id.in_(wanted),
+            or_(UploadedFramework.tenant_id.is_(None), UploadedFramework.tenant_id.in_(user_tenants)),
+        ).all()}
+        if set(wanted) - found:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                                detail=f"Unknown framework id(s): {sorted(set(wanted) - found)}")
+    own = framework_scope(document)
+    document.mapping_framework_ids = sorted(set(wanted) - set(own["applicable"]) - set(own["linked"]))
+    scope = framework_scope(document)
+    if not scope["all"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Pick at least one framework to map this document against.")
+    statements = db.query(func.count(PolicyStatement.id)).filter(
+        PolicyStatement.document_id == document_id,
+        PolicyStatement.tenant_id.in_(user_tenants),
+        PolicyStatement.status == "active",
+    ).scalar() or 0
+    if not statements:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="This document has no statements yet. Parse it on the Statements tab "
+                                   "first; mapping works on its statements.")
+    if not _ai_available():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Mapping needs the AI service, and no AI key is configured on this server.")
+    db.commit()
+
+    tenant_slug = getattr(request.state, "tenant_slug", None)
+    if not tenant_slug:                      # no tenant context (a direct call): map inline
+        return {"status": "completed", "framework_scope_ids": scope["all"], **auto_map_document(db, document_id)}
+    from ....job_status import set_status
+    from ....tasks.governance import dispatch_auto_map
+
+    set_status(tenant_slug, _RUN_NAMESPACE, document_id, {
+        "status": "queued", "updated_at": datetime.utcnow().isoformat(), "statements": statements,
+        "framework_scope_ids": scope["all"], "message": f"Mapping {statements} statement(s)",
+    })
+    task_id = dispatch_auto_map(tenant_slug, document_id)
+    return {"status": "queued", "task_id": task_id, "statements": statements, "framework_scope_ids": scope["all"]}
+
+
+@router.get("/document/{document_id}/run-status")
+def document_mapping_run_status(
+    document_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Where the document's latest mapping run stands: idle, queued, running,
+    completed (with its counts), skipped or failed."""
+    get_document_or_404(document_id, get_user_tenants(current_user, db), db)
+    return _run_state(request, document_id)
 
 
 class RecommendedControlLink(BaseModel):

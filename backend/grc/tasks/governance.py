@@ -318,7 +318,7 @@ def auto_map_document_controls(self, tenant_slug: str, document_id: int, db: Ses
         with tenant_lock(tenant_slug, f"statement_auto_map:{document_id}", ttl_seconds=1800, owner=self.request.id):
             from ..modules.governance.statement_auto_map import auto_map_document
             set_status(tenant_slug, "statement_auto_map", document_id,
-                       {"status": "running", "message": "Recommending controls for statements", "task_id": self.request.id})
+                       {"updated_at": datetime.utcnow().isoformat(), "status": "running", "message": "Recommending controls for statements", "task_id": self.request.id})
             with usage_scope(
                 tenant_slug=tenant_slug,
                 background_job_id=self.request.id,
@@ -326,16 +326,16 @@ def auto_map_document_controls(self, tenant_slug: str, document_id: int, db: Ses
                 feature_key="statement_auto_mapping",
             ):
                 result = auto_map_document(db, document_id)
-            set_status(tenant_slug, "statement_auto_map", document_id, {"status": "completed", **(result or {})})
+            set_status(tenant_slug, "statement_auto_map", document_id, {"updated_at": datetime.utcnow().isoformat(), "status": "completed", **(result or {})})
             logger.info("auto_map_document_controls DONE tenant=%s doc=%s result=%s", tenant_slug, document_id, result)
             return result or {"status": "completed"}
     except LockNotAcquired:
         set_status(tenant_slug, "statement_auto_map", document_id,
-                   {"status": "skipped", "message": "Control recommendation already running for this document"})
+                   {"updated_at": datetime.utcnow().isoformat(), "status": "skipped", "message": "Control recommendation already running for this document"})
         return {"status": "skipped"}
     except Exception as exc:
         logger.exception("auto_map_document_controls failed: %s", exc)
-        set_status(tenant_slug, "statement_auto_map", document_id, {"status": "failed", "error": str(exc)[:500]})
+        set_status(tenant_slug, "statement_auto_map", document_id, {"updated_at": datetime.utcnow().isoformat(), "status": "failed", "error": str(exc)[:500]})
         raise
 
 
@@ -348,13 +348,13 @@ def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: 
     except Exception as exc:
         logger.exception("Failed to open tenant session for auto-map doc %s", document_id)
         set_status(tenant_slug, "statement_auto_map", document_id,
-                   {"status": "failed", "error": f"Could not open tenant DB session: {exc}"})
+                   {"updated_at": datetime.utcnow().isoformat(), "status": "failed", "error": f"Could not open tenant DB session: {exc}"})
         return
     try:
         with tenant_lock(tenant_slug, f"statement_auto_map:{document_id}", ttl_seconds=1800, owner=task_id):
             from ..modules.governance.statement_auto_map import auto_map_document
             set_status(tenant_slug, "statement_auto_map", document_id,
-                       {"status": "running", "message": "Thread worker picked up the job", "task_id": task_id})
+                       {"updated_at": datetime.utcnow().isoformat(), "status": "running", "message": "Thread worker picked up the job", "task_id": task_id})
             with usage_scope(
                 tenant_slug=tenant_slug,
                 background_job_id=task_id,
@@ -362,18 +362,18 @@ def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: 
                 feature_key="statement_auto_mapping",
             ):
                 result = auto_map_document(db, document_id)
-            set_status(tenant_slug, "statement_auto_map", document_id, {"status": "completed", **(result or {})})
+            set_status(tenant_slug, "statement_auto_map", document_id, {"updated_at": datetime.utcnow().isoformat(), "status": "completed", **(result or {})})
             logger.info("auto_map(thread) DONE tenant=%s doc=%s task=%s result=%s", tenant_slug, document_id, task_id, result)
     except LockNotAcquired:
         set_status(tenant_slug, "statement_auto_map", document_id,
-                   {"status": "skipped", "message": "Another worker is already recommending controls"})
+                   {"updated_at": datetime.utcnow().isoformat(), "status": "skipped", "message": "Another worker is already recommending controls"})
     except Exception as exc:  # noqa: BLE001
         try:
             db.rollback()
         except Exception:
             pass
         logger.exception("Auto-map thread crashed: %s", exc)
-        set_status(tenant_slug, "statement_auto_map", document_id, {"status": "failed", "error": str(exc)[:500]})
+        set_status(tenant_slug, "statement_auto_map", document_id, {"updated_at": datetime.utcnow().isoformat(), "status": "failed", "error": str(exc)[:500]})
     finally:
         try:
             db.close()

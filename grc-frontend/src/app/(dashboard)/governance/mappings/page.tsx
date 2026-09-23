@@ -23,6 +23,7 @@ import {
   Search,
 } from 'lucide-react';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import { MappingScope, type FrameworkScope } from './_scope/MappingScope';
 
 interface DocumentItem {
   id: number;
@@ -231,9 +232,10 @@ interface DocumentMappings {
   regulatory_links: unknown[];
   asset_links: unknown[];
   recommended_controls?: RecommendedControl[];
-  // The framework scope (in-scope ∪ referenced UploadedFramework ids) the backend
-  // filtered the recommendations to. Empty → document has no frameworks set.
+  // The framework scope (applicable ∪ linked ∪ added on the Mappings tab) the
+  // backend filtered the recommendations to. Empty → no frameworks set.
   framework_scope_ids?: number[];
+  framework_scope?: FrameworkScope;
 }
 
 // Full statement text keyed by statement id, for the mapping-detail popup.
@@ -1229,7 +1231,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h3 className="text-base font-semibold text-slate-900">Framework mappings</h3>
-            <p className="text-xs text-slate-500">How this document&apos;s statements map to its in-scope &amp; referenced framework clauses.</p>
+            <p className="text-xs text-slate-500">How this document&apos;s statements map to its frameworks&apos; clauses.</p>
           </div>
           {canCreate && (
             <button onClick={() => setShowLinkModal(true)} className="btn-primary btn-sm shrink-0">
@@ -1238,14 +1240,18 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
           )}
         </div>
 
+        {selectedDocumentId != null && !mappingsLoading && (
+          <MappingScope documentId={selectedDocumentId} scope={mappingsData?.framework_scope} canRun={canCreate} />
+        )}
+
         {mappingsLoading ? (
           <div className="flex items-center justify-center py-10">
             <Loader2 strokeWidth={1.75} className="h-6 w-6 animate-spin text-primary-600" />
           </div>
         ) : noFrameworks && gapRecs.length === 0 ? (
           <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            No in-scope or reference frameworks are set for this document, so there are no framework clauses to map against.
-            Edit the document and pick its frameworks — mapping runs only for those.
+            This document has no applicable or linked frameworks yet, so there is nothing to map against. Pick the
+            frameworks above and run the mapping, or edit the document to set them.
           </div>
         ) : (
           <RecommendedControlsSection

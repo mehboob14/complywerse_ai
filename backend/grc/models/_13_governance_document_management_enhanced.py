@@ -48,6 +48,9 @@ class GovernanceDocument(Base):
     # controls per framework). Distinct from framework_ids (drafting citation
     # scope) so a doc can be audited against frameworks beyond what it cited.
     applicable_framework_ids = Column(JSON, default=[])
+    # Further UploadedFramework ids its statements are mapped against, picked on
+    # the document's Mappings tab (beyond the applicable and linked ones).
+    mapping_framework_ids = Column(JSON, default=[])
     tags = Column(JSON, default=[])
     
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
