@@ -12,6 +12,7 @@ from ....models import (
     GRCUser, Tenant, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..tpra import rbac
 
 router = APIRouter(tags=["Vendors"])
 
@@ -188,6 +189,7 @@ def create_vendor(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "vendors", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -396,6 +398,7 @@ def update_vendor(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "vendors", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -418,6 +421,7 @@ def delete_vendor(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "vendors", "delete")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")

@@ -12,6 +12,7 @@ from ....models import (
     Vendor, VendorSLARecord, VendorIncident, GRCUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..tpra import rbac
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Monitoring"])
@@ -158,6 +159,7 @@ def create_sla_record(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "monitoring", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -227,6 +229,7 @@ def create_incident(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "monitoring", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -294,6 +297,7 @@ def update_incident(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "monitoring", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")

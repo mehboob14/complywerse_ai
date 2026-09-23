@@ -13,6 +13,7 @@ from ....models import (
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..tpra import rbac
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Assessments"])
@@ -177,6 +178,7 @@ def create_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "assessments", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -296,6 +298,7 @@ def update_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -319,6 +322,7 @@ def delete_assessment(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "assessments", "delete")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -350,6 +354,7 @@ def score_assessment(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Calculate risk score from questionnaire responses (weighted average)."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -430,6 +435,7 @@ def approve_assessment(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Approve an assessment and update the vendor's risk scores."""
+    rbac.require_write(db, current_user, "approvals", "approve", allow_fallback=False)
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")

@@ -16,6 +16,7 @@ from ....models import (
     GRCUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..tpra import rbac
 
 router = APIRouter(prefix="/ai", tags=["Vendor AI Analysis"])
 
@@ -89,6 +90,7 @@ def ai_score_assessment(
     current_user: GRCUser = Depends(require_auth),
 ):
     """GPT-4o analyzes questionnaire responses and generates risk score, findings, recommendations."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -217,6 +219,7 @@ def ai_vendor_risk_summary(
     current_user: GRCUser = Depends(require_auth),
 ):
     """GPT-4o generates a narrative summary of a vendor's overall risk posture."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -370,6 +373,7 @@ def ai_recommend_tier(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Stage 2 — recommend an inherent risk tier from the vendor profile."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -418,6 +422,7 @@ def ai_gap_analysis(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Stage 4 — derive a real residual-vs-inherent delta and per-gap analysis."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -480,6 +485,7 @@ def ai_remediation_plan(
 ):
     """Stage 5 — draft remediation actions for a vendor's open findings.
     Returns suggested actions; the UI adds the chosen ones to the tracker."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")

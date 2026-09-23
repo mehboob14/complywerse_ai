@@ -13,6 +13,7 @@ from ....models import (
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..tpra import rbac
 
 EVIDENCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "..", "..", "uploads", "questionnaire-evidence")
 os.makedirs(EVIDENCE_UPLOAD_DIR, exist_ok=True)
@@ -140,6 +141,7 @@ def create_template(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "templates", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -168,6 +170,7 @@ def update_template(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "templates", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -195,6 +198,7 @@ def delete_template(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    rbac.require_write(db, current_user, "templates", "delete")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -246,6 +250,7 @@ def update_questionnaire_response(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Update a questionnaire response (e.g., link to assessment)."""
+    rbac.require_write(db, current_user, "assessments", "edit")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
@@ -271,6 +276,7 @@ def send_questionnaire(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Send a questionnaire to a vendor. Creates a VendorQuestionnaireResponse with a unique token."""
+    rbac.require_write(db, current_user, "assessments", "create")
     tenant_ids = get_user_tenants(current_user, db)
     if not tenant_ids:
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
