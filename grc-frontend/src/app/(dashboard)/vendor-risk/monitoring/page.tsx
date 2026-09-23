@@ -8,7 +8,7 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { Radio, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, BellRing, Check, Loader2, ArrowUpRight, ArrowDownWideNarrow, Clock } from 'lucide-react';
+import { Radio, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, BellRing, Check, Loader2, ArrowUpRight, ArrowDownWideNarrow, Clock, Upload, ShieldQuestion } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -20,7 +20,9 @@ interface Signal {
   id: number; vendor_id: number; vendor_name: string | null; signal_type: string;
   severity: string; title: string | null; source: string | null; detail: string | null;
   occurred_at: string | null; acknowledged: boolean; triggered_reassessment: boolean;
+  verified?: boolean;
 }
+interface Provider { provider: string; label: string; kind: string; configured: boolean; reaches_internet: boolean }
 const PAGE = 25;
 const TYPES = ['security_rating', 'breach', 'adverse_media', 'financial', 'sla', 'cert_expiry'];
 // Lower index = more severe. Drives the severity-first sort.
@@ -66,6 +68,32 @@ export default function MonitoringFeedPage() {
     onError: (e) => toast({ type: 'error', title: 'Could not acknowledge', message: errMsg(e, 'Try again.') }),
   });
 
+  // Which feeds are on, so the page says what fills it rather than implying more.
+  const { data: feeds } = useQuery({
+    queryKey: ['tprm-monitoring-providers'],
+    queryFn: async () => ((await tpraApi.monitoringProviders()).data?.providers || []) as Provider[],
+    ...TPRM_QUERY_OPTS,
+  });
+  const canImport = hasPermission('vendor_risk:monitoring:create') || canAck;
+  const [ratingsProvider, setRatingsProvider] = useState('');
+  const importMut = useMutation({
+    mutationFn: async (file: File) => {
+      const form = new FormData();
+      form.append('file', file);
+      if (ratingsProvider.trim()) form.append('provider', ratingsProvider.trim());
+      return (await tpraApi.importRatings(form)).data as { imported: number; already_held: number; drops: number; problems: string[] };
+    },
+    onSuccess: (r) => {
+      qc.invalidateQueries({ queryKey: ['tprm-monitoring'] });
+      toast({
+        type: r.problems.length ? 'warning' : 'success', title: `${r.imported} ratings imported`,
+        message: [r.drops ? `${r.drops} drop${r.drops === 1 ? '' : 's'} raised as signals.` : '',
+          r.problems.length ? `${r.problems.length} line(s) skipped: ${r.problems.slice(0, 3).join('; ')}` : ''].filter(Boolean).join(' '),
+      });
+    },
+    onError: (e) => toast({ type: 'error', title: 'Could not import ratings', message: errMsg(e, 'Check the file has vendor, score and date columns.') }),
+  });
+
   const reset = (fn: () => void) => { fn(); setPage(0); };
   const rawItems = data?.items || [];
   const total = data?.total || 0;
@@ -89,10 +117,43 @@ export default function MonitoringFeedPage() {
 
   return (
     <div className="space-y-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Monitoring Signals</h1>
-        <p className="text-sm text-slate-500">Manually-logged signals for now — connect a ratings feed (BitSight / SecurityScorecard / UpGuard) to refresh automatically.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-lg font-semibold text-slate-900">Monitoring Signals</h1>
+          <p className="text-sm text-slate-500">
+            Signals from the feeds below, and any recorded by hand. Each vendor is checked on its tier&apos;s cadence,
+            and every new signal also appears in Attention.
+          </p>
+        </div>
+        {canImport && (
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2">
+            <input value={ratingsProvider} onChange={(e) => setRatingsProvider(e.target.value)} placeholder="Ratings provider name"
+              aria-label="Ratings provider name" className="w-44 rounded-lg border border-gray-300 px-2 py-1 text-xs" />
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+              title="A CSV export from your ratings provider with vendor, score (0-100) and date columns">
+              {importMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Import ratings (CSV)
+              <input type="file" accept=".csv,text/csv" className="sr-only" disabled={importMut.isPending}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) importMut.mutate(f); e.target.value = ''; }} />
+            </label>
+          </div>
+        )}
       </div>
+
+      {feeds && (
+        <div className="flex flex-wrap gap-2 text-xs">
+          {feeds.map((f) => (
+            <span key={f.provider} className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${
+              f.configured ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+              <span className={`h-1.5 w-1.5 rounded-full ${f.configured ? 'bg-emerald-500' : 'bg-gray-300'}`} />
+              {f.label}: {f.configured ? 'on' : f.reaches_internet ? 'off (turn on in Settings)' : 'off'}
+            </span>
+          ))}
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-gray-50 px-2.5 py-1 text-gray-500"
+            title="A ratings provider is a paid feed; until one is connected, import its export here">
+            <span className="h-1.5 w-1.5 rounded-full bg-gray-300" /> Security ratings: no provider connected; import an export
+          </span>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
         <label className="flex items-center gap-1.5 text-xs text-gray-500">Severity
@@ -162,7 +223,7 @@ export default function MonitoringFeedPage() {
                       {/* Primary nav is the signal title → vendor lifecycle. */}
                       <button onClick={goToVendor}
                         className="inline-flex items-center gap-1 text-left text-sm font-medium text-slate-800 hover:text-primary-700 hover:underline">
-                        {s.title || titleCase(s.signal_type)}
+                        {s.title || titleCase(s.signal_type)}{s.verified === false && (<span className="ml-1.5 inline-flex items-center gap-0.5 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-800" title="One source so far: shown, not emailed, not reopening the assessment"><ShieldQuestion className="h-3 w-3" /> unverified</span>)}
                       </button>
                       <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${sevBadgeCls(s.severity)}`}>{titleCase(s.severity)} severity</span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">{titleCase(s.signal_type)}</span>

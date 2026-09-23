@@ -246,9 +246,10 @@ celery_app.conf.update(
             "schedule": 24 * 60 * 60,
             "options": {"queue": "parsing"},
         },
-        # TPRM — continuous-monitoring connector poll fan-out (every 6h). A no-op
-        # until a live provider is registered in tpra.monitoring_connectors.CONNECTORS;
-        # the seam is scheduled now so a feed goes live by adding the connector alone.
+        # TPRM — outside-in monitoring (every 6h). Each run polls the vendors that
+        # are due on their tier's cadence (tpra/monitoring_connectors.py): lapsed
+        # certificates always, and news for breaches and adverse media where a
+        # tenant has turned it on.
         "tprm-monitoring-connector-poll": {
             "task": "grc.tasks.tprm.poll_monitoring_connectors_sweep",
             "schedule": 6 * 60 * 60,

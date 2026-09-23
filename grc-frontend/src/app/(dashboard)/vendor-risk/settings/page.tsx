@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing, ListChecks, Layers } from 'lucide-react';
+import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing, ListChecks, Layers, Radio } from 'lucide-react';
 import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { PageLoader } from '@/components/ui';
@@ -30,6 +30,7 @@ interface ConfigResp {
   reminder_policy: ReminderPolicy;
   scoring_policy?: { partial_credit: number };
   tier_policy?: Record<string, TierRules>;
+  monitoring_policy?: { adverse_media?: boolean };
   defaults: {
     weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number>;
     reminder_policy: ReminderPolicy; scoring_policy?: { partial_credit: number }; tier_policy?: Record<string, TierRules>;
@@ -66,6 +67,7 @@ export default function VendorRiskSettingsPage() {
   const [reminders, setReminders] = useState<ReminderPolicy | null>(null);
   const [partialPct, setPartialPct] = useState<number | null>(null);
   const [tierPolicy, setTierPolicy] = useState<Record<string, TierRules> | null>(null);
+  const [newsFeed, setNewsFeed] = useState(false);
 
   const { data: templates } = useQuery({
     queryKey: ['questionnaire-templates-for-tier-policy'],
@@ -87,6 +89,7 @@ export default function VendorRiskSettingsPage() {
     setReminders(c.reminder_policy ? { ...c.reminder_policy, escalate_to: [...(c.reminder_policy.escalate_to || [])] } : null);
     setPartialPct(c.scoring_policy ? Math.round(c.scoring_policy.partial_credit * 100) : null);
     setTierPolicy(c.tier_policy ? JSON.parse(JSON.stringify(c.tier_policy)) : null);
+    setNewsFeed(!!c.monitoring_policy?.adverse_media);
   };
   useEffect(() => { if (data) hydrate(data); }, [data]);
 
@@ -98,6 +101,7 @@ export default function VendorRiskSettingsPage() {
       ...(reminders ? { reminder_policy: reminders } : {}),
       ...(partialPct !== null ? { scoring_policy: { partial_credit: partialPct / 100 } } : {}),
       ...(tierPolicy ? { tier_policy: tierPolicy } : {}),
+      monitoring_policy: { adverse_media: newsFeed },
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-config'] }); toast({ type: 'success', title: 'Settings saved', message: 'Tiering, scoring and the next reminder run use these values.' }); },
     onError: (e) => toast({ type: 'error', title: 'Could not save', message: errMsg(e, 'Try again.') }),
@@ -327,6 +331,28 @@ export default function VendorRiskSettingsPage() {
           </div>
         </section>
       )}
+
+      {/* Outside-in monitoring feeds */}
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <div className="mb-1 flex items-center gap-2">
+          <Radio className="h-4 w-4 text-primary-600" />
+          <h3 className="text-sm font-semibold text-slate-900">Monitoring feeds</h3>
+        </div>
+        <p className="mb-3 text-[11px] text-gray-500">
+          Certificates and reports on file that lapse are always watched. Each vendor is checked on its tier&apos;s
+          cadence: critical daily, high weekly, medium monthly, low quarterly.
+        </p>
+        <label className="flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="mt-1" disabled={!canEdit} checked={newsFeed} onChange={(e) => setNewsFeed(e.target.checked)} />
+          <span>
+            Search the news for breaches and adverse media about each vendor
+            <span className="block text-[11px] text-gray-500">
+              Uses the GDELT Project&apos;s free news search; each vendor&apos;s name is sent to it. An alert counts as verified
+              only when two publishers report it; until then it is shown but never emailed and never reopens an assessment.
+            </span>
+          </span>
+        </label>
+      </section>
 
       {/* Questionnaire scoring */}
       {partialPct !== null && (

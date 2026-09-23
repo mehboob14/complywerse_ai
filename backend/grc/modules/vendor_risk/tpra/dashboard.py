@@ -407,5 +407,6 @@ def monitoring_feed(
         "source": s.source, "detail": s.detail,
         "occurred_at": s.occurred_at.isoformat() if s.occurred_at else None,
         "acknowledged": s.acknowledged, "triggered_reassessment": s.triggered_reassessment,
+        "verified": s.verified is not False,
     } for s in rows]
     return {"items": items, "total": total, "skip": skip, "limit": limit}

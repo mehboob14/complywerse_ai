@@ -25,7 +25,8 @@ from sqlalchemy.orm import Session
 
 from ....models import (
     AttentionActivity, AttentionState, Evidence, GRCUser, TPRAApproval, TPRAContract,
-    TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRARiskAcceptance, TPRARiskSnapshot,
+    TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRARiskAcceptance,
+    TPRARiskSnapshot,
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
@@ -46,10 +47,12 @@ CONDITIONS: Dict[str, tuple] = {
     "acceptance_expiring": ("Risk acceptance expiring", 65),
     "assessment_overdue": ("Assessment overdue", 65),
     "reassessment_overdue": ("Reassessment overdue", 65),
+    "signal_new": ("New monitoring signal", 60),
     "certificate_expiring": ("Certificate expiring", 55),
     "contract_expiring": ("Contract expiring", 55),
     "questionnaire_to_review": ("Questionnaire to review", 50),
     "tier_overridden": ("Tier set by hand", 45),
+    "signal_unverified": ("Unverified alert", 30),
     "questionnaire_untouched": ("Questionnaire not started", 40),
 }
 _LAPSED_BONUS = 15              # a date that has passed outranks one that is coming
@@ -61,6 +64,7 @@ _POST_APPROVAL_STAGES = ("onboarding", "monitoring", "reassessment", "offboardin
 _EVIDENCE_RETIRED = ("archived", "superseded", "rejected", "deleted")
 UNTOUCHED_AFTER_DAYS = 7        # a questionnaire nobody has opened for a week
 REVIEW_AFTER_DAYS = 2           # answers sitting unreviewed for two days
+SIGNAL_LOOKBACK_DAYS = 90       # an unacknowledged signal older than this is history, not news
 DROP_LOOKBACK_DAYS = 30         # a worsened rating stays news for a month
 _SNAPSHOT_HISTORY_DAYS = 120
 ACTIONS = ("note", "assign", "snooze", "unsnooze", "close", "reopen")
@@ -295,6 +299,27 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
                 f"(computed {override.get('computed') or 'nothing'}): {override.get('justification')}",
                 f"{str(override.get('computed') or '?').title()} → {str(override.get('to')).title()}",
                 f"/vendor-risk/vendors/{v.id}?stage=tiering")
+
+    # Monitoring signals nobody has acknowledged — typed in or fetched. The queue is
+    # where they are seen; there is no second inbox. An unverified alert is shown,
+    # ranked low, and says so.
+    for sig in db.query(TPRAMonitoringSignal).filter(
+            TPRAMonitoringSignal.tenant_id == tenant_id, TPRAMonitoringSignal.deleted_at.is_(None),
+            or_(TPRAMonitoringSignal.acknowledged.is_(False), TPRAMonitoringSignal.acknowledged.is_(None)),
+            TPRAMonitoringSignal.occurred_at >= datetime.combine(today - timedelta(days=SIGNAL_LOOKBACK_DAYS), time.min)):
+        v = vendors.get(sig.vendor_id)
+        if v is None:
+            continue
+        serious = (sig.severity or "").lower() in ("high", "critical")
+        title = sig.title or f"{sig.signal_type.replace('_', ' ')} signal"
+        if sig.verified is False:
+            add("signal_unverified", "signal", sig.id, v, _day(sig.occurred_at),
+                f"{v.name}: {title}", "Unverified: one source",
+                f"/vendor-risk/vendors/{v.id}?stage=monitoring")
+        else:
+            add("signal_new", "signal", sig.id, v, _day(sig.occurred_at), f"{v.name}: {title}",
+                f"{(sig.severity or 'medium').title()} · {sig.source or 'entered by hand'}",
+                f"/vendor-risk/vendors/{v.id}?stage=monitoring", tone="red" if serious else "amber", lapsed=serious)
 
     # Questionnaires the vendor has answered that nobody has finished reviewing.
     for qr in db.query(VendorQuestionnaireResponse).filter(

@@ -47,6 +47,8 @@ DEFAULT_TIERING_CONFIG = {
     "scoring_policy": {"partial_credit": 0.5},
     # What each tier asks for; empty means tier_policy.DEFAULT_TIER_POLICY.
     "tier_policy": {},
+    # Outside-in feeds that reach out to the internet are off until a tenant turns them on.
+    "monitoring_policy": {"adverse_media": False},
 }
 
 
@@ -118,4 +120,6 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
         "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"],
                            **(getattr(row, "scoring_policy", None) or {})},
         "tier_policy": getattr(row, "tier_policy", None) or {},
+        "monitoring_policy": {**DEFAULT_TIERING_CONFIG["monitoring_policy"],
+                              **(getattr(row, "monitoring_policy", None) or {})},
     }

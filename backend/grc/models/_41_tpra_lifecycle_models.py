@@ -342,6 +342,14 @@ class TPRAMonitoringSignal(Base):
     acknowledged = Column(Boolean, default=False)
     acknowledged_by = Column(Integer, nullable=True)      # who cleared the signal
     acknowledged_at = Column(DateTime, nullable=True)     # when it was cleared
+    # Fetched by a connector: its own id (the dedupe key), the articles or records
+    # behind it, and whether it survived verification. An unverified alert is
+    # shown but never reopens an assessment or goes out by email.
+    external_id = Column(String(200), nullable=True)
+    sources = Column(JSON, default=list)
+    verification = Column(JSON, nullable=True)
+    verified = Column(Boolean, default=True)
+    finding_id = Column(Integer, nullable=True)           # the finding it was raised as
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -399,6 +407,8 @@ class TPRATieringConfig(Base):
     # What each tier asks for: {tier: {template_ids, evidence, approver_role, reassess_on}}
     # (tpra/tier_policy.py; its defaults apply to any tier left unset).
     tier_policy = Column(JSON, default=dict)
+    # Which outside-in feeds to run: {adverse_media: bool} (tpra/monitoring_connectors.py).
+    monitoring_policy = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)

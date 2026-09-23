@@ -1,94 +1,153 @@
-"""Continuous-monitoring connector framework (extension point / scaffolding).
+"""Outside-in monitoring feeds, behind one contract.
 
-TPRA monitoring signals are entered MANUALLY today. This module is the seam for
-LIVE outside-in feeds — BitSight / SecurityScorecard / UpGuard security ratings,
-breach & adverse-media monitoring, financial-health, and certificate expiry — so a
-provider can be plugged in without touching signal ingest or the reassessment
-trigger.
+A connector says whether it is configured for a tenant, and polls one vendor:
+it fetches, normalises what it found into signal drafts, and hands them back.
+The runner here does the rest the same way for every feed — polls each vendor
+on its tier's cadence (monitoring.due_vendors), writes each draft through
+monitoring.record_signal (which dedupes on the provider's own id), and moves the
+vendor's cursor on. A feed that is not configured contributes nothing and breaks
+nothing; the screens say so rather than showing an empty column.
 
-To add a real feed:
-  1. Subclass ``MonitoringConnector`` and implement ``poll(db, tenant_id)`` against
-     the provider API (read credentials from env or a tenant secret store), returning
-     a list of ``SignalDraft``.
-  2. Register the instance in ``CONNECTORS`` (e.g. ``CONNECTORS.append(BitSightConnector())``).
-  3. The ``poll_monitoring_connectors_sweep`` Celery beat task ingests the drafts on a
-     schedule, dedups by ``external_id``, writes ``TPRAMonitoringSignal`` rows, and
-     fires the existing ``should_trigger_reassessment`` path.
-
-Until a provider + credentials are configured, ``CONNECTORS`` is empty and monitoring
-stays MANUAL (the UI is labelled accordingly). Full row-ingestion + external_id dedup
-lands with the first real provider (needs an additive ``external_id`` column via
-``schema_migrations._TPRA_ADDS``).
+Feeds today:
+  * Evidence library — certificates and reports on file that have lapsed. First-
+    party, always on.
+  * GDELT news — breach and adverse-media coverage, through the four checks in
+    adverse_media.py. Off until a tenant turns it on (it queries the internet
+    with vendor names).
+A security-ratings provider is a paid feed (decision 2): it plugs in as another
+connector when a client asks for one; until then ratings arrive by import
+(ratings.py).
 """
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
+from ....models import Evidence, TPRAEvidenceLink, Vendor
+from . import adverse_media, monitoring
+from .bootstrap import get_tiering_config
+
 logger = logging.getLogger(__name__)
+BATCH = 50
 
 
 @dataclass
 class SignalDraft:
     """A provider-agnostic monitoring signal a connector emits (pre-persistence)."""
-    vendor_id: int
     # security_rating | breach | adverse_media | financial | sla | cert_expiry
     signal_type: str
     severity: str = "medium"          # critical | high | medium | low
     title: Optional[str] = None
     detail: Optional[str] = None
-    source: Optional[str] = None      # provider name, e.g. "BitSight"
-    external_id: Optional[str] = None  # provider event id — dedup key for ingest
+    external_id: Optional[str] = None  # the provider's own id: the dedupe key
+    occurred_at: Optional[datetime] = None
+    sources: list = field(default_factory=list)
+    verification: Optional[dict] = None
 
 
 class MonitoringConnector:
-    """Base class for a live monitoring feed. Subclass and implement ``poll``."""
+    """A live monitoring feed. Subclass: set provider/label/kind, implement both methods."""
 
     provider: str = "base"
-    requires_credentials: bool = True
+    label: str = ""
+    kind: str = ""                     # certificates | adverse_media | ratings | exposure
+    reaches_internet: bool = False
 
-    def is_configured(self) -> bool:
-        """True only when credentials/config are present. Real connectors check env
-        or a tenant secret store; the base is never configured (manual monitoring)."""
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
         return False
 
-    def poll(self, db: Session, tenant_id: int) -> List[SignalDraft]:  # pragma: no cover
-        raise NotImplementedError
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        raise NotImplementedError     # pragma: no cover
 
 
-# Registered live connectors — EMPTY until a provider + credentials are wired in.
-# Adding one here (and its is_configured/poll) is all that's needed to go from
-# manual monitoring to a live feed.
-CONNECTORS: List[MonitoringConnector] = []
+class CertificateLapseConnector(MonitoringConnector):
+    provider = "Evidence library"
+    label = "Certificates and reports that have lapsed"
+    kind = "certificates"
+
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
+        return True
+
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        drafts, seen = [], set()
+        for link, ev in (db.query(TPRAEvidenceLink, Evidence).join(Evidence, Evidence.id == TPRAEvidenceLink.evidence_id)
+                         .filter(TPRAEvidenceLink.vendor_id == vendor.id, TPRAEvidenceLink.deleted_at.is_(None),
+                                 Evidence.expiry_date.isnot(None), Evidence.expiry_date < now,
+                                 Evidence.expiry_date >= now - timedelta(days=365))):
+            if ev.id in seen or (ev.status or "").lower() in ("archived", "superseded", "rejected"):
+                continue
+            seen.add(ev.id)
+            drafts.append(SignalDraft(
+                signal_type="cert_expiry", severity="low",
+                title=f"{ev.name} lapsed on {ev.expiry_date:%d %b %Y}",
+                detail="A certificate or report held for this vendor is past its expiry date. Ask the vendor for the current one.",
+                external_id=f"cert:{ev.id}:{ev.expiry_date:%Y%m%d}", occurred_at=ev.expiry_date,
+                sources=[{"title": ev.name, "evidence_id": ev.id}],
+            ))
+        return drafts
 
 
-def any_connector_configured() -> bool:
-    """Whether at least one live monitoring feed is configured (drives the honest
+class AdverseMediaConnector(MonitoringConnector):
+    provider = adverse_media.PROVIDER
+    label = "Breach and adverse-media news"
+    kind = "adverse_media"
+    reaches_internet = True
+    fetch = staticmethod(adverse_media.fetch_gdelt)
+
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
+        return bool((get_tiering_config(db, tenant_id).get("monitoring_policy") or {}).get("adverse_media"))
+
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        found = adverse_media.research(vendor.name, since, now,
+                                       monitoring.rejected(db, vendor.tenant_id, vendor.id, self.provider),
+                                       fetch=self.fetch)
+        return [SignalDraft(**draft) for draft in found]
+
+
+CONNECTORS: List[MonitoringConnector] = [CertificateLapseConnector(), AdverseMediaConnector()]
+
+
+def providers(db: Session, tenant_id: int) -> List[dict]:
+    """Every feed, whether it is on for this tenant, and what it does."""
+    return [{"provider": c.provider, "label": c.label, "kind": c.kind, "reaches_internet": c.reaches_internet,
+             "configured": c.is_configured(db, tenant_id)} for c in CONNECTORS]
+
+
+def any_connector_configured(db: Optional[Session] = None, tenant_id: Optional[int] = None) -> bool:
+    """Whether a feed beyond the evidence library is live (drives the honest
     'Manual monitoring' vs 'Continuous monitoring' labelling)."""
-    return any(c.is_configured() for c in CONNECTORS)
+    if db is None or tenant_id is None:
+        return False
+    return any(c.is_configured(db, tenant_id) for c in CONNECTORS if c.kind != "certificates")
 
 
-def run_connectors(db: Session, tenant_id: int) -> dict:
-    """Poll every configured connector for a tenant and ingest its signal drafts.
-
-    A no-op while ``CONNECTORS`` is empty. When a real provider is registered, this
-    is where each draft is deduped by ``external_id`` and turned into a
-    ``TPRAMonitoringSignal`` (reusing the create-signal + reassessment-trigger path).
-    Failures in one connector never abort the sweep."""
-    ingested = 0
-    for c in CONNECTORS:
-        if not c.is_configured():
+def run_connectors(db: Session, tenant_id: int, now: Optional[datetime] = None, batch: int = BATCH) -> dict:
+    """Poll every configured feed for a tenant, each vendor on its tier's cadence."""
+    now = now or datetime.utcnow()
+    results = {}
+    for connector in CONNECTORS:
+        if not connector.is_configured(db, tenant_id):
             continue
-        try:
-            drafts = c.poll(db, tenant_id) or []
-        except Exception:  # noqa: BLE001 — a flaky feed must not break the sweep
-            logger.exception("monitoring connector %s poll failed (tenant=%s)", c.provider, tenant_id)
-            continue
-        # Row-ingestion (dedup by external_id + create_signal + trigger) is added with
-        # the first live provider; counting here exercises the wiring end-to-end.
-        ingested += len(drafts)
-        logger.info("monitoring connector %s: %d draft(s) (tenant=%s)", c.provider, len(drafts), tenant_id)
-    return {"connectors": len(CONNECTORS), "ingested": ingested}
+        tally = {"polled": 0, "failed": 0, "new_signals": 0, "verified": 0}
+        for vendor, last in monitoring.due_vendors(db, tenant_id, connector.provider, now, batch):
+            try:
+                with db.begin_nested():
+                    for draft in connector.poll(db, vendor, last, now):
+                        signal, _, created = monitoring.record_signal(
+                            db, vendor, source=connector.provider, **asdict(draft))
+                        if not created:
+                            monitoring.corroborate(db, vendor, signal, draft.sources, draft.verification)
+                        tally["new_signals"] += int(created)
+                        tally["verified"] += int(created and signal.verified)
+                    monitoring.mark_polled(db, tenant_id, vendor.id, connector.provider, now)
+                tally["polled"] += 1
+            except Exception as exc:  # noqa: BLE001 — one feed or vendor must not stop the sweep
+                logger.warning("monitoring %s failed for vendor %s: %s", connector.provider, vendor.id, exc)
+                monitoring.mark_failed(db, tenant_id, vendor.id, connector.provider, f"{type(exc).__name__}: {exc}")
+                tally["failed"] += 1
+        results[connector.provider] = tally
+    return {"connectors": len(results), "results": results}

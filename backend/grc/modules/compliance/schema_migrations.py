@@ -934,6 +934,13 @@ _COLUMN_ADDS = [
     ("grc_tpra_evidence_links", "requirement", "VARCHAR(40)", None),
     ("grc_vendor_assessments", "tiering_basis", "JSON", None),
     ("grc_vendor_assessments", "tier_override", "JSON", None),
+    # Outside-in monitoring signals fetched by connectors (tpra/monitoring.py).
+    ("grc_tpra_monitoring_signals", "external_id", "VARCHAR(200)", "ix_tpra_signal_external_id"),
+    ("grc_tpra_monitoring_signals", "sources", "JSON DEFAULT '[]'::json", None),
+    ("grc_tpra_monitoring_signals", "verification", "JSON", None),
+    ("grc_tpra_monitoring_signals", "verified", "BOOLEAN DEFAULT TRUE", None),
+    ("grc_tpra_monitoring_signals", "finding_id", "INTEGER", None),
+    ("grc_tpra_tiering_config", "monitoring_policy", "JSON DEFAULT '{}'::json", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

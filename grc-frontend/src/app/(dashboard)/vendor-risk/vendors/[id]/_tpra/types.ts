@@ -192,6 +192,11 @@ export interface MonitoringSignal {
   triggered_assessment_id: number | null;
   acknowledged: boolean;
   row_version: number;
+  // Fetched by a feed: the articles or records behind it, and whether it was verified.
+  sources?: Array<{ url?: string; title?: string; domain?: string; published?: string }>;
+  verification?: { verified: boolean; reason?: string | null; checks?: Record<string, string> } | null;
+  verified?: boolean;
+  finding_id?: number | null;
 }
 
 export interface AdvanceResult {

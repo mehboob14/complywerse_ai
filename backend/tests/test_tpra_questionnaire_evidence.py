@@ -17,7 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import (
-    Base, Evidence, EvidenceQualityCheck, GRCUser, Tenant, TPRAApproval, TPRAAuditLog, TPRAContract,
+    TPRAMonitoringSignal, Base, Evidence, EvidenceQualityCheck, GRCUser, Tenant, TPRAApproval, TPRAAuditLog, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRARiskAcceptance,
     TPRARiskSnapshot, TPRATemplateVersion, TPRATieringConfig, Vendor, VendorAssessment, VendorQuestionnaireEvidence,
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
@@ -30,7 +30,7 @@ from grc.routers.auth_router import require_auth
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, EvidenceQualityCheck, TPRAEvidenceLink, TPRAContract,
-           TPRAControlObligation, TPRAApproval, TPRARiskAcceptance, TPRARiskSnapshot]
+           TPRAControlObligation, TPRAApproval, TPRARiskAcceptance, TPRARiskSnapshot, TPRAMonitoringSignal]
 
 QUESTIONS = [
     {"id": "isms", "text": "Do you run an information security programme?", "type": "yes_no",

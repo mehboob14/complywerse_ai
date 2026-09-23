@@ -2462,6 +2462,7 @@ export const tpraApi = {
   saveConfig: (data: {
     weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number>;
     reminder_policy?: object; scoring_policy?: { partial_credit: number }; tier_policy?: object;
+    monitoring_policy?: { adverse_media: boolean };
   }) =>
     apiClient.put('/vendor-risk/tpra/config', data),
   getVendorAudit: (vendorId: number, limit = 100) =>
@@ -2485,6 +2486,15 @@ export const tpraApi = {
   updateSignal: (signalId: number, data: Record<string, unknown>) =>
     apiClient.put(`/vendor-risk/tpra/signals/${signalId}`, data),
   deleteSignal: (signalId: number) => apiClient.delete(`/vendor-risk/tpra/signals/${signalId}`),
+  // Stage 5: outside-in monitoring — a signal as a finding, ruling one out, feeds, ratings.
+  raiseSignalFinding: (signalId: number) => apiClient.post(`/vendor-risk/tpra/signals/${signalId}/raise-finding`),
+  rejectSignal: (signalId: number, reason?: string) =>
+    apiClient.post(`/vendor-risk/tpra/signals/${signalId}/reject`, { reason }),
+  monitoringProviders: () => apiClient.get('/vendor-risk/tpra/monitoring/providers'),
+  vendorRatings: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/ratings`),
+  importRatings: (form: FormData) => apiClient.post('/vendor-risk/tpra/ratings/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }),
 };
 
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.

@@ -22,9 +22,8 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import service, rbac, exchange, tier_policy
+from . import service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings
 from .stages import stages_payload, is_valid_stage
-from .engine_monitoring import should_trigger_reassessment
 from .schema_migrations import ensure_tpra_columns
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Lifecycle"])
@@ -180,6 +179,9 @@ def s_signal(s: TPRAMonitoringSignal) -> dict:
         "triggered_assessment_id": s.triggered_assessment_id, "acknowledged": s.acknowledged,
         "acknowledged_by": getattr(s, "acknowledged_by", None),
         "acknowledged_at": getattr(s, "acknowledged_at", None),
+        # fetched by a connector: its sources and whether it survived verification
+        "sources": s.sources or [], "verification": s.verification,
+        "verified": s.verified is not False, "finding_id": s.finding_id,
         "row_version": s.row_version,
     }
 
@@ -321,6 +323,10 @@ class SignalIn(BaseModel):
     detail: Optional[str] = None
     occurred_at: Optional[datetime] = None
 
+class SignalRejectIn(BaseModel):
+    reason: Optional[str] = None
+
+
 class SignalUpdate(BaseModel):
     severity: Optional[str] = None
     title: Optional[str] = None
@@ -351,6 +357,7 @@ class ConfigIn(BaseModel):
     reminder_policy: Optional[dict] = None  # see bootstrap.DEFAULT_TIERING_CONFIG["reminder_policy"]
     scoring_policy: Optional[dict] = None   # {partial_credit: 0..1}, frozen into each questionnaire version
     tier_policy: Optional[dict] = None      # {tier: {template_ids, evidence, approver_role, reassess_on}}
+    monitoring_policy: Optional[dict] = None  # {adverse_media: bool}
 
 class PlanIn(BaseModel):
     """Persist the Due-Diligence Planning selections onto the assessment so the
@@ -1433,41 +1440,9 @@ def create_signal(vendor_id: int, body: SignalIn, db: Session = Depends(get_db),
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "monitoring", "create")
-    sig = TPRAMonitoringSignal(
-        tenant_id=v.tenant_id, vendor_id=v.id, signal_type=body.signal_type,
-        severity=body.severity or "medium", source=body.source, title=body.title, detail=body.detail,
-        occurred_at=body.occurred_at or datetime.utcnow(),
-    )
-    db.add(sig)
-    db.flush()
-    triggered = None
-    _threshold = tier_policy.reassess_threshold(
-        v.tier, tier_policy.merged(service.get_tiering_config(db, v.tenant_id).get("tier_policy")))
-    if should_trigger_reassessment(sig.signal_type, sig.severity, _threshold):
-        # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
-        # version already open in the diligence phase), attach this signal to it
-        # rather than superseding + restarting, which would discard in-flight
-        # progress and let a burst of signals spawn a storm of reassessments.
-        active = service.get_active_assessment(db, v)
-        _in_flight = (
-            active is not None
-            and (active.version_no or 1) > 1
-            and active.lifecycle_status == "active"
-            and active.current_stage not in ("monitoring", "reassessment")
-        )
-        if _in_flight:
-            sig.triggered_reassessment = True
-            sig.triggered_assessment_id = active.id
-            triggered = active.id
-        else:
-            new = service.create_reassessment_version(
-                db, v, actor_id=user.id, reason=f"Auto-triggered by {sig.signal_type} signal",
-                triggered_signal=sig,
-            )
-            triggered = new.id
-    service.write_audit(db, v.tenant_id, entity="signal", action="create",
-                        vendor_id=v.id, entity_id=sig.id, actor_id=user.id, to_value=body.signal_type,
-                        extra={"triggered_assessment_id": triggered})
+    sig, triggered, _ = monitoring.record_signal(
+        db, v, signal_type=body.signal_type, severity=body.severity or "medium", source=body.source,
+        title=body.title, detail=body.detail, occurred_at=body.occurred_at, actor_id=user.id)
     db.commit()
     return {"signal": s_signal(sig), "triggered_reassessment_id": triggered}
 
@@ -1492,6 +1467,65 @@ def update_signal(signal_id: int, body: SignalUpdate, db: Session = Depends(get_
     service.write_audit(db, s.tenant_id, entity="signal", action="update", vendor_id=s.vendor_id, entity_id=s.id, actor_id=user.id)
     db.commit()
     return s_signal(s)
+
+
+@router.post("/signals/{signal_id}/raise-finding")
+def raise_finding_from_signal(signal_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The signal as a finding on the vendor's current assessment, with its sources."""
+    tids = _tids(user, db)
+    s = _get(db, TPRAMonitoringSignal, signal_id, tids)
+    rbac.require_write(db, user, "findings", "create")
+    finding = monitoring.raise_finding(db, s, _vendor(db, s.vendor_id, tids), user.id)
+    db.commit()
+    return {"signal": s_signal(s), "finding_id": finding.id, "assessment_id": finding.assessment_id}
+
+
+@router.post("/signals/{signal_id}/reject")
+def reject_signal(signal_id: int, body: SignalRejectIn = SignalRejectIn(), db: Session = Depends(get_db),
+                  user: GRCUser = Depends(require_auth)):
+    """Not about this vendor: remove it, and never raise the same articles again."""
+    tids = _tids(user, db)
+    s = _get(db, TPRAMonitoringSignal, signal_id, tids)
+    rbac.require_write(db, user, "monitoring", "edit")
+    monitoring.reject(db, s, user.id, " ".join((body.reason or "").split()) or None)
+    db.commit()
+    return {"rejected": True, "id": s.id}
+
+
+@router.post("/ratings/import")
+async def import_ratings(
+    file: UploadFile = File(...),
+    provider: str = Form("Security ratings"),
+    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth),
+):
+    """Scores from a ratings provider's CSV export: vendor, score, date. A fall of
+    ten points or more raises a monitoring signal."""
+    tids = _tids(user, db)
+    rbac.require_write(db, user, "monitoring", "create")
+    content = await file.read(5 * 1024 * 1024 + 1)
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "The file is larger than 5 MB")
+    vendors = db.query(Vendor).filter(Vendor.tenant_id.in_(tids), Vendor.deleted_at.is_(None)).all()
+    try:
+        rows, problems = ratings.parse(content, vendors, " ".join(provider.split())[:60] or "Security ratings")
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    counts = ratings.import_rows(db, rows, user.id)
+    db.commit()
+    return {**counts, "problems": problems[:50]}
+
+
+@router.get("/vendors/{vendor_id}/ratings")
+def vendor_ratings(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    _vendor(db, vendor_id, tids)
+    return {"items": ratings.history(db, vendor_id)}
+
+
+@router.get("/monitoring/providers")
+def monitoring_providers(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Which outside-in feeds are on for this tenant, so screens show only what is real."""
+    return {"providers": monitoring_connectors.providers(db, _tids(user, db)[0])}
 
 
 @router.delete("/signals/{signal_id}")
@@ -1670,6 +1704,7 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
         "reminder_policy": cfg["reminder_policy"],
         "scoring_policy": cfg["scoring_policy"],
         "tier_policy": tier_policy.merged(cfg.get("tier_policy")),
+        "monitoring_policy": cfg.get("monitoring_policy") or {},
         "defaults": {**DEFAULT_TIERING_CONFIG, "tier_policy": tier_policy.DEFAULT_TIER_POLICY},
         "meta": {
             "factor_keys": _FACTOR_KEYS, "factor_labels": _FACTOR_LABELS,
@@ -1733,6 +1768,12 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
+    if body.monitoring_policy is not None:
+        unknown = set(body.monitoring_policy) - {"adverse_media"}
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"Unknown monitoring setting: {', '.join(sorted(unknown))}")
+        row.monitoring_policy = {"adverse_media": bool(body.monitoring_policy.get("adverse_media"))}
+
     if body.tier_policy is not None:
         try:
             row.tier_policy = tier_policy.clean(body.tier_policy,
@@ -1753,7 +1794,8 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
     return {"weights": row.weights, "thresholds": row.thresholds, "cadence_days": row.cadence_days,
             "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"], **(row.reminder_policy or {})},
             "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"], **(row.scoring_policy or {})},
-            "tier_policy": tier_policy.merged(getattr(row, "tier_policy", None))}
+            "tier_policy": tier_policy.merged(getattr(row, "tier_policy", None)),
+            "monitoring_policy": getattr(row, "monitoring_policy", None) or {}}
 
 
 # ── Compliance framework coverage (TPRM-007b) ────────────────────────────────

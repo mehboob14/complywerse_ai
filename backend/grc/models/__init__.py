@@ -35,3 +35,4 @@ from ._60_module_settings import *  # noqa: F401,F403 - per-tenant status levels
 from ._62_vendor_reminders import *  # noqa: F401,F403 - third-party risk reminders, one row per notice
 from ._63_attention import *  # noqa: F401,F403 - snoozes, assignments and notes on attention-queue items
 from ._64_tpra_template_versions import *  # noqa: F401,F403 - questionnaire templates frozen as sent
+from ._65_tpra_monitoring import *  # noqa: F401,F403 - monitoring cursors, ruled-out alerts, external ratings
