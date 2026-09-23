@@ -94,6 +94,10 @@ _COLUMN_ADDS = [
     ("grc_user_roles", "source", "VARCHAR(16)"),
     # A campaign can be scoped to one connected source.
     ("grc_access_review_campaigns", "source", "VARCHAR(32)"),
+    # The access each sampled identity holds, per system; and the rule behind
+    # a finding, so a review reports passes as well as failures.
+    ("grc_access_review_items", "access_snapshot", "JSON"),
+    ("grc_access_review_findings", "rule_id", "VARCHAR(40)"),
     # Access-review enrichment columns on grc_users (synced from Entra Graph).
     # Must mirror the ORM columns in models/_04_user_model_extended.py so the
     # enrichment writer actually persists MFA / sign-in / termination data.

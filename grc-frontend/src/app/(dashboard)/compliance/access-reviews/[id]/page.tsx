@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Check, Lock, RefreshCw, BarChart3, ClipboardCheck,
-  PenLine, FileText, ShieldCheck, X, Sparkles, Paperclip, Info, ArrowRight,
+  PenLine, FileText, ShieldCheck, X, Sparkles, Paperclip, Info, ArrowRight, CheckCircle2, XCircle,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import {
@@ -19,7 +19,7 @@ import {
   STAGES, statusToStage, stageState, isClosed, scopeLabel,
   severityClass, decisionClass, decisionLabel, riskClass,
 } from '../pipeline';
-import type { ReviewItem, Decision } from '../types';
+import type { AccessGrant, ReviewItem, Decision } from '../types';
 
 const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
 const stageIcon = [RefreshCw, BarChart3, ClipboardCheck, PenLine, FileText, Lock];
@@ -250,11 +250,32 @@ function UserPanel({ campaignId, user, onClose }: { campaignId: number; user: Re
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <div className="mb-5 grid grid-cols-2 gap-x-4 gap-y-3.5 text-[13px]">
             <Field k="Department" v={user.department} /><Field k="Title" v={user.designation} />
-            <div className="col-span-2"><K>Roles</K><div className="font-semibold text-slate-800">{user.roles.join(', ') || '—'}</div></div>
+            <div className="col-span-2"><K>Access held</K><AccessList access={user.access} roles={user.roles} /></div>
             <div><K>MFA</K><div className={`font-semibold ${user.mfa_enabled ? 'text-emerald-600' : 'text-rose-600'}`}>{user.mfa_enabled ? 'Enabled' : 'Not enabled'}</div></div>
             <Field k="Account" v={user.account_enabled ? 'active' : 'disabled'} />
             <Field k="Last sign-in" v={user.last_sign_in ?? '—'} /><Field k="Terminated" v={user.termination_date ?? '—'} />
           </div>
+
+          {(user.rules ?? []).length > 0 && <>
+            <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+              Rules checked · {(user.rules ?? []).filter((r) => r.status === 'pass').length} passed,{' '}
+              {(user.rules ?? []).filter((r) => r.status === 'fail').length} failed
+            </div>
+            <div className="mb-5 flex flex-col gap-1">
+              {[...(user.rules ?? [])].sort((a, b) => (a.status === b.status ? a.id.localeCompare(b.id) : a.status === 'fail' ? -1 : 1)).map((r) => (
+                <div key={r.id} className={`flex items-start gap-2 rounded-md border px-2.5 py-1.5 ${r.status === 'fail' ? 'border-rose-200 bg-rose-50/60' : 'border-slate-100 bg-white'}`}>
+                  {r.status === 'fail'
+                    ? <XCircle size={14} className="mt-[2px] shrink-0 text-rose-500" />
+                    : <CheckCircle2 size={14} className="mt-[2px] shrink-0 text-emerald-500" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="text-[12.5px] font-medium text-slate-800">{r.name}</div>
+                    {r.status === 'fail' && r.detail && <div className="text-[11px] text-slate-500">{r.detail}</div>}
+                  </div>
+                  <span className="shrink-0 font-mono text-[10.5px] text-slate-400">{r.id}</span>
+                </div>
+              ))}
+            </div>
+          </>}
 
           {user.findings.length > 0 && <>
             <div className="mb-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400">Findings</div>
@@ -302,6 +323,43 @@ function UserPanel({ campaignId, user, onClose }: { campaignId: number; user: Re
     </div>
   );
 }
+// The access an identity holds, grouped by the system that granted it — a
+// reviewer certifies access, so it has to be readable, not a comma string.
+const SOURCE_LABEL: Record<string, string> = {
+  digitalocean: 'DigitalOcean', okta: 'Okta', google: 'Google Workspace',
+  ldap: 'Active Directory', sailpoint: 'SailPoint', entra_id: 'Microsoft Entra ID',
+};
+function sourceName(source?: string | null): string {
+  if (!source) return 'Granted in this platform';
+  if (SOURCE_LABEL[source]) return SOURCE_LABEL[source];
+  const [kind, name] = source.includes(':') ? source.split(':') : ['', source];
+  const pretty = name.replace(/_/g, ' ').replace(/\w/g, (c) => c.toUpperCase());
+  return kind ? `${pretty} (${kind === 'iga' ? 'IGA' : 'App'})` : pretty;
+}
+
+function AccessList({ access, roles }: { access?: AccessGrant[]; roles: string[] }) {
+  const grants = access?.length ? access : roles.map((name) => ({ name, source: null }));
+  if (!grants.length) return <div className="font-semibold text-slate-800">No access recorded</div>;
+  const bySource = new Map<string, string[]>();
+  grants.forEach((g) => {
+    const key = sourceName(g.source);
+    bySource.set(key, [...(bySource.get(key) ?? []), g.name]);
+  });
+  const groups: [string, string[]][] = Array.from(bySource.entries());
+  return (
+    <div className="flex flex-col gap-2">
+      {groups.map(([source, names]) => (
+        <div key={source} className="rounded-lg border border-slate-100 bg-slate-50/70 px-2.5 py-2">
+          <div className="mb-1 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">{source}</div>
+          <ul className="flex flex-col gap-0.5">
+            {names.map((n: string) => <li key={n} className="text-[12.5px] font-medium text-slate-800">{n}</li>)}
+          </ul>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 const K = ({ children }: { children: React.ReactNode }) => <div className="mb-0.5 text-[11px] font-medium text-slate-400">{children}</div>;
 const Field = ({ k, v }: { k: string; v?: string | null }) => <div><K>{k}</K><div className="font-semibold text-slate-800">{v || '—'}</div></div>;
 
@@ -323,6 +381,52 @@ function ReportBlock({ campaignId, closed, onClose }: { campaignId: number; clos
           ))}
         </div>
       </div>
+
+      {(r.rule_results ?? []).length > 0 && (
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-baseline justify-between">
+            <h3 className="text-[13px] font-bold text-slate-900">Rules checked</h3>
+            <span className="text-[11.5px] text-slate-400">
+              {(r.rule_results ?? []).filter((x) => x.status === 'pass').length} passed ·{' '}
+              {(r.rule_results ?? []).filter((x) => x.status === 'fail').length} failed
+            </span>
+          </div>
+          <table className="w-full text-[12.5px]">
+            <thead>
+              <tr className="border-b border-slate-100 text-left text-[11px] uppercase tracking-wider text-slate-400">
+                <th className="pb-1.5 font-semibold">Rule</th>
+                <th className="pb-1.5 font-semibold">Area</th>
+                <th className="pb-1.5 font-semibold">Evidences</th>
+                <th className="pb-1.5 text-right font-semibold">Failed</th>
+                <th className="pb-1.5 text-right font-semibold">Passed</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {(r.rule_results ?? []).map((x) => (
+                <tr key={x.id}>
+                  <td className="py-1.5">
+                    <span className="inline-flex items-center gap-1.5">
+                      {x.status === 'fail'
+                        ? <XCircle size={13} className="shrink-0 text-rose-500" />
+                        : <CheckCircle2 size={13} className="shrink-0 text-emerald-500" />}
+                      <span className="font-medium text-slate-800">{x.name}</span>
+                      <span className="font-mono text-[10.5px] text-slate-400">{x.id}</span>
+                    </span>
+                  </td>
+                  <td className="py-1.5 text-slate-500">{x.domain}</td>
+                  <td className="py-1.5 text-slate-500" title={(x.frameworks ?? []).map((f) => `${f.name}: ${f.codes.join(', ')}`).join(' | ')}>
+                    {(x.frameworks ?? []).length
+                      ? (x.frameworks ?? []).slice(0, 2).map((f) => `${f.name.replace(/^(EMEA|APAC|AMER)\s+/, '').replace(/\s*\(used for SOC 2\)/, '')} ${f.codes.slice(0, 2).join(', ')}`).join(' · ')
+                      : (x.regulation ?? '—')}
+                  </td>
+                  <td className={`py-1.5 text-right font-mono ${x.failed ? 'font-semibold text-rose-600' : 'text-slate-400'}`}>{x.failed ?? 0}</td>
+                  <td className="py-1.5 text-right font-mono text-slate-500">{x.passed ?? 0}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-7 rounded-2xl border p-5" style={{ borderColor: verdictColor, background: `${verdictColor}14` }}>
         <div><div className="mb-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">Verdict</div><div className="flex items-center gap-2 text-[15px] font-bold" style={{ color: verdictColor }}><span className="h-2.5 w-2.5 rounded-full" style={{ background: verdictColor }} />{r.verdict}</div></div>

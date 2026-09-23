@@ -221,10 +221,14 @@ def _chk_cloud_orphan(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Findi
     return []
 
 
-def _rule(id, domain, name, severity, status, reads, trips, regulation, check=None, default=None):
+def _rule(id, domain, name, severity, status, reads, trips, regulation, check=None, default=None, scf=()):
     return {
         "id": id, "domain": domain, "name": name, "severity": severity,
         "status": status, "reads": reads, "trips": trips, "regulation": regulation,
+        # SCF control ids this rule evidences. The tenant's own crosswalk turns
+        # them into whichever frameworks they hold — ISO 27001, SOC 2, PCI DSS,
+        # NCA ECC, SAMA — so a rule doesn't need a mapping per framework.
+        "scf": tuple(scf),
         "check": check,
         # runnable rules default ON; the rest default OFF (can't run anyway).
         "default_enabled": (status == RUNNABLE) if default is None else default,
@@ -238,32 +242,32 @@ def _rule(id, domain, name, severity, status, reads, trips, regulation, check=No
 RULE_CATALOG: List[Dict[str, Any]] = [
     # ---- Identity lifecycle ----
     _rule("IDM-01", "Identity lifecycle", "Terminated still active", "critical", RUNNABLE,
-          "HR termination + account status", "termination date set AND account still enabled", "SOX·SAMA", _chk_ghost),
+          "HR termination + account status", "termination date set AND account still enabled", "SOX·SAMA", _chk_ghost, scf=("IAC-07.2", "IAC-15")),
     _rule("IDM-02", "Identity lifecycle", "Role kept after transfer (mover)", "high", NEEDS_DATA,
           "department-change history", "dept changed AND old-dept role still held", "SOX"),
     _rule("IDM-03", "Identity lifecycle", "Orphan account", "high", NEEDS_DATA,
           "account ↔ HR identity link", "account has no matching active employee", "SOX·PCI"),
     _rule("IDM-04", "Identity lifecycle", "Dormant access", "medium", RUNNABLE,
-          "last sign-in", "no sign-in > 90 days (or never)", "SOX", _chk_stale),
+          "last sign-in", "no sign-in > 90 days (or never)", "SOX", _chk_stale, scf=("IAC-15.3", "IAC-17")),
     # ---- Authentication ----
     _rule("AUTH-01", "Authentication", "No MFA", "high", RUNNABLE,
-          "mfa_enabled", "active account AND no MFA registered", "PCI·SAMA", _chk_mfa),
+          "mfa_enabled", "active account AND no MFA registered", "PCI·SAMA", _chk_mfa, scf=("IAC-06",)),
     _rule("AUTH-02", "Authentication", "Shared / generic account", "high", RUNNABLE,
-          "account naming", "account not tied to one named person", "SOX·PCI", _chk_shared),
+          "account naming", "account not tied to one named person", "SOX·PCI", _chk_shared, scf=("IAC-15.5", "IAC-09")),
     _rule("AUTH-03", "Authentication", "SSO not enforced", "medium", NEEDS_DATA,
           "per-user auth method", "local password login on an SSO-capable app", "—"),
     # ---- Privilege & SoD ----
     _rule("PRIV-01", "Privilege & SoD", "Over-privileged", "high", RUNNABLE,
-          "roles + department", "privileged role outside IT/Security", "SOX", _chk_over_priv),
+          "roles + department", "privileged role outside IT/Security", "SOX", _chk_over_priv, scf=("IAC-21", "IAC-16")),
     _rule("PRIV-02", "Privilege & SoD", "SoD toxic combo", "high", RUNNABLE,
-          "role pairs vs SoD rules", "holds both roles of a forbidden pair", "SOX·SAMA", _chk_sod),
+          "role pairs vs SoD rules", "holds both roles of a forbidden pair", "SOX·SAMA", _chk_sod, scf=("HRS-11", "IAC-21")),
     _rule("PRIV-03", "Privilege & SoD", "Standing admin (no JIT)", "medium", NEEDS_DATA,
           "assignment type", "permanent privileged role, not time-bound", "—"),
     _rule("PRIV-04", "Privilege & SoD", "Privilege creep", "medium", RUNNABLE,
-          "role count vs peers", "roles accumulated well beyond peer average", "SOX", _chk_creep),
+          "role count vs peers", "roles accumulated well beyond peer average", "SOX", _chk_creep, scf=("IAC-17", "IAC-21")),
     # ---- Authorization ----
     _rule("APRV-01", "Authorization", "No recorded approval", "low", RUNNABLE,
-          "role assignment approver/source", "held role with no approver or source", "SOX", _chk_no_approval),
+          "role assignment approver/source", "held role with no approver or source", "SOX", _chk_no_approval, scf=("IAC-07", "IAC-15")),
     # ---- Network devices (needs connector) ----
     _rule("NET-01", "Network devices", "Default / shared device creds", "critical", NEEDS_CONNECTOR,
           "device local accounts", "default or shared admin present", "PCI"),
@@ -284,9 +288,9 @@ RULE_CATALOG: List[Dict[str, Any]] = [
           "pipeline / prod roles", "developer holds prod deploy rights", "SOX"),
     # ---- Databases (RUNNABLE once a Tier-3 Database connector is synced) ----
     _rule("DB-01", "Databases", "Database superuser (DBA)", "critical", RUNNABLE,
-          "DB roles", "account holds DB superuser", "SOX", _chk_db_super),
+          "DB roles", "account holds DB superuser", "SOX", _chk_db_super, scf=("IAC-16", "IAC-21")),
     _rule("DB-02", "Databases", "Default / shared DB account", "high", RUNNABLE,
-          "DB account name", "default account (postgres/sa/root…) can log in", "PCI", _chk_db_default),
+          "DB account name", "default account (postgres/sa/root…) can log in", "PCI", _chk_db_default, scf=("IAC-15.5", "IAC-10")),
     _rule("DB-03", "Databases", "Direct prod / PII access", "high", NEEDS_CONNECTOR,
           "table grants", "direct read on sensitive tables, bypassing app", "GDPR·PCI"),
     _rule("DB-04", "Databases", "GRANT ALL / public role", "high", NEEDS_CONNECTOR,
@@ -296,13 +300,13 @@ RULE_CATALOG: List[Dict[str, Any]] = [
           "root activity + MFA", "root login OR root MFA off", "SOX·PCI"),
     _rule("CLD-02", "Cloud", "Wildcard IAM policy", "critical", RUNNABLE,
           "cloud credentials + their scope", "a credential with no bucket or scope limit", "SOX",
-          _chk_cloud_wildcard),
+          _chk_cloud_wildcard, scf=("IAC-21", "IAC-20")),
     _rule("CLD-03", "Cloud", "Long-lived access key", "high", RUNNABLE,
-          "access keys + age", "key not rotated > 90 days", "PCI", _chk_cloud_key_age),
+          "access keys + age", "key not rotated > 90 days", "PCI", _chk_cloud_key_age, scf=("IAC-10", "IAC-15")),
     _rule("CLD-04", "Cloud", "Public storage / open SG", "high", NEEDS_CONNECTOR,
           "bucket ACL + security groups", "public bucket OR 0.0.0.0/0 ingress", "PCI·GDPR"),
     _rule("CLD-05", "Cloud", "Orphaned cloud user", "high", RUNNABLE,
-          "cloud users ↔ HR", "active cloud user for a leaver", "SOX", _chk_cloud_orphan),
+          "cloud users ↔ HR", "active cloud user for a leaver", "SOX", _chk_cloud_orphan, scf=("IAC-07.2", "IAC-15.3")),
     # ---- Finance ERP ----
     _rule("ERP-01", "Finance ERP", "SoD: create vendor + run payment", "critical", NEEDS_CONNECTOR,
           "ERP roles", "same user holds both entitlements", "SOX·SAMA"),
@@ -415,6 +419,73 @@ def effective_enabled(rule: Dict[str, Any], cfg) -> bool:
     return bool(rule["default_enabled"])
 
 
+# Frameworks worth naming first when a rule maps to dozens of them.
+_HEADLINE_FRAMEWORKS = (
+    "iso_27001_2022", "aicpa_tsc_soc2", "pci_dss_401",
+    "emea_saudi_arabia_ecc_1_2018",      # NCA ECC
+    "sama_csf_2017", "emea_saudi_arabia_pdpl",
+    "nist_csf_20", "eu_gdpr_2016", "cis_csc_81",
+)
+_MAX_CODES_PER_FRAMEWORK = 4
+
+
+def framework_refs(tenant_db: Session, scf_ids: List[str], limit: int = 6) -> Dict[str, Any]:
+    """The tenant's own frameworks that these SCF controls satisfy.
+
+    The platform already holds the SCF crosswalk, so a rule states the SCF
+    controls it evidences once and every framework the tenant has — ISO 27001,
+    SOC 2, PCI DSS, NCA ECC, SAMA — falls out of their own mapping table. No
+    per-framework rule list to maintain.
+    """
+    if not scf_ids:
+        return {"frameworks": [], "total": 0}
+    from ...models import SCFMapping, SCFSource
+    try:
+        rows = (
+            tenant_db.query(SCFSource.source_slug, SCFSource.display_name, SCFMapping.requirement_code)
+            .join(SCFMapping, SCFMapping.source_slug == SCFSource.source_slug)
+            .filter(SCFMapping.scf_id.in_(list(scf_ids)))
+            .distinct()
+            .all()
+        )
+    except Exception:  # noqa: BLE001 — a tenant without the crosswalk just shows none
+        return {"frameworks": [], "total": 0}
+
+    by_slug: Dict[str, Dict[str, Any]] = {}
+    for slug, name, code in rows:
+        entry = by_slug.setdefault(slug, {"slug": slug, "name": name, "codes": []})
+        if code and code not in entry["codes"]:
+            entry["codes"].append(code)
+    for entry in by_slug.values():
+        entry["codes"] = sorted(entry["codes"])[:_MAX_CODES_PER_FRAMEWORK]
+
+    ordered = sorted(
+        by_slug.values(),
+        key=lambda e: (_HEADLINE_FRAMEWORKS.index(e["slug"]) if e["slug"] in _HEADLINE_FRAMEWORKS else 99, e["name"]),
+    )
+    return {"frameworks": ordered[:limit], "total": len(ordered)}
+
+
+def enabled_rules(tenant_db: Session, tenant_id: int, cfg_map: Optional[Dict[str, Any]] = None,
+                  with_frameworks: bool = False) -> List[Dict[str, Any]]:
+    """The rules a review actually runs — what every sampled identity is tested
+    against, so the result can say which passed as well as which failed.
+    `with_frameworks` attaches the tenant's framework controls each evidences."""
+    if cfg_map is None:
+        from ...models import AccessReviewRuleConfig
+        cfg_map = {
+            c.rule_id: c
+            for c in tenant_db.query(AccessReviewRuleConfig)
+            .filter(AccessReviewRuleConfig.tenant_id == tenant_id).all()
+        }
+    active = [r for r in RULE_CATALOG
+              if r["check"] is not None and effective_enabled(r, cfg_map.get(r["id"]))]
+    if not with_frameworks:
+        return active
+    return [{**r, **{"frameworks": (refs := framework_refs(tenant_db, list(r.get("scf") or ())))["frameworks"],
+                     "frameworks_total": refs["total"]}} for r in active]
+
+
 def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
                       items: List[AccessReviewItem]) -> int:
     """Clear prior findings, then run every ENABLED + RUNNABLE catalog rule over
@@ -432,10 +503,7 @@ def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
     }
     ctx = _build_context(tenant_db, tenant_id, items)
 
-    active = [
-        r for r in RULE_CATALOG
-        if r["check"] is not None and effective_enabled(r, cfg_map.get(r["id"]))
-    ]
+    active = enabled_rules(tenant_db, tenant_id, cfg_map)
     sev_override = {rid: c.severity for rid, c in cfg_map.items() if c.severity}
 
     total = 0
@@ -448,6 +516,7 @@ def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
                     severity=sev_override.get(rule["id"]) or f["severity"],
                     title=f["title"], detail=f.get("detail"),
                     sod_rule_id=f.get("sod_rule_id"),
+                    rule_id=rule["id"],
                 ))
                 total += 1
     return total
@@ -464,6 +533,7 @@ def catalog_view(tenant_db: Session, tenant_id: int) -> Dict[str, Any]:
         .filter(AccessReviewRuleConfig.tenant_id == tenant_id).all()
     }
     domains: Dict[str, List[Dict[str, Any]]] = {}
+    covered: set = set()
     enabled_n = runnable_n = 0
     for r in RULE_CATALOG:
         cfg = cfg_map.get(r["id"])
@@ -473,13 +543,19 @@ def catalog_view(tenant_db: Session, tenant_id: int) -> Dict[str, Any]:
             runnable_n += 1
         if en and is_runnable:
             enabled_n += 1
+        refs = framework_refs(tenant_db, list(r.get("scf") or ()))
+        covered.update(f["slug"] for f in refs["frameworks"])
         domains.setdefault(r["domain"], []).append({
             "id": r["id"], "name": r["name"],
             "severity": (cfg.severity if cfg and cfg.severity else r["severity"]),
             "status": r["status"], "reads": r["reads"], "trips": r["trips"],
             "regulation": r["regulation"], "runnable": is_runnable, "enabled": en,
+            # The tenant's own frameworks this rule evidences.
+            "scf": list(r.get("scf") or ()),
+            "frameworks": refs["frameworks"], "frameworks_total": refs["total"],
         })
     return {
-        "summary": {"total": len(RULE_CATALOG), "runnable": runnable_n, "enabled_active": enabled_n},
+        "summary": {"total": len(RULE_CATALOG), "runnable": runnable_n, "enabled_active": enabled_n,
+                    "frameworks_covered": len(covered)},
         "domains": [{"domain": d, "rules": domains[d]} for d in domain_order()],
     }

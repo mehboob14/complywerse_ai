@@ -48,6 +48,10 @@ export interface ReviewItem {
   department?: string | null;
   designation?: string | null;
   roles: string[];
+  /** What this identity holds, and the system that granted it. */
+  access: AccessGrant[];
+  /** Every rule the review ran against this identity, passed or failed. */
+  rules: RuleResult[];
   mfa_enabled: boolean | null;
   account_enabled: boolean | null;
   last_sign_in?: string | null;
@@ -65,8 +69,30 @@ export interface ReviewItem {
   anomaly_note?: string | null;
 }
 
+export interface AccessGrant {
+  name: string;
+  source?: string | null;
+}
+
+export interface RuleResult {
+  frameworks?: FrameworkRef[];
+  id: string;
+  name: string;
+  domain: string;
+  severity: Severity;
+  regulation?: string | null;
+  status: 'pass' | 'fail';
+  detail?: string | null;
+  /** present on the review-wide summary, not on a single identity */
+  failed?: number;
+  passed?: number;
+  reads?: string | null;
+  trips?: string | null;
+}
+
 export interface CampaignDetail extends Campaign {
   items: ReviewItem[];
+  rule_results: RuleResult[];
 }
 
 export interface Report {
@@ -78,6 +104,7 @@ export interface Report {
   findings_by_severity: Record<string, number>;
   decisions: Record<string, number>;
   verdict: string;
+  rule_results?: RuleResult[];
   ai_summary?: string | null;
   exceptions_open?: number;
 }
@@ -104,10 +131,21 @@ export interface CatalogRule {
   regulation: string;             // e.g. 'SOX·SAMA'
   runnable: boolean;
   enabled: boolean;
+  /** SCF control ids this rule evidences */
+  scf?: string[];
+  /** the tenant's own frameworks those controls satisfy */
+  frameworks?: FrameworkRef[];
+  frameworks_total?: number;
+}
+
+export interface FrameworkRef {
+  slug: string;
+  name: string;
+  codes: string[];
 }
 
 export interface RuleCatalogView {
-  summary: { total: number; runnable: number; enabled_active: number };
+  summary: { total: number; runnable: number; enabled_active: number; frameworks_covered?: number };
   domains: { domain: string; rules: CatalogRule[] }[];
 }
 

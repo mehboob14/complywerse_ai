@@ -34,6 +34,7 @@ from ..models import (
     UserRole,
 )
 from ..models import IdentityProviderConfig
+from ..modules.access_review import collectors as collectors_mod
 from ..modules.access_review import digitalocean as do_mod
 from ..modules.access_review import rule_catalog as rules_mod
 from ..modules.access_review import enrichment as enrichment_mod
@@ -66,14 +67,19 @@ def _tenant_id(tenant_db: Session) -> int:
     return row.id if row else 0
 
 
-def _role_names_for_user(tenant_db: Session, user_id: int) -> List[str]:
+def _access_for_user(tenant_db: Session, user_id: int) -> List[Dict[str, Any]]:
+    """What this identity can do, and which system granted it."""
     rows = (
-        tenant_db.query(Role.name)
+        tenant_db.query(Role.name, UserRole.source)
         .join(UserRole, UserRole.role_id == Role.id)
         .filter(UserRole.user_id == user_id)
         .all()
     )
-    return [r[0] for r in rows]
+    return [{"name": name, "source": source} for name, source in rows]
+
+
+def _role_names_for_user(tenant_db: Session, user_id: int) -> List[str]:
+    return [a["name"] for a in _access_for_user(tenant_db, user_id)]
 
 
 def _campaign_or_404(tenant_db: Session, campaign_id: int, tenant_id: int) -> AccessReviewCampaign:
@@ -186,8 +192,50 @@ def _campaign_dict(c: AccessReviewCampaign, counts: tuple = (0, 0)) -> Dict[str,
     }
 
 
-def _item_dict(item: AccessReviewItem, findings: List[AccessReviewFinding]) -> Dict[str, Any]:
+def _item_rules(item: AccessReviewItem, findings: List[AccessReviewFinding],
+                rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Every rule this identity was tested against, and whether it passed.
+    A review that only lists failures can't show what was checked."""
+    failed = {f.rule_id: f for f in findings if f.rule_id}
+    out = []
+    for rule in rules:
+        hit = failed.get(rule["id"])
+        out.append({
+            "id": rule["id"], "name": rule["name"], "domain": rule["domain"],
+            "severity": (hit.severity if hit else rule["severity"]),
+            "regulation": rule.get("regulation"),
+            "status": "fail" if hit else "pass",
+            "detail": hit.detail if hit else None,
+        })
+    return out
+
+
+def _rule_results(items: List[AccessReviewItem], findings_by_item: Dict[int, List[AccessReviewFinding]],
+                  rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Each rule the review ran, with how many identities passed and failed —
+    the review's own result, not just a list of exceptions."""
+    out = []
+    for rule in rules:
+        failed = [it for it in items
+                  if any(f.rule_id == rule["id"] for f in findings_by_item.get(it.id, []))]
+        out.append({
+            "id": rule["id"], "name": rule["name"], "domain": rule["domain"],
+            "severity": rule["severity"], "regulation": rule.get("regulation"),
+            "reads": rule.get("reads"), "trips": rule.get("trips"),
+            "failed": len(failed), "passed": len(items) - len(failed),
+            "status": "fail" if failed else "pass",
+            # The tenant's own framework controls this rule evidences.
+            "frameworks": rule.get("frameworks") or [],
+        })
+    return sorted(out, key=lambda r: (-r["failed"], r["id"]))
+
+
+def _item_dict(item: AccessReviewItem, findings: List[AccessReviewFinding],
+               rules: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     return {
+        # What this identity holds, per system — the "who has access to what".
+        "access": item.access_snapshot or [{"name": n, "source": None} for n in (item.roles_snapshot or [])],
+        "rules": _item_rules(item, findings, rules or []),
         "id": item.id,
         "user_id": item.user_id,
         "username": item.username,
@@ -673,9 +721,15 @@ async def import_spreadsheet(
 # Same "two faucets, one tank" pattern; all fill grc_users. Before /{campaign_id}.
 # ---------------------------------------------------------------------------
 
+class CollectorSyncIn(BaseModel):
+    provider: str            # a key from GET /connectors/collectors
+
+
 class DigitalOceanSyncIn(BaseModel):
     # Omit to use the token DigitalOcean is already connected with.
     token: Optional[str] = None
+    # Keep it (encrypted) so later reviews refresh without it being re-entered.
+    remember: bool = True
 
 
 class OktaSyncIn(BaseModel):
@@ -812,6 +866,54 @@ def list_connectors(
     }
 
 
+@router.get("/connectors/collectors")
+def list_collector_sources(
+    tenant_db: Session = Depends(get_tenant_db),
+    grc_auth_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Every connected tool whose people a review can pull — they share the
+    credential already stored for that provider."""
+    _require_admin(tenant_db, grc_auth_token, authorization)
+    return {"collectors": collectors_mod.available(tenant_db, _tenant_id(tenant_db))}
+
+
+@router.post("/connectors/collector/sync")
+def collector_sync(
+    payload: CollectorSyncIn,
+    tenant_db: Session = Depends(get_tenant_db),
+    grc_auth_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Pull one connected tool's people into the review population."""
+    admin = _require_admin(tenant_db, grc_auth_token, authorization)
+    tid = _tenant_id(tenant_db)
+    try:
+        result = collectors_mod.sync_collector_population(tenant_db, tenant_id=tid, provider=payload.provider)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=502, detail=f"{payload.provider} sync failed: {str(e)[:180]}")
+
+    cfg = (
+        tenant_db.query(IdentityProviderConfig)
+        .filter(IdentityProviderConfig.tenant_id == tid,
+                IdentityProviderConfig.provider == payload.provider[:32])
+        .first()
+    )
+    if not cfg:
+        cfg = IdentityProviderConfig(tenant_id=tid, provider=payload.provider[:32], created_by_id=admin.id)
+        tenant_db.add(cfg)
+    cfg.is_enabled = True
+    cfg.connected_at = cfg.connected_at or datetime.utcnow()
+    cfg.connected_by_id = admin.id
+    cfg.last_tested_at = datetime.utcnow()
+    cfg.last_test_status = "ok"
+    cfg.last_test_message = f"Synced {result['created'] + result['updated']} people"
+    tenant_db.commit()
+    return result
+
+
 @router.post("/connectors/digitalocean/sync")
 def digitalocean_sync(
     payload: DigitalOceanSyncIn,
@@ -826,7 +928,9 @@ def digitalocean_sync(
     admin = _require_admin(tenant_db, grc_auth_token, authorization)
     tid = _tenant_id(tenant_db)
     try:
-        result = do_mod.sync_digitalocean_population(tenant_db, tenant_id=tid, token=payload.token)
+        result = do_mod.sync_digitalocean_population(
+            tenant_db, tenant_id=tid, token=payload.token,
+            remember=payload.remember, user_id=admin.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:  # noqa: BLE001
@@ -1221,9 +1325,11 @@ def get_campaign(
         .all()
     ):
         findings_by_item.setdefault(f.item_id, []).append(f)
+    ran_rules = rules_mod.enabled_rules(tenant_db, tid, with_frameworks=True)
     return {
         "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0))),
-        "items": [_item_dict(it, findings_by_item.get(it.id, [])) for it in items],
+        "items": [_item_dict(it, findings_by_item.get(it.id, []), ran_rules) for it in items],
+        "rule_results": _rule_results(items, findings_by_item, ran_rules),
     }
 
 
@@ -1311,6 +1417,7 @@ def draw_sample(
             department=u.department,
             designation=u.designation,
             roles_snapshot=_role_names_for_user(tenant_db, u.id),
+            access_snapshot=_access_for_user(tenant_db, u.id),
             mfa_enabled=getattr(u, "mfa_enabled", None),
             account_enabled=getattr(u, "account_enabled", None)
             if getattr(u, "account_enabled", None) is not None
@@ -1654,7 +1761,14 @@ def _build_report(tenant_db: Session, c: AccessReviewCampaign, campaign_id: int)
     verdict = "effective" if users_with_exceptions == 0 else (
         "deficient" if users_with_exceptions <= max(1, sample_size // 10) else "material_weakness"
     )
+    findings_by_item: Dict[int, List[AccessReviewFinding]] = {}
+    for f in findings:
+        findings_by_item.setdefault(f.item_id, []).append(f)
     return {
+        # Every rule the review ran, with how many identities passed each — the
+        # report has to show what was tested, not only what failed.
+        "rule_results": _rule_results(items, findings_by_item,
+                                      rules_mod.enabled_rules(tenant_db, c.tenant_id, with_frameworks=True)),
         "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0))),
         "population_size": c.population_size,
         "sample_size": sample_size,
@@ -1913,7 +2027,8 @@ def export_report(
         .all()
     ):
         findings_by_item.setdefault(f.item_id, []).append(f)
-    item_dicts = [_item_dict(it, findings_by_item.get(it.id, [])) for it in items]
+    ran_rules = rules_mod.enabled_rules(tenant_db, tid, with_frameworks=True)
+    item_dicts = [_item_dict(it, findings_by_item.get(it.id, []), ran_rules) for it in items]
 
     stem = f"access_review_{campaign_id}"
     fmt = (format or "csv").lower()

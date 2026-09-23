@@ -65,8 +65,8 @@ export function useCampaign(id: number, enabled = true) {
     // Backend returns a NESTED shape { campaign, items }; flatten to CampaignDetail.
     queryFn: () =>
       authedFetch(`${API}/${id}`)
-        .then(json<{ campaign: Campaign; items: ReviewItem[] }>)
-        .then((d) => ({ ...d.campaign, items: d.items })),
+        .then(json<{ campaign: Campaign; items: ReviewItem[]; rule_results: CampaignDetail['rule_results'] }>)
+        .then((d) => ({ ...d.campaign, items: d.items, rule_results: d.rule_results ?? [] })),
     enabled: enabled && Number.isFinite(id),
   });
 }

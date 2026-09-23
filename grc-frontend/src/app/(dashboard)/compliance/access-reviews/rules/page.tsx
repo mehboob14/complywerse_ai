@@ -12,6 +12,12 @@ import { useRuleCatalog, useUpdateRule } from '../api';
 import { severityClass } from '../pipeline';
 import type { CatalogRule } from '../types';
 
+// "EMEA Saudi Arabia ECC-1 2018" reads as "ECC-1 2018" on a chip.
+function shortFramework(name: string): string {
+  return name.replace(/^(EMEA|APAC|AMER)\s+/, '').replace(/^(Saudi Arabia|Australia|Japan)\s+/, '')
+    .replace(/\s*\(used for SOC 2\)/, '').slice(0, 22);
+}
+
 const REGS = ['All', 'SOX', 'PCI', 'GDPR', 'SAMA'] as const;
 const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
 const statusMeta: Record<CatalogRule['status'], { label: string; cls: string }> = {
@@ -43,7 +49,7 @@ export default function RuleLibraryPage() {
       <p className="mb-5 mt-1 text-[13.5px] text-slate-500">Checks that run during Stage 3. Enabled, runnable rules fire on the next review.</p>
 
       <div className="mb-4 grid grid-cols-3 gap-3.5">
-        {[['Catalog', data.summary.total, 'rules across all domains'], ['Runnable now', data.summary.runnable, 'with connected data'], ['Enabled', data.summary.enabled_active, 'fire on next Run checks']].map(([k, v, s]) => (
+        {[['Catalog', data.summary.total, 'rules across all domains'], ['Runnable now', data.summary.runnable, 'with connected data'], ['Frameworks', data.summary.frameworks_covered ?? 0, 'evidenced from your library']].map(([k, v, s]) => (
           <div key={k as string} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-1.5 text-[11.5px] font-medium text-slate-500">{k}</div>
             <div className="font-mono text-[25px] font-bold tracking-tight text-slate-900">{v}</div>
@@ -77,8 +83,18 @@ export default function RuleLibraryPage() {
                   <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-[13px] font-semibold text-slate-900">{r.name}</span><span className={`rounded-full px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${severityClass[r.severity]}`}>{r.severity}</span></div>
                   <div className="text-[11.5px] leading-snug text-slate-600"><span className="text-slate-400">reads</span> {r.reads} <span className="text-slate-400">· trips when</span> {r.trips}</div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {r.regulation !== '—' && r.regulation.split('·').map((x) => <span key={x} className="rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide text-slate-600">{x.trim()}</span>)}
+                <div className="flex flex-wrap gap-1.5" title={(r.frameworks ?? []).map((f) => `${f.name}: ${f.codes.join(', ')}`).join(' | ')}>
+                  {(r.frameworks ?? []).slice(0, 3).map((f) => (
+                    <span key={f.slug} className="rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide text-slate-600">
+                      {shortFramework(f.name)} {f.codes.slice(0, 2).join(', ')}
+                    </span>
+                  ))}
+                  {(r.frameworks_total ?? 0) > 3 && (
+                    <span className="rounded px-1 py-0.5 text-[9.5px] font-semibold text-slate-400">+{(r.frameworks_total ?? 0) - 3} more</span>
+                  )}
+                  {!(r.frameworks ?? []).length && r.regulation !== '—' && r.regulation.split('·').map((x) => (
+                    <span key={x} className="rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide text-slate-600">{x.trim()}</span>
+                  ))}
                 </div>
                 <div className="flex justify-end">
                   <button disabled={!r.runnable} onClick={() => update.mutate({ ruleId: r.id, enabled: !r.enabled })}

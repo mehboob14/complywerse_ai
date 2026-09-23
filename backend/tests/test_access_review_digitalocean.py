@@ -205,6 +205,60 @@ def test_only_the_cloud_rules_the_data_supports_are_runnable():
     assert by_id["CLD-01"]["status"] == rules.NEEDS_CONNECTOR
 
 
+def test_a_connected_tool_becomes_a_review_source_without_a_connector_of_its_own(db):
+    """The people of 30-odd SaaS tools come from the credential already stored
+    for them, mapped by a table entry rather than a module each."""
+    from grc.modules.access_review import collectors
+
+    slack = collectors.PEOPLE["slack"]
+    person = collectors.map_person(
+        {"name": "dana", "real_name": "Dana Ali", "email": "dana@bank.example", "is_admin": True}, slack, "slack")
+    assert person["entitlements"] == ["Slack: workspace admin"] and person["is_person"] is True
+    assert person["external_id"] == "slack:dana"
+    assert collectors.map_person({"email": "bot@x.example", "is_bot": True}, slack, "slack") is None
+    # a handle-only tool still yields an addressable identity
+    handle = collectors.map_person({"login": "octocat", "id": 7}, collectors.PEOPLE["github"], "github")
+    assert handle["email"] == "octocat@github.account"
+    # a disabled account is still reviewed, marked as off in the source
+    off = collectors.map_person({"email": "x@bank.example", "deleted": True}, slack, "slack")
+    assert off["account_enabled"] is False
+
+    listed = {c["key"]: c for c in collectors.available(db, 1)}
+    assert len(listed) >= 30 and listed["slack"]["connected"] is False
+    for provider, spec in collectors.PEOPLE.items():
+        assert len(provider) <= m.UserRole.__table__.c.source.type.length, provider
+        assert spec.resource and spec.label
+    with pytest.raises(ValueError, match="not connected"):
+        collectors.sync_collector_population(db, tenant_id=1, provider="slack")
+
+
+def test_a_rule_names_the_frameworks_the_tenant_actually_holds(db):
+    """A rule states the SCF controls it evidences; the tenant's own crosswalk
+    turns those into their frameworks — no per-framework rule list."""
+    db.add_all([
+        m.SCFSource(release_id=1, source_key="k1", source_slug="aicpa_tsc_soc2",
+                    display_name="AICPA TSC 2017:2022 (used for SOC 2)"),
+        m.SCFSource(release_id=1, source_key="k2", source_slug="emea_saudi_arabia_ecc_1_2018",
+                    display_name="EMEA Saudi Arabia ECC-1 2018"),
+        m.SCFMapping(release_id=1, scf_id="IAC-06", source_slug="aicpa_tsc_soc2", requirement_code="CC6.6"),
+        m.SCFMapping(release_id=1, scf_id="IAC-06", source_slug="emea_saudi_arabia_ecc_1_2018",
+                     requirement_code="2-2-3-2"),
+    ])
+    db.commit()
+
+    mfa = rules.CATALOG_BY_ID["AUTH-01"]
+    assert mfa["scf"] == ("IAC-06",)
+    refs = rules.framework_refs(db, list(mfa["scf"]))
+    assert [(f["name"], f["codes"]) for f in refs["frameworks"]] == [
+        ("AICPA TSC 2017:2022 (used for SOC 2)", ["CC6.6"]),
+        ("EMEA Saudi Arabia ECC-1 2018", ["2-2-3-2"]),
+    ]
+    # a rule with no mapping says so rather than inventing coverage
+    assert rules.framework_refs(db, [])["frameworks"] == []
+    assert any(r["id"] == "AUTH-01" and r["frameworks"]
+               for r in rules.enabled_rules(db, 1, with_frameworks=True))
+
+
 def test_the_stored_connection_supplies_the_token_so_a_resync_needs_no_paste(db, monkeypatch):
     assert do.token_for_tenant(db, 1) is None
     db.add(m.IntegrationConnection(tenant_id=1, connection_name="DigitalOcean",

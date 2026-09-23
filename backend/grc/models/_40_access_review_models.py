@@ -106,6 +106,9 @@ class AccessReviewItem(Base):
     department = Column(String(255), nullable=True)
     designation = Column(String(255), nullable=True)
     roles_snapshot = Column(JSON, default=list)  # list of role names
+    # The same access, with the system each grant came from:
+    # [{"name": "DigitalOcean: SSH root access to droplets", "source": "digitalocean"}]
+    access_snapshot = Column(JSON, default=list)
     mfa_enabled = Column(Boolean, nullable=True)
     account_enabled = Column(Boolean, nullable=True)
     last_sign_in = Column(DateTime, nullable=True)
@@ -190,6 +193,9 @@ class AccessReviewFinding(Base):
     sod_rule_id = Column(
         Integer, ForeignKey("grc_sod_rules.id", ondelete="SET NULL"), nullable=True
     )
+    # The catalog rule that raised it ('AUTH-01'), so a review can say which
+    # rules passed as well as which failed.
+    rule_id = Column(String(40), nullable=True, index=True)
 
     # open | remediated | accepted_risk | false_positive
     status = Column(String(20), nullable=False, default="open")

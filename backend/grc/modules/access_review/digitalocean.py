@@ -309,19 +309,52 @@ def token_for_tenant(tenant_db: Session, tenant_id: int) -> Optional[str]:
     return None
 
 
+def remember_token(tenant_db: Session, tenant_id: int, token: str, user_id: Optional[int] = None) -> None:
+    """Keep the token the way the DigitalOcean evidence collector keeps it —
+    encrypted, one connection per tenant — so a review can refresh itself and
+    both features share the one credential. Connecting here is connecting
+    DigitalOcean, not a second copy of it."""
+    from ...crypto import encrypt_secret
+    from ...models import IntegrationConnection
+
+    conn = (
+        tenant_db.query(IntegrationConnection)
+        .filter(IntegrationConnection.tenant_id == tenant_id,
+                IntegrationConnection.integration_type == "digitalocean")
+        .order_by(desc(IntegrationConnection.id))
+        .first()
+    )
+    extra = {**(getattr(conn, "credentials_extra_json", None) or {}), "token": encrypt_secret(token)}
+    if conn is not None:
+        conn.credentials_extra_json = extra
+        conn.is_active = True
+        conn.status = "connected"
+        return
+    tenant_db.add(IntegrationConnection(
+        tenant_id=tenant_id, integration_type="digitalocean", category="evidence_collector",
+        connection_name="DigitalOcean", console_url=API, auth_method="apikey",
+        credentials_extra_json=extra, is_active=True, status="connected",
+        created_by_user_id=user_id,
+    ))
+
+
 def sync_digitalocean_population(tenant_db: Session, *, tenant_id: int,
-                                 token: Optional[str] = None) -> Dict[str, Any]:
+                                 token: Optional[str] = None, remember: bool = True,
+                                 user_id: Optional[int] = None) -> Dict[str, Any]:
     """Pull DigitalOcean's access-bearing objects into the review population.
     An explicit token wins; otherwise the stored connection's is used."""
     supplied = (token or "").strip()
     resolved = supplied or token_for_tenant(tenant_db, tenant_id)
     if not resolved:
-        raise ValueError("No DigitalOcean token. Connect DigitalOcean under Administration → "
-                         "Evidence Collectors, or paste a read-only token here.")
-    collected = collect(resolved)
+        raise ValueError("No DigitalOcean token. Paste a read-only token to connect DigitalOcean, "
+                         "or connect it under Administration → Evidence Collectors.")
+    collected = collect(resolved)          # a bad token fails here, before anything is kept
+    if supplied and remember:
+        remember_token(tenant_db, tenant_id, supplied, user_id)
     result = ingest(tenant_db, tenant_id=tenant_id, records=collected["records"],
                     map_fn=lambda record: record, provider_tag=PROVIDER_DO)
     return {**result, "source": "request" if supplied else "stored",
+            "token_saved": bool(supplied and remember),
             "read": collected["read"], "skipped": collected["skipped"],
             "team": collected["team"], "account_email": collected["account_email"],
             "scope_note": collected["scope_note"]}

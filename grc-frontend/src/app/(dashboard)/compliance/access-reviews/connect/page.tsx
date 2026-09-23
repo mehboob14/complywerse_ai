@@ -18,6 +18,8 @@ type Vendor = {
   key: string; name: string; sub: string; initials: string; color: string;
   kind: 'sso' | 'form' | 'iga' | 'app' | 'upload';
   endpoint?: string;          // for tier-1 form connectors
+  /** its credential can be kept (encrypted) so later reviews refresh on their own */
+  remembers?: boolean;
   fields?: Field[];           // tier-1 fields (iga/app fields come from catalog)
 };
 type Tier = { tier: 1 | 2 | 3; title: string; sub: string; vendors: Vendor[] };
@@ -56,7 +58,7 @@ const TIERS: Tier[] = [
       // DigitalOcean publishes no team-member endpoint, so this pulls what it
       // does expose: the keys, tokens and database users that reach the estate.
       { key: 'digitalocean', name: 'DigitalOcean', sub: 'SSH keys, Spaces keys, database users', initials: 'DO', color: '#0080FF',
-        kind: 'form', endpoint: 'digitalocean',
+        kind: 'form', endpoint: 'digitalocean', remembers: true,
         fields: [{ name: 'token', label: 'Read-only API token', secret: true, ph: 'leave blank to use the connected token' }] },
       { key: 'core_banking', name: 'Core Banking', sub: 'REST API', initials: 'CB', color: '#0F172A', kind: 'app' },
       { key: 'sap', name: 'SAP', sub: 'Roles & profiles', initials: 'SAP', color: '#0EA5E9', kind: 'app' },
@@ -70,19 +72,28 @@ const TIERS: Tier[] = [
 
 interface Status { [k: string]: { connected?: boolean; vendor?: string; app?: string } | number }
 
+/** A tool already connected as an evidence collector, whose people a review
+ *  can pull with that same stored credential. */
+type Collector = { key: string; label: string; category: string; connected: boolean; reads: string };
+
 export default function ConnectSourcePage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
   const [fieldsByKey, setFieldsByKey] = useState<Record<string, Field[]>>({});
+  const [collectors, setCollectors] = useState<Collector[]>([]);
+  const [syncing, setSyncing] = useState<string | null>(null);
+  const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [active, setActive] = useState<Vendor | null>(null);
 
   const load = useCallback(async () => {
-    const [s, iga, apps] = await Promise.all([
+    const [s, iga, apps, coll] = await Promise.all([
       authedFetch(`${API}/connectors`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       authedFetch(`${API}/connectors/iga/vendors`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
       authedFetch(`${API}/connectors/apps/catalog`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      authedFetch(`${API}/connectors/collectors`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     if (s) setStatus(s);
+    setCollectors(coll?.collectors ?? []);
     const fm: Record<string, Field[]> = {};
     (iga?.vendors || []).forEach((v: { key: string; fields: Field[] }) => (fm[v.key] = v.fields));
     (apps?.apps || []).forEach((a: { key: string; fields: Field[] }) => (fm[a.key] = a.fields));
@@ -98,6 +109,23 @@ export default function ConnectSourcePage() {
     return !!row?.connected;
   }, [status]);
 
+  const syncCollector = async (c: Collector) => {
+    setSyncing(c.key); setNote(null);
+    try {
+      const res = await authedFetch(`${API}/connectors/collector/sync`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ provider: c.key }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.detail || 'Sync failed');
+      setNote({ ok: true, text: `${c.label}: pulled ${(d.created ?? 0) + (d.updated ?? 0)} people`
+        + `${d.entitlements_linked ? `, ${d.entitlements_linked} entitlements` : ''}`
+        + `${d.partial ? ` (${d.partial})` : ''}.` });
+      await load();
+    } catch (e) {
+      setNote({ ok: false, text: e instanceof Error ? e.message : 'Sync failed' });
+    } finally { setSyncing(null); }
+  };
+
   if (!status) return <PageLoader />;
 
   return (
@@ -105,6 +133,41 @@ export default function ConnectSourcePage() {
       <button onClick={() => router.push('/compliance/access-reviews')} className="mb-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-slate-500"><ChevronLeft size={14} /> Access Reviews</button>
       <h1 className="text-[23px] font-bold tracking-tight text-slate-900">Connect a source</h1>
       <p className="mb-6 mt-1 text-[13.5px] text-slate-500">Connect only the systems you have — they all feed one user table. Pick from any tier in any order.</p>
+
+      {collectors.length > 0 && (
+        <section className="mb-8">
+          <div className="mb-3 flex items-center gap-2.5">
+            <span className="rounded-full bg-[color:var(--color-base-soft)] px-2.5 py-0.5 text-[11px] font-bold" style={{ color: 'var(--color-base-strong)' }}>Tools</span>
+            <span className="text-[14.5px] font-bold text-slate-900">Tools you already connect</span>
+            <span className="text-[12.5px] text-slate-400">· pulls their people with the credential already stored</span>
+            <span className="ml-auto font-mono text-[12px] text-slate-400">{collectors.filter((c) => c.connected).length}/{collectors.length} connected</span>
+          </div>
+          {note && <div className={`mb-3 rounded-md px-3 py-2 text-[13px] ${note.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{note.text}</div>}
+          <div className="grid grid-cols-3 gap-3.5">
+            {collectors.map((c) => (
+              <div key={c.key} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                style={c.connected ? { borderColor: 'var(--color-base)' } : undefined}>
+                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-[12px] font-bold text-slate-500">
+                  {c.label.slice(0, 2).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13.5px] font-bold text-slate-900">{c.label}</div>
+                  <div className="truncate text-[11.5px] text-slate-400">{c.connected ? 'credential on file' : 'connect it under Evidence Collectors'}</div>
+                </div>
+                {c.connected ? (
+                  <button disabled={syncing === c.key} onClick={() => syncCollector(c)}
+                    className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-60">
+                    {syncing === c.key ? 'Syncing…' : 'Pull people'}
+                  </button>
+                ) : (
+                  <button onClick={() => router.push(`/admin?tab=evidence-collectors&connector=${c.key}`)}
+                    className="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-500">Connect</button>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {TIERS.map((t) => {
         const connectedN = t.vendors.filter(isConnected).length;
@@ -159,6 +222,7 @@ function ConnectDrawer({ vendor, fields, onClose, onDone }: {
   const [vals, setVals] = useState<Record<string, string>>({});
   const [baseUrl, setBaseUrl] = useState('');
   const [file, setFile] = useState<File | null>(null);
+  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const needsBaseUrl = (vendor.kind === 'iga') || (vendor.kind === 'app' && vendor.key !== 'database');
@@ -169,7 +233,8 @@ function ConnectDrawer({ vendor, fields, onClose, onDone }: {
       let res: Response;
       if (vendor.kind === 'form') {
         res = await authedFetch(`${API}/connectors/${vendor.endpoint}/sync`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(vals),
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(vendor.remembers ? { ...vals, remember } : vals),
         });
       } else if (vendor.kind === 'iga') {
         res = await authedFetch(`${API}/connectors/iga/sync`, {
@@ -212,7 +277,11 @@ function ConnectDrawer({ vendor, fields, onClose, onDone }: {
         </div>
 
         <div className="flex-1 overflow-y-auto px-5 py-5">
-          <p className="mb-4 text-[12.5px] text-slate-500">Credentials are used for this sync only and are not stored. Users &amp; access land in one shared table.</p>
+          <p className="mb-4 text-[12.5px] text-slate-500">
+            {vendor.remembers
+              ? 'Leave the token blank to reuse the one already connected. Users & access land in one shared table.'
+              : 'Credentials are used for this sync only and are not stored. Users & access land in one shared table.'}
+          </p>
           {msg && <div className={`mb-4 rounded-md px-3 py-2 text-[13px] ${msg.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'}`}>{msg.text}</div>}
 
           {vendor.kind === 'sso' ? (
@@ -234,6 +303,12 @@ function ConnectDrawer({ vendor, fields, onClose, onDone }: {
                     onChange={(e) => setVals((v) => ({ ...v, [f.name]: e.target.value }))}
                     className="w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] outline-none" /></div>
               ))}
+              {vendor.remembers && (
+                <label className="flex items-start gap-2 rounded-md bg-slate-50 px-3 py-2.5 text-[12.5px] text-slate-600">
+                  <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} className="mt-0.5" />
+                  <span>Keep this token, encrypted, so later reviews can refresh without it being entered again. It is the same credential the evidence collector uses.</span>
+                </label>
+              )}
             </div>
           )}
         </div>
