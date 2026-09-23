@@ -76,11 +76,20 @@ interface Status { [k: string]: { connected?: boolean; vendor?: string; app?: st
  *  can pull with that same stored credential. */
 type Collector = { key: string; label: string; category: string; connected: boolean; reads: string };
 
+/** What a source has actually put in the population. */
+type SourceStat = { key: string; label: string; people: number; entitlements: number; last_synced?: string | null };
+type Person = {
+  id: number; email: string; display_name: string; designation?: string | null;
+  account_enabled?: boolean | null; access: string[]; other_access: string[];
+};
+
 export default function ConnectSourcePage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
   const [fieldsByKey, setFieldsByKey] = useState<Record<string, Field[]>>({});
   const [collectors, setCollectors] = useState<Collector[]>([]);
+  const [sources, setSources] = useState<SourceStat[]>([]);
+  const [inspect, setInspect] = useState<SourceStat | null>(null);
   const [syncing, setSyncing] = useState<string | null>(null);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
   const [active, setActive] = useState<Vendor | null>(null);
@@ -93,6 +102,7 @@ export default function ConnectSourcePage() {
       authedFetch(`${API}/connectors/collectors`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     if (s) setStatus(s);
+    setSources(s?.sources ?? []);
     setCollectors(coll?.collectors ?? []);
     const fm: Record<string, Field[]> = {};
     (iga?.vendors || []).forEach((v: { key: string; fields: Field[] }) => (fm[v.key] = v.fields));
@@ -126,6 +136,10 @@ export default function ConnectSourcePage() {
     } finally { setSyncing(null); }
   };
 
+  const sourceStat = (key: string): SourceStat =>
+    sources.find((x) => x.key === key)
+    ?? { key, label: key, people: 0, entitlements: 0, last_synced: null };
+
   if (!status) return <PageLoader />;
 
   return (
@@ -154,7 +168,13 @@ export default function ConnectSourcePage() {
                   <div className="truncate text-[13.5px] font-bold text-slate-900">{c.label}</div>
                   <div className="truncate text-[11.5px] text-slate-400">{c.connected ? 'credential on file' : 'connect it under Evidence Collectors'}</div>
                 </div>
-                {c.connected ? (
+                {c.connected && (sourceStat(c.key).people || 0) > 0 ? (
+                  <button onClick={() => setInspect(sourceStat(c.key))}
+                    className="rounded-md bg-[color:var(--color-base-soft)] px-3 py-1.5 text-[12px] font-semibold hover:brightness-95"
+                    style={{ color: 'var(--color-base-strong)' }}>
+                    {sourceStat(c.key).people} people
+                  </button>
+                ) : c.connected ? (
                   <button disabled={syncing === c.key} onClick={() => syncCollector(c)}
                     className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100 disabled:opacity-60">
                     {syncing === c.key ? 'Syncing…' : 'Pull people'}
@@ -191,7 +211,11 @@ export default function ConnectSourcePage() {
                       <div className="truncate text-[11.5px] text-slate-400">{v.sub}</div>
                     </div>
                     {on ? (
-                      <span className="inline-flex items-center gap-1 rounded-md bg-[color:var(--color-base-soft)] px-2.5 py-1.5 text-[12px] font-semibold" style={{ color: 'var(--color-base-strong)' }}><Check size={13} /> Connected</span>
+                      <button onClick={() => setInspect(sourceStat(v.key))}
+                        className="inline-flex items-center gap-1 rounded-md bg-[color:var(--color-base-soft)] px-2.5 py-1.5 text-[12px] font-semibold hover:brightness-95"
+                        style={{ color: 'var(--color-base-strong)' }}>
+                        <Check size={13} /> {(sourceStat(v.key).people || 0) > 0 ? `${sourceStat(v.key).people} people` : 'Connected'}
+                      </button>
                     ) : (
                       <button onClick={() => setActive(v)} className="rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-100">Connect</button>
                     )}
@@ -203,6 +227,19 @@ export default function ConnectSourcePage() {
         );
       })}
 
+      {inspect && (
+        <SourceDrawer
+          source={inspect}
+          onClose={() => setInspect(null)}
+          onResync={() => {
+            const vendor = TIERS.flatMap((t) => t.vendors).find((v) => v.key === inspect.key);
+            setInspect(null);
+            if (vendor) setActive(vendor);
+            else syncCollector({ key: inspect.key, label: inspect.label, category: '', connected: true, reads: '' });
+          }}
+        />
+      )}
+
       {active && (
         <ConnectDrawer
           vendor={active}
@@ -211,6 +248,105 @@ export default function ConnectSourcePage() {
           onDone={async () => { setActive(null); await load(); }}
         />
       )}
+    </div>
+  );
+}
+
+/** What a connected source put in the population: who it pulled, what each of
+ *  them holds, and the way on to a review of it. A card that only says
+ *  "Connected" tells nobody whether it worked. */
+function SourceDrawer({ source, onClose, onResync }: {
+  source: SourceStat; onClose: () => void; onResync: () => void;
+}) {
+  const router = useRouter();
+  const [people, setPeople] = useState<Person[] | null>(null);
+  const [starting, setStarting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    let live = true;
+    authedFetch(`${API}/connectors/${encodeURIComponent(source.key)}/people`)
+      .then((r) => (r.ok ? r.json() : { people: [] }))
+      .then((d) => { if (live) setPeople(d.people ?? []); })
+      .catch(() => { if (live) setPeople([]); });
+    return () => { live = false; };
+  }, [source.key]);
+
+  const startReview = async () => {
+    setStarting(true); setErr(null);
+    try {
+      const res = await authedFetch(API, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: `${source.label} access review — ${new Date().toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`,
+          review_type: 'user_access', sampling_method: 'full',
+          requested_sample_size: Math.max(source.people, 1), source: source.key,
+        }),
+      });
+      const d = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(d.detail || 'Could not start the review');
+      router.push(`/compliance/access-reviews/${d.id}`);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not start the review');
+      setStarting(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} className="fixed inset-0 z-40 flex justify-end bg-slate-900/45">
+      <div onClick={(e) => e.stopPropagation()} className="flex h-full w-[560px] max-w-[96%] flex-col border-l border-slate-200 bg-white shadow-2xl">
+        <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <div className="text-base font-bold text-slate-900">{source.label}</div>
+            <div className="text-xs text-slate-400">
+              {source.people} {source.people === 1 ? 'identity' : 'identities'} · {source.entitlements} access grants
+              {source.last_synced ? ` · synced ${new Date(source.last_synced).toLocaleString()}` : ''}
+            </div>
+          </div>
+          <button onClick={onClose} className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-500"><X size={15} /></button>
+        </div>
+
+        <div className="flex gap-2 border-b border-slate-100 px-5 py-3">
+          <button onClick={startReview} disabled={starting || source.people === 0} style={ACCENT}
+            className="rounded-md px-4 py-2 text-[13px] font-semibold shadow-sm disabled:opacity-60">
+            {starting ? 'Starting…' : 'Start a review of this source'}
+          </button>
+          <button onClick={onResync} className="rounded-md border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-600">Re-sync</button>
+        </div>
+        {err && <div className="mx-5 mt-3 rounded-md bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{err}</div>}
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {people === null ? (
+            <div className="text-[13px] text-slate-400">Loading…</div>
+          ) : people.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-slate-200 px-4 py-6 text-center text-[13px] text-slate-500">
+              Nothing pulled yet. Re-sync to fetch this source&apos;s people and their access.
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {people.map((p) => (
+                <div key={p.id} className="rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center gap-2">
+                    <span className="truncate text-[13px] font-semibold text-slate-900">{p.display_name}</span>
+                    {p.account_enabled === false && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">disabled in source</span>}
+                    <span className="ml-auto shrink-0 truncate font-mono text-[11px] text-slate-400">{p.email}</span>
+                  </div>
+                  {p.designation && <div className="mt-0.5 text-[11.5px] text-slate-400">{p.designation}</div>}
+                  <ul className="mt-1.5 flex flex-col gap-0.5">
+                    {p.access.map((a) => <li key={a} className="text-[12px] text-slate-700">• {a}</li>)}
+                  </ul>
+                  {p.other_access.length > 0 && (
+                    <div className="mt-1 text-[11px] text-slate-400">also holds: {p.other_access.join(' · ')}</div>
+                  )}
+                </div>
+              ))}
+              {people.length < source.people && (
+                <div className="py-2 text-center text-[11.5px] text-slate-400">showing {people.length} of {source.people}</div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

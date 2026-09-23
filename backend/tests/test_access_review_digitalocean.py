@@ -156,6 +156,32 @@ def test_a_privileged_pam_account_is_also_kept_out_of_the_people_pickers(db, mon
     assert account.account_enabled is True
 
 
+def test_a_connected_source_shows_what_it_pulled_and_who_holds_what(db, monkeypatch):
+    """A card that only says "Connected" tells nobody whether the sync worked;
+    the source reports its people, its grants and what each identity holds."""
+    from grc.routers import access_review_router as router
+
+    monkeypatch.setattr(do, "collect", lambda token: {
+        "records": [do.map_account(ACCOUNT),
+                    do.map_ssh_key({"id": 9, "name": "deploy"}, acct="cfsb-prod")],
+        "read": {}, "skipped": [], "team": "CFSB Prod", "account_email": "ops@bank.example",
+        "scope_note": "note"})
+    do.sync_digitalocean_population(db, tenant_id=1, token="t", remember=False)
+
+    stats = {s["key"]: s for s in router._source_options(db)}
+    assert stats[do.PROVIDER_DO]["label"] == "DigitalOcean"
+    assert stats[do.PROVIDER_DO]["people"] == 2 and stats[do.PROVIDER_DO]["entitlements"] == 2
+    assert stats[do.PROVIDER_DO]["last_synced"]
+
+    # what the drawer lists: each identity and the access this source gave it
+    ids = router._source_user_ids(db, do.PROVIDER_DO)
+    held = {u.email: [a["name"] for a in router._access_for_user(db, u.id)]
+            for u in db.query(m.GRCUser).filter(m.GRCUser.id.in_(ids))}
+    key = next(e for e in held if e.endswith("@ssh.cfsb-prod.do"))
+    assert held[key] == ["DigitalOcean: SSH root access to droplets"]
+    assert held["ops@bank.example"] == ["DigitalOcean: team CFSB Prod"]
+
+
 def test_a_campaign_scoped_to_one_source_leaves_the_rest_of_the_directory_alone(db):
     staff = m.GRCUser(id=50, username="dana", email="dana@bank.example", is_active=True)
     cloud = m.GRCUser(id=51, username="k", email="k@ssh.acct.do", is_active=False,

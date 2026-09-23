@@ -780,21 +780,44 @@ _SOURCE_LABELS = {
 }
 
 
-def _source_options(tenant_db: Session) -> List[Dict[str, str]]:
-    """Every source that has put somebody in the population — the choices for
-    scoping a review to one system."""
+def _source_label(tag: str) -> str:
+    if tag in _SOURCE_LABELS:
+        return _SOURCE_LABELS[tag]
+    if ":" in tag:
+        kind, name = tag.split(":", 1)
+        return f"{name.replace('_', ' ').title()} ({'IGA' if kind == 'iga' else 'App'})"
+    return tag.replace("_", " ").title()
+
+
+def _source_user_ids(tenant_db: Session, tag: str) -> set:
+    """Who this source put in the population: the rows it created, and anyone
+    it granted access to."""
+    ids = {u for (u,) in tenant_db.query(GRCUser.id).filter(GRCUser.external_provider == tag).all()}
+    ids |= {u for (u,) in tenant_db.query(UserRole.user_id).filter(UserRole.source == tag).distinct().all()}
+    return ids
+
+
+def _source_options(tenant_db: Session) -> List[Dict[str, Any]]:
+    """Every source that has put somebody in the population, with what it
+    contributed — the choices for scoping a review, and what a connected card
+    shows once it has run."""
     tags = {t for (t,) in tenant_db.query(GRCUser.external_provider).distinct().all() if t}
     tags |= {t for (t,) in tenant_db.query(UserRole.source).distinct().all() if t}
 
-    def label(tag: str) -> str:
-        if tag in _SOURCE_LABELS:
-            return _SOURCE_LABELS[tag]
-        if ":" in tag:
-            kind, name = tag.split(":", 1)
-            return f"{name.replace('_', ' ').title()} ({'IGA' if kind == 'iga' else 'App'})"
-        return tag.replace("_", " ").title()
-
-    return sorted(({"key": t, "label": label(t)} for t in tags), key=lambda s: s["label"])
+    out = []
+    for tag in tags:
+        user_ids = _source_user_ids(tenant_db, tag)
+        entitlements = tenant_db.query(UserRole).filter(UserRole.source == tag).count()
+        last = (
+            tenant_db.query(func.max(GRCUser.access_synced_at))
+            .filter(GRCUser.id.in_(user_ids)).scalar() if user_ids else None
+        )
+        out.append({
+            "key": tag, "label": _source_label(tag),
+            "people": len(user_ids), "entitlements": entitlements,
+            "last_synced": last.isoformat() if last else None,
+        })
+    return sorted(out, key=lambda s: s["label"])
 
 
 @router.get("/connectors")
@@ -864,6 +887,46 @@ def list_connectors(
             "last_synced": app.last_tested_at.isoformat() if app and app.last_tested_at else None,
         },
     }
+
+
+@router.get("/connectors/{source}/people")
+def source_people(
+    source: str,
+    limit: int = 200,
+    tenant_db: Session = Depends(get_tenant_db),
+    grc_auth_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Who this source put in the population and what each of them holds —
+    visible as soon as it syncs, without waiting for a review to be drawn."""
+    _require_admin(tenant_db, grc_auth_token, authorization)
+    user_ids = _source_user_ids(tenant_db, source)
+    if not user_ids:
+        return {"source": source, "label": _source_label(source), "people": [], "total": 0}
+    users = (
+        tenant_db.query(GRCUser)
+        .filter(GRCUser.id.in_(user_ids))
+        .order_by(GRCUser.display_name.asc(), GRCUser.email.asc())
+        .limit(max(1, min(limit, 500)))
+        .all()
+    )
+    people = []
+    for u in users:
+        access = _access_for_user(tenant_db, u.id)
+        people.append({
+            "id": u.id, "email": u.email, "display_name": u.display_name or u.email,
+            "designation": u.designation, "department": u.department,
+            "account_enabled": u.account_enabled if u.account_enabled is not None else u.is_active,
+            "mfa_enabled": u.mfa_enabled,
+            "last_sign_in": u.entra_last_sign_in.isoformat() if u.entra_last_sign_in else None,
+            "termination_date": u.termination_date.isoformat() if u.termination_date else None,
+            # what they hold from THIS source, and everything else they hold
+            "access": [a["name"] for a in access if a["source"] == source],
+            "other_access": [f"{_source_label(a['source'] or '')}: {a['name']}"
+                             for a in access if a["source"] != source],
+        })
+    return {"source": source, "label": _source_label(source),
+            "people": people, "total": len(user_ids)}
 
 
 @router.get("/connectors/collectors")
