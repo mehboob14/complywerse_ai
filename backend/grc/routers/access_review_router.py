@@ -925,8 +925,16 @@ def source_people(
             "other_access": [f"{_source_label(a['source'] or '')}: {a['name']}"
                              for a in access if a["source"] != source],
         })
+    cfg = (
+        tenant_db.query(IdentityProviderConfig)
+        .filter(IdentityProviderConfig.tenant_id == _tenant_id(tenant_db),
+                IdentityProviderConfig.provider == source[:32])
+        .first()
+    )
     return {"source": source, "label": _source_label(source),
-            "people": people, "total": len(user_ids)}
+            "people": people, "total": len(user_ids),
+            # the estate those credentials reach, as of the last sync
+            "estate": (cfg.estate if cfg else None) or {}}
 
 
 @router.get("/connectors/collectors")
@@ -1010,6 +1018,11 @@ def digitalocean_sync(
         tenant_db.add(cfg)
     cfg.iga_vendor = (result.get("team") or "DigitalOcean")[:32]
     cfg.iga_base_url = do_mod.API
+    # What the credentials reach, and what this sync could and could not read —
+    # so "1 identity" can be told apart from "the token couldn't see the keys".
+    cfg.estate = {**(result.get("estate") or {}),
+                  "read": result.get("read") or {},
+                  "skipped": result.get("skipped") or []}
     cfg.is_enabled = True
     cfg.connected_at = cfg.connected_at or datetime.utcnow()
     cfg.connected_by_id = admin.id

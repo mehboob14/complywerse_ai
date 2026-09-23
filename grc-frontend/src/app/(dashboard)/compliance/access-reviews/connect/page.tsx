@@ -83,6 +83,17 @@ type Person = {
   account_enabled?: boolean | null; access: string[]; other_access: string[];
 };
 
+/** What the source's credentials reach, as of its last sync. */
+type Estate = {
+  droplets?: { name: string; region?: string; status?: string; size?: string; ip?: string | null }[];
+  volumes?: { name: string; size_gb?: number; region?: string; attached_to?: number[] }[];
+  databases?: { name: string; engine?: string; version?: string; region?: string; nodes?: number }[];
+  kubernetes?: { name: string; region?: string; version?: string }[];
+  /** what the last sync read, and anything the credential could not see */
+  read?: Record<string, number>;
+  skipped?: { resource: string; reason: string }[];
+};
+
 export default function ConnectSourcePage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status | null>(null);
@@ -260,6 +271,7 @@ function SourceDrawer({ source, onClose, onResync }: {
 }) {
   const router = useRouter();
   const [people, setPeople] = useState<Person[] | null>(null);
+  const [estate, setEstate] = useState<Estate>({});
   const [starting, setStarting] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -267,7 +279,7 @@ function SourceDrawer({ source, onClose, onResync }: {
     let live = true;
     authedFetch(`${API}/connectors/${encodeURIComponent(source.key)}/people`)
       .then((r) => (r.ok ? r.json() : { people: [] }))
-      .then((d) => { if (live) setPeople(d.people ?? []); })
+      .then((d) => { if (live) { setPeople(d.people ?? []); setEstate(d.estate ?? {}); } })
       .catch(() => { if (live) setPeople([]); });
     return () => { live = false; };
   }, [source.key]);
@@ -316,6 +328,79 @@ function SourceDrawer({ source, onClose, onResync }: {
         {err && <div className="mx-5 mt-3 rounded-md bg-rose-50 px-3 py-2 text-[13px] text-rose-700">{err}</div>}
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
+          {(estate.read || estate.skipped?.length) ? (
+            <div className="mb-4 rounded-lg border border-slate-100 px-3 py-2">
+              <div className="text-[10.5px] font-bold uppercase tracking-wider text-slate-400">Last sync read</div>
+              <div className="mt-0.5 text-[12px] text-slate-600">
+                {Object.entries(estate.read ?? {}).map(([k, v]) => `${k.replace(/_/g, ' ')}: ${v}`).join(' · ') || '—'}
+              </div>
+              {(estate.skipped ?? []).length > 0 && (
+                <div className="mt-1 text-[11.5px] text-amber-700">
+                  Not readable with this token: {(estate.skipped ?? []).map((x) => `${x.resource} (${x.reason})`).join('; ')}
+                </div>
+              )}
+            </div>
+          ) : null}
+
+          {(estate.droplets?.length || estate.volumes?.length || estate.databases?.length || estate.kubernetes?.length) ? (
+            <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+              <div className="mb-2 text-[10.5px] font-bold uppercase tracking-wider text-slate-400">What this access reaches</div>
+              <div className="flex flex-col gap-2.5">
+                {(estate.droplets ?? []).length > 0 && (
+                  <div>
+                    <div className="text-[11.5px] font-semibold text-slate-600">Virtual machines ({estate.droplets!.length})</div>
+                    <ul className="mt-0.5 flex flex-col gap-0.5">
+                      {estate.droplets!.map((d) => (
+                        <li key={d.name} className="text-[12px] text-slate-700">
+                          • {d.name} <span className="text-slate-400">{[d.size, d.region, d.status].filter(Boolean).join(' · ')}{d.ip ? ` · ${d.ip}` : ''}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(estate.volumes ?? []).length > 0 && (
+                  <div>
+                    <div className="text-[11.5px] font-semibold text-slate-600">Storage volumes ({estate.volumes!.length})</div>
+                    <ul className="mt-0.5 flex flex-col gap-0.5">
+                      {estate.volumes!.map((v) => (
+                        <li key={v.name} className="text-[12px] text-slate-700">
+                          • {v.name} <span className="text-slate-400">{[v.size_gb ? `${v.size_gb} GB` : null, v.region,
+                            v.attached_to?.length ? `attached to ${v.attached_to.length} VM${v.attached_to.length === 1 ? '' : 's'}` : 'unattached'].filter(Boolean).join(' · ')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(estate.databases ?? []).length > 0 && (
+                  <div>
+                    <div className="text-[11.5px] font-semibold text-slate-600">Databases ({estate.databases!.length})</div>
+                    <ul className="mt-0.5 flex flex-col gap-0.5">
+                      {estate.databases!.map((d) => (
+                        <li key={d.name} className="text-[12px] text-slate-700">
+                          • {d.name} <span className="text-slate-400">{[d.engine, d.version, d.region, d.nodes ? `${d.nodes} nodes` : null].filter(Boolean).join(' · ')}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {(estate.kubernetes ?? []).length > 0 && (
+                  <div>
+                    <div className="text-[11.5px] font-semibold text-slate-600">Kubernetes ({estate.kubernetes!.length})</div>
+                    <ul className="mt-0.5 flex flex-col gap-0.5">
+                      {estate.kubernetes!.map((k) => (
+                        <li key={k.name} className="text-[12px] text-slate-700">• {k.name} <span className="text-slate-400">{[k.region, k.version].filter(Boolean).join(' · ')}</span></li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <p className="mt-2 text-[11px] text-slate-400">
+                An SSH key opens the machines it was added to; DigitalOcean does not report which, so the review lists the machines it could reach.
+                Local accounts on each machine need the Compliance Agent.
+              </p>
+            </div>
+          ) : null}
+
           {people === null ? (
             <div className="text-[13px] text-slate-400">Loading…</div>
           ) : people.length === 0 ? (

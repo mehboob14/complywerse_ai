@@ -98,6 +98,9 @@ _COLUMN_ADDS = [
     # a finding, so a review reports passes as well as failures.
     ("grc_access_review_items", "access_snapshot", "JSON"),
     ("grc_access_review_findings", "rule_id", "VARCHAR(40)"),
+    # What a source's credentials reach — droplets, disks, databases, clusters —
+    # as of its last sync, so a review shows the estate behind the access.
+    ("grc_identity_provider_configs", "estate", "JSON"),
     # Access-review enrichment columns on grc_users (synced from Entra Graph).
     # Must mirror the ORM columns in models/_04_user_model_extended.py so the
     # enrichment writer actually persists MFA / sign-in / termination data.

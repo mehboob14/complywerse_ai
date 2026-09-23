@@ -184,10 +184,12 @@ def map_database_user(raw: Dict[str, Any], *, cluster: Dict[str, Any], acct: str
     # "primary" is DigitalOcean's admin role; say so, so the privileged-role
     # heuristic (admin/owner/root) recognises it.
     label = "admin (primary)" if role == "primary" else role
+    engine = (cluster.get("engine") or "").upper()
     return _record(f"do:dbuser:{cluster_id}:{name}",
                    f"{_slug(name)}@{_slug(cluster_name)}.db.{acct}.do",
                    f"{name} ({cluster_name} database)", "Managed database user",
-                   [f"DigitalOcean: database {label} on {cluster_name}"])
+                   [f"DigitalOcean: database {label} on {cluster_name}",
+                    f"Reaches database: {cluster_name}{f' ({engine})' if engine else ''}"])
 
 
 def map_api_token(raw: Dict[str, Any], *, acct: str, now: Optional[datetime] = None) -> Optional[Dict[str, Any]]:
@@ -212,6 +214,38 @@ def map_api_token(raw: Dict[str, Any], *, acct: str, now: Optional[datetime] = N
 # --------------------------------------------------------------------------- #
 # Collect + sync                                                              #
 # --------------------------------------------------------------------------- #
+def _estate(token: str, clusters: List[Dict[str, Any]], note) -> Dict[str, List[Dict[str, Any]]]:
+    """What the credentials reach: the droplets, disks, databases and clusters
+    in this team. A review of a key means little without the estate behind it."""
+    def ip(droplet: Dict[str, Any]) -> Optional[str]:
+        for v4 in ((droplet.get("networks") or {}).get("v4") or []):
+            if v4.get("type") == "public":
+                return v4.get("ip_address")
+        return None
+
+    droplets, reason = _paged(token, "/droplets", "droplets")
+    note("droplets", reason, len(droplets))
+    volumes, reason = _paged(token, "/volumes", "volumes")
+    note("volumes", reason, len(volumes))
+    kubernetes, reason = _paged(token, "/kubernetes/clusters", "kubernetes_clusters")
+    note("kubernetes", reason, len(kubernetes))
+
+    return {
+        "droplets": [{"name": d.get("name"), "id": d.get("id"), "status": d.get("status"),
+                      "region": ((d.get("region") or {}).get("slug")),
+                      "size": d.get("size_slug"), "ip": ip(d),
+                      "created_at": d.get("created_at")} for d in droplets],
+        "volumes": [{"name": v.get("name"), "id": v.get("id"), "size_gb": v.get("size_gigabytes"),
+                     "region": ((v.get("region") or {}).get("slug")),
+                     "attached_to": v.get("droplet_ids") or []} for v in volumes],
+        "databases": [{"name": c.get("name"), "id": c.get("id"), "engine": c.get("engine"),
+                       "version": c.get("version"), "region": c.get("region"),
+                       "nodes": c.get("num_nodes")} for c in clusters],
+        "kubernetes": [{"name": k.get("name"), "id": k.get("id"), "region": k.get("region"),
+                        "version": k.get("version")} for k in kubernetes],
+    }
+
+
 def collect(token: str) -> Dict[str, Any]:
     """Every access-bearing object the token can see, as population records."""
     records: List[Dict[str, Any]] = []
@@ -273,8 +307,10 @@ def collect(token: str) -> Dict[str, Any]:
     teams, reason = _paged(token, "/organizations/teams", "teams")
     note("teams", reason, len(teams))
 
+    estate = _estate(token, clusters, note)
+
     return {
-        "records": records, "read": read, "skipped": skipped,
+        "records": records, "read": read, "skipped": skipped, "estate": estate,
         "team": (account.get("team") or {}).get("name"),
         "account_email": account.get("email"),
         "scope_note": ("DigitalOcean publishes no team-member endpoint, so people with console "
@@ -355,6 +391,7 @@ def sync_digitalocean_population(tenant_db: Session, *, tenant_id: int,
                     map_fn=lambda record: record, provider_tag=PROVIDER_DO)
     return {**result, "source": "request" if supplied else "stored",
             "token_saved": bool(supplied and remember),
-            "read": collected["read"], "skipped": collected["skipped"],
-            "team": collected["team"], "account_email": collected["account_email"],
-            "scope_note": collected["scope_note"]}
+            "estate": collected.get("estate") or {},
+            "read": collected.get("read") or {}, "skipped": collected.get("skipped") or [],
+            "team": collected.get("team"), "account_email": collected.get("account_email"),
+            "scope_note": collected.get("scope_note")}

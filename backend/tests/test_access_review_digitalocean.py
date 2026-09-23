@@ -114,6 +114,33 @@ def test_a_resource_the_token_cannot_read_is_skipped_not_fatal(monkeypatch):
     assert out["scope_note"].startswith("DigitalOcean publishes no team-member endpoint")
 
 
+def test_the_sync_also_reports_the_estate_the_credentials_reach(monkeypatch):
+    """A key or database user means little without the machines, disks and
+    clusters behind it."""
+    api = {
+        "/account": {"account": ACCOUNT},
+        "/droplets": {"droplets": [{"id": 5, "name": "cfsb-prod", "status": "active", "size_slug": "s-2vcpu-4gb",
+                                    "region": {"slug": "fra1"},
+                                    "networks": {"v4": [{"type": "private", "ip_address": "10.0.0.2"},
+                                                        {"type": "public", "ip_address": "137.184.137.106"}]}}]},
+        "/volumes": {"volumes": [{"id": "v1", "name": "backups", "size_gigabytes": 100,
+                                  "region": {"slug": "fra1"}, "droplet_ids": [5]}]},
+        "/databases": {"databases": [{"id": "c1", "name": "cfsb-pg", "engine": "pg", "num_nodes": 1}]},
+        "/databases/c1/users": {"users": [{"name": "doadmin", "role": "primary"}]},
+    }
+    monkeypatch.setattr(do, "_get", lambda token, path, params=None:
+                        (api[path], None) if path in api else (None, "the token has no access to it (403)"))
+    out = do.collect("token")
+    estate = out["estate"]
+    assert estate["droplets"] == [{"name": "cfsb-prod", "id": 5, "status": "active", "region": "fra1",
+                                   "size": "s-2vcpu-4gb", "ip": "137.184.137.106", "created_at": None}]
+    assert estate["volumes"][0]["size_gb"] == 100 and estate["volumes"][0]["attached_to"] == [5]
+    assert estate["databases"][0]["engine"] == "pg"
+    # the database user says which cluster it reaches
+    db_user = next(r for r in out["records"] if r["designation"] == "Managed database user")
+    assert "Reaches database: cfsb-pg (PG)" in db_user["entitlements"]
+
+
 def test_a_refused_token_fails_the_sync_rather_than_reporting_an_empty_estate(monkeypatch):
     monkeypatch.setattr(do, "_get", lambda *a, **k: (None, "the token was refused (401)"))
     with pytest.raises(ValueError, match="refused"):
