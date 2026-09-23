@@ -340,6 +340,7 @@ class ConfigIn(BaseModel):
     thresholds: Optional[dict] = None     # {critical, high, medium} on 0..100, descending
     cadence_days: Optional[dict] = None   # {critical, high, medium, low} in days
     reminder_policy: Optional[dict] = None  # see bootstrap.DEFAULT_TIERING_CONFIG["reminder_policy"]
+    scoring_policy: Optional[dict] = None   # {partial_credit: 0..1}, frozen into each questionnaire version
 
 class PlanIn(BaseModel):
     """Persist the Due-Diligence Planning selections onto the assessment so the
@@ -1592,6 +1593,7 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
     return {
         "weights": cfg["weights"], "thresholds": cfg["thresholds"], "cadence_days": cfg["cadence_days"],
         "reminder_policy": cfg["reminder_policy"],
+        "scoring_policy": cfg["scoring_policy"],
         "defaults": DEFAULT_TIERING_CONFIG,
         "meta": {
             "factor_keys": _FACTOR_KEYS, "factor_labels": _FACTOR_LABELS,
@@ -1654,12 +1656,19 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
+    if body.scoring_policy is not None:
+        credit = body.scoring_policy.get("partial_credit")
+        if not isinstance(credit, (int, float)) or isinstance(credit, bool) or not 0 <= credit <= 1:
+            raise HTTPException(status_code=400, detail="Partial credit must be a number from 0 to 1")
+        row.scoring_policy = {"partial_credit": round(float(credit), 4)}
+
     row.row_version = (row.row_version or 1) + 1
     service.write_audit(db, tenant_id, entity="config", action="update", actor_id=user.id,
                         reason="TPRM program config updated")
     db.commit()
     return {"weights": row.weights, "thresholds": row.thresholds, "cadence_days": row.cadence_days,
-            "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"], **(row.reminder_policy or {})}}
+            "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"], **(row.reminder_policy or {})},
+            "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"], **(row.scoring_policy or {})}}
 
 
 # ── Compliance framework coverage (TPRM-007b) ────────────────────────────────

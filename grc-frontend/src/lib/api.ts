@@ -2417,7 +2417,10 @@ export const tpraApi = {
     apiClient.put(`/vendor-risk/tpra/assessments/${assessmentId}/team`, { roster }),
   // Admin / Settings — program config (tiering weights, thresholds, cadence)
   getConfig: () => apiClient.get('/vendor-risk/tpra/config'),
-  saveConfig: (data: { weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number> }) =>
+  saveConfig: (data: {
+    weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number>;
+    reminder_policy?: object; scoring_policy?: { partial_credit: number };
+  }) =>
     apiClient.put('/vendor-risk/tpra/config', data),
   getVendorAudit: (vendorId: number, limit = 100) =>
     apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/audit`, { params: { limit } }),

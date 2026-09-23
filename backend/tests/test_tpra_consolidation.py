@@ -18,6 +18,7 @@ from sqlalchemy.pool import StaticPool
 from grc.models import (
     Base, Tenant, Vendor, VendorAssessment, VendorQuestionnaireTemplate,
     VendorQuestionnaireResponse, TPRAQuestion, TPRAQuestionResponse, TPRAFinding, TPRATieringConfig,
+    TPRATemplateVersion,
 )
 from grc.modules.vendor_risk.routers.assessments import _split, serialize_assessment
 from grc.modules.vendor_risk.tpra import service
@@ -25,7 +26,8 @@ from grc.modules.vendor_risk.tpra.bootstrap import get_tiering_config
 from grc.modules.vendor_risk.tpra.engine_scoring import score_assessment
 
 _TABLES = [Tenant, Vendor, VendorAssessment, VendorQuestionnaireTemplate,
-           VendorQuestionnaireResponse, TPRAQuestion, TPRAQuestionResponse, TPRAFinding, TPRATieringConfig]
+           VendorQuestionnaireResponse, TPRAQuestion, TPRAQuestionResponse, TPRAFinding, TPRATieringConfig,
+           TPRATemplateVersion]
 
 # A custom template, never backfilled into grc_tpra_questions, with one critical control.
 QUESTIONS = [

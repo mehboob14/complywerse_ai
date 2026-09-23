@@ -34,3 +34,4 @@ from ._59_evidence_quality_models import *  # noqa: F401,F403 - does this file p
 from ._60_module_settings import *  # noqa: F401,F403 - per-tenant status levels, SLA days and extra fields
 from ._62_vendor_reminders import *  # noqa: F401,F403 - third-party risk reminders, one row per notice
 from ._63_attention import *  # noqa: F401,F403 - snoozes, assignments and notes on attention-queue items
+from ._64_tpra_template_versions import *  # noqa: F401,F403 - questionnaire templates frozen as sent

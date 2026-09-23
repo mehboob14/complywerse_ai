@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
+    Vendor, VendorAssessment, VendorQuestionnaireResponse,
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAApproval,
     TPRAMonitoringSignal, TPRAAuditLog, TPRAEvidenceLink,
@@ -26,7 +26,10 @@ from .stages import (
     TIER_SKIPPABLE_STAGES,
 )
 from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
-from .engine_scoring import score_assessment, build_responses_from_answers, normalize_answer
+from .engine_scoring import (
+    score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity,
+)
+from . import versions
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
 from .bootstrap import get_tiering_config
@@ -513,20 +516,13 @@ def _latest_submitted_questionnaire(db: Session, assessment_id: int):
 
 def _collect_from_questionnaire(db: Session, assessment: VendorAssessment) -> List[dict]:
     """Build scoring responses from the vendor-submitted questionnaire blob joined to
-    the template's question defs (domain/weight/critical_control). This is what the
-    external portal actually writes; string answers are coerced by the engine."""
-    if not assessment or not assessment.template_id:
+    the questions of the version it was sent on. This is what the external portal
+    actually writes; string answers are coerced by the engine."""
+    qr = _latest_submitted_questionnaire(db, assessment.id) if assessment else None
+    version = versions.pin(db, qr)
+    if version is None:
         return []
-    qr = _latest_submitted_questionnaire(db, assessment.id)
-    if not qr:
-        return []
-    template = (
-        db.query(VendorQuestionnaireTemplate)
-        .filter(VendorQuestionnaireTemplate.id == assessment.template_id)
-        .first()
-    )
-    questions = (template.questions or []) if template else []
-    return build_responses_from_answers(questions, qr.responses or {})
+    return build_responses_from_answers(version.questions or [], qr.responses or {}, version.id)
 
 
 _ANSWER_LABEL = {"yes": "Yes", "partial": "Partial", "no": "No", "n-a": "N-A"}
@@ -547,21 +543,21 @@ def materialise_responses(db: Session, assessment: VendorAssessment, qr) -> int:
     critical control would pass unnoticed. Custom templates were never backfilled
     there; this does it on first submission.
 
+    Question rows belong to the template version the questionnaire was sent on and
+    are written once, so a later edit to the template cannot reach back into an
+    answer already given.
+
     Idempotent: re-running with the same answers changes nothing, and a changed
     answer bumps its row version. Returns how many answers it holds.
     """
-    if assessment is None or qr is None or not assessment.template_id:
-        return 0
-    template = (db.query(VendorQuestionnaireTemplate)
-                .filter(VendorQuestionnaireTemplate.id == assessment.template_id).first())
-    defs = list((template.questions or []) if template else [])
+    version = versions.pin(db, qr) if assessment is not None else None
+    defs = list(version.questions or []) if version else []
     if not defs:
         return 0
 
     questions = {
         q.question_key: q for q in db.query(TPRAQuestion).filter(
-            TPRAQuestion.template_id == assessment.template_id,
-            TPRAQuestion.tenant_id == assessment.tenant_id,
+            TPRAQuestion.template_version_id == version.id,
         )
     }
     answers = {
@@ -571,24 +567,23 @@ def materialise_responses(db: Session, assessment: VendorAssessment, qr) -> int:
         )
     }
     written = 0
-    for order, (definition, scored) in enumerate(zip(defs, build_responses_from_answers(defs, qr.responses or {}))):
+    scored_rows = build_responses_from_answers(defs, qr.responses or {}, version.id)
+    for order, (definition, scored) in enumerate(zip(defs, scored_rows)):
         key = str(scored["question_key"])
         question = questions.get(key)
         if question is None:
-            question = TPRAQuestion(tenant_id=assessment.tenant_id, template_id=assessment.template_id,
-                                    question_key=key, text=key)
+            question = TPRAQuestion(
+                tenant_id=assessment.tenant_id, template_id=version.template_id,
+                template_version_id=version.id, question_key=key,
+                text=str(definition.get("text") or key), domain=scored["domain"],
+                weight=scored["weight"], critical_control=scored["critical_control"],
+                evidence_required=bool(definition.get("evidence_required") or definition.get("evidence")),
+                qtype=definition.get("type") or "yes_no", options=definition.get("options") or [],
+                order=order,
+            )
             db.add(question)
+            db.flush()
             questions[key] = question
-        # In step with the template as the vendor answered it.
-        question.text = str(definition.get("text") or question.text or key)
-        question.domain = scored["domain"]
-        question.weight = scored["weight"]
-        question.critical_control = scored["critical_control"]
-        question.evidence_required = bool(definition.get("evidence_required") or definition.get("evidence"))
-        question.qtype = definition.get("type") or question.qtype or "yes_no"
-        question.options = definition.get("options") or []
-        question.order = order
-        db.flush()
 
         label = _ANSWER_LABEL.get(normalize_answer(scored["answer"]) or "")
         raw = None if scored["answer"] is None else str(scored["answer"])
@@ -613,15 +608,8 @@ def _count_required_evidence_missing(db: Session, assessment: VendorAssessment) 
     evidence. Approximate (evidence isn't matched per-question in the blob) but makes
     'evidence-required answers with no evidence at all' a real gate blocker instead of
     the previous hardcoded 0."""
-    if not assessment or not assessment.template_id:
-        return 0
-    template = (
-        db.query(VendorQuestionnaireTemplate)
-        .filter(VendorQuestionnaireTemplate.id == assessment.template_id)
-        .first()
-    )
-    questions = (template.questions or []) if template else []
-    qr = _latest_submitted_questionnaire(db, assessment.id)
+    qr = _latest_submitted_questionnaire(db, assessment.id) if assessment else None
+    questions = versions.questions_for(db, qr)
     answers = (qr.responses or {}) if qr else {}
     need = 0
     for q in questions:
@@ -657,14 +645,26 @@ def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]
     )
     out = []
     for resp, q in rows:
+        question = {
+            "options": (q.options if q else None) or [],
+            "weight": float(q.weight) if q and q.weight is not None else 1.0,
+            "critical_control": bool(q.critical_control) if q else False,
+        }
+        raw = resp.raw_value if resp.raw_value is not None else resp.answer
+        label, score = answer_score(question, raw)
         out.append({
             "domain": (q.domain if q else None) or "cybersecurity",
             "answer": resp.answer,
-            "weight": float(q.weight) if q and q.weight is not None else 1.0,
-            "critical_control": bool(q.critical_control) if q else False,
+            "label": label,
+            "score": score,
+            "finding": finding_severity(question, raw),
+            "weight": question["weight"],
+            "critical_control": question["critical_control"],
             "question_key": resp.question_key or (q.question_key if q else None),
             "question_id": resp.question_id,
+            "response_id": resp.id,
             "title": q.text if q else None,
+            "template_version_id": q.template_version_id if q else None,
         })
     if out:
         return out
@@ -673,6 +673,42 @@ def collect_responses_for_scoring(db: Session, assessment_id: int) -> List[dict]
     # REAL submitted answers instead of scoring nothing (which yields residual==inherent).
     assessment = db.query(VendorAssessment).filter(VendorAssessment.id == assessment_id).first()
     return _collect_from_questionnaire(db, assessment) if assessment else []
+
+
+def raise_answer_findings(db: Session, vendor: Vendor, assessment: VendorAssessment,
+                          responses: List[dict], actor_id: Optional[int]) -> int:
+    """One finding per weak answer, as the question's version says: severity by
+    the answer given, a failed critical control always blocking. Each carries the
+    template version, question and answer, so it can be defended later; and each
+    question raises one, however often the assessment is rescored."""
+    existing = {k for (k,) in db.query(TPRAFinding.question_key).filter(
+        TPRAFinding.assessment_id == assessment.id, TPRAFinding.question_key.isnot(None))}
+    # Critical-control findings raised before findings carried their question.
+    legacy = {k for (k,) in db.query(TPRAFinding.source_response_id).filter(
+        TPRAFinding.assessment_id == assessment.id, TPRAFinding.question_key.is_(None),
+        TPRAFinding.is_critical_control_fail.is_(True))}
+    created = 0
+    for r in responses:
+        severity, key = r.get("finding"), r.get("question_key")
+        if not severity or key is None or str(key) in existing:
+            continue
+        failed_critical = bool(r.get("critical_control")) and r.get("score") is not None and r["score"] <= 0
+        if failed_critical and r.get("question_id") in legacy:
+            continue
+        answered = r.get("label") or r.get("answer")
+        db.add(TPRAFinding(
+            tenant_id=assessment.tenant_id, vendor_id=vendor.id, assessment_id=assessment.id,
+            domain=r.get("domain") or "cybersecurity", severity=severity,
+            title=(r.get("title") or "Weak questionnaire answer")[:255],
+            description=f'Raised from the questionnaire: the vendor answered "{answered}".',
+            source_response_id=r.get("response_id"), is_critical_control_fail=failed_critical,
+            template_version_id=r.get("template_version_id"), question_key=str(key)[:100],
+            answer_value=None if answered is None else str(answered)[:255],
+            status="open", created_by=actor_id,
+        ))
+        existing.add(str(key))
+        created += 1
+    return created
 
 
 def run_scoring(
@@ -693,28 +729,7 @@ def run_scoring(
     vendor.risk_rating = result["residual_rating"]
     assessment.row_version = (assessment.row_version or 1) + 1
 
-    # Auto-create a blocking critical finding for each failed critical control
-    # (idempotent by source question key within the assessment).
-    existing_keys = {
-        k for (k,) in db.query(TPRAFinding.source_response_id).filter(
-            TPRAFinding.assessment_id == assessment.id,
-            TPRAFinding.is_critical_control_fail.is_(True),
-        ).all()
-    }
-    created_findings = 0
-    for cf in result["critical_failures"]:
-        qid = cf.get("question_id")
-        if qid in existing_keys:
-            continue
-        db.add(TPRAFinding(
-            tenant_id=assessment.tenant_id, vendor_id=vendor.id, assessment_id=assessment.id,
-            domain=cf.get("domain", "cybersecurity"), severity="critical",
-            title=cf.get("title") or "Critical control failed",
-            description="Auto-raised from a failed critical control during scoring.",
-            source_response_id=qid, is_critical_control_fail=True, status="open",
-            created_by=actor_id,
-        ))
-        created_findings += 1
+    created_findings = raise_answer_findings(db, vendor, assessment, responses, actor_id)
 
     # Snapshot the new posture so the risk-over-time series is real history.
     db.flush()

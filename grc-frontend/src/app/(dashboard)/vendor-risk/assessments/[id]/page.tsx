@@ -929,9 +929,10 @@ export default function AssessmentDetailPage() {
                                         <p className="text-sm text-gray-300 italic">No answer provided</p>
                                       ) : q.type === 'yes_no' ? (
                                         <span className={`inline-flex px-3 py-1 rounded-full text-sm font-medium ${
-                                          String(answer).toLowerCase() === 'yes' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                          ({ yes: 'bg-green-100 text-green-700', partial: 'bg-amber-100 text-amber-800', 'n-a': 'bg-gray-100 text-gray-600' } as Record<string, string>)[String(answer).toLowerCase()]
+                                            || 'bg-red-100 text-red-700'
                                         }`}>
-                                          {String(answer).charAt(0).toUpperCase() + String(answer).slice(1)}
+                                          {String(answer).toLowerCase() === 'n-a' ? 'Not applicable' : String(answer).charAt(0).toUpperCase() + String(answer).slice(1)}
                                         </span>
                                       ) : q.type === 'rating' ? (
                                         <div className="flex items-center gap-0.5">

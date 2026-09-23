@@ -14,8 +14,13 @@ interface Question {
   required: boolean;
   evidence_required: boolean;
   weight: number;
-  options?: string[];
+  // A sent questionnaire carries its options as {value, label}; older templates as plain strings.
+  options?: Array<string | { value: string; label?: string }>;
 }
+
+const optionsOf = (question: Question) =>
+  (question.options || []).map((o) =>
+    typeof o === 'string' ? { value: o, label: o } : { value: String(o.value), label: String(o.label ?? o.value) });
 
 interface QuestionnaireResponseData {
   questionnaire_id: number;
@@ -306,8 +311,8 @@ export default function ExternalQuestionnairePage() {
                           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                         >
                           <option value="">Select an answer</option>
-                          <option value="yes">Yes</option>
-                          <option value="no">No</option>
+                          {(optionsOf(question).length ? optionsOf(question) : [{ value: 'yes', label: 'Yes' }, { value: 'no', label: 'No' }])
+                            .map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                         </select>
                       )}
 
@@ -318,9 +323,9 @@ export default function ExternalQuestionnairePage() {
                           className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100"
                         >
                           <option value="">Select an option</option>
-                          {(question.options || []).map((option) => (
-                            <option key={option} value={option}>
-                              {option}
+                          {optionsOf(question).map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
                             </option>
                           ))}
                         </select>

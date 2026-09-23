@@ -122,10 +122,9 @@ def ai_score_assessment(
     if not qr:
         raise HTTPException(status_code=400, detail="No submitted questionnaire response found")
 
-    # Build questions context
-    questions = []
-    if assessment.template:
-        questions = assessment.template.questions or []
+    # Build questions context, as the questionnaire was sent
+    from ..tpra.versions import questions_for
+    questions = questions_for(db, qr)
 
     questions_text = ""
     for i, q in enumerate(questions):

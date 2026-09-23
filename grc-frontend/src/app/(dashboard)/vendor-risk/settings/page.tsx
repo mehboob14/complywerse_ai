@@ -6,7 +6,7 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing } from 'lucide-react';
+import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing, ListChecks } from 'lucide-react';
 import { tpraApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { PageLoader } from '@/components/ui';
@@ -26,7 +26,11 @@ interface ConfigResp {
   thresholds: Record<string, number>;
   cadence_days: Record<string, number>;
   reminder_policy: ReminderPolicy;
-  defaults: { weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number>; reminder_policy: ReminderPolicy };
+  scoring_policy?: { partial_credit: number };
+  defaults: {
+    weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number>;
+    reminder_policy: ReminderPolicy; scoring_policy?: { partial_credit: number };
+  };
   meta: { factor_keys: string[]; factor_labels: Record<string, string>; tier_keys: string[]; cadence_keys: string[] };
 }
 
@@ -54,12 +58,14 @@ export default function VendorRiskSettingsPage() {
   const [thresholds, setThresholds] = useState<Record<string, number>>({});
   const [cadence, setCadence] = useState<Record<string, number>>({});
   const [reminders, setReminders] = useState<ReminderPolicy | null>(null);
+  const [partialPct, setPartialPct] = useState<number | null>(null);
 
   const hydrate = (c: ConfigResp) => {
     setWeights(Object.fromEntries(c.meta.factor_keys.map((k) => [k, Math.round((c.weights[k] ?? 0) * 100)])));
     setThresholds({ ...c.thresholds });
     setCadence({ ...c.cadence_days });
     setReminders(c.reminder_policy ? { ...c.reminder_policy, escalate_to: [...(c.reminder_policy.escalate_to || [])] } : null);
+    setPartialPct(c.scoring_policy ? Math.round(c.scoring_policy.partial_credit * 100) : null);
   };
   useEffect(() => { if (data) hydrate(data); }, [data]);
 
@@ -69,6 +75,7 @@ export default function VendorRiskSettingsPage() {
       thresholds,
       cadence_days: cadence,
       ...(reminders ? { reminder_policy: reminders } : {}),
+      ...(partialPct !== null ? { scoring_policy: { partial_credit: partialPct / 100 } } : {}),
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-config'] }); toast({ type: 'success', title: 'Settings saved', message: 'Tiering, scoring and the next reminder run use these values.' }); },
     onError: (e) => toast({ type: 'error', title: 'Could not save', message: errMsg(e, 'Try again.') }),
@@ -96,7 +103,7 @@ export default function VendorRiskSettingsPage() {
         </div>
         {canEdit && (
           <div className="flex items-center gap-2">
-            <button onClick={() => data && hydrate({ ...data, weights: data.defaults.weights, thresholds: data.defaults.thresholds, cadence_days: data.defaults.cadence_days, reminder_policy: data.defaults.reminder_policy })}
+            <button onClick={() => data && hydrate({ ...data, weights: data.defaults.weights, thresholds: data.defaults.thresholds, cadence_days: data.defaults.cadence_days, reminder_policy: data.defaults.reminder_policy, scoring_policy: data.defaults.scoring_policy })}
               className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-600 hover:bg-gray-50">
               <RotateCcw className="h-3.5 w-3.5" /> Reset to defaults
             </button>
@@ -227,6 +234,29 @@ export default function VendorRiskSettingsPage() {
                 Each entry is <b>role:</b> followed by a role name, or <b>user:</b> followed by a user id.
                 The owner is always told; these people are added once the escalation point passes.
               </p>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Questionnaire scoring */}
+      {partialPct !== null && (
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="mb-1 flex items-center gap-2">
+            <ListChecks className="h-4 w-4 text-primary-600" />
+            <h3 className="text-sm font-semibold text-slate-900">Questionnaire scoring</h3>
+          </div>
+          <p className="mb-3 text-[11px] text-gray-500">
+            Yes counts in full and No counts nothing. This sets what a Partial answer is worth. It is fixed into a
+            questionnaire when it is sent, so changing it here never rescores answers already given.
+          </p>
+          <div className="flex items-center justify-between gap-3">
+            <label htmlFor="tprm-partial-credit" className="text-sm text-slate-700">A Partial answer is worth</label>
+            <div className="flex items-center gap-1.5">
+              <input id="tprm-partial-credit" type="number" min={0} max={100} className={inputCls} disabled={!canEdit}
+                value={partialPct}
+                onChange={(e) => setPartialPct(Math.max(0, Math.min(100, Number(e.target.value))))} />
+              <span className="text-xs text-gray-400">% of a Yes</span>
             </div>
           </div>
         </section>

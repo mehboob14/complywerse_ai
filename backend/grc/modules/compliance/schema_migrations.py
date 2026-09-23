@@ -901,6 +901,14 @@ _COLUMN_ADDS = [
     ("grc_vendor_assessments", "ai_recommendations", "JSON DEFAULT '[]'::json", None),
     # When to remind about third-party risk dates and whom to escalate to.
     ("grc_tpra_tiering_config", "reminder_policy", "JSON DEFAULT '{}'::json", None),
+    # Questionnaire versions (vendor_risk/tpra/versions.py): what a vendor was sent
+    # is pinned, and so is each question, answer and finding that came from it.
+    ("grc_vendor_questionnaire_responses", "template_version_id", "INTEGER", None),
+    ("grc_tpra_questions", "template_version_id", "INTEGER", None),
+    ("grc_tpra_findings", "template_version_id", "INTEGER", None),
+    ("grc_tpra_findings", "question_key", "VARCHAR(100)", None),
+    ("grc_tpra_findings", "answer_value", "VARCHAR(255)", None),
+    ("grc_tpra_tiering_config", "scoring_policy", "JSON DEFAULT '{}'::json", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

@@ -176,6 +176,8 @@ class VendorQuestionnaireResponse(Base):
     vendor_id = Column(Integer, ForeignKey("grc_vendors.id"), nullable=False, index=True)
     assessment_id = Column(Integer, ForeignKey("grc_vendor_assessments.id"), nullable=True, index=True)
     template_id = Column(Integer, ForeignKey("grc_vendor_questionnaire_templates.id"), nullable=True, index=True)
+    # The frozen version of the template this was sent on (grc_tpra_template_versions).
+    template_version_id = Column(Integer, nullable=True)
     respondent_name = Column(String(255), nullable=True)
     respondent_email = Column(String(255), nullable=True)
     responses = Column(JSON, default={})

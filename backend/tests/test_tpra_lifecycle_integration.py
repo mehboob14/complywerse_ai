@@ -20,7 +20,7 @@ from grc.models import (
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
     TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
-    TPRARiskSnapshot, TPRASharedAssessment,
+    TPRARiskSnapshot, TPRASharedAssessment, TPRATemplateVersion,
 )
 from grc.modules.vendor_risk.tpra import service, rbac
 from grc.modules.vendor_risk.tpra.engine_snapshots import write_portfolio_snapshot
@@ -31,7 +31,7 @@ _TABLES = [
     TPRAStageInstance, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
     TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation,
     TPRAApproval, TPRAMonitoringSignal, TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink,
-    TPRARiskSnapshot, TPRASharedAssessment,
+    TPRARiskSnapshot, TPRASharedAssessment, TPRATemplateVersion,
 ]
 
 

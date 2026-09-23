@@ -9,12 +9,12 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 
 from ....models import (
-    Vendor, VendorAssessment, VendorQuestionnaireTemplate,
+    Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, TenantUser, get_db,
     TPRAFinding,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import rbac
+from ..tpra import rbac, versions
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Vendor Assessments"])
@@ -277,14 +277,9 @@ def get_assessment(
     )
     qr_data = []
     for r in responses:
-        # Load template questions
-        questions = []
-        if r.template_id:
-            tmpl = db.query(VendorQuestionnaireTemplate).filter(
-                VendorQuestionnaireTemplate.id == r.template_id,
-            ).first()
-            if tmpl:
-                questions = tmpl.questions or []
+        # The questions as they were sent, not as the template reads today.
+        version = versions.pin(db, r)
+        questions = list(version.questions or []) if version else []
 
         # Load evidence files
         ev_list = db.query(VendorQuestionnaireEvidence).filter(
@@ -313,9 +308,11 @@ def get_assessment(
             "status": r.status,
             "submitted_at": r.submitted_at.isoformat() if r.submitted_at else None,
             "questions": questions,
+            "template_version": version.version_no if version else None,
             "evidence": evidence_by_q,
         })
     result["questionnaire_responses"] = qr_data
+    db.commit()                      # links sent before versions existed are pinned now
 
     return result
 
@@ -409,14 +406,8 @@ def score_assessment(
     if not qr:
         raise HTTPException(status_code=400, detail="No submitted questionnaire response found for this assessment")
 
-    # Load template questions for weights
-    template = None
-    if assessment.template_id:
-        template = db.query(VendorQuestionnaireTemplate).filter(
-            VendorQuestionnaireTemplate.id == assessment.template_id,
-        ).first()
-
-    questions = (template.questions or []) if template else []
+    # The questions (and their frozen scoring) as this questionnaire was sent.
+    questions = versions.questions_for(db, qr)
     responses = qr.responses or {}
 
     # TPRM-CRITICAL FIX — score through the GOVERNED engine instead of a weighted

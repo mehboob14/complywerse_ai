@@ -7,14 +7,15 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 from pydantic import BaseModel, Field
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from ....models import (
-    Vendor, VendorAssessment, VendorQuestionnaireTemplate,
+    Vendor, VendorAssessment, VendorQuestionnaireTemplate, TPRATemplateVersion,
     VendorQuestionnaireResponse, VendorQuestionnaireEvidence, GRCUser, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..tpra import rbac
+from ..tpra import rbac, versions
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ class ExternalSubmitRequest(BaseModel):
 
 # ── Serializers ───────────────────────────────────────────────────
 
-def serialize_template(t: VendorQuestionnaireTemplate) -> dict:
+def serialize_template(t: VendorQuestionnaireTemplate, latest_version: Optional[int] = None) -> dict:
     return {
         "id": t.id,
         "tenant_id": t.tenant_id,
@@ -80,6 +81,8 @@ def serialize_template(t: VendorQuestionnaireTemplate) -> dict:
         "questions": t.questions or [],
         "question_count": len(t.questions or []),
         "is_default": t.is_default,
+        # Sent questionnaires are pinned to a numbered version; edits make the next one.
+        "latest_version": latest_version,
         "created_by": t.created_by,
         "created_at": t.created_at.isoformat() if t.created_at else None,
         "updated_at": t.updated_at.isoformat() if t.updated_at else None,
@@ -129,9 +132,12 @@ def list_templates(
 
     total = query.count()
     templates = query.order_by(VendorQuestionnaireTemplate.created_at.desc()).offset(skip).limit(limit).all()
+    published = dict(db.query(TPRATemplateVersion.template_id, func.max(TPRATemplateVersion.version_no))
+                     .filter(TPRATemplateVersion.template_id.in_([t.id for t in templates] or [-1]))
+                     .group_by(TPRATemplateVersion.template_id).all())
 
     return {
-        "items": [serialize_template(t) for t in templates],
+        "items": [serialize_template(t, published.get(t.id)) for t in templates],
         "total": total,
         "skip": skip,
         "limit": limit,
@@ -212,6 +218,11 @@ def delete_template(
     ).first()
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
+    if versions.latest(db, template.id) is not None or db.query(VendorQuestionnaireResponse.id).filter(
+            VendorQuestionnaireResponse.template_id == template.id).first():
+        raise HTTPException(status_code=409, detail=(
+            "This template has been sent to vendors, and their answers are kept against it. "
+            "Edit it instead: questionnaires already sent keep the version they were sent on."))
 
     db.delete(template)
     db.commit()
@@ -304,7 +315,8 @@ def send_questionnaire(
         if not assessment:
             raise HTTPException(status_code=404, detail="Assessment not found")
 
-    # Verify template if provided
+    # Verify template if provided, and freeze it as the vendor will see it.
+    version = None
     if payload.template_id:
         template = db.query(VendorQuestionnaireTemplate).filter(
             VendorQuestionnaireTemplate.id == payload.template_id,
@@ -312,6 +324,7 @@ def send_questionnaire(
         ).first()
         if not template:
             raise HTTPException(status_code=404, detail="Template not found")
+        version = versions.publish(db, template, current_user.id)
 
     token = str(uuid.uuid4())
     expires_at = datetime.utcnow() + timedelta(days=payload.expires_in_days)
@@ -321,6 +334,7 @@ def send_questionnaire(
         vendor_id=payload.vendor_id,
         assessment_id=payload.assessment_id,
         template_id=payload.template_id,
+        template_version_id=version.id if version else None,
         respondent_name=payload.respondent_name or vendor.primary_contact_name,
         respondent_email=payload.respondent_email or vendor.primary_contact_email,
         token=token,
@@ -377,14 +391,9 @@ def external_load_questionnaire(
     if qr.status == "submitted":
         raise HTTPException(status_code=400, detail="This questionnaire has already been submitted")
 
-    # Load the template questions
-    questions = []
-    if qr.template_id:
-        template = db.query(VendorQuestionnaireTemplate).filter(
-            VendorQuestionnaireTemplate.id == qr.template_id,
-        ).first()
-        if template:
-            questions = template.questions or []
+    # The questions as they were sent, whatever has happened to the template since.
+    questions = versions.questions_for(db, qr)
+    db.commit()                      # a link sent before versions existed is pinned now
 
     # Load vendor name
     vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()

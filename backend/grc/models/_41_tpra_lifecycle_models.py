@@ -92,6 +92,9 @@ class TPRAQuestion(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     template_id = Column(Integer, ForeignKey("grc_vendor_questionnaire_templates.id"), nullable=False, index=True)
+    # The frozen template version this question belongs to. Rows without one
+    # predate versions and follow the template.
+    template_version_id = Column(Integer, nullable=True)
     # Stable external key matching the legacy JSON question id where backfilled.
     question_key = Column(String(100), nullable=True, index=True)
     text = Column(Text, nullable=False)
@@ -162,6 +165,10 @@ class TPRAFinding(Base):
     # Loose ref to grc_issues.id — the shared Issue/Action item this finding mirrors
     # into (unified owner/SLA/workflow). Set by service.ensure_finding_issue (TPRM-003).
     linked_issue_id = Column(Integer, nullable=True, index=True)
+    # Raised from an answer: which template version, which question, what was answered.
+    template_version_id = Column(Integer, nullable=True)
+    question_key = Column(String(100), nullable=True)
+    answer_value = Column(String(255), nullable=True)
     created_by = Column(Integer, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
@@ -387,6 +394,8 @@ class TPRATieringConfig(Base):
     # When to remind and whom to escalate to: {enabled, remind_before_days,
     # repeat_every_days, escalate_after_days, escalate_to: ["role:<name>" | "user:<id>"]}
     reminder_policy = Column(JSON, default=dict)
+    # How answers score: {partial_credit: 0..1}. Frozen into each template version.
+    scoring_policy = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)

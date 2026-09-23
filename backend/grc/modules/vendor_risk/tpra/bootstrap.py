@@ -42,6 +42,9 @@ DEFAULT_TIERING_CONFIG = {
         "escalate_after_days": 14,
         "escalate_to": [],          # ["role:<role name>", "user:<id>"]
     },
+    # What a "Partial" answer is worth, 0..1. Frozen into each questionnaire
+    # version when it is sent, so changing it never rescores old answers.
+    "scoring_policy": {"partial_credit": 0.5},
 }
 
 
@@ -110,4 +113,6 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
         "cadence_days": row.cadence_days or DEFAULT_TIERING_CONFIG["cadence_days"],
         "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"],
                             **(getattr(row, "reminder_policy", None) or {})},
+        "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"],
+                           **(getattr(row, "scoring_policy", None) or {})},
     }
