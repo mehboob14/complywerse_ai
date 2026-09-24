@@ -37,3 +37,4 @@ from ._63_attention import *  # noqa: F401,F403 - snoozes, assignments and notes
 from ._64_tpra_template_versions import *  # noqa: F401,F403 - questionnaire templates frozen as sent
 from ._65_tpra_monitoring import *  # noqa: F401,F403 - monitoring cursors, ruled-out alerts, external ratings
 from ._66_tpra_vendor_graph import *  # noqa: F401,F403 - fourth parties, platform aliases, vendor links and products
+from ._67_tpra_reports import *  # noqa: F401,F403 - frozen committee packs, registers and vendor files

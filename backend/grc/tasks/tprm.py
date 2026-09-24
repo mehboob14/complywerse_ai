@@ -58,6 +58,14 @@ def write_tprm_snapshot_for_tenant(self, tenant_slug: str, db: Session = None) -
     except Exception:
         logger.exception("metric snapshot failed for tenant=%s", tenant_slug)
 
+    # Programme measures (coverage, overdue, cycle times) behind the committee pack's trends.
+    try:
+        from ..modules.vendor_risk.tpra.reports import write_snapshot
+        write_snapshot(db, tenant_id)
+    except Exception:
+        db.rollback()
+        logger.exception("tprm programme snapshot failed for tenant=%s", tenant_slug)
+
     logger.info("write_tprm_snapshot_for_tenant tenant=%s vendors=%d", tenant_slug, len(vendors))
     return {"status": "ok", "tenant_slug": tenant_slug, "vendors": len(vendors)}
 

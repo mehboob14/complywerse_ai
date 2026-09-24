@@ -2340,6 +2340,13 @@ export const vendorRiskApi = {
 // ── TPRA productionized 11-stage lifecycle (normalized) ──────────────────────
 // Talks to /vendor-risk/tpra/*. Separate from the legacy vendorRiskApi flat
 // methods above so the new lifecycle UI has a clean, grouped client surface.
+export interface ReportRequest {
+  kind: 'committee_pack' | 'register' | 'vendor_file';
+  period_start?: string;
+  period_end?: string;
+  vendor_id?: number;
+}
+
 export const tpraApi = {
   // Program dashboard + analytics
   dashboard: (scope: 'portfolio' | 'mine' = 'portfolio') =>
@@ -2510,6 +2517,16 @@ export const tpraApi = {
   addPlatformAlias: (data: { alias: string; platform?: string; excluded?: boolean }) =>
     apiClient.post('/vendor-risk/tpra/platform-aliases', data),
   removePlatformAlias: (id: number) => apiClient.delete(`/vendor-risk/tpra/platform-aliases/${id}`),
+  reportMeasures: (days = 365) => apiClient.get('/vendor-risk/tpra/reports/measures', { params: { days } }),
+  previewReport: (params: ReportRequest) => apiClient.get('/vendor-risk/tpra/reports/preview', { params }),
+  listReports: () => apiClient.get('/vendor-risk/tpra/reports'),
+  createReport: (data: ReportRequest) => apiClient.post('/vendor-risk/tpra/reports', data),
+  getReport: (id: number) => apiClient.get(`/vendor-risk/tpra/reports/${id}`),
+  approveReport: (id: number) => apiClient.post(`/vendor-risk/tpra/reports/${id}/approve`),
+  deleteReport: (id: number) => apiClient.delete(`/vendor-risk/tpra/reports/${id}`),
+  shareReport: (id: number, days: number) => apiClient.post(`/vendor-risk/tpra/reports/${id}/share`, { days }),
+  revokeReportShare: (id: number) => apiClient.delete(`/vendor-risk/tpra/reports/${id}/share`),
+  examinerReport: (token: string) => apiClient.get(`/vendor-risk/tpra/examiner/${encodeURIComponent(token)}`),
   vendorRatings: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/ratings`),
   importRatings: (form: FormData) => apiClient.post('/vendor-risk/tpra/ratings/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
