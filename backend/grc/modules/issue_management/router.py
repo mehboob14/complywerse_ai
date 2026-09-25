@@ -35,7 +35,11 @@ router = APIRouter(prefix="/issue-management", tags=["Issue Management"])
 # router (which has `POST /issues`) to avoid the parametric `/issues/{id}`
 # in any router catching `from-source` as an id.
 router.include_router(auto_create_router)
-router.include_router(audit_register_router)   # /issues/audit-register/* before /issues/{id}
+from fastapi import Depends  # noqa: E402
+from .routers.audit_register import require_enabled as _register_enabled  # noqa: E402
+
+# /issues/audit-register/* before /issues/{id}; only where the tenant has the register.
+router.include_router(audit_register_router, dependencies=[Depends(_register_enabled)])
 router.include_router(import_export_router)
 router.include_router(issues_router)
 router.include_router(actions_per_issue_router)

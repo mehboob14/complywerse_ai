@@ -38,6 +38,14 @@ from ..audit_register.linkage import (
 
 router = APIRouter(prefix="/issues/audit-register", tags=["Issue Management - Audit register"])
 
+
+def require_enabled(db: Session = Depends(get_db)) -> None:
+    """The register is CFSB's workbook: other tenants don't have it (config.AUDIT_REGISTER_TENANTS)."""
+    from .. import audit_register
+    if not audit_register.enabled(db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="The audit issue register is not enabled for this organisation")
+
 _require_create = require_tenant_permission("issue_management:issues:create")
 _require_edit = require_tenant_permission("issue_management:issues:edit")
 _require_view = require_tenant_permission("issue_management:issues:view")

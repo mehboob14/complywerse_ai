@@ -30,6 +30,8 @@ export interface ReportDataset {
   /** Permissions that grant this dataset — the same strings the module's own nav
    *  entry uses, so Reports can never surface data a user can't already open. */
   permissions?: string[];
+  /** A client-specific module the tenant must have (/auth/me tenant.features). */
+  feature?: string;
 }
 
 export interface SortSpec { key: string; dir: 'asc' | 'desc' }

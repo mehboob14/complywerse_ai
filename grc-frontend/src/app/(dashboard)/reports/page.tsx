@@ -46,7 +46,7 @@ function pushRecent(key: string) {
 export default function ReportsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loaded: permsLoaded, authenticated, can } = usePermissions();
+  const { loaded: permsLoaded, authenticated, canUse } = usePermissions();
   const [activeKey, setActiveKey] = useState<string | undefined>(undefined);
   /** Start blank — user chooses any module; no default dataset. */
   const [blankEmpty, setBlankEmpty] = useState(true);
@@ -54,7 +54,7 @@ export default function ReportsPage() {
   const [builderNonce, setBuilderNonce] = useState(0);
   const [recentKeys, setRecentKeys] = useState<string[]>([]);
 
-  const datasets = useMemo(() => DATASETS.filter((d) => can(d.permissions)), [permsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
+  const datasets = useMemo(() => DATASETS.filter((d) => canUse(d)), [permsLoaded]); // eslint-disable-line react-hooks/exhaustive-deps
   const active = datasets.find((d) => d.key === activeKey) ?? null;
 
   useEffect(() => {

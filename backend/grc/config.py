@@ -26,6 +26,14 @@ CELERY_BROKER_URL = os.getenv("CELERY_BROKER_URL", "redis://127.0.0.1:6379/1")
 CELERY_RESULT_BACKEND = os.getenv("CELERY_RESULT_BACKEND", "redis://127.0.0.1:6379/2")
 
 
+# ----- Client-specific modules ----------------------------------------------
+# The audit issue register runs on CFSB's own workbook template, so it is on
+# only for the tenants named here (comma-separated slugs). Elsewhere its menu
+# entry, API, report datasets and workflow triggers do not exist.
+AUDIT_REGISTER_TENANTS = frozenset(
+    slug.strip().lower() for slug in os.getenv("AUDIT_REGISTER_TENANTS", "cfsb").split(",") if slug.strip())
+
+
 # ----- OpenAI ---------------------------------------------------------------
 # Default chat-completions model. Centralized so the model can be swapped in a
 # single place; mirrors the literal ``"gpt-4o"`` that was inlined across the

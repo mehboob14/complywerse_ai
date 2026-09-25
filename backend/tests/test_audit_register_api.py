@@ -257,3 +257,35 @@ def test_ai_assist_suggests_and_the_finding_records_what_ai_drafted(client, work
     row = session.query(m.AuditLog).filter(m.AuditLog.action == "create",
                                            m.AuditLog.resource_type == "audit-register").all()[-1]
     assert "AI-drafted and accepted: Causes" in row.changes["summary"]
+
+
+# ── only where the tenant has it ─────────────────────────────────────────────
+
+def test_the_register_exists_only_for_the_tenants_configured(client, monkeypatch):
+    """CFSB's workbook register: another tenant has no such API, menu, report or trigger."""
+    import grc.config as config
+    from grc.modules.workflow_engine.routers.catalog import list_node_types
+    from grc.routers.auth_router import _tenant_features
+
+    http, session = client
+    status_url = "/issue-management/issues/audit-register/status"
+    assert http.get(status_url).status_code == 200
+    assert _tenant_features(session) == ["audit_register"]
+    catalog = list_node_types(db=session, _=True)
+    assert any(t["path"][:2] == ["Auditor Portal", "Issue Register"] for t in catalog["triggers"])
+
+    session.query(m.Tenant).filter(m.Tenant.id == 1).update({"slug": "acme"})
+    session.commit()
+    assert http.get(status_url).status_code == 404
+    assert _tenant_features(session) == []
+    catalog = list_node_types(db=session, _=True)
+    assert not any(t["path"][:2] == ["Auditor Portal", "Issue Register"] for t in catalog["triggers"])
+    assert not any(f.get("path", [])[:2] == ["Auditor Portal", "Issue Register"]
+                   for fns in catalog["platform_functions"].values() for f in fns)
+    portal = next(x for x in catalog["modules"] if x["module"] == "Auditor Portal")
+    assert "Issue Register" not in portal["submodules"]
+
+    # Another client gets it by configuration, not by code.
+    monkeypatch.setattr(config, "AUDIT_REGISTER_TENANTS", frozenset({"cfsb", "acme"}))
+    assert http.get(status_url).status_code == 200
+

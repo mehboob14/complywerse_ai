@@ -10,6 +10,20 @@ function normalizePerm(perm: string): string {
   return cleaned.includes('.') ? cleaned.replace(/\./g, ':') : cleaned;
 }
 
+/** Client-specific modules this tenant has (/auth/me tenant.features), e.g. "audit_register". */
+export function useTenantFeatures(): { features: string[]; isLoading: boolean } {
+  const [state, setState] = useState<{ features: string[]; isLoading: boolean }>({ features: [], isLoading: true });
+  useEffect(() => {
+    let live = true;
+    authedFetch('/api/auth/me')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (live) setState({ features: Array.isArray(data?.tenant?.features) ? data.tenant.features : [], isLoading: false }); })
+      .catch(() => { if (live) setState({ features: [], isLoading: false }); });
+    return () => { live = false; };
+  }, []);
+  return state;
+}
+
 export function usePermissions() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);

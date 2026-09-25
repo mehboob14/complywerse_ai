@@ -61,6 +61,8 @@ interface NavItem {
   requiredModules?: string[];
   /** Path prefix for active-highlighting when it differs from href. */
   activeMatch?: string;
+  /** A client-specific module the tenant must have (/auth/me tenant.features) — admins included. */
+  requiredFeature?: string;
 }
 
 interface NavGroup {
@@ -240,7 +242,7 @@ const navigation: NavEntry[] = [
       { name: 'Internal Audit', href: '/auditor-portal/internal-audit', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
       { name: 'Statutory Audit', href: '/auditor-portal/statutory-audit', icon: ScrollText, requiredPermissions: ['compliance:assessments:*'] },
       // Audit Services' register — the client's monthly issue workbook, validated and reported.
-      { name: 'Issue Register', href: '/auditor-portal/issue-register', icon: FileSpreadsheet, requiredPermissions: ['issue_management:issues:*'] },
+      { name: 'Issue Register', href: '/auditor-portal/issue-register', icon: FileSpreadsheet, requiredPermissions: ['issue_management:issues:*'], requiredFeature: 'audit_register' },
     ],
   },
   // Reports — Analytics (Metabase) is primary for cross-module authoring;
@@ -607,6 +609,7 @@ export default function Sidebar() {
   const [allowedModules, setAllowedModules] = useState<string[]>([]);
   const [allowedPermissions, setAllowedPermissions] = useState<string[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [features, setFeatures] = useState<string[]>([]);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -648,6 +651,7 @@ export default function Sidebar() {
 
         setAllowedModules(hasNoAccessPayload ? AUTHENTICATED_DEFAULT_MODULES : resolvedModules);
         setAllowedPermissions(permissions);
+        setFeatures(Array.isArray(data.tenant?.features) ? data.tenant.features : []);
         const adminStatus = data.user.is_admin || false;
         setIsAdmin(adminStatus);
 
@@ -712,6 +716,7 @@ export default function Sidebar() {
 
   const canAccessItem = (item: NavItem & { requiredModules?: string[]; adminOnly?: boolean }) => {
     if (item.adminOnly && !isAdmin) return false;
+    if (item.requiredFeature && !features.includes(item.requiredFeature)) return false;
     if (!hasModuleAccess(item.requiredModules)) return false;
     return hasPermission(item.requiredPermissions);
   };

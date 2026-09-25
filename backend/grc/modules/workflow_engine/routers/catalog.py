@@ -25,29 +25,51 @@ from ..services.catalog import (
 router = APIRouter(prefix="/catalog", tags=["Workflow Engine Catalog"])
 
 
+_REGISTER_PATH = ["Auditor Portal", "Issue Register"]
+
+
+def _register_off(db: Session) -> bool:
+    """The audit issue register exists only for the tenants that have it (config.AUDIT_REGISTER_TENANTS)."""
+    from ...issue_management.audit_register import enabled
+    return not enabled(db)
+
+
+def _menu(db: Session) -> list:
+    menu = sidebar_modules()
+    if not _register_off(db):
+        return menu
+    return [{**m, "submodules": [s for s in m["submodules"] if [m["module"], s] != _REGISTER_PATH]} for m in menu]
+
+
 @router.get("/node-types")
 def list_node_types(
+    db: Session = Depends(get_db),
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
-    platform_functions = get_platform_functions_grouped_by_module()
+    triggers, platform_functions = TRIGGER_NODE_TYPES, get_platform_functions_grouped_by_module()
+    if _register_off(db):
+        keep = lambda items: [i for i in items if (i.get("path") or [])[:2] != _REGISTER_PATH]  # noqa: E731
+        triggers = keep(triggers)
+        platform_functions = {m: kept for m, fns in platform_functions.items() if (kept := keep(fns))}
     return {
-        "triggers": TRIGGER_NODE_TYPES,
+        "triggers": triggers,
         "actions": ACTION_NODE_TYPES,
         "platform_functions": platform_functions,
         "conditions": CONDITION_NODE_TYPES,
         "approvals": APPROVAL_NODE_TYPES,
         "timers": TIMER_NODE_TYPES,
         # Sidebar order, so the builder lists modules the way the menu does.
-        "modules": sidebar_modules(),
+        "modules": _menu(db),
     }
 
 
 @router.get("/modules")
 def list_modules(
+    db: Session = Depends(get_db),
     _: bool = Depends(require_tenant_permission("workflow_engine:definitions:view")),
 ):
     """Every sidebar module with its pages, in menu order."""
-    return {"modules": sidebar_modules()}
+    return {"modules": _menu(db)}
 
 
 @router.get("/node-param-schemas")

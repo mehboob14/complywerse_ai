@@ -878,7 +878,7 @@ export const DATASETS: ReportDataset[] = [
   // The monthly SUMMARY pack is a sectioned document; it exports from Issue
   // Register → Issue Summary rather than as a flat dataset.
   {
-    key: 'audit_register', permissions: ['issue_management:issues:*'], module: 'Auditor Portal', label: 'Issue Register',
+    key: 'audit_register', permissions: ['issue_management:issues:*'], feature: 'audit_register', module: 'Auditor Portal', label: 'Issue Register',
     description: 'Regulatory, internal audit, pen-test and self-identified findings in the client\'s template: status, aging, validation, owner.',
     fetch: async () => asRows((await auditRegisterApi.rows()).data).map((r) => ({ id: r.issue_id, ...r })),
     columns: [
@@ -903,7 +903,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'audit_register_reports', permissions: ['issue_management:issues:*'], module: 'Auditor Portal', label: 'Issue Register — by report',
+    key: 'audit_register_reports', permissions: ['issue_management:issues:*'], feature: 'audit_register', module: 'Auditor Portal', label: 'Issue Register — by report',
     description: 'One line per audit report or exam: findings, open, past due, closed, next due date and owners.',
     fetch: async () => asRows((await auditRegisterApi.reports()).data).map((r) => ({
       ...r,
@@ -926,7 +926,7 @@ export const DATASETS: ReportDataset[] = [
     ],
   },
   {
-    key: 'audit_register_extensions', permissions: ['issue_management:issues:*'], module: 'Auditor Portal', label: 'Issue Register — extensions',
+    key: 'audit_register_extensions', permissions: ['issue_management:issues:*'], feature: 'audit_register', module: 'Auditor Portal', label: 'Issue Register — extensions',
     description: 'Extension requests put to the Audit Committee, the dates asked for and what was decided.',
     fetch: async () => asRows((await auditRegisterApi.extensions()).data),
     columns: [

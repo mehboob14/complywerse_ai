@@ -25,7 +25,7 @@ function fmtWhen(iso?: string | null): string {
 
 export default function SavedReportsPage() {
   const router = useRouter();
-  const { loaded: permsLoaded, can } = usePermissions();
+  const { loaded: permsLoaded, canUse } = usePermissions();
   const [specs, setSpecs] = useState<ReportSpec[]>([]);
   const [source, setSource] = useState<SpecSource>('server');
   const [loading, setLoading] = useState(true);
@@ -39,7 +39,7 @@ export default function SavedReportsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const allowedDatasets = useMemo(
-    () => new Set(DATASETS.filter((d) => can(d.permissions)).map((d) => d.key)),
+    () => new Set(DATASETS.filter((d) => canUse(d)).map((d) => d.key)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [permsLoaded],
   );

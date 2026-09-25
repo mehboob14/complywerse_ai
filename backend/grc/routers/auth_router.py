@@ -249,6 +249,11 @@ def require_auth(
     return user
 
 
+def _tenant_features(db: Session) -> List[str]:
+    from ..modules.issue_management.audit_register import enabled as audit_register_enabled
+    return ["audit_register"] if audit_register_enabled(db) else []
+
+
 def require_tenant_permission(permission_name: str):
     """Dependency factory: confirms current user has the named permission within the tenant DB.
 
@@ -678,6 +683,8 @@ def get_me(
             "name": tenant.name if tenant else None,
             "slug": tenant.slug if tenant else None,
             "subdomain": tenant.subdomain if tenant else None,
+            # Client-specific modules this tenant has (the sidebar and pages read it).
+            "features": _tenant_features(db),
         },
     }
 

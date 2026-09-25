@@ -11,10 +11,16 @@ export const dynamic = 'force-dynamic';
  */
 import { useSearchParams } from 'next/navigation';
 import { AuditRegister } from '@/components/audit-register/AuditRegister';
+import { useTenantFeatures } from '@/hooks/usePermissions';
 
 export default function IssueRegisterPage() {
   const params = useSearchParams();
   const source = params.get('source') || '';
+  const { features, isLoading } = useTenantFeatures();
+  if (isLoading) return null;
+  if (!features.includes('audit_register')) {
+    return <p className="rounded-lg border border-slate-200 bg-white p-6 text-sm text-slate-600">The Issue Register is not enabled for your organisation.</p>;
+  }
   return (
     <div className="space-y-4">
       <div>
