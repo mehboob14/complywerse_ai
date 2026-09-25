@@ -119,6 +119,12 @@ _COLUMN_ADDS = [
     ("grc_access_review_items", "is_anomaly", "BOOLEAN"),
     ("grc_access_review_items", "anomaly_note", "TEXT"),
     ("grc_access_review_campaigns", "ai_summary", "TEXT"),
+    # The rules a review runs (all enabled, one framework's, or a picked set) and
+    # the ones that actually ran.
+    ("grc_access_review_campaigns", "rule_scope", "VARCHAR(20)"),
+    ("grc_access_review_campaigns", "rule_framework", "VARCHAR(120)"),
+    ("grc_access_review_campaigns", "rule_ids", "JSON"),
+    ("grc_access_review_campaigns", "rules_run", "JSON"),
     ("grc_access_review_campaigns", "ai_summary_at", "TIMESTAMP"),
     # SaaS multi-tenant Entra columns
     ("grc_identity_provider_configs", "entra_directory_id", "VARCHAR(64)"),

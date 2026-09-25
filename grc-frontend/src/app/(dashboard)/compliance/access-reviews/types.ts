@@ -24,6 +24,22 @@ export interface Campaign {
   exceptions_found: number;
   items_reviewed: number;
   created_at?: string | null;
+  /** Which rules it runs: every enabled rule, one framework's rules, or a picked set. */
+  rule_scope?: RuleScope;
+  rule_framework?: string | null;
+  rule_framework_name?: string | null;
+  rule_ids?: string[];
+  /** The rules that actually ran, frozen when its checks ran (null before). */
+  rules_run?: string[] | null;
+}
+
+export type RuleScope = 'enabled' | 'framework' | 'custom';
+
+/** A rule set to run, as the pickers and the API speak it. */
+export interface RuleSelection {
+  rule_scope: RuleScope;
+  rule_framework?: string | null;
+  rule_ids?: string[] | null;
 }
 
 export interface ConnectorSource {
@@ -103,10 +119,17 @@ export interface Report {
   findings_by_type: Record<string, number>;
   findings_by_severity: Record<string, number>;
   decisions: Record<string, number>;
-  verdict: string;
+  verdict: string;                // 'effective' | 'deficient' | 'material_weakness'
   rule_results?: RuleResult[];
   ai_summary?: string | null;
   exceptions_open?: number;
+  rule_scope?: RuleScope;
+  rule_framework?: string | null;
+  rule_framework_name?: string | null;
+  /** people still to decide */
+  pending?: number;
+  /** true until the review is sealed — the verdict can still move */
+  provisional?: boolean;
 }
 
 // GET /access-reviews/dashboard — keys match the backend response exactly.

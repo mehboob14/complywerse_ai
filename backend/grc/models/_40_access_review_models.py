@@ -42,6 +42,16 @@ class AccessReviewCampaign(Base):
     # {"include_admins": bool, "include_terminated": bool, "departments": [..]}
     risk_filters = Column(JSON, default=dict)
 
+    # Which rules it runs: every rule enabled in the library ("enabled"), the
+    # runnable rules that evidence one framework ("framework", `rule_framework` a
+    # crosswalk source slug), or a set a person picked ("custom", `rule_ids`).
+    # `rules_run` freezes what actually ran, so a later change to the library
+    # never rewrites a review's results.
+    rule_scope = Column(String(20), nullable=True, default="enabled")
+    rule_framework = Column(String(120), nullable=True)
+    rule_ids = Column(JSON, nullable=True)
+    rules_run = Column(JSON, nullable=True)
+
     # Audit period the review covers
     period_start = Column(Date, nullable=True)
     period_end = Column(Date, nullable=True)

@@ -562,10 +562,53 @@ def enabled_rules(tenant_db: Session, tenant_id: int, cfg_map: Optional[Dict[str
                      "frameworks_total": refs["total"]}} for r in active]
 
 
+# What a review can run: every rule enabled in the library, the runnable rules that
+# evidence one framework, or a set a person picked.
+RULE_SCOPES = ("enabled", "framework", "custom")
+
+
+def framework_rule_ids(tenant_db: Session, framework: str) -> List[str]:
+    """The runnable rules that evidence one framework in the tenant's crosswalk."""
+    crosswalk = _crosswalk(tenant_db, sorted({c for r in RULE_CATALOG for c in (r.get("scf") or ())}))
+    return [r["id"] for r in RULE_CATALOG if r["check"] is not None
+            and framework in {slug for scf_id in (r.get("scf") or ()) for slug, _n, _c in crosswalk.get(scf_id, ())}]
+
+
+def resolve_rule_ids(tenant_db: Session, tenant_id: int, scope: Optional[str], framework: Optional[str] = None,
+                     rule_ids: Optional[List[str]] = None) -> List[str]:
+    """The rule ids a review of this scope runs, as the catalog stands today."""
+    if scope == "framework" and framework:
+        return framework_rule_ids(tenant_db, framework)
+    if scope == "custom":
+        return [rid for rid in dict.fromkeys(rule_ids or []) if (CATALOG_BY_ID.get(rid) or {}).get("check")]
+    return [r["id"] for r in enabled_rules(tenant_db, tenant_id)]
+
+
+def rules_with_frameworks(tenant_db: Session, tenant_id: int, rule_ids: List[str],
+                          prefer: Optional[str] = None) -> List[Dict[str, Any]]:
+    """These rules as a review reports them: the tenant's severity, and the frameworks
+    each evidences — the review's own framework first."""
+    from ...models import AccessReviewRuleConfig
+
+    cfg_map = {c.rule_id: c for c in tenant_db.query(AccessReviewRuleConfig)
+               .filter(AccessReviewRuleConfig.tenant_id == tenant_id).all()}
+    rules = [CATALOG_BY_ID[i] for i in rule_ids if i in CATALOG_BY_ID]
+    crosswalk = _crosswalk(tenant_db, sorted({c for r in rules for c in (r.get("scf") or ())}))
+    out = []
+    for r in rules:
+        pairs = [p for scf_id in (r.get("scf") or ()) for p in crosswalk.get(scf_id, ())]
+        refs = _group_frameworks(pairs, limit=6, prefer=prefer)
+        cfg = cfg_map.get(r["id"])
+        out.append({**r, "severity": (cfg.severity if cfg and cfg.severity else r["severity"]),
+                    "frameworks": refs["frameworks"], "frameworks_total": refs["total"]})
+    return out
+
+
 def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
-                      items: List[AccessReviewItem]) -> int:
-    """Clear prior findings, then run every ENABLED + RUNNABLE catalog rule over
-    each sampled item. Returns the total number of findings written."""
+                      items: List[AccessReviewItem], rule_ids: Optional[List[str]] = None) -> int:
+    """Clear prior findings, then run the review's rules — `rule_ids`, or every
+    ENABLED + RUNNABLE catalog rule — over each sampled item. Returns the total
+    number of findings written."""
     from ...models import AccessReviewRuleConfig
 
     tenant_db.query(AccessReviewFinding).filter(
@@ -579,7 +622,8 @@ def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
     }
     ctx = _build_context(tenant_db, tenant_id, items)
 
-    active = enabled_rules(tenant_db, tenant_id, cfg_map)
+    active = (enabled_rules(tenant_db, tenant_id, cfg_map) if rule_ids is None
+              else [CATALOG_BY_ID[i] for i in rule_ids if (CATALOG_BY_ID.get(i) or {}).get("check")])
     sev_override = {rid: c.severity for rid, c in cfg_map.items() if c.severity}
 
     total = 0
@@ -621,7 +665,7 @@ def _crosswalk(tenant_db: Session, scf_ids: List[str]) -> Dict[str, List[tuple]]
     return out
 
 
-def _group_frameworks(pairs: List[tuple], limit: int) -> Dict[str, Any]:
+def _group_frameworks(pairs: List[tuple], limit: int, prefer: Optional[str] = None) -> Dict[str, Any]:
     by_slug: Dict[str, Dict[str, Any]] = {}
     for slug, name, code in pairs:
         entry = by_slug.setdefault(slug, {"slug": slug, "name": name, "codes": []})
@@ -629,7 +673,9 @@ def _group_frameworks(pairs: List[tuple], limit: int) -> Dict[str, Any]:
             entry["codes"].append(code)
     for entry in by_slug.values():
         entry["codes"] = sorted(entry["codes"])[:_MAX_CODES_PER_FRAMEWORK]
+    # The framework a review was scoped to comes first, then the headline ones.
     ordered = sorted(by_slug.values(), key=lambda e: (
+        e["slug"] != prefer,
         _HEADLINE_FRAMEWORKS.index(e["slug"]) if e["slug"] in _HEADLINE_FRAMEWORKS else 99, e["name"]))
     return {"frameworks": ordered[:limit], "total": len(ordered), "all": ordered}
 

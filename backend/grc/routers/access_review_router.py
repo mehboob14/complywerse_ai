@@ -124,6 +124,16 @@ class CampaignCreate(BaseModel):
     period_start: Optional[date] = None
     period_end: Optional[date] = None
     due_date: Optional[datetime] = None
+    # enabled (every rule on in the library) | framework (rule_framework's rules) | custom (rule_ids)
+    rule_scope: str = "enabled"
+    rule_framework: Optional[str] = None
+    rule_ids: Optional[List[str]] = None
+
+
+class RuleSelectionIn(BaseModel):
+    rule_scope: str = "enabled"
+    rule_framework: Optional[str] = None
+    rule_ids: Optional[List[str]] = None
 
 
 class DecisionIn(BaseModel):
@@ -166,9 +176,57 @@ def _item_counts(tenant_db: Session, campaign_ids: List[int]) -> Dict[int, tuple
     return {cid: (int(total or 0), int(decided or 0)) for cid, total, decided in rows}
 
 
-def _campaign_dict(c: AccessReviewCampaign, counts: tuple = (0, 0)) -> Dict[str, Any]:
+def _rule_selection(tenant_db: Session, tid: int, scope: Optional[str], framework: Optional[str],
+                    rule_ids: Optional[List[str]]) -> tuple:
+    """A rule set a review can run: (scope, framework, picked ids), or 400 saying why not."""
+    scope = scope or "enabled"
+    if scope not in rules_mod.RULE_SCOPES:
+        raise HTTPException(status_code=400, detail=f"rule_scope must be one of {', '.join(rules_mod.RULE_SCOPES)}")
+    if scope == "framework":
+        if not framework:
+            raise HTTPException(status_code=400, detail="Pick the framework whose rules the review runs.")
+        if not rules_mod.framework_rule_ids(tenant_db, framework):
+            raise HTTPException(status_code=400, detail="No rule that can run today evidences that framework.")
+        return scope, framework, None
+    if scope == "custom":
+        picked = rules_mod.resolve_rule_ids(tenant_db, tid, "custom", rule_ids=rule_ids)
+        if not picked:
+            raise HTTPException(status_code=400, detail="Pick at least one rule that can run.")
+        return scope, None, picked
+    return scope, None, None
+
+
+def _framework_names(tenant_db: Session, slugs) -> Dict[str, str]:
+    """Crosswalk source slug → the framework's own name."""
+    slugs = {s for s in slugs if s}
+    if not slugs:
+        return {}
+    from ..models import SCFSource
+    try:
+        return {slug: name for slug, name in tenant_db.query(SCFSource.source_slug, SCFSource.display_name)
+                .filter(SCFSource.source_slug.in_(slugs))}
+    except Exception:  # noqa: BLE001 — a tenant without the crosswalk shows the slug
+        return {}
+
+
+def _campaign_rules(tenant_db: Session, c: AccessReviewCampaign) -> List[Dict[str, Any]]:
+    """The rules this review ran — or, before its checks, the ones it will run — each
+    with its category and the frameworks it evidences (the review's own first)."""
+    ids = c.rules_run if c.rules_run is not None else rules_mod.resolve_rule_ids(
+        tenant_db, c.tenant_id, c.rule_scope, c.rule_framework, c.rule_ids)
+    return rules_mod.rules_with_frameworks(tenant_db, c.tenant_id, list(ids), prefer=c.rule_framework)
+
+
+def _campaign_dict(c: AccessReviewCampaign, counts: tuple = (0, 0),
+                   framework_names: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
     sampled, decided = counts
     return {
+        # Which rules it runs, and — once its checks ran — which it did.
+        "rule_scope": c.rule_scope or "enabled",
+        "rule_framework": c.rule_framework,
+        "rule_framework_name": (framework_names or {}).get(c.rule_framework) or c.rule_framework,
+        "rule_ids": c.rule_ids or [],
+        "rules_run": c.rules_run,
         # What the review actually drew, and how far certification has got.
         "sample_size": sampled or c.requested_sample_size,
         "items_reviewed_live": decided or c.items_reviewed,
@@ -296,7 +354,8 @@ def list_campaigns(
         .all()
     )
     counts = _item_counts(tenant_db, [c.id for c in rows])
-    return {"campaigns": [_campaign_dict(c, counts.get(c.id, (0, 0))) for c in rows]}
+    names = _framework_names(tenant_db, (c.rule_framework for c in rows))
+    return {"campaigns": [_campaign_dict(c, counts.get(c.id, (0, 0)), names) for c in rows]}
 
 
 @router.post("")
@@ -308,8 +367,13 @@ def create_campaign(
 ):
     admin = _require_admin(tenant_db, grc_auth_token, authorization)
     tid = _tenant_id(tenant_db)
+    scope, framework, picked = _rule_selection(tenant_db, tid, payload.rule_scope, payload.rule_framework,
+                                               payload.rule_ids)
     c = AccessReviewCampaign(
         tenant_id=tid,
+        rule_scope=scope,
+        rule_framework=framework,
+        rule_ids=picked,
         name=payload.name,
         description=payload.description,
         review_type=_REVIEW_TYPES.get(payload.review_type, payload.review_type),
@@ -325,7 +389,7 @@ def create_campaign(
     )
     tenant_db.add(c)
     tenant_db.commit()
-    return _campaign_dict(c)
+    return _campaign_dict(c, framework_names=_framework_names(tenant_db, [c.rule_framework]))
 
 
 # ---------------------------------------------------------------------------
@@ -1404,12 +1468,33 @@ def get_campaign(
         .all()
     ):
         findings_by_item.setdefault(f.item_id, []).append(f)
-    ran_rules = rules_mod.enabled_rules(tenant_db, tid, with_frameworks=True)
+    ran_rules = _campaign_rules(tenant_db, c)
     return {
-        "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0))),
+        "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0)),
+                                   _framework_names(tenant_db, [c.rule_framework])),
         "items": [_item_dict(it, findings_by_item.get(it.id, []), ran_rules) for it in items],
         "rule_results": _rule_results(items, findings_by_item, ran_rules),
     }
+
+
+@router.put("/{campaign_id}/rules")
+def set_campaign_rules(
+    campaign_id: int,
+    payload: RuleSelectionIn,
+    tenant_db: Session = Depends(get_tenant_db),
+    grc_auth_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Change which rules the review runs. After its checks, run them again to apply."""
+    _require_admin(tenant_db, grc_auth_token, authorization)
+    tid = _tenant_id(tenant_db)
+    c = _campaign_or_404(tenant_db, campaign_id, tid)
+    _assert_not_completed(c)
+    c.rule_scope, c.rule_framework, c.rule_ids = _rule_selection(
+        tenant_db, tid, payload.rule_scope, payload.rule_framework, payload.rule_ids)
+    tenant_db.commit()
+    return _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0)),
+                          _framework_names(tenant_db, [c.rule_framework]))
 
 
 # ---------------------------------------------------------------------------
@@ -1535,8 +1620,12 @@ def run_checks(
     )
     if not items:
         raise HTTPException(status_code=400, detail="No sample drawn yet")
+    rule_ids = rules_mod.resolve_rule_ids(tenant_db, tid, c.rule_scope, c.rule_framework, c.rule_ids)
+    if not rule_ids:
+        raise HTTPException(status_code=400, detail="This review's rule set has no rule that can run.")
+    c.rules_run = rule_ids                     # what ran, frozen for the report
     total = rules_mod.run_enabled_rules(
-        tenant_db, tenant_id=tid, campaign_id=campaign_id, items=items
+        tenant_db, tenant_id=tid, campaign_id=campaign_id, items=items, rule_ids=rule_ids
     )
     c.exceptions_found = total
     if c.status in ("sampled", "population_built"):
@@ -1800,6 +1889,8 @@ def close_campaign(
     )
     reviewed = sum(1 for it in items if it.decision != "pending")
     c.items_reviewed = reviewed
+    if c.rules_run is None:                    # sealed with the rules it reports, whatever the library does next
+        c.rules_run = rules_mod.resolve_rule_ids(tenant_db, tid, c.rule_scope, c.rule_framework, c.rule_ids)
     c.exceptions_found = (
         tenant_db.query(AccessReviewFinding)
         .filter(AccessReviewFinding.campaign_id == campaign_id)
@@ -1843,12 +1934,19 @@ def _build_report(tenant_db: Session, c: AccessReviewCampaign, campaign_id: int)
     findings_by_item: Dict[int, List[AccessReviewFinding]] = {}
     for f in findings:
         findings_by_item.setdefault(f.item_id, []).append(f)
+    pending = sum(1 for it in items if it.decision == "pending")
+    names = _framework_names(tenant_db, [c.rule_framework])
     return {
         # Every rule the review ran, with how many identities passed each — the
         # report has to show what was tested, not only what failed.
-        "rule_results": _rule_results(items, findings_by_item,
-                                      rules_mod.enabled_rules(tenant_db, c.tenant_id, with_frameworks=True)),
-        "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0))),
+        "rule_results": _rule_results(items, findings_by_item, _campaign_rules(tenant_db, c)),
+        "rule_scope": c.rule_scope or "enabled",
+        "rule_framework": c.rule_framework,
+        "rule_framework_name": names.get(c.rule_framework) or c.rule_framework,
+        # Until everyone is decided and the review sealed, the verdict can still move.
+        "pending": pending,
+        "provisional": c.status != "completed",
+        "campaign": _campaign_dict(c, _item_counts(tenant_db, [c.id]).get(c.id, (0, 0)), names),
         "population_size": c.population_size,
         "sample_size": sample_size,
         "exceptions_total": len(findings),
@@ -2106,16 +2204,16 @@ def export_report(
         .all()
     ):
         findings_by_item.setdefault(f.item_id, []).append(f)
-    ran_rules = rules_mod.enabled_rules(tenant_db, tid, with_frameworks=True)
+    ran_rules = _campaign_rules(tenant_db, c)
     item_dicts = [_item_dict(it, findings_by_item.get(it.id, []), ran_rules) for it in items]
 
     stem = f"access_review_{campaign_id}"
     fmt = (format or "csv").lower()
     if fmt == "xlsx":
-        return export_mod.xlsx_response(stem, item_dicts)
+        return export_mod.xlsx_response(stem, item_dicts, _rule_results(items, findings_by_item, ran_rules))
     if fmt == "pdf":
         report_data = _build_report(tenant_db, c, campaign_id)
-        return export_mod.pdf_response(stem, _campaign_dict(c), report_data, item_dicts)
+        return export_mod.pdf_response(stem, report_data["campaign"], report_data, item_dicts)
     return export_mod.csv_response(stem, item_dicts)
 
 

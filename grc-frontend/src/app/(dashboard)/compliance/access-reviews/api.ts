@@ -7,6 +7,7 @@ import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from '@ta
 import { authedFetch } from '@/lib/auth-fetch';
 import type {
   Campaign, CampaignDetail, ConnectorSource, ReviewItem, Report, DashboardSummary, RuleCatalogView, Decision,
+  RuleSelection,
 } from './types';
 
 const API = '/api/access-reviews';
@@ -14,6 +15,17 @@ const API = '/api/access-reviews';
 // authedFetch does NOT set a default Content-Type — JSON bodies must declare it
 // or the FastAPI router fails to parse them. Use this for every JSON write.
 const JSON_HEADERS = { 'Content-Type': 'application/json' } as const;
+
+/** The server's own words for a failed call: `400 Bad Request – {"detail": "…"}` → `…`. */
+export function errorText(e: unknown, fallback = 'Something went wrong. Try again.'): string {
+  const msg = (e as Error)?.message || '';
+  const body = msg.split(' – ').slice(1).join(' – ');
+  try {
+    const detail = JSON.parse(body).detail;
+    if (typeof detail === 'string') return detail;
+  } catch { /* not JSON */ }
+  return body || msg || fallback;
+}
 
 async function json<T>(res: Response): Promise<T> {
   if (!res.ok) {
@@ -97,7 +109,7 @@ export function useCreateCampaign() {
     mutationFn: (body: {
       name: string; review_type: string; sampling_method: string; requested_sample_size: number;
       source?: string | null; description?: string;
-    }) => authedFetch(API, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) }).then(json<Campaign>),
+    } & RuleSelection) => authedFetch(API, { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(body) }).then(json<Campaign>),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: arKeys.list() });
       qc.invalidateQueries({ queryKey: arKeys.dashboard() });
@@ -198,6 +210,31 @@ export function useAiSummary(id: number) {
   });
 }
 
-/** Build a report-export URL (CSV / XLSX / PDF). GET /{id}/report/export?format= */
-export const reportExportUrl = (id: number, format: 'csv' | 'xlsx' | 'pdf') =>
-  `${API}/${id}/report/export?format=${format}`;
+/** Change which rules a review runs. PUT /{id}/rules — after its checks, run them again to apply. */
+export function useSetRules(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: RuleSelection) =>
+      authedFetch(`${API}/${id}/rules`, { method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(body) }).then(json<Campaign>),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: arKeys.campaign(id) });
+      qc.invalidateQueries({ queryKey: arKeys.report(id) });
+      qc.invalidateQueries({ queryKey: arKeys.list() });
+    },
+  });
+}
+
+/** Download the report (CSV / XLSX / PDF). A plain link can't carry the sign-in
+ *  (it lives in local storage, not a cookie), so fetch it and save the file. */
+export async function downloadReport(id: number, format: 'csv' | 'xlsx' | 'pdf') {
+  const res = await authedFetch(`${API}/${id}/report/export?format=${format}`);
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const url = URL.createObjectURL(await res.blob());
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `access_review_${id}.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
