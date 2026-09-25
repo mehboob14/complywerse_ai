@@ -133,7 +133,7 @@ def _entry_to_dict(e: AuditPlanEntry, settings: Optional[Dict[str, Any]] = None)
         # SLA days for its priority run from when it was planned.
         end = _dt.combine(e.audit_end, _dt.min.time()) if e.audit_end else None
         data["sla"] = sla_state(settings, status=e.status, due_date=end,
-                                priority=e.priority, opened_at=e.created_at)
+                                priority=e.priority, opened_at=e.created_at, values=e.custom_values)
     return data
 
 

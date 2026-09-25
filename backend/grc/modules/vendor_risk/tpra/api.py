@@ -7,6 +7,7 @@ and append an audit row. History-bearing records soft-delete + restore.
 """
 from __future__ import annotations
 
+import json
 from datetime import datetime, timedelta
 from typing import List, Literal, Optional
 
@@ -22,7 +23,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings
+from . import service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
 from .stages import stages_payload, is_valid_stage
 from .schema_migrations import ensure_tpra_columns
 
@@ -358,6 +359,7 @@ class ConfigIn(BaseModel):
     scoring_policy: Optional[dict] = None   # {partial_credit: 0..1}, frozen into each questionnaire version
     tier_policy: Optional[dict] = None      # {tier: {template_ids, evidence, approver_role, reassess_on}}
     monitoring_policy: Optional[dict] = None  # {adverse_media: bool}
+    quantification: Optional[dict] = None     # exposure model constants, see tpra/quantification.py
 
 class PlanIn(BaseModel):
     """Persist the Due-Diligence Planning selections onto the assessment so the
@@ -1705,7 +1707,9 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
         "scoring_policy": cfg["scoring_policy"],
         "tier_policy": tier_policy.merged(cfg.get("tier_policy")),
         "monitoring_policy": cfg.get("monitoring_policy") or {},
-        "defaults": {**DEFAULT_TIERING_CONFIG, "tier_policy": tier_policy.DEFAULT_TIER_POLICY},
+        "quantification": quantification.merged(cfg.get("quantification")),
+        "defaults": {**DEFAULT_TIERING_CONFIG, "tier_policy": tier_policy.DEFAULT_TIER_POLICY,
+                     "quantification": quantification.DEFAULT_QUANT},
         "meta": {
             "factor_keys": _FACTOR_KEYS, "factor_labels": _FACTOR_LABELS,
             "tier_keys": _TIER_KEYS, "cadence_keys": _CADENCE_KEYS,
@@ -1781,6 +1785,20 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
+    if body.quantification is not None:
+        before = quantification.merged(getattr(row, "quantification", None))
+        try:
+            after = quantification.clean(body.quantification, before)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        moved = quantification.changes(before, after)
+        if moved:
+            row.quantification = after
+            service.write_audit(db, tenant_id, entity="quantification", action="update", actor_id=user.id,
+                                from_value=json.dumps({k: v[0] for k, v in moved.items()}),
+                                to_value=json.dumps({k: v[1] for k, v in moved.items()}),
+                                reason="Exposure model constants changed")
+
     if body.scoring_policy is not None:
         credit = body.scoring_policy.get("partial_credit")
         if not isinstance(credit, (int, float)) or isinstance(credit, bool) or not 0 <= credit <= 1:
@@ -1795,7 +1813,8 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
             "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"], **(row.reminder_policy or {})},
             "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"], **(row.scoring_policy or {})},
             "tier_policy": tier_policy.merged(getattr(row, "tier_policy", None)),
-            "monitoring_policy": getattr(row, "monitoring_policy", None) or {}}
+            "monitoring_policy": getattr(row, "monitoring_policy", None) or {},
+            "quantification": quantification.merged(getattr(row, "quantification", None))}
 
 
 # ── Compliance framework coverage (TPRM-007b) ────────────────────────────────

@@ -8,8 +8,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bug, Layers, Loader2, Plus, Trash2 } from 'lucide-react';
-import { tpraApi } from '@/lib/api';
+import { Bug, EyeOff, Layers, Loader2, Plus, Radar, Trash2 } from 'lucide-react';
+import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 
@@ -22,6 +22,7 @@ interface SharedVuln {
   vendors: Array<{ id: number; name: string; tier: string | null; signal_id: number; acknowledged: boolean }>;
 }
 interface Alias { id: number; alias: string; platform: string | null; excluded: boolean }
+interface Shadow { name: string; asset_count: number; products: string[]; sources: string[] }
 
 export default function ConcentrationPage() {
   const qc = useQueryClient();
@@ -45,15 +46,29 @@ export default function ConcentrationPage() {
     queryFn: async () => ((await tpraApi.platformAliases()).data?.items || []) as Alias[],
     ...TPRM_QUERY_OPTS,
   });
+  const { data: shadows } = useQuery({
+    queryKey: ['tprm-shadow-suppliers'],
+    queryFn: async () => ((await tpraApi.shadowSuppliers(50)).data?.items || []) as Shadow[],
+    ...TPRM_QUERY_OPTS,
+  });
+  const [added, setAdded] = useState<Record<string, number>>({});
   const refresh = () => {
     setError(null);
-    ['tprm-concentration', 'tprm-platform-aliases'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
+    ['tprm-concentration', 'tprm-platform-aliases', 'tprm-shadow-suppliers'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   };
   const onError = (e: unknown) =>
     setError((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'That did not save.');
   const addAlias = useMutation({
     mutationFn: async () => tpraApi.addPlatformAlias({ alias: alias.alias, platform: alias.platform || undefined, excluded: alias.excluded }),
     onSuccess: () => { setAlias({ alias: '', platform: '', excluded: false }); refresh(); }, onError,
+  });
+  const register = useMutation({
+    mutationFn: async (name: string) => ({ name, id: (await vendorRiskApi.createVendor({ name })).data?.id as number }),
+    onSuccess: ({ name, id }) => { setAdded((prev) => ({ ...prev, [name]: id })); refresh(); }, onError,
+  });
+  const dismiss = useMutation({
+    mutationFn: async (name: string) => tpraApi.addPlatformAlias({ alias: name, excluded: true }),
+    onSuccess: refresh, onError,
   });
   const removeAlias = useMutation({ mutationFn: async (id: number) => tpraApi.removePlatformAlias(id), onSuccess: refresh, onError });
 
@@ -125,6 +140,49 @@ export default function ConcentrationPage() {
                     <span key={x.id}>{i > 0 && ', '}<Link href={`/vendor-risk/vendors/${x.id}?stage=monitoring`} className="hover:underline">{x.name}</Link></span>
                   ))}
                 </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="rounded-xl border border-gray-200 bg-white p-4">
+        <h2 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900"><Radar className="h-4 w-4 text-slate-500" /> Suppliers we have no record of</h2>
+        <p className="mb-2 text-xs text-gray-500">
+          Found by our own discovery: publishers of software installed on our estate, vendors of identified software, and the
+          vendor named on application, cloud and third-party assets. None of them is in the vendor register yet.
+        </p>
+        {Object.keys(added).length > 0 && (
+          <p className="mb-2 text-xs text-emerald-700">
+            Added:{' '}
+            {Object.entries(added).map(([name, id], i) => (
+              <span key={name}>{i > 0 && ', '}<Link href={`/vendor-risk/vendors/${id}`} className="font-medium hover:underline">{name}</Link></span>
+            ))}
+          </p>
+        )}
+        {(shadows || []).length === 0 ? <p className="text-sm text-gray-500">Every supplier discovery finds is in the register.</p> : (
+          <ul className="divide-y divide-gray-100">
+            {shadows!.map((x) => (
+              <li key={x.name} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                <div>
+                  <p className="text-sm font-medium text-slate-900">{x.name}</p>
+                  <p className="text-[11px] text-gray-500">
+                    {x.asset_count} asset{x.asset_count === 1 ? '' : 's'} · {x.sources.join(', ')}
+                    {x.products.length > 0 && <> · {x.products.join(', ')}</>}
+                  </p>
+                </div>
+                {canEdit && (
+                  <span className="flex items-center gap-2 text-[11px]">
+                    <button type="button" onClick={() => register.mutate(x.name)} disabled={register.isPending}
+                      className="inline-flex items-center gap-1 rounded-md bg-primary-600 px-2 py-1 font-medium text-white disabled:opacity-60">
+                      <Plus className="h-3 w-3" /> Add to vendors
+                    </button>
+                    <button type="button" onClick={() => dismiss.mutate(x.name)} disabled={dismiss.isPending}
+                      className="inline-flex items-center gap-1 rounded-md border border-gray-300 px-2 py-1 font-medium text-gray-600">
+                      <EyeOff className="h-3 w-3" /> Not a supplier we manage
+                    </button>
+                  </span>
+                )}
               </li>
             ))}
           </ul>

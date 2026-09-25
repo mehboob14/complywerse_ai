@@ -363,6 +363,9 @@ class CriticalTask(Base):
     # and by the status-sync helper to mirror task status onto IssueAction.
     linked_issue_id = Column(Integer, ForeignKey("grc_issues.id"), nullable=True, index=True)
     linked_issue_action_id = Column(Integer, ForeignKey("grc_issue_actions.id"), nullable=True, index=True)
+    # The regulatory change a task mirrors an implementation task of (soft link;
+    # governance/regulatory_tasks.py keeps the two in step).
+    linked_regulatory_change_id = Column(Integer, nullable=True, index=True)
     evidence_notes = Column(Text, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     verified_at = Column(DateTime, nullable=True)

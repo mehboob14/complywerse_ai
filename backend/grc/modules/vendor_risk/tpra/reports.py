@@ -44,8 +44,9 @@ from ....models import (
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from ....routers.auth_router import require_auth
-from . import graph, portal, rbac
+from . import graph, portal, quantification, rbac
 from .attention import _names
+from .bootstrap import get_tiering_config
 from .engine_scoring import answer_score
 from .service import write_audit
 from .versions import questions_for
@@ -417,6 +418,20 @@ def committee_pack(db: Session, tenant_id: int, start: date, end: date, today: d
                 row["flags"].add(f"{f['vendor']}: {f['rating'].lower()} residual risk")
     cif_rows = [[k, v["rto"], ", ".join(v["vendors"]), "; ".join(sorted(v["flags"])) or None] for k, v in cif.items()]
 
+    exposure = quantification.portfolio(db, tenant_id, quantification.merged(
+        get_tiering_config(db, tenant_id).get("quantification")), today, top=10)
+
+    def money(v: float) -> str:
+        return f"{exposure['currency']} {v:,.0f}"
+
+    exposure_rows = [[x["name"], _title(x["tier"]), _title(x["rating"]), f"{x['annual']['chance']:.0%}",
+                      money(x["annual"]["mean"]), money(x["annual"]["p90"]), money(x["annual"]["p95"])]
+                     for x in exposure["vendors"]]
+    if exposure["annual"]:
+        a = exposure["annual"]
+        exposure_rows.insert(0, ["All vendors in use", None, None, f"{a['chance']:.0%}", money(a["mean"]),
+                                 money(a["p90"]), money(a["p95"])])
+
     open_findings = sum(sum(c.values()) for c in ages.values())
     return {
         "kind": "committee_pack", "title": f"Third-party risk committee pack, {period_label(start, end)}",
@@ -443,6 +458,11 @@ def committee_pack(db: Session, tenant_id: int, start: date, end: date, today: d
                    cif_rows),
             _table("concentration", "Concentration", ["Platform", "Vendors on it", "Critical dependencies", "Vendors"],
                    conc_rows, "Platforms two or more of our vendors depend on, from the fourth-party register."),
+            _table("exposure", "Estimated annual exposure",
+                   ["Vendor", "Tier", "Residual rating", "Chance of a loss this year", "Average year", "1 year in 10",
+                    "1 year in 20"], exposure_rows,
+                   "A range, not a forecast. " + " ".join(exposure["assumptions"])
+                   + " Each vendor's inputs are on its Exposure tab."),
             _table("incidents", "Incidents", ["Date", "Vendor", "What happened", "Severity", "Source", "Status"], incidents,
                    "Incidents logged against vendors, and breaches or high-severity alerts from monitoring."),
             _table("ageing", "Open findings by age", ["Severity"] + [lbl for lbl, _ in _AGES] + ["Total"], age_rows,

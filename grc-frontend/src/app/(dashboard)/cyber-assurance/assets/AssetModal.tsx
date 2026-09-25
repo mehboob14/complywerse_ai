@@ -8,6 +8,9 @@ import HipaaAttributesFields from '@/cyber-assurance/components/assets/HipaaAttr
 import { ITAsset, AssetType } from '@/cyber-assurance/types';
 import { ComboBoxInput, type ComboBoxOption } from '@/cyber-assurance/components/ui';
 import {
+  CustomFieldsTab, CustomFieldsTabBar, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
+import {
   Loader2,
   X,
   AppWindow,
@@ -174,6 +177,24 @@ const STATUS_OPTIONS: ComboBoxOption[] = [
   { value: 'decommissioned', label: 'Decommissioned' },
 ];
 
+const ENVIRONMENT_OPTIONS: ComboBoxOption[] = [
+  { value: 'production',  label: 'Production' },
+  { value: 'staging',     label: 'Staging' },
+  { value: 'development', label: 'Development' },
+  { value: 'test',        label: 'Test' },
+  { value: 'dr',          label: 'DR' },
+];
+
+// Lifecycle is a state machine on the backend (services/asset_lifecycle.py —
+// retiring an asset closes its findings), so its states are not tenant-editable.
+const LIFECYCLE_OPTIONS: ComboBoxOption[] = [
+  { value: 'planned',        label: 'Planned' },
+  { value: 'active',         label: 'Active' },
+  { value: 'maintenance',    label: 'Maintenance' },
+  { value: 'decommissioned', label: 'Decommissioned' },
+  { value: 'retired',        label: 'Retired' },
+];
+
 const CRITICALITY_OPTIONS: ComboBoxOption[] = [
   { value: 'low',      label: 'Low' },
   { value: 'medium',   label: 'Medium' },
@@ -267,6 +288,16 @@ export function AssetModal({
     eol_date: (String((initialData as any)?.eol_date || '')).slice(0, 10),
   });
   const [customSubComponent, setCustomSubComponent] = useState('');
+  const [tab, setTab] = useState<'details' | 'custom'>('details');
+  const [customValues, setCustomValues] = useState<CustomValues>(
+    () => ((initialData as { custom_values?: CustomValues } | null | undefined)?.custom_values) || {});
+
+  // The tenant's own options for the built-in dropdowns; the shipped
+  // suggestions still lend their grouping and hints where the value matches.
+  const { data: fieldSettings } = useModuleSettings('assets');
+  const choices = (key: string, current: string, shipped: ComboBoxOption[]): ComboBoxOption[] =>
+    listOptions(fieldSettings, key, current, shipped)
+      .map((o) => ({ ...shipped.find((x) => x.value === o.value), value: o.value, label: o.label }));
 
   // OS Knowledge Registry — drives the OS/Product picker so the user can
   // pick what kind of asset this is, and the benchmark matcher resolves the
@@ -407,6 +438,8 @@ export function AssetModal({
       purchase_date: formData.purchase_date || undefined,
       warranty_expiry: formData.warranty_expiry || undefined,
       eol_date: formData.eol_date || undefined,
+      custom_values: valuesToSave(fieldSettings, customValues,
+        isEditMode ? ((initialData as { custom_values?: CustomValues } | null | undefined)?.custom_values || {}) : null),
     };
     if (isEditMode) {
       submitData.status = formData.status;
@@ -504,8 +537,11 @@ export function AssetModal({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col flex-1 min-h-0">
+        {/* A required field left empty on the other tab: go to it. */}
+        <form onSubmit={handleSubmit} onInvalidCapture={(e) => setTab(tabOf(e.target))} className="flex flex-col flex-1 min-h-0">
           <div className="flex-1 overflow-y-auto px-5 py-4">
+            <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
+            <div data-tab="details" className={tab === 'details' ? '' : 'hidden'}>
             {/* Row 1: Name + Description */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
               <div>
@@ -736,7 +772,7 @@ export function AssetModal({
                   <ComboBoxInput
                     value={formData.vendor}
                     onChange={(v) => setFormData({ ...formData, vendor: v })}
-                    options={VENDOR_SUGGESTIONS}
+                    options={choices('vendor', formData.vendor, VENDOR_SUGGESTIONS)}
                     placeholder="Search or type a vendor…"
                     ariaLabel="Vendor"
                   />
@@ -748,7 +784,7 @@ export function AssetModal({
                   <ComboBoxInput
                     value={formData.location}
                     onChange={(v) => setFormData({ ...formData, location: v })}
-                    options={LOCATION_SUGGESTIONS}
+                    options={choices('location', formData.location, LOCATION_SUGGESTIONS)}
                     placeholder="Search or type a location…"
                     ariaLabel="Location"
                   />
@@ -779,7 +815,7 @@ export function AssetModal({
                   <ComboBoxInput
                     value={formData.network_segment}
                     onChange={(v) => setFormData({ ...formData, network_segment: v })}
-                    options={NETWORK_SEGMENT_SUGGESTIONS}
+                    options={choices('network_segment', formData.network_segment, NETWORK_SEGMENT_SUGGESTIONS)}
                     placeholder="Search or type a segment…"
                     ariaLabel="Network segment"
                   />
@@ -905,7 +941,7 @@ export function AssetModal({
                   <ComboBoxInput
                     value={formData.data_classification}
                     onChange={(v) => setFormData({ ...formData, data_classification: (v || '') as typeof formData.data_classification })}
-                    options={DATA_CLASSIFICATION_OPTIONS}
+                    options={choices('data_classification', formData.data_classification, DATA_CLASSIFICATION_OPTIONS)}
                     allowCustom={false}
                     displayLabelInsteadOfValue
                     placeholder="None — search to pick…"
@@ -1008,22 +1044,18 @@ export function AssetModal({
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Environment</label>
                   <select value={formData.environment} onChange={(e) => setFormData({ ...formData, environment: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
                     <option value="">— Not set —</option>
-                    <option value="production">Production</option>
-                    <option value="staging">Staging</option>
-                    <option value="development">Development</option>
-                    <option value="test">Test</option>
-                    <option value="dr">DR</option>
+                    {choices('environment', formData.environment, ENVIRONMENT_OPTIONS).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Lifecycle</label>
                   <select value={formData.lifecycle_state} onChange={(e) => setFormData({ ...formData, lifecycle_state: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
                     <option value="">— Not set —</option>
-                    <option value="planned">Planned</option>
-                    <option value="active">Active</option>
-                    <option value="maintenance">Maintenance</option>
-                    <option value="end_of_life">End of life</option>
-                    <option value="decommissioned">Decommissioned</option>
+                    {listOptions(undefined, 'lifecycle_state', formData.lifecycle_state, LIFECYCLE_OPTIONS).map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -1122,9 +1154,13 @@ export function AssetModal({
                 )}
               </div>
             </div>
+            </div>
+            <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
+              <CustomFieldsTab moduleKey="assets" values={customValues} onChange={setCustomValues} />
+            </div>
           </div>
 
-                    <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
+          <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
             <button
               type="button"
               onClick={onClose}

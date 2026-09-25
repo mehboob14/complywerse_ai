@@ -24,6 +24,7 @@ import RemediationPlanCard from '../_components/RemediationPlanCard';
 import { shortenVulnTitle } from '../../_workspace/lib';
 import { NotesPanel } from '@/cyber-assurance/components/shared/EntityExtras';
 import { AuditFindingTags } from '@/components/audit-register/AuditFindingTags';
+import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
 
 // ── mock palette ──
 const AC = '#005B96', ACS = '#014A81', BORDER = '#E8ECEE', BORDER2 = '#F0F3F5', INK = '#0F1F2B', SEC = '#3A4653', MUTED = '#8A95A1', FAINT = '#AEB8C2';
@@ -216,6 +217,7 @@ export default function FindingDetail({ vulnId }: { vulnId: number }) {
               </>
             ) : <div style={{ fontSize: 12, color: MUTED }}>No asset linked — link one to compute reachability.</div>}
           </RailCard>
+          <CustomFieldsRail vulnId={vulnId} values={v.custom_values} />
           <RailCard title="Department assignments">
             {(deptAssignments?.length ?? 0) > 0
               ? deptAssignments!.map((d: any, i: number) => <Row key={d.id ?? d.department_id ?? i} k={d.department_name || d.name || 'Department'} v={d.priority || d.sla_override_days ? `${d.priority || ''}${d.sla_override_days ? ` · ${d.sla_override_days}d` : ''}`.trim() || 'assigned' : 'assigned'} />)
@@ -228,6 +230,22 @@ export default function FindingDetail({ vulnId }: { vulnId: number }) {
 }
 
 const fmt = (iso?: string) => (iso ? new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—');
+/** The tenant's own fields on this finding — hidden when they have none. */
+function CustomFieldsRail({ vulnId, values }: { vulnId: number; values?: Record<string, unknown> | null }) {
+  const qc = useQueryClient();
+  const { data: settings } = useModuleSettings('vulnerabilities');
+  if (!hasCustomFields(settings, values)) return null;
+  return (
+    <RailCard title="Custom fields">
+      <CustomValuesEditor moduleKey="vulnerabilities" values={values}
+        onSave={async (next) => {
+          await vulnManagementApi.vulnerabilities.update(vulnId, { custom_values: next });
+          await qc.invalidateQueries({ queryKey: ['vulnerability', vulnId] });
+        }} />
+    </RailCard>
+  );
+}
+
 function RailCard({ title, children }: { title: string; children: React.ReactNode }) {
   return <section style={card}><div style={{ padding: '11px 14px', borderBottom: `1px solid ${BORDER2}` }}><h4 style={{ fontSize: 12, fontWeight: 600, margin: 0 }}>{title}</h4></div><div style={{ padding: '8px 14px 12px' }}>{children}</div></section>;
 }

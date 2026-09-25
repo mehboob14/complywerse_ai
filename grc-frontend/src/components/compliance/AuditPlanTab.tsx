@@ -3,7 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
-import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
+import ModuleSettingsPanel, { SlaBadge, type SlaState } from '@/components/settings/ModuleSettingsPanel';
 import {
   Plus, Edit2, Trash2, Sparkles, ChevronDown, ChevronRight,
   X, Save, Loader2, ClipboardList, Search, AlertCircle,
@@ -37,6 +37,7 @@ interface AuditPlanEntry {
   ai_recommendation_generated_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  sla?: SlaState | null;
 }
 
 interface TenantUser {
@@ -469,6 +470,7 @@ export default function AuditPlanTab({ assessmentId, tenantUsers }: Props) {
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Lead Auditor</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Status</th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">Priority</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600">SLA</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600">Actions</th>
                 </tr>
               </thead>
@@ -501,6 +503,7 @@ export default function AuditPlanTab({ assessmentId, tenantUsers }: Props) {
                             </span>
                           ) : <span className="text-xs text-gray-400">—</span>}
                         </td>
+                        <td className="px-4 py-3"><SlaBadge sla={entry.sla} /></td>
                         <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
@@ -524,7 +527,7 @@ export default function AuditPlanTab({ assessmentId, tenantUsers }: Props) {
                       </tr>
                       {expanded && (
                         <tr key={`${entry.id}-exp`} className="bg-gray-50">
-                          <td colSpan={9} className="px-6 py-4">
+                          <td colSpan={10} className="px-6 py-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-700">
                               {entry.scope && <div><strong className="text-gray-500">Scope:</strong> {entry.scope}</div>}
                               {entry.methods && <div><strong className="text-gray-500">Methods:</strong> {entry.methods}</div>}

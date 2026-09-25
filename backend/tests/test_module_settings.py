@@ -190,3 +190,193 @@ def test_an_archived_field_cannot_be_written_again():
 def test_unknown_module_and_unknown_section_are_refused():
     with pytest.raises(ValueError, match="Unknown module"):
         ms.spec("not_a_module")
+
+
+# ── dropdown lists ───────────────────────────────────────────────────────────
+
+def _lists(module_key):
+    return {k: dict(v) for k, v in ms.MODULES[module_key]["lists"].items()}
+
+
+def test_a_fixed_list_keys_new_options_by_slug_and_archives_the_ones_taken_out():
+    saved = ms._clean_lists({"environment": [{"label": "Production"}, {"label": "Pre-prod"}]},
+                            ms.MODULES["assets"], _lists("assets"))
+    by_value = {o["value"]: o for o in saved["environment"]}
+    assert by_value["pre_prod"]["label"] == "Pre-prod" and not by_value["pre_prod"]["archived"]
+    assert by_value["staging"]["archived"] is True       # records holding it keep its name
+    assert saved["location"] == ms.MODULES["assets"]["lists"]["location"]["options"]   # untouched
+
+
+def test_a_free_text_list_keeps_the_label_as_the_value():
+    saved = ms._clean_lists({"location": ["Karachi DC"]}, ms.MODULES["assets"], _lists("assets"))
+    assert saved["location"][0] == {"value": "Karachi DC", "label": "Karachi DC", "archived": False}
+
+
+@pytest.mark.parametrize("raw,message", [
+    ({"environment": [{"label": "Prod"}, {"label": "prod"}]}, "listed twice"),
+    ({"environment": [{"label": "Production", "archived": True}]}, "at least one option in use"),
+    ({"environment": []}, "at least one option"),
+    ({"colour": ["Red"]}, "not a dropdown you can change here"),
+])
+def test_bad_lists_are_refused(raw, message):
+    with pytest.raises(ValueError, match=message):
+        ms._clean_lists(raw, ms.MODULES["assets"], _lists("assets"))
+
+
+def test_archived_options_are_hidden_from_new_records_only():
+    settings = {"lists": {"environment": {"options": [
+        {"value": "production", "label": "Production", "archived": False},
+        {"value": "dr", "label": "DR", "archived": True}]}}}
+    assert [o["value"] for o in ms.list_options(settings, "environment")] == ["production"]
+    assert len(ms.list_options(settings, "environment", include_archived=True)) == 2
+
+
+# ── the clock, per status and per property ───────────────────────────────────
+
+def test_a_paused_status_stops_the_clock_even_past_the_due_date():
+    statuses = ms._clean_statuses([
+        {"key": "open", "label": "Open"},
+        {"key": "awaiting_regulator", "label": "Awaiting regulator", "clock": "paused"},
+        {"key": "closed", "label": "Closed", "terminal": True},
+    ])
+    state = ms.sla_state(_settings(statuses=statuses), status="awaiting_regulator",
+                         due_date=NOW - timedelta(days=30), priority="high", now=NOW)
+    assert state["state"] == "paused"
+    with pytest.raises(ValueError, match="SLA clock"):
+        ms._clean_statuses([{"key": "closed", "label": "Closed", "terminal": True, "clock": "sometimes"}])
+
+
+def test_per_priority_targets_carry_their_own_reminder_and_escalation():
+    module = ms.MODULES["statutory_audit"]
+    sla = ms._clean_sla({"targets": {"high": {"days": 20, "notify_before": 5, "escalate_after": 2}}},
+                        module, dict(module["defaults"]["sla"]))
+    assert sla["by_priority"]["high"] == 20            # kept in step for older readers
+    settings = _settings(sla=sla)
+    # "complied" has no escalation of its own, so the target row's 2 days apply
+    state = ms.sla_state(settings, status="complied", due_date=NOW - timedelta(days=3), priority="high", now=NOW)
+    assert (state["escalate_after_days"], state["escalated"], state["remind_before_due"]) == (2, True, 5)
+    with pytest.raises(ValueError, match="not a value the SLA follows"):
+        ms._clean_sla({"targets": {"urgent": {"days": 1}}}, module, dict(module["defaults"]["sla"]))
+
+
+# ── against a database: sections, drivers, record values ─────────────────────
+
+from sqlalchemy import create_engine  # noqa: E402
+from sqlalchemy.orm import sessionmaker  # noqa: E402
+from sqlalchemy.pool import StaticPool  # noqa: E402
+
+from grc.models import (  # noqa: E402
+    AuditLog, Base, GRCUser, ITAsset, ModuleSettings, Tenant, Vulnerability, VulnerabilityAssetLink,
+    VulnerabilityControlLink, VulnerabilitySLAConfig,
+)
+
+
+@pytest.fixture()
+def db():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    tables = [Tenant, GRCUser, ModuleSettings, AuditLog, Vulnerability, VulnerabilitySLAConfig,
+              VulnerabilityAssetLink, VulnerabilityControlLink, ITAsset]
+    Base.metadata.create_all(engine, tables=[m.__table__ for m in tables])
+    s = sessionmaker(bind=engine)()
+    s.add(Tenant(id=1, name="Bank", slug="bank"))
+    s.add(GRCUser(id=7, username="officer", display_name="Officer", email="officer@bank.test", is_active=True))
+    s.commit()
+    yield s
+    s.close()
+
+
+IMPACT = {"key": "business_impact", "label": "Business impact", "type": "select", "options": ["Tier 1", "Tier 2"]}
+
+
+def test_a_module_only_takes_the_sections_it_offers(db):
+    with pytest.raises(ValueError, match="has no 'sla' settings"):
+        ms.save_settings(db, 1, "assets", {"sla": {"due_soon_days": 3}})
+    saved = ms.save_settings(db, 1, "assets", {"lists": {"vendor": ["Temenos", "Microsoft"]}})
+    assert [o["value"] for o in ms.list_options(saved, "vendor")] == ["Temenos", "Microsoft"]
+    assert "sla" not in saved and saved["module"]["sections"] == ["fields", "lists"]
+
+
+def test_the_sla_can_follow_a_tenant_dropdown_and_that_field_cannot_be_retired(db):
+    ms.save_settings(db, 1, "statutory_audit", {"fields": [IMPACT]})
+    saved = ms.save_settings(db, 1, "statutory_audit", {"sla": {
+        "driver": "field:business_impact", "targets": {"Tier 1": {"days": 5, "escalate_after": 3}}}})
+    state = ms.sla_state(saved, status="complied", due_date=None, opened_at=NOW - timedelta(days=10),
+                         values={"business_impact": "Tier 1"}, now=NOW)
+    assert (state["target_days"], state["state"], state["escalated"]) == (5, "breached", True)
+    with pytest.raises(ValueError, match="cannot follow it"):
+        ms.save_settings(db, 1, "statutory_audit", {"fields": []})
+    # back to priority: the per-tier days mean nothing there, so they go
+    saved = ms.save_settings(db, 1, "statutory_audit", {"sla": {"driver": "priority"}})
+    assert saved["sla"]["targets"] == {}
+
+
+def test_record_values_are_left_alone_by_callers_that_send_none(db):
+    ms.save_settings(db, 1, "vulnerabilities", {"fields": [
+        {"key": "owner_team", "label": "Owner team", "type": "text", "required": True}, IMPACT]})
+    assert ms.clean_record_values(db, 1, "vulnerabilities", None, {"owner_team": "NOC"}, creating=False) == {
+        "owner_team": "NOC"}
+    with pytest.raises(ValueError, match="is required"):
+        ms.clean_record_values(db, 1, "vulnerabilities", {"business_impact": "Tier 1"}, creating=True)
+    merged = ms.clean_record_values(db, 1, "vulnerabilities", {"business_impact": "Tier 2"},
+                                    {"owner_team": "NOC"}, creating=False)
+    assert merged == {"owner_team": "NOC", "business_impact": "Tier 2"}
+
+
+# ── over HTTP ────────────────────────────────────────────────────────────────
+
+import importlib  # noqa: E402
+
+from fastapi import FastAPI  # noqa: E402
+from fastapi.testclient import TestClient  # noqa: E402
+
+from grc.models import get_db  # noqa: E402
+from grc.routers.auth_router import require_auth  # noqa: E402
+
+# the module itself: grc.routers re-exports its APIRouter under the same name
+settings_router = importlib.import_module("grc.routers.module_settings_router")
+
+
+def _app(db, *routers):
+    app = FastAPI()
+    for router in routers:
+        app.include_router(router)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: db.get(GRCUser, 7)
+    for route in app.routes:          # route-level permission checks: granted here
+        for dep in getattr(getattr(route, "dependant", None), "dependencies", []):
+            if getattr(dep.call, "__name__", "") == "permission_checker":
+                app.dependency_overrides[dep.call] = lambda: True
+    return TestClient(app)
+
+
+def test_each_module_is_gated_on_its_own_permission(db, monkeypatch):
+    asked = []
+    monkeypatch.setattr(settings_router, "require_tenant_permission",
+                        lambda name: (asked.append(name), lambda **_: True)[1])
+    http = _app(db, settings_router.router)
+    assert http.get("/module-settings/assets").status_code == 200
+    r = http.put("/module-settings/assets", json={"lists": {"environment": ["Production", "Pre-prod"]}})
+    assert r.status_code == 200, r.text
+    assert asked == ["assets:asset_inventory:view", "assets:asset_inventory:edit"]
+    assert http.put("/module-settings/assets", json={"statuses": []}).status_code == 400
+    assert http.get("/module-settings/payroll").status_code == 404
+    # a "person" field names people for anyone who can see the form
+    assert http.get("/module-settings/risks/people").json() == [{"id": 7, "display_name": "Officer"}]
+    assert asked[-1] == "erm:risks:view"
+
+
+def test_a_vulnerability_carries_its_custom_values(db):
+    from grc.modules.vuln_management.routers import vulnerabilities
+    ms.save_settings(db, 1, "vulnerabilities", {"fields": [IMPACT]})
+    http = _app(db, vulnerabilities.router)
+    bad = http.post("/vulnerabilities", json={"title": "Open SMB", "severity": "high",
+                                              "custom_values": {"business_impact": "Tier 9"}})
+    assert bad.status_code == 400 and "must be one of" in bad.json()["detail"]
+    made = http.post("/vulnerabilities", json={"title": "Open SMB", "severity": "high",
+                                               "custom_values": {"business_impact": "Tier 1"}})
+    assert made.status_code == 201, made.text
+    assert made.json()["custom_values"] == {"business_impact": "Tier 1"}
+    vid = made.json()["id"]
+    changed = http.put(f"/vulnerabilities/{vid}", json={"custom_values": {"business_impact": "Tier 2"}})
+    assert changed.status_code == 200, changed.text
+    assert db.get(Vulnerability, vid).custom_values == {"business_impact": "Tier 2"}

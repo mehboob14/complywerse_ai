@@ -3,6 +3,7 @@ from pathlib import Path
 import re
 from typing import Optional
 
+from ....feature_map import HUB_ASSESSMENTS, PAGE_ORDER, sidebar_path, sidebar_rank
 from ....feature_map import place as place_in_sidebar
 from .route_events import event_name
 
@@ -966,11 +967,8 @@ def get_platform_functions_grouped_by_module() -> dict[str, list[dict]]:
     for item in PLATFORM_FUNCTION_NODE_TYPES:
         module_name = str(item.get("module") or "General")
         grouped.setdefault(module_name, []).append(item)
-    for module_name in grouped:
-        grouped[module_name] = sorted(
-            grouped[module_name],
-            key=lambda x: (str(x.get("submodule") or ""), str(x.get("label") or "")),
-        )
+    # PLATFORM_FUNCTION_NODE_TYPES is already in menu order once the app's routes
+    # have placed it (extend_with_app_routes), so modules and pages keep that order.
     return grouped
 
 
@@ -1168,6 +1166,7 @@ def extend_with_app_routes(app) -> int:
         node["module"], node["submodule"] = _sidebar_place(
             endpoint_module, path,
             (str(node.get("module") or ""), str(node.get("submodule") or "")))
+        node["path"] = sidebar_path(node["module"], node["submodule"])
         trio = (node["module"], node["submodule"], str(node.get("label") or ""))
         if trio in seen_labels:
             continue
@@ -1213,8 +1212,11 @@ def extend_with_app_routes(app) -> int:
             "functionality_name": label, "source": "app_routes", "fn_name": fn_name, "method": method,
             "route_path": path, "endpoint_module": module_path,
             "trigger_event": _trigger_event_for(method, fn_name, module_path, label),
+            "path": sidebar_path(module_name, submodule),
         })
         added += 1
+    PLATFORM_FUNCTION_NODE_TYPES.sort(key=lambda n: (sidebar_rank(n["module"], n["submodule"]), n["label"]))
+    _place_triggers({event_name(mp, fn): (mp, path) for (mp, fn), (_, path) in routes.items()})
     _record_endpoint_labels(app)
     _ROUTES_EXTENDED = True
     return added
@@ -1225,7 +1227,50 @@ def extend_with_app_routes(app) -> int:
 # route_events names it; `when` narrows it to a request-field value. Keys new
 # here are added to TRIGGER_NODE_TYPES; existing ones that nothing raised
 # (or raised only from another path) get their endpoints wired.
-_EndpointEvent = tuple[str, str, str, tuple[str, ...], Optional[tuple[str, frozenset]]]
+_EndpointEvent = tuple[str, str, str, tuple[str, ...], Optional[tuple]]
+
+# ── Assessments ──────────────────────────────────────────────────────────────
+# Every assessment page, and every assessment inside a hub page, posts to the
+# same endpoints and differs only by format. So each event is gated on the page
+# the audit row was placed under, or on the format it recorded: a workflow can
+# run for OWASP ASVS alone without firing for NCA or DPIA. Keys are stored in
+# saved workflows, so the page-level ones keep the names they shipped with.
+_ASSESSMENT_PAGES = [  # (key prefix, what it is, the pages its rows are placed under)
+    ("cyber_security", "Cyber Security assessment", {"cyber security"}),
+    ("nca", "NCA assessment", {"nca"}),
+    ("dpia", "DPIA / PIA", {"dpia / pia"}),
+    ("pdpl", "Saudi PDPL assessment", {"saudi pdpl"}),
+    ("digital_ops", "Digital Operations Maturity assessment", {"digital operations maturity"}),
+    ("other", "Other assessment", {"other assessments", "overview"}),
+]
+_HUB_KEYS = {  # format → key prefix of the assessment inside a hub page
+    "asvs_checklist": "owasp_asvs", "owasp_v4_testing_checklist": "owasp_testing",
+    "mobile_app_security": "mobile_app_security", "csir_maturity": "csir_maturity",
+    "cti_maturity": "cti_maturity", "incident_maturity": "incident_maturity",
+    "itsecops_maturity": "itsecops_maturity", "nca_dcc_tool": "nca_dcc",
+    "nca_vuln_register": "nca_vulnerability_register", "nca_audit_register": "nca_audit_plan",
+    "nca_risk_register": "nca_risk_register",
+}
+_ASSESSMENT_ENDPOINTS = [  # (key suffix, what happened, endpoint, a further condition)
+    ("created", "created", "compliance_assessments_router.upload_assessment", None),
+    ("updated", "updated", "compliance_assessments_router.update_assessment", None),
+    ("completed", "completed", "compliance_assessments_router.update_assessment",
+     ("status", frozenset({"completed", "complete", "closed"}))),
+    ("item_updated", "control or question updated", "compliance_assessments_router.update_assessment_item", None),
+    ("approval", "evidence approval recorded", "compliance_assessments_router.perform_approval_action", None),
+    ("remediation_updated", "remediation item updated", "compliance_assessments_router.update_remediation_item", None),
+]
+
+
+def _assessment_events() -> list:
+    kinds = [(prefix, name, ("submodule", frozenset(pages))) for prefix, name, pages in _ASSESSMENT_PAGES]
+    kinds += [(_HUB_KEYS[fmt], f"NCA {label}" if hub == "NCA" else f"{label} assessment",
+               ("assessment_format", frozenset({fmt})))
+              for hub, items in HUB_ASSESSMENTS.items() for fmt, label in items]
+    return [(f"{prefix}_assessment_{suffix}", f"{name} {what}", "Assessments", (endpoint,),
+             (gate, extra) if extra else gate)
+            for prefix, name, gate in kinds for suffix, what, endpoint, extra in _ASSESSMENT_ENDPOINTS]
+
 ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
     # ── Controls Automation ───────────────────────────────────────────────
     ("control_test_started", "Control test started", "Controls Automation",
@@ -1459,59 +1504,14 @@ ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
      ("issue_management.actions.verify_action",), None),
     ("capa_action_promoted", "CAPA action promoted to a critical task", "Issue Management",
      ("issue_management.actions.promote_action_to_task",), None),
-    # ── Assessments ───────────────────────────────────────────────────────────
-    # Every assessment page posts to the same three endpoints and differs only by
-    # the assessment's format, so these are gated on the page the audit row was
-    # already placed under (feature_map.assessment_place) — a workflow can then
-    # run for Cyber Security assessments without firing for NCA or DPIA.
     ("assessment_status_change", "Assessment approval recorded (any type)", "Assessments",
      ("compliance_assessments_router.perform_approval_action",), None),
-    ("cyber_security_assessment_created", "Cyber Security assessment created", "Assessments",
-     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"cyber security"}))),
-    ("cyber_security_assessment_updated", "Cyber Security assessment updated", "Assessments",
-     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"cyber security"}))),
-    ("cyber_security_assessment_approval", "Cyber Security assessment approval recorded", "Assessments",
-     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"cyber security"}))),
-    ("nca_assessment_created", "NCA assessment created", "Assessments",
-     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"nca"}))),
-    ("nca_assessment_updated", "NCA assessment updated", "Assessments",
-     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"nca"}))),
-    ("nca_assessment_approval", "NCA assessment approval recorded", "Assessments",
-     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"nca"}))),
-    ("dpia_assessment_created", "DPIA / PIA created", "Assessments",
-     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"dpia / pia"}))),
-    ("dpia_assessment_updated", "DPIA / PIA updated", "Assessments",
-     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"dpia / pia"}))),
-    ("dpia_assessment_approval", "DPIA / PIA approval recorded", "Assessments",
-     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"dpia / pia"}))),
-    ("pdpl_assessment_created", "Saudi PDPL assessment created", "Assessments",
-     ("compliance_assessments_router.upload_assessment",), ("submodule", frozenset({"saudi pdpl"}))),
-    ("pdpl_assessment_updated", "Saudi PDPL assessment updated", "Assessments",
-     ("compliance_assessments_router.update_assessment",), ("submodule", frozenset({"saudi pdpl"}))),
-    ("pdpl_assessment_approval", "Saudi PDPL assessment approval recorded", "Assessments",
-     ("compliance_assessments_router.perform_approval_action",), ("submodule", frozenset({"saudi pdpl"}))),
-    ("digital_ops_assessment_created", "Digital Operations Maturity assessment created", "Assessments",
-     ("compliance_assessments_router.upload_assessment",),
-     ("submodule", frozenset({"digital operations maturity"}))),
-    ("digital_ops_assessment_updated", "Digital Operations Maturity assessment updated", "Assessments",
-     ("compliance_assessments_router.update_assessment",),
-     ("submodule", frozenset({"digital operations maturity"}))),
-    ("digital_ops_assessment_approval", "Digital Operations Maturity approval recorded", "Assessments",
-     ("compliance_assessments_router.perform_approval_action",),
-     ("submodule", frozenset({"digital operations maturity"}))),
-    ("other_assessment_created", "Other assessment created", "Assessments",
-     ("compliance_assessments_router.upload_assessment",),
-     ("submodule", frozenset({"other assessments", "overview"}))),
-    ("other_assessment_updated", "Other assessment updated", "Assessments",
-     ("compliance_assessments_router.update_assessment",),
-     ("submodule", frozenset({"other assessments", "overview"}))),
-    ("other_assessment_approval", "Other assessment approval recorded", "Assessments",
-     ("compliance_assessments_router.perform_approval_action",),
-     ("submodule", frozenset({"other assessments", "overview"}))),
+    *_assessment_events(),
 ]
 
-# "api.<endpoint>" → [(trigger key, (request field, values) or None)] for the dispatcher.
-ENDPOINT_TRIGGERS: dict[str, list[tuple[str, Optional[tuple[str, frozenset]]]]] = {}
+# "api.<endpoint>" → [(trigger key, condition or None)] for the dispatcher. A
+# condition is (field, values), or a tuple of them that must all hold.
+ENDPOINT_TRIGGERS: dict[str, list[tuple[str, Optional[tuple]]]] = {}
 for _key, _label, _module, _endpoints, _when in ENDPOINT_EVENT_TYPES:
     for _endpoint in _endpoints:
         ENDPOINT_TRIGGERS.setdefault(f"api.{_endpoint}", []).append((_key, _when))
@@ -1604,6 +1604,139 @@ for _key, _label, _module, *_rest in DUE_DATE_EVENTS:
 # Raised by the dispatcher from a refused sign-in's audit row (a failed request
 # never raises its endpoint's event).
 TRIGGER_NODE_TYPES.append({"key": "sign_in_failed", "label": "Sign-in failed", "module": "Administration"})
+
+
+# ── Where each trigger sits in the sidebar ───────────────────────────────────
+# The builder lists triggers as the sidebar does, module → page → assessment.
+# An event an endpoint raises sits on that endpoint's page (the one map that names
+# audit rows); a date event on its record's page; the rest by how their name
+# begins, first match first.
+_DUE_PLACES: dict[str, tuple] = {
+    "Evidence": ("Compliance Management", "Evidence Management"),
+    "InternalControl": ("Risk Management", "Internal Controls"),
+    "AttestationCampaign": ("Governance", "Attestations"),
+    "OversightAction": ("Governance", "Committees"),
+    "CommitteeCharter": ("Governance", "Committees"),
+    "RiskMitigationAction": ("Risk Management", "Mitigation Actions"),
+    "CriticalTask": ("Critical Tasks", "Critical Tasks"),
+    "Vulnerability": ("Cybersecurity Assurance", "Vulnerabilities"),
+    "IssueAction": ("Issue & Incident Management", "Issues"),
+    "Risk": ("Risk Management", "Risk Register"),
+    "RiskReview": ("Risk Management", "Risk Reviews"),
+    "RCSACampaign": ("Risk Management", "RCSA"),
+    "RiskKRI": ("Governance", "KRIs"),
+    "PolicyException": ("Governance", "Policy Exceptions"),
+    "Exception": ("Governance", "Policy Exceptions"),
+    "ISProjectTask": ("Governance", "Projects"),
+    "ISProjectMilestone": ("Governance", "Projects"),
+    "Vendor": ("Third-Party Vendor Risk", "Vendors"),
+    "VendorAssessment": ("Third-Party Vendor Risk", "Vendor Assessments"),
+    "TPRAContract": ("Third-Party Vendor Risk", "Third-Party Risk Assessments"),
+    "TPRARemediation": ("Third-Party Vendor Risk", "Third-Party Risk Assessments"),
+    "AccessReviewCampaign": ("Compliance Management", "Access Reviews"),
+    "RegulatoryImplementationTask": ("Compliance Management", "Regulatory Changes"),
+    "ComplianceAssessmentDocument": ("Assessments", "Overview"),
+    "NcaVulnEntry": ("Assessments", "NCA", "Vulnerability Register"),
+    "AuditObservation": ("Auditor Portal", "Statutory Audit"),
+    "BcmPlan": ("Business Continuity", "Continuity Plans"),
+    "SCFControlState": ("Controls Automation", "Common Controls"),
+}
+_KEY_PLACES: list[tuple[str, tuple]] = [
+    ("manual_trigger", ("Administration", "Workflow Engine")),
+    ("schedule_recurring", ("Administration", "Workflow Engine")),
+    ("webhook", ("Administration", "Workflow Engine")),
+    ("evidence_", ("Compliance Management", "Evidence Management")),
+    ("audit_package", ("Compliance Management", "Evidence Management")),
+    ("framework_", ("Compliance Management", "Frameworks")),
+    ("compliance_gap", ("Compliance Management", "Frameworks")),
+    ("certification_", ("Compliance Management", "Certifications")),
+    ("access_review", ("Compliance Management", "Access Reviews")),
+    ("regulatory_", ("Compliance Management", "Regulatory Changes")),
+    ("compliance_assessment", ("Assessments", "Overview")),
+    ("assessment_", ("Assessments", "Overview")),
+    ("risk_assessment", ("Risk Management", "Risk Assessments")),
+    ("risk_review", ("Risk Management", "Risk Reviews")),
+    ("risk_", ("Risk Management", "Risk Register")),
+    ("rcsa_", ("Risk Management", "RCSA")),
+    ("internal_control", ("Risk Management", "Internal Controls")),
+    ("control_review", ("Risk Management", "Internal Controls")),
+    ("mitigation_action", ("Risk Management", "Mitigation Actions")),
+    ("appetite_", ("Risk Management", "Risk Appetite")),
+    ("kri_", ("Governance", "KRIs")),
+    ("kpi_", ("Governance", "KPI Report")),
+    ("governance_document", ("Governance", "Documents")),
+    ("document_", ("Governance", "Documents")),
+    ("policy_exception", ("Governance", "Policy Exceptions")),
+    ("policy_", ("Governance", "Documents")),
+    ("attestation_", ("Governance", "Attestations")),
+    ("committee_", ("Governance", "Committees")),
+    ("incident_", ("Issue & Incident Management", "Incidents")),
+    ("issue_", ("Issue & Incident Management", "Issues")),
+    ("capa_", ("Issue & Incident Management", "Issues")),
+    ("new_vulnerability", ("Cybersecurity Assurance", "Vulnerabilities")),
+    ("vulnerability_", ("Cybersecurity Assurance", "Vulnerabilities")),
+    ("asset_", ("Cybersecurity Assurance", "IT Asset Inventory")),
+    ("audit_review", ("Auditor Portal", "Portal")),
+    ("audit_control", ("Auditor Portal", "Portal")),
+    ("audit_", ("Auditor Portal", "Issue Register")),
+    ("vendor_assessment", ("Third-Party Vendor Risk", "Vendor Assessments")),
+    ("vendor_questionnaire", ("Third-Party Vendor Risk", "Questionnaires")),
+    ("vendor_", ("Third-Party Vendor Risk", "Vendors")),
+    ("bcm_drill", ("Business Continuity", "Drills & Invocations")),
+    ("bcm_", ("Business Continuity", "Continuity Plans")),
+    ("cis_", ("Administration", "Compliance Agents")),
+    ("agent_", ("Administration", "Compliance Agents")),
+    ("connection_", ("Administration", "Connections")),
+    ("user_", ("Administration", "User Management")),
+    ("role_", ("Administration", "Role Management")),
+    ("password_", ("Administration", "Password Policy")),
+    ("sign_in", ("Administration", "Sign-in")),
+    ("critical_task", ("Critical Tasks", "Critical Tasks")),
+]
+_HUB_OF = {fmt: (hub, label) for hub, items in HUB_ASSESSMENTS.items() for fmt, label in items}
+
+
+def _conditions(when: Optional[tuple]) -> list:
+    return list(when) if when and isinstance(when[0], tuple) else ([when] if when else [])
+
+
+def _refine(module: str, page: str, when: Optional[tuple]) -> tuple:
+    """The assessment page, or the assessment inside a hub page, an event is gated on."""
+    leaf = None
+    for field, values in _conditions(when):
+        if field == "submodule":
+            page = next((p for p in ("Other Assessments", *PAGE_ORDER["Assessments"]) if p.lower() in values), page)
+        elif field == "assessment_format":
+            page, leaf = _HUB_OF.get(next(iter(values)), (page, None))
+    return module, page, leaf
+
+
+def _place_triggers(routes_by_event: dict) -> None:
+    """Give every trigger its sidebar module, page and path, and list them in menu order."""
+    placed: dict[str, tuple] = {}
+    for key, _label, _module, endpoints, when in ENDPOINT_EVENT_TYPES:
+        route = next((routes_by_event[f"api.{e}"] for e in endpoints if f"api.{e}" in routes_by_event), None)
+        if key in placed or route is None:
+            continue
+        module, page = _sidebar_place(route[0], route[1], ("", ""))
+        if module not in ("", "General"):
+            placed[key] = _refine(module, page, when)
+    for key, _label, _module, model, *_ in DUE_DATE_EVENTS:
+        if key not in placed and model in _DUE_PLACES:
+            placed[key] = _DUE_PLACES[model]
+    for trig in TRIGGER_NODE_TYPES:
+        key = trig["key"]
+        place = placed.get(key) or next((p for prefix, p in _KEY_PLACES if key.startswith(prefix)), None)
+        if place is None:
+            continue
+        module, page, leaf = (*place, None, None)[:3]
+        trig.update(module=module, submodule=page, path=sidebar_path(module, page, leaf))
+        if leaf:
+            trig["leaf"] = leaf
+    last = ((len(TRIGGER_NODE_TYPES), ""),)
+    TRIGGER_NODE_TYPES.sort(key=lambda t: (
+        sidebar_rank(t["module"], t.get("submodule"), t.get("leaf")) if t.get("path") else last, t["label"]))
+
 
 CONDITION_NODE_TYPES = [
     # ── Risk conditions ───────────────────────────────────────────────────────

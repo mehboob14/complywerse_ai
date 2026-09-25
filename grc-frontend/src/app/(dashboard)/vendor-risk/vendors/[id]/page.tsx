@@ -25,6 +25,7 @@ import Link from 'next/link';
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import TpraLifecycle from './_tpra/TpraLifecycle';
 import DependenciesPanel from './_tpra/DependenciesPanel';
+import ExposurePanel from './_tpra/ExposurePanel';
 
 interface Vendor {
   id: number;
@@ -147,7 +148,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
-type TabType = 'lifecycle' | 'overview' | 'dependencies' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'overview' | 'dependencies' | 'exposure' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -187,7 +188,7 @@ export default function VendorDetailPage() {
     if (deepLinkStage || deepLinkFinding != null) {
       setActiveTab('lifecycle');
       deepLinkApplied.current = true;
-    } else if (deepLinkTab && ['lifecycle', 'overview', 'dependencies', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
+    } else if (deepLinkTab && ['lifecycle', 'overview', 'dependencies', 'exposure', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
       setActiveTab(deepLinkTab);                       // ?tab=dependencies from Concentration
       deepLinkApplied.current = true;
     }
@@ -308,6 +309,7 @@ export default function VendorDetailPage() {
     { key: 'lifecycle', label: 'Lifecycle' },
     { key: 'overview', label: 'Overview' },
     { key: 'dependencies', label: 'Dependencies' },
+    { key: 'exposure', label: 'Exposure' },
     { key: 'assessments', label: 'Assessments', count: vendor.assessments_count },
     { key: 'sla', label: 'SLA Tracking', count: vendor.sla_records_count },
     { key: 'incidents', label: 'Incidents', count: vendor.incidents_count },
@@ -587,6 +589,13 @@ export default function VendorDetailPage() {
       {activeTab === 'dependencies' && (
         <div role="tabpanel" id="vendor-tabpanel-dependencies" aria-labelledby="vendor-tab-dependencies" tabIndex={0} className="focus:outline-none">
           <DependenciesPanel vendorId={vendorId} />
+        </div>
+      )}
+
+      {/* Exposure Tab — what this vendor could cost us in a year, as a range */}
+      {activeTab === 'exposure' && (
+        <div role="tabpanel" id="vendor-tabpanel-exposure" aria-labelledby="vendor-tab-exposure" tabIndex={0} className="focus:outline-none">
+          <ExposurePanel vendorId={vendorId} />
         </div>
       )}
 

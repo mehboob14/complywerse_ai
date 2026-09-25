@@ -137,6 +137,8 @@ export type PaletteItem = {
   group: 'triggers' | 'actions' | 'conditions' | 'approvals' | 'timers' | 'control' | 'platform_functions';
   module?: string;
   submodule?: string;
+  /** Where its page sits in the sidebar, outermost first (from the catalog). */
+  path?: string[];
 };
 
 export type NodeOptionItem = {
@@ -622,14 +624,14 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   vendor_remediation_created: { domains: ['risk'], module: 'Third-Party Risk' },
   vendor_reassessment_scheduled: { domains: ['risk'], module: 'Third-Party Risk' },
   vendor_offboarding_updated: { domains: ['risk'], module: 'Third-Party Risk' },
-  new_vulnerability_detected: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_sla_breach: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_sla_warning: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  new_vulnerability_detected: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_sla_breach: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_sla_warning: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   risk_updated: { domains: ['risk'], module: 'Risk Management' },
   risk_deleted: { domains: ['risk'], module: 'Risk Management' },
-  vulnerability_created: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_updated: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  vulnerability_deleted: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  vulnerability_created: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_updated: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  vulnerability_deleted: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   policy_submitted_for_review: { domains: ['governance'], module: 'Governance' },
   policy_review_due: { domains: ['governance'], module: 'Governance' },
   policy_approved: { domains: ['governance'], module: 'Governance' },
@@ -661,10 +663,10 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   policy_exception_revoked: { domains: ['governance'], module: 'Policy Exceptions' },
   audit_review_submitted: { domains: ['audit'], module: 'Auditor Portal' },
   audit_control_approved: { domains: ['audit'], module: 'Auditor Portal' },
-  asset_created: { domains: ['assets'], module: 'IT Asset Management' },
-  asset_updated: { domains: ['assets'], module: 'IT Asset Management' },
-  asset_deleted: { domains: ['assets'], module: 'IT Asset Management' },
-  asset_criticality_changed: { domains: ['assets'], module: 'IT Asset Management' },
+  asset_created: { domains: ['assets'], module: 'Cybersecurity Assurance' },
+  asset_updated: { domains: ['assets'], module: 'Cybersecurity Assurance' },
+  asset_deleted: { domains: ['assets'], module: 'Cybersecurity Assurance' },
+  asset_criticality_changed: { domains: ['assets'], module: 'Cybersecurity Assurance' },
   // BCM
   bcm_plan_created: { domains: ['workflow'], module: 'Business Continuity Management' },
   bcm_plan_activated: { domains: ['workflow'], module: 'Business Continuity Management' },
@@ -711,9 +713,9 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   assign_risk_owner: { domains: ['risk'], module: 'Risk Management' },
   trigger_risk_review: { domains: ['risk'], module: 'Risk Management' },
   create_remediation_task: { domains: ['risk', 'vulnerability', 'compliance'], module: 'Risk Management' },
-  assign_vulnerability_owner: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  update_vulnerability_status: { domains: ['vulnerability'], module: 'Vulnerability Management' },
-  create_vulnerability_entry: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  assign_vulnerability_owner: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  update_vulnerability_status: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
+  create_vulnerability_entry: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   create_policy_review_task: { domains: ['governance'], module: 'Governance' },
   publish_policy: { domains: ['governance'], module: 'Governance' },
   submit_policy_exception: { domains: ['governance'], module: 'Governance' },
@@ -759,7 +761,7 @@ const CURATED_NODE_METADATA: Record<string, NodeDefinitionMeta> = {
   check_evidence_age: { domains: ['evidence', 'compliance'], module: 'Evidence' },
   check_evidence_completeness: { domains: ['evidence', 'compliance'], module: 'Evidence' },
   check_framework_coverage: { domains: ['compliance'], module: 'Compliance' },
-  check_vulnerability_severity: { domains: ['vulnerability'], module: 'Vulnerability Management' },
+  check_vulnerability_severity: { domains: ['vulnerability'], module: 'Cybersecurity Assurance' },
   check_policy_status: { domains: ['governance'], module: 'Governance' },
   check_approval_status: { domains: ['workflow'], module: 'Workflow Engine' },
   check_user_role: { domains: ['workflow'], module: 'Workflow Engine' },
@@ -830,6 +832,8 @@ export function inferWorkflowDomainsFromModuleName(moduleName?: string): Workflo
   if (lower.includes('audit')) return ['audit'];
   if (lower.includes('control')) return ['control'];
   if (lower.includes('asset')) return ['assets'];
+  // Cybersecurity Assurance holds both the asset inventory and vulnerabilities.
+  if (lower.includes('cybersecurity')) return ['vulnerability', 'assets'];
   return ['workflow'];
 }
 
@@ -1201,7 +1205,7 @@ const PRIMARY_TRIGGER_FRONTEND: Record<string, string> = {
 const ENDPOINT_TRIGGER_EVENTS = new Map<string, string>();
 
 export type CatalogNodeTypesPayload = {
-  triggers?: Array<{ key: string; label?: string; module?: string }>;
+  triggers?: Array<{ key: string; label?: string; module?: string; path?: string[] }>;
   platform_functions?: Record<string, Array<{ key: string; trigger_event?: string | null }>>;
 };
 
@@ -1215,8 +1219,13 @@ export function registerCatalogNodeTypes(catalog: CatalogNodeTypesPayload | null
   for (const trig of catalog.triggers || []) {
     if (!trig?.key) continue;
     TRIGGER_KEYS.add(trig.key);
-    if (!CURATED_NODE_METADATA[trig.key] && trig.module) {
-      CURATED_NODE_METADATA[trig.key] = { domains: inferWorkflowDomainsFromModuleName(trig.module), module: trig.module };
+    // The catalog places every trigger on its sidebar page, so its module wins
+    // over the one kept here; the domains kept here stay.
+    if (trig.module) {
+      const known = CURATED_NODE_METADATA[trig.key];
+      CURATED_NODE_METADATA[trig.key] = {
+        domains: known?.domains || inferWorkflowDomainsFromModuleName(trig.module), module: trig.module,
+      };
     }
   }
 }

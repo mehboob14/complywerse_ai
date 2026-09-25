@@ -291,6 +291,7 @@ def _serialize_task(task, include_relations=False):
         "linked_vulnerability_id": task.linked_vulnerability_id,
         "linked_framework_id": getattr(task, "linked_framework_id", None),
         "linked_requirement_id": getattr(task, "linked_requirement_id", None),
+        "linked_regulatory_change_id": getattr(task, "linked_regulatory_change_id", None),
         "evidence_notes": task.evidence_notes,
         "completed_at": task.completed_at.isoformat() if task.completed_at else None,
         "verified_at": task.verified_at.isoformat() if task.verified_at else None,
@@ -346,6 +347,19 @@ def _serialize_task(task, include_relations=False):
             for h in sorted((task.history or []), key=lambda x: x.created_at or datetime.min, reverse=True)
         ]
     return result
+
+
+def _sync_regulatory(db: Session, task_ids, user_id: Optional[int]) -> None:
+    """Tasks mirrored from a regulatory change: the regulatory task follows the edit.
+    Wrapped so the governance module can never break a Task Management write."""
+    try:
+        from ..modules.governance.regulatory_tasks import sync_from_critical_task
+        for task_id in task_ids:
+            sync_from_critical_task(db, task_id, user_id=user_id)
+        db.commit()
+    except Exception:
+        logger.exception("Regulatory task sync failed for tasks %s", list(task_ids))
+        db.rollback()
 
 
 def _add_history(db, task_id, user_id, action, field_changed=None, old_value=None, new_value=None):
@@ -574,10 +588,15 @@ def my_tasks(
         or_(
             CriticalTask.assigned_owner_id == current_user.id,
             CriticalTask.reviewer_id == current_user.id,
+            CriticalTask.assigned_user_ids.isnot(None),
         ),
     )
     tasks = query.order_by(CriticalTask.due_date.asc().nullslast(), CriticalTask.priority.desc()).all()
-    return [_serialize_task(t) for t in tasks]
+    # ponytail: assignee lists are matched here, not in SQL (JSON membership differs by database);
+    # move it into the query if a tenant's task count makes this slow.
+    mine = [t for t in tasks if current_user.id in (t.assigned_owner_id, t.reviewer_id)
+            or current_user.id in (t.assigned_user_ids or [])]
+    return [_serialize_task(t) for t in mine]
 
 
 @router.get("/tenant-users")
@@ -805,6 +824,7 @@ def bulk_action(
         elif payload.action == "assign" and payload.assigned_owner_id is not None:
             old = task.assigned_owner_id
             task.assigned_owner_id = payload.assigned_owner_id
+            task.assigned_user_ids = [payload.assigned_owner_id]
             _add_history(db, task.id, current_user.id, "Bulk Assign", "assigned_owner_id", old, payload.assigned_owner_id)
             if task.assigned_owner_id != old:
                 _notify_task_event(db, task, "assignment", background_tasks=background_tasks)
@@ -812,6 +832,7 @@ def bulk_action(
         task.updated_at = datetime.utcnow()
 
     db.commit()
+    _sync_regulatory(db, [t.id for t in tasks], current_user.id)
     return {"updated": updated}
 
 
@@ -1101,6 +1122,7 @@ def update_task(
         db.commit()
     except Exception:
         db.rollback()
+    _sync_regulatory(db, [task.id], current_user.id)
     db.refresh(task)
     if "assigned_owner_id" in update_data and task.assigned_owner_id and task.assigned_owner_id != old_owner_id:
         _notify_task_event(db, task, "assignment", background_tasks=background_tasks)
@@ -1119,6 +1141,11 @@ def delete_task(
     ).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    try:
+        from ..modules.governance.regulatory_tasks import on_critical_task_deleted
+        on_critical_task_deleted(db, task)
+    except Exception:
+        logger.exception("Could not remove the regulatory task mirrored by task %s", task.id)
     db.delete(task)
     db.commit()
     return None
@@ -1189,6 +1216,7 @@ def transition_status(
         db.commit()
     except Exception:
         db.rollback()
+    _sync_regulatory(db, [task.id], current_user.id)
     db.refresh(task)
     return _serialize_task(task)
 

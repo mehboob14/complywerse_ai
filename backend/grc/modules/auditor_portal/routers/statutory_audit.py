@@ -207,7 +207,7 @@ def _sla_for(db: Session, obs: AuditObservation, settings: Optional[dict]) -> Op
     if settings is None:
         settings = get_settings(db, obs.tenant_id, "statutory_audit")
     return sla_state(settings, status=obs.status, due_date=obs.due_date,
-                     priority=obs.priority, opened_at=obs.created_at)
+                     priority=obs.priority, opened_at=obs.created_at, values=obs.custom_values)
 
 
 def _settings(db: Session, current_user: GRCUser, tenant_ids) -> dict:

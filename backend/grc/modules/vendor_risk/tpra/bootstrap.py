@@ -122,4 +122,5 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
         "tier_policy": getattr(row, "tier_policy", None) or {},
         "monitoring_policy": {**DEFAULT_TIERING_CONFIG["monitoring_policy"],
                               **(getattr(row, "monitoring_policy", None) or {})},
+        "quantification": getattr(row, "quantification", None) or {},
     }

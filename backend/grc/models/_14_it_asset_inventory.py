@@ -45,6 +45,8 @@ class ITAsset(Base):
     # hipaa_safeguard, assessment }.
     ephi_environment = Column(Boolean, default=False, server_default="false", nullable=True)
     hipaa = Column(JSON, nullable=True)
+    # The tenant's own extra fields (services/module_settings.py "assets" holds their definitions).
+    custom_values = Column(JSON, nullable=True)
 
     # ── Phase 5.1: Exposure metadata ───────────────────────────────────────
     # Operational context that the existing `criticality`/`status` columns

@@ -37,9 +37,10 @@ import AutomatedTests, { type TestGroup } from './_assurance/AutomatedTests';
 import { LEVELS, MaturityMeter, MaturityPanel } from './_assurance/Maturity';
 import type { Objective } from './_assurance/types';
 import type { ITAsset, Risk } from '@/types';
+import RegulatoryObligationsCard, { useRegulatoryLinks } from '@/components/regulatory/RegulatoryObligationsCard';
 
-type Tab = 'overview' | 'assurance' | 'evidence' | 'tests' | 'artifacts' | 'risks' | 'assets' | 'links' | 'requirements' | 'history';
-const TAB_IDS: Tab[] = ['overview', 'assurance', 'evidence', 'tests', 'artifacts', 'risks', 'assets', 'links', 'requirements', 'history'];
+type Tab = 'overview' | 'assurance' | 'evidence' | 'tests' | 'artifacts' | 'risks' | 'assets' | 'links' | 'regulatory' | 'requirements' | 'history';
+const TAB_IDS: Tab[] = ['overview', 'assurance', 'evidence', 'tests', 'artifacts', 'risks', 'assets', 'links', 'regulatory', 'requirements', 'history'];
 
 const EMPTY_CHECK_IDS: string[] = [];
 
@@ -1767,6 +1768,8 @@ export default function ControlDetailPage() {
     queryFn: async () => (await automationApi.listControlLinks(code)).data.items,
   });
 
+  // Regulatory obligations this control meets (governance regulatory_links).
+  const regulatoryQ = useRegulatoryLinks('control', { ref: code });
   const custom = customDetailQ.data;
   const control: ControlView | undefined = d ? {
     control_id: d.control_id,
@@ -1902,6 +1905,7 @@ export default function ControlDetailPage() {
     { id: 'risks', label: 'Risks', count: risksQ.data?.items.length ?? 0 },
     { id: 'assets', label: 'Assets', count: assetsTabQ.data?.items.length ?? 0 },
     { id: 'links', label: 'Linked records', count: linkedRecords.length },
+    { id: 'regulatory', label: 'Regulatory', count: regulatoryQ.data?.length ?? 0 },
     { id: 'requirements', label: 'Requirements', count: d?.requirement_count ?? 0 },
     { id: 'history', label: 'History' },
   ];
@@ -2316,6 +2320,8 @@ export default function ControlDetailPage() {
         {tab === 'assets' && <ControlAssetsPanel code={code} />}
 
         {tab === 'links' && <LinkedRecordsPanel code={code} />}
+
+        {tab === 'regulatory' && <RegulatoryObligationsCard targetType="control" targetRef={code} noun="control" />}
 
         {tab === 'requirements' && (
           <>

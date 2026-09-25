@@ -2469,7 +2469,7 @@ export const tpraApi = {
   saveConfig: (data: {
     weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number>;
     reminder_policy?: object; scoring_policy?: { partial_credit: number }; tier_policy?: object;
-    monitoring_policy?: { adverse_media: boolean };
+    monitoring_policy?: { adverse_media: boolean }; quantification?: object;
   }) =>
     apiClient.put('/vendor-risk/tpra/config', data),
   getVendorAudit: (vendorId: number, limit = 100) =>
@@ -2527,6 +2527,10 @@ export const tpraApi = {
   shareReport: (id: number, days: number) => apiClient.post(`/vendor-risk/tpra/reports/${id}/share`, { days }),
   revokeReportShare: (id: number) => apiClient.delete(`/vendor-risk/tpra/reports/${id}/share`),
   examinerReport: (token: string) => apiClient.get(`/vendor-risk/tpra/examiner/${encodeURIComponent(token)}`),
+  vendorExposure: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/exposure`),
+  portfolioExposure: (top = 10) => apiClient.get('/vendor-risk/tpra/exposure', { params: { top } }),
+  quantificationHistory: () => apiClient.get('/vendor-risk/tpra/quantification/history'),
+  shadowSuppliers: (limit = 100) => apiClient.get('/vendor-risk/tpra/shadow-suppliers', { params: { limit } }),
   vendorRatings: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/ratings`),
   importRatings: (form: FormData) => apiClient.post('/vendor-risk/tpra/ratings/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -3183,14 +3187,25 @@ export const regulatoryApi = {
     apiClient.get('/governance/regulatory-changes/changes', { params }),
   getChange: (id: number) => apiClient.get(`/governance/regulatory-changes/changes/${id}`),
   createChange: (data: Record<string, unknown>) => apiClient.post('/governance/regulatory-changes/changes', data),
+  // What the upload form can fill in from the file itself (regulator, reference, title) — nothing saved.
+  identifyChangeDocument: (file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return apiClient.post('/governance/regulatory-changes/changes/identify', fd, {
+      headers: { 'Content-Type': undefined },
+      timeout: 60 * 1000,
+    });
+  },
   uploadChangeDocument: (
     file: File,
-    opts?: { source?: string; title_hint?: string },
+    // title_locked: the person typed the title, so the circular's own title doesn't replace it.
+    opts?: { source?: string; title_hint?: string; title_locked?: boolean },
   ) => {
     const fd = new FormData();
     fd.append('file', file);
     if (opts?.source) fd.append('source', opts.source);
     if (opts?.title_hint) fd.append('title_hint', opts.title_hint);
+    if (opts?.title_locked) fd.append('title_locked', 'true');
     return apiClient.post('/governance/regulatory-changes/changes/upload', fd, {
       // Let axios set multipart boundary; default JSON Content-Type must be cleared.
       headers: { 'Content-Type': undefined },
@@ -3218,6 +3233,26 @@ export const regulatoryApi = {
   }),
   getClosureReadiness: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/closure-readiness`),
   closeChange: (changeId: number) => apiClient.post(`/governance/regulatory-changes/changes/${changeId}/close`),
+  // What the circular requires, clause by clause (regulatory_engine).
+  getObligations: (changeId: number) => apiClient.get(`/governance/regulatory-changes/changes/${changeId}/obligations`),
+  addObligation: (changeId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/governance/regulatory-changes/changes/${changeId}/obligations`, data),
+  updateObligation: (id: number, data: Record<string, unknown>) =>
+    apiClient.patch(`/governance/regulatory-changes/obligations/${id}`, data),
+  deleteObligation: (id: number) => apiClient.delete(`/governance/regulatory-changes/obligations/${id}`),
+  // Obligations linked to platform records (controls first) — regulatory_links.py.
+  getLinks: (changeId: number, targetType?: string) =>
+    apiClient.get(`/governance/regulatory-changes/changes/${changeId}/links`, { params: targetType ? { target_type: targetType } : {} }),
+  suggestControls: (changeId: number) =>
+    apiClient.post(`/governance/regulatory-changes/changes/${changeId}/suggest-controls`, undefined, { timeout: 10 * 60 * 1000 }),
+  decideLink: (id: number, status: 'confirmed' | 'rejected' | 'proposed') =>
+    apiClient.patch(`/governance/regulatory-changes/links/${id}`, { status }),
+  addLink: (obligationId: number, data: { target_type: string; target_id: number; rationale?: string }) =>
+    apiClient.post(`/governance/regulatory-changes/obligations/${obligationId}/links`, data),
+  removeLink: (id: number) => apiClient.delete(`/governance/regulatory-changes/links/${id}`),
+  searchControls: (q: string) => apiClient.get('/governance/regulatory-changes/control-search', { params: { q } }),
+  linksFor: (params: { target_type: string; target_id?: number; target_ref?: string }) =>
+    apiClient.get('/governance/regulatory-changes/links/for', { params }),
 };
 
 export const rcsaApi = {

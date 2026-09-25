@@ -454,6 +454,7 @@ class RiskBase(BaseModel):
     register_type: Optional[str] = None  # PCI-DSS, ISO 27001, SOX, Internal, etc.
     ubl_fields: Optional[Dict[str, Any]] = None
     template_fields: Optional[Dict[str, Any]] = None  # verbatim register-template fields (e.g. 1LINK RCSA)
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -497,6 +498,7 @@ class RiskUpdate(BaseModel):
     register_type: Optional[str] = None
     ubl_fields: Optional[Dict[str, Any]] = None
     template_fields: Optional[Dict[str, Any]] = None  # verbatim register-template fields
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     owner_id: Optional[int] = None
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = None
@@ -528,6 +530,7 @@ class RiskResponse(BaseModel):
     register_type: Optional[str] = None
     ubl_fields: Optional[Dict[str, Any]] = None
     template_fields: Optional[Dict[str, Any]] = None
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     owner_id: Optional[int]
     business_owner_id: Optional[int] = None
     affected_department_ids: Optional[List[int]] = []
@@ -845,6 +848,7 @@ class DocumentControlLinkCreate(BaseModel):
 
 class ITAssetBase(BaseModel):
     name: str
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     description: Optional[str] = None
     asset_type: str
     owner_id: Optional[int] = None
@@ -927,6 +931,7 @@ class ITAssetCreate(ITAssetBase):
 
 class ITAssetUpdate(BaseModel):
     name: Optional[str] = None
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     description: Optional[str] = None
     asset_type: Optional[str] = None
     owner_id: Optional[int] = None
@@ -1003,6 +1008,7 @@ class ITAssetUpdate(BaseModel):
 class ITAssetResponse(BaseModel):
     id: int
     tenant_id: int
+    custom_values: Optional[Dict[str, Any]] = None  # the tenant's own fields (services/module_settings.py)
     name: str
     description: Optional[str]
     asset_type: str

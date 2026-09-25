@@ -409,6 +409,8 @@ class TPRATieringConfig(Base):
     tier_policy = Column(JSON, default=dict)
     # Which outside-in feeds to run: {adverse_media: bool} (tpra/monitoring_connectors.py).
     monitoring_policy = Column(JSON, default=dict)
+    # The exposure model's constants (tpra/quantification.py; its defaults fill any gap).
+    quantification = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)

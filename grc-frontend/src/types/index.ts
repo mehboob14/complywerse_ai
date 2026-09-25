@@ -237,6 +237,8 @@ export interface Risk {
   register_type?: string;
   ubl_fields?: Record<string, unknown>;
   template_fields?: Record<string, unknown>;
+  /** The tenant's own fields (Custom fields tab). */
+  custom_values?: Record<string, unknown> | null;
   business_owner_id?: number;
   business_owner?: { id: number; email: string; full_name?: string };
   affected_department_ids?: number[];

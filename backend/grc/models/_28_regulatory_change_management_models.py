@@ -34,6 +34,9 @@ class RegulatoryChange(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     closed_at = Column(DateTime, nullable=True)
+    # The circular analysis job: {status: queued|running|done|failed, step, done_steps, total_steps,
+    # model, started_at, updated_at, finished_at, error, counts} (governance/regulatory_engine.py).
+    analysis = Column(JSON, nullable=True)
     closed_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     
     tenant = relationship("Tenant")
@@ -107,9 +110,16 @@ class RegulatoryImplementationTask(Base):
     priority = Column(String(20), default="medium")  # critical, high, medium, low
     
     assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
+    # Everyone working on it; `assigned_to` stays the first of them for older readers.
+    assignee_ids = Column(JSON, nullable=True)
     due_date = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
-    
+    # The obligation it was raised from. A soft reference: a re-analysis re-reads the
+    # obligations and moves the link to the obligation's new row (carry_decisions).
+    obligation_id = Column(Integer, nullable=True, index=True)
+    # Its twin in Task Management (grc_critical_tasks) — governance/regulatory_tasks.py.
+    critical_task_id = Column(Integer, nullable=True, index=True)
+
     linked_policy_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
     linked_control_id = Column(Integer, ForeignKey("grc_normalized_controls.id"), nullable=True, index=True)
     

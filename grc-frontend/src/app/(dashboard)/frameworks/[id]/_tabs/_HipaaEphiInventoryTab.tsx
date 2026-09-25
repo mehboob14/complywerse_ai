@@ -13,7 +13,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { certificationsApi, assetsApi } from '@/lib/api';
-import { AssetModal } from '@/app/(dashboard)/assets/page';
+import { AssetModal } from '@/app/(dashboard)/cyber-assurance/assets/AssetModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import type { ITAsset } from '@/types';
 import { HeartPulse, Plus, Pencil, Trash2, ExternalLink, Loader2, ShieldCheck, X } from 'lucide-react';

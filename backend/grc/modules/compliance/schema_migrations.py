@@ -895,6 +895,9 @@ _COLUMN_ADDS = [
     # holds their definitions; the values live here).
     ("grc_audit_observations", "custom_values", "JSON DEFAULT '{}'::json", None),
     ("grc_audit_plan_entries", "custom_values", "JSON DEFAULT '{}'::json", None),
+    ("grc_it_assets", "custom_values", "JSON", None),
+    ("grc_vulnerabilities", "custom_values", "JSON", None),
+    ("grc_risks", "custom_values", "JSON", None),
     # AI-suggested findings on a vendor assessment, kept apart from the analyst's
     # own list (vendor_risk/routers/ai_analysis.py used to overwrite it).
     ("grc_vendor_assessments", "ai_findings", "JSON DEFAULT '[]'::json", None),
@@ -941,6 +944,7 @@ _COLUMN_ADDS = [
     ("grc_tpra_monitoring_signals", "verified", "BOOLEAN DEFAULT TRUE", None),
     ("grc_tpra_monitoring_signals", "finding_id", "INTEGER", None),
     ("grc_tpra_tiering_config", "monitoring_policy", "JSON DEFAULT '{}'::json", None),
+    ("grc_tpra_tiering_config", "quantification", "JSON DEFAULT '{}'::json", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat
@@ -1042,8 +1046,16 @@ _COLUMN_ADDS = [
     # assessments can be regenerated at full fidelity, and flag AI-generated rows
     # so regenerate can replace them while preserving manually-added ones.
     ("grc_regulatory_changes", "source_text", "TEXT", None),
+    ("grc_regulatory_changes", "analysis", "JSON", None),
+    ("grc_regulatory_obligations", "position", "INTEGER", None),
     ("grc_regulatory_impact_assessments", "is_ai_generated", "BOOLEAN DEFAULT FALSE", None),
     ("grc_regulatory_implementation_tasks", "is_ai_generated", "BOOLEAN DEFAULT FALSE", None),
+    # Regulatory tasks: several assignees, the obligation raised from, the Task Management twin.
+    ("grc_regulatory_implementation_tasks", "assignee_ids", "JSON", None),
+    ("grc_regulatory_implementation_tasks", "obligation_id", "INTEGER", "ix_reg_task_obligation"),
+    ("grc_regulatory_implementation_tasks", "critical_task_id", "INTEGER", "ix_reg_task_critical_task"),
+    ("grc_regulatory_obligations", "owner_ids", "JSON", None),
+    ("grc_critical_tasks", "linked_regulatory_change_id", "INTEGER", "ix_critical_task_reg_change"),
     # SCF control plane. The bridge: one NormalizedControl row per SCF control
     # carries its scf_id, so every table already FK'd to grc_normalized_controls
     # (evidence, exceptions, assessments, work items) keeps working unchanged and
@@ -1085,6 +1097,23 @@ def _backfill_audit_register_source_type(engine: Engine) -> None:
     except Exception:
         logger.exception("audit register source_type backfill failed on %s",
                          getattr(engine.url, "database", "?"))
+
+
+def _backfill_regulatory_task_twins(engine: Engine) -> None:
+    """Every regulatory implementation task without a Task Management twin gets one."""
+    try:
+        insp = inspect(engine)
+        if not (insp.has_table("grc_regulatory_implementation_tasks") and insp.has_table("grc_critical_tasks")):
+            return
+        from ..governance.regulatory_tasks import backfill
+        with Session(bind=engine) as db:
+            made = backfill(db)
+            db.commit()
+        if made:
+            logger.info("Mirrored %s regulatory tasks into Task Management on %s",
+                        made, getattr(engine.url, "database", "?"))
+    except Exception:
+        logger.exception("regulatory task twin backfill failed on %s", getattr(engine.url, "database", "?"))
 
 
 def _backfill_framework_assessment_register_type(engine: Engine) -> None:
@@ -1258,6 +1287,10 @@ def _ensure_for_engine(engine: Engine) -> None:
         # Audit register findings imported before the importer set the issue's
         # source show as "Manual" in Issues; tag them "audit". Idempotent.
         _backfill_audit_register_source_type(engine)
+
+        # Regulatory implementation tasks show in Task Management: a task made
+        # before that gets its twin now. Idempotent.
+        _backfill_regulatory_task_twins(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

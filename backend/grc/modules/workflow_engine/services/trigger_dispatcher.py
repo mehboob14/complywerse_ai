@@ -19,7 +19,10 @@ logger = logging.getLogger(__name__)
 def _matches_when(when: tuple, changes_all: dict, body: dict, query: dict) -> bool:
     """A named event's narrowing test. "module" and "submodule" read the sidebar
     page the audit row was placed under, which is how one event can name a single
-    assessment type; any other field reads the request itself."""
+    assessment type; any other field reads the request, then what the row itself
+    recorded (the assessment's format). A tuple of tests must all pass."""
+    if when and isinstance(when[0], tuple):
+        return all(_matches_when(w, changes_all, body, query) for w in when)
     field, values = when
     if field in ("module", "submodule"):
         value = changes_all.get(field)
@@ -32,6 +35,8 @@ def _matches_when(when: tuple, changes_all: dict, body: dict, query: dict) -> bo
                 value = placed[1]
     else:
         value = body.get(field, query.get(field))
+        if value is None:
+            value = changes_all.get(field)
     return str(value or "").strip().lower() in values
 
 

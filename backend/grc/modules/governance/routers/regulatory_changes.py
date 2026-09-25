@@ -1,11 +1,13 @@
 from ....config import get_openai_model
 from ....services.licence_guard import exclude_restricted
 from typing import Any, List, Optional
-from datetime import datetime, timezone, timedelta
+from datetime import date, datetime, timezone, timedelta
+
+from pydantic import BaseModel, Field
 import json
 import re
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request, UploadFile, File, Form
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_
 
@@ -16,7 +18,7 @@ except Exception:
     client = None
 
 from ....models import (
-    RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
+    RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask, RegulatoryObligation,
     GovernanceDocument, NormalizedControl, InternalControl, InternalControlFrameworkLink, Framework, GRCUser, Tenant, AuditLog, UserRole, Role,
     AuditObservation, GRCDepartment, get_db
 )
@@ -31,7 +33,25 @@ from ....schemas import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
+from .. import regulatory_engine, regulatory_tasks
+
 router = APIRouter(prefix="/regulatory-changes", tags=["Governance - Regulatory Change Management"])
+
+
+def _tenant_slug(request: Request, change: RegulatoryChange) -> str:
+    """The tenant database a background job must open."""
+    slug = getattr(request.state, "tenant_slug", None)
+    if slug:
+        return slug
+    from ....db import MasterSession
+    master = MasterSession()
+    try:
+        row = master.query(Tenant.slug).filter(Tenant.id == change.tenant_id).first()
+    finally:
+        master.close()
+    if not row or not row[0]:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not tell which tenant to analyse for.")
+    return row[0]
 
 REGULATORY_CHANGE_SOURCES = [
     "SBP", "SAMA", "QCB", "MAS", "NCA",
@@ -197,7 +217,8 @@ def serialize_regulatory_change(change: RegulatoryChange) -> RegulatoryChangeRes
         closed_by_name=change.closer.display_name if change.closer else None,
         assessment_count=len(change.impact_assessments),
         task_count=len(change.implementation_tasks),
-        completed_task_count=completed_tasks
+        completed_task_count=completed_tasks,
+        analysis=regulatory_engine.analysis_state(change),
     )
 
 
@@ -288,6 +309,9 @@ def serialize_implementation_task(task: RegulatoryImplementationTask) -> Regulat
     is_overdue = False
     if task.due_date and task.status not in ["completed", "blocked"]:
         is_overdue = task.due_date < datetime.utcnow()
+    ids = regulatory_tasks.assignees_of(task)
+    session = Session.object_session(task)
+    people = {u.id: u for u in session.query(GRCUser).filter(GRCUser.id.in_(ids))} if ids and session else {}
     
     return RegulatoryImplementationTaskResponse(
         id=task.id,
@@ -302,8 +326,13 @@ def serialize_implementation_task(task: RegulatoryImplementationTask) -> Regulat
         assigned_to=task.assigned_to,
         assignee_name=task.assignee.display_name if task.assignee else None,
         assignee_department=task.assignee.department if task.assignee else None,
+        assignee_ids=[i for i in ids if i in people],
+        assignees=[{"id": i, "display_name": people[i].display_name or people[i].username,
+                    "department": people[i].department} for i in ids if i in people],
         due_date=task.due_date,
         completed_at=task.completed_at,
+        obligation_id=task.obligation_id,
+        critical_task_id=task.critical_task_id,
         linked_policy_id=task.linked_policy_id,
         linked_policy_title=task.linked_policy.title if task.linked_policy else None,
         linked_control_id=task.linked_control_id,
@@ -451,42 +480,35 @@ def create_regulatory_change(
     return serialize_regulatory_change(db_change)
 
 
-def _analyze_and_persist(
+IMPACT_TEXT_CHARS = 250000   # the whole circular for a large-context model; beyond this it is cut
+
+
+def _impact_context(
     db: Session,
     change: RegulatoryChange,
     document_text: str,
-    current_user: GRCUser,
-    *,
-    update_change_fields: bool,
-    title_hint: Optional[str] = None,
-    filename: Optional[str] = None,
-) -> dict:
-    """Run the AI regulatory-impact analysis over ``document_text`` and generate
-    detailed, platform-grounded impact assessments + implementation tasks for
-    ``change``.
+    obligations: Optional[List[dict]] = None,
+):
+    """The impact prompt for a circular, and the records its answer is mapped back onto.
 
-    Shared by the upload endpoint (new change → ``update_change_fields=True``)
-    and the regenerate endpoint (existing change → ``False``). Every impacted
-    policy/control is asked to cite the exact driving clause, compare against
-    what the mapped internal control/policy currently does, name the concrete
-    gap and the affected departments, and cross-reference an open audit
-    observation when relevant — so assessments are specific, not generic.
-
-    AI-generated assessments/tasks from a previous run are cleared first, so
-    regenerate is idempotent and never touches manually-added rows.
+    Every impacted policy/control is asked to cite the exact driving clause, compare
+    against what the mapped internal control/policy currently does, name the concrete
+    gap and the affected departments, and cross-reference an open audit observation
+    when relevant — so assessments are specific, not generic.
     """
-    if not client:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="OpenAI client not configured.")
+    from ..regulatory_engine import obligations_brief
 
     tenant_id = change.tenant_id
     source_value = change.source if change.source in REGULATORY_CHANGE_SOURCES else "custom"
 
-    # Local truncated copy for the prompt; the full text stays on change.source_text.
     doc_text = (document_text or "").strip()
     if not doc_text:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="No source text available to analyze.")
-    if len(doc_text) > 12000:
-        doc_text = doc_text[:12000] + "\n\n...[truncated]"
+    if obligations is not None:
+        # Every obligation the circular sets, read section by section (regulatory_engine).
+        doc_text = obligations_brief(obligations)
+    elif len(doc_text) > IMPACT_TEXT_CHARS:
+        doc_text = doc_text[:IMPACT_TEXT_CHARS] + "\n\n...[truncated]"
 
     frameworks = db.query(Framework).filter(Framework.is_active == True).all()
     # For most regulators we map controls to NormalizedControl. For SBP circulars
@@ -559,8 +581,8 @@ and board/management accountability when present. Write a clear operational impa
 Analyze the regulatory document and produce a platform-aware compliance impact result.
 {sbp_context}
 Be SPECIFIC and evidence-based. For every impacted policy and control you MUST:
-- cite the exact clause / statement in THIS document that drives the impact (quote or
-  closely paraphrase it, with any section or paragraph reference);
+- cite the obligation that drives the impact: its O-number, its reference and its text as listed
+  under OBLIGATIONS (when the document is given as obligations);
 - compare it against what the named internal control / policy CURRENTLY does, using the
   descriptions provided in PLATFORM CONTEXT;
 - state the concrete, specific change required (never a bare word like "modification");
@@ -617,7 +639,7 @@ Return ONLY valid JSON in this exact schema:
 The returned impacted_controls.id MUST be values from {controls_id_field} whenever possible.
 If you are unsure, still provide the best-matching codes from the platform text you see above.
 
-TEXT:
+OBLIGATIONS (every duty the document sets, with its reference and its own words) OR TEXT:
 {doc_text}
 
 PLATFORM CONTEXT (used to map ids and ground the analysis):
@@ -637,20 +659,32 @@ DEPARTMENTS (pick affected_departments from these names):
 {departments_text}
 """
 
-    try:
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {"role": "system", "content": "You are a compliance assistant. Respond only with valid JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.2,
-            max_tokens=4500,
-            response_format={"type": "json_object"},
-        )
-        analysis = json.loads(response.choices[0].message.content.strip())
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI extraction failed: {str(e)}")
+    return prompt, {"source_value": source_value, "controls": controls, "internal_controls": internal_controls,
+                    "policies": policies}
+
+
+IMPACT_SYSTEM = ("You are a senior GRC compliance expert. Map regulatory obligations onto the organisation's own "
+                 "policies and controls precisely; never invent a policy title or control id that is not listed.")
+
+
+def _persist_impact(
+    db: Session,
+    change: RegulatoryChange,
+    analysis: dict,
+    current_user: GRCUser,
+    state: dict,
+    *,
+    update_change_fields: bool,
+    title_hint: Optional[str] = None,
+    filename: Optional[str] = None,
+    set_title: bool = True,
+) -> dict:
+    """Write an impact answer: an assessment per impacted policy and control, and the
+    implementation tasks. AI rows from an earlier reading are replaced; rows people
+    added stay."""
+    tenant_id = change.tenant_id
+    source_value, controls = state["source_value"], state["controls"]
+    internal_controls, policies = state["internal_controls"], state["policies"]
 
     # Change-level fields (upload only — regenerate leaves title/priority as set).
     if update_change_fields:
@@ -668,7 +702,8 @@ DEPARTMENTS (pick affected_departments from these names):
                 change.effective_date = datetime.strptime(eff_str.strip(), "%Y-%m-%d")
             except Exception:
                 pass
-        change.title = ai_title[:500]
+        if set_title:
+            change.title = ai_title[:500]
         change.description = ai_summary
         change.priority = ai_priority
     db.flush()
@@ -693,10 +728,16 @@ DEPARTMENTS (pick affected_departments from these names):
         ).update({RegulatoryImplementationTask.impact_assessment_id: None}, synchronize_session=False)
         for a in prior:
             db.delete(a)
-    db.query(RegulatoryImplementationTask).filter(
+    kept_titles = set()
+    for old_task in db.query(RegulatoryImplementationTask).filter(
         RegulatoryImplementationTask.regulatory_change_id == change.id,
         RegulatoryImplementationTask.is_ai_generated == True,
-    ).delete(synchronize_session=False)
+    ).all():
+        if old_task.status != "pending" or regulatory_tasks.assignees_of(old_task):
+            kept_titles.add((old_task.title or "").strip().lower())      # someone is on it: it stays
+            continue
+        regulatory_tasks.drop_twin(db, old_task)
+        db.delete(old_task)
     db.flush()
 
     # Resolve control + policy ids for impacted items.
@@ -840,7 +881,9 @@ DEPARTMENTS (pick affected_departments from these names):
                     impact_assessment_id = a.id
                     break
 
-        db.add(RegulatoryImplementationTask(
+        if task_title[:500].strip().lower() in kept_titles:
+            continue                                                  # already there, and in hand
+        new_task = RegulatoryImplementationTask(
             tenant_id=tenant_id,
             regulatory_change_id=change.id,
             impact_assessment_id=impact_assessment_id,
@@ -855,7 +898,10 @@ DEPARTMENTS (pick affected_departments from these names):
             linked_control_id=None,
             is_ai_generated=True,
             created_by=current_user.id,
-        ))
+        )
+        db.add(new_task)
+        db.flush()
+        regulatory_tasks.mirror(db, new_task, current_user.id)
 
     if change.status in (None, "identified"):
         change.status = "under_assessment"
@@ -868,11 +914,114 @@ DEPARTMENTS (pick affected_departments from these names):
     }
 
 
+def _analyze_and_persist(
+    db: Session,
+    change: RegulatoryChange,
+    document_text: str,
+    current_user: GRCUser,
+    *,
+    update_change_fields: bool,
+    title_hint: Optional[str] = None,
+    filename: Optional[str] = None,
+    obligations: Optional[List[dict]] = None,
+) -> dict:
+    """The impact analysis in one go: prompt, answer, written."""
+    from ..regulatory_engine import IMPACT_SCHEMA, llm_json
+
+    prompt, state = _impact_context(db, change, document_text, obligations)
+    try:
+        analysis, _model = llm_json(IMPACT_SYSTEM, prompt, IMPACT_SCHEMA, "regulatory_impact", max_output_tokens=48000)
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI extraction failed: {str(e)}")
+    return _persist_impact(db, change, analysis, current_user, state, update_change_fields=update_change_fields,
+                           title_hint=title_hint, filename=filename)
+
+
+def _file_type(filename: str) -> str:
+    """The extractor's file type for an upload; anything unknown is sniffed by content."""
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
+    if ext in {"txt", "md", "csv", "json", "log", "rtf"}:
+        return "txt"
+    return ext or "bin"
+
+
+# Regulators by the full name a circular carries on its letterhead; the one named
+# first is the issuer. An abbreviation alone counts only in the file name.
+_REGULATOR_NAMES = {
+    "SBP": r"state bank of pakistan",
+    "SAMA": r"saudi central bank|saudi arabian monetary",
+    "QCB": r"qatar central bank",
+    "MAS": r"monetary authority of singapore",
+    "NCA": r"national cybersecurity authority",
+    "OCC": r"comptroller of the currency",
+    "Fed": r"federal reserve",
+    "EBA": r"european banking authority",
+    "PRA": r"prudential regulation authority",
+    "SEC": r"securities and exchange commission(?! of pakistan)",
+    "FINRA": r"financial industry regulatory authority",
+}
+_REFERENCE = re.compile(r"(?:\b[A-Z]{2,10}(?:[ &/-]+[A-Z]{2,10})?\s+)?(?i:circular(?:\s+letter)?|notice|bulletin|directive)"
+                        r"\s+(?i:no\.?|number)\s*[\w./-]+(?:\s+(?i:of|dated)\s+\d{4})?")
+_SUBJECT = re.compile(r"^\s*(?:subject|sub\.?|re)\s*:\s*(?:\n\s*)?(\S.{6,200}?)\s*$", re.I | re.M)
+_SMALL_WORDS = {"a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to", "with"}
+
+
+def _heading_under(head: str, at: int) -> Optional[str]:
+    """The capitalised heading a circular puts under its reference line (SBP's
+    layout), in title case."""
+    taken = []
+    for line in head[at:].splitlines()[1:12]:
+        line = line.strip()
+        if not line:
+            continue
+        if line != line.upper() or len(re.findall(r"[A-Za-z]{2,}", line)) < 2:
+            break
+        taken.append(line)
+    if not taken:
+        return None
+    text = re.sub(r"[A-Za-z]+", lambda m: m.group(0).lower() if m.group(0).lower() in _SMALL_WORDS
+                  else m.group(0).capitalize(), " ".join(taken))
+    return text[:1].upper() + text[1:]
+
+
+def identify_circular(text: str, filename: str = "") -> dict:
+    """The regulator, reference and subject a circular states at its head, found by
+    pattern so the upload form fills itself at once; the AI confirms them as it reads."""
+    head = (text or "")[:6000]
+    named = [(m.start(), code) for code, name in _REGULATOR_NAMES.items() if (m := re.search(name, head.lower()))]
+    source = min(named)[1] if named else None
+    if not source:
+        words = f" {re.sub(r'[^a-z]+', ' ', filename.lower())} "
+        source = next((code for code in REGULATORY_CHANGE_SOURCES if code != "custom" and f" {code.lower()} " in words), None)
+    ref, subject = _REFERENCE.search(head), _SUBJECT.search(head)
+    reference = " ".join(ref.group(0).split()) if ref else None
+    subject = " ".join(subject.group(1).split()).rstrip(".") if subject else (_heading_under(head, ref.start()) if ref else None)
+    title = f"{subject} ({reference})" if subject and reference else subject or reference
+    return {"source": source, "reference": reference, "title": title}
+
+
+@router.post("/changes/identify")
+def preview_regulatory_document(file: UploadFile = File(...), current_user: GRCUser = Depends(require_auth)):
+    """What the upload form can fill in from the file itself: the first pages' text
+    layer only (no OCR, no AI), nothing saved."""
+    from .policy_parser import extract_text_from_bytes
+
+    filename = file.filename or ""
+    try:
+        text = extract_text_from_bytes(file.file.read(), _file_type(filename), filename, max_pages=2, allow_ocr=False)
+    except Exception:
+        text = ""
+    return identify_circular(text, filename)
+
+
 @router.post("/changes/upload", response_model=RegulatoryChangeResponse, status_code=status.HTTP_201_CREATED)
 def upload_regulatory_change_document(
+    request: Request,
     file: UploadFile = File(...),
     source: Optional[str] = Form("custom"),  # OCC, Fed, EBA, PRA, SEC, FINRA, SBP, custom
     title_hint: Optional[str] = Form(None),
+    # True when the person typed the title: it stands. Otherwise the circular's own title replaces it.
+    title_locked: bool = Form(False),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -890,23 +1039,8 @@ def upload_regulatory_change_document(
 
     # Accept common document types; extraction falls back across engines.
     filename = file.filename or "regulatory_document"
-    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()
-    if ext in {"pdf"}:
-        file_type = "pdf"
-    elif ext in {"docx"}:
-        file_type = "docx"
-    elif ext in {"doc"}:
-        file_type = "doc"
-    elif ext in {"txt", "md", "csv", "json", "log", "rtf"}:
-        file_type = "txt"
-    elif ext in {"xlsx", "xls"}:
-        file_type = ext
-    elif ext in {"png", "jpg", "jpeg", "tiff", "tif", "bmp", "webp", "gif"}:
-        file_type = ext
-    else:
-        # Accept anything else too — the extractor auto-detects by content
-        # (magic bytes) and OCRs scans/images, so users can upload any document.
-        file_type = ext or "bin"
+    # Anything is accepted — the extractor detects by content and OCRs scans/images.
+    file_type = _file_type(filename)
 
     try:
         from .policy_parser import extract_text_from_bytes
@@ -955,21 +1089,14 @@ def upload_regulatory_change_document(
         assigned_to=None,
     )
     db.add(db_change)
-    db.flush()
-
-    _analyze_and_persist(
-        db,
-        db_change,
-        content_text,
-        current_user,
-        update_change_fields=True,
-        title_hint=title_hint,
-        filename=filename,
-    )
-
     db.commit()
-    db.refresh(db_change)
 
+    # The circular is read section by section in the background; the page polls
+    # the change's `analysis` for progress (regulatory_engine).
+    regulatory_engine.start(db, db_change, current_user, _tenant_slug(request, db_change),
+                            update_change_fields=True, title_hint=title_hint, filename=filename,
+                            keep_title=bool(title_locked and title_hint))
+    db.refresh(db_change)
     return serialize_regulatory_change(db_change)
 
 
@@ -1075,10 +1202,21 @@ def delete_regulatory_change(
     
     if not db_change:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
-    
+
+    # Its obligations and their control links go with it; a feed item or an agenda
+    # item that pointed at it stays, pointing at nothing (no FK cascades on these).
+    from ....models import MeetingAgendaItem, RegulatoryFeedItem, RegulatoryLink
+    for t in db_change.implementation_tasks:
+        regulatory_tasks.drop_twin(db, t)
+    db.query(RegulatoryLink).filter(RegulatoryLink.regulatory_change_id == change_id).delete(synchronize_session=False)
+    db.query(RegulatoryObligation).filter(RegulatoryObligation.regulatory_change_id == change_id).delete(synchronize_session=False)
+    db.query(RegulatoryFeedItem).filter(RegulatoryFeedItem.regulatory_change_id == change_id).update(
+        {RegulatoryFeedItem.regulatory_change_id: None}, synchronize_session=False)
+    db.query(MeetingAgendaItem).filter(MeetingAgendaItem.linked_regulatory_change_id == change_id).update(
+        {MeetingAgendaItem.linked_regulatory_change_id: None}, synchronize_session=False)
     db.delete(db_change)
     db.commit()
-    
+
     return MessageResponse(message="Regulatory change deleted successfully")
 
 
@@ -1237,6 +1375,7 @@ def create_impact_assessment(
 @router.post("/changes/{change_id}/assessments/regenerate", response_model=List[RegulatoryImpactAssessmentResponse])
 def regenerate_impact_assessments(
     change_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -1266,8 +1405,10 @@ def regenerate_impact_assessments(
             detail="This change has no source document or description to analyze. Add a description or re-upload the document, then regenerate.",
         )
 
-    _analyze_and_persist(db, change, source_text, current_user, update_change_fields=False)
-    db.commit()
+    if regulatory_engine.is_running(change):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An analysis of this circular is already running.")
+    # Re-read in the background; the page follows `analysis` and refreshes when it finishes.
+    regulatory_engine.start(db, change, current_user, _tenant_slug(request, change), update_change_fields=False)
 
     assessments = db.query(RegulatoryImpactAssessment).options(
         joinedload(RegulatoryImpactAssessment.assessor)
@@ -1275,6 +1416,149 @@ def regenerate_impact_assessments(
         RegulatoryImpactAssessment.regulatory_change_id == change_id
     ).order_by(RegulatoryImpactAssessment.assessed_at.desc()).all()
     return [serialize_impact_assessment(a, db) for a in assessments]
+
+
+# =============================================================================
+# Obligations — what the circular requires, clause by clause
+# =============================================================================
+
+_COMPLIANCE_STATUSES = ("not_assessed", "compliant", "partially_compliant", "non_compliant", "not_applicable")
+_TYPE_PATTERN = "^(" + "|".join(regulatory_engine.OBLIGATION_TYPES) + ")$"
+
+
+class ObligationIn(BaseModel):
+    summary: str = Field(..., min_length=3, max_length=4000)
+    ref: Optional[str] = Field(None, max_length=120)
+    quote: Optional[str] = Field(None, max_length=8000)
+    obligation_type: str = Field("requirement", pattern=_TYPE_PATTERN)
+    priority: str = Field("medium", pattern="^(critical|high|medium|low)$")
+    deadline: Optional[date] = None
+    deadline_text: Optional[str] = Field(None, max_length=255)
+
+
+class ObligationPatch(BaseModel):
+    summary: Optional[str] = Field(None, min_length=3, max_length=4000)
+    ref: Optional[str] = Field(None, max_length=120)
+    obligation_type: Optional[str] = Field(None, pattern=_TYPE_PATTERN)
+    priority: Optional[str] = Field(None, pattern="^(critical|high|medium|low)$")
+    deadline: Optional[date] = None
+    compliance_status: Optional[str] = Field(None, pattern="^(" + "|".join(_COMPLIANCE_STATUSES) + ")$")
+    owner_id: Optional[int] = None
+    owner_ids: Optional[List[int]] = None
+    department: Optional[str] = Field(None, max_length=255)
+    notes: Optional[str] = Field(None, max_length=8000)
+
+
+def _s_obligation(o: RegulatoryObligation, owners: dict) -> dict:
+    return {
+        "id": o.id, "regulatory_change_id": o.regulatory_change_id, "ref": o.ref, "quote": o.quote,
+        "summary": o.summary, "obligation_type": o.obligation_type, "applies_to": o.applies_to or [],
+        "deadline": o.deadline.isoformat() if o.deadline else None, "deadline_text": o.deadline_text,
+        "priority": o.priority, "verified": bool(o.verified), "match_score": o.match_score,
+        "compliance_status": o.compliance_status, "owner_id": o.owner_id, "owner_name": owners.get(o.owner_id),
+        "owner_ids": [i for i in _owner_ids(o) if i in owners],
+        "owners": [{"id": i, "display_name": owners[i]} for i in _owner_ids(o) if i in owners],
+        "department": o.department, "notes": o.notes, "source": o.source,
+        "updated_at": o.updated_at.isoformat() if o.updated_at else None,
+    }
+
+
+def _change_for(db: Session, user: GRCUser, change_id: int) -> RegulatoryChange:
+    change = db.query(RegulatoryChange).filter(RegulatoryChange.id == change_id,
+                                               RegulatoryChange.tenant_id.in_(get_user_tenants(user, db))).first()
+    if not change:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
+    return change
+
+
+def _obligation_for(db: Session, user: GRCUser, obligation_id: int) -> RegulatoryObligation:
+    o = db.query(RegulatoryObligation).filter(RegulatoryObligation.id == obligation_id,
+                                              RegulatoryObligation.tenant_id.in_(get_user_tenants(user, db)),
+                                              RegulatoryObligation.deleted_at.is_(None)).first()
+    if not o:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Obligation not found")
+    return o
+
+
+def _owner_ids(o: RegulatoryObligation) -> List[int]:
+    return regulatory_tasks._ids(o.owner_ids) or regulatory_tasks._ids([o.owner_id])
+
+
+def _task_obligation(db: Session, change_id: int, obligation_id: int) -> RegulatoryObligation:
+    o = db.query(RegulatoryObligation).filter(RegulatoryObligation.id == obligation_id,
+                                              RegulatoryObligation.regulatory_change_id == change_id,
+                                              RegulatoryObligation.deleted_at.is_(None)).first()
+    if not o:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="That obligation is not part of this change")
+    return o
+
+
+def _task_assignees(db: Session, ids) -> List[int]:
+    try:
+        return regulatory_tasks.check_users(db, ids or [])
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
+
+def _owners(db: Session, ids) -> dict:
+    ids = {i for i in ids if i}
+    if not ids:
+        return {}
+    return {u.id: u.display_name or u.username for u in db.query(GRCUser).filter(GRCUser.id.in_(ids))}
+
+
+@router.get("/changes/{change_id}/obligations")
+def list_obligations(change_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    change = _change_for(db, current_user, change_id)
+    rows = (db.query(RegulatoryObligation)
+            .filter(RegulatoryObligation.regulatory_change_id == change.id, RegulatoryObligation.deleted_at.is_(None))
+            .order_by(RegulatoryObligation.position.is_(None), RegulatoryObligation.position,
+                      RegulatoryObligation.id).all())
+    owners = _owners(db, (i for o in rows for i in _owner_ids(o)))
+    return {"items": [_s_obligation(o, owners) for o in rows]}
+
+
+@router.post("/changes/{change_id}/obligations", status_code=status.HTTP_201_CREATED)
+def add_obligation(change_id: int, body: ObligationIn, db: Session = Depends(get_db),
+                   current_user: GRCUser = Depends(require_auth)):
+    change = _change_for(db, current_user, change_id)
+    o = RegulatoryObligation(tenant_id=change.tenant_id, regulatory_change_id=change.id, source="manual",
+                             verified=bool(body.quote), created_by=current_user.id, **body.model_dump())
+    db.add(o)
+    db.flush()
+    create_audit_log_entry(db, change.tenant_id, current_user.id, "create", "regulatory_obligation", o.id,
+                           {"summary": o.summary[:200]})
+    db.commit()
+    return _s_obligation(o, _owners(db, [o.owner_id]))
+
+
+@router.patch("/obligations/{obligation_id}")
+def update_obligation(obligation_id: int, body: ObligationPatch, db: Session = Depends(get_db),
+                      current_user: GRCUser = Depends(require_auth)):
+    o = _obligation_for(db, current_user, obligation_id)
+    changed = body.model_dump(exclude_unset=True)
+    # Everyone who owns it: the list if one came, else the single owner; owner_id is the first.
+    if "owner_ids" in changed or "owner_id" in changed:
+        ids = changed.get("owner_ids") if changed.get("owner_ids") is not None else [changed.get("owner_id")]
+        ids = _task_assignees(db, ids)
+        changed["owner_ids"], changed["owner_id"] = ids, (ids[0] if ids else None)
+    before = {k: getattr(o, k) for k in changed}
+    for field, value in changed.items():
+        setattr(o, field, value)
+    create_audit_log_entry(db, o.tenant_id, current_user.id, "update", "regulatory_obligation", o.id,
+                           {k: [str(before[k]), str(v)] for k, v in changed.items() if before[k] != v})
+    db.commit()
+    return _s_obligation(o, _owners(db, _owner_ids(o)))
+
+
+@router.delete("/obligations/{obligation_id}", response_model=MessageResponse)
+def delete_obligation(obligation_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    o = _obligation_for(db, current_user, obligation_id)
+    o.deleted_at = datetime.utcnow()
+    create_audit_log_entry(db, o.tenant_id, current_user.id, "delete", "regulatory_obligation", o.id,
+                           {"summary": o.summary[:200]})
+    db.commit()
+    return MessageResponse(message="Obligation removed")
 
 
 # =============================================================================
@@ -1288,6 +1572,7 @@ def list_implementation_tasks(
     status: Optional[str] = None,
     priority: Optional[str] = None,
     assigned_to: Optional[int] = None,
+    obligation_id: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -1316,7 +1601,9 @@ def list_implementation_tasks(
         query = query.filter(RegulatoryImplementationTask.priority == priority)
     if assigned_to:
         query = query.filter(RegulatoryImplementationTask.assigned_to == assigned_to)
-    
+    if obligation_id:
+        query = query.filter(RegulatoryImplementationTask.obligation_id == obligation_id)
+
     tasks = query.order_by(RegulatoryImplementationTask.due_date.asc().nullslast()).all()
     return [serialize_implementation_task(t) for t in tasks]
 
@@ -1362,28 +1649,34 @@ def create_implementation_task(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid impact_assessment_id"
             )
-    
+    if task.obligation_id:
+        _task_obligation(db, change_id, task.obligation_id)
+    assignees = _task_assignees(db, task.assignee_ids if task.assignee_ids is not None else [task.assigned_to])
+
     db_task = RegulatoryImplementationTask(
         tenant_id=change.tenant_id,
         regulatory_change_id=change_id,
         impact_assessment_id=task.impact_assessment_id,
+        obligation_id=task.obligation_id,
         title=task.title,
         description=task.description,
         task_type=task.task_type,
         status="pending",
         priority=task.priority,
-        assigned_to=task.assigned_to,
         due_date=task.due_date,
         linked_policy_id=task.linked_policy_id,
         linked_control_id=task.linked_control_id,
         created_by=current_user.id
     )
-    
+    regulatory_tasks.set_assignees(db_task, assignees)
     db.add(db_task)
-    
+    db.flush()
+    # It shows in Task Management too, for everyone on it.
+    regulatory_tasks.mirror(db, db_task, current_user.id)
+
     if change.status in ["identified", "under_assessment"]:
         change.status = "implementation"
-    
+
     db.commit()
     db.refresh(db_task)
     
@@ -1433,6 +1726,8 @@ def update_implementation_task(
             )
         if update_data["status"] == "completed" and db_task.status != "completed":
             update_data["completed_at"] = datetime.utcnow()
+        elif update_data["status"] != "completed":
+            update_data["completed_at"] = None
     
     if "priority" in update_data:
         valid_priorities = ["critical", "high", "medium", "low"]
@@ -1442,12 +1737,21 @@ def update_implementation_task(
                 detail=f"Invalid priority. Must be one of: {', '.join(valid_priorities)}"
             )
     
+    if update_data.get("obligation_id"):
+        _task_obligation(db, db_task.regulatory_change_id, update_data["obligation_id"])
+    # Everyone on it: the list if one came, else the single legacy assignee.
+    if "assignee_ids" in update_data or "assigned_to" in update_data:
+        ids = update_data.pop("assignee_ids", None)
+        single = update_data.pop("assigned_to", None)
+        regulatory_tasks.set_assignees(db_task, _task_assignees(db, ids if ids is not None else [single]))
+
     for key, value in update_data.items():
         setattr(db_task, key, value)
-    
+    regulatory_tasks.mirror(db, db_task, current_user.id)
+
     db.commit()
     db.refresh(db_task)
-    
+
     db_task = db.query(RegulatoryImplementationTask).options(
         joinedload(RegulatoryImplementationTask.assignee),
         joinedload(RegulatoryImplementationTask.creator),
@@ -1473,10 +1777,11 @@ def delete_implementation_task(
     
     if not db_task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    
+
+    regulatory_tasks.drop_twin(db, db_task)
     db.delete(db_task)
     db.commit()
-    
+
     return MessageResponse(message="Task deleted successfully")
 
 

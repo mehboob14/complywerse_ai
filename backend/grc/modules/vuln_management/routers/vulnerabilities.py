@@ -83,6 +83,7 @@ def _build_vulnerability_response(v: Vulnerability, solution_count=None) -> Vuln
     return VulnerabilityResponse(
         id=v.id,
         tenant_id=v.tenant_id,
+        custom_values=getattr(v, "custom_values", None) or {},
         report_id=v.report_id,
         vuln_id=v.vuln_id,
         title=v.title,
@@ -494,9 +495,15 @@ def create_vulnerability(
     
     sla_days = get_sla_days(tenant_id, request.severity, db)
     due_date = request.due_date or (datetime.utcnow() + timedelta(days=sla_days))
-    
+    try:
+        from ....services.module_settings import clean_record_values
+        custom_values = clean_record_values(db, tenant_id, "vulnerabilities", request.custom_values, creating=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
     vuln = Vulnerability(
         tenant_id=tenant_id,
+        custom_values=custom_values,
         report_id=request.report_id,
         vuln_id=vuln_id,
         title=request.title,
@@ -763,9 +770,16 @@ def update_vulnerability(
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
     
     update_data = request.model_dump(exclude_unset=True)
+    if "custom_values" in update_data:
+        try:
+            from ....services.module_settings import clean_record_values
+            update_data["custom_values"] = clean_record_values(
+                db, vuln.tenant_id, "vulnerabilities", update_data["custom_values"], vuln.custom_values, creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     for field, value in update_data.items():
         setattr(vuln, field, value)
-    
+
     vuln.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(vuln)

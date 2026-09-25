@@ -13,9 +13,9 @@ Place = Tuple[str, str]  # (module, sub-module)
 
 # Sidebar order, for the filter lists.
 MODULE_ORDER = [
-    "Performance Overview", "My Work", "Governance", "Risk Management", "Third-Party Vendor Risk",
+    "Performance Overview", "Critical Tasks", "My Work", "Governance", "Risk Management", "Third-Party Vendor Risk",
     "Compliance Management", "Assessments", "Business Continuity", "Controls Automation",
-    "Issue & Incident Management", "Cybersecurity Assurance", "Auditor Portal", "Critical Tasks",
+    "Issue & Incident Management", "Cybersecurity Assurance", "Auditor Portal",
     "Reports", "AI Assistant", "Administration",
 ]
 
@@ -208,6 +208,66 @@ _FORMAT_PAGES = {
 }
 
 
+# ── The menu's shape, for the workflow builder's trees ───────────────────────
+# Places above are flat (module, page). The sidebar (components/layout/Sidebar.tsx)
+# nests some of them; these say how, so a trigger is found where the page is.
+PARENT: Dict[str, str] = {"Assessments": "Compliance Management", "Business Continuity": "Compliance Management"}
+SUBGROUPS: Dict[Place, str] = {("Risk Management", page): "Operational Risk" for page in (
+    "Risk Register", "Risk Assessments", "RCSA", "Scenario Analysis", "Bow-Tie Analysis", "Advanced Analytics")}
+# Modules the menu now names differently from the rows already written under them.
+SIDEBAR_NAMES: Dict[str, str] = {"Critical Tasks": "Task Management"}
+# Pages in menu order. A module's other pages (not in the menu) follow, by name.
+PAGE_ORDER: Dict[str, List[str]] = {
+    "Governance": ["Overview", "Documents", "Committees", "KRIs", "KPI Report", "Projects"],
+    "Risk Management": ["Overview", "Risk Register", "Risk Assessments", "RCSA", "Scenario Analysis",
+                        "Bow-Tie Analysis", "Advanced Analytics"],
+    "Compliance Management": ["Overview", "Frameworks", "Evidence Management", "Access Reviews",
+                              "Regulatory Changes", "Regulatory Feeds"],
+    "Assessments": ["Overview", "Cyber Security", "NCA", "Digital Operations Maturity", "DPIA / PIA", "Saudi PDPL"],
+    "Business Continuity": ["Overview", "Continuity Plans", "Drills & Invocations"],
+    "Controls Automation": ["Overview", "Common Controls"],
+    "Issue & Incident Management": ["Issues", "Incidents"],
+    "Cybersecurity Assurance": ["Performance", "IT Asset Discovery", "IT Asset Inventory", "Assets Risk Posture",
+                                "Vulnerabilities", "Vulnerability Scanning"],
+    "Auditor Portal": ["Portal", "Internal Audit", "Statutory Audit", "Issue Register"],
+    "Third-Party Vendor Risk": ["Vendors", "Third-Party Risk Assessments", "Vendor Assessments", "Questionnaires"],
+    "Reports": ["Analytics", "Quick export", "Saved exports"],
+}
+# The assessments a hub page holds, by format, in the hub's own order.
+HUB_ASSESSMENTS: Dict[str, List[Tuple[str, str]]] = {
+    "Cyber Security": [
+        ("asvs_checklist", "OWASP ASVS"), ("owasp_v4_testing_checklist", "OWASP Testing"),
+        ("mobile_app_security", "Mobile App Security"), ("csir_maturity", "CSIR Maturity"),
+        ("cti_maturity", "CTI Maturity"), ("incident_maturity", "Incident Management"),
+        ("itsecops_maturity", "IT Security Operations"),
+    ],
+    "NCA": [
+        ("nca_dcc_tool", "DCC Assessment"), ("nca_vuln_register", "Vulnerability Register"),
+        ("nca_audit_register", "Audit Plan"), ("nca_risk_register", "Risk Management"),
+    ],
+}
+
+
+def sidebar_path(module: str, page: Optional[str] = None, leaf: Optional[str] = None) -> List[str]:
+    """Where a place sits in the menu, outermost first: a nested group under its
+    parent, a page under its sub-group, an assessment under its hub page."""
+    path = ([PARENT[module]] if module in PARENT else []) + [SIDEBAR_NAMES.get(module, module)]
+    if (module, page) in SUBGROUPS:
+        path.append(SUBGROUPS[(module, page)])
+    if page and page != module:
+        path.append(page)
+    return path + [leaf] if leaf else path
+
+
+def sidebar_rank(module: str, page: Optional[str] = None, leaf: Optional[str] = None) -> tuple:
+    """Sorts places in menu order; what the menu doesn't show comes last, by name."""
+    def at(order: List[str], name: Optional[str]) -> tuple:
+        return (order.index(name), "") if name in order else (len(order), name or "")
+    hub = [label for _, label in HUB_ASSESSMENTS.get(page or "", [])]
+    # A hub page's own entries come before the assessments inside it.
+    return at(MODULE_ORDER, module), at(PAGE_ORDER.get(module, []), page), at(hub, leaf) if leaf else (-1, "")
+
+
 def strip_mount(path: str) -> str:
     path = path or ""
     return path[4:] if path.startswith("/grc/") or path == "/grc" else path
@@ -233,31 +293,41 @@ def assessment_place(fmt: Optional[str]) -> Optional[Place]:
     return _FORMAT_PAGES.get(fmt, ("Assessments", "Other Assessments"))
 
 
-# (tenant slug, "a"|"i", id) → format; formats never change once set.
+# (tenant slug, "a"|"i"|"e", id) → format; formats never change once set.
 _FORMAT_CACHE: "OrderedDict[tuple, Optional[str]]" = OrderedDict()
 _ASSESSMENT_ID = re.compile(r"^/compliance/assessments/(\d+)(?:/|$)")
-_ITEM_ID = re.compile(r"^/compliance/assessments/items/(\d+)(?:/|$)")
+_ITEM_ID = re.compile(r"^/compliance/assessments/(?:items|remediation-items)/(\d+)(?:/|$)")
+_EVIDENCE_ID = re.compile(r"^/compliance/assessments/evidence/(\d+)(?:/|$)")
 
 
-def _assessment_format(db, slug: str, path: str, payload: Any, query: Any) -> Optional[str]:
+def assessment_format(db, slug: str, path: str, payload: Any, query: Any) -> Optional[str]:
+    """The format of the assessment a request touches: named in the request, or
+    found from the assessment, item or evidence link its URL names."""
     for source in (payload, query):
         if isinstance(source, dict) and isinstance(source.get("assessment_format"), str):
             return source["assessment_format"]
     p = strip_mount(path)
-    item = _ITEM_ID.match(p)
-    whole = None if item else _ASSESSMENT_ID.match(p)
-    if db is None or not (item or whole):
+    evidence = _EVIDENCE_ID.match(p)
+    item = None if evidence else _ITEM_ID.match(p)
+    whole = None if (evidence or item) else _ASSESSMENT_ID.match(p)
+    found = evidence or item or whole
+    if db is None or not found:
         return None
-    key = (slug, "i" if item else "a", int((item or whole).group(1)))
+    key = (slug, "e" if evidence else "i" if item else "a", int(found.group(1)))
     if key in _FORMAT_CACHE:
         return _FORMAT_CACHE[key]
-    from .models import ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem
+    from .models import AssessmentItemEvidence, ComplianceAssessmentDocument, ComplianceAssessmentDocumentItem
     try:
         q = db.query(ComplianceAssessmentDocument.assessment_format)
-        if item:
+        if evidence or item:
             q = q.join(ComplianceAssessmentDocumentItem,
-                       ComplianceAssessmentDocumentItem.assessment_id == ComplianceAssessmentDocument.id
-                       ).filter(ComplianceAssessmentDocumentItem.id == key[2])
+                       ComplianceAssessmentDocumentItem.assessment_id == ComplianceAssessmentDocument.id)
+        if evidence:
+            q = q.join(AssessmentItemEvidence,
+                       AssessmentItemEvidence.assessment_item_id == ComplianceAssessmentDocumentItem.id
+                       ).filter(AssessmentItemEvidence.id == key[2])
+        elif item:
+            q = q.filter(ComplianceAssessmentDocumentItem.id == key[2])
         else:
             q = q.filter(ComplianceAssessmentDocument.id == key[2])
         row = q.first()
@@ -277,7 +347,7 @@ def place(endpoint: Optional[str], path: str, *, db=None, slug: str = "",
     file = (endpoint or "").split(":", 1)[0]
     found = BY_FILE.get(file) or place_path(path)
     if found and found[0] == "Assessments" and found[1] == "Overview":
-        found = assessment_place(_assessment_format(db, slug, path, payload, query)) or found
+        found = assessment_place(assessment_format(db, slug, path, payload, query)) or found
     if found:
         return found
     first = next((s for s in strip_mount(path).split("/") if s), "")

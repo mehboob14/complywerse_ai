@@ -54,6 +54,8 @@ interface CriticalTaskDetail {
   description: string | null;
   source: string;
   source_module: string | null;
+  /** Set when the task mirrors an implementation task of a regulatory change. */
+  linked_regulatory_change_id?: number | null;
   source_entity_id: number | null;
   source_entity_type: string | null;
   priority: string;
@@ -389,7 +391,7 @@ export default function TaskDetailPage() {
           </div>
           <p className="text-sm text-[var(--color-muted)] mt-1">
             Task #{task.id} · {task.source} · {task.category}
-            {task.source_module && <span className="text-primary-700/70"> · via {task.source_module}</span>}
+            {task.source_module && <span className="text-primary-700/70"> · via {task.source_module.replace(/_/g, ' ')}</span>}
             {task.escalation_level > 0 && <span className="text-rose-600"> · Escalation Level {task.escalation_level}</span>}
           </p>
           {/* v2 Issue Management — when this task was promoted from a CAPA
@@ -401,6 +403,16 @@ export default function TaskDetailPage() {
               title="This Critical Task was promoted from a CAPA action — status syncs from here back to the Issue"
             >
               Linked Issue #{(task as { linked_issue_id?: number }).linked_issue_id} ↗
+            </a>
+          )}
+          {/* A task on a regulatory change: edits here show there, and there, here. */}
+          {task.linked_regulatory_change_id && (
+            <a
+              href={`/governance/regulatory-changes/${task.linked_regulatory_change_id}?tab=tasks`}
+              className="mt-2 inline-flex items-center gap-1 rounded border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
+              title="This task is part of a regulatory change; its status, people and dates stay in step with it"
+            >
+              Regulatory change #{task.linked_regulatory_change_id} ↗
             </a>
           )}
         </div>

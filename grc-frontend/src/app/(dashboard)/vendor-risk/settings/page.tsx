@@ -10,6 +10,7 @@ import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gau
 import { tpraApi, vendorRiskApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { PageLoader } from '@/components/ui';
+import ExposureModel, { type Quant } from './_ExposureModel';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 
@@ -31,7 +32,9 @@ interface ConfigResp {
   scoring_policy?: { partial_credit: number };
   tier_policy?: Record<string, TierRules>;
   monitoring_policy?: { adverse_media?: boolean };
+  quantification?: Quant;
   defaults: {
+    quantification?: Quant;
     weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number>;
     reminder_policy: ReminderPolicy; scoring_policy?: { partial_credit: number }; tier_policy?: Record<string, TierRules>;
   };
@@ -375,6 +378,10 @@ export default function VendorRiskSettingsPage() {
             </div>
           </div>
         </section>
+      )}
+
+      {data.quantification && data.defaults.quantification && (
+        <ExposureModel initial={data.quantification} defaults={data.defaults.quantification} canEdit={canEdit} />
       )}
 
       <p className="text-[11px] text-gray-400">Integrations &amp; template defaults are managed elsewhere; questionnaire templates live under the Questionnaires tab.</p>

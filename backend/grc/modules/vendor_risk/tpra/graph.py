@@ -254,6 +254,48 @@ def shared_vulnerabilities(db: Session, tenant_id: int, days: int = 90) -> List[
     return sorted(groups.values(), key=lambda g: (-len(g["vendors"]), g["occurred_at"] or ""), reverse=False)
 
 
+def shadow_suppliers(db: Session, tenant_id: int, limit: int = 100) -> List[dict]:
+    """Suppliers our own discovery finds us using that the vendor register does not
+    know: publishers of software installed on our estate, vendors of identified
+    software, and the vendor named on application, cloud and third-party assets.
+    Generic and excluded names never count, so excluding one hides it for good."""
+    aliases = tenant_aliases(db, tenant_id)
+    keys, platforms = set(), set()
+    for (name,) in db.query(Vendor.name).filter(Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None)):
+        keys.add(normalise(name))
+        platforms.add(platform_for(name, aliases).lower())
+    found: Dict[str, dict] = {}
+
+    def see(name: Optional[str], asset_id: int, product: Optional[str], source: str) -> None:
+        name = (name or "").replace("_", " ").strip()
+        platform = platform_for(name, aliases)
+        if not platform or normalise(name) in keys or platform.lower() in platforms:
+            return
+        row = found.setdefault(platform.lower(), {"name": platform if platform != platform.lower() else platform.title(),
+                                                  "assets": set(), "products": set(), "sources": set()})
+        row["assets"].add(asset_id)
+        row["sources"].add(source)
+        if product:
+            row["products"].add(str(product)[:80])
+
+    # ponytail: reads every asset's software list; page by asset id past tens of thousands of assets
+    for aid, items in db.query(ITAsset.id, ITAsset.detected_software_json).filter(
+            ITAsset.tenant_id == tenant_id, ITAsset.detected_software_json.isnot(None)):
+        for item in items or []:
+            if isinstance(item, dict):
+                see(item.get("publisher"), aid, item.get("name"), "installed software")
+    for aid, vendor, product in db.query(SoftwareIdentifier.asset_id, SoftwareIdentifier.vendor,
+                                         SoftwareIdentifier.product).filter(SoftwareIdentifier.tenant_id == tenant_id):
+        see(vendor, aid, product, "software identifiers")
+    for aid, vendor, name in db.query(ITAsset.id, ITAsset.vendor, ITAsset.name).filter(
+            ITAsset.tenant_id == tenant_id, ITAsset.vendor.isnot(None),
+            ITAsset.asset_type.in_(("application", "cloud", "third_party"))):
+        see(vendor, aid, name, "asset register")
+    rows = sorted(found.values(), key=lambda r: (-len(r["assets"]), r["name"].lower()))[:limit]
+    return [{"name": r["name"], "asset_count": len(r["assets"]), "products": sorted(r["products"])[:5],
+             "sources": sorted(r["sources"])} for r in rows]
+
+
 # ── REST ─────────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Vendor Graph"])
@@ -492,6 +534,12 @@ def unwatch_product(product_id: int, db: Session = Depends(get_db), user: GRCUse
     db.delete(product)
     db.commit()
     return {"deleted": True, "id": product_id}
+
+
+@router.get("/shadow-suppliers")
+def list_shadow_suppliers(limit: int = Query(100, ge=1, le=500), db: Session = Depends(get_db),
+                          user: GRCUser = Depends(require_auth)):
+    return {"items": shadow_suppliers(db, _tenant(db, user), limit)}
 
 
 @router.get("/concentration/vulnerabilities")

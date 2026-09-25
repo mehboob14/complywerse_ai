@@ -587,9 +587,16 @@ def create_asset(
         except Exception:  # noqa: BLE001 — never block asset creation
             _os_normalized = _os_normalized or _os_family
 
+    try:
+        from ..services.module_settings import clean_record_values
+        custom_values = clean_record_values(db, tenant_id, "assets", asset.custom_values, creating=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     db_asset = ITAsset(
         origin_source="manual",  # stamped once at birth; never mutated
         tenant_id=tenant_id,
+        custom_values=custom_values,
         name=asset.name,
         description=asset.description,
         asset_type=asset.asset_type,
@@ -1435,6 +1442,8 @@ def get_asset(
         "cde_environment": asset.cde_environment or False,
         "ephi_environment": asset.ephi_environment or False,
         "created_at": asset.created_at.isoformat(),
+        # The edit form opened from here sends these back; without them it would clear them.
+        "custom_values": asset.custom_values or {},
         # Phase 5 operational context fields.
         "internet_facing": bool(asset.internet_facing) if asset.internet_facing is not None else False,
         # `is_internet_facing` is a legacy wire alias (the Risk Posture page still uses
@@ -1486,6 +1495,13 @@ def update_asset(
         )
     
     update_data = asset_update.model_dump(exclude_unset=True)
+    if "custom_values" in update_data:
+        try:
+            from ..services.module_settings import clean_record_values
+            update_data["custom_values"] = clean_record_values(
+                db, asset.tenant_id, "assets", update_data["custom_values"], asset.custom_values, creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     # Validate any criticality override before applying any fields so we
     # don't half-update the row.

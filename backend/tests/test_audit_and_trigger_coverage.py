@@ -64,12 +64,19 @@ def test_a_request_is_placed_under_its_sidebar_module_and_page(db):
         == ("Assessments", "Cyber Security")
     assert feature_map.place(None, "/grc/compliance/assessments/items/30", db=db, slug="demo") \
         == ("Assessments", "Cyber Security")
+    # an evidence decision and a remediation update name the item, not the assessment
+    db.add(_make(m.AssessmentItemEvidence, id=300, assessment_item_id=30, tenant_id=1))
+    db.commit()
+    assert feature_map.place(None, "/grc/compliance/assessments/evidence/300/approval", db=db, slug="demo") \
+        == ("Assessments", "Cyber Security")
+    assert feature_map.place(None, "/grc/compliance/assessments/remediation-items/30", db=db, slug="demo") \
+        == ("Assessments", "Cyber Security")
     assert feature_map.place(None, "/grc/compliance/assessments", payload={"assessment_format": "pdpl_assessment_toolkit"}) \
         == ("Assessments", "Saudi PDPL")
     assert feature_map.place(None, "/grc/compliance/assessments") == ("Assessments", "Overview")
 
     modules = {p["module"]: p["submodules"] for p in feature_map.modules()}
-    assert list(modules)[:3] == ["Performance Overview", "My Work", "Governance"]
+    assert list(modules)[:3] == ["Performance Overview", "Critical Tasks", "My Work"]
     assert {"Cyber Security", "NCA", "Saudi PDPL", "DPIA / PIA"} <= set(modules["Assessments"])
     include, exclude = feature_map.legacy_prefixes("Risk Management")
     assert "/erm" in include and "/erm/kris" in exclude and "/erm/incidents" in exclude
@@ -162,6 +169,7 @@ def test_the_request_row_names_its_page_function_and_changes(db, monkeypatch):
 
     ok, failed = db.query(m.AuditLog).order_by(m.AuditLog.id).all()
     assert (ok.changes["module"], ok.changes["submodule"]) == ("Assessments", "Cyber Security")
+    assert ok.changes["assessment_format"] == "asvs_checklist"          # one assessment's workflows start from it
     assert ok.changes["feature"] and ok.changes["db_changes"] == changes
     assert "db_changes" not in failed.changes                          # a failed request's writes rolled back
 

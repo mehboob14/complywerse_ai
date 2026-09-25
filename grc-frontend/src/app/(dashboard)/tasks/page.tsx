@@ -31,6 +31,8 @@ interface CriticalTaskItem {
   description: string | null;
   source: string;
   source_module: string | null;
+  /** Set when the task mirrors an implementation task of a regulatory change. */
+  linked_regulatory_change_id?: number | null;
   source_entity_id: number | null;
   source_entity_type: string | null;
   priority: string;
@@ -766,7 +768,10 @@ export default function TaskBoardPage() {
                       </Link>
                       <div className="flex items-center gap-2 mt-0.5">
                         {task.category && <span className="text-xs text-[var(--color-muted)]">{task.category}</span>}
-                        {task.source_module && <span className="text-xs text-primary-700/70">via {task.source_module}</span>}
+                        {task.linked_regulatory_change_id ? (
+                          <Link href={`/governance/regulatory-changes/${task.linked_regulatory_change_id}?tab=tasks`}
+                            className="text-xs text-primary-700 hover:underline">via regulatory change ↗</Link>
+                        ) : task.source_module && <span className="text-xs text-primary-700/70">via {task.source_module.replace(/_/g, ' ')}</span>}
                       </div>
                     </td>
                     <td className="px-4 py-3"><span className="text-xs text-[var(--color-muted)]">{task.source}</span></td>

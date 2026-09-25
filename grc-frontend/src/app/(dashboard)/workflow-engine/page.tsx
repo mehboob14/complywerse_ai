@@ -171,7 +171,7 @@ function extractApiErrorMessage(error: unknown): string {
 }
 
 
-type CatalogItem = NodeOptionItem & { functionality_name?: string };
+type CatalogItem = NodeOptionItem & { functionality_name?: string; path?: string[]; trigger_event?: string | null };
 type CatalogResponse = {
   triggers?: CatalogItem[];
   actions?: CatalogItem[];
@@ -308,6 +308,7 @@ function buildPalette(catalog: CatalogResponse): PaletteItem[] {
         group: 'platform_functions',
         module: item.module || moduleName,
         submodule: item.submodule,
+        path: item.path,
       });
       seen.add(item.key);
     }
@@ -1258,18 +1259,16 @@ function WorkflowEngineContent() {
     (new Date(b.updated_at || '').getTime() || 0) - (new Date(a.updated_at || '').getTime() || 0)
   );
 
+  // A saved workflow is filed under the sidebar module its trigger belongs to.
+  const moduleOfEvent = new Map<string, string>();
+  for (const t of catalog.triggers || []) if (t.path?.[0]) moduleOfEvent.set(t.key, t.path[0]);
+  for (const fns of Object.values(catalog.platform_functions || {})) {
+    for (const f of fns) if (f.trigger_event && f.path?.[0]) moduleOfEvent.set(f.trigger_event, f.path[0]);
+  }
   const savedWorkflowTemplates: WorkflowTemplate[] = sortedDefinitions.map((d) => ({
     id: d.id,
     name: d.name,
-    category: d.trigger_event?.includes('vulnerability')
-      ? 'Vulnerability Management'
-      : d.trigger_event?.includes('risk')
-        ? 'Risk Management'
-        : d.trigger_event?.includes('policy')
-          ? 'Policy'
-          : d.trigger_event?.includes('asset')
-            ? 'Asset Management'
-            : 'Saved Workflows',
+    category: moduleOfEvent.get(d.trigger_event || '') || 'Saved Workflows',
     description: d.description || `Trigger: ${d.trigger_event || 'manual.trigger'}`,
     trigger_event: d.trigger_event,
     nodes_json: (d.nodes || []) as BackendNode[],
@@ -1476,7 +1475,6 @@ function WorkflowEngineContent() {
         <div className="w-48 shrink-0 flex flex-col min-h-0">
           <NodePalette
             palette={palette}
-            moduleOrder={(catalog as { modules?: { module: string; submodules: string[] }[] })?.modules || []}
             locked={WORKFLOW_CREATION_LOCKED}
             onDragStart={onDragStart}
             onAddNode={(item) => {

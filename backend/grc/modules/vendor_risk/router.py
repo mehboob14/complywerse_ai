@@ -12,6 +12,7 @@ from .tpra.dashboard import router as tpra_dashboard_router
 from .tpra.attention import router as tpra_attention_router
 from .tpra.graph import router as tpra_graph_router
 from .tpra.reports import router as tpra_reports_router
+from .tpra.quantification import router as tpra_exposure_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -32,6 +33,8 @@ router.include_router(tpra_attention_router)
 router.include_router(tpra_graph_router)
 # Committee pack, register, vendor evidence files and the examiner link.
 router.include_router(tpra_reports_router)
+# What a vendor could cost us in a year, as a range.
+router.include_router(tpra_exposure_router)
 
 
 @router.get("")

@@ -42,6 +42,9 @@ import { SearchInput } from '@/components/ui/SearchInput';
 import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import {
+  CustomFieldsTab, CustomFieldsTabBar, errorText, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
 import { PageLoader } from '@/components/ui';
 import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
@@ -526,6 +529,12 @@ const isNcaRegisterTypeValue = (value: string | null | undefined) =>
 // still stored on older rows.
 const isOneLinkRegisterTypeValue = (value: string | null | undefined) =>
   canonicalFilterValue(value).includes(canonicalFilterValue(ONELINK_REGISTER_TYPE));
+
+// The per-client register templates keep their own entries until they are
+// moved into each tenant's custom fields; the other register types are the
+// tenant's own list (module settings → risks → register_type).
+const isTemplateRegisterTypeValue = (value: string | null | undefined) =>
+  isUBLRegisterTypeValue(value) || isNcaRegisterTypeValue(value) || isOneLinkRegisterTypeValue(value);
 
 const isUBLAllowedCategoryValue = (value: string | null | undefined) =>
   UBL_ONLY_RISK_CATEGORIES.some((allowed) => filterValuesMatch(value, allowed));
@@ -2188,6 +2197,10 @@ function RiskModal({
     consequences: (risk as unknown as { consequences?: string } | null)?.consequences || '',
     recommendations: (risk as unknown as { recommendations?: string } | null)?.recommendations || '',
   });
+  const [tab, setTab] = useState<'details' | 'custom'>('details');
+  const [customValues, setCustomValues] = useState<CustomValues>(() => risk?.custom_values || {});
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const { data: fieldSettings } = useModuleSettings('risks');
   const [assetSearch, setAssetSearch] = useState('');
   const [selectedAssetIds, setSelectedAssetIds] = useState<number[]>(
     ((risk as unknown as { linked_assets?: Array<{ asset_id?: number; id?: number }> } | null)?.linked_assets || [])
@@ -2406,9 +2419,15 @@ function RiskModal({
     documents: (oneLinkDocuments || []).map((d) => d.title || `Document #${d.id}`).filter(Boolean),
   }), [users, teams, oneLinkIncidents, oneLinkControls, oneLinkDocuments]);
 
-  const categoryOptions = isUBLTemplateSelected
+  const categoryOptions: Array<{ value: string; label: string }> = isUBLTemplateSelected
     ? RISK_CATEGORIES.filter((category) => UBL_ONLY_RISK_CATEGORIES.includes(category.value))
-    : STANDARD_RISK_CATEGORIES;
+    : listOptions(fieldSettings, 'category', formData.risk_category, STANDARD_RISK_CATEGORIES);
+  const registerTypeItems = [
+    ...REGISTER_TYPES.filter((t) => isTemplateRegisterTypeValue(t.value)),
+    ...listOptions(fieldSettings, 'register_type',
+      isTemplateRegisterTypeValue(formData.register_type) ? '' : formData.register_type,
+      REGISTER_TYPES.filter((t) => !isTemplateRegisterTypeValue(t.value))),
+  ].map((t) => ({ value: t.value, label: t.label }));
   const extraUblFieldKeys = useMemo(() => {
     return Object.keys(ublFields).filter(
       (key) =>
@@ -2597,19 +2616,25 @@ function RiskModal({
       }
     }
 
-    await onSubmit({
-      riskData: {
-        ...formData,
-        risk_sub_category: derivedSubCategory,
-        inherent_score: formData.inherent_likelihood * formData.inherent_impact,
-        residual_score: formData.residual_likelihood * formData.residual_impact,
-        ubl_fields: isUBLTemplateSelected ? cleanedUblFields : undefined,
-        ...(isOneLinkSelected ? deriveCore(templateFields) : {}),
-        template_fields: isOneLinkSelected ? templateFields : undefined,
-      },
-      linkedAssetIds: selectedAssetIds,
-      aiSuggestions: aiAssistUsed ? aiSuggestions : null,
-    });
+    setSaveError(null);
+    try {
+      await onSubmit({
+        riskData: {
+          ...formData,
+          risk_sub_category: derivedSubCategory,
+          inherent_score: formData.inherent_likelihood * formData.inherent_impact,
+          residual_score: formData.residual_likelihood * formData.residual_impact,
+          ubl_fields: isUBLTemplateSelected ? cleanedUblFields : undefined,
+          ...(isOneLinkSelected ? deriveCore(templateFields) : {}),
+          template_fields: isOneLinkSelected ? templateFields : undefined,
+          custom_values: valuesToSave(fieldSettings, customValues, risk ? (risk.custom_values || {}) : null),
+        },
+        linkedAssetIds: selectedAssetIds,
+        aiSuggestions: aiAssistUsed ? aiSuggestions : null,
+      });
+    } catch (err) {
+      setSaveError(errorText(err, 'Could not save the risk.'));
+    }
   };
 
   const renderUblInput = (field: UBLFieldDef) => {
@@ -2704,7 +2729,15 @@ function RiskModal({
         </div>
       }
     >
-      <form id="risk-modal-form" onSubmit={handleSubmit} className="space-y-3">
+      {/* A required field left empty on the other tab: go to it. */}
+      <form id="risk-modal-form" onSubmit={handleSubmit} onInvalidCapture={(e) => setTab(tabOf(e.target))} className="space-y-3">
+        {saveError && (
+          <p className="flex items-start gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {saveError}
+          </p>
+        )}
+        <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
+        <div data-tab="details" className={tab === 'details' ? 'space-y-3' : 'hidden'}>
           <div>
             <label className="block text-sm font-medium text-slate-800 mb-1">Title *</label>
             <div className="flex gap-2">
@@ -2992,7 +3025,7 @@ function RiskModal({
             <label className="block text-sm font-medium text-slate-800 mb-1">Register Type</label>
             <MultiSelectDropdown
               title="Register Type"
-              items={REGISTER_TYPES.filter(t => t.value).map(t => ({ value: t.value, label: t.label }))}
+              items={registerTypeItems}
               selectedValues={formData.register_type ? [formData.register_type] : []}
               onApply={(vals) => handleRegisterTypeChange(vals[0] || '')}
               multiSelect={false}
@@ -3305,7 +3338,10 @@ function RiskModal({
               placeholder="Treatment approach (use AI Assist → Treatment Options → Save to field, or write your own)…"
             />
           </div>
-
+        </div>
+        <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
+          <CustomFieldsTab moduleKey="risks" values={customValues} onChange={setCustomValues} />
+        </div>
       </form>
     </RightSlidePanel>
   );

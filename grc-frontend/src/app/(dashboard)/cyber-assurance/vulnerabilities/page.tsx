@@ -43,6 +43,9 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import Link from 'next/link';
+import {
+  CustomFieldsTab, CustomFieldsTabBar, errorText, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
 // The register-header severity/status/SLA charts were moved out (they duplicate
 // the Overview tab), so recharts is no longer imported here. The Overview tab's
 // VulnerabilityDashboardPage keeps its own charts.
@@ -192,6 +195,9 @@ export default function VulnerabilitiesPage() {
   // known nickname (Log4Shell etc.). When a match comes back, we surface a
   // small "Apply" banner that one-click pre-fills cvss/cve/cwe/severity.
   const addFormRef = useRef<HTMLFormElement>(null);
+  const [addTab, setAddTab] = useState<'details' | 'custom'>('details');
+  const [addCustomValues, setAddCustomValues] = useState<CustomValues>({});
+  const { data: vulnFieldSettings } = useModuleSettings('vulnerabilities');
   const [titleDraft, setTitleDraft] = useState('');
   const [cveLookup, setCveLookup] = useState<{
     matched: boolean;
@@ -597,6 +603,8 @@ export default function VulnerabilitiesPage() {
       queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
       queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
       setIsModalOpen(false);
+      setAddCustomValues({});
+      setAddTab('details');
     },
   });
 
@@ -678,6 +686,7 @@ export default function VulnerabilitiesPage() {
       affected_component: formData.get('affected_component') || undefined,
       affected_host: formData.get('affected_host') || undefined,
       due_date: formData.get('due_date') || undefined,
+      custom_values: valuesToSave(vulnFieldSettings, addCustomValues),
     };
     createMutation.mutate(data);
   };
@@ -1111,9 +1120,12 @@ export default function VulnerabilitiesPage() {
             e.preventDefault();
             handleSubmit(new FormData(e.currentTarget));
           }}
+          onInvalidCapture={(e) => setAddTab(tabOf(e.target))}
           className="flex flex-col flex-1 min-h-0"
         >
-          <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
+          <div className="flex-1 overflow-y-auto px-5 py-4">
+            <CustomFieldsTabBar tab={addTab} onTab={setAddTab} settings={vulnFieldSettings} />
+            <div data-tab="details" className={addTab === 'details' ? 'space-y-3' : 'hidden'}>
             {/* CVE auto-fill banner — surfaced when the title contains a
                 CVE-ID or matches a known nickname. One-click pre-fills the
                 CVE / CVSS / CWE / severity / description fields below. */}
@@ -1279,7 +1291,16 @@ export default function VulnerabilitiesPage() {
                 />
               </div>
             </div>
+            </div>
+            <div data-tab="custom" className={addTab === 'custom' ? '' : 'hidden'}>
+              <CustomFieldsTab moduleKey="vulnerabilities" values={addCustomValues} onChange={setAddCustomValues} />
+            </div>
           </div>
+          {createMutation.isError && (
+            <p className="flex items-start gap-1.5 border-t border-rose-100 bg-rose-50 px-6 py-2 text-xs text-rose-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" /> {errorText(createMutation.error, 'Could not create the vulnerability.')}
+            </p>
+          )}
 
             <div className="flex-shrink-0 flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
               <button 

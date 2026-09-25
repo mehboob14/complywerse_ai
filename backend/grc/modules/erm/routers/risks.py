@@ -1124,9 +1124,15 @@ def create_risk(
         tenant_id=tenant_id,
         db=db,
     )
+    try:
+        from ....services.module_settings import clean_record_values
+        custom_values = clean_record_values(db, tenant_id, "risks", risk.custom_values, creating=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     db_risk = Risk(
         tenant_id=tenant_id,
+        custom_values=custom_values,
         title=risk.title,
         description=risk.description,
         category=resolved_category,
@@ -1699,6 +1705,14 @@ def update_risk(
             update_data.get("risk_category", risk.risk_category)
         )
         update_data["risk_category"] = update_data["category"]
+
+    if "custom_values" in update_data:
+        try:
+            from ....services.module_settings import clean_record_values
+            update_data["custom_values"] = clean_record_values(
+                db, risk.tenant_id, "risks", update_data["custom_values"], risk.custom_values, creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     # team_id is a transient mapping field — resolve it to a real
     # business_unit_id and don't try to setattr it onto the ORM model

@@ -105,11 +105,13 @@ const navigation: NavEntry[] = [
     requiredModules: ['dashboard'],
     requiredPermissions: ['dashboard:overview:*']
   },
+  // Task Management sits where My Work did; My Work stays reachable from the dashboard.
   {
-    name: 'My Work',
-    href: '/my-work',
-    icon: ClipboardList,
-    requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'],
+    name: 'Task Management',
+    href: '/tasks',
+    icon: ListTodo,
+    requiredModules: ['critical_tasks'],
+    requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
   {
     name: 'Governance',
@@ -240,13 +242,6 @@ const navigation: NavEntry[] = [
       // Audit Services' register — the client's monthly issue workbook, validated and reported.
       { name: 'Issue Register', href: '/auditor-portal/issue-register', icon: FileSpreadsheet, requiredPermissions: ['issue_management:issues:*'] },
     ],
-  },
-  {
-    name: 'Critical Tasks',
-    href: '/tasks',
-    icon: ListTodo,
-    requiredModules: ['critical_tasks'],
-    requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
   },
   // Reports — Analytics (Metabase) is primary for cross-module authoring;
   // Quick export keeps the native register builder for simple CSVs.

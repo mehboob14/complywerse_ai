@@ -10,7 +10,7 @@ import {
   AlertCircle, Search,
 } from 'lucide-react';
 import { statutoryAuditApi } from '@/lib/api';
-import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
+import ModuleSettingsPanel, { SlaBadge, type SlaState } from '@/components/settings/ModuleSettingsPanel';
 import { CustomFieldsSection, type CustomFieldDef } from '@/components/settings/CustomFieldsSection';
 import {
   MultiSelectDropdown, AnimatedModal, PageLoader, DataTable,
@@ -38,6 +38,7 @@ type ObsRow = {
   category?: string;
   due_date?: string;
   evidence_count?: number;
+  sla?: SlaState | null;
 };
 
 type DraftRow = {
@@ -206,6 +207,12 @@ export default function StatutoryAuditListPage() {
         accessor: 'due_date',
         minWidth: '100px',
         render: (o) => <span className="text-sm text-slate-600">{fmtDate(o.due_date)}</span>,
+      },
+      {
+        id: 'sla',
+        header: 'SLA',
+        minWidth: '110px',
+        render: (o) => <SlaBadge sla={o.sla} />,
       },
       {
         id: 'evidence',

@@ -616,7 +616,7 @@ def write_audit_log(
                         resource_name = v.strip()
                         break
 
-            from .feature_map import place
+            from .feature_map import assessment_format, place
             from .modules.workflow_engine.services.catalog import ENDPOINT_LABELS
             from .modules.workflow_engine.services.route_events import endpoint_of
 
@@ -646,6 +646,9 @@ def write_audit_log(
                 "summary": summary,
                 "resource_name": resource_name,
             }
+            if module == "Assessments":
+                # Which assessment it was, so a workflow can start for one kind only.
+                details["assessment_format"] = assessment_format(db, slug, path, request_payload, query)
             # Capture response error body (e.g. FastAPI's {"detail": "..."}) so the
             # AI summary can surface the real failure reason instead of just the
             # HTTP status code. Only populated when middleware passed it in.

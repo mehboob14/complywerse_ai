@@ -22,6 +22,8 @@ class Risk(Base):
     # following_steps, last_evaluation_date, etc.). Rendered as a read-only
     # panel on the general risk detail page so no NCA data is lost.
     template_fields = Column(JSON, nullable=True)
+    # The tenant's own extra fields (services/module_settings.py "risks" holds their definitions).
+    custom_values = Column(JSON, nullable=True)
     owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     business_owner_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     affected_department_ids = Column(JSON, default=[])

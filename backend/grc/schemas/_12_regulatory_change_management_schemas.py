@@ -64,6 +64,8 @@ class RegulatoryChangeResponse(BaseModel):
     assessment_count: int = 0
     task_count: int = 0
     completed_task_count: int = 0
+    # The circular analysis in progress or last run (regulatory_engine.analysis_state).
+    analysis: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -117,10 +119,12 @@ class RegulatoryImplementationTaskCreate(BaseModel):
     task_type: str  # policy_update, control_update, process_change, training, communication
     priority: str = "medium"
     assigned_to: Optional[int] = None
+    assignee_ids: Optional[List[int]] = None  # everyone on it; assigned_to follows the first
     due_date: Optional[datetime] = None
     linked_policy_id: Optional[int] = None
     linked_control_id: Optional[int] = None
     impact_assessment_id: Optional[int] = None
+    obligation_id: Optional[int] = None  # the obligation it was raised from
 
 
 class RegulatoryImplementationTaskUpdate(BaseModel):
@@ -130,9 +134,11 @@ class RegulatoryImplementationTaskUpdate(BaseModel):
     status: Optional[str] = None
     priority: Optional[str] = None
     assigned_to: Optional[int] = None
+    assignee_ids: Optional[List[int]] = None
     due_date: Optional[datetime] = None
     linked_policy_id: Optional[int] = None
     linked_control_id: Optional[int] = None
+    obligation_id: Optional[int] = None
 
 
 class RegulatoryImplementationTaskResponse(BaseModel):
@@ -148,8 +154,12 @@ class RegulatoryImplementationTaskResponse(BaseModel):
     assigned_to: Optional[int]
     assignee_name: Optional[str] = None
     assignee_department: Optional[str] = None
+    assignee_ids: List[int] = []
+    assignees: List[Dict[str, Any]] = []  # [{id, display_name, department}]
     due_date: Optional[datetime]
     completed_at: Optional[datetime]
+    obligation_id: Optional[int] = None
+    critical_task_id: Optional[int] = None  # its twin in Task Management
     linked_policy_id: Optional[int]
     linked_policy_title: Optional[str] = None
     linked_control_id: Optional[int]

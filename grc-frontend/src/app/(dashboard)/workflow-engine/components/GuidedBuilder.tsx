@@ -33,6 +33,7 @@ import {
   type NodeParamSchemas,
   type WorkflowDomain,
 } from './types';
+import { SidebarTree } from './SidebarTree';
 
 // ─── Curated per-domain escalation field templates (open-question #1: each
 // trigger gets its own escalation type/fields) ───────────────────────────────
@@ -127,8 +128,8 @@ type NotificationItem = {
   delayMinutes: number;
 };
 
-type CatalogPF = { key: string; label?: string; module?: string; submodule?: string };
-type CatalogTrigger = { key: string; label?: string; module?: string };
+type CatalogPF = { key: string; label?: string; module?: string; submodule?: string; path?: string[] };
+type CatalogTrigger = { key: string; label?: string; module?: string; submodule?: string; path?: string[] };
 type CatalogResponse = {
   platform_functions?: Record<string, CatalogPF[]>;
   triggers?: CatalogTrigger[];
@@ -138,48 +139,30 @@ type CatalogResponse = {
 // scope for the event-driven guided shell, so they're not offered as events.
 const EXCLUDED_CURATED_TRIGGERS = new Set(['manual_trigger', 'schedule_recurring', 'webhook']);
 
-// Bucket a curated event key into a display group + escalation domain so the
-// picker can present platform events hierarchically alongside CRUD functions.
-function curatedTriggerGroup(key: string, module?: string): { group: string; domain: WorkflowDomain } {
-  // Events the catalog gives a module (Controls Automation, Reports, …) group under it.
-  if (module) return { group: module, domain: inferWorkflowDomainsFromModuleName(module)[0] || 'workflow' };
+// The escalation domain of a curated event: by what its key names first, else
+// by the sidebar module the catalog placed it under.
+function curatedTriggerDomain(key: string, module?: string): WorkflowDomain {
   const k = (key || '').toLowerCase();
-  if (k.startsWith('vendor_')) return { group: 'Third-Party Risk', domain: 'risk' };
-  if (k.startsWith('bcm_') || k.startsWith('bia_')) return { group: 'BCM', domain: 'workflow' };
-  if (k.startsWith('user_') || k.startsWith('role_') || k.startsWith('password_') || k.startsWith('critical_task_')) {
-    return { group: 'Administration', domain: 'workflow' };
-  }
-
-  // Assessments (can map to risk *or* compliance escalation configs)
-  if (k.startsWith('risk_review_') || k.startsWith('risk_assessment_') || k.startsWith('rcsa_')) {
-    return { group: 'Assessments', domain: 'risk' };
-  }
-  if (k.startsWith('internal_control_') || k.startsWith('compliance_assessment_') || k.startsWith('access_review_')) {
-    return { group: 'Assessments', domain: 'compliance' };
-  }
-
-  if (k.startsWith('mitigation_') || k.startsWith('appetite_') || k.startsWith('kpi_')) return { group: 'Risk Management', domain: 'risk' };
-  if (k.startsWith('risk') || k.startsWith('kri') || k.startsWith('incident')) return { group: 'Risk Management', domain: 'risk' };
-  if (k.startsWith('vulnerab') || k.startsWith('new_vulnerab')) return { group: 'Vulnerability Management', domain: 'vulnerability' };
-  if (k.startsWith('evidence')) return { group: 'Compliance · Evidence', domain: 'evidence' };
-  if (k.startsWith('framework') || k.startsWith('assessment') || k.startsWith('compliance') || k.startsWith('certification')) return { group: 'Compliance', domain: 'compliance' };
+  if (k.startsWith('vendor_') || k.startsWith('tpra_')) return 'risk';
+  if (k.startsWith('bcm_') || k.startsWith('bia_')) return 'workflow';
+  if (k.startsWith('user_') || k.startsWith('role_') || k.startsWith('password_') || k.startsWith('critical_task_')) return 'workflow';
+  if (k.startsWith('risk_review_') || k.startsWith('risk_assessment_') || k.startsWith('rcsa_')) return 'risk';
+  if (k.startsWith('internal_control_') || k.startsWith('compliance_assessment_') || k.startsWith('access_review_')) return 'compliance';
+  if (k.startsWith('mitigation_') || k.startsWith('appetite_') || k.startsWith('kpi_')) return 'risk';
+  if (k.startsWith('risk') || k.startsWith('kri') || k.startsWith('incident')) return 'risk';
+  if (k.startsWith('vulnerab') || k.startsWith('new_vulnerab')) return 'vulnerability';
+  if (k.startsWith('asset') || k.startsWith('discover') || k.startsWith('criticality_')) return 'assets';
+  if (k.startsWith('evidence')) return 'evidence';
+  if (k.startsWith('framework') || k.startsWith('assessment') || k.startsWith('compliance') || k.startsWith('certification')
+      || k.includes('_assessment_')) return 'compliance';
   if (
-    k.startsWith('governance') ||
-    k.startsWith('document_') ||
-    k.startsWith('committee_') ||
-    k.startsWith('policy_exception_') ||
-    k.startsWith('regulatory_') ||
-    k.startsWith('policy') ||
-    k.startsWith('attestation') ||
-    k.startsWith('control')
-  ) {
-    return { group: 'Governance', domain: 'governance' };
-  }
-  if (k.startsWith('audit')) return { group: 'Audit', domain: 'audit' };
-  if (k.startsWith('asset')) return { group: 'Assets', domain: 'assets' };
-  if (k.startsWith('issue_') || k.startsWith('capa_')) return { group: 'Issue Management', domain: 'workflow' };
-  if (k.startsWith('cis') || k.startsWith('agent') || k.startsWith('connection')) return { group: 'CIS / Agents', domain: 'compliance' };
-  return { group: 'Other events', domain: 'workflow' };
+    k.startsWith('governance') || k.startsWith('document_') || k.startsWith('committee_') || k.startsWith('policy') ||
+    k.startsWith('regulatory_') || k.startsWith('attestation') || k.startsWith('control')
+  ) return 'governance';
+  if (k.startsWith('audit')) return 'audit';
+  if (k.startsWith('issue_') || k.startsWith('capa_')) return 'workflow';
+  if (k.startsWith('cis') || k.startsWith('agent') || k.startsWith('connection')) return 'compliance';
+  return inferWorkflowDomainsFromModuleName(module)[0] || 'workflow';
 }
 
 // Template placeholders the backend resolves at send-time from the trigger
@@ -325,12 +308,11 @@ export default function GuidedBuilder({
       if (cfg.is_workflow_trigger || action.startsWith('platform_action.') || eventName) {
         const moduleName = (cfg.module as string) || undefined;
         if (isEventTrigger) {
-          const grp = curatedTriggerGroup(eventName, moduleName);
           trg.push({
             uid: uid('t'), kind: 'event', key: eventName,
             label: String(n.name || formatNodeLabel(eventName)),
-            module: moduleName || grp.group, submodule: cfg.submodule as string | undefined,
-            domain: grp.domain, triggerEvent: eventName, config: stripMeta(cfg),
+            module: moduleName, submodule: cfg.submodule as string | undefined,
+            domain: curatedTriggerDomain(eventName, moduleName), triggerEvent: eventName, config: stripMeta(cfg),
           });
         } else {
           const ev = inferTriggerEventFromActionName(action) || String(n.node_key || action);
@@ -368,8 +350,8 @@ export default function GuidedBuilder({
   }, []);
 
   // ─── Trigger management ────────────────────────────────────────────────────
-  const addTrigger = useCallback((pf: CatalogPF, moduleName: string) => {
-    const moduleLabel = pf.module || moduleName;
+  const addTrigger = useCallback((pf: CatalogPF) => {
+    const moduleLabel = pf.module || '';
     const ev = inferTriggerEventFromActionName(pf.key);
     if (!ev) {
       setError(`"${pf.label || pf.key}" can't be used as a trigger (no platform event maps to it). Pick a Create / Update / Delete function.`);
@@ -388,13 +370,12 @@ export default function GuidedBuilder({
   }, []);
 
   // Curated platform-event trigger — the event key IS the trigger event.
-  const addEventTrigger = useCallback((trig: CatalogTrigger, group: string) => {
-    const grp = curatedTriggerGroup(trig.key, trig.module);
+  const addEventTrigger = useCallback((trig: CatalogTrigger) => {
     const item: TriggerItem = {
       uid: uid('t'), kind: 'event', key: trig.key,
       label: trig.label || formatNodeLabel(trig.key),
-      module: group || grp.group, submodule: 'Platform event',
-      domain: grp.domain, triggerEvent: trig.key, config: {},
+      module: trig.module, submodule: trig.submodule,
+      domain: curatedTriggerDomain(trig.key, trig.module), triggerEvent: trig.key, config: {},
     };
     setTriggers((prev) => [...prev, item]);
     setEscalationConfig((prev) => ({ ...prev, [item.uid]: {} }));
@@ -506,18 +487,15 @@ export default function GuidedBuilder({
     }
   }, [buildPayload, definitionId, triggers.length, onSaved]);
 
-  const platformGroups = useMemo(() => Object.entries(catalog.platform_functions || {}), [catalog]);
-
-  // Curated platform events grouped by domain (manual/schedule/webhook excluded).
-  const eventGroups = useMemo<Array<[string, CatalogTrigger[]]>>(() => {
-    const byGroup: Record<string, CatalogTrigger[]> = {};
-    for (const t of catalog.triggers || []) {
-      if (!t?.key || EXCLUDED_CURATED_TRIGGERS.has(t.key)) continue;
-      const { group } = curatedTriggerGroup(t.key, t.module);
-      (byGroup[group] ||= []).push(t);
-    }
-    return Object.entries(byGroup).sort(([a], [b]) => a.localeCompare(b));
-  }, [catalog]);
+  // Functions that can start a workflow, and the platform's named events
+  // (manual/schedule/webhook excluded), both in sidebar order from the catalog.
+  const triggerFunctions = useMemo(() => Object.values(catalog.platform_functions || {}).flat()
+    .filter((pf) => inferTriggerEventFromActionName(pf.key)), [catalog]);
+  const events = useMemo(() => (catalog.triggers || [])
+    .filter((t) => t?.key && !EXCLUDED_CURATED_TRIGGERS.has(t.key)), [catalog]);
+  // Where each trigger lives in the sidebar, for the list of chosen triggers.
+  const placeOf = useMemo(() => new Map([...events, ...triggerFunctions]
+    .filter((it) => it.path?.length).map((it) => [it.key, it.path!.join(' › ')])), [events, triggerFunctions]);
 
   // Domains of the configured triggers — used to surface the most relevant
   // ready-to-use message templates first on each notification node.
@@ -564,7 +542,7 @@ export default function GuidedBuilder({
               <div className="mb-1 flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-semibold text-slate-800">{t.label}</p>
-                  <p className="text-[11px] text-slate-500">{t.module}{t.submodule ? ` / ${t.submodule}` : ''} · fires on <code className="text-blue-700">{t.triggerEvent}</code></p>
+                  <p className="text-[11px] text-slate-500">{placeOf.get(t.key) || [t.module, t.submodule].filter(Boolean).join(' / ')} · fires on <code className="text-blue-700">{t.triggerEvent}</code></p>
                 </div>
                 <button onClick={() => removeTrigger(t.uid)} className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
               </div>
@@ -664,8 +642,8 @@ export default function GuidedBuilder({
       {/* Trigger picker */}
       {pickerOpen && (
         <TriggerPicker
-          crudGroups={platformGroups}
-          eventGroups={eventGroups}
+          functions={triggerFunctions}
+          events={events}
           onPickCrud={addTrigger}
           onPickEvent={addEventTrigger}
           onClose={() => setPickerOpen(false)}
@@ -874,24 +852,28 @@ function EscInput({ field, value, onChange, roleOptions }: { field: EscField; va
 //               grouped by domain.
 //   • Actions — Create / Update / Delete platform functions, in a
 //               Module → Submodule → Function hierarchy.
-function TriggerPicker({ crudGroups, eventGroups, onPickCrud, onPickEvent, onClose }: {
-  crudGroups: Array<[string, CatalogPF[]]>;
-  eventGroups: Array<[string, CatalogTrigger[]]>;
-  onPickCrud: (pf: CatalogPF, moduleName: string) => void;
-  onPickEvent: (trig: CatalogTrigger, group: string) => void;
+function TriggerPicker({ functions, events, onPickCrud, onPickEvent, onClose }: {
+  functions: CatalogPF[];
+  events: CatalogTrigger[];
+  onPickCrud: (pf: CatalogPF) => void;
+  onPickEvent: (trig: CatalogTrigger) => void;
   onClose: () => void;
 }) {
   const [q, setQ] = useState('');
-  const [tab, setTab] = useState<'events' | 'actions'>(eventGroups.length ? 'events' : 'actions');
-  const [openGroup, setOpenGroup] = useState<string | null>(eventGroups[0]?.[0] || null);
-  const [openModule, setOpenModule] = useState<string | null>(crudGroups[0]?.[0] || null);
-  const ql = q.trim().toLowerCase();
+  const [tab, setTab] = useState<'events' | 'actions'>(events.length ? 'events' : 'actions');
 
   const tabBtn = (id: 'events' | 'actions', label: string) => (
     <button
       onClick={() => setTab(id)}
       className={`flex-1 rounded-md px-3 py-1.5 text-xs font-semibold transition ${tab === id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'}`}
     >{label}</button>
+  );
+  const row = (key: string, label: string, code: string | null, color: string, onPick: () => void) => (
+    <button key={key} onClick={onPick} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700">
+      <Zap className={`h-3 w-3 flex-shrink-0 ${color}`} />
+      <span className="flex-1 truncate">{label}</span>
+      {code && <code className="text-[10px] text-slate-400">{code}</code>}
+    </button>
   );
 
   return (
@@ -903,7 +885,7 @@ function TriggerPicker({ crudGroups, eventGroups, onPickCrud, onPickEvent, onClo
         </div>
         <div className="space-y-2 border-b border-slate-100 p-3">
           <div className="flex gap-1 rounded-lg bg-slate-50 p-1">
-            {tabBtn('events', `Platform events${eventGroups.length ? '' : ' (0)'}`)}
+            {tabBtn('events', `Platform events${events.length ? '' : ' (0)'}`)}
             {tabBtn('actions', 'Create / Update / Delete')}
           </div>
           <div className="flex items-center gap-2 rounded-md border border-slate-300 px-2">
@@ -912,77 +894,23 @@ function TriggerPicker({ crudGroups, eventGroups, onPickCrud, onPickEvent, onClo
           </div>
           <p className="text-[11px] text-slate-400">
             {tab === 'events'
-              ? 'Semantic events the platform raises (SLA breaches, thresholds, expiries, status changes). Any one starts the workflow.'
-              : 'Records being created, edited or deleted across the platform. Each maps 1:1 to a system event.'}
+              ? 'Events the platform raises (created, completed, approvals, SLA breaches, expiries), listed as the sidebar lists its pages. Any one starts the workflow.'
+              : 'Records being created, edited or deleted, listed as the sidebar lists its pages. Each maps 1:1 to a system event.'}
           </p>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-2">
           {tab === 'events' ? (
-            eventGroups.length === 0 ? (
+            events.length === 0 ? (
               <p className="px-3 py-6 text-center text-xs text-slate-400">No platform events available.</p>
             ) : (
-              eventGroups.map(([group, items]) => {
-                const filtered = items.filter((it) => !ql || (it.label || it.key).toLowerCase().includes(ql) || group.toLowerCase().includes(ql));
-                if (!filtered.length) return null;
-                const open = ql ? true : openGroup === group;
-                return (
-                  <div key={group} className="mb-1">
-                    <button onClick={() => setOpenGroup(open ? null : group)} className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                      {group} <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-                    </button>
-                    {open && (
-                      <div className="space-y-0.5 pb-1">
-                        {filtered.map((it) => (
-                          <button key={it.key} onClick={() => onPickEvent(it, group)} className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700">
-                            <Zap className="h-3 w-3 flex-shrink-0 text-amber-500" />
-                            <span className="flex-1 truncate">{it.label || formatNodeLabel(it.key)}</span>
-                            <code className="text-[10px] text-slate-400">{it.key}</code>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                );
-              })
+              <SidebarTree items={events} query={q} renderItem={(it) =>
+                row(it.key, it.label || formatNodeLabel(it.key), it.key, 'text-amber-500', () => onPickEvent(it))} />
             )
           ) : (
-            crudGroups.map(([moduleName, items]) => {
-              const filtered = items.filter((it) => !ql || (it.label || it.key).toLowerCase().includes(ql) || moduleName.toLowerCase().includes(ql) || (it.submodule || '').toLowerCase().includes(ql));
-              const triggerable = filtered.filter((it) => inferTriggerEventFromActionName(it.key));
-              if (!triggerable.length) return null;
-              const open = ql ? true : openModule === moduleName;
-              // Sub-group by submodule for a Module → Submodule → Function tree.
-              const bySub: Record<string, CatalogPF[]> = {};
-              for (const it of triggerable) { (bySub[it.submodule || 'General'] ||= []).push(it); }
-              const subEntries = Object.entries(bySub).sort(([a], [b]) => a.localeCompare(b));
-              return (
-                <div key={moduleName} className="mb-1">
-                  <button onClick={() => setOpenModule(open ? null : moduleName)} className="flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                    <span>{formatNodeLabel(moduleName)} <span className="ml-1 text-[10px] font-normal text-slate-400">{triggerable.length}</span></span>
-                    <ChevronDown className={`h-3.5 w-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
-                  </button>
-                  {open && (
-                    <div className="space-y-1 pb-1 pl-1">
-                      {subEntries.map(([sub, fns]) => (
-                        <div key={sub}>
-                          <p className="px-2 pt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{sub}</p>
-                          <div className="space-y-0.5">
-                            {fns.map((it) => (
-                              <button key={it.key} onClick={() => onPickCrud(it, moduleName)} className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-xs text-slate-700 hover:bg-blue-50 hover:text-blue-700">
-                                <Zap className="h-3 w-3 flex-shrink-0 text-blue-500" />
-                                <span className="flex-1 truncate">{it.label || formatNodeLabel(it.key.split('.').pop() || it.key)}</span>
-                                <code className="text-[10px] text-slate-400">{inferTriggerEventFromActionName(it.key)}</code>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })
+            <SidebarTree items={functions} query={q} renderItem={(it) =>
+              row(it.key, it.label || formatNodeLabel(it.key.split('.').pop() || it.key),
+                inferTriggerEventFromActionName(it.key), 'text-blue-500', () => onPickCrud(it))} />
           )}
         </div>
       </div>
