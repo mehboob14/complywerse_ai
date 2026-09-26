@@ -18,7 +18,7 @@ NEXPOSE_SEVERITY_MAP = {
     10: "critical",
 }
 
-COMPLIVERSE_SEVERITY_ORDER = {
+AVA_SEVERITY_ORDER = {
     "critical": 4,
     "high": 3,
     "medium": 2,
@@ -39,7 +39,7 @@ def _iso_to_dt(val: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _compute_compliverse_severity(composite_score: float) -> str:
+def _compute_ava_severity(composite_score: float) -> str:
     if composite_score >= 9.0:
         return "critical"
     elif composite_score >= 7.0:
@@ -190,8 +190,8 @@ class Rapid7Transformer:
             "cvss_v2_vector": cvss_v2.get("vector"),
             "nexpose_risk_score": nexpose_risk,
             "scanner_severity": scanner_severity,
-            "compliverse_risk_score": composite,
-            "compliverse_severity": _compute_compliverse_severity(composite),
+            "ava_risk_score": composite,
+            "ava_severity": _compute_ava_severity(composite),
             "cve_id": cves[0] if cves else None,
             "cve_ids": cves,
             "published_date": _iso_to_dt(vuln_detail.get("published")),

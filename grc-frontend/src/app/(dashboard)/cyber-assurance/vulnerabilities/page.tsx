@@ -17,6 +17,7 @@ import NcaVulnQuickAddModal from '@/cyber-assurance/components/vulnerabilities/N
 // zero extra network calls.
 import VulnerabilityDashboardPage from './dashboard/page';
 import { VulnsWorkspace } from './_workspace/VulnsWorkspace';
+import { SmartImportWizard } from '../assets/_import/SmartImportWizard';
 import type { Vulnerability } from './_workspace/lib';
 import {
   Upload,
@@ -268,6 +269,7 @@ export default function VulnerabilitiesPage() {
   const [bulkUploadState, setBulkUploadState] = useState<'idle'|'uploading'|'done'|'error'>('idle');
   const [bulkUploadMsg, setBulkUploadMsg] = useState<string|null>(null);
   const bulkFileRef = useRef<HTMLInputElement>(null);
+  const [showSmartImport, setShowSmartImport] = useState(false);
   // Template chooser shown before the file picker opens. 'standard' uses the
   // generic vuln-management bulk endpoint; 'nca' parses the NCA template
   // client-side and posts each row to /vulnerabilities/nca.
@@ -924,7 +926,7 @@ export default function VulnerabilitiesPage() {
                       </td>
                       <td className="px-3 py-2 font-mono cw-text-muted whitespace-nowrap">{tf.vuln_identifier || `VULN-${vuln.id}`}</td>
                       <td className="px-3 py-2 max-w-[300px]">
-                        <Link href={`/cyber-assurance/vulnerabilities/${vuln.id}`} className="text-sm cw-text font-medium hover:text-[var(--color-base)] transition-colors line-clamp-1">
+                        <Link href={`/vulnerabilities/${vuln.id}`} className="text-sm cw-text font-medium hover:text-[var(--color-base)] transition-colors line-clamp-1">
                           {vuln.title}
                         </Link>
                       </td>
@@ -940,7 +942,7 @@ export default function VulnerabilitiesPage() {
                       <td className="px-3 py-2 cw-text-muted whitespace-nowrap">{vuln.assignee_name ?? <span className="italic">—</span>}</td>
                       <td className="px-3 py-2 cw-text-muted whitespace-nowrap">{fmtDate(vuln.due_date || tf.due_date)}</td>
                       <td className="px-3 py-2">
-                        <Link href={`/cyber-assurance/vulnerabilities/${vuln.id}`} className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-[var(--color-base)] transition-colors" title="View Details" aria-label="View Details">
+                        <Link href={`/vulnerabilities/${vuln.id}`} className="inline-flex items-center justify-center rounded p-1.5 text-slate-500 hover:bg-slate-100 hover:text-[var(--color-base)] transition-colors" title="View Details" aria-label="View Details">
                           <Eye size={16} />
                         </Link>
                       </td>
@@ -1077,6 +1079,7 @@ export default function VulnerabilitiesPage() {
             setBulkTemplateChoice(registerType === 'nca' ? 'nca' : 'standard');
             setShowBulkChooser(true);
           }}
+          onImport={() => setShowSmartImport(true)}
           onAdd={() => {
             // NCA register → NCA-specific add modal; Standard → Add slide-over.
             if (registerType === 'nca') setIsNcaAddOpen(true);
@@ -1089,6 +1092,17 @@ export default function VulnerabilitiesPage() {
 
         {/* legacy inline toolbar + table removed — superseded by VulnsWorkspace */}
       </div>
+
+      {showSmartImport && (
+        <SmartImportWizard
+          kind="vuln"
+          onClose={() => setShowSmartImport(false)}
+          onSuccess={() => {
+            queryClient.invalidateQueries({ queryKey: ['vulnerabilities'] });
+            queryClient.invalidateQueries({ queryKey: ['vuln-dashboard'] });
+          }}
+        />
+      )}
 
       {/* Add Vulnerability Slide-over — dimmed backdrop so the page behind stays visible but recedes */}
       {isModalOpen && (
@@ -1503,7 +1517,7 @@ export default function VulnerabilitiesPage() {
                           <p className="text-sm cw-text-muted">No vulnerabilities assigned</p>
                         ) : (
                           departmentVulnerabilities.slice(0, 5).map((vuln) => (
-                            <Link key={vuln.id} href={`/cyber-assurance/vulnerabilities/${vuln.vulnerability_id}`} className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-subtle)] hover:bg-[var(--color-hover)] transition-colors">
+                            <Link key={vuln.id} href={`/vulnerabilities/${vuln.vulnerability_id}`} className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-subtle)] hover:bg-[var(--color-hover)] transition-colors">
                               <div className="flex items-center gap-2">
                                 <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${deptSeverityStyles[vuln.severity] || deptSeverityStyles.info}`}>{vuln.severity}</span>
                                 <span className="text-sm cw-text truncate max-w-[150px]">{vuln.title}</span>

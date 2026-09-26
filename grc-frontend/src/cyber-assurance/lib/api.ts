@@ -151,7 +151,14 @@ apiClient.interceptors.response.use(
       const isAuthMeCall = /\/auth\/me(?:[/?#]|$)/.test(url);
       const isAuthRefresh = /\/auth\/refresh(?:[/?#]|$)/.test(url);
       if (isAuthMeCall || isAuthRefresh) {
+        // Clearing auth state on a proven-expired session is correct, but localStorage.clear() also
+        // nukes the user's OWN work (e.g. saved AI-Pentest sessions) — so a token blip on reload made
+        // their sessions vanish. Preserve non-auth app data across the clear.
+        const KEEP = ['pentest-sessions', 'pentest-active-session', 'pt-sidebar', 'pt-use-creds'];
+        const keep: Record<string, string> = {};
+        for (const k of KEEP) { try { const v = localStorage.getItem(k); if (v != null) keep[k] = v; } catch { /* storage off */ } }
         localStorage.clear();
+        for (const k of Object.keys(keep)) { try { localStorage.setItem(k, keep[k]); } catch { /* storage off */ } }
         window.location.href = '/login';
         return Promise.reject(error);
       }
@@ -898,6 +905,10 @@ export const discoveryApi = {
   // runId scopes the queue to one discovery run; omit for the full backlog.
   discoveredDevices: (runId?: number) =>
     apiClient.get('/discovery/discovered-devices', { params: runId != null ? { run_id: runId } : undefined }),
+  // Network map: nodes (discovered devices) + edges (topology) for the graph.
+  // runId scopes to one run; omit for the current state across all runs.
+  topology: (runId?: number) =>
+    apiClient.get('/discovery/topology', { params: runId != null ? { run_id: runId } : undefined }),
   // Promote an unclaimed discovered device (keyed by OBSERVATION id) — it only
   // becomes an asset if the login works.
   connectDevice: (observationId: number, data: { username?: string; password?: string; domain?: string; transport?: string; credential_id?: number }) =>

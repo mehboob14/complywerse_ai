@@ -858,6 +858,39 @@ _LINUX_FAMS = ("linux", "ubuntu", "debian", "rhel", "centos", "rocky", "almalinu
                "oraclelinux", "amazonlinux", "sles", "suse")
 
 
+@router.get("/topology")
+def network_topology(
+    run_id: Optional[int] = Query(
+        default=None, description="Scope the map to one discovery run; omit for the current state across all runs."),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Nodes + edges for the network map.
+
+    Nodes are the DISCOVERED DEVICES (deduped observations) — the same set the
+    Overview radar / Connect / Review queues show — so every device a sweep found
+    appears here, not just the ones promoted to inventory. Edges are computed on
+    read: the SNMP-measured switch tree (LLDP/CDP/FDB) where a device answered, and
+    the inferred /24 gateway star everywhere else. `measured` flags them apart so
+    the UI draws solid vs dashed. Read-only.
+    """
+    from .services.network_topology import build_topology_view
+
+    tid = get_user_primary_tenant(current_user, db)
+    view = build_topology_view(db, tid, run_id)
+    nodes = [{
+        "id": n["id"],
+        "label": n["name"],
+        "ip": n["ip"],
+        "type": n["type"],
+        "subnet": n["subnet"],
+        "in_inventory": n["in_inventory"],
+    } for n in view["nodes"]]
+    edges = [{"source": e["source"], "target": e["target"], "measured": e["measured"]}
+             for e in view["edges"]]
+    return {"nodes": nodes, "edges": edges}
+
+
 @router.get("/discovered-devices")
 def list_discovered_devices(
     run_id: Optional[int] = Query(
@@ -1194,16 +1227,42 @@ def _resolve_host_profile(db, tid, body, *, name, kind, ip, current_user):
         return prof
     if not body.username or not body.password:
         raise HTTPException(400, "Provide a username + password, or a credential_id to reuse a saved login.")
-    prof = CredentialProfile(
-        tenant_id=tid, name=name, kind=kind, username=body.username,
-        secret_kind="password", secret_encrypted=encrypt_secret(body.password),
-        domain=(body.domain or None), applies_to_cidrs=[f"{ip}/32"],
-        priority=100, is_active=True,
-        created_by_id=getattr(current_user, "id", None),
-        created_by_name=getattr(current_user, "username", None),
-    )
-    db.add(prof)
-    db.commit()
+    cidr = f"{ip}/32"
+    # Upsert by (tenant, name): reuse/refresh an existing same-named profile
+    # rather than blind-insert. The unique (tenant_id, name) constraint otherwise
+    # 500s the operator's retry after a mistyped password, and a corrected
+    # password on retry must actually take effect.
+    prof = db.query(CredentialProfile).filter(
+        CredentialProfile.tenant_id == tid, CredentialProfile.name == name,
+    ).first()
+    if prof:
+        prof.kind = kind
+        prof.username = body.username
+        prof.secret_kind = "password"
+        prof.secret_encrypted = encrypt_secret(body.password)
+        prof.domain = (body.domain or None)
+        prof.is_active = True
+        if cidr not in (prof.applies_to_cidrs or []):
+            prof.applies_to_cidrs = (prof.applies_to_cidrs or []) + [cidr]
+    else:
+        prof = CredentialProfile(
+            tenant_id=tid, name=name, kind=kind, username=body.username,
+            secret_kind="password", secret_encrypted=encrypt_secret(body.password),
+            domain=(body.domain or None), applies_to_cidrs=[cidr],
+            priority=100, is_active=True,
+            created_by_id=getattr(current_user, "id", None),
+            created_by_name=getattr(current_user, "username", None),
+        )
+        db.add(prof)
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.tenant_id == tid, CredentialProfile.name == name,
+        ).first()
+        if prof is None:
+            raise
     db.refresh(prof)
     return prof
 
@@ -1239,9 +1298,10 @@ def connect_discovered_device(
         promote_observation, transport_for_observation,
     )
     transport = (body.transport or "").lower()
-    if transport not in ("windows", "linux"):
+    if transport not in ("windows", "linux", "wmi"):
         transport = transport_for_observation(obs) or "windows"
-    kind = "winrm" if transport == "windows" else "ssh"
+    # WMI is an alternate Windows transport (DCOM) — it reuses a Windows login.
+    kind = "winrm" if transport in ("windows", "wmi") else "ssh"
     prof = _resolve_host_profile(
         db, tid, body, name=f"{obs.host_name or ip} - {kind}", kind=kind, ip=ip,
         current_user=current_user,
@@ -1345,8 +1405,10 @@ def connect_discovered_service(
     if itype is None:
         raise HTTPException(400, f"Unsupported kind '{kind}'. One of: {', '.join(_TYPED_ITYPE)}")
     default_port = next((dp for _p, k, _i, _l, dp in SERVICE_SUGGESTIONS if k == kind), None)
-    port = int(body.port or default_port or 0)
-    if port and not live_port_open(ip, [port]):
+    port = int(body.port or default_port or (161 if kind == "snmp" else 0))
+    # SNMP is UDP — a TCP reachability precheck would wrongly reject it, so skip
+    # it and let the SNMP collector itself determine reachability over UDP/161.
+    if port and kind != "snmp" and not live_port_open(ip, [port]):
         reason = f"{kind} port {port} is not reachable on {ip} right now."
         obs.resolution_note = reason; db.commit()
         return {"collected": False, "error": reason}
@@ -1369,16 +1431,43 @@ def connect_discovered_service(
             raise HTTPException(400, "Provide a password, or a credential_id to reuse a saved login.")
         username = body.username or ""
         creds = typed_credentials_dict(kind, ip, port, username, body.password, body.database)
-        prof = CredentialProfile(
-            tenant_id=tid, name=f"{obs.host_name or ip} - {kind}", kind=kind,
-            username=username, secret_kind="password",
-            secret_encrypted=encrypt_secret(body.password),
-            port=port or None, applies_to_cidrs=[f"{ip}/32"],
-            priority=100, is_active=True,
-            created_by_id=getattr(current_user, "id", None),
-            created_by_name=getattr(current_user, "username", None),
-        )
-        db.add(prof); db.commit(); db.refresh(prof)
+        # Upsert by (tenant, name) — same reasoning as _resolve_host_profile:
+        # a blind insert 500s the retry after a wrong password.
+        prof_name = f"{obs.host_name or ip} - {kind}"
+        cidr = f"{ip}/32"
+        prof = db.query(CredentialProfile).filter(
+            CredentialProfile.tenant_id == tid, CredentialProfile.name == prof_name,
+        ).first()
+        if prof:
+            prof.kind = kind
+            prof.username = username
+            prof.secret_kind = "password"
+            prof.secret_encrypted = encrypt_secret(body.password)
+            prof.port = port or None
+            prof.is_active = True
+            if cidr not in (prof.applies_to_cidrs or []):
+                prof.applies_to_cidrs = (prof.applies_to_cidrs or []) + [cidr]
+        else:
+            prof = CredentialProfile(
+                tenant_id=tid, name=prof_name, kind=kind,
+                username=username, secret_kind="password",
+                secret_encrypted=encrypt_secret(body.password),
+                port=port or None, applies_to_cidrs=[cidr],
+                priority=100, is_active=True,
+                created_by_id=getattr(current_user, "id", None),
+                created_by_name=getattr(current_user, "username", None),
+            )
+            db.add(prof)
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            prof = db.query(CredentialProfile).filter(
+                CredentialProfile.tenant_id == tid, CredentialProfile.name == prof_name,
+            ).first()
+            if prof is None:
+                raise
+        db.refresh(prof)
     result: Dict[str, Any] = {"collected": False, "kind": kind, "credential_id": prof.id}
     try:
         asset = promote_observation_typed(db, obs, kind, itype, creds)
@@ -1422,10 +1511,24 @@ def reconnect_asset(
     if not ip:
         raise HTTPException(400, "Asset has no IP address to connect to")
     transport = (body.transport or "").lower()
-    if transport not in ("windows", "linux"):
+    if transport not in ("windows", "linux", "wmi"):
         fam = (a.os_family or "").lower()
-        transport = "linux" if fam.startswith(_LINUX_FAMS) else "windows"
-    kind = "winrm" if transport == "windows" else "ssh"
+        if fam.startswith(_LINUX_FAMS):
+            transport = "linux"
+        elif fam.startswith("windows"):
+            transport = "windows"
+        elif getattr(body, "credential_id", None):
+            # Unknown OS (e.g. an evidence-only adopted asset): trust the chosen
+            # saved login's kind rather than blindly assuming Windows — otherwise
+            # an SSH reconnect builds WinRM and fails as a "bad credential".
+            ck = db.query(CredentialProfile.kind).filter(
+                CredentialProfile.id == body.credential_id,
+                CredentialProfile.tenant_id == tid,
+            ).scalar()
+            transport = "linux" if ck == "ssh" else "windows"
+        else:
+            transport = "windows"
+    kind = "winrm" if transport in ("windows", "wmi") else "ssh"
     prof = _resolve_host_profile(
         db, tid, body, name=f"{a.name or ip} - {kind}", kind=kind, ip=ip,
         current_user=current_user,
@@ -1687,6 +1790,11 @@ class ConnectSelectedIn(BaseModel):
     observation_ids: List[int] = Field(min_length=1)
     credential_ids: Optional[List[int]] = None
     credential_id: Optional[int] = None
+    # Bulk connect METHOD: "host" (default; WinRM/SSH by device type) | "wmi"
+    # (Windows over DCOM/135, reuses the WinRM login) | "snmp" (community string
+    # over UDP/161). credential_ids apply to host/wmi; community applies to snmp.
+    method: Optional[str] = None
+    community: Optional[str] = None
 
 
 @router.post("/connect-selected", status_code=202)
@@ -1704,28 +1812,43 @@ def connect_selected(
     leaves the device unclaimed with the reason, never an empty inventory row.
     """
     tid = get_user_primary_tenant(current_user, db)
+    # "auto" (the default) = use whatever each device answered on during the
+    # sweep, decided per device below. The explicit methods force one way in.
+    method = (body.method or "auto").lower()
+    if method not in ("auto", "host", "winrm", "ssh", "wmi", "snmp"):
+        raise HTTPException(400, "method must be one of: auto, host, wmi, snmp")
+    community = (body.community or "").strip()
 
     wanted_ids: List[int] = list(body.credential_ids or [])
     if body.credential_id is not None:
         wanted_ids.append(body.credential_id)
     wanted_ids = list(dict.fromkeys(wanted_ids))  # de-dupe, keep order
 
-    forced_profiles: List[CredentialProfile] = []
-    if wanted_ids:
-        forced_profiles = db.query(CredentialProfile).filter(
-            CredentialProfile.id.in_(wanted_ids),
-            CredentialProfile.tenant_id == tid,
-            CredentialProfile.is_active.is_(True),
-        ).all()
-        if not forced_profiles:
-            raise HTTPException(404, "None of the chosen logins were found (or active).")
-        if any(p.kind not in ("winrm", "ssh") for p in forced_profiles):
-            raise HTTPException(400, "Only host logins (WinRM / SSH) can be run against discovered devices.")
-
     from grc.modules.asset_discovery.services.deep_collect import transport_for_observation
     _KIND_TRANSPORT = {"winrm": "windows", "ssh": "linux"}
-    # Transports the ticked logins can drive (None = auto: any transport allowed).
-    covered = {_KIND_TRANSPORT[p.kind] for p in forced_profiles} if forced_profiles else None
+
+    forced_profiles: List[CredentialProfile] = []
+    if method == "snmp":
+        # SNMP authenticates with a community string, not a saved host login.
+        if not community:
+            community = "public"
+        covered = None  # any device with an IP is eligible
+    else:
+        if wanted_ids:
+            forced_profiles = db.query(CredentialProfile).filter(
+                CredentialProfile.id.in_(wanted_ids),
+                CredentialProfile.tenant_id == tid,
+                CredentialProfile.is_active.is_(True),
+            ).all()
+            if not forced_profiles:
+                raise HTTPException(404, "None of the chosen logins were found (or active).")
+            if any(p.kind not in ("winrm", "ssh") for p in forced_profiles):
+                raise HTTPException(400, "Only host logins (WinRM / SSH) can be run against discovered devices.")
+        # WMI drives ONLY Windows (over DCOM/135, reusing the WinRM login). Host
+        # mode uses the ticked kinds' transports (None = auto, any transport).
+        covered = {"windows"} if method == "wmi" else (
+            None if method == "auto" else
+            {_KIND_TRANSPORT[p.kind] for p in forced_profiles} if forced_profiles else None)
 
     # Only this tenant's still-unclaimed picks; silently drop anything already
     # promoted or out of scope rather than erroring the whole batch.
@@ -1756,8 +1879,9 @@ def connect_selected(
         wdb = Sess()
         try:
             from grc.modules.asset_discovery.services.deep_collect import (
-                promote_observation, select_credential,
-                transport_for_observation as _t,
+                promote_observation, promote_observation_typed, typed_credentials_dict,
+                select_credential, transport_for_observation as _t,
+                login_methods_for_observation as _login_methods,
                 live_port_open as _live_open, classify_collect_error as _classify,
             )
             # Load the ticked logins once for this batch (worker session).
@@ -1769,20 +1893,99 @@ def connect_selected(
                     _sweep_update(tid, done=1, already=1)
                     continue
                 _sweep_update(tid, current=(o.host_name or o.ip_address))
+
+                # In auto mode the device decides: use the best login service the
+                # sweep actually saw answering on it. Nothing open = nothing to try.
+                m = method
+                if method == "auto":
+                    _avail = _login_methods(o)
+                    if not _avail:
+                        o.resolution_note = ("no login service answered on this device — "
+                                             "no WinRM (5985), SSH (22), WMI (135) or SNMP (161)")
+                        wdb.commit(); _sweep_update(tid, done=1, unknown_type=1); continue
+                    m = "host" if _avail[0] in ("winrm", "ssh") else _avail[0]
+
+                # ── SNMP bulk: community string over UDP/161 (no host login) ──────
+                if m == "snmp":
+                    if not o.ip_address:
+                        _sweep_update(tid, done=1, unknown_type=1); continue
+                    try:
+                        creds = typed_credentials_dict("snmp", o.ip_address, 161, "", community, None)
+                        promote_observation_typed(wdb, o, "snmp", "snmp_v2c", creds)
+                        wdb.commit(); _sweep_update(tid, done=1, connected=1)
+                    except Exception as exc:  # noqa: BLE001
+                        wdb.rollback()
+                        o2 = wdb.get(DiscoveryObservation, oid)
+                        if o2 is not None:
+                            o2.resolution_note = f"snmp: {str(exc)[:220]}"; wdb.commit()
+                        _sweep_update(tid, done=1, rejected=1)
+                    continue
+
                 transport = _t(o)
                 if transport is None:
                     o.resolution_note = ("type unknown: the sweep saw no Windows (445/3389) "
                                          "or Linux (22) port, so no login type applies")
                     wdb.commit(); _sweep_update(tid, done=1, unknown_type=1); continue
+
+                # ── WMI bulk: Windows over DCOM/135, reusing the WinRM login ──────
+                if m == "wmi":
+                    if transport != "windows":
+                        _sweep_update(tid, done=1, unknown_type=1); continue  # WMI is Windows-only
+                    if not _live_open(o.ip_address, (135,)):
+                        o.resolution_note = (f"WMI (135) is not reachable on {o.ip_address} right now — the host "
+                                             f"answered discovery but DCOM/RPC is disabled or firewalled.")
+                        wdb.commit(); _sweep_update(tid, done=1, unreachable=1); continue
+                    if forced_id_list:
+                        cands = [p for p in fps if p.kind == "winrm"]
+                        prof = min(cands, key=lambda p: (p.priority if p.priority is not None else 100)) if cands else None
+                    else:
+                        prof = select_credential(wdb, tid, o.ip_address, "windows")
+                    if prof is None:
+                        o.resolution_note = (f"no Windows login saved that covers {o.ip_address} — "
+                                             f"add one under Connect → Add connection")
+                        wdb.commit(); _sweep_update(tid, done=1, no_login=1); continue
+                    try:
+                        promote_observation(wdb, o, prof, "wmi")
+                        wdb.commit(); _sweep_update(tid, done=1, connected=1)
+                    except Exception as exc:  # noqa: BLE001
+                        wdb.rollback()
+                        cls = _classify(exc)
+                        o2 = wdb.get(DiscoveryObservation, oid)
+                        if o2 is not None:
+                            o2.resolution_note = (f"unreachable: could not reach WMI (135) on {o.ip_address}. The login was never tested."
+                                                  if cls == "unreachable" else f"login failed: {str(exc)[:250]}"
+                                                  if cls == "auth" else f"collect error: {str(exc)[:250]}")
+                            wdb.commit()
+                        _sweep_update(tid, done=1, **({"unreachable": 1} if cls == "unreachable" else {"rejected": 1}))
+                    continue
+
                 # "Try anyway": re-check the login port LIVE (not the stale sweep), so a
                 # host that just had WinRM enabled connects, and a truly-off one fails in
-                # ~2s as unreachable (a connection error, never an auth lockout).
+                # a probe-timeout or two as unreachable (a connection error, never an auth
+                # lockout). Uses the SAME timeout budget as the sweep — a tighter one here
+                # made a WinRM host the sweep saw over a slow tunnel read "not reachable".
                 login_ports = (5985, 5986) if transport == "windows" else (22,)
+                _seen_ports = (o.raw or {}).get("open_ports") if isinstance(o.raw, dict) else None
+                logger.warning("login-sweep: host=%r ip=%s transport=%s method=%s ticked_logins=%d "
+                               "open_ports_seen=%s -> live re-check ports %s",
+                               o.host_name, o.ip_address, transport, m, len(fps),
+                               _seen_ports, login_ports)
                 if not _live_open(o.ip_address, login_ports):
                     svc = "WinRM (5985/5986)" if transport == "windows" else "SSH (22)"
-                    o.resolution_note = (f"{svc} is not reachable on {o.ip_address} right now — the host "
-                                         f"answered discovery but remote login is disabled or firewalled. "
-                                         f"Enable it (or the agent) and try again.")
+                    # Tell "login service down" apart from "scanner can't reach this host at all":
+                    # re-probe ONE baseline port the sweep saw open. Dead too = a route/vantage gap
+                    # (open-ports were recorded on a different network) — no login/timeout change fixes it.
+                    _baseline = next((p for p in (_seen_ports or []) if p not in login_ports), None)
+                    if _baseline is not None and not _live_open(o.ip_address, [_baseline]):
+                        o.resolution_note = (f"no network route to {o.ip_address} from this scanner — its "
+                                             f"previously-open port {_baseline} does not answer either. Those "
+                                             f"ports were seen from a different network; this scanner is on a "
+                                             f"different subnet and can't reach it. Run discovery/login from a "
+                                             f"collector on the host's network (or connect this box to it).")
+                    else:
+                        o.resolution_note = (f"{svc} is not reachable on {o.ip_address} right now — the host "
+                                             f"answered discovery but remote login is disabled or firewalled. "
+                                             f"Enable it (or the agent) and try again.")
                     wdb.commit(); _sweep_update(tid, done=1, unreachable=1); continue
                 if forced_id_list:
                     # Only the ticked logins of THIS device's kind; highest
@@ -1826,7 +2029,10 @@ def connect_selected(
     _sweep_start(tid, len(obs_ids), forced_profiles[0].kind if len(forced_profiles) == 1 else None)
     threading.Thread(target=_connect_in_background, daemon=True,
                      name=f"disc-connect-sel-{tid}").start()
-    label = (forced_profiles[0].name if len(forced_profiles) == 1
+    label = ("SNMP (community string)" if method == "snmp"
+             else f"WMI · {forced_profiles[0].name}" if method == "wmi" and len(forced_profiles) == 1
+             else "WMI (auto Windows login)" if method == "wmi"
+             else forced_profiles[0].name if len(forced_profiles) == 1
              else f"{len(forced_profiles)} chosen logins" if forced_profiles
              else "best match per device")
     return {
@@ -1931,8 +2137,10 @@ def resolve_observation_endpoint(
 class CredentialIn(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     kind: str  # winrm | ssh | ldap
-    username: str = Field(min_length=1, max_length=255)
-    secret: str = Field(min_length=1)          # password or PEM key — write-only
+    # Optional: SNMP v2c is community-only and k8s is token-only — no username.
+    # Enforced per-kind in create_credential for the kinds that do need one.
+    username: Optional[str] = Field(default=None, max_length=255)
+    secret: str = Field(min_length=1)          # password / PEM key / community — write-only
     secret_kind: str = "password"              # password | ssh_key
     domain: Optional[str] = None
     port: Optional[int] = Field(default=None, ge=1, le=65535)
@@ -2044,6 +2252,9 @@ def create_credential(
         raise HTTPException(400, f"Invalid kind. One of: {', '.join(CREDENTIAL_KINDS)}")
     if body.secret_kind not in SECRET_KINDS:
         raise HTTPException(400, f"Invalid secret_kind. One of: {', '.join(SECRET_KINDS)}")
+    # SNMP (community-only) and k8s (token-only) carry no username; everything else needs one.
+    if body.kind not in ("snmp", "k8s") and not (body.username or "").strip():
+        raise HTTPException(400, "A username is required for this credential kind.")
     for cidr in (body.applies_to_cidrs or []):
         try:
             ipaddress.ip_network(cidr, strict=False)
@@ -2055,7 +2266,7 @@ def create_credential(
         raise HTTPException(409, f"A credential named '{body.name}' already exists.")
 
     c = CredentialProfile(
-        tenant_id=tid, name=body.name, kind=body.kind, username=body.username,
+        tenant_id=tid, name=body.name, kind=body.kind, username=(body.username or ""),
         secret_kind=body.secret_kind,
         secret_encrypted=encrypt_secret(body.secret),  # encrypted at rest
         domain=body.domain, port=body.port, winrm_transport=body.winrm_transport,

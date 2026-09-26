@@ -76,6 +76,7 @@ from .modules.agents import agents_router, agent_downloads_router
 from .modules.risk_posture import risk_posture_router
 from .modules.onboarding import onboarding_router
 from .modules.asset_discovery import asset_discovery_router
+from .modules.asset_import.router import router as asset_import_router
 from .modules.compliance_plugins import compliance_plugins_router
 from .modules.automation import automation_soc2_router, automation_frameworks_router, automation_common_router
 from .routers.connect_wizard_router import router as connect_wizard_router
@@ -263,6 +264,10 @@ app.include_router(agent_downloads_router)
 app.include_router(risk_posture_router)
 app.include_router(onboarding_router)
 app.include_router(asset_discovery_router)
+app.include_router(asset_import_router)
+# AI Pentest assessments (isolated cyber module: grc/modules/pentest)
+from .modules.pentest.router import router as pentest_router  # noqa: E402
+app.include_router(pentest_router)
 app.include_router(compliance_plugins_router)
 app.include_router(automation_soc2_router)
 # common must be registered before the {framework} router so /automation/common/*
@@ -298,6 +303,26 @@ def on_startup():
     _embed_worker_autostart = os.getenv("COMPLYCHAT_EMBED_WORKER_AUTOSTART", "true").strip().lower()
     if _disable_complychat_embedding_worker not in ("1", "true", "yes", "on") and _embed_worker_autostart in ("1", "true", "yes", "on"):
         start_complychat_embedding_worker()
+
+    # Pentest Find scans (grc_pentest_scan_jobs): their worker thread dies on restart, so re-drive
+    # nessus/openvas and fail the in-process ones with a clear reason instead of leaving them 'running'.
+    try:
+        from grc.modules.pentest.service import resume_inflight_scans
+        resume_inflight_scans(os.getenv("DEFAULT_TENANT_SLUG", "ava"))
+    except Exception:  # noqa: BLE001
+        import logging as _logging
+        _logging.getLogger(__name__).warning("pentest resume-on-startup skipped", exc_info=True)
+
+    # Auto-start the pentest MCP fleet's PERSISTENT backends (HexStrike's :8888 server, and the
+    # Greenbone/OpenVAS stack when built) so scanners are available without a manual restart — a WSL
+    # restart otherwise kills them. Non-blocking (daemon thread) + fault-tolerant.
+    if os.getenv("DISABLE_PENTEST_FLEET_AUTOSTART", "").strip().lower() not in ("1", "true", "yes", "on"):
+        try:
+            from grc.modules.pentest.fleet_lifecycle import ensure_fleet_up
+            ensure_fleet_up()
+        except Exception:  # noqa: BLE001
+            import logging as _logging
+            _logging.getLogger(__name__).warning("pentest fleet auto-start skipped", exc_info=True)
 
 
 @app.on_event("shutdown")

@@ -112,6 +112,7 @@ const navigation: NavEntry[] = [
       // { name: 'Criticality Assessments',   href: '/cyber-assurance/assets/criticality-assessments', icon: ClipboardCheck, requiredPermissions: ['assets:criticality_assessments:view'] },
       { name: 'Vulnerabilities',           href: '/cyber-assurance/vulnerabilities',               icon: Bug,           requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
       { name: 'Vulnerability Scanning',    href: '/cyber-assurance/scan-flows',                    icon: Crosshair,     requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
+      { name: 'AI Pentest',                href: '/cyber-assurance/pentest',                       icon: Bot },
     ],
   },
 ];

@@ -13,6 +13,7 @@ import { AssetModal } from './AssetModal';
 import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
 import InventoryScorecard from '@/cyber-assurance/components/dashboard/InventoryScorecard';
 import InventoryRedesign from './_workspace/InventoryRedesign';
+import { SmartImportWizard } from './_import/SmartImportWizard';
 import {
   Loader2,
   AlertCircle,
@@ -339,6 +340,7 @@ export default function AssetsPage() {
           <div style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
             <select className="sel"><option>Last 30 days</option><option>Last 7 days</option><option>This quarter</option></select>
             <button type="button" className="btn"><Download size={15} />Export</button>
+            {canCreate && <button type="button" className="btn" onClick={() => setIsImportModalOpen(true)}><Upload size={15} />Import</button>}
             {canCreate && <button type="button" className="btn btn-pri" onClick={() => setIsModalOpen(true)}><Plus size={15} />Add asset</button>}
           </div>
         </div>
@@ -397,10 +399,11 @@ export default function AssetsPage() {
       )}
 
       {isImportModalOpen && (
-        <ImportAssetsModal
+        <SmartImportWizard
           onClose={() => setIsImportModalOpen(false)}
           onSuccess={() => {
             queryClient.invalidateQueries({ queryKey: ['assets'] });
+            queryClient.invalidateQueries({ queryKey: ['asset-facets'] });
             queryClient.invalidateQueries({ queryKey: ['assets-dashboard'] });
           }}
         />

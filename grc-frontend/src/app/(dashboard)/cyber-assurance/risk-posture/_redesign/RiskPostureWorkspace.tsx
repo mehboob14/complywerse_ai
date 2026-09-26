@@ -157,19 +157,10 @@ export default function RiskPostureWorkspace() {
       <style>{`.rp-row:hover{background:#F7FBFA}`}</style>
       <WeightsPanel open={weightsOpen} onClose={() => setWeightsOpen(false)} />
 
-      {/* header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, marginBottom: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ fontSize: 22, letterSpacing: '-.025em', fontWeight: 600 }}>Assets Risk Posture</h1>
-          <div style={{ fontSize: 12.5, color: MUTED, marginTop: 4, display: 'flex', alignItems: 'center', gap: 7 }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: AC }} />
-            {total} assets scored on read · risk = weighted blend of vulnerabilities, hardening, control gap and business impact
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
-          <button style={btn} onClick={() => { if (!hasPermission('compliance:scan:execute')) { toast.toast({ title: 'Permission required', message: 'Only an administrator or scan operator can change risk weights.', type: 'warning' }); return; } setWeightsOpen(true); }}>Tune weights</button>
-          <button style={btnGreen} onClick={() => { qc.invalidateQueries({ queryKey: ['risk-posture.dashboard'] }); toast.toast({ title: 'Recalculating', message: `Re-scoring ${total} assets from live signals.`, type: 'info' }); }}>↻ Recalculate</button>
-        </div>
+      {/* header — page title lives in the top bar (PAGE_TITLES); only actions here */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 9, marginBottom: 16, flexWrap: 'wrap' }}>
+        <button style={btn} onClick={() => { if (!hasPermission('compliance:scan:execute')) { toast.toast({ title: 'Permission required', message: 'Only an administrator or scan operator can change risk weights.', type: 'warning' }); return; } setWeightsOpen(true); }}>Tune weights</button>
+        <button style={btnGreen} onClick={() => { qc.invalidateQueries({ queryKey: ['risk-posture.dashboard'] }); toast.toast({ title: 'Recalculating', message: `Re-scoring ${total} assets from live signals.`, type: 'info' }); }}>↻ Recalculate</button>
       </div>
 
       {/* hero */}
