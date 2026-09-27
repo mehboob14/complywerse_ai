@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   AlertTriangle, BellRing, Building2, CalendarCheck, ClipboardList, Cpu, FileQuestion, FileSignature, FileText, Inbox, Layers,
-  ShieldAlert,
+  EyeOff, ShieldAlert,
   LayoutDashboard,
   PackageCheck, Radar, Radio, Settings, Share2, Shield, type LucideIcon,
 } from 'lucide-react';
@@ -24,6 +24,7 @@ const GROUPS: Array<{ title: string; items: Item[] }> = [
     { name: 'Vendors', href: '/vendor-risk/vendors', icon: Building2 },
     { name: 'Procurement', href: '/vendor-risk/procurement', icon: PackageCheck },
     { name: 'Contracts', href: '/vendor-risk/contracts', icon: FileSignature },
+    { name: 'Shadow SaaS', href: '/vendor-risk/shadow-saas', icon: EyeOff },
   ] },
   { title: 'Assessment', items: [
     { name: 'Assessments', href: '/vendor-risk/assessments', icon: ClipboardList },

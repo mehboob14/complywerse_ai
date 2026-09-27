@@ -2625,6 +2625,25 @@ export const vendorAlertsApi = {
   research: (id: number) => apiClient.post(`/vendor-risk/alerts/${id}/research`, {}, { timeout: 180000 }),
 };
 
+// Software in use that no one has assessed (tpra/shadow_saas.py).
+export const vendorShadowApi = {
+  board: (params?: { status?: string }) => apiClient.get('/vendor-risk/shadow-saas', { params: params || {} }),
+  template: () => apiClient.get('/vendor-risk/shadow-saas/import/template', { responseType: 'blob' }),
+  importFile: (file: File, dryRun: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post('/vendor-risk/shadow-saas/import', form, {
+      params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  syncGrip: () => apiClient.post('/vendor-risk/shadow-saas/sync', {}, { timeout: 180000 }),
+  fromRecords: (name: string) => apiClient.post('/vendor-risk/shadow-saas/from-records', { name }),
+  onboard: (id: number, note?: string) => apiClient.post(`/vendor-risk/shadow-saas/${id}/onboard`, { note }),
+  deny: (id: number, note: string, block: boolean) => apiClient.post(`/vendor-risk/shadow-saas/${id}/deny`, { note, block }),
+  dismiss: (id: number, note: string) => apiClient.post(`/vendor-risk/shadow-saas/${id}/dismiss`, { note }),
+  reopen: (id: number) => apiClient.post(`/vendor-risk/shadow-saas/${id}/reopen`),
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

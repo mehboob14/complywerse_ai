@@ -118,6 +118,8 @@ def _bootstrap() -> None:
         "grc.modules.connectors.providers.securitytrails",
         # Security-rating providers — pull-only; read by third-party risk monitoring.
         "grc.modules.connectors.providers.security_ratings",
+        # SaaS discovery (Grip) and the web gateway that blocks what is denied (Zscaler).
+        "grc.modules.connectors.providers.saas_governance",
     ]
     for mod_path in provider_modules:
         try:

@@ -4,7 +4,7 @@ import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Plug, Plus, RefreshCw, CheckCircle, AlertCircle, Loader2, X, ExternalLink,
-  Ticket, Activity, ShieldAlert, MessageSquare, Mic, BookOpenCheck, Trash2, Radar, Gauge,
+  Ticket, Activity, ShieldAlert, MessageSquare, Mic, BookOpenCheck, Trash2, Radar, Gauge, Cloud, ShieldBan,
 } from 'lucide-react';
 import { connectorsApi, type ConnectorProviderMeta, type ConnectorRow } from '@/cyber-assurance/lib/api';
 import { useToast } from '@/cyber-assurance/components/ui/ToastProvider';
@@ -18,9 +18,11 @@ const CATEGORY_META: Record<string, { label: string; icon: typeof Ticket; descri
   transcribe: { label: 'Transcription', icon: Mic,            description: 'Pull meeting transcripts to auto-create committee meeting minutes.' },
   easm_source: { label: 'Attack surface', icon: Radar,      description: 'Passive internet data (Shodan, Censys, SecurityTrails) for asset discovery and supplier scans.' },
   security_rating: { label: 'Security ratings', icon: Gauge, description: "Read each supplier's rating from UpGuard, SecurityScorecard or BitSight." },
+  saas_discovery: { label: 'SaaS discovery', icon: Cloud, description: 'Bring the apps your people use (Grip Security) into Shadow SaaS for a decision.' },
+  web_gateway: { label: 'Web gateway', icon: ShieldBan, description: 'Block the domain of an app third-party risk denies (Zscaler Internet Access).' },
 };
 
-const CATEGORY_ORDER = ['ticketing', 'siem', 'pentest', 'collab', 'transcribe', 'easm_source', 'security_rating'] as const;
+const CATEGORY_ORDER = ['ticketing', 'siem', 'pentest', 'collab', 'transcribe', 'easm_source', 'security_rating', 'saas_discovery', 'web_gateway'] as const;
 
 export default function ConnectorsAdminPage() {
   const [openSetupFor, setOpenSetupFor] = useState<ConnectorProviderMeta | null>(null);
