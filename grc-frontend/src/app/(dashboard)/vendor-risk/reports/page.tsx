@@ -90,7 +90,7 @@ export default function ReportsPage() {
   });
   const { data: vendors } = useQuery({
     queryKey: ['tprm-report-vendors'],
-    enabled: kind === 'vendor_file',
+    enabled: kind === 'vendor_file' || kind === 'vendor_summary',
     queryFn: async () => {
       const d = (await vendorRiskApi.getVendors({ limit: 500 })).data;
       return ((Array.isArray(d) ? d : d?.items || d?.vendors || []) as Array<{ id: number; name: string }>)
@@ -101,8 +101,8 @@ export default function ReportsPage() {
 
   const request = (): ReportRequest => (kind === 'committee_pack' || kind === 'ratings_quarter'
     ? { kind, period_start: periods[period].start, period_end: periods[period].end }
-    : kind === 'vendor_file' ? { kind, vendor_id: Number(vendorId) } : { kind });
-  const ready = kind !== 'vendor_file' || vendorId !== '';
+    : kind === 'vendor_file' || kind === 'vendor_summary' ? { kind, vendor_id: Number(vendorId) } : { kind });
+  const ready = (kind !== 'vendor_file' && kind !== 'vendor_summary') || vendorId !== '';
   const refresh = () => qc.invalidateQueries({ queryKey: ['tprm-reports'] });
   const onError = (e: unknown) => setError(detail(e));
 
@@ -179,6 +179,7 @@ export default function ReportsPage() {
               <option value="register">Register of functions and obligations</option>
               <option value="vendor_file">Vendor evidence file</option>
               <option value="ratings_quarter">Security ratings of critical suppliers</option>
+              <option value="vendor_summary">Supplier summary</option>
             </select>
           </label>
           {(kind === 'committee_pack' || kind === 'ratings_quarter') && (
@@ -189,7 +190,7 @@ export default function ReportsPage() {
               </select>
             </label>
           )}
-          {kind === 'vendor_file' && (
+          {(kind === 'vendor_file' || kind === 'vendor_summary') && (
             <label className="text-xs text-gray-600">Vendor
               <select className="mt-0.5 block w-64 rounded-lg border border-gray-300 px-2 py-1 text-sm" value={vendorId}
                 onChange={(e) => { setVendorId(e.target.value ? Number(e.target.value) : ''); setPreview(null); }}>

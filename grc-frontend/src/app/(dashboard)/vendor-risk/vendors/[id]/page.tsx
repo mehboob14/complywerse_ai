@@ -360,6 +360,11 @@ export default function VendorDetailPage() {
             )}
           </div>
         </div>
+        <div className="flex flex-wrap items-center gap-2">
+        <Link href={`/vendor-risk/vendors/${vendorId}/summary`}
+          className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50">
+          Summary report
+        </Link>
         {canEdit && (
           <button
             onClick={() => {
@@ -384,6 +389,7 @@ export default function VendorDetailPage() {
             Edit
           </button>
         )}
+        </div>
       </div>
 
       {/* Tabs */}

@@ -54,7 +54,8 @@ from .service import write_audit
 from .versions import questions_for
 
 KINDS = {"committee_pack": "Committee pack", "register": "Register of functions and obligations",
-         "vendor_file": "Vendor evidence file", "ratings_quarter": "Security ratings of critical suppliers"}
+         "vendor_file": "Vendor evidence file", "ratings_quarter": "Security ratings of critical suppliers",
+         "vendor_summary": "Supplier summary"}
 LEVELS = ("critical", "high", "medium", "low")
 MEASURES = {
     "cycle": "Assessment cycle: start to decision",
@@ -695,10 +696,11 @@ router = APIRouter(prefix="/tpra", tags=["TPRA Reports"])
 
 
 class ReportIn(BaseModel):
-    kind: str = Field(..., pattern="^(committee_pack|register|vendor_file|ratings_quarter)$")
+    kind: str = Field(..., pattern="^(committee_pack|register|vendor_file|ratings_quarter|vendor_summary)$")
     period_start: Optional[date] = None
     period_end: Optional[date] = None
     vendor_id: Optional[int] = None
+    narrative: Optional[List[str]] = Field(None, max_length=5)     # a supplier summary's AI paragraphs, kept with it
 
 
 class ShareIn(BaseModel):
@@ -720,6 +722,10 @@ def _build(db: Session, tenant_id: int, body: ReportIn) -> Tuple[dict, Optional[
     if not body.vendor_id:
         raise HTTPException(400, "Choose the vendor whose file to generate.")
     vendor = graph._vendor(db, tenant_id, body.vendor_id)
+    if body.kind == "vendor_summary":
+        from .summary import summary
+        narrative = [" ".join(str(p).split())[:900] for p in (body.narrative or []) if str(p).strip()] or None
+        return summary(db, tenant_id, vendor, today, narrative), None, None, vendor.id
     return vendor_file(db, tenant_id, vendor, today), None, None, vendor.id
 
 
@@ -766,7 +772,7 @@ def s_report(db: Session, reports: List[TPRAReport], content: bool = False) -> L
 
 
 @router.get("/reports/preview")
-def preview_report(kind: str = Query(..., pattern="^(committee_pack|register|vendor_file|ratings_quarter)$"),
+def preview_report(kind: str = Query(..., pattern="^(committee_pack|register|vendor_file|ratings_quarter|vendor_summary)$"),
                    period_start: Optional[date] = None, period_end: Optional[date] = None,
                    vendor_id: Optional[int] = None, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """The report as it would be generated now, without keeping it."""

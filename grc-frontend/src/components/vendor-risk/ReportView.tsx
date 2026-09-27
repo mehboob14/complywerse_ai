@@ -1,5 +1,5 @@
-// Draws any third-party risk report (committee pack, register, vendor file): the
-// headline figures, then each section as a table. Used inside the app and on the
+// Draws any third-party risk report (committee pack, register, vendor file, supplier
+// summary): the headline figures, then each section as a table, or as paragraphs. Used inside the app and on the
 // examiner's read-only page, so it depends on nothing but its props.
 
 export interface ReportSection {
@@ -8,6 +8,7 @@ export interface ReportSection {
   note?: string | null;
   columns: string[];
   rows: Array<Array<string | number | null>>;
+  paragraphs?: string[];
 }
 
 export interface ReportContent {
@@ -60,7 +61,9 @@ export default function ReportView({ content }: { content: ReportContent }) {
         <section key={s.key} className="break-inside-avoid rounded-xl border border-gray-200 bg-white p-4">
           <h2 className="text-sm font-semibold text-slate-900">{s.title}</h2>
           {s.note && <p className="mt-0.5 text-xs text-gray-500">{s.note}</p>}
-          {s.rows.length === 0 ? (
+          {s.paragraphs?.length ? (
+            <div className="mt-2 space-y-2 text-sm leading-relaxed text-slate-800">{s.paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
+          ) : s.rows.length === 0 ? (
             <p className="mt-2 text-sm text-gray-500">None.</p>
           ) : (
             <div className="mt-2 overflow-x-auto">

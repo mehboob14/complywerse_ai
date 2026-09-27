@@ -2341,10 +2341,11 @@ export const vendorRiskApi = {
 // Talks to /vendor-risk/tpra/*. Separate from the legacy vendorRiskApi flat
 // methods above so the new lifecycle UI has a clean, grouped client surface.
 export interface ReportRequest {
-  kind: 'committee_pack' | 'register' | 'vendor_file' | 'ratings_quarter';
+  kind: 'committee_pack' | 'register' | 'vendor_file' | 'ratings_quarter' | 'vendor_summary';
   period_start?: string;
   period_end?: string;
   vendor_id?: number;
+  narrative?: string[];
 }
 
 export const tpraApi = {
@@ -2660,6 +2661,12 @@ export const vendorFairApi = {
     form.append('file', file);
     return apiClient.post('/vendor-risk/fair/import', form, { params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' } });
   },
+};
+
+// A supplier on a few printable pages, with its NIST CSF 2.0 profile (tpra/summary.py).
+export const vendorSummaryApi = {
+  get: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/summary`),
+  narrative: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/summary/narrative`, {}, { timeout: 180000 }),
 };
 
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
