@@ -2644,6 +2644,24 @@ export const vendorShadowApi = {
   reopen: (id: number) => apiClient.post(`/vendor-risk/shadow-saas/${id}/reopen`),
 };
 
+// FAIR analyses of supplier loss scenarios (tpra/fair.py).
+export const vendorFairApi = {
+  list: (params?: { vendor_id?: number }) => apiClient.get('/vendor-risk/fair', { params: params || {} }),
+  prefill: (vendorId: number, effect: string) => apiClient.get(`/vendor-risk/vendors/${vendorId}/fair/prefill`, { params: { effect } }),
+  create: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/fair', data),
+  get: (id: number) => apiClient.get(`/vendor-risk/fair/${id}`),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/fair/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/vendor-risk/fair/${id}`),
+  exportOne: (id: number) => apiClient.get(`/vendor-risk/fair/${id}/export.csv`, { responseType: 'blob' }),
+  exportAll: () => apiClient.get('/vendor-risk/fair/export.csv', { responseType: 'blob' }),
+  template: () => apiClient.get('/vendor-risk/fair/import/template', { responseType: 'blob' }),
+  importFile: (file: File, dryRun: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post('/vendor-risk/fair/import', form, { params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

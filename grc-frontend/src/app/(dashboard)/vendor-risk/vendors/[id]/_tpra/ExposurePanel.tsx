@@ -43,10 +43,16 @@ export default function ExposurePanel({ vendorId }: { vendorId: number }) {
   return (
     <div className="space-y-4">
       <section className="rounded-xl border border-gray-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">What this vendor could cost us in a year</h2>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">What this vendor could cost us in a year</h2>
+          <Link href={`/vendor-risk/fair?vendor=${vendorId}`} className="rounded-lg border border-slate-200 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
+            Run a FAIR analysis
+          </Link>
+        </div>
         <p className="mb-3 text-xs text-gray-500">
           A range from {data.iterations.toLocaleString('en-GB')} simulated years, not a forecast. The constants behind it
-          are set in <Link href="/vendor-risk/settings" className="text-primary-700 hover:underline">Settings</Link>.
+          are set in <Link href="/vendor-risk/settings" className="text-primary-700 hover:underline">Settings</Link>. A FAIR
+          analysis takes one scenario apart factor by factor, starting from these same figures.
         </p>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {year(data.annual).map((t) => (

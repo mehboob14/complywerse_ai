@@ -42,3 +42,4 @@ from ._68_regulatory_obligations import *  # noqa: F401,F403 - what each regulat
 from ._69_tpra_checkins import *  # noqa: F401,F403 - stakeholders' yearly check-ins on suppliers
 from ._70_tpra_outside_in import *  # noqa: F401,F403 - outside-in scans of supplier domains, and waivers
 from ._71_tpra_shadow_saas import *  # noqa: F401,F403 - software in use that no one has assessed
+from ._72_tpra_fair import *  # noqa: F401,F403 - FAIR analyses of supplier loss scenarios
