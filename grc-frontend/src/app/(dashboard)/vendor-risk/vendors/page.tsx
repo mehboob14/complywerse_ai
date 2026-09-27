@@ -10,11 +10,13 @@ import {
   Plus,
   Eye,
   Trash2,
+  Upload,
 } from 'lucide-react';
 import Link from 'next/link';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader, AnimatedModal } from '@/components/ui';
 import { StageProgress, stageNumberLabel } from '../_lib/lifecycleShared';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import ImportVendors from './_ImportVendors';
 
 interface Vendor {
   id: number;
@@ -106,6 +108,7 @@ export default function VendorListPage() {
     hasPermission('vendor_risk:vendors:delete') ||
     hasPermission('vendor_risk:vendors:edit');
   const [showModal, setShowModal] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -288,15 +291,27 @@ export default function VendorListPage() {
           <p className="text-sm text-slate-500 mt-1">Manage your third-party vendor inventory</p>
         </div>
         {canCreate && (
-          <button
-            onClick={() => setShowModal(true)}
-            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
-          >
-            <Plus className="h-4 w-4" />
-            Add Vendor
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setImporting(true)}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <Upload className="h-4 w-4" />
+              Import
+            </button>
+            <button
+              onClick={() => setShowModal(true)}
+              className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium"
+            >
+              <Plus className="h-4 w-4" />
+              Add Vendor
+            </button>
+          </div>
         )}
       </div>
+      {importing && (
+        <ImportVendors onClose={() => setImporting(false)} onDone={() => queryClient.invalidateQueries({ queryKey: ['vendors'] })} />
+      )}
 
       {/* Filters / Search row */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center">

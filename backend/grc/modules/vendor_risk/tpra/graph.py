@@ -56,7 +56,7 @@ BUILT_IN_ALIASES: Dict[str, str] = {
 GENERIC = {"linux", "windows", "microsoft windows", "internal", "in house", "in-house", "n/a", "na", "none",
            "various", "multiple", "tbc", "tbd", "unknown", "other"}
 _SUFFIXES = {"inc", "ltd", "llc", "limited", "corp", "corporation", "plc", "gmbh", "co", "company", "sa", "ag", "bv"}
-_INACTIVE = ("retired", "offboarded", "inactive", "terminated")
+_INACTIVE = ("retired", "offboarded", "inactive", "terminated", "requested", "rejected")
 
 
 def normalise(name: str) -> str:

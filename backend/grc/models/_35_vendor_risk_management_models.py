@@ -56,6 +56,17 @@ class Vendor(Base):
     active_assessment_id = Column(Integer, nullable=True, index=True)
     # Soft-delete: vendors carry history, so they are never hard-deleted.
     deleted_at = Column(DateTime, nullable=True)
+    # ── Onboarding request (tpra/intake.py) ───────────────────────────────────
+    # The requester's structured intake: {"answers": {...}, "justifications": {...}}.
+    # Null for vendors added directly rather than requested.
+    intake = Column(JSON, nullable=True)
+    # draft → submitted → in_review → approved | rejected; null = never a request.
+    intake_status = Column(String(20), nullable=True, index=True)
+    requested_by = Column(Integer, nullable=True)   # plain id: a second FK to users would make joins ambiguous
+    submitted_at = Column(DateTime, nullable=True)
+    # Who else looks after the relationship, and who else hears about it.
+    stakeholder_ids = Column(JSON, nullable=True)
+    notify_emails = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

@@ -39,7 +39,7 @@ from . import tier_policy
 
 logger = logging.getLogger(__name__)
 
-_INACTIVE_VENDOR = ("retired", "offboarded", "inactive", "terminated")
+_INACTIVE_VENDOR = ("retired", "offboarded", "inactive", "terminated", "requested", "rejected")
 _REMEDIATION_DONE = ("completed", "complete", "closed", "verified", "cancelled", "canceled", "done")
 _MAX_DAYS = 3650
 

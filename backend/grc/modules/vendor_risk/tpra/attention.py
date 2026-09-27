@@ -51,6 +51,7 @@ CONDITIONS: Dict[str, tuple] = {
     "certificate_expiring": ("Certificate expiring", 55),
     "contract_expiring": ("Contract expiring", 55),
     "questionnaire_to_review": ("Questionnaire to review", 50),
+    "request_to_review": ("Onboarding request to review", 58),
     "tier_overridden": ("Tier set by hand", 45),
     "signal_unverified": ("Unverified alert", 30),
     "questionnaire_untouched": ("Questionnaire not started", 40),
@@ -335,6 +336,16 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             f"Submitted {_days((today - submitted).days)} ago",
             f"/vendor-risk/assessments/{qr.assessment_id}?tab=questionnaire" if qr.assessment_id
             else "/vendor-risk/questionnaires")
+
+    # Onboarding requests submitted and not yet picked up. These records are not
+    # vendors in use yet, so they are read here rather than from `vendors`.
+    for v in db.query(Vendor).filter(Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None),
+                                     Vendor.intake_status == "submitted"):
+        submitted = _day(v.submitted_at or v.created_at or datetime.utcnow())
+        add("request_to_review", "vendor", v.id, v, submitted,
+            f"{v.name} was requested on {submitted:%d %b %Y} and is waiting for review",
+            f"Waiting {_days((today - submitted).days)}", f"/vendor-risk/intake/{v.id}",
+            tone="amber", lapsed=(today - submitted).days > REVIEW_AFTER_DAYS)
 
     return items
 

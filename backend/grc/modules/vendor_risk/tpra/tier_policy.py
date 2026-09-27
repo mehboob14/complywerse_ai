@@ -26,6 +26,7 @@ from ....models import (
     Evidence, Role, TPRAEvidenceLink, TPRAMonitoringSignal, UserRole, Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate,
 )
+from . import intake as intake_answers
 from .builtin_templates import TIER_SUGGESTED_TEMPLATES
 from .portal import ANSWERED
 from .stages import TIERS, cadence_days_for, required_reviewers_for
@@ -169,6 +170,7 @@ def basis(vendor: Vendor) -> dict:
         "locations": _words(vendor.geographic_locations),
         "services": "; ".join(_words(vendor.services_provided if isinstance(vendor.services_provided, list)
                                      else [vendor.services_provided])),
+        "intake": intake_answers.fingerprint(vendor),
         "at": datetime.utcnow().isoformat(),
     }
 
@@ -191,6 +193,8 @@ def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAsses
         reasons.append(f"now operates in {', '.join(new_places)}")
     if now["services"] and now["services"] != recorded.get("services"):
         reasons.append("the services it provides have changed")
+    if "intake" in recorded:
+        reasons.extend(intake_answers.changes_since(recorded["intake"] or {}, vendor))
     since = datetime.fromisoformat(recorded["at"]) if recorded.get("at") else None
     if since is not None:
         breach = (db.query(TPRAMonitoringSignal).filter(

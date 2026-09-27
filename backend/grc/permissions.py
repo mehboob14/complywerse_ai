@@ -506,6 +506,12 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "create", "edit", "delete"]
             },
             {
+                # create = raise a request for a new supplier; review = pick it up or turn it down
+                "name": "intake",
+                "display_name": "Onboarding Requests",
+                "actions": ["view", "create", "review"]
+            },
+            {
                 "name": "assessments",
                 "display_name": "TPRA Assessments",
                 "actions": ["view", "create", "edit", "delete"]

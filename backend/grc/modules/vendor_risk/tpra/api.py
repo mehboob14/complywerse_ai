@@ -23,7 +23,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
+from . import intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
 from .stages import stages_payload, is_valid_stage
 from .schema_migrations import ensure_tpra_columns
 
@@ -1275,6 +1275,13 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
     service.write_audit(db, a.tenant_id, entity="approval", action="create",
                         vendor_id=a.vendor_id, assessment_id=a.id, entity_id=ap.id, actor_id=user.id,
                         to_value=body.decision, reason=body.rationale)
+    # An onboarding request is decided by the same decision.
+    _requested = db.query(Vendor).filter(Vendor.id == a.vendor_id).first()
+    if _requested is not None and _requested.intake_status in ("submitted", "in_review"):
+        if body.decision in ("approve", "approve_with_conditions"):
+            intake.set_status(_requested, "approved")
+        elif body.decision == "reject":
+            intake.set_status(_requested, "rejected")
     db.commit()
     return s_approval(ap)
 

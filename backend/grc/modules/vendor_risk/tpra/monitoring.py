@@ -29,7 +29,7 @@ from .bootstrap import get_tiering_config
 from .engine_monitoring import should_trigger_reassessment
 
 POLL_EVERY_DAYS = {"critical": 1, "high": 7, "medium": 30, "low": 90}
-_INACTIVE = ("retired", "offboarded", "inactive", "terminated")
+_INACTIVE = ("retired", "offboarded", "inactive", "terminated", "requested", "rejected")
 _DOMAIN_FOR = {"breach": "cybersecurity", "security_rating": "cybersecurity", "cert_expiry": "compliance",
                "financial": "financial", "adverse_media": "reputational", "sla": "operational"}
 

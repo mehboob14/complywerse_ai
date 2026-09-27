@@ -898,6 +898,13 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "custom_values", "JSON", None),
     ("grc_vulnerabilities", "custom_values", "JSON", None),
     ("grc_risks", "custom_values", "JSON", None),
+    # Vendor onboarding requests (vendor_risk/tpra/intake.py).
+    ("grc_vendors", "intake", "JSON", None),
+    ("grc_vendors", "intake_status", "VARCHAR(20)", "ix_grc_vendors_intake_status"),
+    ("grc_vendors", "requested_by", "INTEGER", None),
+    ("grc_vendors", "submitted_at", "TIMESTAMP", None),
+    ("grc_vendors", "stakeholder_ids", "JSON", None),
+    ("grc_vendors", "notify_emails", "TEXT", None),
     # AI-suggested findings on a vendor assessment, kept apart from the analyst's
     # own list (vendor_risk/routers/ai_analysis.py used to overwrite it).
     ("grc_vendor_assessments", "ai_findings", "JSON DEFAULT '[]'::json", None),

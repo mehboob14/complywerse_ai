@@ -117,6 +117,8 @@ def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
         "contract_document_id": getattr(v, "contract_document_id", None),
         "offboarding_checklist": getattr(v, "offboarding_checklist", None) or [],
         "remediation_actions": getattr(v, "remediation_actions", None) or [],
+        # Set when the vendor came in as an onboarding request (tpra/onboarding.py).
+        "intake_status": getattr(v, "intake_status", None),
         "created_at": v.created_at.isoformat() if v.created_at else None,
         "updated_at": v.updated_at.isoformat() if v.updated_at else None,
     }

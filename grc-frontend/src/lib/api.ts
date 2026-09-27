@@ -2537,6 +2537,39 @@ export const tpraApi = {
   }),
 };
 
+// ── Onboarding requests, procurement's view and bulk vendor import (tpra/onboarding.py).
+export interface IntakeBody {
+  vendor?: Record<string, unknown>;
+  answers?: Record<string, unknown>;
+  justifications?: Record<string, string>;
+}
+
+export const vendorOnboardingApi = {
+  questions: () => apiClient.get('/vendor-risk/intake/questions'),
+  people: () => apiClient.get('/vendor-risk/intake/people'),
+  preview: (answers: Record<string, unknown>) => apiClient.post('/vendor-risk/intake/preview', { answers }),
+  requests: (params?: { status?: string; scope?: 'all' | 'mine'; search?: string }) =>
+    apiClient.get('/vendor-risk/intake/requests', { params: params || {} }),
+  createRequest: (data: { name: string; website?: string }) => apiClient.post('/vendor-risk/intake/requests', data),
+  intake: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/intake`),
+  saveIntake: (vendorId: number, body: IntakeBody) => apiClient.put(`/vendor-risk/vendors/${vendorId}/intake`, body),
+  submit: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/submit`),
+  startReview: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/review`),
+  reject: (vendorId: number, reason: string) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/reject`, { reason }),
+  sendBack: (vendorId: number, reason: string) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/intake/return`, { reason }),
+  procurement: () => apiClient.get('/vendor-risk/intake/procurement'),
+  importTemplate: () => apiClient.get('/vendor-risk/vendors/import/template', { responseType: 'blob' }),
+  importVendors: (file: File, dryRun: boolean) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post('/vendor-risk/vendors/import', form, {
+      params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

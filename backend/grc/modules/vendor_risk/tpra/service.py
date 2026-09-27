@@ -29,7 +29,7 @@ from .engine_tiering import compute_inherent_tier, derive_factors_from_profile
 from .engine_scoring import (
     score_assessment, build_responses_from_answers, normalize_answer, answer_score, finding_severity,
 )
-from . import tier_policy, versions
+from . import intake as intake_answers, tier_policy, versions
 from .portal import ANSWERED
 from .engine_gates import evaluate_stage_exit, recommend_decision
 from .engine_snapshots import write_vendor_snapshot
@@ -475,7 +475,11 @@ def run_tiering(
 ) -> dict:
     """Compute the inherent tier and persist it on the assessment + vendor."""
     cfg = get_tiering_config(db, assessment.tenant_id)
-    if factors is None:
+    reasons = None
+    if factors is None and intake_answers.has_answers(getattr(vendor, "intake", None)):
+        # The requester's answers are the facts; the factors follow from them.
+        factors, reasons = intake_answers.factors(vendor.intake)
+    elif factors is None:
         factors = derive_factors_from_profile({
             "data_access_level": vendor.data_access_level,
             "data_types_accessed": vendor.data_types_accessed or [],
@@ -483,6 +487,8 @@ def run_tiering(
             "business_criticality": vendor.tier,
         })
     result = compute_inherent_tier(factors, cfg)
+    if reasons:
+        result["reasons"] = reasons
     # Recorded to notice when the facts move past it (tier_policy.retier_reasons).
     assessment.tiering_basis = tier_policy.basis(vendor)
     assessment.tier_override = None

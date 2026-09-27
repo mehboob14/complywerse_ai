@@ -1,8 +1,8 @@
 'use client';
 
-// Stage 01 — Intake & Scoping. Turns the static intake stage into a real
-// data-capture form editing the vendor profile (PUT /vendor-risk/vendors/{id}).
-// Setting a business owner + a data access level satisfies the intake exit gate
+// Stage 01 — Intake & Scoping: the intake questions (shared with onboarding
+// requests; their answers tier the vendor) plus the free-form profile fields.
+// A business owner + a data access level satisfy the intake exit gate
 // (has_owner + has_data_classification), so this directly unblocks Advance.
 
 import { useEffect, useState } from 'react';
@@ -11,6 +11,7 @@ import { Loader2, Save, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { vendorRiskApi, adminApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
+import IntakeForm from '../../../_lib/intake/IntakeForm';
 
 const inputCls =
   'w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500';
@@ -30,6 +31,44 @@ const toList = (s: string): string[] => s.split(',').map((x) => x.trim()).filter
 const fromList = (v: unknown): string => (Array.isArray(v) ? v.join(', ') : '');
 
 export default function IntakePanel({ vendorId, onChanged }: { vendorId: number; onChanged?: () => void }) {
+  const qc = useQueryClient();
+  const { data: vendor } = useQuery({
+    queryKey: ['vendor-intake', vendorId],
+    queryFn: async () => (await vendorRiskApi.getVendor(vendorId)).data as Record<string, unknown>,
+  });
+  const ownerSet = vendor?.owner_id != null;
+  const classSet = !!vendor?.data_access_level && vendor.data_access_level !== 'none';
+  const refresh = () => {
+    qc.invalidateQueries({ queryKey: ['vendor-intake', vendorId] });
+    qc.invalidateQueries({ queryKey: ['tpra-lifecycle'] });
+    onChanged?.();
+  };
+  return (
+    <div className="space-y-4">
+      <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
+        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary-600" />
+        <div>
+          <p>Answer the intake questions — they set the tiering factors. A named <span className="font-medium">business owner</span> and a <span className="font-medium">data access level</span> above &ldquo;None&rdquo; satisfy this stage&apos;s exit gate.</p>
+          <div className="mt-1.5 flex flex-wrap gap-3 text-[11px]">
+            <span className={`inline-flex items-center gap-1 ${ownerSet ? 'text-emerald-600' : 'text-gray-400'}`}>
+              <CheckCircle2 className="h-3 w-3" /> Business owner {ownerSet ? 'set' : 'needed'}
+            </span>
+            <span className={`inline-flex items-center gap-1 ${classSet ? 'text-emerald-600' : 'text-gray-400'}`}>
+              <CheckCircle2 className="h-3 w-3" /> Data classification {classSet ? 'set' : 'needed'}
+            </span>
+          </div>
+        </div>
+      </div>
+      <IntakeForm vendorId={vendorId} layout="panel" onSaved={refresh} />
+      <details className="rounded-lg border border-gray-200 p-3">
+        <summary className="cursor-pointer text-xs font-medium text-gray-700">Profile fields (data access, services, locations)</summary>
+        <div className="mt-3"><ProfileFields vendorId={vendorId} onChanged={refresh} /></div>
+      </details>
+    </div>
+  );
+}
+
+function ProfileFields({ vendorId, onChanged }: { vendorId: number; onChanged?: () => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
@@ -106,27 +145,8 @@ export default function IntakePanel({ vendorId, onChanged }: { vendorId: number;
     return <div className="flex items-center gap-2 py-6 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading vendor…</div>;
   }
 
-  const ownerSet = form.owner_id !== '';
-  const classSet = form.data_access_level !== 'none';
-
   return (
     <div className="space-y-4">
-      {/* Gate helper */}
-      <div className="flex items-start gap-2 rounded-lg border border-gray-200 bg-gray-50 p-3 text-xs text-gray-600">
-        <ShieldCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-primary-600" />
-        <div>
-          <p>Capture the business owner and the data/service scope. A named <span className="font-medium">business owner</span> and a <span className="font-medium">data access level</span> above &ldquo;None&rdquo; satisfy this stage&apos;s exit gate.</p>
-          <div className="mt-1.5 flex flex-wrap gap-3 text-[11px]">
-            <span className={`inline-flex items-center gap-1 ${ownerSet ? 'text-emerald-600' : 'text-gray-400'}`}>
-              <CheckCircle2 className="h-3 w-3" /> Business owner {ownerSet ? 'set' : 'needed'}
-            </span>
-            <span className={`inline-flex items-center gap-1 ${classSet ? 'text-emerald-600' : 'text-gray-400'}`}>
-              <CheckCircle2 className="h-3 w-3" /> Data classification {classSet ? 'set' : 'needed'}
-            </span>
-          </div>
-        </div>
-      </div>
-
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div>
           <label className={labelCls}>Business owner</label>
