@@ -51,6 +51,11 @@ def _compute_ava_severity(composite_score: float) -> str:
     return "info"
 
 
+# back-compat: the cyber-assurance port renamed this from _compute_compliverse_severity; integrations'
+# scoring_service still imports the original name, so keep it as an alias.
+_compute_compliverse_severity = _compute_ava_severity
+
+
 class Rapid7Transformer:
 
     @staticmethod
