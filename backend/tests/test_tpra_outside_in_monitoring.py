@@ -118,8 +118,9 @@ def test_articles_pass_four_checks_and_one_publisher_is_not_enough():
 
 def test_news_monitoring_is_off_until_a_tenant_turns_it_on(db):
     # the certificate feed always; news once turned on; product watch once a product is watched;
-    # the outside-in scan once turned on, and each ratings provider once its key is added
-    assert [p["configured"] for p in feeds.providers(db, 1)] == [True, False, False, False, False, False, False]
+    # software seen on estates and the outside-in scan once scanning is turned on, and each
+    # ratings provider once its key is added
+    assert [p["configured"] for p in feeds.providers(db, 1)] == [True, False, False, False, False, False, False, False]
 
 
 def test_a_feed_fills_the_queue_dedupes_and_is_corroborated_later(db, monkeypatch):

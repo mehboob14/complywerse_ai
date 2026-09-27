@@ -23,7 +23,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import contracts, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
+from . import alerts, contracts, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
 from .stages import stages_payload, is_valid_stage
 from .schema_migrations import ensure_tpra_columns
 
@@ -184,6 +184,7 @@ def s_signal(s: TPRAMonitoringSignal) -> dict:
         # fetched by a connector: its sources and whether it survived verification
         "sources": s.sources or [], "verification": s.verification,
         "verified": s.verified is not False, "finding_id": s.finding_id,
+        "triage_status": alerts.status_of(s) if s.signal_type in alerts.ALERT_TYPES else None,
         "row_version": s.row_version,
     }
 

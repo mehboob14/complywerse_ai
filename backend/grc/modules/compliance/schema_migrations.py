@@ -968,6 +968,10 @@ _COLUMN_ADDS = [
     ("grc_vendors", "domains", "JSON", None),
     # What each scanned host showed it runs (asset_discovery/services/web_tech.py).
     ("grc_tpra_surface_scans", "technologies", "JSON", None),
+    # Breach alerts worked like cases (tpra/alerts.py).
+    ("grc_tpra_monitoring_signals", "triage_status", "VARCHAR(20)", "ix_tpra_signal_triage_status"),
+    ("grc_tpra_monitoring_signals", "triage_owner", "INTEGER", None),
+    ("grc_tpra_monitoring_signals", "research", "JSON", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

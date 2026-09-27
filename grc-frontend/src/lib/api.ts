@@ -2616,6 +2616,15 @@ export const vendorTechApi = {
   whoShows: (id: string) => apiClient.get('/vendor-risk/technologies/cve', { params: { id } }),
 };
 
+// Breach, adverse-media and vulnerability alerts worked like cases (tpra/alerts.py).
+export const vendorAlertsApi = {
+  board: (params?: { status?: string; type?: string }) => apiClient.get('/vendor-risk/alerts', { params: params || {} }),
+  get: (id: number) => apiClient.get(`/vendor-risk/alerts/${id}`),
+  move: (id: number, data: { status: string; note?: string; raise_finding?: boolean }) =>
+    apiClient.post(`/vendor-risk/alerts/${id}/move`, data),
+  research: (id: number) => apiClient.post(`/vendor-risk/alerts/${id}/research`, {}, { timeout: 180000 }),
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

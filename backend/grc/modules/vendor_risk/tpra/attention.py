@@ -65,6 +65,7 @@ _OPEN_FINDING = ("open", "in_remediation")
 _ASSESSMENT_DONE = ("approved", "completed", "rejected", "cancelled", "canceled", "closed")
 _POST_APPROVAL_STAGES = ("onboarding", "monitoring", "reassessment", "offboarding")
 _EVIDENCE_RETIRED = ("archived", "superseded", "rejected", "deleted")
+_ALERT_TYPES = ("breach", "adverse_media", "vulnerability")   # worked on the Breach alerts page
 UNTOUCHED_AFTER_DAYS = 7        # a questionnaire nobody has opened for a week
 REVIEW_AFTER_DAYS = 2           # answers sitting unreviewed for two days
 SIGNAL_LOOKBACK_DAYS = 90       # an unacknowledged signal older than this is history, not news
@@ -319,14 +320,15 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             continue
         serious = (sig.severity or "").lower() in ("high", "critical")
         title = sig.title or f"{sig.signal_type.replace('_', ' ')} signal"
+        link = (f"/vendor-risk/alerts?alert={sig.id}" if sig.signal_type in _ALERT_TYPES
+                else f"/vendor-risk/vendors/{v.id}?stage=monitoring")
         if sig.verified is False:
             add("signal_unverified", "signal", sig.id, v, _day(sig.occurred_at),
-                f"{v.name}: {title}", "Unverified: one source",
-                f"/vendor-risk/vendors/{v.id}?stage=monitoring")
+                f"{v.name}: {title}", "Unverified: one source", link)
         else:
             add("signal_new", "signal", sig.id, v, _day(sig.occurred_at), f"{v.name}: {title}",
                 f"{(sig.severity or 'medium').title()} · {sig.source or 'entered by hand'}",
-                f"/vendor-risk/vendors/{v.id}?stage=monitoring", tone="red" if serious else "amber", lapsed=serious)
+                link, tone="red" if serious else "amber", lapsed=serious)
 
     # Questionnaires the vendor has answered that nobody has finished reviewing.
     for qr in db.query(VendorQuestionnaireResponse).filter(

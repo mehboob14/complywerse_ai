@@ -362,6 +362,11 @@ class TPRAMonitoringSignal(Base):
     verification = Column(JSON, nullable=True)
     verified = Column(Boolean, default=True)
     finding_id = Column(Integer, nullable=True)           # the finding it was raised as
+    # Breach alerts (tpra/alerts.py): new → investigating → confirmed | not_relevant → closed,
+    # who is investigating, and the AI's reading of the articles behind it.
+    triage_status = Column(String(20), nullable=True, index=True)
+    triage_owner = Column(Integer, nullable=True)
+    research = Column(JSON, nullable=True)
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

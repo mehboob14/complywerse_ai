@@ -18,6 +18,7 @@ from .tpra.checkins import router as tpra_checkins_router
 from .tpra.contracts import router as tpra_contracts_router
 from .tpra.outside_in import router as tpra_outside_in_router
 from .tpra.technology import router as tpra_technology_router
+from .tpra.alerts import router as tpra_alerts_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -32,6 +33,8 @@ router.include_router(tpra_contracts_router)
 router.include_router(tpra_outside_in_router)
 # Which suppliers run what, and which show a given vulnerability.
 router.include_router(tpra_technology_router)
+# Breach, adverse-media and vulnerability alerts, triaged like cases.
+router.include_router(tpra_alerts_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)

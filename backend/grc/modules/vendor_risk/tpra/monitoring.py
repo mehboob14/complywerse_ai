@@ -183,6 +183,15 @@ def raise_finding(db: Session, signal: TPRAMonitoringSignal, vendor: Vendor,
 def reject(db: Session, signal: TPRAMonitoringSignal, actor_id: Optional[int], reason: Optional[str]) -> None:
     """Rule a fetched alert out as not about the vendor: it goes, and its articles
     are remembered so the same ones are never raised again."""
+    remember_rejection(db, signal, actor_id, reason)
+    signal.deleted_at = datetime.utcnow()
+    service.write_audit(db, signal.tenant_id, entity="signal", action="reject", vendor_id=signal.vendor_id,
+                        entity_id=signal.id, actor_id=actor_id, reason=reason)
+
+
+def remember_rejection(db: Session, signal: TPRAMonitoringSignal, actor_id: Optional[int],
+                       reason: Optional[str]) -> None:
+    """Remember the articles behind an alert ruled out, so the same ones are never raised again."""
     from .adverse_media import fingerprint
 
     for source in signal.sources or []:
@@ -195,6 +204,3 @@ def reject(db: Session, signal: TPRAMonitoringSignal, actor_id: Optional[int], r
             db.add(TPRASignalRejection(tenant_id=signal.tenant_id, vendor_id=signal.vendor_id,
                                        provider=signal.source or "", fingerprint=fp, reason=reason,
                                        rejected_by=actor_id))
-    signal.deleted_at = datetime.utcnow()
-    service.write_audit(db, signal.tenant_id, entity="signal", action="reject", vendor_id=signal.vendor_id,
-                        entity_id=signal.id, actor_id=actor_id, reason=reason)

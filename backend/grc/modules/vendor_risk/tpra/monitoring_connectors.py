@@ -17,6 +17,10 @@ Feeds today:
   * CISA KEV — a known-exploited vulnerability in a product on a vendor's
     watchlist. On once any vendor has a watched product; it reads the catalogue
     the vulnerability module already downloads daily, every vendor every day.
+  * CISA KEV, technology seen — a newly listed known-exploited vulnerability in
+    software an outside-in scan saw on a supplier's estate. The version cannot be
+    confirmed from outside, so the alert is kept unverified: shown for triage,
+    never reopening an assessment by itself.
   * Outside-in scan — each supplier's websites and domains as the internet sees
     them (outside_in.py): certificates, web hardening, mail spoofing protection,
     and exposed services and vulnerabilities where a Shodan key is held. Off until
@@ -178,6 +182,58 @@ class ProductWatchConnector(MonitoringConnector):
         return drafts
 
 
+def tech_matches(tech_name: str, entry: dict) -> bool:
+    """Does a catalogue entry concern a technology seen on an estate? Every word of
+    the technology's name must be in the entry's vendor and product, and one at
+    least in the product itself ("Apache HTTP Server" matches Apache / HTTP Server)."""
+    wanted = set(_words(tech_name).split())
+    product = set(_words(entry.get("product")).split())
+    return bool(wanted) and wanted <= product | set(_words(entry.get("vendor_project")).split()) and bool(wanted & product)
+
+
+class TechnologyWatchConnector(MonitoringConnector):
+    provider = "CISA KEV, technology seen"
+    label = "Known exploited vulnerabilities in software seen on a supplier's estate"
+    kind = "vulnerabilities"
+    reaches_internet = True            # the CISA catalogue, already fetched for vulnerability enrichment
+    every_days = 1
+    catalogue = staticmethod(_kev_catalogue)
+
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
+        return outside_in.policy_on(db, tenant_id)
+
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        scan = (db.query(TPRASurfaceScan).filter(TPRASurfaceScan.vendor_id == vendor.id, TPRASurfaceScan.status == "done")
+                .order_by(TPRASurfaceScan.started_at.desc()).first())
+        techs = outside_in.seen_technologies(scan) if scan is not None else []
+        if not techs:
+            return []
+        start = (since or now - timedelta(days=30)) - timedelta(days=3)
+        drafts = []
+        for cve, entry in self.catalogue().items():
+            added = entry.get("date_added")
+            hit = next((t for t in techs if tech_matches(t["name"], entry)), None) if added and added >= start else None
+            if hit is None:
+                continue
+            ransomware = str(entry.get("known_ransomware_campaign_use") or "").lower() == "known"
+            hosts = ", ".join((hit.get("hosts") or [])[:3]) or "its estate"
+            drafts.append(SignalDraft(
+                signal_type="vulnerability", severity="high" if ransomware else "medium",
+                title=f"{cve}: {hit['name']} is seen on {vendor.name}'s estate"[:255],
+                detail=(f"{entry.get('short_description') or entry.get('vulnerability_name') or ''}\n\n"
+                        f"{hit['name']} was seen on {hosts}"
+                        + (f" (version {', '.join(hit['versions'])})" if hit.get("versions") else "")
+                        + ". Whether that version is affected cannot be told from outside: ask the supplier whether "
+                          "it is affected and patched."
+                        + ("\n\nKnown to be used in ransomware campaigns." if ransomware else "")).strip(),
+                external_id=f"kev-tech:{cve}", occurred_at=added,
+                sources=[{"url": f"https://nvd.nist.gov/vuln/detail/{cve}", "title": cve, "domain": "nvd.nist.gov"}],
+                verification={"verified": False, "checks": {"catalogue": "CISA Known Exploited Vulnerabilities",
+                                                            "match": f"{hit['name']} seen from outside; version unconfirmed"}},
+            ))
+        return drafts
+
+
 class SurfaceScanConnector(MonitoringConnector):
     provider = outside_in.PROVIDER
     label = "Supplier websites and domains, as the internet sees them"
@@ -222,7 +278,8 @@ class RatingFeedConnector(MonitoringConnector):
 
 
 CONNECTORS: List[MonitoringConnector] = [
-    CertificateLapseConnector(), AdverseMediaConnector(), ProductWatchConnector(), SurfaceScanConnector(),
+    CertificateLapseConnector(), AdverseMediaConnector(), ProductWatchConnector(), TechnologyWatchConnector(),
+    SurfaceScanConnector(),
     *(RatingFeedConnector(key) for key in rating_feeds.PROVIDERS),
 ]
 
