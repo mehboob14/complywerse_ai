@@ -30,6 +30,7 @@ export interface VendorView {
   latest: null | {
     id: number; at: string; domains: string[]; hosts: Host[]; findings: Finding[]; score: number | null;
     grade: string | null; categories: Record<string, number> | null; scanned_score: number | null; note: string | null;
+    technologies: Array<{ name: string; category: string; versions: string[]; hosts: string[]; evidence: string | null }>;
   };
   failed: { at: string; error: string | null } | null;
   history: Point[]; ratings: Record<string, Point[]>; waivers: Waiver[];

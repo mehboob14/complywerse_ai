@@ -43,7 +43,7 @@ router = APIRouter(tags=["Vendor outside-in security"])
 PROVIDER = "Outside-in scan"
 CATEGORIES = {
     "tls": "Certificates and encryption", "web": "Web hardening", "email": "Email protection",
-    "exposure": "Exposed services", "vulns": "Known vulnerabilities",
+    "exposure": "Exposed services", "vulns": "Known vulnerabilities", "software": "Out-of-date software",
 }
 POINTS = {"critical": 30, "high": 15, "medium": 6, "low": 2}
 CATEGORY_CAP = 40
@@ -231,19 +231,25 @@ def exposure_findings(host: str, ports: Iterable[int], vulns: Dict[str, dict], k
 
 
 def shodan_host(ip: str, key: str, get: Callable = requests.get) -> dict:
-    """The ports and vulnerabilities Shodan has recorded for one address."""
+    """The ports, software and vulnerabilities Shodan has recorded for one address."""
     resp = get(f"https://api.shodan.io/shodan/host/{ip}", params={"key": key}, timeout=20)
     if resp.status_code == 404:
-        return {"ports": [], "vulns": {}}
+        return {"ports": [], "vulns": {}, "products": []}
     resp.raise_for_status()
     body = resp.json() or {}
     vulns: Dict[str, dict] = {}
+    products: Dict[str, dict] = {}
     for item in body.get("data") or []:
         for cve, meta in (item.get("vulns") or {}).items():
             vulns.setdefault(cve, meta if isinstance(meta, dict) else {})
+        if item.get("product"):
+            products.setdefault(item["product"], {"name": str(item["product"])[:80], "category": "Service",
+                                                  "version": (str(item.get("version"))[:40] or None) if item.get("version") else None,
+                                                  "evidence": f"Shodan, port {item.get('port')}"})
     for cve in body.get("vulns") or []:
         vulns.setdefault(cve, {})
-    return {"ports": sorted({int(p) for p in body.get("ports") or [] if str(p).isdigit()}), "vulns": vulns}
+    return {"ports": sorted({int(p) for p in body.get("ports") or [] if str(p).isdigit()}), "vulns": vulns,
+            "products": list(products.values())}
 
 
 # ── the score ────────────────────────────────────────────────────────────────
@@ -286,7 +292,34 @@ def _summary(facts: dict, host: dict) -> dict:
             "https": bool(facts.get("https_available") or facts.get("scheme") == "https"),
             "tls_issuer": facts.get("tls_issuer"), "tls_version": facts.get("tls_version"),
             "tls_expires": str(facts.get("tls_not_after") or "")[:10] or None, "cdn_waf": facts.get("cdn_waf"),
-            "ports": host.get("ports") or []}
+            "ports": host.get("ports") or [], "tech": host.get("tech") or []}
+
+
+def software_findings(host: str, tech: List[dict], today: date) -> List[dict]:
+    """Versions a host names that are out of support, or old enough to carry known flaws."""
+    from ...asset_discovery.services.web_tech import outdated
+
+    out = []
+    for t in tech:
+        why = outdated(t, today)
+        if why:
+            out.append({"key": f"outdated:{t['name']}", "category": "software", "severity": "medium",
+                        "title": f"{t['name']} {t['version']} is out of date", "detail": why, "host": host})
+    return out
+
+
+def technologies(hosts: List[dict]) -> List[dict]:
+    """Every technology the hosts showed, once, with the versions and hosts it was seen on."""
+    seen: Dict[str, dict] = {}
+    for h in hosts:
+        for t in h.get("tech") or []:
+            entry = seen.setdefault(t["name"].lower(), {"name": t["name"], "category": t["category"], "versions": [],
+                                                        "hosts": [], "evidence": t.get("evidence")})
+            if t.get("version") and t["version"] not in entry["versions"]:
+                entry["versions"].append(t["version"])
+            if h["fqdn"] not in entry["hosts"]:
+                entry["hosts"].append(h["fqdn"])
+    return sorted(seen.values(), key=lambda t: (t["category"], t["name"].lower()))
 
 
 def _kev() -> set:
@@ -302,14 +335,18 @@ def scan_facts(domains: List[str], *, sources: Optional[dict] = None, probe: Cal
                collect: Callable = _collect, resolve: Callable = _resolve, shodan: Callable = shodan_host,
                kev: Optional[Callable] = None) -> Tuple[List[dict], List[dict]]:
     """(host summaries, findings) for a supplier's domains. Pure apart from the network."""
+    from ...asset_discovery.services.web_tech import providers
+
     hosts = pick_hosts(domains, sources, collect, resolve)
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         facts = list(pool.map(lambda h: probe(h["fqdn"], (h.get("ips") or [None])[0]), hosts))
     findings: List[dict] = []
     for host, found in zip(hosts, facts):
+        host["tech"] = list(found.get("technologies") or [])
         findings += host_findings(found)
         if host["fqdn"] == host["domain"]:
             findings += email_findings(found)
+            host["tech"] += providers(found.get("dns_mx") or [], found.get("dns_ns") or [])
     key = ((sources or {}).get("shodan") or {}).get("api_key")
     if key and hosts:
         known = (kev or _kev)()
@@ -326,7 +363,12 @@ def scan_facts(domains: List[str], *, sources: Optional[dict] = None, probe: Cal
                     by_ip[ip] = {"ports": [], "vulns": {}}
             seen = by_ip[ip]
             host["ports"] = sorted(set(host.get("ports") or []) | set(seen["ports"]))
+            host["tech"] += [p for p in seen.get("products") or []
+                             if p["name"].lower() not in {t["name"].lower() for t in host["tech"]}]
             findings += exposure_findings(host["fqdn"], host["ports"], seen["vulns"], known)
+    today = datetime.utcnow().date()
+    for host in hosts:
+        findings += software_findings(host["fqdn"], host["tech"], today)
     return [_summary(f, h) for f, h in zip(facts, hosts)], findings
 
 
@@ -365,6 +407,7 @@ def complete(db: Session, scan: TPRASurfaceScan, vendor: Vendor, now: Optional[d
     waivers = waivers_of(db, vendor)
     result = score(findings, waivers, now.date())
     scan.hosts, scan.findings, scan.finished_at, scan.status = hosts, findings, now, "done"
+    scan.technologies = technologies(hosts)
     if not any(h["live"] or h["tls_expires"] for h in hosts):
         scan.score = scan.grade = None
         scan.categories = None
@@ -393,6 +436,28 @@ def drafts(vendor: Vendor, fresh: List[dict]) -> List[dict]:
                     "sources": [{"title": f["host"], "finding": f["key"]}],
                     "verification": {"verified": True, "checks": {"observed": "outside-in scan"}}})
     return out
+
+
+# Technologies that are someone else's service the supplier relies on, and so
+# count as its fourth parties when concentration is worked out.
+PLATFORM_CATEGORIES = {"CDN", "WAF", "Hosting", "Email", "DNS", "Identity", "Payments", "E-commerce",
+                       "Website builder", "Customer messaging"}
+
+
+def latest_scans(db: Session, tenant_id: int, days: int = 400) -> Dict[int, TPRASurfaceScan]:
+    """Each supplier's latest finished scan within `days`.
+    ponytail: reads every scan in the window; keep a latest-scan pointer per vendor if this slows."""
+    out: Dict[int, TPRASurfaceScan] = {}
+    for s in (db.query(TPRASurfaceScan).filter(
+            TPRASurfaceScan.tenant_id == tenant_id, TPRASurfaceScan.status == "done",
+            TPRASurfaceScan.started_at >= datetime.utcnow() - timedelta(days=days))
+            .order_by(TPRASurfaceScan.started_at.desc())):
+        out.setdefault(s.vendor_id, s)
+    return out
+
+
+def seen_technologies(scan: TPRASurfaceScan) -> List[dict]:
+    return scan.technologies or technologies(scan.hosts or [])
 
 
 def policy_on(db: Session, tenant_id: int) -> bool:
@@ -467,7 +532,7 @@ def vendor_view(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = D
                 "hosts": latest.hosts or [], "findings": findings,
                 "score": now_score["score"] if now_score else None, "grade": now_score["grade"] if now_score else None,
                 "categories": now_score["categories"] if now_score else None, "scanned_score": latest.score,
-                "note": latest.error}
+                "note": latest.error, "technologies": latest.technologies or technologies(latest.hosts or [])}
     last_failed = next((s for s in scans if s.status == "failed"), None)
     return {
         "vendor": {"id": v.id, "name": v.name, "tier": v.tier, "website": v.website},

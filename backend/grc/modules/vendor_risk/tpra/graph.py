@@ -5,7 +5,9 @@ a payment processor, a subprocessor — with the service it provides and the dat
 of ours it sees. Entered by hand, declared by the vendor, or taken from a
 questionnaire.
 
-Concentration counts how many of our vendors sit on the same platform. Names are
+Concentration counts how many of our vendors sit on the same platform, whether
+declared as a fourth party or seen on the vendor's own estate by an outside-in
+scan (its CDN, hosting, mail and DNS providers). Names are
 folded through an alias map first ("Amazon Web Services", "AWS" and "amazon aws"
 are one platform), generic names that say nothing ("Linux", "various") are left
 out, and a tenant can add aliases and exclusions of its own. A platform that is
@@ -51,6 +53,10 @@ BUILT_IN_ALIASES: Dict[str, str] = {
     "snowflake": "Snowflake", "datadog": "Datadog", "github": "GitHub", "atlassian": "Atlassian",
     "slack": "Slack", "zendesk": "Zendesk", "hubspot": "HubSpot", "digitalocean": "DigitalOcean",
     "digital ocean": "DigitalOcean", "oracle cloud": "Oracle Cloud", "ibm cloud": "IBM Cloud", "heroku": "Heroku",
+    # Services an outside-in scan names, folded into the platform behind them.
+    "amazon cloudfront": "AWS", "amazon s3": "AWS", "aws elastic load balancing": "AWS", "amazon route 53": "AWS",
+    "amazon ses": "AWS", "azure front door": "Azure", "azure app service": "Azure", "azure dns": "Azure",
+    "google cloud dns": "Google Cloud",
 }
 # Names that describe nothing in particular; never counted towards concentration.
 GENERIC = {"linux", "windows", "microsoft windows", "internal", "in house", "in-house", "n/a", "na", "none",
@@ -106,6 +112,14 @@ def concentration(db: Session, tenant_id: int, min_vendors: int = 2) -> List[dic
         vendor = vendors.get(fp.vendor_id)
         if vendor is not None:
             note(fp.platform, vendor, f"fourth party: {fp.service or fp.name}", bool(fp.critical))
+    # Platforms seen on a vendor's own estate from outside: its CDN, host, mail and DNS providers.
+    from .outside_in import PLATFORM_CATEGORIES, latest_scans, seen_technologies
+    for vendor_id, scan in latest_scans(db, tenant_id).items():
+        vendor = vendors.get(vendor_id)
+        for t in seen_technologies(scan) if vendor is not None else []:
+            platform = platform_for(t["name"], aliases) if t.get("category") in PLATFORM_CATEGORIES else ""
+            if platform:
+                note(platform, vendor, f"seen from outside: {t['name']}", False)
     for vendor in vendors.values():                  # a platform we contract with directly
         platform = platform_for(vendor.name, aliases)
         if platform and platform.lower() in groups:

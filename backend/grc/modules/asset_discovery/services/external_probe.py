@@ -534,7 +534,7 @@ def probe_asset(fqdn: str, ip: Optional[str] = None, *, extras: bool = True) -> 
         "whois_status": None, "whois_nameservers": None,
         "asn": None, "asn_org": None, "ip_network": None, "ip_region": None,
         "subdomains": None,
-        "set_cookies": [], "cdn_waf": None,
+        "set_cookies": [], "cdn_waf": None, "technologies": [],
         "probed_at": datetime.utcnow().isoformat() + "Z",
     }
     if not fqdn:
@@ -564,9 +564,15 @@ def probe_asset(fqdn: str, ip: Optional[str] = None, *, extras: bool = True) -> 
         facts["set_cookies"] = _set_cookies(resp)
         facts["cdn_waf"] = _cdn_waf(resp.headers)
         try:
-            facts["title"] = _extract_title((resp.text or "")[:MAX_TITLE_SCAN])
+            head = (resp.text or "")[:MAX_TITLE_SCAN]
         except Exception:
-            facts["title"] = None
+            head = ""
+        facts["title"] = _extract_title(head)
+        try:
+            from .web_tech import detect
+            facts["technologies"] = detect(resp.headers, facts["set_cookies"], head, str(resp.url))
+        except Exception:  # noqa: BLE001 — fingerprinting is extra, never the reason a probe fails
+            facts["technologies"] = []
         break
 
     _probe_tls(fqdn, facts)

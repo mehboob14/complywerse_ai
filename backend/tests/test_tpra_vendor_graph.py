@@ -12,12 +12,12 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import (
-    Base, GRCUser, Tenant, TPRAAuditLog, TPRAFourthParty, TPRAPlatformAlias, Vendor, get_db,
+    Base, GRCUser, Tenant, TPRAAuditLog, TPRAFourthParty, TPRAPlatformAlias, TPRASurfaceScan, Vendor, get_db,
 )
 from grc.modules.vendor_risk.tpra import graph, rbac
 from grc.routers.auth_router import require_auth
 
-_TABLES = [Tenant, GRCUser, Vendor, TPRAAuditLog, TPRAFourthParty, TPRAPlatformAlias]
+_TABLES = [Tenant, GRCUser, Vendor, TPRAAuditLog, TPRAFourthParty, TPRAPlatformAlias, TPRASurfaceScan]
 
 
 @pytest.fixture()

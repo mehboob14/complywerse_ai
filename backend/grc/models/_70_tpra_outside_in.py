@@ -28,6 +28,7 @@ class TPRASurfaceScan(Base):
     score = Column(Integer, nullable=True)                            # 0..100 with the waivers then in date
     grade = Column(String(2), nullable=True)
     categories = Column(JSON, nullable=True)                          # category -> 0..100
+    technologies = Column(JSON, nullable=True)                        # what the hosts showed they run
     error = Column(Text, nullable=True)
 
     __table_args__ = (Index("ix_tpra_surface_scans_vendor", "tenant_id", "vendor_id", "started_at"),)

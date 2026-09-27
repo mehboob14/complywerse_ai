@@ -209,6 +209,30 @@ export default function OutsideInPanel({ vendorId }: { vendorId: number }) {
         </section>
       )}
 
+      {latest && latest.technologies.length > 0 && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="oi-tech">
+          <h3 id="oi-tech" className="mb-1 text-sm font-semibold text-slate-900">Technologies seen</h3>
+          <p className="mb-3 text-[11px] text-slate-400">What its sites, mail and DNS records say it runs. A site can hide or misstate these, so absence proves nothing.</p>
+          <div className="space-y-2">
+            {Array.from(new Set(latest.technologies.map((t) => t.category))).map((cat) => (
+              <div key={cat} className="flex flex-wrap items-baseline gap-1.5">
+                <span className="w-36 shrink-0 text-xs text-slate-500">{cat}</span>
+                {latest.technologies.filter((t) => t.category === cat).map((t) => {
+                  const old = latest.findings.some((f) => f.key === `outdated:${t.name}` && !f.waiver);
+                  return (
+                    <Link key={t.name} href={`/vendor-risk/technology?q=${encodeURIComponent(t.name)}`} title={`Seen on ${t.hosts.join(', ')}`}
+                      className={clsx('rounded-full border px-2 py-0.5 text-xs hover:border-primary-300',
+                        old ? 'border-amber-200 bg-amber-50 text-amber-900' : 'border-slate-200 bg-slate-50 text-slate-700')}>
+                      {t.name}{t.versions.length ? ` ${t.versions.join(', ')}` : ''}{old ? ' · out of date' : ''}
+                    </Link>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
       {data.waivers.length > 0 && (
         <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="oi-waivers">
           <h3 id="oi-waivers" className="mb-2 text-sm font-semibold text-slate-900">Waivers</h3>

@@ -14,6 +14,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from grc.models import TPRASurfaceScan  # read by concentration: platforms seen from outside
 from grc.models import (
     Base, BcmBiaDependency, BcmBiaRecord, BcmPlan, GRCUser, ITAsset, SoftwareIdentifier, Tenant, TPRAApproval,
     TPRAAuditLog, TPRAFinding, TPRAFourthParty, TPRAMonitoringSignal, TPRAPlatformAlias, TPRARemediation,
@@ -27,7 +28,7 @@ from grc.routers.auth_router import require_auth
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, TPRAApproval, TPRAAuditLog, TPRATieringConfig, TPRAVendorLink,
            BcmPlan, BcmBiaRecord, BcmBiaDependency, TPRAFourthParty, TPRAPlatformAlias, ITAsset, SoftwareIdentifier,
            TPRAStageInstance, TPRAFinding, TPRARemediation, TPRARiskAcceptance, TPRAMonitoringSignal, VendorIncident,
-           VendorQuestionnaireResponse]
+           VendorQuestionnaireResponse, TPRASurfaceScan]
 CFG = quantification.merged(None)
 
 

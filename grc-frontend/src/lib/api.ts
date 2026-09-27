@@ -2609,6 +2609,13 @@ export const vendorSecurityApi = {
   revokeWaiver: (waiverId: number) => apiClient.delete(`/vendor-risk/outside-in/waivers/${waiverId}`),
 };
 
+// Which suppliers run what, and which show a vulnerability (tpra/technology.py).
+export const vendorTechApi = {
+  catalogue: (params?: { q?: string; category?: string }) => apiClient.get('/vendor-risk/technologies', { params: params || {} }),
+  whoRuns: (name: string) => apiClient.get('/vendor-risk/technologies/vendors', { params: { name } }),
+  whoShows: (id: string) => apiClient.get('/vendor-risk/technologies/cve', { params: { id } }),
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

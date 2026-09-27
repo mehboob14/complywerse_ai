@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  AlertTriangle, BellRing, Building2, CalendarCheck, ClipboardList, FileQuestion, FileSignature, FileText, Inbox, Layers,
+  AlertTriangle, BellRing, Building2, CalendarCheck, ClipboardList, Cpu, FileQuestion, FileSignature, FileText, Inbox, Layers,
   LayoutDashboard,
   PackageCheck, Radar, Radio, Settings, Share2, Shield, type LucideIcon,
 } from 'lucide-react';
@@ -33,6 +33,7 @@ const GROUPS: Array<{ title: string; items: Item[] }> = [
   { title: 'Monitoring', items: [
     { name: 'Signals', href: '/vendor-risk/monitoring', icon: Radio },
     { name: 'Security ratings', href: '/vendor-risk/security', icon: Radar },
+    { name: 'Technology', href: '/vendor-risk/technology', icon: Cpu },
     { name: 'Concentration', href: '/vendor-risk/concentration', icon: Layers },
   ] },
   { title: 'Insight', items: [

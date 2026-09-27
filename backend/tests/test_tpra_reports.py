@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from grc.models import TPRASurfaceScan  # read by concentration: platforms seen from outside
 from grc.models import (
     Base, BcmBiaDependency, BcmBiaRecord, BcmPlan, Evidence, GRCUser, MetricSnapshot, SCFControl, SCFMapping,
     SCFMappingReview, SCFRelease, SCFScope, Tenant, TPRAApproval, TPRAAuditLog, TPRAContract, TPRAControlObligation,
@@ -26,7 +27,7 @@ from grc.models import (
 from grc.modules.vendor_risk.tpra import rbac, reports
 from grc.routers.auth_router import require_auth
 
-_TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, TPRAStageInstance, TPRAApproval, TPRAAuditLog, TPRAFinding,
+_TABLES = [TPRASurfaceScan, Tenant, GRCUser, Vendor, VendorAssessment, TPRAStageInstance, TPRAApproval, TPRAAuditLog, TPRAFinding,
            TPRARemediation, TPRARiskAcceptance, TPRAMonitoringSignal, VendorIncident, TPRAFourthParty, TPRAPlatformAlias,
            TPRAVendorLink, BcmPlan, BcmBiaRecord, BcmBiaDependency, TPRAContract, TPRAControlObligation, SCFRelease,
            SCFControl, SCFMapping, SCFScope, SCFMappingReview, TPRAReport, VendorQuestionnaireTemplate,
