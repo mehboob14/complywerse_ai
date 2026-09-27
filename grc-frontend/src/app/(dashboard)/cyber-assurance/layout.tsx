@@ -22,7 +22,7 @@ export default function CyberAssuranceLayout({
   return (
     <Providers>
       <GuideProvider>
-        <div className="platform-ui compact-density cw-dashboard">
+        <div className="platform-ui compact-density cw-dashboard h-full">
           {children}
         </div>
         {/* Guide mode slide-over — renders nothing until a marker is clicked. */}
