@@ -260,6 +260,18 @@ class TPRAContract(Base):
     expiry_date = Column(DateTime, nullable=True)
     # draft | active | expired | terminated
     status = Column(String(30), default="draft", index=True)
+    # The signed copy, kept in the evidence library (loose link).
+    evidence_id = Column(Integer, nullable=True)
+    # Commercial terms; tpra/contracts.py cleans every one of them.
+    reference = Column(String(120), nullable=True)       # contract, order or PO number
+    record_link = Column(String(500), nullable=True)     # where the contract is held
+    renewal_type = Column(String(20), nullable=True)     # auto | manual | evergreen
+    notice_days = Column(Integer, nullable=True)         # notice owed before the end date
+    annual_value = Column(Numeric(14, 2, asdecimal=False), nullable=True)
+    currency = Column(String(3), nullable=True)
+    billing = Column(String(20), nullable=True)          # monthly | quarterly | annually
+    pricing = Column(JSON, nullable=True)                # unit price, included units, overage, one-off fees, cap, uplift
+    termination = Column(Text, nullable=True)            # how either side can get out
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

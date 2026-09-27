@@ -8,8 +8,9 @@ who has no account, is emailed on the same rhythm until the link expires.
 
 The rhythm is one notice when the reminder window opens, then — once overdue —
 one every repeat period: weekly by default, not daily nagging. Past the
-escalation threshold the escalation contacts are told as well. A questionnaire,
-acceptance or contract that has lapsed gets a single notice, not a weekly one.
+escalation threshold the escalation contacts are told as well. A questionnaire
+or acceptance that has lapsed gets a single notice, not a weekly one; a contract
+past its notice date keeps coming weekly until its renewal or end is recorded.
 
 Each notice is written to grc_tpra_reminders before it is sent, under a unique
 key of what it is about, who it is for and which period it belongs to. The sweep
@@ -35,7 +36,7 @@ from ....models import (
     UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
 )
 from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
-from . import tier_policy
+from . import contracts as contract_rules, tier_policy
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,8 @@ def clean_policy(raw: dict, current: dict) -> dict:
     for key, value in raw.items():
         if key == "enabled":
             policy[key] = bool(value)
-        elif key in ("remind_before_days", "repeat_every_days", "escalate_after_days", "checkin_every_days"):
+        elif key in ("remind_before_days", "repeat_every_days", "escalate_after_days", "checkin_every_days",
+                     "contract_before_days"):
             try:
                 number = int(value)
             except (TypeError, ValueError):
@@ -63,9 +65,9 @@ def clean_policy(raw: dict, current: dict) -> dict:
             if not low <= number <= _MAX_DAYS:
                 raise ValueError(f"{key.replace('_', ' ')} must be between {low} and {_MAX_DAYS}")
             policy[key] = number
-        elif key == "escalate_to":
+        elif key in ("escalate_to", "contract_notify"):
             if not isinstance(value, list) or len(value) > 20:
-                raise ValueError("Escalate to must be a list of at most 20 entries")
+                raise ValueError(f"{key.replace('_', ' ').capitalize()} must be a list of at most 20 entries")
             targets = []
             for entry in value:
                 text = " ".join(str(entry or "").split())
@@ -140,10 +142,11 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
     every = int(policy.get("repeat_every_days", 7))
     notices: List[Notice] = []
 
-    def add(kind, subject_type, subject_id, vendor_id, due, title, link, recipients, once=False, email=None):
+    def add(kind, subject_type, subject_id, vendor_id, due, title, link, recipients, once=False, email=None,
+            before_days=None):
         if due is None:
             return
-        period = reminder_period(due, today, before, every, once_overdue=once)
+        period = reminder_period(due, today, before if before_days is None else before_days, every, once_overdue=once)
         if period is None:
             return
         notices.append(Notice(kind, subject_type, subject_id, vendor_id, due, period,
@@ -224,18 +227,22 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"/vendor-risk/vendors/{v.id}" if v else "/vendor-risk/findings",
             [a.accepted_by, v.owner_id if v else None], once=True)
 
-    # 5. Contracts coming up for renewal or expiry — whichever comes first.
+    # 5. Contracts needing a decision: due on the last day to give notice (the end
+    #    date when the contract asks for none), then weekly until someone records
+    #    the renewal or closes the contract out. The owner hears, and whoever the
+    #    policy names for contracts — procurement, usually.
+    contract_before = int(policy.get("contract_before_days", contract_rules.DECIDE_DAYS))
+    contract_people = escalation_users(db, policy.get("contract_notify") or [])
     for c in db.query(TPRAContract).filter(
             TPRAContract.tenant_id == tenant_id, TPRAContract.deleted_at.is_(None),
             TPRAContract.status == "active"):
-        dates = [d for d in (_day(c.renewal_date), _day(c.expiry_date)) if d]
         v = vendors.get(c.vendor_id)
-        if not dates or v is None:
+        due = contract_rules.act_by(c)
+        if due is None or v is None or (v.status or "").lower() in _INACTIVE_VENDOR:
             continue
-        due = min(dates)
         add("contract_expiring", "contract", c.id, v.id, due,
-            f"Contract '{c.title or 'contract'}' with {v.name} is {_when(due, today, 'past its date')}",
-            f"/vendor-risk/vendors/{v.id}", [v.owner_id], once=True)
+            contract_rules.headline(c, v, _when(due, today, "past its date")),
+            f"/vendor-risk/contracts?contract={c.id}", [v.owner_id, *contract_people], before_days=contract_before)
 
     # 6. A tier the vendor's facts have moved past: its owner hears once.
     for a in db.query(VendorAssessment).filter(

@@ -21,6 +21,8 @@ interface ReminderPolicy {
   escalate_after_days: number;
   escalate_to: string[];
   checkin_every_days?: number;
+  contract_before_days?: number;
+  contract_notify?: string[];
 }
 
 interface TierRules { template_ids: number[]; evidence: string[]; approver_role: string | null; reassess_on: string }
@@ -261,6 +263,28 @@ export default function VendorRiskSettingsPage() {
                   onChange={(e) => setReminders({ ...reminders, checkin_every_days: Number(e.target.value) })} />
                 <span className="text-xs text-gray-400">days</span>
               </div>
+            </div>
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-slate-700">Start contract reminders this many days before the last day to give notice</span>
+              <div className="flex items-center gap-1.5">
+                <input type="number" min={0} className={inputCls} disabled={!canEdit || !reminders.enabled}
+                  value={reminders.contract_before_days ?? 30}
+                  onChange={(e) => setReminders({ ...reminders, contract_before_days: Number(e.target.value) })} />
+                <span className="text-xs text-gray-400">days</span>
+              </div>
+            </div>
+            <div>
+              <label htmlFor="tprm-contract-notify" className="text-sm text-slate-700">Also tell about contracts</label>
+              <input id="tprm-contract-notify"
+                className="mt-1 w-full rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 disabled:bg-gray-50"
+                disabled={!canEdit || !reminders.enabled}
+                placeholder="role:Procurement, user:12"
+                value={(reminders.contract_notify || []).join(', ')}
+                onChange={(e) => setReminders({ ...reminders, contract_notify: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })} />
+              <p className="mt-0.5 text-[11px] text-gray-400">
+                The supplier&apos;s owner always hears when a contract needs a decision; these people hear too. A contract past
+                its notice date is repeated on the same rhythm until its renewal is recorded or it is closed out.
+              </p>
             </div>
             <div>
               <label htmlFor="tprm-escalate-to" className="text-sm text-slate-700">Escalate to</label>

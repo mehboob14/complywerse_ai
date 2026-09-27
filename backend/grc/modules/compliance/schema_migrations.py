@@ -952,6 +952,18 @@ _COLUMN_ADDS = [
     ("grc_tpra_monitoring_signals", "finding_id", "INTEGER", None),
     ("grc_tpra_tiering_config", "monitoring_policy", "JSON DEFAULT '{}'::json", None),
     ("grc_tpra_tiering_config", "quantification", "JSON DEFAULT '{}'::json", None),
+    # The contracts inbox (tpra/contracts.py): the signed copy, commercial terms
+    # and how each contract renews.
+    ("grc_tpra_contracts", "evidence_id", "INTEGER", None),
+    ("grc_tpra_contracts", "reference", "VARCHAR(120)", None),
+    ("grc_tpra_contracts", "record_link", "VARCHAR(500)", None),
+    ("grc_tpra_contracts", "renewal_type", "VARCHAR(20)", None),
+    ("grc_tpra_contracts", "notice_days", "INTEGER", None),
+    ("grc_tpra_contracts", "annual_value", "NUMERIC(14,2)", None),
+    ("grc_tpra_contracts", "currency", "VARCHAR(3)", None),
+    ("grc_tpra_contracts", "billing", "VARCHAR(20)", None),
+    ("grc_tpra_contracts", "pricing", "JSON", None),
+    ("grc_tpra_contracts", "termination", "TEXT", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

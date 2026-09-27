@@ -3,7 +3,8 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  AlertTriangle, BellRing, Building2, CalendarCheck, ClipboardList, FileQuestion, FileText, Inbox, Layers, LayoutDashboard,
+  AlertTriangle, BellRing, Building2, CalendarCheck, ClipboardList, FileQuestion, FileSignature, FileText, Inbox, Layers,
+  LayoutDashboard,
   PackageCheck, Radio, Settings, Share2, Shield, type LucideIcon,
 } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -17,10 +18,11 @@ const GROUPS: Array<{ title: string; items: Item[] }> = [
     { name: 'Dashboard', href: '/vendor-risk', icon: LayoutDashboard, exact: true },
     { name: 'Attention', href: '/vendor-risk/attention', icon: BellRing },
   ] },
-  { title: 'Onboarding', items: [
+  { title: 'Suppliers', items: [
     { name: 'Requests', href: '/vendor-risk/intake', icon: Inbox },
     { name: 'Vendors', href: '/vendor-risk/vendors', icon: Building2 },
     { name: 'Procurement', href: '/vendor-risk/procurement', icon: PackageCheck },
+    { name: 'Contracts', href: '/vendor-risk/contracts', icon: FileSignature },
   ] },
   { title: 'Assessment', items: [
     { name: 'Assessments', href: '/vendor-risk/assessments', icon: ClipboardList },

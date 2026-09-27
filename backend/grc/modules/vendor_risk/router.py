@@ -15,6 +15,7 @@ from .tpra.reports import router as tpra_reports_router
 from .tpra.quantification import router as tpra_exposure_router
 from .tpra.onboarding import router as tpra_onboarding_router
 from .tpra.checkins import router as tpra_checkins_router
+from .tpra.contracts import router as tpra_contracts_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -23,6 +24,8 @@ router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 router.include_router(tpra_onboarding_router)
 # Stakeholders' yearly check-ins on suppliers in use.
 router.include_router(tpra_checkins_router)
+# Every contract, with the ones needing a decision first.
+router.include_router(tpra_contracts_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)

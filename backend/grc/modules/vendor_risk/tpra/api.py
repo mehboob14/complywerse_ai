@@ -23,7 +23,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
+from . import contracts, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
 from .stages import stages_payload, is_valid_stage
 from .schema_migrations import ensure_tpra_columns
 
@@ -127,6 +127,7 @@ def s_contract(c: TPRAContract) -> dict:
         "contract_type": c.contract_type, "title": c.title, "terms": c.terms,
         "document_id": c.document_id, "effective_date": c.effective_date,
         "renewal_date": c.renewal_date, "expiry_date": c.expiry_date, "status": c.status,
+        **{k: getattr(c, k) for k in contracts.TERM_FIELDS}, "evidence_id": c.evidence_id,
         "row_version": c.row_version,
     }
 
@@ -280,10 +281,26 @@ class ContractIn(BaseModel):
     renewal_date: Optional[datetime] = None
     expiry_date: Optional[datetime] = None
     status: Optional[str] = "draft"
+    # Commercial terms; tpra/contracts.py cleans them.
+    reference: Optional[str] = None
+    record_link: Optional[str] = None
+    renewal_type: Optional[str] = None
+    notice_days: Optional[int] = None
+    annual_value: Optional[float] = None
+    currency: Optional[str] = None
+    billing: Optional[str] = None
+    pricing: Optional[dict] = None
+    termination: Optional[str] = None
 
 class ContractUpdate(ContractIn):
+    # Only the fields a request names are written, so leaving one out keeps it.
     contract_type: Optional[str] = None
+    status: Optional[str] = None
     row_version: Optional[int] = None
+    reason: Optional[str] = None
+
+_CONTRACT_FIELDS = ("contract_type", "title", "terms", "document_id", "effective_date", "renewal_date",
+                    "expiry_date", "status", "assessment_id") + contracts.TERM_FIELDS
 
 class ObligationIn(BaseModel):
     obligation: str
@@ -1096,12 +1113,20 @@ def create_contract(vendor_id: int, body: ContractIn, db: Session = Depends(get_
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "contracts", "create")
+    try:
+        terms = contracts.clean({k: getattr(body, k) for k in ("contract_type", "status", *contracts.TERM_FIELDS)})
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     c = TPRAContract(
-        tenant_id=v.tenant_id, vendor_id=v.id, assessment_id=body.assessment_id,
-        contract_type=body.contract_type or "master", title=body.title, terms=body.terms,
+        tenant_id=v.tenant_id, vendor_id=v.id, assessment_id=body.assessment_id, title=body.title, terms=body.terms,
         document_id=body.document_id, effective_date=body.effective_date,
-        renewal_date=body.renewal_date, expiry_date=body.expiry_date, status=body.status or "draft",
+        renewal_date=body.renewal_date, expiry_date=body.expiry_date,
+        **{**terms, "contract_type": terms.get("contract_type") or "master", "status": terms.get("status") or "draft"},
     )
+    try:
+        contracts.check_dates(c)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     db.add(c)
     db.flush()
     service.write_audit(db, v.tenant_id, entity="contract", action="create",
@@ -1116,12 +1141,20 @@ def update_contract(contract_id: int, body: ContractUpdate, db: Session = Depend
     c = _get(db, TPRAContract, contract_id, tids)
     rbac.require_write(db, user, "contracts", "edit")
     _check_concurrency(c, body.row_version)
-    for field in ("contract_type", "title", "terms", "document_id", "effective_date", "renewal_date", "expiry_date", "status", "assessment_id"):
-        val = getattr(body, field)
-        if val is not None:
-            setattr(c, field, val)
-    _bump(c)
-    service.write_audit(db, c.tenant_id, entity="contract", action="update", vendor_id=c.vendor_id, entity_id=c.id, actor_id=user.id)
+    given = {f: getattr(body, f) for f in body.model_fields_set if f in _CONTRACT_FIELDS}
+    for required in ("contract_type", "status"):           # these can change but never be emptied
+        if required in given and not given[required]:
+            given.pop(required)
+    try:
+        changes = contracts.apply(c, contracts.clean(given))
+        contracts.check_dates(c)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if changes:
+        _bump(c)
+        service.write_audit(db, c.tenant_id, entity="contract", action="update", vendor_id=c.vendor_id,
+                            entity_id=c.id, actor_id=user.id, to_value=", ".join(changes)[:500],
+                            reason=" ".join((body.reason or "").split()) or None, extra={"changes": changes})
     db.commit()
     return s_contract(c)
 

@@ -2579,6 +2579,25 @@ export const vendorOnboardingApi = {
   }) => apiClient.post(`/vendor-risk/vendors/${vendorId}/checkins`, data),
 };
 
+// Every supplier contract, the ones needing a decision first (tpra/contracts.py).
+// Create/update/delete and obligations stay on the lifecycle routes.
+export const vendorContractsApi = {
+  list: (params?: { vendor_id?: number }) => apiClient.get('/vendor-risk/contracts', { params: params || {} }),
+  get: (id: number) => apiClient.get(`/vendor-risk/contracts/${id}`),
+  create: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/contracts`, data),
+  update: (id: number, data: Record<string, unknown>) => apiClient.put(`/vendor-risk/tpra/contracts/${id}`, data),
+  remove: (id: number) => apiClient.delete(`/vendor-risk/tpra/contracts/${id}`),
+  renew: (id: number, data: { renewal_date?: string; expiry_date?: string; annual_value?: number; note?: string }) =>
+    apiClient.post(`/vendor-risk/contracts/${id}/renew`, data),
+  attachFile: (id: number, file: File) => {
+    const form = new FormData();
+    form.append('file', file);
+    return apiClient.post(`/vendor-risk/contracts/${id}/file`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
+  },
+  readTerms: (id: number) => apiClient.post(`/vendor-risk/contracts/${id}/read-terms`, {}, { timeout: 180000 }),
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

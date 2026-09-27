@@ -131,32 +131,6 @@ export interface FindingDetail {
   acceptances: Acceptance[];
 }
 
-export interface Contract {
-  id: number;
-  vendor_id: number;
-  assessment_id: number | null;
-  contract_type: string;
-  title: string | null;
-  terms: string | null;
-  document_id: number | null;
-  effective_date: string | null;
-  renewal_date: string | null;
-  expiry_date: string | null;
-  status: string;
-  row_version: number;
-}
-
-export interface Obligation {
-  id: number;
-  contract_id: number;
-  obligation: string;
-  control_ref: string | null;
-  finding_id: number | null;
-  renewal_date: string | null;
-  status: string;
-  row_version: number;
-}
-
 export interface ApprovalCondition {
   id: string;
   text: string;

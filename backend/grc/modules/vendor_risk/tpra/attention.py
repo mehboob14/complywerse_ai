@@ -30,7 +30,7 @@ from ....models import (
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
-from . import rbac, tier_policy
+from . import contracts as contract_rules, rbac, tier_policy
 from .bootstrap import get_tiering_config
 from .reminders import _INACTIVE_VENDOR, _day
 from .schema_migrations import ensure_tpra_columns
@@ -143,16 +143,20 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             f"{v.name} breached a contract obligation: {(o.obligation or '').strip()[:140]}",
             "Breached", f"/vendor-risk/vendors/{v.id}?stage=contracting", tone="red")
 
-    # Active contracts up for renewal or expiry, whichever comes first.
+    # Active contracts needing a decision: due on the last day to give notice, or
+    # on the renewal or expiry date (whichever is first) when no notice is owed.
+    decide_by = today + timedelta(days=int(policy.get("contract_before_days", contract_rules.DECIDE_DAYS)))
     for c in contracts.values():
         v = vendors.get(c.vendor_id)
-        dates = [d for d in (_day(c.renewal_date), _day(c.expiry_date)) if d]
-        if c.status != "active" or v is None or not dates or min(dates) > horizon:
+        due = contract_rules.act_by(c)
+        if c.status != "active" or v is None or due is None or due > decide_by:
             continue
-        due = min(dates)
+        end = contract_rules.ends_on(c)
         add("contract_expiring", "contract", c.id, v, due,
-            f"Contract '{c.title or 'contract'}' with {v.name} is up for renewal or expiry on {due:%d %b %Y}",
-            _countdown(due, today, "Due"), f"/vendor-risk/vendors/{v.id}?stage=contracting",
+            f"Contract '{c.title or 'contract'}' with {v.name} "
+            f"{'renews' if c.renewal_type == 'auto' else 'is up for renewal or expiry'} on {end:%d %b %Y}"
+            + (f"; notice is due by {due:%d %b %Y}" if due < end else ""),
+            _countdown(due, today, "Due"), f"/vendor-risk/contracts?contract={c.id}",
             tone="red" if due < today else "amber", lapsed=due < today)
 
     # Certificates and other evidence a vendor supplied, expired or about to.
