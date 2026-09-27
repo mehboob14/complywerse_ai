@@ -17,6 +17,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import (
     TPRAMonitoringSignal, Base, GRCUser, Role, Tenant, TPRAAuditLog, TPRAFinding, TPRAQuestion, TPRAQuestionResponse, TPRAReminder,
     TPRARiskAcceptance, TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence,
@@ -32,7 +33,7 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            VendorQuestionnaireResponse, VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion,
            TPRAQuestionResponse, TPRAFinding, TPRATieringConfig, TPRAAuditLog, TPRAReminder, TPRARiskAcceptance,
            TPRARemediation, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, Evidence, TPRAApproval,
-           TPRARiskSnapshot, TPRAMonitoringSignal]
+           TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin]
 
 QUESTIONS = [
     {"id": "subs", "text": "Do you use subprocessors?", "type": "yes_no", "required": True},

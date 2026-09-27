@@ -12,6 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from grc.models import TPRACheckin, TPRAApproval  # read by the check-in schedule
 from grc.models import (
     Base, Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
     TPRAFinding, TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAReminder,
@@ -22,7 +23,7 @@ from grc.modules.vendor_risk.tpra.bootstrap import DEFAULT_TIERING_CONFIG
 TODAY = date(2026, 9, 23)
 POLICY = dict(DEFAULT_TIERING_CONFIG["reminder_policy"])      # 14 before, weekly, escalate at 14
 _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
-           TPRAFinding, TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAReminder]
+           TPRAFinding, TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAReminder, TPRACheckin, TPRAApproval]
 
 
 @pytest.fixture()

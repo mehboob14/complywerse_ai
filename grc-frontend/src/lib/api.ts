@@ -2568,6 +2568,15 @@ export const vendorOnboardingApi = {
       params: { dry_run: dryRun }, headers: { 'Content-Type': 'multipart/form-data' },
     });
   },
+  // Yearly stakeholder check-ins (tpra/checkins.py).
+  checkins: (params?: { scope?: 'all' | 'mine'; search?: string }) =>
+    apiClient.get('/vendor-risk/checkins', { params: params || {} }),
+  checkinHistory: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/checkins`),
+  checkIn: (vendorId: number, data: {
+    still_owner: boolean; new_owner_id?: number | null; changed: boolean; change_notes?: string;
+    contact_current: boolean;
+    contact?: { primary_contact_name?: string; primary_contact_email?: string; primary_contact_phone?: string };
+  }) => apiClient.post(`/vendor-risk/vendors/${vendorId}/checkins`, data),
 };
 
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.

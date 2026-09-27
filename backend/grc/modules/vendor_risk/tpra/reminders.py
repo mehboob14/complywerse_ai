@@ -54,12 +54,12 @@ def clean_policy(raw: dict, current: dict) -> dict:
     for key, value in raw.items():
         if key == "enabled":
             policy[key] = bool(value)
-        elif key in ("remind_before_days", "repeat_every_days", "escalate_after_days"):
+        elif key in ("remind_before_days", "repeat_every_days", "escalate_after_days", "checkin_every_days"):
             try:
                 number = int(value)
             except (TypeError, ValueError):
                 raise ValueError(f"{key.replace('_', ' ')} must be a whole number of days")
-            low = 1 if key == "repeat_every_days" else 0
+            low = {"repeat_every_days": 1, "checkin_every_days": 30}.get(key, 0)
             if not low <= number <= _MAX_DAYS:
                 raise ValueError(f"{key.replace('_', ' ')} must be between {low} and {_MAX_DAYS}")
             policy[key] = number
@@ -249,6 +249,14 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             add("retier_needed", "assessment", a.id, v.id, _day(v.updated_at) or today,
                 f"{v.name} may need re-tiering: {'; '.join(reasons)}",
                 f"/vendor-risk/vendors/{v.id}?stage=tiering", [v.owner_id], once=True)
+
+    # 7. Yearly check-ins falling due: the owner and whoever else looks after it.
+    from .checkins import schedule  # here: checkins reads this module's vendor statuses
+    for item in schedule(db, tenant_id, today, int(policy.get("checkin_every_days") or 365)):
+        v = item["vendor"]
+        add("checkin_due", "vendor", v.id, v.id, item["due"],
+            f"The yearly check-in on {v.name} is {_when(item['due'], today)}",
+            f"/vendor-risk/reviews?vendor={v.id}", [v.owner_id, *(v.stakeholder_ids or [])])
 
     return notices
 

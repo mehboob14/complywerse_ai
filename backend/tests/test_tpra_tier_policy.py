@@ -15,6 +15,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Role, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRAQuestion,
@@ -32,7 +33,7 @@ _TABLES = [Tenant, GRCUser, Role, UserRole, Vendor, VendorAssessment, VendorQues
            VendorQuestionnaireResponse, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, TPRAEvidenceLink, TPRAMonitoringSignal, TPRAApproval,
            TPRAStageInstance, TPRAContract, TPRAControlObligation, TPRARemediation, TPRARiskAcceptance,
-           TPRARiskSnapshot, AttentionState, AttentionActivity]
+           TPRARiskSnapshot, AttentionState, AttentionActivity, TPRACheckin]
 TODAY = datetime.utcnow().date()
 
 

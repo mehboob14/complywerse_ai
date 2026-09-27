@@ -12,6 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal,
@@ -24,7 +25,7 @@ TODAY = date(2026, 9, 23)
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireResponse, TPRAFinding,
            TPRARemediation, TPRARiskAcceptance, TPRAContract, TPRAControlObligation, TPRAApproval,
            Evidence, TPRAEvidenceLink, TPRARiskSnapshot, TPRATieringConfig, TPRAAuditLog,
-           TPRAMonitoringSignal, AttentionState, AttentionActivity, WorkflowNotification]
+           TPRAMonitoringSignal, AttentionState, AttentionActivity, WorkflowNotification, TPRACheckin]
 
 
 @pytest.fixture()

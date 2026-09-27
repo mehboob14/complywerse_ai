@@ -24,7 +24,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import (
-    AttentionActivity, AttentionState, Evidence, GRCUser, TPRAApproval, TPRAContract,
+    AttentionActivity, AttentionState, Evidence, GRCUser, TPRAApproval, TPRACheckin, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRARiskAcceptance,
     TPRARiskSnapshot,
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
@@ -52,6 +52,8 @@ CONDITIONS: Dict[str, tuple] = {
     "contract_expiring": ("Contract expiring", 55),
     "questionnaire_to_review": ("Questionnaire to review", 50),
     "request_to_review": ("Onboarding request to review", 58),
+    "checkin_change": ("Owner reported a change", 62),
+    "checkin_overdue": ("Yearly check-in overdue", 52),
     "tier_overridden": ("Tier set by hand", 45),
     "signal_unverified": ("Unverified alert", 30),
     "questionnaire_untouched": ("Questionnaire not started", 40),
@@ -346,6 +348,25 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             f"{v.name} was requested on {submitted:%d %b %Y} and is waiting for review",
             f"Waiting {_days((today - submitted).days)}", f"/vendor-risk/intake/{v.id}",
             tone="amber", lapsed=(today - submitted).days > REVIEW_AFTER_DAYS)
+
+    # Yearly check-ins: the overdue ones, and changes an owner reported for the
+    # team to act on (re-tier, reassess, or close with a note).
+    from .checkins import schedule
+    for item in schedule(db, tenant_id, today, int(policy.get("checkin_every_days") or 365)):
+        v = item["vendor"]
+        if item["state"] == "overdue" and v.id in vendors:
+            add("checkin_overdue", "vendor", v.id, v, item["due"],
+                f"The yearly check-in on {v.name} is overdue",
+                f"{_days((today - item['due']).days)} overdue", f"/vendor-risk/reviews?vendor={v.id}", lapsed=True)
+    for c in db.query(TPRACheckin).filter(
+            TPRACheckin.tenant_id == tenant_id, TPRACheckin.changed.is_(True),
+            TPRACheckin.completed_at >= datetime.combine(today - timedelta(days=SIGNAL_LOOKBACK_DAYS), time.min)):
+        v = vendors.get(c.vendor_id)
+        if v is None:
+            continue
+        add("checkin_change", "checkin", c.id, v, _day(c.completed_at),
+            f"{v.name}: its owner reported a change — {(c.change_notes or '')[:140]}",
+            "Reported at check-in", f"/vendor-risk/vendors/{v.id}")
 
     return items
 

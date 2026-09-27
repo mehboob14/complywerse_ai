@@ -20,6 +20,7 @@ interface ReminderPolicy {
   repeat_every_days: number;
   escalate_after_days: number;
   escalate_to: string[];
+  checkin_every_days?: number;
 }
 
 interface TierRules { template_ids: number[]; evidence: string[]; approver_role: string | null; reassess_on: string }
@@ -230,7 +231,8 @@ export default function VendorRiskSettingsPage() {
             </label>
           </div>
           <p className="mb-3 text-[11px] text-gray-500">
-            Covers reassessments, questionnaires waiting on a vendor, remediation, risk acceptances and contracts.
+            Covers reassessments, questionnaires waiting on a vendor, remediation, risk acceptances, contracts and
+            stakeholders&apos; yearly check-ins.
             One notice when the window opens, then one per repeat period once overdue. An expired risk acceptance
             is marked expired and stops mitigating its finding.
           </p>
@@ -251,6 +253,15 @@ export default function VendorRiskSettingsPage() {
                 </div>
               </div>
             ))}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm text-slate-700">Stakeholders check in on each supplier every</span>
+              <div className="flex items-center gap-1.5">
+                <input type="number" min={30} className={inputCls} disabled={!canEdit || !reminders.enabled}
+                  value={reminders.checkin_every_days ?? 365}
+                  onChange={(e) => setReminders({ ...reminders, checkin_every_days: Number(e.target.value) })} />
+                <span className="text-xs text-gray-400">days</span>
+              </div>
+            </div>
             <div>
               <label htmlFor="tprm-escalate-to" className="text-sm text-slate-700">Escalate to</label>
               <input id="tprm-escalate-to"

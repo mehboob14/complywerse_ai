@@ -14,12 +14,15 @@ from .tpra.graph import router as tpra_graph_router
 from .tpra.reports import router as tpra_reports_router
 from .tpra.quantification import router as tpra_exposure_router
 from .tpra.onboarding import router as tpra_onboarding_router
+from .tpra.checkins import router as tpra_checkins_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
 # Onboarding requests, procurement's view and vendor import. First, so its
 # literal /vendors/import paths are matched before any /vendors/{id} route.
 router.include_router(tpra_onboarding_router)
+# Stakeholders' yearly check-ins on suppliers in use.
+router.include_router(tpra_checkins_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)
