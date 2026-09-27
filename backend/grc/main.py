@@ -268,6 +268,9 @@ app.include_router(asset_import_router)
 # AI Pentest assessments (isolated cyber module: grc/modules/pentest)
 from .modules.pentest.router import router as pentest_router  # noqa: E402
 app.include_router(pentest_router)
+# Performance (exec) dashboard read-only aggregates (isolated cyber module: grc/modules/exec_dashboard)
+from .modules.exec_dashboard.router import router as exec_dashboard_router  # noqa: E402
+app.include_router(exec_dashboard_router)
 app.include_router(compliance_plugins_router)
 app.include_router(automation_soc2_router)
 # common must be registered before the {framework} router so /automation/common/*

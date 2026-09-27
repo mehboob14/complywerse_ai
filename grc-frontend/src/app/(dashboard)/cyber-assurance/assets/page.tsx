@@ -48,7 +48,7 @@ export default function AssetsPage() {
   );
   const switchView = (v: 'inventory' | 'cis') => {
     setActiveView(v);
-    router.replace(v === 'cis' ? '/assets?tab=cis' : '/assets', { scroll: false });
+    router.replace(v === 'cis' ? '/cyber-assurance/assets?tab=cis' : '/cyber-assurance/assets', { scroll: false });
   };
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('assets:asset_inventory:create');

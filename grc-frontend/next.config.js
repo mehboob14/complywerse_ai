@@ -19,6 +19,10 @@ const nextConfig = {
     serverActions: {
       bodySizeLimit: '50mb',
     },
+    // The /api rewrite proxy defaults to a 30s timeout and answers 500 past it. Live
+    // aggregates (risk-posture scores every asset: ~8s here, far longer on a busy box)
+    // must not be turned into "didn't respond" by the proxy while the backend is still working.
+    proxyTimeout: 120000,
   },
   // Increase timeout for long-running API operations
   serverRuntimeConfig: {
