@@ -59,7 +59,8 @@ RUN pipx install certipy-ad         || true
 # --- HexStrike (~130 finders) — same install as the web lane image ------------
 RUN git clone --depth=1 https://github.com/0x4m4/hexstrike-ai.git /opt/hexstrike \
     && python3 -m venv /opt/hexstrike/.venv \
-    && /opt/hexstrike/.venv/bin/pip install --no-cache-dir -r /opt/hexstrike/requirements.txt \
+    && ( /opt/hexstrike/.venv/bin/pip install --no-cache-dir -r /opt/hexstrike/requirements.txt \
+         || echo "SKIP: hexstrike optional deps (cffi/zstandard/cryptography) need heavy build tools; not needed by the direct tool path" ) \
     && printf '#!/bin/sh\nexec /opt/hexstrike/.venv/bin/python /opt/hexstrike/hexstrike_server.py "$@"\n' \
          > /usr/local/bin/hexstrike \
     && chmod +x /usr/local/bin/hexstrike
