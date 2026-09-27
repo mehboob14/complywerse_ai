@@ -964,6 +964,8 @@ _COLUMN_ADDS = [
     ("grc_tpra_contracts", "billing", "VARCHAR(20)", None),
     ("grc_tpra_contracts", "pricing", "JSON", None),
     ("grc_tpra_contracts", "termination", "TEXT", None),
+    # Outside-in scans (tpra/outside_in.py) look at these domains as well as the website.
+    ("grc_vendors", "domains", "JSON", None),
     # ── ITAM parity block on ITAsset ──────────────────────────────────────────
     # These 14 shipped on the model (_14_it_asset_inventory.py) and are read and
     # written by assets_router (create/update/detail), the agent heartbeat

@@ -16,6 +16,7 @@ from .tpra.quantification import router as tpra_exposure_router
 from .tpra.onboarding import router as tpra_onboarding_router
 from .tpra.checkins import router as tpra_checkins_router
 from .tpra.contracts import router as tpra_contracts_router
+from .tpra.outside_in import router as tpra_outside_in_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -26,6 +27,8 @@ router.include_router(tpra_onboarding_router)
 router.include_router(tpra_checkins_router)
 # Every contract, with the ones needing a decision first.
 router.include_router(tpra_contracts_router)
+# Each supplier's websites and domains as the internet sees them, and waivers.
+router.include_router(tpra_outside_in_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)

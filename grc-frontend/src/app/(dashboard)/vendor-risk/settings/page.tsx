@@ -34,7 +34,7 @@ interface ConfigResp {
   reminder_policy: ReminderPolicy;
   scoring_policy?: { partial_credit: number };
   tier_policy?: Record<string, TierRules>;
-  monitoring_policy?: { adverse_media?: boolean };
+  monitoring_policy?: { adverse_media?: boolean; outside_in?: boolean };
   quantification?: Quant;
   defaults: {
     quantification?: Quant;
@@ -74,6 +74,7 @@ export default function VendorRiskSettingsPage() {
   const [partialPct, setPartialPct] = useState<number | null>(null);
   const [tierPolicy, setTierPolicy] = useState<Record<string, TierRules> | null>(null);
   const [newsFeed, setNewsFeed] = useState(false);
+  const [outsideIn, setOutsideIn] = useState(false);
 
   const { data: templates } = useQuery({
     queryKey: ['questionnaire-templates-for-tier-policy'],
@@ -96,6 +97,7 @@ export default function VendorRiskSettingsPage() {
     setPartialPct(c.scoring_policy ? Math.round(c.scoring_policy.partial_credit * 100) : null);
     setTierPolicy(c.tier_policy ? JSON.parse(JSON.stringify(c.tier_policy)) : null);
     setNewsFeed(!!c.monitoring_policy?.adverse_media);
+    setOutsideIn(!!c.monitoring_policy?.outside_in);
   };
   useEffect(() => { if (data) hydrate(data); }, [data]);
 
@@ -107,7 +109,7 @@ export default function VendorRiskSettingsPage() {
       ...(reminders ? { reminder_policy: reminders } : {}),
       ...(partialPct !== null ? { scoring_policy: { partial_credit: partialPct / 100 } } : {}),
       ...(tierPolicy ? { tier_policy: tierPolicy } : {}),
-      monitoring_policy: { adverse_media: newsFeed },
+      monitoring_policy: { adverse_media: newsFeed, outside_in: outsideIn },
     }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-config'] }); toast({ type: 'success', title: 'Settings saved', message: 'Tiering, scoring and the next reminder run use these values.' }); },
     onError: (e) => toast({ type: 'error', title: 'Could not save', message: errMsg(e, 'Try again.') }),
@@ -387,6 +389,18 @@ export default function VendorRiskSettingsPage() {
             <span className="block text-[11px] text-gray-500">
               Uses the GDELT Project&apos;s free news search; each vendor&apos;s name is sent to it. An alert counts as verified
               only when two publishers report it; until then it is shown but never emailed and never reopens an assessment.
+            </span>
+          </span>
+        </label>
+        <label className="mt-3 flex items-start gap-2 text-sm text-slate-700">
+          <input type="checkbox" className="mt-1" disabled={!canEdit} checked={outsideIn} onChange={(e) => setOutsideIn(e.target.checked)} />
+          <span>
+            Scan each supplier&apos;s websites and domains from outside
+            <span className="block text-[11px] text-gray-500">
+              Looks at what any visitor sees: certificates, HTTPS and protective headers, and email spoofing protection, plus
+              exposed services and known vulnerabilities when a Shodan key is connected. Nothing is port-scanned. Critical
+              suppliers weekly, high monthly, medium quarterly, low twice a year. A supplier&apos;s first scan sets its
+              baseline; after that a new high or critical finding raises a signal.
             </span>
           </span>
         </label>

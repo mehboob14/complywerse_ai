@@ -26,6 +26,7 @@ import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/u
 import TpraLifecycle from './_tpra/TpraLifecycle';
 import DependenciesPanel from './_tpra/DependenciesPanel';
 import ExposurePanel from './_tpra/ExposurePanel';
+import OutsideInPanel from './_tpra/OutsideInPanel';
 
 interface Vendor {
   id: number;
@@ -148,7 +149,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
-type TabType = 'lifecycle' | 'overview' | 'dependencies' | 'exposure' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'overview' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -188,7 +189,7 @@ export default function VendorDetailPage() {
     if (deepLinkStage || deepLinkFinding != null) {
       setActiveTab('lifecycle');
       deepLinkApplied.current = true;
-    } else if (deepLinkTab && ['lifecycle', 'overview', 'dependencies', 'exposure', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
+    } else if (deepLinkTab && ['lifecycle', 'overview', 'dependencies', 'exposure', 'outside-in', 'assessments', 'sla', 'incidents'].includes(deepLinkTab)) {
       setActiveTab(deepLinkTab);                       // ?tab=dependencies from Concentration
       deepLinkApplied.current = true;
     }
@@ -310,6 +311,7 @@ export default function VendorDetailPage() {
     { key: 'overview', label: 'Overview' },
     { key: 'dependencies', label: 'Dependencies' },
     { key: 'exposure', label: 'Exposure' },
+    { key: 'outside-in', label: 'Outside-in' },
     { key: 'assessments', label: 'Assessments', count: vendor.assessments_count },
     { key: 'sla', label: 'SLA Tracking', count: vendor.sla_records_count },
     { key: 'incidents', label: 'Incidents', count: vendor.incidents_count },
@@ -596,6 +598,13 @@ export default function VendorDetailPage() {
       {activeTab === 'exposure' && (
         <div role="tabpanel" id="vendor-tabpanel-exposure" aria-labelledby="vendor-tab-exposure" tabIndex={0} className="focus:outline-none">
           <ExposurePanel vendorId={vendorId} />
+        </div>
+      )}
+
+      {/* Outside-in Tab — the supplier's websites and domains as the internet sees them */}
+      {activeTab === 'outside-in' && (
+        <div role="tabpanel" id="vendor-tabpanel-outside-in" aria-labelledby="vendor-tab-outside-in" tabIndex={0} className="focus:outline-none">
+          <OutsideInPanel vendorId={vendorId} />
         </div>
       )}
 

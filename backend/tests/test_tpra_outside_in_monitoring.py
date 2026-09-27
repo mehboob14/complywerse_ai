@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from grc.models import TPRACheckin  # read by the check-in schedule
+from grc.models import IntegrationConnection  # where the rating providers' keys are held
 from grc.models import (
     AttentionActivity, AttentionState, Base, Evidence, GRCUser, Tenant, TPRAApproval, TPRAAuditLog,
     TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAExternalRating, TPRAFinding,
@@ -28,7 +29,8 @@ NOW = datetime(2026, 9, 24, 12, 0)
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireResponse, TPRAFinding, TPRAAuditLog,
            TPRATieringConfig, Evidence, TPRAEvidenceLink, TPRAMonitoringSignal, TPRAMonitoringCursor,
            TPRASignalRejection, TPRAExternalRating, TPRAContract, TPRAControlObligation, TPRAApproval,
-           TPRARiskAcceptance, TPRARiskSnapshot, AttentionState, AttentionActivity, TPRAVendorProduct, TPRACheckin]
+           TPRARiskAcceptance, TPRARiskSnapshot, AttentionState, AttentionActivity, TPRAVendorProduct, TPRACheckin,
+           IntegrationConnection]
 
 
 @pytest.fixture()
@@ -115,8 +117,9 @@ def test_articles_pass_four_checks_and_one_publisher_is_not_enough():
 # ── the runner ───────────────────────────────────────────────────────────────
 
 def test_news_monitoring_is_off_until_a_tenant_turns_it_on(db):
-    # the certificate feed always; news once turned on; product watch once a product is watched
-    assert [p["configured"] for p in feeds.providers(db, 1)] == [True, False, False]
+    # the certificate feed always; news once turned on; product watch once a product is watched;
+    # the outside-in scan once turned on, and each ratings provider once its key is added
+    assert [p["configured"] for p in feeds.providers(db, 1)] == [True, False, False, False, False, False, False]
 
 
 def test_a_feed_fills_the_queue_dedupes_and_is_corroborated_later(db, monkeypatch):

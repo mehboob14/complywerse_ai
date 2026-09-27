@@ -2341,7 +2341,7 @@ export const vendorRiskApi = {
 // Talks to /vendor-risk/tpra/*. Separate from the legacy vendorRiskApi flat
 // methods above so the new lifecycle UI has a clean, grouped client surface.
 export interface ReportRequest {
-  kind: 'committee_pack' | 'register' | 'vendor_file';
+  kind: 'committee_pack' | 'register' | 'vendor_file' | 'ratings_quarter';
   period_start?: string;
   period_end?: string;
   vendor_id?: number;
@@ -2469,7 +2469,7 @@ export const tpraApi = {
   saveConfig: (data: {
     weights?: Record<string, number>; thresholds?: Record<string, number>; cadence_days?: Record<string, number>;
     reminder_policy?: object; scoring_policy?: { partial_credit: number }; tier_policy?: object;
-    monitoring_policy?: { adverse_media: boolean }; quantification?: object;
+    monitoring_policy?: { adverse_media?: boolean; outside_in?: boolean }; quantification?: object;
   }) =>
     apiClient.put('/vendor-risk/tpra/config', data),
   getVendorAudit: (vendorId: number, limit = 100) =>
@@ -2596,6 +2596,17 @@ export const vendorContractsApi = {
     return apiClient.post(`/vendor-risk/contracts/${id}/file`, form, { headers: { 'Content-Type': 'multipart/form-data' } });
   },
   readTerms: (id: number) => apiClient.post(`/vendor-risk/contracts/${id}/read-terms`, {}, { timeout: 180000 }),
+};
+
+// Each supplier's websites and domains as the internet sees them (tpra/outside_in.py).
+export const vendorSecurityApi = {
+  portfolio: () => apiClient.get('/vendor-risk/outside-in'),
+  vendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/outside-in`),
+  scan: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/outside-in/scan`),
+  setDomains: (vendorId: number, domains: string[]) => apiClient.put(`/vendor-risk/vendors/${vendorId}/domains`, { domains }),
+  waive: (vendorId: number, data: { finding_key: string; host?: string | null; reason: string; expires_on: string }) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/outside-in/waivers`, data),
+  revokeWaiver: (waiverId: number) => apiClient.delete(`/vendor-risk/outside-in/waivers/${waiverId}`),
 };
 
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.

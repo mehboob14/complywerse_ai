@@ -35,19 +35,20 @@ _DOMAIN_FOR = {"breach": "cybersecurity", "security_rating": "cybersecurity", "c
 
 
 def due_vendors(db: Session, tenant_id: int, provider: str, now: datetime, limit: int = 50,
-                every_days: Optional[int] = None) -> List[Tuple[Vendor, Optional[datetime]]]:
+                every_days: Optional[int] = None, cadence: Optional[dict] = None) -> List[Tuple[Vendor, Optional[datetime]]]:
     """Vendors a connector should poll now, most overdue first, at most `limit`.
-    A feed cheap enough to check every vendor on one cadence passes `every_days`."""
+    A feed cheap enough to check every vendor on one cadence passes `every_days`;
+    one too costly for POLL_EVERY_DAYS passes its own days per tier as `cadence`."""
     cursor = aliased(TPRAMonitoringCursor)
     tier = func.lower(func.coalesce(Vendor.tier, "medium"))
     if every_days:
         due = or_(cursor.last_polled_at.is_(None), cursor.last_polled_at <= now - timedelta(days=every_days))
     else:
+        days = cadence or POLL_EVERY_DAYS
         due = or_(
             cursor.last_polled_at.is_(None),
-            *[and_(tier == t, cursor.last_polled_at <= now - timedelta(days=d)) for t, d in POLL_EVERY_DAYS.items()],
-            and_(~tier.in_(list(POLL_EVERY_DAYS)),
-                 cursor.last_polled_at <= now - timedelta(days=POLL_EVERY_DAYS["medium"])),
+            *[and_(tier == t, cursor.last_polled_at <= now - timedelta(days=d)) for t, d in days.items()],
+            and_(~tier.in_(list(days)), cursor.last_polled_at <= now - timedelta(days=days["medium"])),
         )
     return (db.query(Vendor, cursor.last_polled_at)
             .outerjoin(cursor, and_(cursor.vendor_id == Vendor.id, cursor.provider == provider,

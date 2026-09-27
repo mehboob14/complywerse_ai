@@ -116,14 +116,16 @@ def _bootstrap() -> None:
         "grc.modules.connectors.providers.shodan",
         "grc.modules.connectors.providers.censys",
         "grc.modules.connectors.providers.securitytrails",
+        # Security-rating providers — pull-only; read by third-party risk monitoring.
+        "grc.modules.connectors.providers.security_ratings",
     ]
     for mod_path in provider_modules:
         try:
             import importlib
             mod = importlib.import_module(mod_path)
-            meta = getattr(mod, "META", None)
-            if meta is not None:
-                register(meta)
+            for meta in [getattr(mod, "META", None), *getattr(mod, "METAS", [])]:
+                if meta is not None:
+                    register(meta)
         except Exception:
             log.exception("Failed to import connector provider module %s", mod_path)
 

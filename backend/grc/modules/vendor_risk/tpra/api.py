@@ -375,7 +375,7 @@ class ConfigIn(BaseModel):
     reminder_policy: Optional[dict] = None  # see bootstrap.DEFAULT_TIERING_CONFIG["reminder_policy"]
     scoring_policy: Optional[dict] = None   # {partial_credit: 0..1}, frozen into each questionnaire version
     tier_policy: Optional[dict] = None      # {tier: {template_ids, evidence, approver_role, reassess_on}}
-    monitoring_policy: Optional[dict] = None  # {adverse_media: bool}
+    monitoring_policy: Optional[dict] = None  # {adverse_media: bool, outside_in: bool}
     quantification: Optional[dict] = None     # exposure model constants, see tpra/quantification.py
 
 class PlanIn(BaseModel):
@@ -1813,10 +1813,11 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
             raise HTTPException(status_code=400, detail=str(exc))
 
     if body.monitoring_policy is not None:
-        unknown = set(body.monitoring_policy) - {"adverse_media"}
+        unknown = set(body.monitoring_policy) - {"adverse_media", "outside_in"}
         if unknown:
             raise HTTPException(status_code=400, detail=f"Unknown monitoring setting: {', '.join(sorted(unknown))}")
-        row.monitoring_policy = {"adverse_media": bool(body.monitoring_policy.get("adverse_media"))}
+        row.monitoring_policy = {**(getattr(row, "monitoring_policy", None) or {}),
+                                 **{k: bool(v) for k, v in body.monitoring_policy.items()}}
 
     if body.tier_policy is not None:
         try:

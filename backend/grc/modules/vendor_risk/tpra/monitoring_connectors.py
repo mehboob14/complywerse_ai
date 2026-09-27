@@ -17,9 +17,13 @@ Feeds today:
   * CISA KEV — a known-exploited vulnerability in a product on a vendor's
     watchlist. On once any vendor has a watched product; it reads the catalogue
     the vulnerability module already downloads daily, every vendor every day.
-A security-ratings provider is a paid feed (decision 2): it plugs in as another
-connector when a client asks for one; until then ratings arrive by import
-(ratings.py).
+  * Outside-in scan — each supplier's websites and domains as the internet sees
+    them (outside_in.py): certificates, web hardening, mail spoofing protection,
+    and exposed services and vulnerabilities where a Shodan key is held. Off until
+    a tenant turns it on; on its own, slower tier cadence and a small batch.
+  * UpGuard, SecurityScorecard and BitSight — ratings from the providers a tenant
+    pays for (rating_feeds.py), on once its key is added under Admin → Connectors.
+    Without one, ratings still arrive by import (ratings.py).
 """
 from __future__ import annotations
 
@@ -31,8 +35,8 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from ....models import Evidence, TPRAEvidenceLink, TPRAVendorProduct, Vendor
-from . import adverse_media, monitoring
+from ....models import Evidence, TPRAEvidenceLink, TPRASurfaceScan, TPRAVendorProduct, Vendor
+from . import adverse_media, monitoring, outside_in, rating_feeds, ratings
 from .bootstrap import get_tiering_config
 
 logger = logging.getLogger(__name__)
@@ -61,6 +65,8 @@ class MonitoringConnector:
     kind: str = ""                     # certificates | adverse_media | ratings | vulnerabilities
     reaches_internet: bool = False
     every_days: Optional[int] = None   # one cadence for every vendor, instead of the tier's
+    cadence: Optional[dict] = None     # or its own days per tier, instead of monitoring.POLL_EVERY_DAYS
+    batch: Optional[int] = None        # fewer vendors per run for a slow feed
 
     def is_configured(self, db: Session, tenant_id: int) -> bool:
         return False
@@ -172,7 +178,53 @@ class ProductWatchConnector(MonitoringConnector):
         return drafts
 
 
-CONNECTORS: List[MonitoringConnector] = [CertificateLapseConnector(), AdverseMediaConnector(), ProductWatchConnector()]
+class SurfaceScanConnector(MonitoringConnector):
+    provider = outside_in.PROVIDER
+    label = "Supplier websites and domains, as the internet sees them"
+    kind = "ratings"
+    reaches_internet = True
+    cadence = outside_in.SCAN_EVERY_DAYS
+    batch = 10                         # a scan can take a minute
+
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
+        return outside_in.policy_on(db, tenant_id)
+
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        if not outside_in.domains_for(vendor):
+            return []
+        scan = TPRASurfaceScan(tenant_id=vendor.tenant_id, vendor_id=vendor.id, status="running", started_at=now)
+        db.add(scan)
+        db.flush()
+        return [SignalDraft(**d) for d in outside_in.drafts(vendor, outside_in.complete(db, scan, vendor, now))]
+
+
+class RatingFeedConnector(MonitoringConnector):
+    """A paid ratings provider: the latest rating for the supplier's main domain.
+    ratings.record keeps it and raises the signal when it falls."""
+    kind = "ratings"
+    reaches_internet = True
+    cadence = outside_in.SCAN_EVERY_DAYS
+
+    def __init__(self, integration: str):
+        self.integration, self.provider = integration, rating_feeds.PROVIDERS[integration]
+        self.label = f"{self.provider} security ratings"
+
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
+        return rating_feeds.credentials(db, tenant_id, self.integration) is not None
+
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        domains = outside_in.domains_for(vendor)
+        creds = rating_feeds.credentials(db, vendor.tenant_id, self.integration)
+        found = rating_feeds.FETCH[self.integration](domains[0], creds) if domains and creds else None
+        if found:
+            ratings.record(db, vendor, self.provider, found["score"], now, found.get("grade"))
+        return []
+
+
+CONNECTORS: List[MonitoringConnector] = [
+    CertificateLapseConnector(), AdverseMediaConnector(), ProductWatchConnector(), SurfaceScanConnector(),
+    *(RatingFeedConnector(key) for key in rating_feeds.PROVIDERS),
+]
 
 
 def providers(db: Session, tenant_id: int) -> List[dict]:
@@ -197,8 +249,8 @@ def run_connectors(db: Session, tenant_id: int, now: Optional[datetime] = None, 
         if not connector.is_configured(db, tenant_id):
             continue
         tally = {"polled": 0, "failed": 0, "new_signals": 0, "verified": 0}
-        for vendor, last in monitoring.due_vendors(db, tenant_id, connector.provider, now, batch,
-                                                   every_days=connector.every_days):
+        for vendor, last in monitoring.due_vendors(db, tenant_id, connector.provider, now, connector.batch or batch,
+                                                   every_days=connector.every_days, cadence=connector.cadence):
             try:
                 with db.begin_nested():
                     for draft in connector.poll(db, vendor, last, now):

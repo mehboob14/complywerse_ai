@@ -115,12 +115,13 @@ from grc.models import (  # noqa: E402
     SCFControlState, SoftwareIdentifier, TPRAEvidenceLink, TPRAMonitoringCursor, TPRAMonitoringSignal,
     TPRASignalRejection, TPRATieringConfig, TPRAVendorLink, TPRAVendorProduct, VendorAssessment,
 )
+from grc.models import IntegrationConnection  # noqa: E402 - where the rating providers' keys are held
 from grc.modules.vendor_risk.tpra import monitoring_connectors as feeds, service  # noqa: E402
 
 _WIDE = _TABLES + [ITAsset, SoftwareIdentifier, BcmPlan, BcmBiaRecord, BcmBiaDependency, ControlRecordLink,
                    SCFControlState, NormalizedControl, TPRAVendorLink, TPRAVendorProduct, TPRAMonitoringSignal,
                    TPRAMonitoringCursor, TPRASignalRejection, TPRATieringConfig, Evidence, TPRAEvidenceLink,
-                   VendorAssessment]
+                   VendorAssessment, IntegrationConnection]
 
 
 @pytest.fixture()

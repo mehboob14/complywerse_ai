@@ -499,8 +499,12 @@ def _probe_ct_subdomains(fqdn: str, facts: Dict[str, Any]) -> None:
 # Do NOT add either without an authorization gate.
 
 
-def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
+def probe_asset(fqdn: str, ip: Optional[str] = None, *, extras: bool = True) -> dict:
     """Touch one external host and return a FLAT dict of its EASM parameters.
+
+    `extras=False` skips the registration, location and certificate-log lookups
+    (reverse DNS, MTA-STS, RDAP, GeoIP, CT subdomains) for callers that only need
+    the host's own HTTP, TLS and DNS answers — a supplier scan looks at many hosts.
 
     NEVER raises: an unreachable host, a hostile server, a broken cert — all come
     back as recorded facts. HTTP is tried on 443 then 80 (first responder wins);
@@ -567,6 +571,8 @@ def probe_asset(fqdn: str, ip: Optional[str] = None) -> dict:
 
     _probe_tls(fqdn, facts)
     _probe_dns(fqdn, facts)
+    if not extras:
+        return facts
     _probe_reverse_dns(facts)       # needs facts["ip"] / dns_a from above
     _probe_mta_sts(fqdn, facts)
     _probe_rdap_domain(fqdn, facts)

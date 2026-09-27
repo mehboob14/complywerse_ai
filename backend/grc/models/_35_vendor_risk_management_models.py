@@ -67,6 +67,7 @@ class Vendor(Base):
     # Who else looks after the relationship, and who else hears about it.
     stakeholder_ids = Column(JSON, nullable=True)
     notify_emails = Column(Text, nullable=True)
+    domains = Column(JSON, nullable=True)            # other domains beyond the website, for outside-in scans
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

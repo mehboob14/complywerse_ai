@@ -99,7 +99,7 @@ export default function ReportsPage() {
     ...TPRM_QUERY_OPTS,
   });
 
-  const request = (): ReportRequest => (kind === 'committee_pack'
+  const request = (): ReportRequest => (kind === 'committee_pack' || kind === 'ratings_quarter'
     ? { kind, period_start: periods[period].start, period_end: periods[period].end }
     : kind === 'vendor_file' ? { kind, vendor_id: Number(vendorId) } : { kind });
   const ready = kind !== 'vendor_file' || vendorId !== '';
@@ -178,9 +178,10 @@ export default function ReportsPage() {
               <option value="committee_pack">Committee pack</option>
               <option value="register">Register of functions and obligations</option>
               <option value="vendor_file">Vendor evidence file</option>
+              <option value="ratings_quarter">Security ratings of critical suppliers</option>
             </select>
           </label>
-          {kind === 'committee_pack' && (
+          {(kind === 'committee_pack' || kind === 'ratings_quarter') && (
             <label className="text-xs text-gray-600">Period
               <select className="mt-0.5 block rounded-lg border border-gray-300 px-2 py-1 text-sm" value={period}
                 onChange={(e) => { setPeriod(Number(e.target.value)); setPreview(null); }}>

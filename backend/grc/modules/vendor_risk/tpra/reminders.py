@@ -32,7 +32,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Role, TPRAContract, TPRAFinding, TPRAReminder, TPRARemediation, TPRARiskAcceptance,
+    Role, TPRAContract, TPRAFinding, TPRAReminder, TPRARemediation, TPRARiskAcceptance, TPRASurfaceWaiver,
     UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
 )
 from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
@@ -264,6 +264,17 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
         add("checkin_due", "vendor", v.id, v.id, item["due"],
             f"The yearly check-in on {v.name} is {_when(item['due'], today)}",
             f"/vendor-risk/reviews?vendor={v.id}", [v.owner_id, *(v.stakeholder_ids or [])])
+
+    # 8. Outside-in waivers running out: whoever granted one, and the owner, hear
+    #    once as it nears its end and once when it lapses and the finding counts again.
+    for w in db.query(TPRASurfaceWaiver).filter(
+            TPRASurfaceWaiver.tenant_id == tenant_id, TPRASurfaceWaiver.revoked_at.is_(None)):
+        v = vendors.get(w.vendor_id)
+        if v is None or (v.status or "").lower() in _INACTIVE_VENDOR:
+            continue
+        add("waiver_expiring", "surface_waiver", w.id, v.id, w.expires_on,
+            f"The waiver of '{w.finding_key}' on {v.name} is {_when(w.expires_on, today, 'past its end')}",
+            f"/vendor-risk/vendors/{v.id}?tab=outside-in", [w.created_by, v.owner_id], once=True)
 
     return notices
 

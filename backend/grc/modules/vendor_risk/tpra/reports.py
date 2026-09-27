@@ -1,6 +1,6 @@
 """The regulator and board pack, generated from records third-party risk already keeps.
 
-Three reports:
+Four reports:
 
 * the committee pack for a period: the portfolio by tier and residual risk,
   coverage and what is overdue, the programme's own measures, concentration,
@@ -9,7 +9,9 @@ Three reports:
   and each contractual obligation mapped to the requirements of the frameworks
   the tenant has put in scope;
 * a vendor's evidence file: assessments, questionnaires and answers, evidence,
-  findings, decisions and alerts.
+  findings, decisions and alerts;
+* the period's security ratings of the critical suppliers: who was rated, how
+  each moved, what is still open from outside, and what is waived.
 
 A report is frozen when it is generated, so what a committee or an examiner saw
 stays on record. Its content is headline figures and tables, so one renderer
@@ -39,12 +41,12 @@ from sqlalchemy.orm import Session
 from ....models import (
     BcmBiaDependency, BcmBiaRecord, BcmPlan, Evidence, GRCUser, SCFControl, SCFMapping, SCFScope,
     TPRAApproval, TPRAAuditLog, TPRAContract, TPRAControlObligation, TPRAEvidenceLink, TPRAFinding,
-    TPRAFourthParty, TPRAMonitoringSignal, TPRARemediation, TPRAReport, TPRARiskAcceptance,
-    TPRAStageInstance, TPRAVendorLink, Vendor, VendorAssessment, VendorIncident,
+    TPRAExternalRating, TPRAFourthParty, TPRAMonitoringSignal, TPRARemediation, TPRAReport, TPRARiskAcceptance,
+    TPRAStageInstance, TPRASurfaceScan, TPRASurfaceWaiver, TPRAVendorLink, Vendor, VendorAssessment, VendorIncident,
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate, get_db,
 )
 from ....routers.auth_router import require_auth
-from . import graph, portal, quantification, rbac
+from . import graph, outside_in, portal, quantification, rbac
 from .attention import _names
 from .bootstrap import get_tiering_config
 from .engine_scoring import answer_score
@@ -52,7 +54,7 @@ from .service import write_audit
 from .versions import questions_for
 
 KINDS = {"committee_pack": "Committee pack", "register": "Register of functions and obligations",
-         "vendor_file": "Vendor evidence file"}
+         "vendor_file": "Vendor evidence file", "ratings_quarter": "Security ratings of critical suppliers"}
 LEVELS = ("critical", "high", "medium", "low")
 MEASURES = {
     "cycle": "Assessment cycle: start to decision",
@@ -598,13 +600,102 @@ def vendor_file(db: Session, tenant_id: int, vendor: Vendor, today: date) -> dic
     }
 
 
+def ratings_quarter(db: Session, tenant_id: int, start: date, end: date, today: date) -> dict:
+    """The period's security ratings of the critical-tier suppliers in use."""
+    lo, hi = _span(start, end)
+    vendors = [v for v in _vendors(db, tenant_id) if _tier(v) == "critical"]
+    ids = [v.id for v in vendors] or [-1]
+    series: Dict[int, Dict[str, list]] = defaultdict(lambda: defaultdict(list))
+    before: Dict[Tuple[int, str], TPRAExternalRating] = {}
+    for r in (db.query(TPRAExternalRating).filter(TPRAExternalRating.vendor_id.in_(ids), TPRAExternalRating.captured_at < hi)
+              .order_by(TPRAExternalRating.captured_at)):
+        if r.captured_at >= lo:
+            series[r.vendor_id][r.provider].append(r)
+        else:
+            before[(r.vendor_id, r.provider)] = r
+    providers = sorted({p for per in series.values() for p in per} - {outside_in.PROVIDER})
+    last_scan: Dict[int, TPRASurfaceScan] = {}
+    for scan in (db.query(TPRASurfaceScan).filter(TPRASurfaceScan.vendor_id.in_(ids), TPRASurfaceScan.status == "done",
+                                                  TPRASurfaceScan.started_at >= lo, TPRASurfaceScan.started_at < hi)
+                 .order_by(TPRASurfaceScan.started_at)):
+        last_scan[scan.vendor_id] = scan
+    waivers: Dict[int, list] = defaultdict(list)
+    for w in db.query(TPRASurfaceWaiver).filter(TPRASurfaceWaiver.vendor_id.in_(ids), TPRASurfaceWaiver.created_at < hi):
+        if w.expires_on >= end and (w.revoked_at is None or w.revoked_at >= hi):
+            waivers[w.vendor_id].append(w)
+
+    def avg(rows) -> Optional[float]:
+        return round(sum(r.score for r in rows) / len(rows), 1) if rows else None
+
+    def mean(values) -> Optional[float]:
+        values = [x for x in values if x is not None]
+        return round(sum(values) / len(values), 1) if values else None
+
+    table, unrated, waived_rows, averages = [], [], [], defaultdict(list)
+    for v in vendors:
+        own = series[v.id].get(outside_in.PROVIDER, [])
+        if not any(series[v.id].values()):
+            prior = max((r for (vid, _), r in before.items() if vid == v.id), key=lambda r: r.captured_at, default=None)
+            unrated.append([v.name, _d(prior.captured_at) if prior else "Never",
+                            ", ".join(outside_in.domains_for(v)) or "No domain on record"])
+            continue
+        scan = last_scan.get(v.id)
+        serious = None
+        if scan is not None:
+            counted = set(outside_in.score(scan.findings or [], waivers[v.id], end)["counted"])
+            serious = len({f["key"] for f in scan.findings or []
+                           if f["key"] in counted and f["severity"] in ("critical", "high")})
+        was = before.get((v.id, outside_in.PROVIDER))
+        change = None
+        if own and (was is not None or len(own) > 1):
+            change = round(own[-1].score - (was.score if was is not None else own[0].score), 1)
+        if own:
+            averages[outside_in.PROVIDER].append(avg(own))
+        for p in providers:
+            if series[v.id].get(p):
+                averages[p].append(avg(series[v.id][p]))
+        table.append([v.name, len(own), avg(own), own[-1].score if own else None, own[-1].grade if own else None,
+                      change, *[avg(series[v.id].get(p, [])) for p in providers], serious, len(waivers[v.id])])
+    names = {v.id: v.name for v in vendors}
+    for vid, ws in waivers.items():
+        for w in ws:
+            waived_rows.append([names[vid], w.finding_key, w.host or "Every host", _d(w.expires_on), w.reason])
+
+    low = sum(1 for row in table if row[4] in ("D", "F"))
+    return {
+        "kind": "ratings_quarter", "title": f"Security ratings of critical suppliers, {period_label(start, end)}",
+        "period": {"start": start.isoformat(), "end": end.isoformat()}, "as_of": today.isoformat(),
+        "headline": [
+            {"label": "Critical suppliers in use", "value": len(vendors)},
+            {"label": "Rated in the period", "value": f"{len(table)} of {len(vendors)}",
+             "hint": f"{round(len(table) / len(vendors) * 100)}%" if vendors else None},
+            {"label": "Average outside-in score", "value": mean(averages[outside_in.PROVIDER])},
+            *[{"label": f"Average {p}", "value": mean(averages[p]), "hint": "on a 0 to 100 scale"} for p in providers],
+            {"label": "Graded D or F", "value": low},
+            {"label": "Waivers in force at the end", "value": len(waived_rows)},
+        ],
+        "sections": [
+            _table("rated", "Critical suppliers rated in the period",
+                   ["Supplier", "Scans", "Average", "Latest", "Grade", "Change", *providers, "Open high or critical",
+                    "Waived"], table,
+                   "Outside-in scores and grades come from our own scans of each supplier's domains; other providers "
+                   "are shown on a 0 to 100 scale, averaged over the period. Change runs from the last score before "
+                   "the period, or its first, to its last."),
+            _table("unrated", "Critical suppliers not rated in the period", ["Supplier", "Last rated", "Domains"], unrated,
+                   "Turn on outside-in scanning under Settings, or add the supplier's website, to have these rated."),
+            _table("waivers", "Waivers in force at the end of the period", ["Supplier", "Finding", "Host", "Until", "Why"],
+                   waived_rows),
+        ],
+    }
+
+
 # ── REST ─────────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/tpra", tags=["TPRA Reports"])
 
 
 class ReportIn(BaseModel):
-    kind: str = Field(..., pattern="^(committee_pack|register|vendor_file)$")
+    kind: str = Field(..., pattern="^(committee_pack|register|vendor_file|ratings_quarter)$")
     period_start: Optional[date] = None
     period_end: Optional[date] = None
     vendor_id: Optional[int] = None
@@ -616,13 +707,14 @@ class ShareIn(BaseModel):
 
 def _build(db: Session, tenant_id: int, body: ReportIn) -> Tuple[dict, Optional[date], Optional[date], Optional[int]]:
     today = date.today()
-    if body.kind == "committee_pack":
+    if body.kind in ("committee_pack", "ratings_quarter"):
         start, end = body.period_start, body.period_end
         if not start or not end:
             start, end = last_quarter(today)
         if end < start or (end - start).days > 366:
             raise HTTPException(400, "The period must run forwards and be no longer than a year.")
-        return committee_pack(db, tenant_id, start, end, today), start, end, None
+        build = committee_pack if body.kind == "committee_pack" else ratings_quarter
+        return build(db, tenant_id, start, end, today), start, end, None
     if body.kind == "register":
         return register(db, tenant_id, today), None, None, None
     if not body.vendor_id:
@@ -674,7 +766,7 @@ def s_report(db: Session, reports: List[TPRAReport], content: bool = False) -> L
 
 
 @router.get("/reports/preview")
-def preview_report(kind: str = Query(..., pattern="^(committee_pack|register|vendor_file)$"),
+def preview_report(kind: str = Query(..., pattern="^(committee_pack|register|vendor_file|ratings_quarter)$"),
                    period_start: Optional[date] = None, period_end: Optional[date] = None,
                    vendor_id: Optional[int] = None, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """The report as it would be generated now, without keeping it."""

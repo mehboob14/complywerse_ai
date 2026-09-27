@@ -40,3 +40,4 @@ from ._66_tpra_vendor_graph import *  # noqa: F401,F403 - fourth parties, platfo
 from ._67_tpra_reports import *  # noqa: F401,F403 - frozen committee packs, registers and vendor files
 from ._68_regulatory_obligations import *  # noqa: F401,F403 - what each regulatory circular requires, clause by clause
 from ._69_tpra_checkins import *  # noqa: F401,F403 - stakeholders' yearly check-ins on suppliers
+from ._70_tpra_outside_in import *  # noqa: F401,F403 - outside-in scans of supplier domains, and waivers

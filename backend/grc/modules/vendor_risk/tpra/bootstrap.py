@@ -48,7 +48,7 @@ DEFAULT_TIERING_CONFIG = {
     # What each tier asks for; empty means tier_policy.DEFAULT_TIER_POLICY.
     "tier_policy": {},
     # Outside-in feeds that reach out to the internet are off until a tenant turns them on.
-    "monitoring_policy": {"adverse_media": False},
+    "monitoring_policy": {"adverse_media": False, "outside_in": False},
 }
 
 
