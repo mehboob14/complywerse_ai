@@ -47,9 +47,9 @@ export default function AccessReviewsPage() {
   ];
 
   return (
-    <div className="mx-auto max-w-[1180px] px-8 py-7 pb-16">
+    <div className="w-full pb-8">
       {/* header */}
-      <div className="mb-5 flex items-start justify-between gap-5">
+      <div className="mb-4 flex items-start justify-between gap-5">
         <div>
           <h1 className="text-[23px] font-bold tracking-tight text-slate-900">Access Reviews</h1>
           <p className="mt-1 text-[13.5px] text-slate-500">Certify that every user holds only the access they should — and prove it.</p>
@@ -69,7 +69,7 @@ export default function AccessReviewsPage() {
       </div>
 
       {/* guided journey — the single guidance element */}
-      <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="mb-4 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-stretch">
           {[
             { n: 1, title: 'Connect a source', sub: 'Identity & access data', done: hasSource },
@@ -102,7 +102,7 @@ export default function AccessReviewsPage() {
       </div>
 
       {/* KPI row */}
-      <div className="mb-7 grid grid-cols-4 gap-3.5">
+      <div className="mb-5 grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {kpis.map((k) => (
           <div key={k.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-2.5 flex items-center gap-2"><k.Icon size={16} className={k.tone} /><span className="text-[12.5px] font-medium text-slate-500">{k.label}</span></div>
