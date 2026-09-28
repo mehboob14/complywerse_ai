@@ -8,7 +8,9 @@ export default function ComplianceLayout({
   children: React.ReactNode;
 }) {
   const pathname = usePathname() || '';
-  const hideModuleHeader = pathname.startsWith('/compliance/assessments');
+  // access-reviews has its own module shell (its layout.tsx) with a distinct
+  // header + tab bar; don't stack the generic "Compliance" header above it.
+  const hideModuleHeader = pathname.startsWith('/compliance/assessments') || pathname.startsWith('/compliance/access-reviews');
 
   if (hideModuleHeader) {
     return <div>{children}</div>;
