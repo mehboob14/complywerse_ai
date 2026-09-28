@@ -1,18 +1,19 @@
 'use client';
 // src/app/(dashboard)/compliance/access-reviews/page.tsx
-// Landing: KPI summary + guided journey + reviews list (each row shows its
-// pipeline stage). Visual spec: "Access Reviews.dc.html" (landing screen).
+// Landing: compact live stat strip + onboarding journey (collapses to a slim
+// strip once reviews exist) + a dense, full-width reviews table. The module
+// header/tab bar now live in layout.tsx — this page owns content only.
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ShieldCheck, Plus, Plug, ListChecks, ChevronRight, Check, Users, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Plus, ChevronRight, Check, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
-import { useCampaigns, useDashboard, useCreateCampaign } from './api';
+import { useCampaigns, useDashboard } from './api';
 import { STAGES, statusToStage, isClosed, scopeLabel } from './pipeline';
 import type { Campaign } from './types';
 import { CreateReviewModal } from './_components/CreateReviewModal';
 
-const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
+const ACCENT = { background: 'var(--ar-accent)', color: '#fff' } as const;
 
 export default function AccessReviewsPage() {
   const router = useRouter();
@@ -40,88 +41,84 @@ export default function AccessReviewsPage() {
   const reviewed = dash?.items_reviewed ?? 0;
   const sampled = dash?.items_total ?? 0;
   const kpis = [
-    { label: 'Active reviews', value: activeCount, sub: 'in progress', Icon: ShieldCheck, tone: 'text-primary-600' },
-    { label: 'Awaiting decision', value: Math.max(sampled - reviewed, 0), sub: 'users to certify', Icon: Clock, tone: 'text-amber-600' },
-    { label: 'Open exceptions', value: dash?.findings_open ?? 0, sub: `${dash?.users_with_open_exceptions ?? 0} users flagged`, Icon: AlertTriangle, tone: 'text-rose-600' },
-    { label: 'Certified', value: sampled ? `${Math.round((reviewed / sampled) * 100)}%` : '0%', sub: `${reviewed} of ${sampled}`, Icon: CheckCircle2, tone: 'text-emerald-600' },
+    { label: 'active', value: activeCount, Icon: ShieldCheck, tone: '#4F46E5' },
+    { label: 'awaiting decision', value: Math.max(sampled - reviewed, 0), Icon: Clock, tone: '#B45309' },
+    { label: 'open exceptions', value: dash?.findings_open ?? 0, Icon: AlertTriangle, tone: '#B42318' },
+    { label: 'certified', value: sampled ? `${Math.round((reviewed / sampled) * 100)}%` : '0%', Icon: CheckCircle2, tone: '#15803D' },
   ];
 
   return (
-    <div className="mx-auto max-w-[1180px] px-8 py-7 pb-16">
-      {/* header */}
-      <div className="mb-5 flex items-start justify-between gap-5">
-        <div>
-          <h1 className="text-[23px] font-bold tracking-tight text-slate-900">Access Reviews</h1>
-          <p className="mt-1 text-[13.5px] text-slate-500">Certify that every user holds only the access they should — and prove it.</p>
-        </div>
-        <div className="flex shrink-0 gap-2.5">
-          <button onClick={() => router.push('/compliance/access-reviews/connect')} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">
-            <Plug size={15} /> Sources
-          </button>
-          <button onClick={() => router.push('/compliance/access-reviews/rules')} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">
-            <ListChecks size={15} /> Rule library
-          </button>
-          <button disabled={!hasSource} onClick={() => setShowCreate(true)} style={hasSource ? ACCENT : undefined}
-            className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-semibold ${hasSource ? 'shadow-sm' : 'cursor-not-allowed bg-slate-100 text-slate-400'}`}>
-            <Plus size={15} /> New review
-          </button>
-        </div>
-      </div>
-
-      {/* guided journey — the single guidance element */}
-      <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-stretch">
-          {[
-            { n: 1, title: 'Connect a source', sub: 'Identity & access data', done: hasSource },
-            { n: 2, title: 'Create a review', sub: 'Scope & sample population', done: hasReviews },
-            { n: 3, title: 'Run & certify', sub: 'Decide and seal the report', done: allClosed },
-          ].map((s, i) => {
-            const active = step === s.n;
-            return (
-              <div key={s.n} className={`flex-1 px-6 py-5 ${i < 2 ? 'border-r border-slate-100' : ''} ${active ? 'bg-[color:var(--color-base-soft)]' : ''}`}>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full font-mono text-sm font-semibold"
-                    style={s.done ? ACCENT : active ? { background: 'var(--color-base-strong)', color: '#fff' } : { background: '#EEF1F4', color: '#8A94A1' }}>
-                    {s.done ? <Check size={15} /> : s.n}
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Step {s.n}</div>
-                    <div className={`text-[13.5px] font-semibold ${active || s.done ? 'text-slate-900' : 'text-slate-500'}`}>{s.title}</div>
-                    <div className="mt-0.5 text-xs text-slate-500">{s.sub}</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <div className="flex shrink-0 items-center border-l border-slate-100 bg-slate-50 px-6">
-            <button onClick={primary.go} style={ACCENT} className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-4 py-2.5 text-[13px] font-semibold shadow-sm">
-              {primary.label} <ChevronRight size={15} />
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* KPI row */}
-      <div className="mb-7 grid grid-cols-4 gap-3.5">
+    <div className="px-6 py-5">
+      {/* toolbar: compact stat chips + primary action (Sources/Rule library now live in the tab bar) */}
+      <div className="mb-4 flex flex-wrap items-center gap-2.5">
         {kpis.map((k) => (
-          <div key={k.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-2.5 flex items-center gap-2"><k.Icon size={16} className={k.tone} /><span className="text-[12.5px] font-medium text-slate-500">{k.label}</span></div>
-            <div className="font-mono text-[27px] font-bold tracking-tight text-slate-900">{k.value}</div>
-            <div className="mt-0.5 text-[11.5px] text-slate-400">{k.sub}</div>
+          <div key={k.label} className="flex items-center gap-2 rounded-lg border bg-white px-3 py-2" style={{ borderColor: 'var(--ar-border)' }}>
+            <k.Icon size={14} style={{ color: k.tone }} />
+            <span className="font-mono text-[14px] font-bold" style={{ color: 'var(--ar-text)' }}>{k.value}</span>
+            <span className="text-[11.5px]" style={{ color: 'var(--ar-text-muted)' }}>{k.label}</span>
           </div>
         ))}
+        <button
+          onClick={() => setShowCreate(true)}
+          disabled={!hasSource}
+          style={hasSource ? ACCENT : undefined}
+          className={`ml-auto inline-flex items-center gap-2 rounded-lg px-3.5 py-2 text-[12.5px] font-semibold ${hasSource ? 'shadow-sm' : 'cursor-not-allowed bg-slate-100 text-slate-400'}`}
+        >
+          <Plus size={14} /> New review
+        </button>
       </div>
 
-      {/* reviews list */}
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">Reviews</h2>
-        {hasReviews && <span className="text-xs text-slate-400">{campaigns!.length} total</span>}
+      {/* onboarding journey — full card pre-first-review, a slim strip after */}
+      {step < 3 ? (
+        <div className="mb-5 overflow-hidden rounded-xl border bg-white shadow-sm" style={{ borderColor: 'var(--ar-border)' }}>
+          <div className="flex items-stretch">
+            {[
+              { n: 1, title: 'Connect a source', sub: 'Identity & access data', done: hasSource },
+              { n: 2, title: 'Create a review', sub: 'Scope & sample population', done: hasReviews },
+              { n: 3, title: 'Run & certify', sub: 'Decide and seal the report', done: allClosed },
+            ].map((s, i) => {
+              const active = step === s.n;
+              return (
+                <div key={s.n} className="flex-1 border-r px-5 py-4 last:border-r-0" style={{ borderColor: 'var(--ar-border)', background: active ? 'var(--ar-accent-soft)' : undefined }}>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full font-mono text-[12.5px] font-semibold"
+                      style={s.done ? ACCENT : active ? { background: 'var(--ar-accent-strong)', color: '#fff' } : { background: '#EEF1F4', color: '#8A94A1' }}>
+                      {s.done ? <Check size={13} /> : s.n}
+                    </div>
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: 'var(--ar-text-muted)' }}>Step {s.n}</div>
+                      <div className="text-[13px] font-semibold" style={{ color: active || s.done ? 'var(--ar-text)' : 'var(--ar-text-muted)' }}>{s.title}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex shrink-0 items-center border-l px-5" style={{ borderColor: 'var(--ar-border)', background: 'var(--ar-surface-alt)' }}>
+              <button onClick={primary.go} style={ACCENT} className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-[12.5px] font-semibold shadow-sm">
+                {primary.label} <ChevronRight size={14} />
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        !allClosed && (
+          <div className="mb-4 flex items-center justify-between rounded-lg border px-4 py-2.5" style={{ borderColor: 'var(--ar-border)', background: 'var(--ar-accent-soft)' }}>
+            <span className="text-[12.5px] font-medium" style={{ color: 'var(--ar-text)' }}>{activeCount} review{activeCount === 1 ? '' : 's'} in progress</span>
+            <button onClick={primary.go} className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold" style={{ color: 'var(--ar-accent-strong)' }}>{primary.label} <ChevronRight size={13} /></button>
+          </div>
+        )
+      )}
+
+      {/* reviews table */}
+      <div className="mb-2.5 flex items-center justify-between">
+        <h2 className="text-[13px] font-bold" style={{ color: 'var(--ar-text)' }}>Reviews</h2>
+        {hasReviews && <span className="text-[11.5px]" style={{ color: 'var(--ar-text-muted)' }}>{campaigns!.length} total</span>}
       </div>
 
       {hasReviews ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[2.4fr_1fr_2.1fr_1fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
-            <div>Review</div><div>Scope</div><div>Pipeline stage</div><div>Certified</div>
+        <div className="overflow-hidden rounded-xl border bg-white shadow-sm" style={{ borderColor: 'var(--ar-border)' }}>
+          <div className="grid grid-cols-[2fr_0.8fr_1.8fr_0.8fr_0.9fr_0.9fr] gap-4 border-b px-5 py-2 text-[10px] font-semibold uppercase tracking-wider" style={{ borderColor: 'var(--ar-border)', background: 'var(--ar-surface-alt)', color: 'var(--ar-text-muted)' }}>
+            <div>Review</div><div>Scope</div><div>Pipeline stage</div><div>Exceptions</div><div>Certified</div><div>Created</div>
           </div>
           {campaigns!.map((c) => <ReviewRow key={c.id} c={c} onOpen={() => router.push(`/compliance/access-reviews/${c.id}`)} />)}
         </div>
@@ -138,38 +135,41 @@ function ReviewRow({ c, onOpen }: { c: Campaign; onOpen: () => void }) {
   const stage = statusToStage(c.status);
   const closed = isClosed(c.status);
   const pct = c.requested_sample_size ? Math.round((c.items_reviewed / c.requested_sample_size) * 100) : 0;
+  const created = c.created_at ? new Date(c.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—';
   return (
-    <button onClick={onOpen} className="grid w-full grid-cols-[2.4fr_1fr_2.1fr_1fr] items-center gap-4 border-b border-slate-100 px-5 py-3.5 text-left hover:bg-slate-50">
+    <button onClick={onOpen} className="grid w-full grid-cols-[2fr_0.8fr_1.8fr_0.8fr_0.9fr_0.9fr] items-center gap-4 border-b px-5 py-3 text-left transition-colors hover:bg-[color:var(--ar-surface-alt)]" style={{ borderColor: 'var(--ar-border)' }}>
       <div className="min-w-0">
-        <div className="truncate text-[13.5px] font-semibold text-slate-900">{c.name}</div>
-        <div className="mt-0.5 font-mono text-[11.5px] text-slate-400">AR-{c.id} · {scopeLabel[c.review_type] ?? c.review_type}</div>
+        <div className="truncate text-[13px] font-semibold" style={{ color: 'var(--ar-text)' }}>{c.name}</div>
+        <div className="mt-0.5 font-mono text-[11px]" style={{ color: 'var(--ar-text-muted)' }}>AR-{c.id} · {c.sampling_method}</div>
       </div>
-      <div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">{scopeLabel[c.review_type] ?? c.review_type}</span></div>
+      <div><span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10.5px] font-semibold text-slate-600">{scopeLabel[c.review_type] ?? c.review_type}</span></div>
       <div>
         <div className="mb-1.5 flex items-center gap-1.5">
           {STAGES.map((s) => {
             const done = closed || s.n < stage; const cur = !closed && s.n === stage;
-            return <div key={s.n} title={s.label} className="h-[5px] flex-1 rounded-full" style={{ background: done ? 'var(--color-base)' : cur ? 'var(--color-base-strong)' : '#EEF1F4' }} />;
+            return <div key={s.n} title={s.label} className="h-[4px] flex-1 rounded-full" style={{ background: done ? 'var(--ar-accent)' : cur ? 'var(--ar-accent-strong)' : '#EEF1F4' }} />;
           })}
         </div>
-        <div className="text-[11.5px] font-medium text-slate-600">Stage {Math.min(stage, 6)} · {STAGES[Math.min(stage, 6) - 1].label}</div>
+        <div className="text-[11px] font-medium" style={{ color: 'var(--ar-text-muted)' }}>Stage {Math.min(stage, 6)} · {STAGES[Math.min(stage, 6) - 1].label}</div>
       </div>
+      <div>{c.exceptions_found > 0 ? <span className="rounded-full bg-rose-100 px-2 py-0.5 font-mono text-[11px] font-semibold text-rose-700">{c.exceptions_found}</span> : <span className="text-[11px]" style={{ color: 'var(--ar-text-muted)' }}>—</span>}</div>
       <div>
-        <div className="font-mono text-[13px] font-semibold text-slate-700">{c.items_reviewed}/{c.requested_sample_size}</div>
-        <div className="mt-1.5 h-1 w-[84px] overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--color-base)' }} /></div>
+        <div className="font-mono text-[12px] font-semibold" style={{ color: 'var(--ar-text)' }}>{c.items_reviewed}/{c.requested_sample_size}</div>
+        <div className="mt-1 h-1 w-[64px] overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--ar-accent)' }} /></div>
       </div>
+      <div className="text-[11.5px]" style={{ color: 'var(--ar-text-muted)' }}>{created}</div>
     </button>
   );
 }
 
 function EmptyState({ hasSource, onPrimary, label }: { hasSource: boolean; onPrimary: () => void; label: string }) {
   return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: 'var(--color-base-soft)', color: 'var(--color-base-strong)' }}>
+    <div className="rounded-xl border border-dashed px-6 py-14 text-center" style={{ borderColor: 'var(--ar-border)', background: 'white' }}>
+      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: 'var(--ar-accent-soft)', color: 'var(--ar-accent-strong)' }}>
         <ShieldCheck size={24} />
       </div>
-      <div className="text-[15px] font-semibold text-slate-900">{hasSource ? 'No reviews yet' : 'Connect a source to begin'}</div>
-      <div className="mx-auto mb-4 mt-1 max-w-sm text-[13px] text-slate-500">
+      <div className="text-[15px] font-semibold" style={{ color: 'var(--ar-text)' }}>{hasSource ? 'No reviews yet' : 'Connect a source to begin'}</div>
+      <div className="mx-auto mb-4 mt-1 max-w-sm text-[13px]" style={{ color: 'var(--ar-text-muted)' }}>
         {hasSource ? 'Create your first review to draw a sample and start certifying access.' : 'Access Reviews pulls users from the identity and access systems you connect — they all feed one user table.'}
       </div>
       <button onClick={onPrimary} style={ACCENT} className="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-[13px] font-semibold shadow-sm">{label} <ChevronRight size={15} /></button>
