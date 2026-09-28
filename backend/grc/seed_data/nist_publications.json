@@ -1,0 +1,272 @@
+{
+  "note": "NIST publications are in the public domain in the US, and NIST grants a royalty-free right to reuse them worldwide, derivative works included (https://www.nist.gov/open/license). Links, status and templates checked on csrc.nist.gov on 2026-09-28. 'serves' lists the Cyber Security assessment formats each publication supports; a template's 'outline' is its official section structure, which AI drafts of that kind follow.",
+  "publications": [
+    {
+      "id": "SP800-53",
+      "title": "NIST SP 800-53 Rev. 5, Security and Privacy Controls",
+      "url": "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final",
+      "summary": "The catalog of security and privacy controls: what to put in place, control by control.",
+      "status": "Release 5.2.0 (August 2025) is on NIST's CPRT site.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": [
+        {"name": "Control collaboration index template", "format": "xlsx", "note": "Who carries out each control: the organisation, the system or a provider.",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/53/r5/upd1/final/docs/sp800-53-collaboration-index-template.xlsx"}
+      ]
+    },
+    {
+      "id": "SP800-53A",
+      "title": "NIST SP 800-53A Rev. 5, Assessing Security and Privacy Controls",
+      "url": "https://csrc.nist.gov/pubs/sp/800/53/a/r5/final",
+      "summary": "How to assess each SP 800-53 control: examine, interview and test procedures.",
+      "status": "Release 5.2.0 (August 2025) is on NIST's CPRT site.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": []
+    },
+    {
+      "id": "CSF2",
+      "title": "NIST Cybersecurity Framework 2.0",
+      "url": "https://www.nist.gov/cyberframework",
+      "summary": "Cybersecurity outcomes in six functions: Govern, Identify, Protect, Detect, Respond and Recover.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": [
+        {"name": "Organizational profile template", "format": "xlsx", "note": "Current and target profile side by side, to find the gaps.",
+         "url": "https://www.nist.gov/document/csf-20-organizational-profile-template"}
+      ]
+    },
+    {
+      "id": "SP800-218",
+      "title": "NIST SP 800-218, Secure Software Development Framework",
+      "url": "https://csrc.nist.gov/pubs/sp/800/218/final",
+      "summary": "Secure software development practices: prepare the organisation, protect the software, produce well-secured software, respond to vulnerabilities.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security"],
+      "templates": [
+        {"name": "SSDF practices and tasks table", "format": "xlsx", "note": "Every practice and task with examples and references.",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/218/final/docs/nist.sp.800-218.ssdf-table.xlsx"}
+      ]
+    },
+    {
+      "id": "SP800-115",
+      "title": "NIST SP 800-115, Technical Guide to Information Security Testing and Assessment",
+      "url": "https://csrc.nist.gov/pubs/sp/800/115/final",
+      "summary": "Planning, running and reporting technical security tests: reviews, target identification, vulnerability validation.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security"],
+      "templates": [
+        {"name": "Rules of engagement template", "format": "pdf", "note": "Appendix B of the publication.",
+         "url": "https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-115.pdf",
+         "kinds": ["plan", "procedure"], "keywords": ["rules of engagement", "test plan", "testing plan", "penetration test plan", "security testing plan", "assessment plan"],
+         "outline": [
+           "1. Introduction: 1.1 Purpose, 1.2 Scope, 1.3 Assumptions and Limitations, 1.4 Risks, 1.5 Document Structure",
+           "2. Logistics: 2.1 Personnel, 2.2 Test Schedule, 2.3 Test Site, 2.4 Test Equipment",
+           "3. Communication Strategy: 3.1 General Communication, 3.2 Incident Handling and Response",
+           "4. Target System/Network",
+           "5. Testing Execution: 5.1 Nontechnical Test Components, 5.2 Technical Test Components, 5.3 Data Handling",
+           "6. Reporting",
+           "7. Signature Page"
+         ]}
+      ]
+    },
+    {
+      "id": "SP800-163",
+      "title": "NIST SP 800-163 Rev. 1, Vetting the Security of Mobile Applications",
+      "url": "https://csrc.nist.gov/pubs/sp/800/163/r1/final",
+      "summary": "Vetting mobile apps for security and reliability before and while they are used.",
+      "serves": ["mobile_app_security"],
+      "templates": []
+    },
+    {
+      "id": "SP800-124",
+      "title": "NIST SP 800-124 Rev. 2, Managing the Security of Mobile Devices",
+      "url": "https://csrc.nist.gov/pubs/sp/800/124/r2/final",
+      "summary": "Managing the security of organisation-owned and personal mobile devices across their life cycle.",
+      "serves": ["mobile_app_security"],
+      "templates": []
+    },
+    {
+      "id": "SP800-63B",
+      "title": "NIST SP 800-63B-4, Authentication and Authenticator Management",
+      "url": "https://csrc.nist.gov/pubs/sp/800/63/b/4/final",
+      "summary": "Authentication: passwords, multi-factor authenticators, reauthentication and session management.",
+      "serves": ["asvs_checklist", "mobile_app_security"],
+      "templates": []
+    },
+    {
+      "id": "SP800-52",
+      "title": "NIST SP 800-52 Rev. 2, Guidelines for TLS Implementations",
+      "url": "https://csrc.nist.gov/pubs/sp/800/52/r2/final",
+      "summary": "Choosing and configuring TLS: versions, cipher suites, certificates.",
+      "status": "Under review in NIST's crypto publication review (May 2026).",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security"],
+      "templates": []
+    },
+    {
+      "id": "SP800-44",
+      "title": "NIST SP 800-44 Ver. 2, Guidelines on Securing Public Web Servers",
+      "url": "https://csrc.nist.gov/pubs/sp/800/44/ver2/final",
+      "summary": "Securing public web servers: platform, server software, content, network protection and testing.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist"],
+      "templates": []
+    },
+    {
+      "id": "SP800-123",
+      "title": "NIST SP 800-123, Guide to General Server Security",
+      "url": "https://csrc.nist.gov/pubs/sp/800/123/final",
+      "summary": "Planning, hardening and maintaining servers.",
+      "serves": ["asvs_checklist", "itsecops_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-128",
+      "title": "NIST SP 800-128, Security-Focused Configuration Management",
+      "url": "https://csrc.nist.gov/pubs/sp/800/128/upd1/final",
+      "summary": "Secure baseline configurations, change control and configuration monitoring.",
+      "serves": ["asvs_checklist", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-40",
+      "title": "NIST SP 800-40 Rev. 4, Enterprise Patch Management Planning",
+      "url": "https://csrc.nist.gov/pubs/sp/800/40/r4/final",
+      "summary": "Planning enterprise patch management as preventive maintenance.",
+      "serves": ["itsecops_maturity", "digital_ops_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-92",
+      "title": "NIST SP 800-92, Guide to Computer Security Log Management",
+      "url": "https://csrc.nist.gov/pubs/sp/800/92/final",
+      "summary": "Planning and running security log management: generation, storage, analysis and disposal.",
+      "serves": ["itsecops_maturity", "csir_maturity", "incident_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-137",
+      "title": "NIST SP 800-137, Information Security Continuous Monitoring",
+      "url": "https://csrc.nist.gov/pubs/sp/800/137/final",
+      "summary": "A continuous monitoring strategy and programme: what to watch, how often, and how to respond.",
+      "serves": ["itsecops_maturity", "cti_maturity", "digital_ops_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-61",
+      "title": "NIST SP 800-61 Rev. 3, Incident Response Recommendations and Considerations",
+      "url": "https://csrc.nist.gov/pubs/sp/800/61/r3/final",
+      "summary": "Incident response across the CSF 2.0 functions: preparing for, detecting, responding to and recovering from incidents.",
+      "serves": ["csir_maturity", "incident_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-86",
+      "title": "NIST SP 800-86, Integrating Forensic Techniques into Incident Response",
+      "url": "https://csrc.nist.gov/pubs/sp/800/86/final",
+      "summary": "Collecting, examining and analysing forensic data from files, systems, networks and applications.",
+      "serves": ["csir_maturity", "incident_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-150",
+      "title": "NIST SP 800-150, Guide to Cyber Threat Information Sharing",
+      "url": "https://csrc.nist.gov/pubs/sp/800/150/final",
+      "summary": "Sharing cyber threat information and using what others share.",
+      "serves": ["cti_maturity"],
+      "templates": []
+    },
+    {
+      "id": "SP800-34",
+      "title": "NIST SP 800-34 Rev. 1, Contingency Planning Guide",
+      "url": "https://csrc.nist.gov/pubs/sp/800/34/r1/upd1/final",
+      "summary": "Contingency planning: business impact analysis, recovery plans, testing and maintenance.",
+      "serves": ["incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": [
+        {"name": "Business impact analysis template", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/34/r1/upd1/final/docs/sp800-34-rev1_bia_template.docx",
+         "kinds": ["report", "plan"], "keywords": ["business impact", "bia"],
+         "outline": [
+           "1. Overview: 1.1 Purpose",
+           "2. System Description",
+           "3. BIA Data Collection: 3.1 Determine Process and System Criticality (3.1.1 Identify Outage Impacts and Estimated Downtime), 3.2 Identify Resource Requirements, 3.3 Identify Recovery Priorities for System Resources"
+         ]},
+        {"name": "Contingency plan template, low-impact system", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/34/r1/upd1/final/docs/sp800-34-rev1_cp_template_low_impact_system.docx"},
+        {"name": "Contingency plan template, moderate-impact system", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/34/r1/upd1/final/docs/sp800-34-rev1_cp_template_moderate_impact_system.docx",
+         "kinds": ["plan"], "keywords": ["contingency", "disaster recovery", "recovery plan", "continuity", "backup and recovery", "restoration"],
+         "outline": [
+           "1. Introduction: 1.1 Background, 1.2 Scope, 1.3 Assumptions",
+           "2. Concept of Operations: 2.1 System Description, 2.2 Overview of Three Phases, 2.3 Roles and Responsibilities",
+           "3. Activation and Notification: 3.1 Activation Criteria and Procedure, 3.2 Notification, 3.3 Outage Assessment",
+           "4. Recovery: 4.1 Sequence of Recovery Activities, 4.2 Recovery Procedures, 4.3 Recovery Escalation Notices/Awareness",
+           "5. Reconstitution: 5.1 Validation Data Testing, 5.2 Validation Functionality Testing, 5.3 Recovery Declaration, 5.4 Notifications (users), 5.5 Cleanup, 5.6 Offsite Data Storage, 5.7 Data Backup, 5.8 Event Documentation, 5.9 Deactivation",
+           "Appendices: A Personnel Contact List, B Vendor Contact List, C Detailed Recovery Procedures, D Alternate Processing Procedures, E System Validation Test Plan, F Alternate Storage, Site and Telecommunications, G Diagrams (System and Input/Output), H Hardware and Software Inventory, I Interconnections Table, J Test and Maintenance Schedule, K Associated Plans and Procedures, L Business Impact Analysis, M Document Change Page"
+         ]},
+        {"name": "Contingency plan template, high-impact system", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/34/r1/upd1/final/docs/sp800-34-rev1_cp_template_high_impact_system.docx"}
+      ]
+    },
+    {
+      "id": "SP800-30",
+      "title": "NIST SP 800-30 Rev. 1, Guide for Conducting Risk Assessments",
+      "url": "https://csrc.nist.gov/pubs/sp/800/30/r1/final",
+      "summary": "Conducting risk assessments: threat sources and events, vulnerabilities, likelihood, impact and risk.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": [
+        {"name": "Risk assessment report elements", "format": "pdf", "note": "Appendix K of the publication; NIST calls these elements examples, not a required template.",
+         "url": "https://nvlpubs.nist.gov/nistpubs/legacy/sp/nistspecialpublication800-30r1.pdf",
+         "kinds": ["report"], "keywords": ["risk assessment"],
+         "outline": [
+           "Executive summary: date of the assessment, purpose, scope, whether it is an initial or subsequent assessment, overall level of risk, and the number of risks at each level",
+           "Body of the report: purpose and the questions the assessment answers; assumptions and constraints; risk tolerance inputs; risk model and analytic approach; threat sources, threat events, vulnerabilities and predisposing conditions, likelihood, impact and risk for each threat event, set out in a risk table",
+           "Supporting appendices: references and sources, the assessment team, detailed risk tables and supporting data"
+         ]}
+      ]
+    },
+    {
+      "id": "SP800-18",
+      "title": "NIST SP 800-18 Rev. 2, Developing Security, Privacy and C-SCRM Plans for Systems",
+      "url": "https://csrc.nist.gov/pubs/sp/800/18/r2/final",
+      "summary": "Developing system security, privacy and cybersecurity supply chain risk management plans.",
+      "status": "Rev. 2, June 2026; replaces Rev. 1.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": [
+        {"name": "System security plan outline", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/18/r2/final/docs/sp800-18r2_system_security_plan_outline_example.docx",
+         "kinds": ["plan"], "keywords": ["security plan", "system plan", "ssp"],
+         "outline": [
+           "System Name and Identifier", "System Type", "System Overview", "Role Identification and Responsible Personnel",
+           "System Information Types", "Laws, Regulations, and Policies Affecting the System Requirements",
+           "Authorization Boundary Description", "System Component Inventory", "Environment of Operation Diagrams",
+           "System Categorization", "Control Implementation Details", "Control Implementation Status",
+           "Information Exchanges Summary", "Control Assessment Status", "Remediation Actions",
+           "System Authorization Decision", "System Operational Status", "System Plan Approval",
+           "System Plan Review Records", "System Plan Change Records"
+         ]},
+        {"name": "System privacy plan outline", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/18/r2/final/docs/sp800-18r2_system_privacy_plan_outline_example.docx"},
+        {"name": "Supply chain risk management (C-SCRM) plan outline", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/18/r2/final/docs/sp800-18r2_c-scrm_plan_outline_example.docx"},
+        {"name": "System plan roles and responsibilities", "format": "docx",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/18/r2/final/docs/sp800-18r2_roles_and_responsibilities.docx"}
+      ]
+    },
+    {
+      "id": "SP800-171",
+      "title": "NIST SP 800-171 Rev. 3, Protecting Controlled Unclassified Information",
+      "url": "https://csrc.nist.gov/pubs/sp/800/171/r3/final",
+      "summary": "Security requirements for sensitive information held outside government systems.",
+      "serves": ["asvs_checklist", "owasp_v4_testing_checklist", "mobile_app_security", "csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": [
+        {"name": "System security plan template", "format": "docx", "note": "Published with Rev. 2.",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/171/r2/upd1/final/docs/cui-ssp-template-final.docx"},
+        {"name": "Plan of action template", "format": "docx", "note": "Published with Rev. 2; a plan of action and milestones for gaps.",
+         "url": "https://csrc.nist.gov/files/pubs/sp/800/171/r2/upd1/final/docs/cui-plan-of-action-template-final.docx"}
+      ]
+    },
+    {
+      "id": "SP800-100",
+      "title": "NIST SP 800-100, Information Security Handbook",
+      "url": "https://csrc.nist.gov/pubs/sp/800/100/upd1/final",
+      "summary": "A handbook for managers across the information security programme.",
+      "serves": ["csir_maturity", "cti_maturity", "incident_maturity", "itsecops_maturity", "digital_ops_maturity"],
+      "templates": []
+    }
+  ]
+}

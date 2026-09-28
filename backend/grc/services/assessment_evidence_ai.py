@@ -27,6 +27,7 @@ import re
 import threading
 from datetime import datetime, timedelta
 from functools import lru_cache
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
@@ -73,53 +74,19 @@ FORMAT_GUIDE: Dict[str, str] = {
         "practice operating: procedures, records, metrics, reviews"),
 }
 
-# NIST publications an answer may cite, by id. NIST text is in the public domain in the US and NIST grants a
-# royalty-free right to reuse it worldwide, derivative works included (nist.gov/open/license), so unlike SCF it
-# may shape what the model writes; the model still only picks ids, and the titles and links come from here.
-NIST_SOURCES: Dict[str, tuple] = {
-    "SP800-53": ("NIST SP 800-53 Rev. 5, Security and Privacy Controls",
-                 "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"),
-    "SP800-53A": ("NIST SP 800-53A Rev. 5, Assessing Security and Privacy Controls",
-                  "https://csrc.nist.gov/pubs/sp/800/53/a/r5/final"),
-    "CSF2": ("NIST Cybersecurity Framework 2.0", "https://www.nist.gov/cyberframework"),
-    "SP800-218": ("NIST SP 800-218, Secure Software Development Framework",
-                  "https://csrc.nist.gov/pubs/sp/800/218/final"),
-    "SP800-115": ("NIST SP 800-115, Technical Guide to Information Security Testing and Assessment",
-                  "https://csrc.nist.gov/pubs/sp/800/115/final"),
-    "SP800-163": ("NIST SP 800-163 Rev. 1, Vetting the Security of Mobile Applications",
-                  "https://csrc.nist.gov/pubs/sp/800/163/r1/final"),
-    "SP800-124": ("NIST SP 800-124 Rev. 2, Managing the Security of Mobile Devices",
-                  "https://csrc.nist.gov/pubs/sp/800/124/r2/final"),
-    "SP800-63B": ("NIST SP 800-63B-4, Authentication and Authenticator Management",
-                  "https://csrc.nist.gov/pubs/sp/800/63/b/4/final"),
-    "SP800-52": ("NIST SP 800-52 Rev. 2, Guidelines for TLS Implementations",
-                 "https://csrc.nist.gov/pubs/sp/800/52/r2/final"),
-    "SP800-44": ("NIST SP 800-44 Ver. 2, Guidelines on Securing Public Web Servers",
-                 "https://csrc.nist.gov/pubs/sp/800/44/ver2/final"),
-    "SP800-123": ("NIST SP 800-123, Guide to General Server Security", "https://csrc.nist.gov/pubs/sp/800/123/final"),
-    "SP800-128": ("NIST SP 800-128, Security-Focused Configuration Management",
-                  "https://csrc.nist.gov/pubs/sp/800/128/upd1/final"),
-    "SP800-40": ("NIST SP 800-40 Rev. 4, Enterprise Patch Management Planning",
-                 "https://csrc.nist.gov/pubs/sp/800/40/r4/final"),
-    "SP800-92": ("NIST SP 800-92, Guide to Computer Security Log Management",
-                 "https://csrc.nist.gov/pubs/sp/800/92/final"),
-    "SP800-137": ("NIST SP 800-137, Information Security Continuous Monitoring",
-                  "https://csrc.nist.gov/pubs/sp/800/137/final"),
-    "SP800-61": ("NIST SP 800-61 Rev. 3, Incident Response Recommendations and Considerations",
-                 "https://csrc.nist.gov/pubs/sp/800/61/r3/final"),
-    "SP800-86": ("NIST SP 800-86, Integrating Forensic Techniques into Incident Response",
-                 "https://csrc.nist.gov/pubs/sp/800/86/final"),
-    "SP800-150": ("NIST SP 800-150, Guide to Cyber Threat Information Sharing",
-                  "https://csrc.nist.gov/pubs/sp/800/150/final"),
-    "SP800-34": ("NIST SP 800-34 Rev. 1, Contingency Planning Guide",
-                 "https://csrc.nist.gov/pubs/sp/800/34/r1/upd1/final"),
-    "SP800-30": ("NIST SP 800-30 Rev. 1, Guide for Conducting Risk Assessments",
-                 "https://csrc.nist.gov/pubs/sp/800/30/r1/final"),
-    "SP800-18": ("NIST SP 800-18 Rev. 1, Developing Security Plans", "https://csrc.nist.gov/pubs/sp/800/18/r1/final"),
-    "SP800-171": ("NIST SP 800-171 Rev. 3, Protecting Controlled Unclassified Information",
-                  "https://csrc.nist.gov/pubs/sp/800/171/r3/final"),
-    "SP800-100": ("NIST SP 800-100, Information Security Handbook", "https://csrc.nist.gov/pubs/sp/800/100/upd1/final"),
-}
+# NIST publications an answer may cite, by id, with their official templates: seed_data/nist_publications.json.
+# NIST text is in the public domain in the US and NIST grants a royalty-free right to reuse it worldwide,
+# derivative works included (nist.gov/open/license), so unlike SCF it may shape what the model writes; the
+# model still only picks ids, and the titles and links come from the library.
+_LIBRARY = Path(__file__).resolve().parent.parent / "seed_data" / "nist_publications.json"
+
+
+@lru_cache(maxsize=1)
+def nist_library() -> Dict[str, Any]:
+    return json.loads(_LIBRARY.read_text(encoding="utf-8"))
+
+
+NIST_SOURCES: Dict[str, tuple] = {p["id"]: (p["title"], p["url"]) for p in nist_library()["publications"]}
 _NIST_NORM = {nid: re.sub(r"[^A-Z0-9]", "", nid) for nid in NIST_SOURCES}
 
 # Kinds of document a recommendation can be; each can be drafted (see _STRUCTURE).
@@ -432,8 +399,21 @@ def draft_view(draft: Any) -> Any:
     return draft
 
 
+def template_for(title: Any, kind: Any) -> Optional[Dict[str, Any]]:
+    """The official NIST template outline a draft follows: one whose keywords name the document (a "business
+    impact analysis" follows the BIA template) and whose kinds include it. A cited publication alone isn't
+    enough: an incident response plan citing SP 800-34 must not take the BIA's shape."""
+    named = str(title or "").lower()
+    for pub in nist_library()["publications"]:
+        for tpl in pub.get("templates") or []:
+            if (tpl.get("outline") and kind in (tpl.get("kinds") or [])
+                    and any(re.search(r"\b" + re.escape(k) + r"\b", named) for k in tpl.get("keywords") or [])):
+                return {**tpl, "publication": pub["title"]}
+    return None
+
+
 def build_draft_prompt(item: ComplianceAssessmentDocumentItem, rec: Dict[str, Any], nist: List[Dict[str, Any]],
-                       organisation: Optional[str]) -> str:
+                       organisation: Optional[str], template: Optional[Dict[str, Any]] = None) -> str:
     assessment = getattr(item, "assessment", None)
     fmt = getattr(assessment, "assessment_format", None) or ""
     kind = rec.get("document") if rec.get("document") in _STRUCTURE else "standard"
@@ -449,9 +429,14 @@ def build_draft_prompt(item: ComplianceAssessmentDocumentItem, rec: Dict[str, An
     ]
     lines += [f"- {n.get('title')}" + (f": {n['refs']}" if n.get("refs") else "")
               + (f" — {n['why']}" if n.get("why") else "") for n in nist] or [f"- {NIST_SOURCES['SP800-53'][0]}"]
-    lines.append(f"\nWrite {_STRUCTURE[kind]}. 900 to 1500 words. Start with a level-1 heading carrying the "
-                 "document's title. The References section lists the NIST publications above. Return only the "
-                 "document, in Markdown.")
+    if template:
+        shape = (f"the document on the outline of NIST's {template['name']} ({template['publication']}), keeping its "
+                 "section numbers and headings, after a document control table:\n"
+                 + "\n".join(f"- {line}" for line in template["outline"]) + "\nThen a References section")
+    else:
+        shape = _STRUCTURE[kind]
+    lines.append(f"\nWrite {shape}. 900 to 1500 words. Start with a level-1 heading carrying the document's title. "
+                 "The References section lists the NIST publications above. Return only the document, in Markdown.")
     return "\n".join(lines)
 
 
@@ -461,17 +446,19 @@ def _draft_complete(messages: List[Dict[str, str]]) -> str:
 
 def draft_document(item: ComplianceAssessmentDocumentItem, rec: Dict[str, Any], nist: List[Dict[str, Any]],
                    organisation: Optional[str],
-                   complete: Optional[Callable[[List[Dict[str, str]]], str]] = None) -> str:
+                   complete: Optional[Callable[[List[Dict[str, str]]], str]] = None,
+                   template: Optional[Dict[str, Any]] = None) -> str:
     """One document drafted for the item, in Markdown, ending with the NIST credit line."""
     text = (complete or _draft_complete)([
         {"role": "system", "content": DRAFT_SYSTEM},
-        {"role": "user", "content": build_draft_prompt(item, rec, nist, organisation)},
+        {"role": "user", "content": build_draft_prompt(item, rec, nist, organisation, template)},
     ])
     text = re.sub(r"^```(?:markdown|md)?\s*|\s*```$", "", (text or "").strip())
     if len(text) < 400:
         raise AIEmptyAnswer("The AI's draft came back empty or cut off. Try again.")
     sources = ", ".join(n.get("title") or "" for n in nist) or NIST_SOURCES["SP800-53"][0]
-    return (text + "\n\n---\n\n*Prepared with reference to " + sources + ". NIST publications are reprinted "
+    shaped = f"Structured on NIST's {template['name']} ({template['publication']}). " if template else ""
+    return (text + "\n\n---\n\n*" + shaped + "Prepared with reference to " + sources + ". NIST publications are reprinted "
             "courtesy of the National Institute of Standards and Technology, U.S. Department of Commerce. Drafted "
             "with AI: review it, fill in the [bracketed] details and approve it before use.*")
 
@@ -489,8 +476,11 @@ def draft_into(db: Session, item_id: int, key: str,
         if rec is None:
             raise AIEmptyAnswer("That document is no longer among this item's recommendations.")
         tenant = db.get(Tenant, item.tenant_id)
-        content = draft_document(item, rec, data.get("nist") or [], getattr(tenant, "name", None), complete)
-        outcome = {"status": "ready", "content": content, "error": None, "generated_at": datetime.utcnow().isoformat()}
+        nist = data.get("nist") or []
+        template = template_for(rec.get("evidence_type"), rec.get("document"))
+        content = draft_document(item, rec, nist, getattr(tenant, "name", None), complete, template)
+        outcome = {"status": "ready", "content": content, "error": None, "generated_at": datetime.utcnow().isoformat(),
+                   "template": f"{template['name']} ({template['publication']})" if template else None}
     except (AIUnavailable, AIEmptyAnswer) as exc:
         outcome = {"status": "failed", "error": str(exc)}
     except Exception as exc:  # noqa: BLE001 — provider down, timeout, auth, rate limit

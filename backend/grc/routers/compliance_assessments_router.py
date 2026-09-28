@@ -5150,6 +5150,22 @@ def kpi_live_metrics(
     return {"as_of": now.isoformat(), "metrics": metrics}
 
 
+@router.get("/nist-library")
+def get_nist_library(current_user: GRCUser = Depends(require_auth)):
+    """The NIST publications and official templates the AI evidence advice cites, with the Cyber Security
+    assessments each serves, and the NIST documents in the artifacts catalog that download as Word or PDF.
+    Declared before /{assessment_id}, which would otherwise take the path."""
+    from ..services.assessment_evidence_ai import nist_catalog, nist_library
+
+    lib = nist_library()
+    publications = [{
+        **{k: v for k, v in pub.items() if k != "templates"},
+        "templates": [{**{k: tpl[k] for k in ("name", "url", "format", "note") if tpl.get(k)},
+                       "drafts_follow": bool(tpl.get("outline"))} for tpl in pub.get("templates") or []],
+    } for pub in lib["publications"]]
+    return {"note": lib.get("note"), "publications": publications, "catalog": list(nist_catalog())}
+
+
 @router.get("/{assessment_id}")
 def get_assessment(
     assessment_id: int,

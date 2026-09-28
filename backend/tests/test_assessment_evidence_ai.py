@@ -272,3 +272,45 @@ def test_a_recommended_document_is_drafted_exported_and_linked_to_governance(db,
         assert failed["status"] == "failed" and "did not answer" in failed["error"]
     finally:
         app.dependency_overrides.clear()
+
+
+def test_the_nist_library_is_served_and_drafts_follow_official_template_outlines(db, monkeypatch):
+    from grc.main import app
+
+    lib = advisor.nist_library()["publications"]
+    assert all(p["url"].startswith("https://") and all(t["url"].startswith("https://") for t in p["templates"]) for p in lib)
+    assert advisor.NIST_SOURCES["SP800-18"][1].endswith("/800/18/r2/final")          # Rev. 1 was withdrawn June 2026
+    picked = {t: (advisor.template_for(t, k) or {}).get("name") for t, k in [
+        ("Business impact analysis for payments", "report"), ("IT disaster recovery plan", "plan"),
+        ("System security plan", "plan"), ("Security testing rules of engagement", "plan"),
+        ("Application risk assessment report", "report"), ("Incident response plan", "plan"),
+        ("Algorithmic bias review", "report"), ("Penetration test report", "report")]}
+    assert picked == {
+        "Business impact analysis for payments": "Business impact analysis template",
+        "IT disaster recovery plan": "Contingency plan template, moderate-impact system",
+        "System security plan": "System security plan outline",
+        "Security testing rules of engagement": "Rules of engagement template",
+        "Application risk assessment report": "Risk assessment report elements",
+        "Incident response plan": None, "Algorithmic bias review": None, "Penetration test report": None}
+
+    _item(db).ai_evidence_recommendation = json.dumps({"summary": "s", "matches": [], "nist": [], "recommendations": [
+        {"evidence_type": "Business impact analysis", "description": "Downtime tolerance of the login service",
+         "priority": "high", "document": "report"}]})
+    db.commit()
+    prompts = []
+    advisor.draft_into(db, 30, "business-impact-analysis", lambda m: prompts.append(m[1]["content"]) or "# BIA\n\n" + "Text. " * 120)
+    draft = advisor.loads(_item(db).ai_evidence_recommendation)["drafts"]["business-impact-analysis"]
+    assert "Business impact analysis template" in prompts[0] and "3. BIA Data Collection" in prompts[0]
+    assert draft["status"] == "ready" and draft["template"].startswith("Business impact analysis template (NIST SP 800-34")
+    assert "Structured on NIST's Business impact analysis template" in draft["content"]
+
+    app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, 7)
+    try:
+        served = TestClient(app).get("/compliance/assessments/nist-library").json()
+    finally:
+        app.dependency_overrides.clear()
+    ids = [p["id"] for p in served["publications"]]
+    assert "SP800-53" in ids and "SP800-34" in ids and isinstance(served["catalog"], list)
+    sp34 = next(p for p in served["publications"] if p["id"] == "SP800-34")
+    assert {t["name"]: t["drafts_follow"] for t in sp34["templates"]}["Business impact analysis template"] is True
+    assert all("outline" not in t for t in sp34["templates"])                        # outlines stay server-side

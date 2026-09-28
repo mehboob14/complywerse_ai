@@ -15,16 +15,17 @@ import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import {
   LayoutDashboard, Shield, Bug, Smartphone, BarChart3, Radar,
-  AlertTriangle, Activity, ArrowRight, ArrowLeft, ShieldCheck, TrendingUp, ClipboardList,
+  AlertTriangle, Activity, ArrowRight, ArrowLeft, ShieldCheck, TrendingUp, ClipboardList, BookOpen,
 } from 'lucide-react';
 import ASVSAssessmentTab from '@/components/compliance/ASVSAssessmentTab';
 import OwaspTestingTab from '@/components/compliance/OwaspTestingTab';
 import MobileAppSecurityTab from '@/components/compliance/MobileAppSecurityTab';
 import MaturityAssessmentTab from '@/components/compliance/MaturityAssessmentTab';
+import NistLibraryTab from '@/components/compliance/NistLibraryTab';
 
 type TabKey =
   | 'overview' | 'asvs' | 'owasp_testing' | 'cs_mobile'
-  | 'cs_csir' | 'cs_cti' | 'cs_incident' | 'cs_itsecops';
+  | 'cs_csir' | 'cs_cti' | 'cs_incident' | 'cs_itsecops' | 'nist_library';
 type DrillKind = 'gaps' | 'coverage' | 'compliant' | 'started';
 
 type Feature = { key: TabKey; label: string; icon: React.ElementType; group: string; format: string };
@@ -42,6 +43,7 @@ const FEATURES: Feature[] = [
 const TABS: { key: TabKey; label: string; icon: React.ElementType }[] = [
   { key: 'overview', label: 'Overview', icon: LayoutDashboard },
   ...FEATURES.map((f) => ({ key: f.key, label: f.label, icon: f.icon })),
+  { key: 'nist_library', label: 'NIST library', icon: BookOpen },
 ];
 const VALID = new Set<TabKey>(TABS.map((t) => t.key));
 
@@ -54,6 +56,7 @@ function renderFeature(tab: TabKey): React.ReactNode {
     case 'cs_cti': return <MaturityAssessmentTab format="cti_maturity" />;
     case 'cs_incident': return <MaturityAssessmentTab format="incident_maturity" />;
     case 'cs_itsecops': return <MaturityAssessmentTab format="itsecops_maturity" />;
+    case 'nist_library': return <NistLibraryTab />;
     default: return null;
   }
 }

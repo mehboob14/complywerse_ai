@@ -34,14 +34,21 @@ type Match = {
   status?: string | null; reason?: string; confidence?: number;
 };
 type NistSource = { id: string; title: string; url: string; refs?: string; why?: string };
-type Reference = {
+export type Reference = {
   artifact_id: string; framework_key: string; framework: string; title: string;
   type?: string | null; control_ref?: string | null; reason?: string;
 };
 type Draft = {
   title: string; kind: DocKind; status: 'drafting' | 'ready' | 'failed';
   content?: string; error?: string | null; generated_at?: string; document_id?: number | null;
+  /** The official NIST template outline the draft follows, when one fits. */
+  template?: string | null;
 };
+export type LibraryTemplate = { name: string; url: string; format: string; note?: string; drafts_follow?: boolean };
+export type LibraryPublication = {
+  id: string; title: string; url: string; summary?: string; status?: string; serves: string[]; templates: LibraryTemplate[];
+};
+type NistLibrary = { note?: string; publications: LibraryPublication[]; catalog: Reference[] };
 type Result = {
   summary?: string; recommendations?: Recommendation[]; matches?: Match[]; library_checked?: number;
   nist?: NistSource[]; references?: Reference[]; drafts?: Record<string, Draft>;
@@ -87,6 +94,25 @@ async function download(url: string, params: Record<string, string>, filename: s
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(href), 1000);
+}
+
+/** The NIST publications, official templates and catalog documents the advice draws on. */
+export function useNistLibrary() {
+  return useQuery({
+    queryKey: ['nist-library'],
+    queryFn: async () => (await apiClient.get('/compliance/assessments/nist-library')).data as NistLibrary,
+    staleTime: Infinity,
+  });
+}
+
+export function TemplateLink({ template }: { template: LibraryTemplate }) {
+  return (
+    <a href={template.url} target="_blank" rel="noreferrer noopener" title={template.note || 'Official NIST template'}
+       className="inline-flex items-center gap-1 rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10.5px] text-slate-600 hover:bg-slate-50">
+      <Download className="h-3 w-3" /> {template.name}
+      <span className="uppercase text-slate-400">{template.format}</span>
+    </a>
+  );
 }
 
 function useRun(assessmentId: number, itemId: number) {
@@ -225,6 +251,9 @@ function DraftCard({ assessmentId, itemId, rec, draft, basis, context, itemNumbe
           Drafting… this takes up to a minute. You can close this and come back.
         </p>
       )}
+      {status === 'ready' && draft?.template && (
+        <p className="mt-1 text-[11px] text-violet-700">Follows NIST&apos;s {draft.template}.</p>
+      )}
       {status === 'failed' && draft?.error && <p className="mt-2 rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">{draft.error}</p>}
       {err && <p className="mt-2 rounded bg-red-50 px-2 py-1 text-[11px] text-red-700">{err}</p>}
 
@@ -296,6 +325,8 @@ export function AiEvidenceDialog({ assessmentId, item, context, onClose, onLinke
   const run = useRun(assessmentId, itemId);
   const inFlight = useIsMutating({ mutationKey: runKey(assessmentId, itemId) }) > 0;
   const running = run.isPending || inFlight;
+  const library = useNistLibrary();
+  const templatesOf = (id: string) => library.data?.publications.find((p) => p.id === id)?.templates || [];
   const link = useMutation({
     mutationFn: async (evidenceId: number) =>
       (await apiClient.post(`${base(assessmentId, itemId)}/evidence/link`, { evidence_id: evidenceId })).data,
@@ -472,6 +503,11 @@ export function AiEvidenceDialog({ assessmentId, item, context, onClose, onLinke
                       {n.title} <ExternalLink className="h-3 w-3" />
                     </a>
                     {(n.refs || n.why) && <p className="text-[11px] text-slate-500">{[n.refs, n.why].filter(Boolean).join(' — ')}</p>}
+                    {templatesOf(n.id).length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {templatesOf(n.id).map((t) => <TemplateLink key={t.url} template={t} />)}
+                      </div>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -484,7 +520,8 @@ export function AiEvidenceDialog({ assessmentId, item, context, onClose, onLinke
   );
 }
 
-function ReferenceRow({ reference }: { reference: Reference }) {
+/** A document from the artifacts catalog, downloadable as Word or PDF. */
+export function ReferenceRow({ reference }: { reference: Reference }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState('');
   const get = async (fmt: 'docx' | 'pdf') => {
