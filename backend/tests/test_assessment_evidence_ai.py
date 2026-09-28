@@ -126,14 +126,21 @@ def test_the_endpoint_keeps_the_result_and_says_when_ai_is_not_set_up(db, monkey
         monkeypatch.setattr(advisor, "openai_complete", lambda messages: (_ for _ in ()).throw(RuntimeError("down")))
         down = http.post(base)
         assert down.status_code == 502 and "did not answer" in down.json()["detail"]
+
+        # An answer cut off mid-JSON, or with nothing we asked for, is refused rather than saved as empty.
+        for unusable in ('{"summary": "s", "recommendations": [{"evidence_type": "Pol', '{"note": "n/a"}', ""):
+            monkeypatch.setattr(advisor, "openai_complete", lambda messages, text=unusable: text)
+            cut = http.post(base)
+            assert cut.status_code == 502 and "empty or cut off" in cut.json()["detail"], cut.text
+        assert http.get(base).json()["recommendation"]["summary"] == "s"     # the last good one is still kept
     finally:
         app.dependency_overrides.clear()
 
 
 @pytest.mark.parametrize("model, sent", [
     # gpt-6 models answer 400 to max_tokens and to a temperature other than 1, as gpt-5 does.
-    ("gpt-6-luna", {"max_completion_tokens": 1800, "reasoning_effort": "low"}),
-    ("gpt-4o", {"max_tokens": 1800, "temperature": 0.3}),
+    ("gpt-6-luna", {"max_completion_tokens": 4000, "reasoning_effort": "low"}),
+    ("gpt-4o", {"max_tokens": 4000, "temperature": 0.3}),
 ])
 def test_old_style_parameters_are_translated_for_reasoning_models(monkeypatch, model, sent):
     import httpx

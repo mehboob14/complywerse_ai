@@ -33,6 +33,10 @@ class AIUnavailable(RuntimeError):
     """No AI key is configured on this server."""
 
 
+class AIEmptyAnswer(RuntimeError):
+    """The AI answered, but nothing in the answer could be used (cut off, empty, or not the JSON asked for)."""
+
+
 # What each kind of item is, so the evidence asked for fits it.
 FORMAT_GUIDE: Dict[str, str] = {
     "asvs_checklist": (
@@ -119,8 +123,10 @@ def openai_complete(messages: List[Dict[str, str]]) -> str:
     from openai import OpenAI
 
     client = OpenAI(api_key=key, base_url=get_openai_base_url(), timeout=60)
+    # A ceiling, not a target: reasoning models spend part of it thinking before they answer, and
+    # at 1800 an answer listing library matches could be cut off mid-JSON and read as nothing.
     reply = client.chat.completions.create(
-        model=get_openai_model(), temperature=0.3, max_tokens=1800,
+        model=get_openai_model(), temperature=0.3, max_tokens=4000,
         response_format={"type": "json_object"}, messages=messages,
     )
     return reply.choices[0].message.content or ""
@@ -171,7 +177,7 @@ def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Eviden
         "\"description\": \"what it must show for THIS item\", \"how_to_collect\": \"where and how to get "
         "it: the system, report, export or screen\", \"priority\": \"high|medium|low\", "
         "\"example_files\": [\"file names\"]}], \"matches\": [{\"evidence_id\": 0, \"reason\": \"why it "
-        "supports this item\", \"confidence\": 0.0}]}. Give 3-5 recommendations, most important first."
+        "supports this item\", \"confidence\": 0.0}]}. Give 3-5 recommendations, most important first, and at most 5 matches, best first."
     )
     return "\n".join(lines)
 
@@ -180,10 +186,11 @@ def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
                        complete: Optional[Callable[[List[Dict[str, str]]], str]] = None) -> Dict[str, Any]:
     """The recommendation for one item; the caller stores it on the item."""
     candidates = shortlist_existing(db, item)
-    answer = _parse((complete or openai_complete)([
+    raw = (complete or openai_complete)([
         {"role": "system", "content": SYSTEM},
         {"role": "user", "content": build_prompt(item, candidates)},
-    ]))
+    ])
+    answer = _parse(raw)
 
     recommendations = []
     for rec in (answer.get("recommendations") or [])[:6]:
@@ -221,6 +228,11 @@ def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
             "status": ev.status, "reason": _text(match.get("reason"), 240), "confidence": round(confidence, 2),
         })
     matches.sort(key=lambda m: m["confidence"], reverse=True)
+
+    if not recommendations and not matches:
+        # Say so rather than keep an empty result over the item's last good one.
+        logger.warning("AI evidence answer for item %s had nothing usable: %r", item.id, (raw or "")[:300])
+        raise AIEmptyAnswer("The AI's answer came back empty or cut off, so nothing was saved. Try again.")
 
     return {
         "summary": _text(answer.get("summary"), 600),

@@ -6449,13 +6449,15 @@ def generate_ai_recommendation(
 
     # What evidence proves the item, how to collect it, and which records in the
     # Evidence library already fit (services/assessment_evidence_ai).
-    from ..services.assessment_evidence_ai import AIUnavailable, recommend_evidence
+    from ..services.assessment_evidence_ai import AIEmptyAnswer, AIUnavailable, recommend_evidence
     from ..services.licence_guard import LicenceRestrictedContent
 
     try:
         result = recommend_evidence(db, item)
     except AIUnavailable as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc))
+    except AIEmptyAnswer as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
     except LicenceRestrictedContent:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                             detail="This item's text is licence-restricted control wording, so it was not "
