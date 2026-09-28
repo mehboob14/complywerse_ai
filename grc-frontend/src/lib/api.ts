@@ -2649,6 +2649,8 @@ export const vendorShadowApi = {
 // FAIR analyses of supplier loss scenarios (tpra/fair.py).
 export const vendorFairApi = {
   list: (params?: { vendor_id?: number }) => apiClient.get('/vendor-risk/fair', { params: params || {} }),
+  overview: () => apiClient.get('/vendor-risk/fair/overview'),
+  writeUp: (id: number) => apiClient.post(`/vendor-risk/fair/${id}/write-up`),
   prefill: (vendorId: number, effect: string) => apiClient.get(`/vendor-risk/vendors/${vendorId}/fair/prefill`, { params: { effect } }),
   create: (data: Record<string, unknown>) => apiClient.post('/vendor-risk/fair', data),
   get: (id: number) => apiClient.get(`/vendor-risk/fair/${id}`),

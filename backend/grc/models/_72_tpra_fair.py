@@ -6,7 +6,7 @@ came from, so the reasoning behind a number stays with it.
 """
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, JSON, String, Text
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
 
 from ._00_base import Base
 
@@ -25,6 +25,12 @@ class TPRAFairAnalysis(Base):
     inputs = Column(JSON, nullable=False)                 # a [least, most likely, most] range per factor
     notes = Column(JSON, nullable=True)                   # where each prefilled input came from
     result = Column(JSON, nullable=True)
+    # The supplier's cyber insurance cover, in the tenant's currency; the result
+    # says how often a year's loss would exceed it.
+    insurance_cover = Column(Float, nullable=True)
+    # The AI's write-up of the result, and the inputs it was written for (stale when they move).
+    ai_review = Column(JSON, nullable=True)
+    ai_review_for = Column(String(64), nullable=True)
     status = Column(String(20), nullable=False, default="draft")   # draft | final
     created_by = Column(Integer, nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

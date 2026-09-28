@@ -954,6 +954,10 @@ _COLUMN_ADDS = [
     ("grc_tpra_tiering_config", "monitoring_policy", "JSON DEFAULT '{}'::json", None),
     ("grc_tpra_tiering_config", "quantification", "JSON DEFAULT '{}'::json", None),
     ("grc_tpra_tiering_config", "customisation", "JSON DEFAULT '{}'::json", None),
+    # Comply analyses: the supplier's insurance cover and the AI's write-up (tpra/fair.py).
+    ("grc_tpra_fair_analyses", "insurance_cover", "DOUBLE PRECISION", None),
+    ("grc_tpra_fair_analyses", "ai_review", "JSON", None),
+    ("grc_tpra_fair_analyses", "ai_review_for", "VARCHAR(64)", None),
     # The contracts inbox (tpra/contracts.py): the signed copy, commercial terms
     # and how each contract renews.
     ("grc_tpra_contracts", "evidence_id", "INTEGER", None),

@@ -1,6 +1,6 @@
 'use client';
 
-// Shapes, money formatting and the loss exceedance curve shared by the FAIR pages.
+// Shapes, money formatting and the loss exceedance curve shared by the Comply analysis pages.
 
 import { useId, useState } from 'react';
 
@@ -17,14 +17,30 @@ export interface FairResult {
   per_event: { p10: number; p50: number; p90: number };
   split: { primary: number; secondary: number; secondary_share: number };
   lec: Array<{ loss: number; chance: number }>; liability_cap: number;
+  cover?: { amount: number; chance_exceeded: number; gap_one_in_twenty: number; covers_one_in_twenty: boolean } | null;
+}
+export type RiskLevel = 'low' | 'medium' | 'high' | 'critical';
+export interface WriteUp {
+  risk_level: RiskLevel; confidence: 'low' | 'medium' | 'high'; summary: string; reasons: string[]; actions: string[];
+  insurance: string; at: string; by: string | null;
 }
 export interface FairAnalysis {
   id: number; vendor: { id: number; name: string; tier: string | null }; name: string;
   effect: 'confidentiality' | 'integrity' | 'availability'; scenario: string | null; asset: string | null; threat: string | null;
   status: 'draft' | 'final'; currency: string; annual: FairResult['annual'] | null; liability_cap: number | null;
   updated_at: string; run_at: string | null; row_version: number;
+  insurance_cover?: number | null; risk_level?: RiskLevel | null;
   inputs?: FairInputs; notes?: string[]; result?: FairResult | null;
+  ai_review?: WriteUp | null; ai_review_stale?: boolean;
 }
+
+export const LEVEL_CLS: Record<RiskLevel, string> = {
+  low: 'border-emerald-200 bg-emerald-50 text-emerald-800', medium: 'border-amber-200 bg-amber-50 text-amber-800',
+  high: 'border-orange-200 bg-orange-50 text-orange-800', critical: 'border-rose-200 bg-rose-50 text-rose-800',
+};
+
+/** "1 year in 14", from a chance a year. */
+export const oneIn = (chance: number) => (chance <= 0 ? 'never in the simulated years' : `about 1 year in ${Math.max(1, Math.round(1 / chance))}`);
 
 export const EFFECT_LABEL: Record<FairAnalysis['effect'], string> = {
   confidentiality: 'Data exposed', integrity: 'Data tampered with', availability: 'Service stops',

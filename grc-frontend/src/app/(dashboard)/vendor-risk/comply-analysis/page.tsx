@@ -15,7 +15,16 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { fmtDate } from '../_lib/tprmShared';
 import { TIER_CLS, errText } from '../_lib/intake/types';
-import { EFFECT_LABEL, download, money, pct, type FairAnalysis } from '../_lib/fair/shared';
+import { EFFECT_LABEL, LEVEL_CLS, download, money, pct, type FairAnalysis, type RiskLevel } from '../_lib/fair/shared';
+
+interface Brief {
+  id: number; name: string; vendor: { id: number; name: string }; p95: number | null; mean: number | null;
+  chance: number | null; cover: number | null; risk_level: RiskLevel | null; status: string;
+}
+interface OverviewData {
+  currency: string; count: number; finals: number; drafts: number; suppliers: number; average_year: number;
+  largest: Brief[]; under_insured: Brief[]; no_cover: number; by_risk_level: Record<string, number>;
+}
 
 export default function FairPage() {
   const params = useSearchParams();
@@ -61,6 +70,8 @@ export default function FairPage() {
           )}
         </div>
       </div>
+
+      <Overview />
 
       {isLoading ? (
         <div className="flex items-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>
@@ -110,6 +121,78 @@ export default function FairPage() {
 
       {creating !== null && <NewAnalysis vendorId={creating === 'pick' ? null : creating} onClose={() => setCreating(null)} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={() => qc.invalidateQueries({ queryKey: ['tprm-fair'] })} />}
+    </div>
+  );
+}
+
+function Overview() {
+  const { data } = useQuery({
+    queryKey: ['tprm-fair', 'overview'],
+    queryFn: async () => (await vendorFairApi.overview()).data as OverviewData,
+    ...TPRM_QUERY_OPTS,
+  });
+  if (!data || !data.count) return null;
+  const top = Math.max(...data.largest.map((b) => b.p95 || 0), 1);
+  const stat = (label: string, value: string | number, note?: string, warn?: boolean) => (
+    <div className={clsx('rounded-xl border p-4', warn ? 'border-amber-200 bg-amber-50/50' : 'border-slate-200 bg-white')}>
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-semibold text-slate-900">{value}</p>
+      {note && <p className="text-xs text-slate-500">{note}</p>}
+    </div>
+  );
+  return (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {stat('Analyses', data.count, `${data.finals} final · ${data.drafts} draft`)}
+        {stat('Suppliers analysed', data.suppliers)}
+        {stat('Average year, final analyses', money(data.average_year, data.currency), 'Their average years added up')}
+        {stat('Insurance short of the 1-in-20 year', data.under_insured.length,
+          data.no_cover ? `${data.no_cover} with no cover recorded` : 'Every analysis has a cover recorded', data.under_insured.length > 0)}
+      </div>
+      <div className="grid gap-3 lg:grid-cols-2">
+        <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="fair-largest">
+          <h2 id="fair-largest" className="mb-2 text-sm font-semibold text-slate-900">Largest one-in-twenty years</h2>
+          <ul className="space-y-2">
+            {data.largest.map((b) => (
+              <li key={b.id}>
+                <div className="flex items-center justify-between gap-2 text-sm">
+                  <Link href={`/vendor-risk/comply-analysis/${b.id}`} className="min-w-0 truncate text-slate-800 hover:text-primary-700 hover:underline">
+                    {b.name} <span className="text-xs text-slate-400">· {b.vendor.name}</span>
+                  </Link>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    {b.risk_level && <span className={clsx('rounded-full border px-1.5 text-[10px] font-semibold capitalize', LEVEL_CLS[b.risk_level])}>{b.risk_level}</span>}
+                    <span className="tabular-nums text-slate-900">{money(b.p95, data.currency)}</span>
+                  </span>
+                </div>
+                <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100" aria-hidden>
+                  <div className="h-full rounded-full bg-primary-500" style={{ width: `${((b.p95 || 0) / top) * 100}%` }} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="fair-short">
+          <h2 id="fair-short" className="mb-2 text-sm font-semibold text-slate-900">Where the supplier’s insurance falls short</h2>
+          {data.under_insured.length === 0 ? (
+            <p className="text-sm text-slate-500">
+              {data.no_cover ? 'None of the covers recorded falls short. Record the others’ cover to check them too.' : 'Every supplier’s cover pays for its one-in-twenty year.'}
+            </p>
+          ) : (
+            <ul className="divide-y divide-slate-100">
+              {data.under_insured.map((b) => (
+                <li key={b.id} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                  <Link href={`/vendor-risk/comply-analysis/${b.id}`} className="min-w-0 truncate text-slate-800 hover:text-primary-700 hover:underline">
+                    {b.vendor.name} <span className="text-xs text-slate-400">· {b.name}</span>
+                  </Link>
+                  <span className="shrink-0 text-xs text-amber-800">
+                    covers {money(b.cover, data.currency)} of {money(b.p95, data.currency)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      </div>
     </div>
   );
 }

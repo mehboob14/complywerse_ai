@@ -8,12 +8,14 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { ArrowLeft, Download, Loader2, Trash2 } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, ShieldCheck, Sparkles, Trash2 } from 'lucide-react';
 import { vendorFairApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { errText } from '../../_lib/intake/types';
-import { EFFECT_LABEL, LossCurve, download, money, pct, type FairAnalysis, type FairInputs, type Triple } from '../../_lib/fair/shared';
+import {
+  EFFECT_LABEL, LEVEL_CLS, LossCurve, download, money, oneIn, pct, type FairAnalysis, type FairInputs, type Triple,
+} from '../../_lib/fair/shared';
 
 type Row = { path: string; label: string; help: string; unit: 'events' | 'share' | 'money' };
 const GROUPS: Array<{ title: string; rows: Row[] }> = [
@@ -72,22 +74,29 @@ export default function FairAnalysisPage() {
     queryFn: async () => (await vendorFairApi.get(analysisId)).data,
   });
   const [text, setText] = useState<Record<string, [string, string, string]> | null>(null);
-  const [meta, setMeta] = useState({ name: '', scenario: '', asset: '', threat: '' });
+  const [meta, setMeta] = useState({ name: '', scenario: '', asset: '', threat: '', cover: '' });
+  const metaOf = (x: FairAnalysis) => ({ name: x.name, scenario: x.scenario || '', asset: x.asset || '', threat: x.threat || '',
+    cover: x.insurance_cover == null ? '' : String(x.insurance_cover) });
   useEffect(() => {
     if (a?.inputs) {
       setText(toText(a.inputs));
-      setMeta({ name: a.name, scenario: a.scenario || '', asset: a.asset || '', threat: a.threat || '' });
+      setMeta(metaOf(a));
     }
   }, [a]);
   const dirty = useMemo(() => !!a?.inputs && !!text && (JSON.stringify(toText(a.inputs)) !== JSON.stringify(text)
-    || meta.name !== a.name || meta.scenario !== (a.scenario || '') || meta.asset !== (a.asset || '') || meta.threat !== (a.threat || '')), [a, text, meta]);
+    || JSON.stringify(meta) !== JSON.stringify(metaOf(a))), [a, text, meta]);
   const save = useMutation({
     mutationFn: async (extra: Record<string, unknown> = {}) => (await vendorFairApi.update(analysisId, {
       inputs: fromText(text!, a!.inputs!.iterations), name: meta.name, scenario: meta.scenario, asset: meta.asset, threat: meta.threat,
-      row_version: a!.row_version, ...extra,
+      insurance_cover: meta.cover === '' ? null : Number(meta.cover), row_version: a!.row_version, ...extra,
     })).data as FairAnalysis,
     onSuccess: (r) => { qc.setQueryData(['tprm-fair', analysisId], r); qc.invalidateQueries({ queryKey: ['tprm-fair'] }); toast({ type: 'success', title: 'Saved and run again' }); },
     onError: (e) => toast({ type: 'error', title: 'Not saved', message: errText(e, 'Try again.') }),
+  });
+  const writeUp = useMutation({
+    mutationFn: async () => (await vendorFairApi.writeUp(analysisId)).data as FairAnalysis,
+    onSuccess: (r) => { qc.setQueryData(['tprm-fair', analysisId], r); qc.invalidateQueries({ queryKey: ['tprm-fair'] }); },
+    onError: (e) => toast({ type: 'error', title: 'No write-up', message: errText(e, 'The AI could not write this up. Try again.') }),
   });
   const remove = useMutation({
     mutationFn: () => vendorFairApi.remove(analysisId),
@@ -146,6 +155,11 @@ export default function FairAnalysisPage() {
                   placeholder="e.g. Organised criminals" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
               </label>
             </div>
+            <label className="block text-xs font-medium text-slate-700">The supplier’s cyber insurance cover ({a.currency})
+              <input type="number" min={0} step="any" value={meta.cover} onChange={(e) => setMeta({ ...meta, cover: e.target.value })} disabled={!canEdit}
+                placeholder="Leave empty if not known" className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm tabular-nums focus:border-primary-500 focus:outline-none" />
+              <span className="mt-0.5 block font-normal text-slate-400">From their insurance certificate. The result says how often a year’s loss would exceed it.</span>
+            </label>
           </section>
 
           {GROUPS.map((g) => (
@@ -179,7 +193,7 @@ export default function FairAnalysisPage() {
           )}
           {canEdit && (
             <div className="sticky bottom-0 flex justify-end gap-2 bg-gradient-to-t from-white via-white py-2">
-              <button type="button" disabled={!dirty || save.isPending} onClick={() => { setText(toText(a.inputs!)); setMeta({ name: a.name, scenario: a.scenario || '', asset: a.asset || '', threat: a.threat || '' }); }}
+              <button type="button" disabled={!dirty || save.isPending} onClick={() => { setText(toText(a.inputs!)); setMeta(metaOf(a)); }}
                 className="rounded-lg border border-slate-200 px-3.5 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">Undo changes</button>
               <button type="submit" disabled={!dirty || save.isPending}
                 className="inline-flex items-center gap-1.5 rounded-lg bg-primary-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
@@ -200,6 +214,25 @@ export default function FairAnalysisPage() {
                 <Tile label="One year in a hundred" value={money(r.annual.p99, a.currency)} />
                 <Tile label="Least liability cap to accept" value={money(r.liability_cap, a.currency)} note="The one-in-twenty year, rounded up" strong />
               </div>
+              <section className={clsx('rounded-xl border p-4', !r.cover ? 'border-slate-200 bg-white' : r.cover.covers_one_in_twenty ? 'border-emerald-200 bg-emerald-50/40' : 'border-amber-200 bg-amber-50/40')}
+                aria-labelledby="fair-cover">
+                <h2 id="fair-cover" className="flex items-center gap-2 text-sm font-semibold text-slate-900"><ShieldCheck className="h-4 w-4 text-slate-500" /> Insurance</h2>
+                {!r.cover ? (
+                  <p className="mt-1 text-sm text-slate-600">
+                    No cover recorded for this supplier. To pay for the one-in-twenty year, their cyber insurance should cover at least{' '}
+                    <b>{money(r.liability_cap, a.currency, false)}</b>.
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-slate-700">
+                    Their cover of <b>{money(r.cover.amount, a.currency, false)}</b> is exceeded in {oneIn(r.cover.chance_exceeded)}
+                    {' '}({pct(r.cover.chance_exceeded)} of simulated years).{' '}
+                    {r.cover.covers_one_in_twenty
+                      ? 'It pays for the one-in-twenty year.'
+                      : <>The one-in-twenty year is {money(r.annual.p95, a.currency, false)}: <b>{money(r.cover.gap_one_in_twenty, a.currency, false)} short</b>.</>}
+                  </p>
+                )}
+              </section>
+              <WriteUpCard a={a} canEdit={canEdit} busy={writeUp.isPending} dirty={dirty} onWrite={() => writeUp.mutate()} />
               <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="fair-lec">
                 <h2 id="fair-lec" className="text-sm font-semibold text-slate-900">How likely a year costs at least…</h2>
                 <p className="mb-2 text-xs text-slate-500">Loss exceedance curve from {r.iterations.toLocaleString()} simulated years.</p>
@@ -218,6 +251,51 @@ export default function FairAnalysisPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function WriteUpCard({ a, canEdit, busy, dirty, onWrite }: {
+  a: FairAnalysis; canEdit: boolean; busy: boolean; dirty: boolean; onWrite: () => void;
+}) {
+  const w = a.ai_review;
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="fair-writeup">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 id="fair-writeup" className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Sparkles className="h-4 w-4 text-primary-600" /> What it means</h2>
+        {canEdit && (
+          <button type="button" onClick={onWrite} disabled={busy || dirty} title={dirty ? 'Save your changes first' : undefined}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+            {w ? 'Write it again' : 'Write it up with AI'}
+          </button>
+        )}
+      </div>
+      {!w ? (
+        <p className="mt-1 text-sm text-slate-500">
+          The AI can turn these figures into a short read for a committee: a risk level, how far to trust the numbers, and what to do.
+        </p>
+      ) : (
+        <div className="mt-2 space-y-2 text-sm text-slate-700">
+          <p className="flex flex-wrap items-center gap-1.5">
+            <span className={clsx('rounded-full border px-2 py-0.5 text-xs font-semibold capitalize', LEVEL_CLS[w.risk_level])}>{w.risk_level} risk</span>
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-600">{w.confidence} confidence</span>
+            {a.ai_review_stale && <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">Written before the latest changes</span>}
+          </p>
+          <p>{w.summary}</p>
+          {w.reasons.length > 0 && <ul className="ml-4 list-disc space-y-0.5 text-slate-600">{w.reasons.map((x) => <li key={x}>{x}</li>)}</ul>}
+          {w.actions.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">What to do</p>
+              <ul className="ml-4 list-disc space-y-0.5">{w.actions.map((x) => <li key={x}>{x}</li>)}</ul>
+            </div>
+          )}
+          {w.insurance && <p className="rounded-lg bg-slate-50 px-3 py-2 text-slate-600"><b className="font-medium text-slate-700">Insurance: </b>{w.insurance}</p>}
+          <p className="text-[11px] text-slate-400">
+            Written by AI from the figures above{w.by ? ` at ${w.by}'s request` : ''} on {new Date(w.at).toLocaleString('en-GB')}. Check it before relying on it.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
 

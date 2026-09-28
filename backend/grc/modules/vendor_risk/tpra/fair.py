@@ -13,6 +13,12 @@ loss this year, the average year, the bad years, and the loss exceedance curve �
 for each amount, the chance the year costs at least that much. The one-in-twenty
 year is offered as the least liability cap to accept in the contract.
 
+With the supplier's cyber insurance cover recorded, the result says how often a
+year's loss would exceed it and how far the one-in-twenty year falls short. The
+AI can write the result up for a committee: a risk level, how far to trust the
+figures, and what to do, from the figures alone; the write-up says when the
+inputs have changed since it was written.
+
 A new analysis is prefilled from what the programme holds about the supplier —
 its tier, the data it reaches, the continuity processes behind it, its residual
 rating and its outside-in grade — through the tenant's exposure settings, and
@@ -96,7 +102,7 @@ def _round_up(x: float) -> int:
     return int(math.ceil(x / step) * step)
 
 
-def simulate(inputs: dict, seed: int) -> dict:
+def simulate(inputs: dict, seed: int, cover: Optional[float] = None) -> dict:
     rng = np.random.default_rng(seed)
     n = inputs["iterations"]
     tef = q._pert(rng, inputs["tef"], n)
@@ -130,6 +136,10 @@ def simulate(inputs: dict, seed: int) -> dict:
         "split": {"primary": round(float(annual_primary.mean())), "secondary": round(float(annual.mean() - annual_primary.mean())),
                   "secondary_share": round(float(happens.mean()), 4) if total else 0.0},
         "lec": lec, "liability_cap": _round_up(p95),
+        "cover": None if cover is None else {
+            "amount": round(float(cover)), "chance_exceeded": round(float((annual > cover).mean()), 4),
+            "gap_one_in_twenty": max(0, p95 - round(float(cover))), "covers_one_in_twenty": float(cover) >= p95,
+        },
     }
 
 
@@ -281,17 +291,26 @@ def _analysis(db: Session, analysis_id: int, tids: List[int]) -> Tuple[TPRAFairA
 
 
 def _run(a: TPRAFairAnalysis) -> None:
-    a.result = simulate(a.inputs, _seed(a.vendor_id, a.inputs))
+    a.result = simulate(a.inputs, _seed(a.vendor_id, a.inputs), a.insurance_cover)
     a.run_at = datetime.utcnow()
+
+
+def _written_for(a: TPRAFairAnalysis) -> str:
+    """What a write-up rests on: the inputs, the cover and the scenario."""
+    basis = [a.inputs, a.insurance_cover, a.effect, a.scenario, a.asset, a.threat]
+    return hashlib.sha256(json.dumps(basis, sort_keys=True, default=str).encode()).hexdigest()
 
 
 def _out(a: TPRAFairAnalysis, v: Vendor, currency: str, full: bool = True) -> dict:
     row = {"id": a.id, "vendor": {"id": v.id, "name": v.name, "tier": v.tier}, "name": a.name, "effect": a.effect,
            "scenario": a.scenario, "asset": a.asset, "threat": a.threat, "status": a.status, "currency": currency,
            "annual": (a.result or {}).get("annual"), "liability_cap": (a.result or {}).get("liability_cap"),
+           "insurance_cover": a.insurance_cover,
+           "risk_level": (a.ai_review or {}).get("risk_level"),
            "updated_at": a.updated_at, "run_at": a.run_at, "row_version": a.row_version}
     if full:
-        row.update({"inputs": a.inputs, "notes": a.notes or [], "result": a.result})
+        row.update({"inputs": a.inputs, "notes": a.notes or [], "result": a.result, "ai_review": a.ai_review,
+                    "ai_review_stale": bool(a.ai_review) and a.ai_review_for != _written_for(a)})
     return row
 
 
@@ -305,6 +324,39 @@ def list_analyses(vendor_id: Optional[int] = None, db: Session = Depends(get_db)
     currency = q._config(db, tid)["currency"]
     rows = [_out(a, v, currency, full=False) for a, v in query.order_by(TPRAFairAnalysis.updated_at.desc())]
     return {"items": rows, "currency": currency}
+
+
+@router.get("/fair/overview")
+def overview(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The analyses at a glance: how many, which suppliers, the largest one-in-twenty
+    years, and where a supplier's insurance falls short."""
+    tid = _tids(user, db)[0]
+    rows = (db.query(TPRAFairAnalysis, Vendor).join(Vendor, Vendor.id == TPRAFairAnalysis.vendor_id)
+            .filter(TPRAFairAnalysis.tenant_id == tid, TPRAFairAnalysis.deleted_at.is_(None)).all())
+    currency = q._config(db, tid)["currency"]
+    year = lambda a: (a.result or {}).get("annual") or {}  # noqa: E731
+    brief = lambda a, v: {"id": a.id, "name": a.name, "vendor": {"id": v.id, "name": v.name},  # noqa: E731
+                          "p95": year(a).get("p95"), "mean": year(a).get("mean"), "chance": year(a).get("chance"),
+                          "cover": a.insurance_cover, "risk_level": (a.ai_review or {}).get("risk_level"),
+                          "status": a.status}
+    finals = [(a, v) for a, v in rows if a.status == "final"]
+    short = [(a, v) for a, v in rows if ((a.result or {}).get("cover") or {}).get("covers_one_in_twenty") is False]
+    levels: Dict[str, int] = {}
+    for a, _ in rows:
+        level = (a.ai_review or {}).get("risk_level")
+        if level:
+            levels[level] = levels.get(level, 0) + 1
+    return {
+        "currency": currency, "count": len(rows), "finals": len(finals), "drafts": len(rows) - len(finals),
+        "suppliers": len({a.vendor_id for a, _ in rows}),
+        "average_year": sum(year(a).get("mean") or 0 for a, _ in finals),
+        "largest": [brief(a, v) for a, v in sorted(rows, key=lambda r: -(year(r[0]).get("p95") or 0))[:5]],
+        "under_insured": [brief(a, v) for a, v in sorted(short, key=lambda r: -((r[0].result or {}).get("cover") or {}).get(
+            "gap_one_in_twenty", 0))[:5]],
+        "no_cover": sum(1 for a, _ in rows if a.insurance_cover is None),
+        "by_effect": {e: sum(1 for a, _ in rows if a.effect == e) for e in EFFECTS},
+        "by_risk_level": levels,
+    }
 
 
 @router.get("/vendors/{vendor_id}/fair/prefill")
@@ -327,6 +379,7 @@ class AnalysisIn(BaseModel):
     notes: Optional[List[str]] = None
     status: Optional[str] = Field(None, pattern="^(draft|final)$")
     row_version: Optional[int] = None
+    insurance_cover: Optional[float] = Field(None, ge=0, le=MAX_MONEY)   # send null to clear it
 
 
 @router.post("/fair", status_code=status.HTTP_201_CREATED)
@@ -343,7 +396,7 @@ def create(body: AnalysisIn, db: Session = Depends(get_db), user: GRCUser = Depe
     a = TPRAFairAnalysis(tenant_id=v.tenant_id, vendor_id=v.id, name=" ".join((body.name or f"{v.name}: {body.effect or 'confidentiality'}").split())[:255],
                          effect=body.effect or "confidentiality", scenario=body.scenario, asset=body.asset, threat=body.threat,
                          inputs=inputs, notes=[str(n)[:300] for n in (body.notes or [])][:20], status=body.status or "draft",
-                         created_by=user.id)
+                         insurance_cover=body.insurance_cover, created_by=user.id)
     _run(a)
     db.add(a)
     db.flush()
@@ -455,7 +508,10 @@ def update(analysis_id: int, body: AnalysisIn, db: Session = Depends(get_db), us
             changed.append(field)
     if body.notes is not None:
         a.notes = [str(n)[:300] for n in body.notes][:20]
-    if "inputs" in changed:
+    if "insurance_cover" in body.model_fields_set and body.insurance_cover != a.insurance_cover:
+        a.insurance_cover = body.insurance_cover
+        changed.append("insurance_cover")
+    if "inputs" in changed or "insurance_cover" in changed:
         _run(a)
     if changed:
         a.row_version = (a.row_version or 1) + 1
@@ -463,6 +519,90 @@ def update(analysis_id: int, body: AnalysisIn, db: Session = Depends(get_db), us
                             actor_id=user.id, to_value=", ".join(changed))
     db.commit()
     return _out(a, v, q._config(db, a.tenant_id)["currency"])
+
+
+# ── the AI's write-up ────────────────────────────────────────────────────────
+
+_ASK = """You help a third-party risk team read a quantified loss analysis of one scenario at one supplier.
+From the analysis below, answer with one JSON object:
+{"risk_level": "low" | "medium" | "high" | "critical",
+ "confidence": "low" | "medium" | "high",
+ "summary": "two to four plain-English sentences: what a year could cost and how likely that is",
+ "reasons": ["why this risk level, citing the figures", "... at most four"],
+ "actions": ["what to do: contract terms, controls or evidence to ask the supplier for", "... at most five"],
+ "insurance": "one or two sentences: whether the supplier's cyber insurance cover is enough for this scenario, or what cover to require when none is recorded"}
+Use only the figures and facts given; do not invent any. Say confidence is lower when the input ranges are wide
+or were left at the prefilled starting values."""
+LEVELS = ("low", "medium", "high", "critical")
+CONFIDENCE = ("low", "medium", "high")
+
+
+def _as_text(a: TPRAFairAnalysis, v: Vendor, currency: str) -> str:
+    r = a.result or {}
+    ann, ev = r.get("annual") or {}, r.get("per_event") or {}
+    rng = lambda t, unit="": f"{t[0]:,} to {t[2]:,}{unit}, most likely {t[1]:,}{unit}"  # noqa: E731
+    lines = [f"Analysis: {a.name}", f"Supplier: {v.name} (tier {v.tier or 'not set'})", f"What goes wrong: {a.effect}",
+             f"Scenario: {a.scenario or 'not described'}", f"At risk: {a.asset or 'not given'}",
+             f"Who would act: {a.threat or 'not given'}", f"Money is in {currency}.",
+             f"Threat events a year: {rng(a.inputs['tef'])}",
+             f"Chance an attempt becomes a loss: {rng([round(x * 100, 1) for x in a.inputs['vulnerability']], '%')}"]
+    lines += [f"{PRIMARY[k]} cost per loss: {rng(a.inputs['primary'][k])}" for k in PRIMARY]
+    lines.append("Chance others react after a loss: "
+                 + rng([round(x * 100, 1) for x in a.inputs['secondary']['probability']], '%'))
+    lines += [f"{SECONDARY[k]} when others react: {rng(a.inputs['secondary'][k])}" for k in SECONDARY]
+    if a.notes:
+        lines.append("Where starting values came from: " + "; ".join(a.notes))
+    lines += [f"Result from {r.get('iterations', 0):,} simulated years:",
+              f"Chance of a loss in a year: {ann.get('chance', 0):.0%}", f"Average year: {ann.get('mean', 0):,}",
+              f"One year in ten: {ann.get('p90', 0):,}", f"One year in twenty: {ann.get('p95', 0):,}",
+              f"One year in a hundred: {ann.get('p99', 0):,}",
+              f"One loss costs {ev.get('p10', 0):,} to {ev.get('p90', 0):,} (80% of losses)",
+              f"Least liability cap to accept: {r.get('liability_cap', 0):,}"]
+    cover = r.get("cover")
+    lines.append("Supplier's cyber insurance cover: not recorded" if not cover else
+                 f"Supplier's cyber insurance cover: {cover['amount']:,}; a year's loss exceeds it "
+                 f"{cover['chance_exceeded']:.1%} of the time; the one-in-twenty year is "
+                 + ("covered" if cover["covers_one_in_twenty"] else f"short by {cover['gap_one_in_twenty']:,}"))
+    return "\n".join(lines)[:8000]
+
+
+def write_up(a: TPRAFairAnalysis, v: Vendor, currency: str, complete=None) -> dict:
+    from ....services.assessment_evidence_ai import _parse, openai_complete
+
+    reply = _parse((complete or openai_complete)([{"role": "system", "content": _ASK},
+                                                 {"role": "user", "content": _as_text(a, v, currency)}]))
+    text = lambda x, n: " ".join(str(x or "").split())[:n]  # noqa: E731
+    items = lambda x, k: [text(i, 400) for i in (x if isinstance(x, list) else []) if str(i).strip()][:k]  # noqa: E731
+    level, confidence = str(reply.get("risk_level", "")).lower(), str(reply.get("confidence", "")).lower()
+    summary = text(reply.get("summary"), 1200)
+    if level not in LEVELS or not summary:
+        raise ValueError("The AI did not return a usable write-up")
+    return {"risk_level": level, "confidence": confidence if confidence in CONFIDENCE else "low", "summary": summary,
+            "reasons": items(reply.get("reasons"), 4), "actions": items(reply.get("actions"), 5),
+            "insurance": text(reply.get("insurance"), 600)}
+
+
+@router.post("/fair/{analysis_id}/write-up")
+def write_it_up(analysis_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    from ....services.assessment_evidence_ai import AIUnavailable
+
+    a, v = _analysis(db, analysis_id, _tids(user, db))
+    rbac.require_write(db, user, "assessments", "edit")
+    if not a.result:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Run the analysis first")
+    currency = q._config(db, a.tenant_id)["currency"]
+    try:
+        review = write_up(a, v, currency)
+    except AIUnavailable as exc:
+        raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, str(exc))
+    except Exception:  # noqa: BLE001 — a failed call must not look like a write-up
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, "The AI could not write this up. Try again.")
+    a.ai_review = {**review, "at": datetime.utcnow().isoformat(), "by": user.display_name or user.username}
+    a.ai_review_for = _written_for(a)
+    service.write_audit(db, a.tenant_id, entity="fair_analysis", action="write_up", vendor_id=v.id, entity_id=a.id,
+                        actor_id=user.id, to_value=review["risk_level"])
+    db.commit()
+    return _out(a, v, currency)
 
 
 @router.delete("/fair/{analysis_id}")
