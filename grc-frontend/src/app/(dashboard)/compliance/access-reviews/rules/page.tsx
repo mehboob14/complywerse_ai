@@ -37,12 +37,12 @@ export default function RuleLibraryPage() {
   const filteredCount = domains.reduce((n, d) => n + d.rules.length, 0);
 
   return (
-    <div className="mx-auto max-w-[1080px] px-8 py-7 pb-16">
+    <div className="w-full pb-8">
       <button onClick={() => router.push('/compliance/access-reviews')} className="mb-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-slate-500"><ChevronLeft size={14} /> Access Reviews</button>
       <h1 className="text-[23px] font-bold tracking-tight text-slate-900">Rule library</h1>
-      <p className="mb-5 mt-1 text-[13.5px] text-slate-500">Checks that run during Stage 3. Enabled, runnable rules fire on the next review.</p>
+      <p className="mb-4 mt-1 text-[13.5px] text-slate-500">Checks that run during Stage 3. Enabled, runnable rules fire on the next review.</p>
 
-      <div className="mb-4 grid grid-cols-3 gap-3.5">
+      <div className="mb-4 grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         {[['Catalog', data.summary.total, 'rules across all domains'], ['Runnable now', data.summary.runnable, 'with connected data'], ['Enabled', data.summary.enabled_active, 'fire on next Run checks']].map(([k, v, s]) => (
           <div key={k as string} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
             <div className="mb-1.5 text-[11.5px] font-medium text-slate-500">{k}</div>
