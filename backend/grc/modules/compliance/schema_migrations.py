@@ -960,6 +960,8 @@ _COLUMN_ADDS = [
     ("grc_tpra_fair_analyses", "ai_review_for", "VARCHAR(64)", None),
     # What a ratings provider says beyond the score: UpGuard's risks by severity (tpra/rating_feeds.py).
     ("grc_tpra_external_ratings", "details", "JSON", None),
+    # Who Grip has seen using each shadow SaaS app (tpra/shadow_saas.py).
+    ("grc_tpra_shadow_apps", "people", "JSON", None),
     # The contracts inbox (tpra/contracts.py): the signed copy, commercial terms
     # and how each contract renews.
     ("grc_tpra_contracts", "evidence_id", "INTEGER", None),

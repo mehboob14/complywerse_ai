@@ -27,6 +27,8 @@ DEFAULTS: Dict = {
     "adverse_media": False, "outside_in": False,
     "check_every_days": POLL_EVERY_DAYS, "scan_every_days": SCAN_EVERY_DAYS,
     "scan_points": POINTS, "scan_category_cap": CATEGORY_CAP, "grades": GRADES,
+    # Shadow SaaS read from Grip Security once a day (tpra/shadow_saas.py).
+    "grip_daily": False,
 }
 _DAYS_LIMIT = {"check_every_days": 365, "scan_every_days": 730}
 
@@ -67,7 +69,7 @@ def clean(raw: dict, current: Optional[dict]) -> dict:
         raise ValueError(f"Unknown monitoring setting: {', '.join(sorted(unknown))}")
     out = merged(current)
     for key, value in raw.items():
-        if key in ("adverse_media", "outside_in"):
+        if key in ("adverse_media", "outside_in", "grip_daily"):
             out[key] = bool(value)
         elif key in _DAYS_LIMIT:
             if not isinstance(value, dict) or set(value) - set(TIERS):

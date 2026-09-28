@@ -44,6 +44,44 @@ def grip_apps(base_url: str, token: str, get=requests.get, page: int = 200, limi
     return out
 
 
+def _sibling(base_url: str, name: str) -> str:
+    """Grip's other lists hang off /public beside /public/saas."""
+    base = base_url.rstrip("/")
+    return (base[: -len("/saas")] if base.endswith("/saas") else base) + f"/{name}"
+
+
+def grip_users(base_url: str, token: str, get=requests.get, page: int = 200, limit: int = 50000) -> List[dict]:
+    """Everyone Grip has seen using SaaS, page by page."""
+    return grip_apps(_sibling(base_url, "users"), token, get=get, page=page, limit=limit)
+
+
+def _apps_of(user: dict) -> List[dict]:
+    """The apps a Grip user record names, however it names them."""
+    for key in ("saas", "apps", "applications", "saasApps", "saasList"):
+        value = user.get(key)
+        if isinstance(value, list):
+            return [v if isinstance(v, dict) else {"name": str(v)} for v in value]
+    return []
+
+
+def rosters(users: List[dict]) -> Dict[str, List[dict]]:
+    """Who uses each app, keyed by Grip app id or, failing that, lower-cased app name."""
+    out: Dict[str, List[dict]] = {}
+    for u in users:
+        email = u.get("email") or u.get("userEmail") or u.get("username")
+        name = u.get("name") or u.get("displayName") or " ".join(
+            str(x) for x in (u.get("firstName"), u.get("lastName")) if x) or None
+        if not email and not name:
+            continue
+        person = {"email": email, "name": name, "department": u.get("department") or u.get("team"),
+                  "last_seen": u.get("lastSeen") or u.get("last_seen") or u.get("lastActivity")}
+        for app in _apps_of(u):
+            key = str(app.get("id") or app.get("saasId") or "").strip() or str(app.get("name") or "").strip().lower()
+            if key:
+                out.setdefault(key, []).append(person)
+    return out
+
+
 class GripAdapter(EasmSourceAdapter):
     provider = "grip"
     category = "saas_discovery"

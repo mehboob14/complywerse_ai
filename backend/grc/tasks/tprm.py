@@ -169,11 +169,15 @@ def poll_monitoring_connectors_for_tenant(self, tenant_slug: str, db: Session = 
     from ..models import Tenant
     from ..modules.vendor_risk.tpra.monitoring_connectors import run_connectors
 
+    from ..modules.vendor_risk.tpra.shadow_saas import scheduled_sync
+
     tenant = db.query(Tenant).first()
     if not tenant:
         return {"status": "skipped", "tenant_slug": tenant_slug, "reason": "no_tenant"}
     result = run_connectors(db, tenant.id)
     db.commit()
+    # Shadow SaaS from Grip, once a day when the tenant has asked for it.
+    result["grip"] = scheduled_sync(db, tenant.id)
     return {"status": "ok", "tenant_slug": tenant_slug, **result}
 
 

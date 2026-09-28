@@ -35,6 +35,8 @@ class TPRAShadowApp(Base):
     decided_at = Column(DateTime, nullable=True)
     decision_note = Column(Text, nullable=True)
     blocked = Column(Boolean, nullable=False, default=False)   # on the web gateway's block list
+    # Who Grip has seen using it: [{email, name, department, last_seen}], at most ROSTER_MAX.
+    people = Column(JSON, nullable=True)
     blocked_at = Column(DateTime, nullable=True)
     first_seen = Column(DateTime, nullable=False, default=datetime.utcnow)
     last_seen = Column(DateTime, nullable=False, default=datetime.utcnow)

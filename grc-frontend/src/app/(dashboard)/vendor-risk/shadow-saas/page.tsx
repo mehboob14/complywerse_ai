@@ -8,7 +8,7 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
-import { ChevronDown, ChevronRight, Download, Loader2, RefreshCw, Upload, X } from 'lucide-react';
+import { Ban, ChevronDown, ChevronRight, Download, Loader2, RefreshCw, Search, ShieldCheck, Upload, Users, X } from 'lucide-react';
 import { vendorShadowApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -22,6 +22,7 @@ interface App {
   owner_name: string | null; owner_email: string | null; source: string; source_risk: number | null; risk: number;
   level: 'high' | 'medium' | 'low'; why: string[]; status: Status; vendor_id: number | null; blocked: boolean;
   decided_by: string | null; decided_at: string | null; decision_note: string | null; last_seen: string;
+  people_count: number;
 }
 interface Board {
   items: App[]; counts: Record<Status, number>; pending_high: number; people_on_pending: number; blocked: number;
@@ -43,6 +44,7 @@ export default function ShadowSaasPage() {
   const [open, setOpen] = useState<number | null>(null);
   const [deciding, setDeciding] = useState<{ app: App; how: 'deny' | 'dismiss' } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [roster, setRoster] = useState<App | null>(null);
   const key = ['tprm-shadow', status];
   const { data, isLoading, isError } = useQuery<Board>({
     queryKey: key,
@@ -147,7 +149,7 @@ export default function ShadowSaasPage() {
             <tbody className="divide-y divide-slate-100">
               {data.items.map((a) => (
                 <Row key={a.id} app={a} open={open === a.id} onToggle={() => setOpen(open === a.id ? null : a.id)} canEdit={canEdit}
-                  busy={onboard.isPending || reopen.isPending}
+                  busy={onboard.isPending || reopen.isPending} onPeople={() => setRoster(a)}
                   onOnboard={() => onboard.mutate(a.id)} onDeny={() => setDeciding({ app: a, how: 'deny' })}
                   onDismiss={() => setDeciding({ app: a, how: 'dismiss' })} onReopen={() => reopen.mutate(a.id)} />
               ))}
@@ -175,15 +177,18 @@ export default function ShadowSaasPage() {
         </section>
       )}
 
+      {data && <GatewayCard connected={data.connected.zscaler} canEdit={canEdit} onDone={refresh} />}
+
       {deciding && <DecideDialog app={deciding.app} how={deciding.how} gateway={!!data?.connected.zscaler} onClose={() => setDeciding(null)} onDone={refresh} />}
+      {roster && <PeopleDialog app={roster} onClose={() => setRoster(null)} />}
       {importing && <ImportDialog onClose={() => setImporting(false)} onDone={refresh} />}
     </div>
   );
 }
 
-function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismiss, onReopen }: {
+function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismiss, onReopen, onPeople }: {
   app: App; open: boolean; onToggle: () => void; canEdit: boolean; busy: boolean;
-  onOnboard: () => void; onDeny: () => void; onDismiss: () => void; onReopen: () => void;
+  onOnboard: () => void; onDeny: () => void; onDismiss: () => void; onReopen: () => void; onPeople: () => void;
 }) {
   return (
     <>
@@ -197,7 +202,14 @@ function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismi
           <p className="font-medium text-slate-900">{a.name}</p>
           <p className="text-xs text-slate-500">{[a.domain, a.category, SOURCE[a.source] || a.source].filter(Boolean).join(' · ')}</p>
         </td>
-        <td className="px-3 py-3 text-right tabular-nums text-slate-700">{a.users ?? '—'}</td>
+        <td className="px-3 py-3 text-right tabular-nums text-slate-700">
+          {a.people_count > 0 ? (
+            <button type="button" onClick={onPeople} className="inline-flex items-center gap-1 text-primary-700 hover:underline"
+              aria-label={`Who uses ${a.name}`}>
+              <Users className="h-3.5 w-3.5" aria-hidden /> {a.users ?? a.people_count}
+            </button>
+          ) : (a.users ?? '—')}
+        </td>
         <td className="px-3 py-3">
           <span className={clsx('inline-flex rounded-full border px-2 py-0.5 text-xs font-medium capitalize', LEVEL_CLS[a.level])}>{a.level} · {a.risk}</span>
           {a.source_risk !== null && <p className="mt-0.5 text-[11px] text-slate-400">{SOURCE[a.source] || 'Source'} says {a.source_risk}</p>}
@@ -229,10 +241,129 @@ function Row({ app: a, open, onToggle, canEdit, busy, onOnboard, onDeny, onDismi
             {a.description && <p className="mb-1.5">{a.description}</p>}
             {a.why.length > 0 && <ul className="ml-4 list-disc">{a.why.map((w) => <li key={w}>{w}</li>)}</ul>}
             {a.decision_note && <p className="mt-1.5">Decided by {a.decided_by || '—'} on {fmtDate(a.decided_at)}: “{a.decision_note}”</p>}
+            {a.people_count > 0 && (
+              <button type="button" onClick={onPeople} className="mt-1.5 inline-flex items-center gap-1 text-primary-700 hover:underline">
+                <Users className="h-3.5 w-3.5" /> See the {a.people_count} {a.people_count === 1 ? 'person' : 'people'} {SOURCE[a.source] || 'the source'} has seen using it
+              </button>
+            )}
           </td>
         </tr>
       )}
     </>
+  );
+}
+
+function PeopleDialog({ app, onClose }: { app: App; onClose: () => void }) {
+  const [search, setSearch] = useState('');
+  const { data, isLoading } = useQuery({
+    queryKey: ['tprm-shadow-people', app.id],
+    queryFn: async () => (await vendorShadowApi.people(app.id)).data as
+      { items: Array<{ email: string | null; name: string | null; department: string | null; last_seen: string | null }>; total: number },
+  });
+  const needle = search.trim().toLowerCase();
+  const shown = (data?.items || []).filter((p) => !needle || Object.values(p).join(' ').toLowerCase().includes(needle));
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label={`Who uses ${app.name}`}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="flex max-h-[80vh] w-full max-w-lg flex-col rounded-xl bg-white shadow-xl">
+        <div className="flex items-start justify-between gap-3 border-b border-slate-100 p-4">
+          <div>
+            <h2 className="text-base font-semibold text-slate-900">Who uses {app.name}</h2>
+            <p className="text-xs text-slate-500">The people {SOURCE[app.source] || 'the source'} has seen using it: those a breach of it would touch.</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="border-b border-slate-100 p-3">
+          <label className="relative block">
+            <span className="sr-only">Find a person</span>
+            <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" aria-hidden />
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Find by name, email or team"
+              className="w-full rounded-lg border border-slate-300 py-2 pl-8 pr-3 text-sm focus:border-primary-500 focus:outline-none" />
+          </label>
+        </div>
+        <ul className="flex-1 divide-y divide-slate-100 overflow-y-auto">
+          {isLoading && <li className="flex items-center gap-2 p-4 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</li>}
+          {!isLoading && shown.length === 0 && <li className="p-4 text-sm text-slate-500">Nobody matches.</li>}
+          {shown.map((p, i) => (
+            <li key={`${p.email || p.name}-${i}`} className="flex items-center justify-between gap-2 px-4 py-2 text-sm">
+              <span className="min-w-0">
+                <span className="block truncate text-slate-800">{p.name || p.email}</span>
+                <span className="block truncate text-xs text-slate-500">{[p.name ? p.email : null, p.department].filter(Boolean).join(' · ')}</span>
+              </span>
+              {p.last_seen && <span className="shrink-0 text-xs text-slate-400">{fmtDate(p.last_seen)}</span>}
+            </li>
+          ))}
+        </ul>
+        <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">{data ? `${data.total} in all` : ''}</p>
+      </div>
+    </div>
+  );
+}
+
+function GatewayCard({ connected, canEdit, onDone }: { connected: boolean; canEdit: boolean; onDone: () => void }) {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [domain, setDomain] = useState('');
+  const [action, setAction] = useState<'block' | 'allow'>('block');
+  const [reason, setReason] = useState('');
+  const { data } = useQuery({
+    queryKey: ['tprm-shadow-gateway'],
+    queryFn: async () => (await vendorShadowApi.gatewayHistory()).data as
+      { items: Array<{ domain: string; action: 'block' | 'allow'; reason: string | null; at: string; by: string | null }> },
+    enabled: connected,
+  });
+  const change = useMutation({
+    mutationFn: () => vendorShadowApi.gateway({ domain, action, reason }),
+    onSuccess: () => {
+      toast({ type: 'success', title: action === 'block' ? `${domain} is blocked` : `${domain} is off the block list` });
+      setDomain(''); setReason('');
+      qc.invalidateQueries({ queryKey: ['tprm-shadow-gateway'] });
+      onDone();
+    },
+    onError: (e) => toast({ type: 'error', title: 'Zscaler did not take it', message: errText(e, 'Try again.') }),
+  });
+  return (
+    <section className="rounded-xl border border-slate-200 bg-white p-4" aria-labelledby="shadow-gateway">
+      <h2 id="shadow-gateway" className="flex items-center gap-2 text-sm font-semibold text-slate-900"><ShieldCheck className="h-4 w-4 text-slate-500" /> The web gateway</h2>
+      {!connected ? (
+        <p className="mt-1 text-xs text-slate-500">
+          Connect Zscaler under <Link href="/admin/connectors" className="text-primary-700 hover:underline">Admin → Connectors</Link> to block a domain, or take one off the block list, from here.
+        </p>
+      ) : (
+        <>
+          <p className="mb-3 mt-1 text-xs text-slate-500">Block any domain at Zscaler, or take one off the block list, with the reason on the record. Nothing else in Zscaler changes.</p>
+          {canEdit && (
+            <form className="grid gap-2 sm:grid-cols-[1fr_auto_2fr_auto]" onSubmit={(e) => { e.preventDefault(); change.mutate(); }}>
+              <input value={domain} onChange={(e) => setDomain(e.target.value)} placeholder="files.example.com" required aria-label="Domain"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+              <select value={action} onChange={(e) => setAction(e.target.value as 'block' | 'allow')} aria-label="What to do"
+                className="rounded-lg border border-slate-300 bg-white px-2 py-2 text-sm">
+                <option value="block">Block it</option>
+                <option value="allow">Take it off the block list</option>
+              </select>
+              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (kept on the record)" required minLength={5} aria-label="Why"
+                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
+              <button type="submit" disabled={change.isPending}
+                className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60">
+                {change.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ban className="h-4 w-4" />} Apply
+              </button>
+            </form>
+          )}
+          {!!data?.items.length && (
+            <ul className="mt-3 divide-y divide-slate-100 text-sm">
+              {data.items.slice(0, 10).map((h, i) => (
+                <li key={`${h.domain}-${i}`} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                  <span><span className={clsx('mr-2 rounded-full border px-1.5 text-[11px]', h.action === 'block' ? 'border-rose-200 bg-rose-50 text-rose-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800')}>
+                    {h.action === 'block' ? 'Blocked' : 'Unblocked'}</span>{h.domain}
+                    {h.reason && <span className="text-xs text-slate-500"> · {h.reason}</span>}</span>
+                  <span className="text-xs text-slate-400">{h.by || '—'} · {fmtDate(h.at)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 

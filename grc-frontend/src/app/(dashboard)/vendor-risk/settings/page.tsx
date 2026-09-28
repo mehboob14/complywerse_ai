@@ -32,7 +32,8 @@ interface ReminderPolicy {
 }
 interface TierRules { template_ids: number[]; evidence: string[]; approver_role: string | null; reassess_on: string }
 interface MonitoringPolicy {
-  adverse_media: boolean; outside_in: boolean; check_every_days: Record<string, number>; scan_every_days: Record<string, number>;
+  adverse_media: boolean; outside_in: boolean; grip_daily?: boolean;
+  check_every_days: Record<string, number>; scan_every_days: Record<string, number>;
   scan_points: Record<string, number>; scan_category_cap: number; grades: Record<string, number>;
 }
 interface Defaults {
@@ -58,7 +59,7 @@ interface Draft {
   tier_policy: Record<string, TierRules>;
   cadence_days: Record<string, number>;
   reminder_policy: ReminderPolicy;
-  monitoring_policy: Pick<MonitoringPolicy, 'adverse_media' | 'outside_in' | 'check_every_days' | 'scan_every_days'>;
+  monitoring_policy: Pick<MonitoringPolicy, 'adverse_media' | 'outside_in' | 'grip_daily' | 'check_every_days' | 'scan_every_days'>;
   scan_scoring: Pick<MonitoringPolicy, 'scan_points' | 'scan_category_cap' | 'grades'>;   // sent within monitoring_policy
   scoring_policy: { partial_credit: number };
   quantification: Quant;
@@ -79,7 +80,7 @@ function toDraft(c: ConfigResp, from: Defaults): Draft {
     ...(() => {
       const m = { ...(c.defaults.monitoring_policy || {}), ...(from.monitoring_policy || {}) } as MonitoringPolicy;
       return {
-        monitoring_policy: { adverse_media: !!m.adverse_media, outside_in: !!m.outside_in,
+        monitoring_policy: { adverse_media: !!m.adverse_media, outside_in: !!m.outside_in, grip_daily: !!m.grip_daily,
           check_every_days: { ...m.check_every_days }, scan_every_days: { ...m.scan_every_days } },
         scan_scoring: { scan_points: { ...m.scan_points }, scan_category_cap: m.scan_category_cap, grades: { ...m.grades } },
       };
@@ -577,6 +578,17 @@ export default function VendorRiskSettingsPage() {
                     Looks at what any visitor sees: certificates, HTTPS and protective headers, and email spoofing protection, plus
                     exposed services and known vulnerabilities when a Shodan key is connected. Nothing is port-scanned. A supplier’s
                     first scan sets its baseline; after that a new high or critical finding raises an alert.
+                  </span>
+                </span>
+              </label>
+              <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                <input type="checkbox" className="mt-1" disabled={!canEdit} checked={!!m.grip_daily}
+                  onChange={(e) => set('monitoring_policy', { ...m, grip_daily: e.target.checked })} />
+                <span>
+                  Sync shadow SaaS from Grip Security every day
+                  <span className="mt-0.5 block text-[11px] text-slate-500">
+                    New apps and who uses each arrive on their own each day, once Grip is connected under Admin → Connectors.
+                    A sync can still be run by hand from the Shadow SaaS page.
                   </span>
                 </span>
               </label>

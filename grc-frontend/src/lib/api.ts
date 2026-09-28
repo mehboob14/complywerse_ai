@@ -2644,6 +2644,9 @@ export const vendorShadowApi = {
   deny: (id: number, note: string, block: boolean) => apiClient.post(`/vendor-risk/shadow-saas/${id}/deny`, { note, block }),
   dismiss: (id: number, note: string) => apiClient.post(`/vendor-risk/shadow-saas/${id}/dismiss`, { note }),
   reopen: (id: number) => apiClient.post(`/vendor-risk/shadow-saas/${id}/reopen`),
+  people: (id: number, search?: string) => apiClient.get(`/vendor-risk/shadow-saas/${id}/people`, { params: search ? { search } : {} }),
+  gateway: (data: { domain: string; action: 'block' | 'allow'; reason: string }) => apiClient.post('/vendor-risk/shadow-saas/gateway', data),
+  gatewayHistory: () => apiClient.get('/vendor-risk/shadow-saas/gateway'),
 };
 
 // FAIR analyses of supplier loss scenarios (tpra/fair.py).

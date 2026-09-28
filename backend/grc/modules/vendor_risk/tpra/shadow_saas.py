@@ -18,20 +18,25 @@ from __future__ import annotations
 
 import csv
 import io
+import logging
 import re
-from datetime import datetime
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Dict, List, Literal, Optional, Tuple
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ....models import GRCUser, IntegrationConnection, TPRAShadowApp, Vendor, get_db
+from ....models import GRCUser, IntegrationConnection, TPRAAuditLog, TPRAShadowApp, Vendor, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from . import graph, intake, rbac, service
 
 router = APIRouter(tags=["Vendor shadow SaaS"])
+logger = logging.getLogger(__name__)
+ROSTER_MAX = 1000          # people kept per app
+DAILY_AFTER = timedelta(hours=20)   # a daily sync that ran this recently is not run again
+_DOMAIN = re.compile(r"^(?=.{4,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
 
 STATUSES = ("pending", "onboarded", "denied", "dismissed")
 MAX_FILE = 5 * 1024 * 1024
@@ -289,7 +294,8 @@ def _row(a: TPRAShadowApp, names: Dict[int, str]) -> dict:
             "users": a.users, "owner_name": a.owner_name, "owner_email": a.owner_email, "source": a.source,
             "source_risk": a.source_risk, "risk": risk, "level": level(risk), "why": why, "facts": a.facts or {},
             "status": a.status, "vendor_id": a.vendor_id, "blocked": bool(a.blocked), "decided_by": names.get(a.decided_by),
-            "decided_at": a.decided_at, "decision_note": a.decision_note, "first_seen": a.first_seen, "last_seen": a.last_seen}
+            "decided_at": a.decided_at, "decision_note": a.decision_note, "first_seen": a.first_seen, "last_seen": a.last_seen,
+            "people_count": len(a.people or [])}
 
 
 def _names(db: Session, ids) -> Dict[int, str]:
@@ -355,24 +361,133 @@ async def import_apps(file: UploadFile = File(...), dry_run: bool = Query(True),
     return {**result, "rows": len(raw), "skipped": len(raw) - len(rows), "dry_run": dry_run}
 
 
-@router.post("/shadow-saas/sync")
-def sync_grip(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    from ...connectors.providers.saas_governance import grip_apps
+def sync_from_grip(db: Session, tenant_id: int, actor_id: Optional[int], get=None) -> dict:
+    """Read Grip's apps, then who uses each. ValueError when Grip is not connected;
+    anything else from Grip is raised for the caller to report. A roster Grip will
+    not give leaves the apps as they are: the apps still count."""
+    from ...connectors.providers.saas_governance import grip_apps, grip_users, rosters
 
-    tid = _tids(user, db)[0]
-    rbac.require_write(db, user, "vendors", "edit")
-    creds = connection(db, tid, "saas_discovery", "grip")
+    creds = connection(db, tenant_id, "saas_discovery", "grip")
     if not creds or not creds.get("api_token") or not creds.get("base_url"):
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Connect Grip Security under Admin → Connectors first")
+        raise ValueError("Connect Grip Security under Admin → Connectors first")
+    kw = {"get": get} if get else {}
+    found = grip_apps(creds["base_url"], creds["api_token"], **kw)
+    result = bring_in(db, tenant_id, [r for r in (from_grip(a) for a in found) if r], "grip", dry_run=False)
+    db.flush()
+    people = 0
     try:
-        found = grip_apps(creds["base_url"], creds["api_token"])
-    except Exception as exc:  # noqa: BLE001
-        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Grip could not be read: {exc}"[:300])
-    result = bring_in(db, tid, [r for r in (from_grip(a) for a in found) if r], "grip", dry_run=False)
-    service.write_audit(db, tid, entity="shadow_app", action="sync", actor_id=user.id,
-                        to_value=f"{result['new']} new, {result['updated']} updated")
+        who = rosters(grip_users(creds["base_url"], creds["api_token"], **kw))
+    except Exception as exc:  # noqa: BLE001 — the apps are kept; the rosters wait for the next sync
+        logger.warning("Grip users not read for tenant %s: %s", tenant_id, exc)
+        who = None
+    if who is not None:
+        for app in db.query(TPRAShadowApp).filter(TPRAShadowApp.tenant_id == tenant_id, TPRAShadowApp.source == "grip"):
+            # Some records name the app by Grip's id, some by its name: both count, each person once.
+            roster, seen = [], set()
+            for person in who.get(app.external_id or "", []) + who.get((app.name or "").lower(), []):
+                key = (person.get("email") or "").lower() or person.get("name")
+                if key not in seen:
+                    seen.add(key)
+                    roster.append(person)
+            if roster:
+                app.people = roster[:ROSTER_MAX]
+                people += len(app.people)
+    result["people"] = people if who is not None else None
+    service.write_audit(db, tenant_id, entity="shadow_app", action="sync", actor_id=actor_id,
+                        to_value=f"{result['new']} new, {result['updated']} updated",
+                        reason=None if actor_id else "Daily sync")
     db.commit()
     return result
+
+
+@router.post("/shadow-saas/sync")
+def sync_grip(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tid = _tids(user, db)[0]
+    rbac.require_write(db, user, "vendors", "edit")
+    try:
+        return sync_from_grip(db, tid, user.id)
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Grip could not be read: {exc}"[:300])
+
+
+def scheduled_sync(db: Session, tenant_id: int, now: Optional[datetime] = None) -> Optional[dict]:
+    """The daily sync, when the tenant asked for it and Grip is connected, and not
+    twice in a day. Returns what it did, or None when it had nothing to do."""
+    from .monitoring_policy import for_tenant
+
+    now = now or datetime.utcnow()
+    if not for_tenant(db, tenant_id).get("grip_daily") or connection(db, tenant_id, "saas_discovery", "grip") is None:
+        return None
+    last = (db.query(TPRAAuditLog.created_at).filter(TPRAAuditLog.tenant_id == tenant_id,
+                                                      TPRAAuditLog.entity == "shadow_app", TPRAAuditLog.action == "sync")
+            .order_by(TPRAAuditLog.created_at.desc()).first())
+    if last is not None and last[0] is not None and now - last[0] < DAILY_AFTER:
+        return None
+    try:
+        return sync_from_grip(db, tenant_id, None)
+    except Exception as exc:  # noqa: BLE001 — tomorrow's run tries again
+        db.rollback()
+        logger.warning("daily Grip sync failed for tenant %s: %s", tenant_id, exc)
+        return {"error": f"{exc}"[:300]}
+
+
+@router.get("/shadow-saas/{app_id}/people")
+def people(app_id: int, search: Optional[str] = None, db: Session = Depends(get_db),
+           user: GRCUser = Depends(require_auth)):
+    """Who the discovery source has seen using the app: the people a breach of it would touch."""
+    app = _app(db, app_id, _tids(user, db))
+    rows = app.people or []
+    if search:
+        needle = search.strip().lower()
+        rows = [r for r in rows if needle in " ".join(str(v or "") for v in r.values()).lower()]
+    return {"app": {"id": app.id, "name": app.name, "users": app.users, "source": app.source},
+            "items": rows, "total": len(app.people or [])}
+
+
+# ── the web gateway, for any domain ──────────────────────────────────────────
+
+class GatewayIn(BaseModel):
+    domain: str = Field(..., min_length=4, max_length=253)
+    action: Literal["block", "allow"]
+    reason: str = Field(..., min_length=5, max_length=1000)
+
+
+@router.post("/shadow-saas/gateway")
+def gateway_change(body: GatewayIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Put a domain on the Zscaler block category, or take it off, for a reason on the
+    record. For a domain that is not an app here, or a decision taken elsewhere."""
+    tid = _tids(user, db)[0]
+    rbac.require_write(db, user, "vendors", "edit")
+    domain = _host(body.domain) or ""
+    if not _DOMAIN.match(domain):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Give a domain such as files.example.com")
+    gateway = _gateway(db, tid)
+    if gateway is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Connect Zscaler under Admin → Connectors first")
+    try:
+        with gateway() as z:
+            (z.block if body.action == "block" else z.allow)(domain)
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status.HTTP_502_BAD_GATEWAY, f"Zscaler did not take it: {exc}"[:300])
+    for app in db.query(TPRAShadowApp).filter(TPRAShadowApp.tenant_id == tid, TPRAShadowApp.domain == domain):
+        app.blocked, app.blocked_at = body.action == "block", datetime.utcnow() if body.action == "block" else None
+    service.write_audit(db, tid, entity="web_gateway", action=body.action, actor_id=user.id, to_value=domain,
+                        reason=" ".join(body.reason.split()))
+    db.commit()
+    return {"domain": domain, "action": body.action}
+
+
+@router.get("/shadow-saas/gateway")
+def gateway_history(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tid = _tids(user, db)[0]
+    rows = (db.query(TPRAAuditLog).filter(TPRAAuditLog.tenant_id == tid, TPRAAuditLog.entity == "web_gateway")
+            .order_by(TPRAAuditLog.created_at.desc()).limit(50).all())
+    names = _names(db, [r.actor_id for r in rows])
+    return {"items": [{"domain": r.to_value, "action": r.action, "reason": r.reason, "at": r.created_at,
+                       "by": names.get(r.actor_id)} for r in rows],
+            "connected": connection(db, tid, "web_gateway", "zscaler") is not None}
 
 
 class FromRecordsIn(BaseModel):
