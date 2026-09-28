@@ -1,6 +1,6 @@
 // Onboarding requests (backend: vendor_risk/tpra/intake.py + onboarding.py).
 
-export type QuestionType = 'yes_no' | 'level' | 'number' | 'date' | 'choice' | 'text';
+export type QuestionType = 'yes_no' | 'level' | 'number' | 'date' | 'choice' | 'multi_choice' | 'text';
 
 export interface Question {
   key: string;
@@ -8,17 +8,24 @@ export interface Question {
   label: string;
   required?: boolean;
   justify?: boolean;
-  show_if?: string;
-  options?: Array<{ value: string; label: string }>;
+  show_if?: string | null;
+  help?: string;
+  options?: Array<{ value: string; label: string; archived?: boolean; points?: number }>;
 }
 
 export interface Section { key: string; title: string; questions: Question[] }
 
-export interface Catalogue { sections: Section[]; levels: string[]; statuses: string[]; min_reason: number }
+export interface Factor { key: string; label: string; builtin: boolean }
+
+export interface Catalogue {
+  sections: Section[]; levels: string[]; statuses: string[]; min_reason: number;
+  /** The factors a tier is made of: the built-in five, then the tenant's own. */
+  factors?: Factor[];
+}
 
 export interface Problem { key: string; message: string }
 
-export type FactorKey = 'data_sensitivity' | 'business_criticality' | 'system_access' | 'regulatory_scope' | 'fourth_party';
+export type FactorKey = string;
 
 export interface Preview {
   score: number;

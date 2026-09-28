@@ -9,8 +9,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import {
-  AlertCircle, BellRing, CalendarClock, ChevronsDownUp, ChevronsUpDown, Coins, Gauge, Layers, ListChecks, Loader2,
-  Mail, Radio, Save, Search, Settings, SlidersHorizontal, type LucideIcon,
+  AlertCircle, BellRing, CalendarClock, ChevronsDownUp, ChevronsUpDown, Coins, FileCheck2, Gauge, Layers, ListChecks,
+  Loader2, Mail, MessageSquareText, Radio, Save, Search, Settings, SlidersHorizontal, type LucideIcon,
 } from 'lucide-react';
 import { tpraApi, vendorEmailsApi, vendorRiskApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
@@ -18,6 +18,10 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import ExposureSection, { exposureProblems, exposureSummary, type Quant } from './_Exposure';
+import { EvidenceEditor, FactorsEditor, activeEvidence, type EvidenceDraft, type Named } from './_Lists';
+import QuestionsEditor, {
+  questionsProblems, questionsSummary, type BuiltinSection, type CustomQuestion, type QuestionsDraft,
+} from './_Questions';
 import { Help, Row, Section, TargetsPicker, TIERS, TIER_LABEL, Unit, fieldCls, inputCls, type Directory } from './_ui';
 
 interface ReminderPolicy {
@@ -30,12 +34,15 @@ interface Defaults {
   reminder_policy: ReminderPolicy; scoring_policy?: { partial_credit: number }; tier_policy?: Record<string, TierRules>;
   quantification?: Quant;
 }
+interface Customisation extends QuestionsDraft, EvidenceDraft { factors: Named[] }
 interface ConfigResp extends Defaults {
   monitoring_policy?: { adverse_media?: boolean; outside_in?: boolean };
+  customisation?: Customisation;
   defaults: Defaults;
   meta: {
     factor_keys: string[]; factor_labels: Record<string, string>; tier_keys: string[]; cadence_keys: string[];
     evidence_kinds?: Record<string, string>; severities?: string[];
+    builtin?: { sections: BuiltinSection[]; factors: Record<string, string>; evidence: Record<string, string> };
   };
 }
 
@@ -49,6 +56,9 @@ interface Draft {
   monitoring_policy: { adverse_media: boolean; outside_in: boolean };
   scoring_policy: { partial_credit: number };
   quantification: Quant;
+  custom_questions: QuestionsDraft;          // these three are sent together as `customisation`
+  custom_factors: Named[];
+  custom_evidence: EvidenceDraft;
 }
 type DraftKey = keyof Draft;
 
@@ -65,6 +75,16 @@ function toDraft(c: ConfigResp, from: Defaults): Draft {
       : { adverse_media: false, outside_in: false },
     scoring_policy: { partial_credit: from.scoring_policy?.partial_credit ?? 0.5 },
     quantification: clone((from.quantification || c.quantification) as Quant),
+    // The defaults have none of the organisation's own questions, factors or evidence types.
+    ...(() => {
+      const cu = from === c ? c.customisation : undefined;
+      return {
+        custom_questions: { sections: clone(cu?.sections || []), builtin_sections: clone(cu?.builtin_sections || {}),
+          builtin: clone(cu?.builtin || {}), questions: clone(cu?.questions || []) as CustomQuestion[] },
+        custom_factors: clone(cu?.factors || []),
+        custom_evidence: { evidence: clone(cu?.evidence || []), evidence_builtin: clone(cu?.evidence_builtin || {}) },
+      };
+    })(),
   };
 }
 
@@ -79,7 +99,7 @@ const errText = (e: unknown, fallback: string) =>
   (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || fallback;
 
 interface SectionDef {
-  id: string; key: DraftKey | null; title: string; icon: LucideIcon; keywords: string; summary: string; body: () => React.ReactNode;
+  id: string; keys: DraftKey[]; title: string; icon: LucideIcon; keywords: string; summary: string; body: () => React.ReactNode;
 }
 
 export default function VendorRiskSettingsPage() {
@@ -141,8 +161,18 @@ export default function VendorRiskSettingsPage() {
   }, [dirty.length]);
 
   const save = useMutation({
-    mutationFn: () => tpraApi.saveConfig(
-      Object.fromEntries(dirty.map((k) => [k, draft![k]])) as unknown as Parameters<typeof tpraApi.saveConfig>[0]),
+    mutationFn: () => {
+      const body: Record<string, unknown> = {};
+      const custom: Record<string, unknown> = {};
+      dirty.forEach((k) => {
+        if (k === 'custom_questions') Object.assign(custom, draft!.custom_questions);
+        else if (k === 'custom_factors') custom.factors = draft!.custom_factors;
+        else if (k === 'custom_evidence') Object.assign(custom, draft!.custom_evidence);
+        else body[k] = draft![k];
+      });
+      if (Object.keys(custom).length) body.customisation = custom;
+      return tpraApi.saveConfig(body as Parameters<typeof tpraApi.saveConfig>[0]);
+    },
     onSuccess: () => {
       ['tprm-config', 'tprm-quant-history', 'tprm-exposure'].forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
       toast({ type: 'success', title: 'Settings saved', message: 'Tiering, reminders, monitoring and exposure use the new values from now on.' });
@@ -170,46 +200,74 @@ export default function VendorRiskSettingsPage() {
   const tp = draft.tier_policy;
   const setTierRule = (tier: string, patch: Partial<TierRules>) => set('tier_policy', { ...tp, [tier]: { ...tp[tier], ...patch } });
   const toggle = <T,>(list: T[], value: T) => (list.includes(value) ? list.filter((v) => v !== value) : [...list, value]);
-  const evidenceKinds = data.meta.evidence_kinds || {};
+  const builtin = data.meta.builtin || { sections: [], factors: {}, evidence: data.meta.evidence_kinds || {} };
+  const evidenceKinds = activeEvidence(builtin.evidence, draft.custom_evidence);
+  const factorList = [
+    ...Object.entries(builtin.factors).map(([key, label]) => ({ key, label })),
+    ...draft.custom_factors.filter((f) => !f.archived).map((f) => ({ key: f.key, label: f.label })),
+  ];
+  const cq = draft.custom_questions;
+  const liveQuestions = cq.questions.filter((q) => !q.archived);
+  const factorsUsedBy: Record<string, string[]> = {};
+  liveQuestions.forEach((q) => { if (q.factor) (factorsUsedBy[q.factor] ||= []).push(q.label); });
+  const evidenceUsedBy: Record<string, string[]> = {};
+  liveQuestions.forEach((q) => { if (q.evidence) (evidenceUsedBy[q.evidence] ||= []).push(`Question: ${q.label}`); });
+  Object.entries(cq.builtin).forEach(([key, change]) => {
+    if (change.evidence) {
+      const q = builtin.sections.flatMap((sec) => sec.questions).find((x) => x.key === key);
+      (evidenceUsedBy[change.evidence] ||= []).push(`Question: ${change.label || q?.label || key}`);
+    }
+  });
+  TIERS.forEach((k) => (tp[k]?.evidence || []).forEach((kind) => (evidenceUsedBy[kind] ||= []).push(`${TIER_LABEL[k]} tier`)));
+  const savedQuestionKeys = new Set((saved?.custom_questions.questions || []).map((q) => q.key));
+  // Taking an evidence type out also takes it off every tier, so the tier policy stays valid.
+  const setEvidence = (next: EvidenceDraft) => {
+    const live = activeEvidence(builtin.evidence, next);
+    const pruned = Object.fromEntries(Object.entries(tp).map(([k, rules]) => [k, { ...rules, evidence: rules.evidence.filter((e) => e in live) }]));
+    setDraft((d) => (d ? { ...d, custom_evidence: next, ...(JSON.stringify(pruned) !== JSON.stringify(tp) ? { tier_policy: pruned } : {}) } : d));
+  };
 
   const problems = [
     ...(t.critical >= t.high && t.high >= t.medium ? [] : ['Tier thresholds must go Critical ≥ High ≥ Medium']),
     ...(weightTotal > 0 ? [] : ['At least one risk factor needs a weight']),
     ...(r.repeat_every_days >= 1 ? [] : ['Overdue reminders must repeat at least every day']),
     ...exposureProblems(draft.quantification).map((p) => `Exposure model: ${p}`),
+    ...questionsProblems(cq).map((p) => `Onboarding questions: ${p}`),
+    ...(draft.custom_factors.some((f) => !f.archived && !f.label.trim()) ? ['Every factor needs a name'] : []),
+    ...(draft.custom_evidence.evidence.some((e) => !e.archived && !e.label.trim()) ? ['Every evidence type needs a name'] : []),
   ];
 
   const sections: Array<{ group: string; items: SectionDef[] }> = [
     { group: 'How suppliers are tiered', items: [
       {
-        id: 'factors', key: 'weights', icon: SlidersHorizontal, title: 'Risk factors and their weights',
-        keywords: 'inherent risk factor weight data sensitivity criticality access regulatory fourth party',
-        summary: [...data.meta.factor_keys].sort((a, b) => (w[b] || 0) - (w[a] || 0)).slice(0, 3)
-          .map((k) => `${labels[k] || k} ${w[k] || 0}%`).join(' · ') + (data.meta.factor_keys.length > 3 ? ` · ${data.meta.factor_keys.length - 3} more` : ''),
+        id: 'questions', keys: ['custom_questions'], icon: MessageSquareText, title: 'Onboarding questions',
+        keywords: 'onboarding intake request questions form section type yes no choice evidence factor add custom',
+        summary: questionsSummary(cq, builtin.sections),
+        body: () => (
+          <QuestionsEditor value={cq} onChange={(next) => set('custom_questions', next)} builtin={builtin.sections}
+            factors={factorList} evidence={evidenceKinds} savedKeys={savedQuestionKeys} canEdit={canEdit} />
+        ),
+      },
+      {
+        id: 'factors', keys: ['weights', 'custom_factors'], icon: SlidersHorizontal, title: 'Risk factors and their weights',
+        keywords: 'inherent risk factor weight data sensitivity criticality access regulatory fourth party add custom',
+        summary: [...factorList].sort((a, b) => (w[b.key] || 0) - (w[a.key] || 0)).slice(0, 3)
+          .map((f) => `${f.label} ${w[f.key] || 0}%`).join(' · ') + (factorList.length > 3 ? ` · ${factorList.length - 3} more` : ''),
         body: () => (
           <>
             <Help>
               A supplier’s inherent risk (0 to 100) adds up its factors, each scored 0 to 4 from the onboarding answers, in these
-              proportions. Weights are scaled to add up to 100% when saved.
+              proportions. Add factors of your own and give onboarding questions points for them. Weights are scaled to add up
+              to 100% when saved.
             </Help>
-            {data.meta.factor_keys.map((k) => (
-              <Row key={k} label={labels[k] || k} htmlFor={`w-${k}`}>
-                <span className="hidden h-1.5 w-28 overflow-hidden rounded-full bg-slate-100 sm:block" aria-hidden>
-                  <span className="block h-full rounded-full bg-primary-500" style={{ width: `${weightTotal ? ((w[k] || 0) / weightTotal) * 100 : 0}%` }} />
-                </span>
-                <input id={`w-${k}`} type="number" min={0} max={100} className={inputCls} disabled={!canEdit} value={w[k] ?? 0}
-                  onChange={(e) => set('weights', { ...w, [k]: Number(e.target.value) })} />
-                <Unit>%</Unit>
-              </Row>
-            ))}
-            <p className={clsx('mt-2 text-right text-xs', Math.round(weightTotal) === 100 ? 'text-emerald-700' : 'text-slate-500')}>
-              Total {Math.round(weightTotal)}%{Math.round(weightTotal) !== 100 && ' — scaled to 100% when saved'}
-            </p>
+            <FactorsEditor builtinLabels={builtin.factors} weights={w} custom={draft.custom_factors} usedBy={factorsUsedBy}
+              canEdit={canEdit} onWeights={(next) => set('weights', next)}
+              onFactors={(f, next) => setDraft((d) => (d ? { ...d, custom_factors: f, weights: next } : d))} />
           </>
         ),
       },
       {
-        id: 'thresholds', key: 'thresholds', icon: Gauge, title: 'Where each tier starts',
+        id: 'thresholds', keys: ['thresholds'], icon: Gauge, title: 'Where each tier starts',
         keywords: 'tier threshold score critical high medium low',
         summary: `Critical from ${t.critical} · High from ${t.high} · Medium from ${t.medium} · Low below ${t.medium}`,
         body: () => (
@@ -229,7 +287,18 @@ export default function VendorRiskSettingsPage() {
         ),
       },
       {
-        id: 'tier-asks', key: 'tier_policy', icon: Layers, title: 'What each tier asks for',
+        id: 'evidence-types', keys: ['custom_evidence'], icon: FileCheck2, title: 'Evidence types',
+        keywords: 'evidence types documents certificate report add custom hide',
+        summary: `${Object.keys(evidenceKinds).length} in use`
+          + (draft.custom_evidence.evidence.filter((e) => !e.archived).length ? ` · ${draft.custom_evidence.evidence.filter((e) => !e.archived).length} of your own` : '')
+          + (Object.values(draft.custom_evidence.evidence_builtin).filter((e) => e.hidden).length
+            ? ` · ${Object.values(draft.custom_evidence.evidence_builtin).filter((e) => e.hidden).length} built-in hidden` : ''),
+        body: () => (
+          <EvidenceEditor builtin={builtin.evidence} value={draft.custom_evidence} usedBy={evidenceUsedBy} canEdit={canEdit} onChange={setEvidence} />
+        ),
+      },
+      {
+        id: 'tier-asks', keys: ['tier_policy'], icon: Layers, title: 'What each tier asks for',
         keywords: 'questionnaire evidence approver role reassess signal tier policy',
         summary: TIERS.map((k) => `${TIER_LABEL[k]}: ${(tp[k]?.evidence || []).length} evidence`).join(' · '),
         body: () => {
@@ -306,7 +375,7 @@ export default function VendorRiskSettingsPage() {
     ] },
     { group: 'Reviews, reminders and emails', items: [
       {
-        id: 'cadence', key: 'cadence_days', icon: CalendarClock, title: 'How often each tier is reassessed',
+        id: 'cadence', keys: ['cadence_days'], icon: CalendarClock, title: 'How often each tier is reassessed',
         keywords: 'reassessment cadence days review frequency',
         summary: TIERS.map((k) => `${TIER_LABEL[k]} ${days(draft.cadence_days[k])}`).join(' · '),
         body: () => (
@@ -323,7 +392,7 @@ export default function VendorRiskSettingsPage() {
         ),
       },
       {
-        id: 'reminders', key: 'reminder_policy', icon: BellRing, title: 'Reminders and escalation',
+        id: 'reminders', keys: ['reminder_policy'], icon: BellRing, title: 'Reminders and escalation',
         keywords: 'reminder escalation overdue check-in contract notify email',
         summary: r.enabled
           ? `On · ${r.remind_before_days} days before · then every ${r.repeat_every_days} days · escalated after ${r.escalate_after_days} days overdue`
@@ -382,7 +451,7 @@ export default function VendorRiskSettingsPage() {
         },
       },
       {
-        id: 'emails', key: null, icon: Mail, title: 'Emails we send',
+        id: 'emails', keys: [], icon: Mail, title: 'Emails we send',
         keywords: 'email wording template invitation reminder escalation assigned',
         summary: emails
           ? `${emails.length} emails · ${emails.filter((e) => e.changed).length ? `${emails.filter((e) => e.changed).length} in your own words` : 'all in the built-in wording'}`
@@ -407,7 +476,7 @@ export default function VendorRiskSettingsPage() {
     ] },
     { group: 'Monitoring', items: [
       {
-        id: 'monitoring', key: 'monitoring_policy', icon: Radio, title: 'Monitoring feeds',
+        id: 'monitoring', keys: ['monitoring_policy'], icon: Radio, title: 'Monitoring feeds',
         keywords: 'monitoring news adverse media breach outside-in scan domains gdelt shodan',
         summary: `News search ${draft.monitoring_policy.adverse_media ? 'on' : 'off'} · Scanning from outside ${draft.monitoring_policy.outside_in ? 'on' : 'off'} · Lapsing certificates always watched`,
         body: () => {
@@ -449,7 +518,7 @@ export default function VendorRiskSettingsPage() {
     ] },
     { group: 'Questionnaires', items: [
       {
-        id: 'scoring', key: 'scoring_policy', icon: ListChecks, title: 'Questionnaire scoring',
+        id: 'scoring', keys: ['scoring_policy'], icon: ListChecks, title: 'Questionnaire scoring',
         keywords: 'questionnaire scoring partial credit answer',
         summary: `A Partial answer is worth ${Math.round(draft.scoring_policy.partial_credit * 100)}% of a Yes`,
         body: () => (
@@ -470,7 +539,7 @@ export default function VendorRiskSettingsPage() {
     ] },
     { group: 'Money at risk', items: [
       {
-        id: 'exposure', key: 'quantification', icon: Coins, title: 'Exposure model',
+        id: 'exposure', keys: ['quantification'], icon: Coins, title: 'Exposure model',
         keywords: 'exposure model money cost currency incidents outages records range comply analysis',
         summary: exposureSummary(draft.quantification),
         body: () => <ExposureSection value={draft.quantification} onChange={(q) => set('quantification', q)} canEdit={canEdit} />,
@@ -489,7 +558,7 @@ export default function VendorRiskSettingsPage() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const titleOf = (key: DraftKey) => sections.flatMap((g) => g.items).find((s) => s.key === key)?.title || key;
+  const changedSections = sections.flatMap((g) => g.items).filter((sd) => sd.keys.some((k) => dirty.includes(k))).map((sd) => sd.title);
 
   return (
     <div className="max-w-4xl space-y-5 pb-24">
@@ -528,8 +597,10 @@ export default function VendorRiskSettingsPage() {
           <div className="space-y-2">
             {g.items.map((s) => (
               <Section key={s.id} id={s.id} icon={s.icon} title={s.title} summary={s.summary}
-                open={isOpen(s.id)} onToggle={() => toggleOpen(s.id)} dirty={!!s.key && dirty.includes(s.key)}
-                onDefaults={canEdit && s.key ? () => set(s.key as DraftKey, clone(defaults[s.key as DraftKey]) as never) : undefined}>
+                open={isOpen(s.id)} onToggle={() => toggleOpen(s.id)} dirty={s.keys.some((k) => dirty.includes(k))}
+                onDefaults={canEdit && s.keys.length
+                  ? () => setDraft((d) => (d ? { ...d, ...Object.fromEntries(s.keys.map((k) => [k, clone(defaults[k])])) } : d))
+                  : undefined}>
                 {s.body()}
               </Section>
             ))}
@@ -545,7 +616,7 @@ export default function VendorRiskSettingsPage() {
       {canEdit && dirty.length > 0 && (
         <div className="sticky bottom-4 z-20 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur" role="region" aria-label="Unsaved changes">
           <div className="min-w-0 text-sm">
-            <p className="font-medium text-slate-900">Unsaved changes in {dirty.map(titleOf).join(', ')}</p>
+            <p className="font-medium text-slate-900">Unsaved changes in {changedSections.join(', ')}</p>
             {problems.length > 0 && <p className="mt-0.5 flex items-center gap-1 text-xs text-rose-600"><AlertCircle className="h-3.5 w-3.5 shrink-0" /> {problems[0]}{problems.length > 1 && ` (and ${problems.length - 1} more)`}</p>}
           </div>
           <div className="flex items-center gap-2">

@@ -55,9 +55,12 @@ def compute_inherent_tier(factors: Dict[str, float], config: Optional[dict] = No
     weights = cfg.get("weights") or DEFAULT_TIERING_CONFIG["weights"]
     thresholds = cfg.get("thresholds") or DEFAULT_TIERING_CONFIG["thresholds"]
 
+    # The five built-in factors, then any the tenant added (tpra/customisation.py),
+    # which count once they carry a weight.
+    keys = FACTOR_KEYS + [k for k in weights if k not in FACTOR_KEYS]
     contributions: Dict[str, float] = {}
     weighted = 0.0
-    for k in FACTOR_KEYS:
+    for k in keys:
         raw = _clamp_factor(factors.get(k, 0))
         w = float(weights.get(k, 0.0))
         norm = raw / 4.0
@@ -71,7 +74,7 @@ def compute_inherent_tier(factors: Dict[str, float], config: Optional[dict] = No
         "score": score,
         "tier": tier,
         "contributions": contributions,
-        "factors": {k: _clamp_factor(factors.get(k, 0)) for k in FACTOR_KEYS},
+        "factors": {k: _clamp_factor(factors.get(k, 0)) for k in keys},
     }
 
 

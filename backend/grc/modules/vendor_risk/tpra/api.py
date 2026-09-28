@@ -23,7 +23,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import alerts, contracts, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
+from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
 from .stages import stages_payload, is_valid_stage
 from .schema_migrations import ensure_tpra_columns
 
@@ -378,6 +378,7 @@ class ConfigIn(BaseModel):
     tier_policy: Optional[dict] = None      # {tier: {template_ids, evidence, approver_role, reassess_on}}
     monitoring_policy: Optional[dict] = None  # {adverse_media: bool, outside_in: bool}
     quantification: Optional[dict] = None     # exposure model constants, see tpra/quantification.py
+    customisation: Optional[dict] = None      # the tenant's own questions, factors, evidence (tpra/customisation.py)
 
 class PlanIn(BaseModel):
     """Persist the Due-Diligence Planning selections onto the assessment so the
@@ -828,11 +829,14 @@ class EvidenceLinkIn(BaseModel):
     requirement: Optional[str] = None       # the evidence the tier asks for that this satisfies
 
 
-def _requirement(value: Optional[str]) -> Optional[str]:
-    if value and value not in tier_policy.EVIDENCE_KINDS:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            f"Requirement must be one of: {', '.join(tier_policy.EVIDENCE_KINDS)}")
-    return value or None
+def _requirement(db: Session, tenant_id: int, value: Optional[str]) -> Optional[str]:
+    """One of the tenant's evidence types in use, or None."""
+    if not value:
+        return None
+    kinds = customisation.evidence_kinds(service.get_tiering_config(db, tenant_id).get("customisation"))
+    if value not in kinds:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, f"Requirement must be one of: {', '.join(kinds.values())}")
+    return value
 
 
 @router.get("/assessments/{assessment_id}/evidence")
@@ -869,7 +873,7 @@ async def upload_assessment_evidence(
     tids = _tids(user, db)
     a = _assessment(db, assessment_id, tids)
     rbac.require_write(db, user, "assessments", "edit")
-    requirement = _requirement(requirement)
+    requirement = _requirement(db, a.tenant_id, requirement)
     ev = await _save_evidence_file(db, a.tenant_id, name, evidence_type, file, user.id)
     link = TPRAEvidenceLink(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
@@ -899,7 +903,7 @@ def link_assessment_evidence(
     link = TPRAEvidenceLink(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
         finding_id=body.finding_id, response_id=body.response_id, evidence_id=ev.id, note=body.note, created_by=user.id,
-        requirement=_requirement(body.requirement),
+        requirement=_requirement(db, a.tenant_id, body.requirement),
     )
     db.add(link)
     db.flush()
@@ -917,7 +921,7 @@ def tag_evidence(link_id: int, body: EvidenceRequirementIn, db: Session = Depend
     tids = _tids(user, db)
     link = _get(db, TPRAEvidenceLink, link_id, tids)
     rbac.require_write(db, user, "assessments", "edit")
-    previous, link.requirement = link.requirement, _requirement(body.requirement)
+    previous, link.requirement = link.requirement, _requirement(db, link.tenant_id, body.requirement)
     service.write_audit(db, link.tenant_id, entity="evidence", action="update", vendor_id=link.vendor_id,
                         assessment_id=link.assessment_id, entity_id=link.id, actor_id=user.id,
                         from_value=previous, to_value=link.requirement, reason="Evidence requirement")
@@ -1724,12 +1728,6 @@ def vendor_audit(
 # Per-tenant tiering factor weights, tier thresholds and reassessment cadence.
 # The engines already read TPRATieringConfig; this exposes read + edit.
 
-_FACTOR_KEYS = ["data_sensitivity", "business_criticality", "system_access", "regulatory_scope", "fourth_party"]
-_FACTOR_LABELS = {
-    "data_sensitivity": "Data sensitivity", "business_criticality": "Business criticality",
-    "system_access": "System access", "regulatory_scope": "Regulatory & geographic scope",
-    "fourth_party": "Fourth-party reliance",
-}
 _TIER_KEYS = ["critical", "high", "medium"]
 _CADENCE_KEYS = ["critical", "high", "medium", "low"]
 
@@ -1742,6 +1740,7 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
     tenant_id = tids[0]
     ensure_tpra_tenant_defaults(db, tenant_id)
     cfg = get_tiering_config(db, tenant_id)
+    custom = customisation.merged(cfg.get("customisation"))
     return {
         "weights": cfg["weights"], "thresholds": cfg["thresholds"], "cadence_days": cfg["cadence_days"],
         "reminder_policy": cfg["reminder_policy"],
@@ -1749,12 +1748,19 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
         "tier_policy": tier_policy.merged(cfg.get("tier_policy")),
         "monitoring_policy": cfg.get("monitoring_policy") or {},
         "quantification": quantification.merged(cfg.get("quantification")),
+        "customisation": custom,
         "defaults": {**DEFAULT_TIERING_CONFIG, "tier_policy": tier_policy.DEFAULT_TIER_POLICY,
                      "quantification": quantification.DEFAULT_QUANT},
         "meta": {
-            "factor_keys": _FACTOR_KEYS, "factor_labels": _FACTOR_LABELS,
+            "factor_keys": [f["key"] for f in customisation.factors(custom)],
+            "factor_labels": customisation.factor_labels(custom),
             "tier_keys": _TIER_KEYS, "cadence_keys": _CADENCE_KEYS,
-            "evidence_kinds": tier_policy.EVIDENCE_KINDS, "severities": tier_policy.SEVERITIES,
+            "evidence_kinds": customisation.evidence_kinds(custom), "severities": tier_policy.SEVERITIES,
+            # What the tenant's changes are made against: the built-in questions,
+            # factors and evidence types as shipped.
+            "builtin": {"sections": intake.SECTIONS, "factors": customisation.BUILTIN_FACTORS,
+                        "evidence": customisation.BUILTIN_EVIDENCE, "types": list(intake.TYPES),
+                        "levels": list(intake.LEVELS)},
         },
     }
 
@@ -1803,9 +1809,23 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
         except (TypeError, ValueError):
             return float(fallback)
 
-    if body.weights is not None:
+    # The tenant's own questions, factors and evidence types first: the weights
+    # and the tier policy below may name what was just added.
+    if body.customisation is not None:
+        before = customisation.merged(getattr(row, "customisation", None))
+        try:
+            row.customisation = customisation.clean(body.customisation, before)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+        service.write_audit(db, tenant_id, entity="customisation", action="update", actor_id=user.id,
+                            to_value=", ".join(sorted(body.customisation)),
+                            reason="Onboarding questions, factors or evidence types changed")
+    custom = customisation.merged(getattr(row, "customisation", None))
+    factor_keys = [f["key"] for f in customisation.factors(custom)]
+
+    if body.weights is not None or body.customisation is not None:
         cur = row.weights or DEFAULT_TIERING_CONFIG["weights"]
-        w = {k: max(0.0, _num(body.weights, k, cur.get(k, 0))) for k in _FACTOR_KEYS}
+        w = {k: max(0.0, _num(body.weights, k, cur.get(k, 0))) for k in factor_keys}
         s = sum(w.values()) or 1.0
         row.weights = {k: round(v / s, 4) for k, v in w.items()}   # normalize → sum 1.0
 
@@ -1839,7 +1859,8 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
     if body.tier_policy is not None:
         try:
             row.tier_policy = tier_policy.clean(body.tier_policy,
-                                                tier_policy.merged(getattr(row, "tier_policy", None)))
+                                                tier_policy.merged(getattr(row, "tier_policy", None)),
+                                                customisation.evidence_kinds(custom))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
@@ -1872,7 +1893,8 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
             "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"], **(row.scoring_policy or {})},
             "tier_policy": tier_policy.merged(getattr(row, "tier_policy", None)),
             "monitoring_policy": getattr(row, "monitoring_policy", None) or {},
-            "quantification": quantification.merged(getattr(row, "quantification", None))}
+            "quantification": quantification.merged(getattr(row, "quantification", None)),
+            "customisation": custom}
 
 
 # ── Compliance framework coverage (TPRM-007b) ────────────────────────────────

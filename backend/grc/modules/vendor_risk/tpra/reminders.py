@@ -245,13 +245,15 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"/vendor-risk/contracts?contract={c.id}", [v.owner_id, *contract_people], before_days=contract_before)
 
     # 6. A tier the vendor's facts have moved past: its owner hears once.
+    from .bootstrap import get_tiering_config
+    custom = get_tiering_config(db, tenant_id).get("customisation")
     for a in db.query(VendorAssessment).filter(
             VendorAssessment.tenant_id == tenant_id, VendorAssessment.deleted_at.is_(None),
             VendorAssessment.inherent_tier.isnot(None), VendorAssessment.lifecycle_status == "active"):
         v = vendors.get(a.vendor_id)
         if v is None or (v.status or "").lower() in _INACTIVE_VENDOR:
             continue
-        reasons = tier_policy.retier_reasons(db, v, a)
+        reasons = tier_policy.retier_reasons(db, v, a, custom)
         if reasons:
             add("retier_needed", "assessment", a.id, v.id, _day(v.updated_at) or today,
                 f"{v.name} may need re-tiering: {'; '.join(reasons)}",

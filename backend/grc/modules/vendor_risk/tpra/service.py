@@ -478,7 +478,7 @@ def run_tiering(
     reasons = None
     if factors is None and intake_answers.has_answers(getattr(vendor, "intake", None)):
         # The requester's answers are the facts; the factors follow from them.
-        factors, reasons = intake_answers.factors(vendor.intake)
+        factors, reasons = intake_answers.factors(vendor.intake, cfg.get("customisation"))
     elif factors is None:
         factors = derive_factors_from_profile({
             "data_access_level": vendor.data_access_level,
@@ -490,7 +490,7 @@ def run_tiering(
     if reasons:
         result["reasons"] = reasons
     # Recorded to notice when the facts move past it (tier_policy.retier_reasons).
-    assessment.tiering_basis = tier_policy.basis(vendor)
+    assessment.tiering_basis = tier_policy.basis(vendor, cfg.get("customisation"))
     assessment.tier_override = None
     assessment.inherent_tier = result["tier"]
     assessment.inherent_score = result["score"]

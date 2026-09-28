@@ -19,7 +19,7 @@ interface Requirements {
   reassess_on: string;
   reviewers: string[];
   questionnaires: Array<{ template_id: number; name: string; response_id: number | null; status: 'unsent' | 'sent' | 'answered' }>;
-  evidence: Array<{ kind: string; label: string; satisfied: boolean;
+  evidence: Array<{ kind: string; label: string; satisfied: boolean; because?: string;
     items: Array<{ link_id: number; name: string; expired: boolean; expiry_date: string | null }> }>;
 }
 interface EvidenceLink { id: number; name: string | null; requirement: string | null }
@@ -178,6 +178,7 @@ export default function TierRequirementsPanel({ vendorId, assessmentId, canEdit,
                       : <XCircle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-red-500" />}
                     <span>
                       {e.label}
+                      {e.because && <span className="block text-[10px] text-primary-700">{e.because}</span>}
                       {e.items.map((i) => (
                         <span key={i.link_id} className={`block text-[10px] ${i.expired ? 'text-red-600' : 'text-gray-500'}`}>
                           {i.name}{i.expiry_date ? ` · ${i.expired ? 'expired' : 'valid until'} ${new Date(i.expiry_date).toLocaleDateString()}` : ''}

@@ -49,6 +49,8 @@ DEFAULT_TIERING_CONFIG = {
     "tier_policy": {},
     # Outside-in feeds that reach out to the internet are off until a tenant turns them on.
     "monitoring_policy": {"adverse_media": False, "outside_in": False},
+    # The tenant's own onboarding questions, factors and evidence types (tpra/customisation.py).
+    "customisation": {},
 }
 
 
@@ -123,4 +125,5 @@ def get_tiering_config(db: Session, tenant_id: int) -> dict:
         "monitoring_policy": {**DEFAULT_TIERING_CONFIG["monitoring_policy"],
                               **(getattr(row, "monitoring_policy", None) or {})},
         "quantification": getattr(row, "quantification", None) or {},
+        "customisation": getattr(row, "customisation", None) or {},
     }

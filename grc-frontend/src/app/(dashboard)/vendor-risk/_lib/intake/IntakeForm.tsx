@@ -11,7 +11,7 @@ import { clsx } from 'clsx';
 import { vendorOnboardingApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../tprmQuery';
 import {
-  Catalogue, FACTOR_LABELS, FactorKey, IntakePayload, IntakeVendor, Person, Preview, Question, TIER_CLS, errText,
+  Catalogue, FACTOR_LABELS, Factor, FactorKey, IntakePayload, IntakeVendor, Person, Preview, Question, TIER_CLS, errText,
 } from './types';
 
 const SUPPLIER = 'supplier';
@@ -216,7 +216,7 @@ export default function IntakeForm({
 
   const side = (
     <div className="space-y-4">
-      <TierCard preview={data.preview} />
+      <TierCard preview={data.preview} factors={catalogue.factors} />
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="text-sm font-semibold text-slate-900">{problems.length ? `Still needed (${problems.length})` : 'Ready to submit'}</h3>
         {problems.length === 0 ? (
@@ -264,6 +264,7 @@ function QuestionRow({ q, value, reason, editable, minReason, problem, onAnswer,
       <p className="text-sm font-medium text-slate-800">
         {q.label}{q.required && <span className="text-rose-600"> *</span>}
       </p>
+      {q.help && <p className="mt-0.5 text-xs text-slate-500">{q.help}</p>}
       <div className="mt-2">
         {q.type === 'yes_no' && (
           <Segmented value={text} disabled={!editable} onChange={onAnswer}
@@ -283,7 +284,7 @@ function QuestionRow({ q, value, reason, editable, minReason, problem, onAnswer,
         )}
         {q.type === 'choice' && (
           <div className="grid gap-1.5 sm:grid-cols-2" role="radiogroup" aria-label={q.label}>
-            {(q.options || []).map((o) => (
+            {(q.options || []).filter((o) => !o.archived || o.value === text).map((o) => (
               <button key={o.value} type="button" role="radio" aria-checked={text === o.value} disabled={!editable}
                 onClick={() => onAnswer(o.value)}
                 className={clsx('rounded-lg border px-3 py-2 text-left text-sm transition-colors',
@@ -293,6 +294,22 @@ function QuestionRow({ q, value, reason, editable, minReason, problem, onAnswer,
             ))}
           </div>
         )}
+        {q.type === 'multi_choice' && (() => {
+          const picked = Array.isArray(value) ? (value as string[]) : [];
+          return (
+            <div className="grid gap-1.5 sm:grid-cols-2" role="group" aria-label={q.label}>
+              {(q.options || []).filter((o) => !o.archived || picked.includes(o.value)).map((o) => (
+                <label key={o.value} className={clsx('flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
+                  picked.includes(o.value) ? 'border-primary-500 bg-primary-50 text-primary-800' : 'border-slate-200 text-slate-700 hover:bg-slate-50',
+                  !editable && 'cursor-default')}>
+                  <input type="checkbox" className="h-4 w-4" checked={picked.includes(o.value)} disabled={!editable}
+                    onChange={() => onAnswer(picked.includes(o.value) ? picked.filter((v) => v !== o.value) : [...picked, o.value])} />
+                  {o.label}
+                </label>
+              ))}
+            </div>
+          );
+        })()}
         {q.type === 'number' && (
           <input type="number" min={0} className={clsx(input, 'max-w-[220px]')} value={text} disabled={!editable}
             onChange={(e) => onAnswer(e.target.value === '' ? null : Number(e.target.value))} />
@@ -410,8 +427,10 @@ function SupplierSection({ vendor, people, editable, setField, problems }: {
 
 // ── the likely tier ──────────────────────────────────────────────────────────
 
-export function TierCard({ preview, title = 'Likely tier' }: { preview: Preview; title?: string }) {
-  const keys = Object.keys(FACTOR_LABELS) as FactorKey[];
+export function TierCard({ preview, title = 'Likely tier', factors }: { preview: Preview; title?: string; factors?: Factor[] }) {
+  const named: Record<string, string> = { ...FACTOR_LABELS, ...Object.fromEntries((factors || []).map((f) => [f.key, f.label])) };
+  const keys = (factors?.length ? factors.map((f) => f.key) : Object.keys(FACTOR_LABELS))
+    .filter((k) => k in (preview.factors || {}) || k in FACTOR_LABELS) as FactorKey[];
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-center justify-between">
@@ -428,7 +447,7 @@ export function TierCard({ preview, title = 'Likely tier' }: { preview: Preview;
           return (
             <li key={k}>
               <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-700">{FACTOR_LABELS[k]}</span>
+                <span className="text-slate-700">{named[k] || k}</span>
                 <span className="tabular-nums text-slate-500">{value} / 4</span>
               </div>
               <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-100">

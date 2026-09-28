@@ -428,6 +428,9 @@ class TPRATieringConfig(Base):
     monitoring_policy = Column(JSON, default=dict)
     # The exposure model's constants (tpra/quantification.py; its defaults fill any gap).
     quantification = Column(JSON, default=dict)
+    # The tenant's own onboarding questions, tiering factors and evidence types
+    # (tpra/customisation.py).
+    customisation = Column(JSON, default=dict)
     is_active = Column(Boolean, default=True)
     row_version = Column(Integer, default=1)
     created_at = Column(DateTime, default=datetime.utcnow)

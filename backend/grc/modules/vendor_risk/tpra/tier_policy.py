@@ -26,20 +26,15 @@ from ....models import (
     Evidence, Role, TPRAEvidenceLink, TPRAMonitoringSignal, UserRole, Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate,
 )
+from . import customisation
 from . import intake as intake_answers
 from .builtin_templates import TIER_SUGGESTED_TEMPLATES
 from .portal import ANSWERED
 from .stages import TIERS, cadence_days_for, required_reviewers_for
 
-EVIDENCE_KINDS: Dict[str, str] = {
-    "assurance_report": "Independent assurance: a SOC 2 report or ISO 27001 certificate",
-    "pen_test": "Penetration test summary from the last 12 months",
-    "bcp_test": "Business continuity or disaster recovery test results",
-    "insurance": "Cyber insurance certificate",
-    "security_policy": "Information security policy",
-    "dpa": "Signed data processing agreement",
-    "financials": "Audited financial statements",
-}
+# The built-in evidence types; a tenant renames, hides and adds to them
+# (customisation.evidence_kinds is what is in use for a tenant).
+EVIDENCE_KINDS: Dict[str, str] = customisation.BUILTIN_EVIDENCE
 SEVERITIES = ["low", "medium", "high", "critical"]
 
 DEFAULT_TIER_POLICY: Dict[str, dict] = {
@@ -66,8 +61,10 @@ def merged(stored: Optional[dict]) -> Dict[str, dict]:
     return {t: {**DEFAULT_TIER_POLICY[t], **(stored.get(t) or {})} for t in TIERS}
 
 
-def clean(raw: dict, current: Dict[str, dict]) -> Dict[str, dict]:
-    """Validate a tier-policy patch: {tier: {template_ids?, evidence?, approver_role?, reassess_on?}}."""
+def clean(raw: dict, current: Dict[str, dict], kinds: Optional[Dict[str, str]] = None) -> Dict[str, dict]:
+    """Validate a tier-policy patch: {tier: {template_ids?, evidence?, approver_role?, reassess_on?}}.
+    `kinds` are the evidence types in use for the tenant."""
+    kinds = kinds if kinds is not None else EVIDENCE_KINDS
     if not isinstance(raw, dict):
         raise ValueError("The tier policy must be an object keyed by tier")
     policy = {t: dict(v) for t, v in current.items()}
@@ -80,8 +77,8 @@ def clean(raw: dict, current: Dict[str, dict]) -> Dict[str, dict]:
                     raise ValueError("Questionnaires must be a list of at most 10 template ids")
                 policy[tier][key] = list(dict.fromkeys(value))
             elif key == "evidence":
-                if not isinstance(value, list) or any(k not in EVIDENCE_KINDS for k in value):
-                    raise ValueError(f"Evidence must be chosen from: {', '.join(EVIDENCE_KINDS)}")
+                if not isinstance(value, list) or any(k not in kinds for k in value):
+                    raise ValueError(f"Evidence must be chosen from: {', '.join(kinds.values())}")
                 policy[tier][key] = list(dict.fromkeys(value))
             elif key == "approver_role":
                 name = " ".join(str(value or "").split())[:100]
@@ -124,9 +121,13 @@ def questionnaire_status(db: Session, assessment: VendorAssessment,
     return out
 
 
-def evidence_status(db: Session, vendor: Vendor, kinds: List[str], today: Optional[date] = None) -> List[dict]:
-    """Each piece of evidence the tier asks for, and whether the vendor has it in date."""
+def evidence_status(db: Session, vendor: Vendor, kinds: List[str], today: Optional[date] = None,
+                    labels: Optional[Dict[str, str]] = None, because: Optional[Dict[str, str]] = None) -> List[dict]:
+    """Each piece of evidence asked for, and whether the vendor has it in date.
+    `because` says why a piece is asked for when it is not the tier."""
     today = today or datetime.utcnow().date()
+    labels = labels if labels is not None else EVIDENCE_KINDS
+    because = because or {}
     tagged: Dict[str, List[dict]] = {}
     for link, ev in (db.query(TPRAEvidenceLink, Evidence).join(Evidence, Evidence.id == TPRAEvidenceLink.evidence_id)
                      .filter(TPRAEvidenceLink.vendor_id == vendor.id, TPRAEvidenceLink.deleted_at.is_(None),
@@ -138,8 +139,9 @@ def evidence_status(db: Session, vendor: Vendor, kinds: List[str], today: Option
             "link_id": link.id, "evidence_id": ev.id, "name": ev.name, "expired": expired,
             "expiry_date": ev.expiry_date.isoformat() if ev.expiry_date else None,
         })
-    return [{"kind": k, "label": EVIDENCE_KINDS[k], "items": tagged.get(k, []),
-             "satisfied": any(not i["expired"] for i in tagged.get(k, []))} for k in kinds if k in EVIDENCE_KINDS]
+    return [{"kind": k, "label": labels[k], "items": tagged.get(k, []),
+             "satisfied": any(not i["expired"] for i in tagged.get(k, [])),
+             **({"because": because[k]} if k in because else {})} for k in kinds if k in labels]
 
 
 def approver_problem(db: Session, user, tier: str, policy: Dict[str, dict], is_admin: bool = False) -> Optional[str]:
@@ -162,7 +164,7 @@ def _words(values) -> List[str]:
     return sorted({" ".join(str(v).lower().split()) for v in values or [] if str(v).strip()})
 
 
-def basis(vendor: Vendor) -> dict:
+def basis(vendor: Vendor, custom: Optional[dict] = None) -> dict:
     """The facts a tier was computed from, kept to notice when they change."""
     return {
         "data_access_level": (vendor.data_access_level or "none").lower(),
@@ -170,18 +172,19 @@ def basis(vendor: Vendor) -> dict:
         "locations": _words(vendor.geographic_locations),
         "services": "; ".join(_words(vendor.services_provided if isinstance(vendor.services_provided, list)
                                      else [vendor.services_provided])),
-        "intake": intake_answers.fingerprint(vendor),
+        "intake": intake_answers.fingerprint(vendor, custom),
         "at": datetime.utcnow().isoformat(),
     }
 
 
-def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAssessment]) -> List[str]:
+def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAssessment],
+                   custom: Optional[dict] = None) -> List[str]:
     """What has changed since the tier was computed. Nothing is reported for a
     tier computed before its basis was recorded: there is nothing to compare."""
     recorded = (assessment.tiering_basis if assessment is not None else None) or {}
     if not recorded:
         return []
-    now = basis(vendor)
+    now = basis(vendor, custom)
     reasons = []
     if _ACCESS_RANK.get(now["data_access_level"], 0) > _ACCESS_RANK.get(recorded.get("data_access_level", "none"), 0):
         reasons.append(f"data access went from {recorded.get('data_access_level')} to {now['data_access_level']}")
@@ -194,7 +197,7 @@ def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAsses
     if now["services"] and now["services"] != recorded.get("services"):
         reasons.append("the services it provides have changed")
     if "intake" in recorded:
-        reasons.extend(intake_answers.changes_since(recorded["intake"] or {}, vendor))
+        reasons.extend(intake_answers.changes_since(recorded["intake"] or {}, vendor, custom))
     since = datetime.fromisoformat(recorded["at"]) if recorded.get("at") else None
     if since is not None:
         breach = (db.query(TPRAMonitoringSignal).filter(
@@ -207,18 +210,27 @@ def retier_reasons(db: Session, vendor: Vendor, assessment: Optional[VendorAsses
 
 
 def requirements(db: Session, vendor: Vendor, assessment: VendorAssessment, config: dict) -> dict:
-    """Everything the vendor's tier asks for, and where the vendor stands."""
+    """Everything the vendor's tier asks for, and where the vendor stands. The
+    evidence is the tier's, plus whatever an onboarding answer asked for."""
     policy = merged(config.get("tier_policy"))
     tier = _tier(assessment.inherent_tier or vendor.tier)
     rules = policy[tier]
+    custom = config.get("customisation")
+    in_use = customisation.evidence_kinds(custom)
+    kinds = [k for k in rules.get("evidence") or [] if k in in_use]
+    because = {}
+    for kind, question in intake_answers.evidence_asked(getattr(vendor, "intake", None), custom):
+        if kind in in_use and kind not in kinds:
+            kinds.append(kind)
+            because[kind] = f"Asked because the answer to '{question}' was yes"
     return {
         "tier": tier,
         "override": assessment.tier_override or None,
-        "retier_reasons": retier_reasons(db, vendor, assessment),
+        "retier_reasons": retier_reasons(db, vendor, assessment, custom),
         "cadence_days": cadence_days_for(tier, config.get("cadence_days")),
         "approver_role": rules.get("approver_role"),
         "reassess_on": rules.get("reassess_on"),
         "reviewers": required_reviewers_for(tier),
         "questionnaires": questionnaire_status(db, assessment, templates_for(db, vendor.tenant_id, tier, policy)),
-        "evidence": evidence_status(db, vendor, rules.get("evidence") or []),
+        "evidence": evidence_status(db, vendor, kinds, labels=in_use, because=because),
     }

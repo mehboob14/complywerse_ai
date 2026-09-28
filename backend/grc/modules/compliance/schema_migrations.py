@@ -952,6 +952,7 @@ _COLUMN_ADDS = [
     ("grc_tpra_monitoring_signals", "finding_id", "INTEGER", None),
     ("grc_tpra_tiering_config", "monitoring_policy", "JSON DEFAULT '{}'::json", None),
     ("grc_tpra_tiering_config", "quantification", "JSON DEFAULT '{}'::json", None),
+    ("grc_tpra_tiering_config", "customisation", "JSON DEFAULT '{}'::json", None),
     # The contracts inbox (tpra/contracts.py): the signed copy, commercial terms
     # and how each contract renews.
     ("grc_tpra_contracts", "evidence_id", "INTEGER", None),

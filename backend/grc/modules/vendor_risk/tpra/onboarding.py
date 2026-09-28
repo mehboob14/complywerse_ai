@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from ....models import GRCUser, TPRAAuditLog, TPRAStageInstance, Vendor, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
-from . import intake, rbac, service
+from . import customisation, intake, rbac, service
 from .bootstrap import get_tiering_config
 from .engine_tiering import compute_inherent_tier
 from .stages import TPRA_STAGES
@@ -72,9 +72,15 @@ def _may_edit(db: Session, user: GRCUser, v: Vendor) -> bool:
     return _can(db, user, "vendors", "edit")
 
 
+def _custom(db: Session, tenant_id: int) -> dict:
+    """The tenant's own questions, factors and evidence types (tpra/customisation.py)."""
+    return get_tiering_config(db, tenant_id).get("customisation") or {}
+
+
 def _preview(db: Session, v: Vendor) -> dict:
-    scores, why = intake.factors(v.intake)
-    result = compute_inherent_tier(scores, get_tiering_config(db, v.tenant_id))
+    cfg = get_tiering_config(db, v.tenant_id)
+    scores, why = intake.factors(v.intake, cfg.get("customisation"))
+    result = compute_inherent_tier(scores, cfg)
     result["reasons"] = why
     return result
 
@@ -82,8 +88,10 @@ def _preview(db: Session, v: Vendor) -> dict:
 # ── the questions and a live tier ────────────────────────────────────────────
 
 @router.get("/intake/questions")
-def questions(user: GRCUser = Depends(require_auth)):
-    return intake.catalogue()
+def questions(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The questions as this tenant asks them, and the factors a tier is made of."""
+    custom = _custom(db, _tids(user, db)[0])
+    return {**intake.catalogue(custom), "factors": customisation.factors(custom)}
 
 
 @router.get("/intake/people")
@@ -104,19 +112,20 @@ class PreviewIn(BaseModel):
 def preview(body: PreviewIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """The tier these answers would give, without saving anything."""
     tids = _tids(user, db)
+    cfg = get_tiering_config(db, tids[0])
     try:
-        cleaned = intake.clean(body.answers, {})
+        cleaned = intake.clean(body.answers, {}, cfg.get("customisation"))
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
-    scores, why = intake.factors(cleaned)
-    result = compute_inherent_tier(scores, get_tiering_config(db, tids[0]))
+    scores, why = intake.factors(cleaned, cfg.get("customisation"))
+    result = compute_inherent_tier(scores, cfg)
     result["reasons"] = why
     return result
 
 
 # ── requests ─────────────────────────────────────────────────────────────────
 
-def _request_row(v: Vendor, names: dict, stages: dict) -> dict:
+def _request_row(v: Vendor, names: dict, stages: dict, custom: Optional[dict] = None) -> dict:
     return {
         "id": v.id, "name": v.name, "website": v.website, "host": intake.host(v.website),
         "intake_status": v.intake_status, "vendor_status": v.status, "tier": v.tier,
@@ -124,7 +133,7 @@ def _request_row(v: Vendor, names: dict, stages: dict) -> dict:
         "requested_by": {"id": v.requested_by, "name": names.get(v.requested_by)} if v.requested_by else None,
         "owner": {"id": v.owner_id, "name": names.get(v.owner_id)} if v.owner_id else None,
         "submitted_at": v.submitted_at, "created_at": v.created_at, "updated_at": v.updated_at,
-        "stage": stages.get(v.id), "open_problems": len(intake.problems(v.intake, v)),
+        "stage": stages.get(v.id), "open_problems": len(intake.problems(v.intake, v, custom)),
     }
 
 
@@ -151,7 +160,8 @@ def list_requests(
     names = _names(db, [x for v in rows for x in (v.requested_by, v.owner_id)])
     stages = {v.id: {"key": v.lifecycle_stage, "label": _STAGE_LABEL.get(v.lifecycle_stage or "")}
               for v in rows if v.intake_status in ("in_review", "approved")}
-    return {"items": [_request_row(v, names, stages) for v in rows], "counts": counts,
+    custom = _custom(db, tids[0])
+    return {"items": [_request_row(v, names, stages, custom) for v in rows], "counts": counts,
             "can_create": _can(db, user, "intake", "create"), "can_review": _can(db, user, "intake", "review")}
 
 
@@ -201,7 +211,7 @@ def _payload(db: Session, user: GRCUser, v: Vendor) -> dict:
         "requested_by": v.requested_by, "submitted_at": v.submitted_at,
         "intake": v.intake or {"answers": {}, "justifications": {}},
         "intake_status": v.intake_status,
-        "problems": intake.problems(v.intake, v),
+        "problems": intake.problems(v.intake, v, _custom(db, v.tenant_id)),
         "preview": _preview(db, v),
         "can_edit": _may_edit(db, user, v),
         "can_review": _can(db, user, "intake", "review"),
@@ -264,14 +274,15 @@ def save_intake(vendor_id: int, body: IntakeIn, db: Session = Depends(get_db), u
     v = _vendor(db, vendor_id, _tids(user, db))
     if not _may_edit(db, user, v):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "This request is with the review team now")
+    custom = _custom(db, v.tenant_id)
     try:
-        patch = intake.clean(body.answers, body.justifications)
+        patch = intake.clean(body.answers, body.justifications, custom)
         if body.vendor is not None:
             _apply_vendor_part(db, v, body.vendor)
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     v.intake = intake.merge(v.intake, patch)
-    intake.apply_to_vendor(v, v.intake)
+    intake.apply_to_vendor(v, v.intake, custom)
     v.updated_at = datetime.utcnow()
     db.commit()
     return _payload(db, user, v)
@@ -292,7 +303,7 @@ def submit(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depend
     v = _vendor(db, vendor_id, _tids(user, db))
     if not _may_edit(db, user, v):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the requester or the review team can submit this")
-    missing = intake.problems(v.intake, v)
+    missing = intake.problems(v.intake, v, _custom(db, v.tenant_id))
     if missing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, {"message": "Some answers are missing", "problems": missing})
     _move(db, v, user, "submitted")

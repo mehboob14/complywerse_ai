@@ -82,10 +82,45 @@ SECTIONS: List[dict] = [
     ]},
 ]
 QUESTIONS: Dict[str, dict] = {q["key"]: q for s in SECTIONS for q in s["questions"]}
+TYPES = ("yes_no", "choice", "multi_choice", "level", "number", "date", "text")
 
 
-def catalogue() -> dict:
-    return {"sections": SECTIONS, "levels": list(LEVELS), "statuses": list(STATUSES), "min_reason": _MIN_REASON}
+def spec(custom: Optional[dict] = None) -> dict:
+    """The questions as this tenant asks them (tpra/customisation.py).
+
+    `sections` are in order with the questions to ask, hidden and removed ones
+    left out. `questions` holds every question by key, hidden and removed ones
+    too, because answers already given still need a name and a type."""
+    c = custom if isinstance(custom, dict) else {}
+    over = c.get("builtin") if isinstance(c.get("builtin"), dict) else {}
+    titles = c.get("builtin_sections") if isinstance(c.get("builtin_sections"), dict) else {}
+    sections, every = [], {}
+    for s in SECTIONS:
+        asked = []
+        for q in s["questions"]:
+            change = over.get(q["key"]) or {}
+            merged = {**q, **{k: change[k] for k in ("label", "help", "required", "options", "evidence") if k in change},
+                      "section": s["key"], "builtin": True, "hidden": bool(change.get("hidden"))}
+            every[q["key"]] = merged
+            if not merged["hidden"]:
+                asked.append(merged)
+        sections.append({"key": s["key"], "title": (titles.get(s["key"]) or {}).get("title") or s["title"],
+                         "builtin": True, "questions": asked})
+    for s in c.get("sections") or []:
+        if not s.get("archived"):
+            sections.append({"key": s["key"], "title": s["title"], "builtin": False, "questions": []})
+    where = {s["key"]: s for s in sections}
+    for q in sorted(c.get("questions") or [], key=lambda q: (q.get("order") or 0, q["key"])):
+        merged = {**q, "builtin": False}
+        every[q["key"]] = merged
+        if not q.get("archived") and q.get("section") in where:
+            where[q["section"]]["questions"].append(merged)
+    return {"sections": sections, "questions": every}
+
+
+def catalogue(custom: Optional[dict] = None) -> dict:
+    return {"sections": spec(custom)["sections"], "levels": list(LEVELS), "statuses": list(STATUSES),
+            "min_reason": _MIN_REASON}
 
 
 # ── cleaning ─────────────────────────────────────────────────────────────────
@@ -127,27 +162,39 @@ def _clean_value(question: dict, value):
         datetime.strptime(text, "%Y-%m-%d")
         return text
     if kind == "choice":
-        allowed = [o["value"] for o in question["options"]]
+        allowed = [o["value"] for o in question["options"] if not o.get("archived")]
         if value not in allowed:
             raise ValueError(f"must be one of {', '.join(allowed)}")
         return value
+    if kind == "multi_choice":
+        allowed = [o["value"] for o in question["options"] if not o.get("archived")]
+        picked = []
+        for item in value if isinstance(value, list) else [value]:
+            if item not in allowed:
+                raise ValueError(f"must be chosen from {', '.join(allowed)}")
+            if item not in picked:
+                picked.append(item)
+        return picked or None
     return " ".join(str(value).split())[:2000] or None
 
 
-def clean(answers, justifications) -> dict:
+def clean(answers, justifications, custom: Optional[dict] = None) -> dict:
     """Validate a (possibly partial) intake. Unknown keys are refused, so a typo
     cannot look like a saved answer. Completeness is `problems`' job."""
+    every = spec(custom)["questions"]
     out = {"answers": {}, "justifications": {}}
     for key, value in (answers or {}).items():
-        question = QUESTIONS.get(key)
+        question = every.get(key)
         if question is None:
             raise ValueError(f"'{key}' is not an intake question")
+        if question.get("archived"):
+            raise ValueError(f"'{question['label']}' has been taken off the form")
         try:
             out["answers"][key] = _clean_value(question, value)
         except ValueError as exc:
             raise ValueError(f"{question['label']} {exc}")
     for key, value in (justifications or {}).items():
-        question = QUESTIONS.get(key)
+        question = every.get(key)
         if question is None or not question.get("justify"):
             raise ValueError(f"'{key}' does not take a reason")
         out["justifications"][key] = " ".join(str(value or "").split())[:1000]
@@ -165,8 +212,8 @@ def _asked(question: dict, answers: dict) -> bool:
     return not gate or answers.get(gate) == "yes"
 
 
-def problems(intake: Optional[dict], vendor: Optional[Vendor] = None) -> List[dict]:
-    """What stops the request being submitted, one line per question."""
+def problems(intake: Optional[dict], vendor: Optional[Vendor] = None, custom: Optional[dict] = None) -> List[dict]:
+    """What stops the request being submitted, one line per question asked."""
     answers = (intake or {}).get("answers") or {}
     reasons = (intake or {}).get("justifications") or {}
     out = []
@@ -175,7 +222,7 @@ def problems(intake: Optional[dict], vendor: Optional[Vendor] = None) -> List[di
             out.append({"key": "name", "message": "Give the supplier's name"})
         if vendor.owner_id is None:
             out.append({"key": "owner_id", "message": "Name the business owner"})
-    for question in QUESTIONS.values():
+    for question in (q for s in spec(custom)["sections"] for q in s["questions"]):
         if not _asked(question, answers):
             continue
         value = answers.get(question["key"])
@@ -192,8 +239,24 @@ def has_answers(intake: Optional[dict]) -> bool:
 
 # ── the factors ──────────────────────────────────────────────────────────────
 
-def factors(intake: Optional[dict]) -> Tuple[Dict[str, float], Dict[str, List[str]]]:
-    """The five tiering factors (0..4) the answers imply, and why each is what it is."""
+def _answer_points(q: dict, value) -> Tuple[int, str]:
+    """What one answer to a tenant's own question adds to its factor, and why."""
+    name = q["label"].rstrip("?")
+    if q["type"] == "yes_no":
+        return (int(q.get("points") or 0), f"{name}: yes") if value == "yes" else (0, "")
+    if q["type"] == "level":
+        n = _LEVEL.get(value or "none", 0)
+        return (n, f"{name}: {value}") if n else (0, "")
+    options = {o["value"]: o for o in q.get("options") or []}
+    picked = [options[v] for v in (value if isinstance(value, list) else [value]) if v in options]
+    best = max(picked, key=lambda o: o.get("points") or 0, default=None)
+    return (int(best.get("points") or 0), f"{name}: {best['label']}") if best else (0, "")
+
+
+def factors(intake: Optional[dict], custom: Optional[dict] = None) -> Tuple[Dict[str, float], Dict[str, List[str]]]:
+    """The tiering factors (0..4) the answers imply, and why each is what it is:
+    the five built-in ones from the built-in questions, then whatever the
+    tenant's own questions add, to built-in factors or to its own."""
     a = (intake or {}).get("answers") or {}
     yes = lambda key: a.get(key) == "yes"  # noqa: E731
     level = lambda key: _LEVEL.get(a.get(key) or "none", 0)  # noqa: E731
@@ -264,7 +327,28 @@ def factors(intake: Optional[dict]) -> Tuple[Dict[str, float], Dict[str, List[st
         raise_to("fourth_party", 2, "sends our data to AI providers")
     if yes("hosts_data") and engagement in ("saas", "infrastructure"):
         raise_to("fourth_party", 2, "runs on someone else's cloud")
+
+    c = custom if isinstance(custom, dict) else {}
+    for f in c.get("factors") or []:
+        if not f.get("archived"):
+            scores.setdefault(f["key"], 0.0)
+            why.setdefault(f["key"], [])
+    for q in spec(custom)["questions"].values():
+        if q.get("builtin") or q.get("archived") or q.get("factor") not in scores or not _asked(q, a):
+            continue
+        points, reason = _answer_points(q, a.get(q["key"]))
+        if points:
+            raise_to(q["factor"], points, reason)
     return scores, why
+
+
+def evidence_asked(intake: Optional[dict], custom: Optional[dict] = None) -> List[Tuple[str, str]]:
+    """Evidence the answers ask the supplier for, beyond what the tier asks:
+    (evidence type, the question whose yes asked for it)."""
+    a = (intake or {}).get("answers") or {}
+    return [(q["evidence"], q["label"]) for q in spec(custom)["questions"].values()
+            if q.get("evidence") and q["type"] == "yes_no" and not q.get("archived") and not q.get("hidden")
+            and _asked(q, a) and a.get(q["key"]) == "yes"]
 
 
 # ── onto the vendor record ───────────────────────────────────────────────────
@@ -275,7 +359,7 @@ _DATA_TYPES = [("personal_data", "personal data"), ("special_category", "sensiti
                ("financial_reporting", "financial reporting data")]
 
 
-def apply_to_vendor(vendor: Vendor, intake: dict) -> None:
+def apply_to_vendor(vendor: Vendor, intake: dict, custom: Optional[dict] = None) -> None:
     """Carry the answers onto the fields the rest of the programme reads (the
     intake gate, re-tier detection, reports). Data access only ever goes up here:
     a lower answer is for a reviewer to accept, not for a form to quietly apply."""
@@ -297,28 +381,34 @@ def apply_to_vendor(vendor: Vendor, intake: dict) -> None:
             types.append(label)
     vendor.data_types_accessed = types
     if not vendor.vendor_type and a.get("engagement_type"):
-        vendor.vendor_type = dict(ENGAGEMENTS).get(a["engagement_type"])
+        named = {o["value"]: o["label"] for o in spec(custom)["questions"]["engagement_type"].get("options") or []}
+        vendor.vendor_type = named.get(a["engagement_type"]) or dict(ENGAGEMENTS).get(a["engagement_type"])
     if not vendor.description and a.get("purpose"):
         vendor.description = a["purpose"]
 
 
-def fingerprint(vendor: Vendor) -> dict:
-    """The answers a tier rests on, recorded with it to notice when they change."""
+def fingerprint(vendor: Vendor, custom: Optional[dict] = None) -> dict:
+    """The answers a tier rests on, recorded with it to notice when they change:
+    the built-in yes/no and level answers, and the tenant's own scored ones."""
     a = ((vendor.intake or {}).get("answers") or {})
-    return {k: a.get(k) for k, q in QUESTIONS.items() if q["type"] in ("yes_no", "level")}
+    return {k: a.get(k) for k, q in spec(custom)["questions"].items()
+            if (q.get("builtin") and q["type"] in ("yes_no", "level")) or (not q.get("builtin") and q.get("factor"))}
 
 
-def changes_since(recorded: dict, vendor: Vendor) -> List[str]:
+def changes_since(recorded: dict, vendor: Vendor, custom: Optional[dict] = None) -> List[str]:
     """Answers that have moved towards more risk since the tier was computed."""
-    now = fingerprint(vendor)
+    every = spec(custom)["questions"]
     out = []
-    for key, value in now.items():
+    for key, value in fingerprint(vendor, custom).items():
         before = recorded.get(key)
-        label = QUESTIONS[key]["label"].rstrip("?")
-        if QUESTIONS[key]["type"] == "yes_no" and value == "yes" and before != "yes":
+        q = every[key]
+        label = q["label"].rstrip("?")
+        if q["type"] == "yes_no" and value == "yes" and before != "yes":
             out.append(f"now yes: {label.lower()}")
-        elif QUESTIONS[key]["type"] == "level" and _LEVEL.get(value or "none", 0) > _LEVEL.get(before or "none", 0):
+        elif q["type"] == "level" and _LEVEL.get(value or "none", 0) > _LEVEL.get(before or "none", 0):
             out.append(f"{label.lower()} went from {before or 'none'} to {value}")
+        elif q["type"] in ("choice", "multi_choice") and _answer_points(q, value)[0] > _answer_points(q, before)[0]:
+            out.append(f"{label.lower()} changed to {_answer_points(q, value)[1].split(': ', 1)[-1]}")
     return out
 
 
