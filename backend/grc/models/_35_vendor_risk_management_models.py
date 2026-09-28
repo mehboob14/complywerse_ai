@@ -70,6 +70,9 @@ class Vendor(Base):
     domains = Column(JSON, nullable=True)            # other domains beyond the website, for outside-in scans
     # The tenant's own fields on a supplier (services/module_settings.py, module "vendors").
     custom_values = Column(JSON, nullable=True)
+    # An EU VAT number and what VIES last said about it (vendor_risk/tpra/vat.py).
+    vat_number = Column(String(40), nullable=True)
+    vat_check = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

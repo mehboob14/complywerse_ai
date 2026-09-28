@@ -176,8 +176,10 @@ def poll_monitoring_connectors_for_tenant(self, tenant_slug: str, db: Session = 
         return {"status": "skipped", "tenant_slug": tenant_slug, "reason": "no_tenant"}
     result = run_connectors(db, tenant.id)
     db.commit()
-    # Shadow SaaS from Grip, once a day when the tenant has asked for it.
+    # Shadow SaaS from Grip, and our own domains in public code, once a day when asked for.
+    from ..modules.vendor_risk.tpra.leaks import own_sweep
     result["grip"] = scheduled_sync(db, tenant.id)
+    result["own_leaks"] = own_sweep(db, tenant.id)
     return {"status": "ok", "tenant_slug": tenant_slug, **result}
 
 

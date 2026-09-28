@@ -17,6 +17,7 @@ import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader, Animated
 import { StageProgress, stageNumberLabel } from '../_lib/lifecycleShared';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import ImportVendors from './_ImportVendors';
+import VendorLogo from '../_lib/VendorLogo';
 import {
   CustomFieldsTab, CustomFieldsTabBar, errorText, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
@@ -380,7 +381,8 @@ export default function VendorListPage() {
                 filtered.map((vendor) => (
                   <tr key={vendor.id} className="hover:bg-slate-50">
                     <td className="px-4 py-3">
-                      <Link href={`/vendor-risk/vendors/${vendor.id}`} className="text-sm font-medium text-primary-600 hover:text-primary-700">
+                      <Link href={`/vendor-risk/vendors/${vendor.id}`} className="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-700">
+                        <VendorLogo vendorId={vendor.id} name={vendor.name} size={22} cachedOnly />
                         {vendor.name}
                       </Link>
                     </td>

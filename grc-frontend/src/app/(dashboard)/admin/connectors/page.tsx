@@ -2,10 +2,7 @@
 
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  Plug, Plus, RefreshCw, CheckCircle, AlertCircle, Loader2, X, ExternalLink,
-  Ticket, Activity, ShieldAlert, MessageSquare, Mic, BookOpenCheck, Trash2, Radar, Gauge, Cloud, ShieldBan,
-} from 'lucide-react';
+import { Plug, Plus, RefreshCw, CheckCircle, AlertCircle, Loader2, X, ExternalLink, Ticket, Activity, ShieldAlert, MessageSquare, Mic, BookOpenCheck, Trash2, Radar, Gauge, Cloud, ShieldBan, SearchCode } from 'lucide-react';
 import { connectorsApi, type ConnectorProviderMeta, type ConnectorRow } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 
@@ -20,9 +17,10 @@ const CATEGORY_META: Record<string, { label: string; icon: typeof Ticket; descri
   security_rating: { label: 'Security ratings', icon: Gauge, description: "Read each supplier's rating from UpGuard, SecurityScorecard or BitSight." },
   saas_discovery: { label: 'SaaS discovery', icon: Cloud, description: 'Bring the apps your people use (Grip Security) into Shadow SaaS for a decision.' },
   web_gateway: { label: 'Web gateway', icon: ShieldBan, description: 'Block the domain of an app third-party risk denies (Zscaler Internet Access).' },
+  code_search: { label: 'Code search', icon: SearchCode, description: "Search public code for suppliers' and our own domains beside words like password (GitHub)." },
 };
 
-const CATEGORY_ORDER = ['ticketing', 'siem', 'pentest', 'collab', 'transcribe', 'easm_source', 'security_rating', 'saas_discovery', 'web_gateway'] as const;
+const CATEGORY_ORDER = ['ticketing', 'siem', 'pentest', 'collab', 'transcribe', 'easm_source', 'security_rating', 'saas_discovery', 'web_gateway', 'code_search'] as const;
 
 export default function ConnectorsAdminPage() {
   const [openSetupFor, setOpenSetupFor] = useState<ConnectorProviderMeta | null>(null);

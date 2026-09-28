@@ -45,3 +45,4 @@ from ._71_tpra_shadow_saas import *  # noqa: F401,F403 - software in use that no
 from ._72_tpra_fair import *  # noqa: F401,F403 - FAIR analyses of supplier loss scenarios
 from ._73_tpra_email_templates import *  # noqa: F401,F403 - a tenant's own wording for TPRM emails
 from ._74_tpra_action_items import *  # noqa: F401,F403 - planned actions on a supplier
+from ._75_tpra_leaks_logos import *  # noqa: F401,F403 - own-domain code leaks and supplier logos

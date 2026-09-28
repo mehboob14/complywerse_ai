@@ -28,6 +28,8 @@ import DependenciesPanel from './_tpra/DependenciesPanel';
 import ExposurePanel from './_tpra/ExposurePanel';
 import OutsideInPanel from './_tpra/OutsideInPanel';
 import ActionPlanPanel from './_tpra/ActionPlanPanel';
+import VendorLogo from '../../_lib/VendorLogo';
+import VatCard from './_tpra/VatCard';
 import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
 
 interface Vendor {
@@ -40,6 +42,8 @@ interface Vendor {
   industry: string | null;
   website: string | null;
   custom_values?: Record<string, unknown> | null;
+  vat_number?: string | null;
+  vat_check?: { valid: boolean; name: string | null; address: string | null; checked_at: string; name_matches?: boolean | null } | null;
   inherent_risk_score: number | null;
   residual_risk_score: number | null;
   risk_rating: string | null;
@@ -345,6 +349,7 @@ export default function VendorDetailPage() {
         </button>
         <div className="flex-1">
           <div className="flex items-center gap-3 flex-wrap">
+            <VendorLogo vendorId={vendor.id} name={vendor.name} size={32} />
             <h1 className="text-lg sm:text-xl font-semibold text-slate-900">{vendor.name}</h1>
             <span className={`inline-flex px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${getTierBadge(vendor.tier)}`}>
               {vendor.tier}
@@ -519,6 +524,8 @@ export default function VendorDetailPage() {
               <p className="text-sm text-gray-600">{vendor.notes}</p>
             </div>
           )}
+          <VatCard vendorId={vendor.id} vatNumber={vendor.vat_number || null} check={vendor.vat_check || null}
+            onChecked={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })} />
           {hasCustomFields(vendorFieldSettings, vendor.custom_values) && (
             <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
               <h3 className="text-sm font-semibold text-slate-900 mb-2">Your fields</h3>

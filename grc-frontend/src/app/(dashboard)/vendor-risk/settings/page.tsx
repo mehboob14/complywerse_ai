@@ -32,7 +32,7 @@ interface ReminderPolicy {
 }
 interface TierRules { template_ids: number[]; evidence: string[]; approver_role: string | null; reassess_on: string }
 interface MonitoringPolicy {
-  adverse_media: boolean; outside_in: boolean; grip_daily?: boolean;
+  adverse_media: boolean; outside_in: boolean; grip_daily?: boolean; leak_search?: boolean; own_domains?: string[];
   check_every_days: Record<string, number>; scan_every_days: Record<string, number>;
   scan_points: Record<string, number>; scan_category_cap: number; grades: Record<string, number>;
 }
@@ -59,7 +59,8 @@ interface Draft {
   tier_policy: Record<string, TierRules>;
   cadence_days: Record<string, number>;
   reminder_policy: ReminderPolicy;
-  monitoring_policy: Pick<MonitoringPolicy, 'adverse_media' | 'outside_in' | 'grip_daily' | 'check_every_days' | 'scan_every_days'>;
+  monitoring_policy: Pick<MonitoringPolicy, 'adverse_media' | 'outside_in' | 'grip_daily' | 'leak_search' | 'own_domains'
+    | 'check_every_days' | 'scan_every_days'>;
   scan_scoring: Pick<MonitoringPolicy, 'scan_points' | 'scan_category_cap' | 'grades'>;   // sent within monitoring_policy
   scoring_policy: { partial_credit: number };
   quantification: Quant;
@@ -81,6 +82,7 @@ function toDraft(c: ConfigResp, from: Defaults): Draft {
       const m = { ...(c.defaults.monitoring_policy || {}), ...(from.monitoring_policy || {}) } as MonitoringPolicy;
       return {
         monitoring_policy: { adverse_media: !!m.adverse_media, outside_in: !!m.outside_in, grip_daily: !!m.grip_daily,
+          leak_search: !!m.leak_search, own_domains: [...(m.own_domains || [])],
           check_every_days: { ...m.check_every_days }, scan_every_days: { ...m.scan_every_days } },
         scan_scoring: { scan_points: { ...m.scan_points }, scan_category_cap: m.scan_category_cap, grades: { ...m.grades } },
       };
@@ -580,6 +582,25 @@ export default function VendorRiskSettingsPage() {
                     Looks at what any visitor sees: certificates, HTTPS and protective headers, and email spoofing protection, plus
                     exposed services and known vulnerabilities when a Shodan key is connected. Nothing is port-scanned. A supplier’s
                     first scan sets its baseline; after that a new high or critical finding raises an alert.
+                  </span>
+                </span>
+              </label>
+              <label className="mt-2 flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
+                <input type="checkbox" className="mt-1" disabled={!canEdit} checked={!!m.leak_search}
+                  onChange={(e) => set('monitoring_policy', { ...m, leak_search: e.target.checked })} />
+                <span className="min-w-0 flex-1">
+                  Search public code for credentials published by mistake
+                  <span className="mt-0.5 block text-[11px] text-slate-500">
+                    Each supplier&apos;s domains, on its scan cadence, and ours below, once a day, are searched on GitHub beside
+                    words like password or secret. Needs GitHub code search connected under Admin → Connectors. A file found is an
+                    unverified alert to look at; it is linked, never copied.
+                  </span>
+                  <span className="mt-2 block">
+                    <span className="text-xs font-medium text-slate-600">Our own domains</span>
+                    <input disabled={!canEdit || !m.leak_search} value={(m.own_domains || []).join(', ')}
+                      onChange={(e) => set('monitoring_policy', { ...m, own_domains: e.target.value.split(',').map((x) => x.trim()).filter(Boolean) })}
+                      placeholder="acme.com, acme-cloud.io" aria-label="Our own domains"
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm disabled:bg-slate-50" />
                   </span>
                 </span>
               </label>
