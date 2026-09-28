@@ -65,11 +65,14 @@ FORMAT_GUIDE: Dict[str, str] = {
         "practice operating: procedures, records, metrics, reviews"),
 }
 
+# "Choosing none is fine" once sat beside the recommendations, and gpt-4o-mini read it as leave-them-out:
+# 5 answers in 6 came back with an empty list. Always-3-to-5 is said separately from the library matches.
 SYSTEM = (
-    "You are a cyber security and compliance assessor. You recommend the evidence that proves one "
-    "assessment item and say how to collect it. Be specific to the item, never generic. Pick existing "
-    "evidence only from the list you are given, by its id, and only when it genuinely supports the "
-    "item; choosing none is fine. Return JSON only."
+    "You are a cyber security and compliance assessor. For one assessment item you recommend the evidence "
+    "that would prove it and say how to collect it. Always give 3 to 5 recommendations, specific to the item "
+    "and never generic; they never depend on what the organisation already holds. Separately, you may pick "
+    "records from the existing-evidence list you are given, by id, only when one genuinely supports the "
+    "item; picking none of them is fine. Return JSON only."
 )
 
 _WORD = re.compile(r"[a-z][a-z0-9]{2,}")
@@ -177,7 +180,8 @@ def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Eviden
         "\"description\": \"what it must show for THIS item\", \"how_to_collect\": \"where and how to get "
         "it: the system, report, export or screen\", \"priority\": \"high|medium|low\", "
         "\"example_files\": [\"file names\"]}], \"matches\": [{\"evidence_id\": 0, \"reason\": \"why it "
-        "supports this item\", \"confidence\": 0.0}]}. Give 3-5 recommendations, most important first, and at most 5 matches, best first."
+        "supports this item\", \"confidence\": 0.0}]}. Give 3-5 recommendations, most important first. \"recommendations\" must never be empty, even when no "
+        "existing record fits; \"matches\" may be empty, at most 5, best first."
     )
     return "\n".join(lines)
 
@@ -186,11 +190,12 @@ def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
                        complete: Optional[Callable[[List[Dict[str, str]]], str]] = None) -> Dict[str, Any]:
     """The recommendation for one item; the caller stores it on the item."""
     candidates = shortlist_existing(db, item)
-    raw = (complete or openai_complete)([
-        {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": build_prompt(item, candidates)},
-    ])
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": build_prompt(item, candidates)}]
+    raw = (complete or openai_complete)(messages)
     answer = _parse(raw)
+    if not answer.get("recommendations") and not answer.get("matches"):
+        raw = (complete or openai_complete)(messages)   # a small model now and then leaves both out; ask once more
+        answer = _parse(raw)
 
     recommendations = []
     for rec in (answer.get("recommendations") or [])[:6]:

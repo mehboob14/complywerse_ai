@@ -164,3 +164,21 @@ def test_old_style_parameters_are_translated_for_reasoning_models(monkeypatch, m
     assert advisor.openai_complete([{"role": "user", "content": "Which evidence proves MFA is enforced?"}]) == '{"ok": true}'
     keys = ("max_tokens", "max_completion_tokens", "temperature", "reasoning_effort")
     assert {k: seen[k] for k in keys if k in seen} == sent
+
+
+def test_an_answer_with_nothing_in_it_is_asked_once_more(db):
+    answers = iter([
+        json.dumps({"summary": "Headers must not show versions.", "recommendations": [], "matches": []}),
+        json.dumps({"summary": "s", "recommendations": [
+            {"evidence_type": "HTTP response headers capture", "description": "No Server or X-Powered-By version",
+             "priority": "high"}]}),
+    ])
+    asked = []
+
+    def model(messages):
+        asked.append(messages)
+        return next(answers)
+
+    result = advisor.recommend_evidence(db, _item(db), complete=model)
+    assert len(asked) == 2 and result["recommendations"][0]["evidence_type"] == "HTTP response headers capture"
+    assert "must never be empty" in asked[0][1]["content"]
