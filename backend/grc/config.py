@@ -92,7 +92,7 @@ def get_openai_base_url() -> str | None:
 # ----- gpt-5.x / o-series compatibility shim --------------------------------
 # The codebase was written for gpt-4o-era chat completions: ~all call sites pass
 # ``max_tokens=`` and ``temperature=0.x``. The newer reasoning models
-# (gpt-5.x, o1/o3/o4) reject both — they require ``max_completion_tokens`` and
+# (gpt-5.x, gpt-6-*, o1/o3/o4) reject both — they require ``max_completion_tokens`` and
 # only accept the default ``temperature`` (1). Rather than edit dozens of call
 # sites (and risk regressions), we wrap ``Completions.create`` once so legacy
 # params are translated transparently *only* for those models. gpt-4o and any
@@ -106,14 +106,14 @@ def install_openai_compat_shim() -> bool:
 
     def _prepare(kwargs):
         model = kwargs.get("model")
-        if isinstance(model, str) and model.lower().startswith(("gpt-5", "o1", "o3", "o4")):
+        if isinstance(model, str) and model.lower().startswith(("gpt-5", "gpt-6", "o1", "o3", "o4")):
             if "max_tokens" in kwargs and "max_completion_tokens" not in kwargs:
                 kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
             else:
                 kwargs.pop("max_tokens", None)
             if kwargs.get("temperature") not in (None, 1):
                 kwargs.pop("temperature", None)
-            if model.lower().startswith("gpt-5") and "reasoning_effort" not in kwargs:
+            if model.lower().startswith(("gpt-5", "gpt-6")) and "reasoning_effort" not in kwargs:
                 kwargs["reasoning_effort"] = "low"
         return model
 

@@ -128,3 +128,32 @@ def test_the_endpoint_keeps_the_result_and_says_when_ai_is_not_set_up(db, monkey
         assert down.status_code == 502 and "did not answer" in down.json()["detail"]
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.mark.parametrize("model, sent", [
+    # gpt-6 models answer 400 to max_tokens and to a temperature other than 1, as gpt-5 does.
+    ("gpt-6-luna", {"max_completion_tokens": 1800, "reasoning_effort": "low"}),
+    ("gpt-4o", {"max_tokens": 1800, "temperature": 0.3}),
+])
+def test_old_style_parameters_are_translated_for_reasoning_models(monkeypatch, model, sent):
+    import httpx
+    import openai
+
+    seen = {}
+
+    def reply(request):
+        seen.update(json.loads(request.content))
+        return httpx.Response(200, json={"id": "c", "object": "chat.completion", "created": 0, "model": model,
+                                         "choices": [{"index": 0, "finish_reason": "stop",
+                                                      "message": {"role": "assistant", "content": '{"ok": true}'}}]})
+
+    real = openai.OpenAI
+    monkeypatch.setattr(openai, "OpenAI",
+                        lambda **kw: real(**kw, http_client=httpx.Client(transport=httpx.MockTransport(reply))))
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_API_KEY", "sk-test-" + "x" * 32)
+    monkeypatch.setenv("AI_INTEGRATIONS_OPENAI_MODEL", model)
+    monkeypatch.delenv("AI_INTEGRATIONS_OPENAI_BASE_URL", raising=False)
+
+    assert advisor.openai_complete([{"role": "user", "content": "Which evidence proves MFA is enforced?"}]) == '{"ok": true}'
+    keys = ("max_tokens", "max_completion_tokens", "temperature", "reasoning_effort")
+    assert {k: seen[k] for k in keys if k in seen} == sent

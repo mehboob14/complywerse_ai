@@ -6582,6 +6582,8 @@ def get_ai_recommendation(
     if item.ai_evidence_recommendation:
         try:
             recommendation = json.loads(item.ai_evidence_recommendation)
+            if isinstance(recommendation, dict):
+                recommendation.pop("model", None)  # the page says "AI", never the model
         except json.JSONDecodeError:
             recommendation = {"raw": item.ai_evidence_recommendation}
     

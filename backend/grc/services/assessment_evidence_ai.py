@@ -227,5 +227,4 @@ def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
         "recommendations": recommendations,
         "matches": matches[:5],
         "library_checked": len(candidates),
-        "model": get_openai_model(),
     }
