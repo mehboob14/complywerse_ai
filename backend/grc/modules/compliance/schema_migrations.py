@@ -962,6 +962,9 @@ _COLUMN_ADDS = [
     ("grc_tpra_external_ratings", "details", "JSON", None),
     # Who Grip has seen using each shadow SaaS app (tpra/shadow_saas.py).
     ("grc_tpra_shadow_apps", "people", "JSON", None),
+    # A supplier's EU VAT number and what VIES said about it (tpra/vat.py).
+    ("grc_vendors", "vat_number", "VARCHAR(40)", None),
+    ("grc_vendors", "vat_check", "JSON", None),
     # The contracts inbox (tpra/contracts.py): the signed copy, commercial terms
     # and how each contract renews.
     ("grc_tpra_contracts", "evidence_id", "INTEGER", None),

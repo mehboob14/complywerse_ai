@@ -120,6 +120,8 @@ def _bootstrap() -> None:
         "grc.modules.connectors.providers.security_ratings",
         # SaaS discovery (Grip) and the web gateway that blocks what is denied (Zscaler).
         "grc.modules.connectors.providers.saas_governance",
+        # Code search (GitHub), for credentials published by mistake.
+        "grc.modules.connectors.providers.code_search",
     ]
     for mod_path in provider_modules:
         try:

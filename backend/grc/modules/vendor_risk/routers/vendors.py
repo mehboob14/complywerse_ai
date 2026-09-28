@@ -125,6 +125,7 @@ def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
         # Set when the vendor came in as an onboarding request (tpra/onboarding.py).
         "intake_status": getattr(v, "intake_status", None),
         "custom_values": getattr(v, "custom_values", None) or {},
+        "vat_number": getattr(v, "vat_number", None), "vat_check": getattr(v, "vat_check", None),
         "created_at": v.created_at.isoformat() if v.created_at else None,
         "updated_at": v.updated_at.isoformat() if v.updated_at else None,
     }

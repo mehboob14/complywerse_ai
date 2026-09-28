@@ -24,6 +24,9 @@ from .tpra.fair import router as tpra_fair_router
 from .tpra.summary import router as tpra_summary_router
 from .tpra.emails import router as tpra_emails_router
 from .tpra.action_plans import router as tpra_action_plans_router
+from .tpra.leaks import router as tpra_leaks_router
+from .tpra.logos import router as tpra_logos_router
+from .tpra.vat import router as tpra_vat_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -50,6 +53,10 @@ router.include_router(tpra_summary_router)
 router.include_router(tpra_emails_router)
 # A supplier's action plan: dated to-dos, and sends, check-ins and reassessments on a date.
 router.include_router(tpra_action_plans_router)
+# Leaked credentials in public code, supplier logos, and EU VAT numbers checked with VIES.
+router.include_router(tpra_leaks_router)
+router.include_router(tpra_logos_router)
+router.include_router(tpra_vat_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)

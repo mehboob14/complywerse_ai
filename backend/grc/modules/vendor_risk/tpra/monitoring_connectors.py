@@ -40,7 +40,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from ....models import Evidence, TPRAEvidenceLink, TPRASurfaceScan, TPRAVendorProduct, Vendor
-from . import adverse_media, monitoring, monitoring_policy, outside_in, rating_feeds, ratings
+from . import adverse_media, leaks, monitoring, monitoring_policy, outside_in, rating_feeds, ratings
 from .bootstrap import get_tiering_config
 
 logger = logging.getLogger(__name__)
@@ -282,9 +282,31 @@ class RatingFeedConnector(MonitoringConnector):
         return []
 
 
+class LeakSearchConnector(MonitoringConnector):
+    """Public code naming the supplier's domains beside credential words: an
+    unverified breach alert per file, linked, never copied."""
+    provider = "Code search (GitHub)"
+    label = "Credentials published by mistake in public code"
+    kind = "leaks"
+    reaches_internet = True
+    cadence = outside_in.SCAN_EVERY_DAYS
+    cadence_key = "scan_every_days"
+    batch = 5                          # code search allows about ten requests a minute
+
+    def is_configured(self, db: Session, tenant_id: int) -> bool:
+        return leaks.switched_on(db, tenant_id)
+
+    def poll(self, db: Session, vendor: Vendor, since: Optional[datetime], now: datetime) -> List[SignalDraft]:
+        from ...connectors.providers.code_search import search
+
+        key = leaks.token(db, vendor.tenant_id)
+        return [SignalDraft(**d) for d in leaks.drafts(vendor, outside_in.domains_for(vendor),
+                                                       lambda domain: search(domain, key), now)]
+
+
 CONNECTORS: List[MonitoringConnector] = [
     CertificateLapseConnector(), AdverseMediaConnector(), ProductWatchConnector(), TechnologyWatchConnector(),
-    SurfaceScanConnector(),
+    SurfaceScanConnector(), LeakSearchConnector(),
     *(RatingFeedConnector(key) for key in rating_feeds.PROVIDERS),
 ]
 

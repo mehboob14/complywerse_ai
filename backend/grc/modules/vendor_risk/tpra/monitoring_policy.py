@@ -29,6 +29,9 @@ DEFAULTS: Dict = {
     "scan_points": POINTS, "scan_category_cap": CATEGORY_CAP, "grades": GRADES,
     # Shadow SaaS read from Grip Security once a day (tpra/shadow_saas.py).
     "grip_daily": False,
+    # Public code searched for suppliers' and our own domains beside credential words (tpra/leaks.py).
+    "leak_search": False,
+    "own_domains": [],
 }
 _DAYS_LIMIT = {"check_every_days": 365, "scan_every_days": 730}
 
@@ -69,8 +72,11 @@ def clean(raw: dict, current: Optional[dict]) -> dict:
         raise ValueError(f"Unknown monitoring setting: {', '.join(sorted(unknown))}")
     out = merged(current)
     for key, value in raw.items():
-        if key in ("adverse_media", "outside_in", "grip_daily"):
+        if key in ("adverse_media", "outside_in", "grip_daily", "leak_search"):
             out[key] = bool(value)
+        elif key == "own_domains":
+            from .leaks import clean_domains  # here: leaks reads this module's settings
+            out[key] = clean_domains(value)
         elif key in _DAYS_LIMIT:
             if not isinstance(value, dict) or set(value) - set(TIERS):
                 raise ValueError("Days must be given per tier: critical, high, medium, low")

@@ -2630,6 +2630,15 @@ export const vendorAlertsApi = {
 };
 
 // Software in use that no one has assessed (tpra/shadow_saas.py).
+// Our own domains in public code, and EU VAT numbers checked with VIES (tpra/leaks.py, tpra/vat.py).
+export const vendorLeaksApi = {
+  own: () => apiClient.get('/vendor-risk/leaks/own'),
+  decide: (id: number, data: { status: 'new' | 'confirmed' | 'dismissed'; note?: string }) =>
+    apiClient.post(`/vendor-risk/leaks/own/${id}`, data),
+  checkVat: (vendorId: number, vatNumber: string) =>
+    apiClient.post(`/vendor-risk/vendors/${vendorId}/vat`, { vat_number: vatNumber }, { timeout: 30000 }),
+};
+
 export const vendorShadowApi = {
   board: (params?: { status?: string }) => apiClient.get('/vendor-risk/shadow-saas', { params: params || {} }),
   template: () => apiClient.get('/vendor-risk/shadow-saas/import/template', { responseType: 'blob' }),

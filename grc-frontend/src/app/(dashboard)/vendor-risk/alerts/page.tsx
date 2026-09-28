@@ -16,6 +16,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { fmtDate, sevBadgeCls } from '../_lib/tprmShared';
 import { TIER_CLS, errText } from '../_lib/intake/types';
+import OwnLeaks from './_OwnLeaks';
 
 type Status = 'new' | 'investigating' | 'confirmed' | 'not_relevant' | 'closed';
 interface Row {
@@ -92,6 +93,8 @@ export default function BreachAlertsPage() {
           </button>
         ))}
       </div>
+
+      <OwnLeaks />
 
       <div className="flex flex-wrap gap-1.5" role="group" aria-label="Filter by kind">
         {[['', 'Every kind'], ...Object.entries(TYPES)].map(([k, label]) => (

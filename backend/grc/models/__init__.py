@@ -48,3 +48,4 @@ from ._74_tpra_action_items import *  # noqa: F401,F403 - planned actions on a s
 from ._pentest_scan_jobs import PentestScanJob  # noqa: F401 - pentest live scan jobs (M2)
 from ._pentest_exploit_results import PentestExploitResult  # noqa: F401 - pentest persisted exploit results (M2)
 from ._pentest_event_log import PentestEventLog  # noqa: F401 - AVA/GRC pentest all-stage event log
+from ._75_tpra_leaks_logos import *  # noqa: F401,F403 - own-domain code leaks and supplier logos
