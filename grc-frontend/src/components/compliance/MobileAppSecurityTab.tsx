@@ -15,9 +15,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Smartphone, Loader2, Upload, CheckCircle2, XCircle, MinusCircle, Clock,
-  ChevronRight, Search, Server, Plus, X, Paperclip, FileText, ShieldCheck, Trash2, Sparkles,
+  ChevronRight, Search, Server, Plus, X, Paperclip, FileText, ShieldCheck, Trash2,
 } from 'lucide-react';
-import { AiEvidenceAdvisor } from './AiEvidenceAdvisor';
+import { AiEvidenceButton, AiEvidenceDialog } from './AiEvidenceAdvisor';
 import apiClient, { assetsApi } from '@/lib/api';
 import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
 
@@ -73,7 +73,7 @@ const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
 
 // Per-requirement evidence: list + upload. Uploading marks the requirement Pass
 // ("based on evidence it will pass") via the onUploaded callback.
-function EvidencePanel({ assessmentId, itemId, onUploaded, aiAuto = false }: { assessmentId: number; itemId: number; onUploaded: () => void; aiAuto?: boolean }) {
+function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: number; itemId: number; onUploaded: () => void }) {
   const qc = useQueryClient();
   const ref = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -105,12 +105,6 @@ function EvidencePanel({ assessmentId, itemId, onUploaded, aiAuto = false }: { a
   const list = Array.isArray(ev) ? ev : [];
   return (
     <div className="border-t border-slate-100 bg-slate-50/70 px-4 py-3">
-      {/* What evidence proves this item, and records you already have that fit. */}
-      <AiEvidenceAdvisor assessmentId={assessmentId} itemId={itemId} autoRun={aiAuto} onLinked={() => {
-        qc.invalidateQueries({ queryKey: ['masvs-ev', itemId] });
-        qc.invalidateQueries({ queryKey: ['masvs-detail', assessmentId] });
-        onUploaded();
-      }} />
       <div className="mb-2 flex items-center justify-between">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Evidence</span>
         <input ref={ref} type="file" className="hidden" onChange={onFile} />
@@ -290,6 +284,8 @@ export default function MobileAppSecurityTab() {
 
   const term = search.trim().toLowerCase();
   const scoreColor = (p: number) => (p >= 80 ? '#059669' : p >= 50 ? '#d97706' : '#dc2626');
+
+  const aiItem = aiFor != null ? (detail?.items || []).find((x) => x.id === aiFor) : undefined;
 
   return (
     <div className="space-y-4">
@@ -486,11 +482,7 @@ export default function MobileAppSecurityTab() {
                                 </div>
                               </div>
                               <div className="flex shrink-0 items-center gap-1">
-                                <button onClick={() => { setAiFor(it.id); setEvOpen(it.id); }} title="AI evidence recommendations for this item"
-                                  className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
-                                  style={evActive && aiFor === it.id ? { borderColor: '#7c3aed', color: '#6d28d9', backgroundColor: '#f5f3ff' } : { borderColor: '#ddd6fe', color: '#7c3aed' }}>
-                                  <Sparkles className="h-3 w-3" /> AI
-                                </button>
+                                <AiEvidenceButton assessmentId={activeId!} itemId={it.id} active={aiFor === it.id} onOpen={() => setAiFor(it.id)} />
                                 <button onClick={() => setEvOpen(evActive ? null : it.id)} title="Evidence — attaching evidence marks this Pass"
                                   className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition"
                                   style={evActive || evc > 0 ? { borderColor: '#0f766e', color: '#0f766e', backgroundColor: '#e7faf5' } : { borderColor: '#e2e8f0', color: '#64748b' }}>
@@ -512,7 +504,7 @@ export default function MobileAppSecurityTab() {
                             {evActive && (
                               <EvidencePanel
                                 assessmentId={activeId!}
-                                itemId={it.id} aiAuto={aiFor === it.id}
+                                itemId={it.id}
                                 onUploaded={() => setStatus.mutate({ itemId: it.id, status: 'complied' })}
                               />
                             )}
@@ -526,6 +518,14 @@ export default function MobileAppSecurityTab() {
             })}
           </div>
         </>
+      )}
+      {aiItem && activeId != null && (
+        <AiEvidenceDialog assessmentId={activeId} item={aiItem} context={detail?.name} onClose={() => setAiFor(null)}
+          onLinked={() => {
+            qc.invalidateQueries({ queryKey: ['masvs-ev', aiItem.id] });
+            qc.invalidateQueries({ queryKey: ['masvs-detail', activeId] });
+            setStatus.mutate({ itemId: aiItem.id, status: 'complied' });
+          }} />
       )}
     </div>
   );

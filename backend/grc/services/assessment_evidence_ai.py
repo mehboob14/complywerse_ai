@@ -11,7 +11,12 @@ records are shortlisted here by the words they share with the item, the model
 may only pick from that shortlist, and any id it invents is dropped. Records
 already linked to the item are left out. Only the item's own text and the
 records' names and summaries go into the prompt; the model client's licence
-guard refuses SCF text should any slip in.
+guard refuses SCF text should any slip in. The NIST publications and the
+artifacts-catalog documents it may cite are listed the same way, by id.
+
+A recommendation that is a document the organisation writes (a policy, standard,
+procedure, plan or report) can be drafted here too, structured on the NIST
+guidance the recommendation named, in the background, and kept on the item.
 """
 from __future__ import annotations
 
@@ -19,12 +24,15 @@ import json
 import logging
 import math
 import re
+import threading
+from datetime import datetime, timedelta
+from functools import lru_cache
 from typing import Any, Callable, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
 from ..config import get_openai_api_key, get_openai_base_url, get_openai_model
-from ..models import AssessmentItemEvidence, ComplianceAssessmentDocumentItem, Evidence
+from ..models import AssessmentItemEvidence, ComplianceAssessmentDocumentItem, Evidence, Tenant
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +72,58 @@ FORMAT_GUIDE: Dict[str, str] = {
         "a digital operations maturity question on a CMMI 1-5 scale. Evidence shows the "
         "practice operating: procedures, records, metrics, reviews"),
 }
+
+# NIST publications an answer may cite, by id. NIST text is in the public domain in the US and NIST grants a
+# royalty-free right to reuse it worldwide, derivative works included (nist.gov/open/license), so unlike SCF it
+# may shape what the model writes; the model still only picks ids, and the titles and links come from here.
+NIST_SOURCES: Dict[str, tuple] = {
+    "SP800-53": ("NIST SP 800-53 Rev. 5, Security and Privacy Controls",
+                 "https://csrc.nist.gov/pubs/sp/800/53/r5/upd1/final"),
+    "SP800-53A": ("NIST SP 800-53A Rev. 5, Assessing Security and Privacy Controls",
+                  "https://csrc.nist.gov/pubs/sp/800/53/a/r5/final"),
+    "CSF2": ("NIST Cybersecurity Framework 2.0", "https://www.nist.gov/cyberframework"),
+    "SP800-218": ("NIST SP 800-218, Secure Software Development Framework",
+                  "https://csrc.nist.gov/pubs/sp/800/218/final"),
+    "SP800-115": ("NIST SP 800-115, Technical Guide to Information Security Testing and Assessment",
+                  "https://csrc.nist.gov/pubs/sp/800/115/final"),
+    "SP800-163": ("NIST SP 800-163 Rev. 1, Vetting the Security of Mobile Applications",
+                  "https://csrc.nist.gov/pubs/sp/800/163/r1/final"),
+    "SP800-124": ("NIST SP 800-124 Rev. 2, Managing the Security of Mobile Devices",
+                  "https://csrc.nist.gov/pubs/sp/800/124/r2/final"),
+    "SP800-63B": ("NIST SP 800-63B-4, Authentication and Authenticator Management",
+                  "https://csrc.nist.gov/pubs/sp/800/63/b/4/final"),
+    "SP800-52": ("NIST SP 800-52 Rev. 2, Guidelines for TLS Implementations",
+                 "https://csrc.nist.gov/pubs/sp/800/52/r2/final"),
+    "SP800-44": ("NIST SP 800-44 Ver. 2, Guidelines on Securing Public Web Servers",
+                 "https://csrc.nist.gov/pubs/sp/800/44/ver2/final"),
+    "SP800-123": ("NIST SP 800-123, Guide to General Server Security", "https://csrc.nist.gov/pubs/sp/800/123/final"),
+    "SP800-128": ("NIST SP 800-128, Security-Focused Configuration Management",
+                  "https://csrc.nist.gov/pubs/sp/800/128/upd1/final"),
+    "SP800-40": ("NIST SP 800-40 Rev. 4, Enterprise Patch Management Planning",
+                 "https://csrc.nist.gov/pubs/sp/800/40/r4/final"),
+    "SP800-92": ("NIST SP 800-92, Guide to Computer Security Log Management",
+                 "https://csrc.nist.gov/pubs/sp/800/92/final"),
+    "SP800-137": ("NIST SP 800-137, Information Security Continuous Monitoring",
+                  "https://csrc.nist.gov/pubs/sp/800/137/final"),
+    "SP800-61": ("NIST SP 800-61 Rev. 3, Incident Response Recommendations and Considerations",
+                 "https://csrc.nist.gov/pubs/sp/800/61/r3/final"),
+    "SP800-86": ("NIST SP 800-86, Integrating Forensic Techniques into Incident Response",
+                 "https://csrc.nist.gov/pubs/sp/800/86/final"),
+    "SP800-150": ("NIST SP 800-150, Guide to Cyber Threat Information Sharing",
+                  "https://csrc.nist.gov/pubs/sp/800/150/final"),
+    "SP800-34": ("NIST SP 800-34 Rev. 1, Contingency Planning Guide",
+                 "https://csrc.nist.gov/pubs/sp/800/34/r1/upd1/final"),
+    "SP800-30": ("NIST SP 800-30 Rev. 1, Guide for Conducting Risk Assessments",
+                 "https://csrc.nist.gov/pubs/sp/800/30/r1/final"),
+    "SP800-18": ("NIST SP 800-18 Rev. 1, Developing Security Plans", "https://csrc.nist.gov/pubs/sp/800/18/r1/final"),
+    "SP800-171": ("NIST SP 800-171 Rev. 3, Protecting Controlled Unclassified Information",
+                  "https://csrc.nist.gov/pubs/sp/800/171/r3/final"),
+    "SP800-100": ("NIST SP 800-100, Information Security Handbook", "https://csrc.nist.gov/pubs/sp/800/100/upd1/final"),
+}
+_NIST_NORM = {nid: re.sub(r"[^A-Z0-9]", "", nid) for nid in NIST_SOURCES}
+
+# Kinds of document a recommendation can be; each can be drafted (see _STRUCTURE).
+DOC_KINDS = ("policy", "standard", "procedure", "plan", "report")
 
 # "Choosing none is fine" once sat beside the recommendations, and gpt-4o-mini read it as leave-them-out:
 # 5 answers in 6 came back with an empty list. Always-3-to-5 is said separately from the library matches.
@@ -119,18 +179,19 @@ def _configured_key() -> Optional[str]:
     return key
 
 
-def openai_complete(messages: List[Dict[str, str]]) -> str:
+def openai_complete(messages: List[Dict[str, str]], *, max_tokens: int = 4000, json_mode: bool = True,
+                    timeout: float = 60) -> str:
     key = _configured_key()
     if not key:
         raise AIUnavailable("AI isn't set up on this server: no AI key is configured.")
     from openai import OpenAI
 
-    client = OpenAI(api_key=key, base_url=get_openai_base_url(), timeout=60)
+    client = OpenAI(api_key=key, base_url=get_openai_base_url(), timeout=timeout)
     # A ceiling, not a target: reasoning models spend part of it thinking before they answer, and
     # at 1800 an answer listing library matches could be cut off mid-JSON and read as nothing.
     reply = client.chat.completions.create(
-        model=get_openai_model(), temperature=0.3, max_tokens=4000,
-        response_format={"type": "json_object"}, messages=messages,
+        model=get_openai_model(), temperature=0.3, max_tokens=max_tokens, messages=messages,
+        **({"response_format": {"type": "json_object"}} if json_mode else {}),
     )
     return reply.choices[0].message.content or ""
 
@@ -147,6 +208,36 @@ def _parse(text: str) -> Dict[str, Any]:
 
 def _text(value: Any, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit]
+
+
+@lru_cache(maxsize=1)
+def nist_catalog() -> tuple:
+    """NIST documents in the artifacts catalog that have written content, so each downloads as Word or PDF."""
+    try:
+        from ..routers.artifacts_router import _CATALOG_PATH, _load_artifact_content
+        catalog = json.loads(_CATALOG_PATH.read_text(encoding="utf-8"))
+        written = _load_artifact_content()
+    except Exception:  # noqa: BLE001 — recommendations work without the catalog
+        logger.warning("artifacts catalog unavailable for evidence references", exc_info=True)
+        return ()
+    found = []
+    for fw_key, fw in catalog.items():
+        if not str(fw_key).startswith("nist_") or not isinstance(fw, dict):
+            continue
+        for art in fw.get("artifacts") or []:
+            aid = art.get("artifact_id")
+            if aid and ((written.get(fw_key) or {}).get(aid) or {}).get("content"):
+                found.append({"artifact_id": aid, "framework_key": fw_key, "framework": fw.get("name") or fw_key,
+                              "title": art.get("name") or aid, "type": art.get("type"),
+                              "control_ref": art.get("control_ref")})
+    return tuple(found)
+
+
+def _nist_id(said: Any) -> Optional[str]:
+    """The NIST_SOURCES id an answer names, forgiving "NIST SP 800-53 Rev. 5" for SP800-53."""
+    norm = re.sub(r"[^A-Z0-9]", "", str(said or "").upper().replace("NIST", ""))
+    hits = [nid for nid, key in _NIST_NORM.items() if norm.startswith(key)]
+    return max(hits, key=lambda nid: len(_NIST_NORM[nid])) if hits else None
 
 
 def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Evidence]) -> str:
@@ -174,14 +265,27 @@ def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Eviden
             lines.append(f"- {ev.id} | {_text(ev.name, 120)} | {ev.evidence_type or '-'} | {summary or '-'}")
     else:
         lines.append("- none")
+    lines.append("\nNIST PUBLICATIONS (id | title):")
+    lines += [f"- {nid} | {title}" for nid, (title, _url) in NIST_SOURCES.items()]
+    lines.append("\nREFERENCE DOCUMENTS IN THE ARTIFACTS CATALOG (id | title | type | framework reference):")
+    lines += [f"- {a['artifact_id']} | {a['title']} | {a['type'] or '-'} | {a['control_ref'] or '-'}"
+              for a in nist_catalog()] or ["- none"]
     lines.append(
         "\nReturn JSON: {\"summary\": \"one or two sentences on what proves this item\", "
         "\"recommendations\": [{\"evidence_type\": \"short name, e.g. MFA configuration export\", "
         "\"description\": \"what it must show for THIS item\", \"how_to_collect\": \"where and how to get "
         "it: the system, report, export or screen\", \"priority\": \"high|medium|low\", "
-        "\"example_files\": [\"file names\"]}], \"matches\": [{\"evidence_id\": 0, \"reason\": \"why it "
-        "supports this item\", \"confidence\": 0.0}]}. Give 3-5 recommendations, most important first. \"recommendations\" must never be empty, even when no "
-        "existing record fits; \"matches\" may be empty, at most 5, best first."
+        "\"example_files\": [\"file names\"], \"document\": \"policy|standard|procedure|plan|report, or null\"}], "
+        "\"matches\": [{\"evidence_id\": 0, \"reason\": \"why it supports this item\", \"confidence\": 0.0}], "
+        "\"nist\": [{\"id\": \"an id from the NIST list\", \"refs\": \"the controls, practices or sections of that "
+        "publication that apply, e.g. CM-6, CM-7\", \"why\": \"how it applies to this item\"}], "
+        "\"references\": [{\"artifact_id\": \"an id from the catalog list\", \"reason\": \"how it helps with "
+        "this item\"}]}. Give 3-5 recommendations, most important first. Where a document the organisation "
+        "writes and approves would prove the item (a policy, standard, procedure, plan or report template), "
+        "include it and set \"document\" to its kind; tool output, scan results, configuration exports, "
+        "screenshots, tickets and logs are records, not documents, so their \"document\" is null. \"recommendations\" must never be empty, "
+        "even when no existing record fits; \"matches\" may be empty, at most 5, best first; \"nist\": the 1-3 "
+        "publications that best apply; \"references\": 0-3 catalog documents that would help, may be empty."
     )
     return "\n".join(lines)
 
@@ -203,12 +307,14 @@ def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
             continue
         priority = str(rec.get("priority") or "").lower()
         files = rec.get("example_files") if isinstance(rec.get("example_files"), list) else []
+        kind = str(rec.get("document") or "").strip().lower()
         recommendations.append({
             "evidence_type": _text(rec.get("evidence_type"), 120) or "Evidence",
             "description": _text(rec.get("description"), 800),
             "how_to_collect": _text(rec.get("how_to_collect"), 600),
             "priority": priority if priority in {"high", "medium", "low"} else "medium",
             "example_files": [_text(f, 80) for f in files if _text(f, 80)][:4],
+            "document": kind if kind in DOC_KINDS else None,
         })
 
     by_id = {ev.id: ev for ev in candidates}
@@ -239,9 +345,185 @@ def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
         logger.warning("AI evidence answer for item %s had nothing usable: %r", item.id, (raw or "")[:300])
         raise AIEmptyAnswer("The AI's answer came back empty or cut off, so nothing was saved. Try again.")
 
+    nist, named = [], set()
+    for ref in answer.get("nist") or []:
+        ref = ref if isinstance(ref, dict) else {"id": ref}
+        nid = _nist_id(ref.get("id"))
+        if nid and nid not in named:                     # an id not on our list is dropped
+            named.add(nid)
+            title, url = NIST_SOURCES[nid]
+            nist.append({"id": nid, "title": title, "url": url, "refs": _text(ref.get("refs"), 120),
+                         "why": _text(ref.get("why"), 240)})
+
+    catalog = {a["artifact_id"]: a for a in nist_catalog()}
+    references, picked = [], set()
+    for ref in answer.get("references") or []:
+        ref = ref if isinstance(ref, dict) else {"artifact_id": ref}
+        aid = str(ref.get("artifact_id") or "").strip()
+        if aid in catalog and aid not in picked:
+            picked.add(aid)
+            references.append({**catalog[aid], "reason": _text(ref.get("reason"), 240)})
+
     return {
         "summary": _text(answer.get("summary"), 600),
         "recommendations": recommendations,
         "matches": matches[:5],
         "library_checked": len(candidates),
+        "nist": nist[:3],
+        "references": references[:3],
     }
+
+
+# ── Drafting a recommended document ──────────────────────────────────────────
+
+DRAFT_STALE = timedelta(minutes=10)
+
+DRAFT_SYSTEM = (
+    "You are a cyber security governance writer. You draft one document an organisation will adopt to meet an "
+    "assessment requirement, following the structure and terms of the NIST guidance you are given. Write specific, "
+    "implementable text for this requirement, not generic filler. Use Markdown: headings, numbered statements and "
+    "tables where they help. Put facts you do not know (names, systems, dates, owners) in [square brackets] for the "
+    "organisation to fill in, and never claim that something is already in place."
+)
+
+# The shape of each kind of document, after the NIST publication that sets it.
+_STRUCTURE = {
+    "policy": ("a policy in the shape NIST SP 800-53's policy-and-procedure controls (the -1 controls) expect: a "
+               "document control table; Purpose; Scope; Roles and responsibilities; Management commitment; Policy "
+               "statements as numbered 'shall' statements; Compliance and exceptions; Review and update; References"),
+    "standard": ("a technical standard: a document control table; Purpose; Scope (systems and technologies); "
+                 "Requirements as numbered, testable statements, grouped by technology where it helps; Verification: "
+                 "how each requirement is checked; Exceptions; Review and update; References"),
+    "procedure": ("a procedure: a document control table; Purpose; Scope; Roles; Prerequisites; Steps as a numbered "
+                  "list saying who does what and when; Records kept as evidence; Review and update; References"),
+    "plan": ("a plan in the shape of the NIST template for its kind (SP 800-34 for contingency plans, SP 800-61 Rev. 3 "
+             "for incident response, SP 800-18 for security plans): a document control table; Introduction and "
+             "purpose; Scope; Roles and responsibilities; Concept of operations; the plan's phases or activities; "
+             "Testing, training and exercises; Plan maintenance; References"),
+    "report": ("a report template in the shape of NIST SP 800-115's reporting guidance: a document control table; "
+               "Executive summary; Scope and rules of engagement; Methodology; Findings as a table (ID, finding, "
+               "severity, evidence, recommendation) with [placeholders]; Conclusion; References"),
+}
+
+
+def loads(text: Optional[str]) -> Dict[str, Any]:
+    """The item's stored AI result as a dict ({} when empty or unreadable)."""
+    try:
+        data = json.loads(text or "{}")
+    except (TypeError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def draft_key(title: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", "-", str(title or "").lower()).strip("-")[:60] or "document"
+
+
+def draft_view(draft: Any) -> Any:
+    """A draft as the page should see it: one left 'drafting' by a restart reads as stopped."""
+    if not isinstance(draft, dict) or draft.get("status") != "drafting":
+        return draft
+    try:
+        started = datetime.fromisoformat(str(draft.get("started_at") or ""))
+    except ValueError:
+        started = None
+    if started is None or datetime.utcnow() - started > DRAFT_STALE:
+        return {**draft, "status": "failed", "error": "Drafting stopped before it finished. Try again."}
+    return draft
+
+
+def build_draft_prompt(item: ComplianceAssessmentDocumentItem, rec: Dict[str, Any], nist: List[Dict[str, Any]],
+                       organisation: Optional[str]) -> str:
+    assessment = getattr(item, "assessment", None)
+    fmt = getattr(assessment, "assessment_format", None) or ""
+    kind = rec.get("document") if rec.get("document") in _STRUCTURE else "standard"
+    lines = [
+        f"ORGANISATION: {organisation or '[Organisation name]'}",
+        f"ASSESSMENT: {getattr(assessment, 'name', None) or 'Assessment'}"
+        + (f" — each item is {FORMAT_GUIDE[fmt]}." if fmt in FORMAT_GUIDE else ""),
+        f"REQUIREMENT {item.item_number or ''}: {_text(item.control_description, 2000)}",
+        f"DOCUMENT TO WRITE: {rec.get('evidence_type')} (a {kind})",
+        f"IT MUST SHOW: {rec.get('description') or '-'}",
+        f"HOW IT WILL BE USED AS EVIDENCE: {rec.get('how_to_collect') or '-'}",
+        "NIST BASIS:",
+    ]
+    lines += [f"- {n.get('title')}" + (f": {n['refs']}" if n.get("refs") else "")
+              + (f" — {n['why']}" if n.get("why") else "") for n in nist] or [f"- {NIST_SOURCES['SP800-53'][0]}"]
+    lines.append(f"\nWrite {_STRUCTURE[kind]}. 900 to 1500 words. Start with a level-1 heading carrying the "
+                 "document's title. The References section lists the NIST publications above. Return only the "
+                 "document, in Markdown.")
+    return "\n".join(lines)
+
+
+def _draft_complete(messages: List[Dict[str, str]]) -> str:
+    return openai_complete(messages, max_tokens=6000, json_mode=False, timeout=180)
+
+
+def draft_document(item: ComplianceAssessmentDocumentItem, rec: Dict[str, Any], nist: List[Dict[str, Any]],
+                   organisation: Optional[str],
+                   complete: Optional[Callable[[List[Dict[str, str]]], str]] = None) -> str:
+    """One document drafted for the item, in Markdown, ending with the NIST credit line."""
+    text = (complete or _draft_complete)([
+        {"role": "system", "content": DRAFT_SYSTEM},
+        {"role": "user", "content": build_draft_prompt(item, rec, nist, organisation)},
+    ])
+    text = re.sub(r"^```(?:markdown|md)?\s*|\s*```$", "", (text or "").strip())
+    if len(text) < 400:
+        raise AIEmptyAnswer("The AI's draft came back empty or cut off. Try again.")
+    sources = ", ".join(n.get("title") or "" for n in nist) or NIST_SOURCES["SP800-53"][0]
+    return (text + "\n\n---\n\n*Prepared with reference to " + sources + ". NIST publications are reprinted "
+            "courtesy of the National Institute of Standards and Technology, U.S. Department of Commerce. Drafted "
+            "with AI: review it, fill in the [bracketed] details and approve it before use.*")
+
+
+def draft_into(db: Session, item_id: int, key: str,
+               complete: Optional[Callable[[List[Dict[str, str]]], str]] = None) -> None:
+    """Write one document draft onto the item. A failure is kept on the draft for the page to show."""
+    item = db.get(ComplianceAssessmentDocumentItem, item_id)
+    if item is None:
+        return
+    data = loads(item.ai_evidence_recommendation)
+    rec = next((r for r in data.get("recommendations") or []
+                if isinstance(r, dict) and draft_key(r.get("evidence_type")) == key), None)
+    try:
+        if rec is None:
+            raise AIEmptyAnswer("That document is no longer among this item's recommendations.")
+        tenant = db.get(Tenant, item.tenant_id)
+        content = draft_document(item, rec, data.get("nist") or [], getattr(tenant, "name", None), complete)
+        outcome = {"status": "ready", "content": content, "error": None, "generated_at": datetime.utcnow().isoformat()}
+    except (AIUnavailable, AIEmptyAnswer) as exc:
+        outcome = {"status": "failed", "error": str(exc)}
+    except Exception as exc:  # noqa: BLE001 — provider down, timeout, auth, rate limit
+        logger.warning("AI evidence draft failed for item %s", item_id, exc_info=True)
+        outcome = {"status": "failed", "error": f"The AI service did not answer ({type(exc).__name__}). Try again."}
+    db.refresh(item)                                    # a regenerate may have landed meanwhile
+    data = loads(item.ai_evidence_recommendation)
+    drafts = dict(data.get("drafts") or {})
+    drafts[key] = {**(drafts.get(key) or {}), **outcome}
+    data["drafts"] = drafts
+    item.ai_evidence_recommendation = json.dumps(data)
+    db.commit()
+
+
+def run_draft_job(tenant_slug: str, item_id: int, key: str, user_id: int) -> None:
+    """The background draft: its own tenant session, never raises."""
+    from ..db import open_tenant_session
+    from .ai_usage import usage_scope
+
+    db = open_tenant_session(tenant_slug)
+    try:
+        with usage_scope(tenant_slug=tenant_slug, actor_user_id=user_id, background_job_id=f"evidence-draft-{item_id}",
+                         module_key="compliance", feature_key="assessment_evidence_draft"):
+            draft_into(db, item_id, key)
+    except Exception:  # noqa: BLE001 — the draft then reads as stopped after DRAFT_STALE
+        logger.exception("Evidence draft job failed for item %s", item_id)
+        db.rollback()
+    finally:
+        db.close()
+
+
+def start_draft(tenant_slug: str, item_id: int, key: str, user_id: int) -> None:
+    """ponytail: a thread in the web process, as the regulatory analysis runs; a restart mid-draft leaves it
+    'drafting', which reads as stopped after DRAFT_STALE. Move to Celery if drafts must survive restarts."""
+    threading.Thread(target=run_draft_job, args=(tenant_slug, item_id, key, user_id), daemon=True,
+                     name=f"evidence-draft-{item_id}").start()

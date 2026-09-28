@@ -182,3 +182,93 @@ def test_an_answer_with_nothing_in_it_is_asked_once_more(db):
     result = advisor.recommend_evidence(db, _item(db), complete=model)
     assert len(asked) == 2 and result["recommendations"][0]["evidence_type"] == "HTTP response headers capture"
     assert "must never be empty" in asked[0][1]["content"]
+
+
+def test_recommendations_cite_nist_sources_catalog_documents_and_document_kinds(db, monkeypatch):
+    monkeypatch.setattr(advisor, "nist_catalog", lambda: ({
+        "artifact_id": "NIST-015", "framework_key": "nist_csf_2", "framework": "NIST CSF 2.0",
+        "title": "Data Security Policy", "type": "Policy", "control_ref": "PR.DS"},))
+    seen = {}
+
+    def model(messages):
+        seen["prompt"] = messages[1]["content"]
+        return json.dumps({"summary": "s", "recommendations": [
+            {"evidence_type": "Password standard", "description": "d", "priority": "high", "document": "Standard"},
+            {"evidence_type": "Signup test", "description": "d", "priority": "low", "document": "screenshot"}],
+            "nist": [{"id": "NIST SP 800-63B-4", "refs": "3.1.1.2", "why": "length rules"}, {"id": "SP 800-53 Rev. 5"},
+                     {"id": "SP800-63B"}, {"id": "ISO 27001"}],
+            "references": [{"artifact_id": "NIST-015", "reason": "covers credentials"}, {"artifact_id": "NIST-999"}]})
+
+    result = advisor.recommend_evidence(db, _item(db), complete=model)
+    assert "- SP800-63B | NIST SP 800-63B-4" in seen["prompt"]
+    assert "- NIST-015 | Data Security Policy | Policy | PR.DS" in seen["prompt"]
+    assert [r["document"] for r in result["recommendations"]] == ["standard", None]
+    assert [(n["id"], n["refs"]) for n in result["nist"]] == [("SP800-63B", "3.1.1.2"), ("SP800-53", "")]
+    assert result["nist"][0]["url"].startswith("https://csrc.nist.gov/")          # titles and links are ours
+    assert [(r["artifact_id"], r["framework_key"], r["reason"]) for r in result["references"]] == [
+        ("NIST-015", "nist_csf_2", "covers credentials")]                           # an invented id is dropped
+
+
+def test_a_recommended_document_is_drafted_exported_and_linked_to_governance(db, monkeypatch):
+    from grc import audit_logger
+    from grc.main import app
+
+    _item(db).ai_evidence_recommendation = json.dumps({"summary": "s", "matches": [], "recommendations": [
+        {"evidence_type": "Password standard", "description": "Minimum length 12 for every account",
+         "how_to_collect": "The approved standard", "priority": "high", "document": "standard"},
+        {"evidence_type": "IdP export", "description": "Settings", "priority": "high", "document": None}],
+        "nist": [{"id": "SP800-63B", "title": advisor.NIST_SOURCES["SP800-63B"][0], "refs": "3.1.1.2", "why": "length"}]})
+    db.commit()
+    written = []
+
+    def writer(messages):
+        written.append(messages[1]["content"])
+        return "```markdown\n# Password Standard\n\n" + "1. Passwords shall be at least 12 characters long. " * 20 + "\n```"
+
+    monkeypatch.setattr(audit_logger, "_resolve_tenant_slug", lambda request, tenant_id: "demo")
+    monkeypatch.setattr(advisor, "_configured_key", lambda: "sk-test")
+    monkeypatch.setattr(advisor, "start_draft", lambda slug, item_id, key, user_id: advisor.draft_into(db, item_id, key, writer))
+    user = db.get(m.GRCUser, 7)
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: user
+    try:
+        http = TestClient(app)
+        base = "/compliance/assessments/3/items/30"
+        assert http.post(f"{base}/ai-drafts", json={"title": "IdP export"}).status_code == 404      # not a document
+        started = http.post(f"{base}/ai-drafts", json={"title": "Password standard"})
+        assert started.status_code == 202 and started.json()["key"] == "password-standard"
+        assert "ORGANISATION: Demo Bank" in written[0] and "SP 800-63B-4" in written[0] and "technical standard" in written[0]
+
+        draft = http.get(f"{base}/ai-recommendation").json()["recommendation"]["drafts"]["password-standard"]
+        assert draft["status"] == "ready" and draft["content"].startswith("# Password Standard")
+        assert "courtesy of the National Institute of Standards and Technology" in draft["content"]
+        docx = http.get(f"{base}/ai-drafts/password-standard/export", params={"fmt": "docx"})
+        assert docx.status_code == 200 and docx.content[:2] == b"PK"
+        pdf = http.get(f"{base}/ai-drafts/password-standard/export", params={"fmt": "pdf"})
+        assert pdf.status_code == 200 and pdf.content[:4] == b"%PDF"
+
+        db.add(m.GovernanceDocument(id=501, tenant_id=1, title="Password Standard", doc_type="standard", status="draft"))
+        db.commit()
+        assert http.patch(f"{base}/ai-drafts/password-standard", json={"document_id": 999}).status_code == 404
+        assert http.patch(f"{base}/ai-drafts/password-standard", json={"document_id": 501}).json()["document_id"] == 501
+
+        # A regenerate keeps the drafts; one left 'drafting' by a restart reads as stopped.
+        monkeypatch.setattr(advisor, "openai_complete", lambda messages: json.dumps({"summary": "again", "recommendations": [
+            {"evidence_type": "Password standard", "description": "d", "priority": "high", "document": "standard"}]}))
+        again = http.post(f"{base}/ai-recommendation").json()["recommendation"]
+        assert again["drafts"]["password-standard"]["document_id"] == 501
+        stored = advisor.loads(_item(db).ai_evidence_recommendation)
+        stored["drafts"]["password-standard"].update(status="drafting", started_at="2020-01-01T00:00:00")
+        _item(db).ai_evidence_recommendation = json.dumps(stored)
+        db.commit()
+        stale = http.get(f"{base}/ai-recommendation").json()["recommendation"]["drafts"]["password-standard"]
+        assert stale["status"] == "failed" and "stopped" in stale["error"]
+
+        # A provider failure is kept on the draft for the page to show.
+        monkeypatch.setattr(advisor, "start_draft", lambda slug, item_id, key, user_id: advisor.draft_into(
+            db, item_id, key, lambda messages: (_ for _ in ()).throw(RuntimeError("down"))))
+        assert http.post(f"{base}/ai-drafts", json={"title": "Password standard"}).status_code == 202
+        failed = http.get(f"{base}/ai-recommendation").json()["recommendation"]["drafts"]["password-standard"]
+        assert failed["status"] == "failed" and "did not answer" in failed["error"]
+    finally:
+        app.dependency_overrides.clear()

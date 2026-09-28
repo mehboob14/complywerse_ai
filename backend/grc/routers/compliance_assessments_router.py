@@ -9,7 +9,7 @@ import logging
 import traceback
 from typing import Dict, List, Optional, Tuple
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, or_
@@ -6467,6 +6467,10 @@ def generate_ai_recommendation(
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
                             detail=f"The AI service did not answer ({type(exc).__name__}). Try again.")
 
+    from ..services.assessment_evidence_ai import loads as _stored
+    drafts = _stored(item.ai_evidence_recommendation).get("drafts")
+    if drafts:
+        result["drafts"] = drafts                        # documents drafted earlier outlive a regenerate
     item.ai_evidence_recommendation = json.dumps(result)
     item.ai_recommendation_generated_at = datetime.utcnow()
     db.commit()
@@ -6586,6 +6590,9 @@ def get_ai_recommendation(
             recommendation = json.loads(item.ai_evidence_recommendation)
             if isinstance(recommendation, dict):
                 recommendation.pop("model", None)  # the page says "AI", never the model
+                if isinstance(recommendation.get("drafts"), dict):
+                    from ..services.assessment_evidence_ai import draft_view
+                    recommendation["drafts"] = {k: draft_view(v) for k, v in recommendation["drafts"].items()}
         except json.JSONDecodeError:
             recommendation = {"raw": item.ai_evidence_recommendation}
     
@@ -6595,3 +6602,119 @@ def get_ai_recommendation(
         "recommendation": recommendation,
         "generated_at": item.ai_recommendation_generated_at.isoformat() if item.ai_recommendation_generated_at else None
     }
+
+
+def _ai_item(db: Session, current_user: GRCUser, assessment_id: int, item_id: int) -> ComplianceAssessmentDocumentItem:
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.assessment_id == assessment_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(get_user_tenants(current_user, db)),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+    return item
+
+
+class AIDraftStart(BaseModel):
+    title: str
+
+
+class AIDraftSaved(BaseModel):
+    document_id: int
+
+
+@router.post("/{assessment_id}/items/{item_id}/ai-drafts", status_code=status.HTTP_202_ACCEPTED)
+def start_ai_draft(
+    assessment_id: int,
+    item_id: int,
+    body: AIDraftStart,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Draft one of the item's recommended documents with AI, structured on the NIST guidance the
+    recommendation named. It runs in the background; the GET above shows its progress and the result."""
+    from .. import audit_logger
+    from ..services import assessment_evidence_ai as advisor
+
+    item = _ai_item(db, current_user, assessment_id, item_id)
+    data = advisor.loads(item.ai_evidence_recommendation)
+    key = advisor.draft_key(body.title)
+    rec = next((r for r in data.get("recommendations") or []
+                if isinstance(r, dict) and r.get("document") and advisor.draft_key(r.get("evidence_type")) == key), None)
+    if rec is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="That document isn't among this item's recommendations. Get recommendations first.")
+    drafts = dict(data.get("drafts") or {})
+    if (advisor.draft_view(drafts.get(key)) or {}).get("status") == "drafting":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This document is already being drafted.")
+    if not advisor._configured_key():
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="AI isn't set up on this server: no AI key is configured.")
+    tenant_slug = audit_logger._resolve_tenant_slug(request, item.tenant_id)
+    if not tenant_slug:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Couldn't tell which organisation this item belongs to.")
+    drafts[key] = {"title": rec.get("evidence_type"), "kind": rec.get("document"), "status": "drafting",
+                   "started_at": datetime.utcnow().isoformat(), "error": None}
+    data["drafts"] = drafts
+    item.ai_evidence_recommendation = json.dumps(data)
+    db.commit()
+    advisor.start_draft(tenant_slug, item.id, key, current_user.id)
+    return {"key": key, "status": "drafting"}
+
+
+@router.get("/{assessment_id}/items/{item_id}/ai-drafts/{key}/export")
+def export_ai_draft(
+    assessment_id: int,
+    item_id: int,
+    key: str,
+    fmt: str = Query("docx", description="docx | pdf | md"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """A drafted document as a Word, PDF or Markdown file."""
+    from ._artifact_export import build_export
+    from ..services.assessment_evidence_ai import loads
+
+    item = _ai_item(db, current_user, assessment_id, item_id)
+    draft = (loads(item.ai_evidence_recommendation).get("drafts") or {}).get(key) or {}
+    if draft.get("status") != "ready" or not draft.get("content"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="That draft isn't ready.")
+    if fmt not in ("docx", "pdf", "md"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Use docx, pdf or md.")
+    title = draft.get("title") or "Document"
+    body, media, ext = build_export(fmt, title=title, content=draft["content"], content_format="markdown")
+    name = re.sub(r"[^A-Za-z0-9 _.-]+", "", title).strip() or "document"
+    return StreamingResponse(io.BytesIO(body), media_type=media,
+                             headers={"Content-Disposition": f'attachment; filename="{name}.{ext}"'})
+
+
+@router.patch("/{assessment_id}/items/{item_id}/ai-drafts/{key}")
+def record_ai_draft_document(
+    assessment_id: int,
+    item_id: int,
+    key: str,
+    body: AIDraftSaved,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Remember the Governance document a draft was saved as. The page saves it through
+    POST /governance/documents itself, so that module's audit trail and workflows run as usual."""
+    from ..models import GovernanceDocument
+    from ..services.assessment_evidence_ai import loads
+
+    item = _ai_item(db, current_user, assessment_id, item_id)
+    doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == body.document_id,
+                                              GovernanceDocument.tenant_id == item.tenant_id).first()
+    if doc is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Governance document not found")
+    data = loads(item.ai_evidence_recommendation)
+    drafts = dict(data.get("drafts") or {})
+    if key not in drafts:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Draft not found")
+    drafts[key] = {**drafts[key], "document_id": doc.id}
+    data["drafts"] = drafts
+    item.ai_evidence_recommendation = json.dumps(data)
+    db.commit()
+    return {"key": key, "document_id": doc.id}
