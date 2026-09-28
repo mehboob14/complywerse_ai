@@ -7,7 +7,7 @@ a ratings provider, kept as history so a drop can be seen.
 """
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 
 from ._00_base import Base
 
@@ -56,6 +56,8 @@ class TPRAExternalRating(Base):
     grade = Column(String(8), nullable=True)
     captured_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     external_id = Column(String(200), nullable=True)
+    # What the provider says beyond the score: {"risks": {"critical": n, "high": n, ...}} (UpGuard).
+    details = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (

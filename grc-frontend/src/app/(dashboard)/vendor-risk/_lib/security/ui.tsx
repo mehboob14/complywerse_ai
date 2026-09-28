@@ -23,7 +23,14 @@ export interface Host {
   https: boolean; tls_issuer: string | null; tls_version: string | null; tls_expires: string | null; cdn_waf: string | null;
   ports: number[];
 }
-export interface Point { at: string; score: number; grade?: string | null }
+export interface Point { at: string; score: number; grade?: string | null; risks?: Record<string, number> | null }
+
+/** A provider's own count of risks by severity, worst first, e.g. "1 critical · 3 high". */
+export function riskCounts(risks?: Record<string, number> | null): string | null {
+  if (!risks) return null;
+  const shown = ['critical', 'high', 'medium', 'low'].filter((s) => risks[s]).map((s) => `${risks[s]} ${s}`);
+  return shown.length ? shown.join(' · ') : 'no open risks';
+}
 export interface VendorView {
   vendor: { id: number; name: string; tier: string | null; website: string | null };
   domains: string[]; extra_domains: string[]; enabled: boolean; shodan: boolean; running: boolean;

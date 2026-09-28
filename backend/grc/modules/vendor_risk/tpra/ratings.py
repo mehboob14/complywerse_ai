@@ -25,7 +25,7 @@ MAX_ROWS = 5000
 
 
 def record(db: Session, vendor: Vendor, provider: str, score: float, captured_at: datetime,
-           grade: Optional[str] = None, actor_id: Optional[int] = None
+           grade: Optional[str] = None, actor_id: Optional[int] = None, details: Optional[dict] = None
            ) -> Tuple[Optional[TPRAExternalRating], Optional[TPRAMonitoringSignal]]:
     """Keep one score. Returns (the rating, or None when that day is already held;
     the signal a drop raised, if any)."""
@@ -39,7 +39,8 @@ def record(db: Session, vendor: Vendor, provider: str, score: float, captured_at
         TPRAExternalRating.vendor_id == vendor.id, TPRAExternalRating.provider == provider,
         TPRAExternalRating.captured_at < day).order_by(TPRAExternalRating.captured_at.desc()).first())
     rating = TPRAExternalRating(tenant_id=vendor.tenant_id, vendor_id=vendor.id, provider=provider,
-                                score=float(score), grade=(grade or None) and str(grade)[:8], captured_at=day)
+                                score=float(score), grade=(grade or None) and str(grade)[:8], captured_at=day,
+                                details=details or None)
     db.add(rating)
     db.flush()
     if previous is None or previous.score - rating.score < DROP_POINTS:

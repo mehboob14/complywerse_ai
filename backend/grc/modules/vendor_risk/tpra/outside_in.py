@@ -514,7 +514,8 @@ def _ratings(db: Session, vendor_ids: List[int]) -> Dict[int, Dict[str, List[dic
               .order_by(TPRAExternalRating.captured_at.desc())):
         series = out.setdefault(r.vendor_id, {}).setdefault(r.provider, [])
         if len(series) < 12:
-            series.append({"at": r.captured_at.date().isoformat(), "score": round(r.score, 1), "grade": r.grade})
+            series.append({"at": r.captured_at.date().isoformat(), "score": round(r.score, 1), "grade": r.grade,
+                           "risks": (r.details or {}).get("risks")})
     return out
 
 

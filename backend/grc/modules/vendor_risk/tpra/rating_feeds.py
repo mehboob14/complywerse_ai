@@ -13,6 +13,7 @@ answers differently fails loudly in the monitoring log, never quietly.
 """
 from __future__ import annotations
 
+import logging
 from typing import Callable, Dict, Optional
 
 import requests
@@ -20,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from ....models import IntegrationConnection
 
+logger = logging.getLogger(__name__)
 CATEGORY = "security_rating"
 PROVIDERS = {"upguard": "UpGuard", "securityscorecard": "SecurityScorecard", "bitsight": "BitSight"}
 TIMEOUT = 30
@@ -39,8 +41,40 @@ def _letter(score: float, bands) -> str:
     return next(letter for floor, letter in bands if score >= floor)
 
 
+SEVERITIES = ("critical", "high", "medium", "low", "info")
+_SEVERITY_NUMBER = {"5": "critical", "4": "high", "3": "medium", "2": "low", "1": "info", "0": "info"}
+
+
+def _severity(value) -> str:
+    text = str(value if value is not None else "info").strip().lower()
+    text = _SEVERITY_NUMBER.get(text, text)
+    return text if text in SEVERITIES else "info"
+
+
+def upguard_risks(domain: str, creds: dict, get: Callable = requests.get) -> Optional[Dict[str, int]]:
+    """How many of each severity of risk UpGuard holds against the supplier. None when
+    it cannot say: the score still counts without them."""
+    try:
+        resp = get("https://cyber-risk.upguard.com/api/public/risks/vendors", params={"primary_hostname": domain},
+                   headers={"Authorization": creds["api_key"], "Accept": "application/json"}, timeout=TIMEOUT)
+        if resp.status_code == 404:
+            return None
+        resp.raise_for_status()
+        body = resp.json() or {}
+    except Exception as exc:  # noqa: BLE001 — the score must not fail for want of the risk list
+        logger.warning("UpGuard risks for %s not read: %s", domain, exc)
+        return None
+    risks = body.get("risks", body if isinstance(body, list) else [])
+    counts = {s: 0 for s in SEVERITIES}
+    for risk in risks if isinstance(risks, list) else []:
+        if isinstance(risk, dict):
+            counts[_severity(risk.get("severity", risk.get("severityName")))] += 1
+    return counts
+
+
 def upguard(domain: str, creds: dict, get: Callable = requests.get) -> Optional[dict]:
-    """UpGuard rates 0–950; its letter bands are A from 800 down to F below 200."""
+    """UpGuard rates 0–950; its letter bands are A from 800 down to F below 200. Its
+    count of risks by severity comes with the score."""
     resp = get("https://cyber-risk.upguard.com/api/public/vendor", params={"hostname": domain},
                headers={"Authorization": creds["api_key"], "Accept": "application/json"}, timeout=TIMEOUT)
     if resp.status_code == 404:
@@ -52,7 +86,8 @@ def upguard(domain: str, creds: dict, get: Callable = requests.get) -> Optional[
         return None
     raw = float(raw)
     return {"score": round(raw / 9.5, 1), "native": raw,
-            "grade": _letter(raw, ((800, "A"), (600, "B"), (400, "C"), (200, "D"), (0, "F")))}
+            "grade": _letter(raw, ((800, "A"), (600, "B"), (400, "C"), (200, "D"), (0, "F"))),
+            "risks": upguard_risks(domain, creds, get)}
 
 
 def securityscorecard(domain: str, creds: dict, get: Callable = requests.get) -> Optional[dict]:

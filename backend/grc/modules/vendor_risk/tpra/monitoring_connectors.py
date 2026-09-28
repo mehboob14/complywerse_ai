@@ -277,7 +277,8 @@ class RatingFeedConnector(MonitoringConnector):
         creds = rating_feeds.credentials(db, vendor.tenant_id, self.integration)
         found = rating_feeds.FETCH[self.integration](domains[0], creds) if domains and creds else None
         if found:
-            ratings.record(db, vendor, self.provider, found["score"], now, found.get("grade"))
+            ratings.record(db, vendor, self.provider, found["score"], now, found.get("grade"),
+                           details={"risks": found["risks"]} if found.get("risks") else None)
         return []
 
 

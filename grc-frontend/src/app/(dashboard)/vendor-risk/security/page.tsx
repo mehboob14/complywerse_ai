@@ -13,7 +13,7 @@ import { vendorSecurityApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { fmtDate } from '../_lib/tprmShared';
 import { TIER_CLS } from '../_lib/intake/types';
-import { GradeBadge, everyDays, type Portfolio } from '../_lib/security/ui';
+import { GradeBadge, everyDays, riskCounts, type Portfolio } from '../_lib/security/ui';
 
 const GRADES = ['A', 'B', 'C', 'D', 'F'] as const;
 const TIERS = ['critical', 'high', 'medium', 'low'];
@@ -144,7 +144,15 @@ export default function SecurityRatingsPage() {
                   <td className={clsx('px-4 py-3 text-right tabular-nums', r.serious ? 'font-medium text-rose-700' : 'text-slate-500')}>{r.score === null ? '—' : r.serious}</td>
                   <td className="hidden px-4 py-3 text-right tabular-nums text-slate-600 lg:table-cell">{r.waived || '—'}</td>
                   {providers.map((p) => (
-                    <td key={p} className="hidden px-4 py-3 text-right tabular-nums text-slate-600 lg:table-cell">{r.ratings[p]?.score ?? '—'}</td>
+                    <td key={p} className="hidden px-4 py-3 text-right tabular-nums text-slate-600 lg:table-cell"
+                      title={riskCounts(r.ratings[p]?.risks) ? `${p} risks: ${riskCounts(r.ratings[p]?.risks)}` : undefined}>
+                      {r.ratings[p]?.score ?? '—'}
+                      {!!(r.ratings[p]?.risks?.critical || r.ratings[p]?.risks?.high) && (
+                        <span className="block text-[11px] text-rose-700">
+                          {[r.ratings[p]?.risks?.critical ? `${r.ratings[p]?.risks?.critical} critical` : '', r.ratings[p]?.risks?.high ? `${r.ratings[p]?.risks?.high} high` : ''].filter(Boolean).join(' · ')}
+                        </span>
+                      )}
+                    </td>
                   ))}
                 </tr>
               ))}

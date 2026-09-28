@@ -15,7 +15,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { fmtDate } from './constants';
 import { errText } from '../../../_lib/intake/types';
 import {
-  GradeBadge, Meter, SCAN_PROVIDER, SEVERITY_CLS, SEVERITY_ORDER, Sparkline, type Finding, type VendorView,
+  GradeBadge, Meter, SCAN_PROVIDER, SEVERITY_CLS, SEVERITY_ORDER, Sparkline, riskCounts, type Finding, type VendorView,
 } from '../../../_lib/security/ui';
 
 const input = 'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-100';
@@ -171,6 +171,11 @@ export default function OutsideInPanel({ vendorId }: { vendorId: number }) {
                   <div>
                     <p className="text-sm text-slate-800">{p}</p>
                     <p className="text-xs text-slate-500">{series[0].score} of 100{series[0].grade ? ` · ${series[0].grade}` : ''} · {fmtDate(series[0].at)}</p>
+                    {riskCounts(series[0].risks) && (
+                      <p className={clsx('text-xs', series[0].risks?.critical || series[0].risks?.high ? 'text-rose-700' : 'text-slate-500')}>
+                        Its risks: {riskCounts(series[0].risks)}
+                      </p>
+                    )}
                   </div>
                   <Sparkline points={[...series].reverse()} width={96} height={28} label={`${p} rating`} />
                 </div>

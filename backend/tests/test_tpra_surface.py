@@ -221,8 +221,20 @@ class _Resp:
 
 def test_each_provider_lands_on_one_scale():
     creds = {"api_key": "k"}
-    assert rating_feeds.upguard("a.test", creds, get=lambda *a, **k: _Resp({"score": 760})) == \
-        {"score": 80.0, "native": 760.0, "grade": "B"}
+    def upguard(url, **kw):
+        if url.endswith("/risks/vendors"):                  # its risks by severity, however each is written
+            return _Resp({"risks": [{"severity": "critical"}, {"severity": "high"}, {"severity": 4},
+                                    {"severityName": "Medium"}, {}]})
+        return _Resp({"score": 760})
+    assert rating_feeds.upguard("a.test", creds, get=upguard) == {
+        "score": 80.0, "native": 760.0, "grade": "B",
+        "risks": {"critical": 1, "high": 2, "medium": 1, "low": 0, "info": 1}}
+
+    def risks_down(url, **kw):
+        if url.endswith("/risks/vendors"):
+            raise RuntimeError("timed out")
+        return _Resp({"score": 760})
+    assert rating_feeds.upguard("a.test", creds, get=risks_down)["risks"] is None   # the score still counts
     assert rating_feeds.upguard("a.test", creds, get=lambda *a, **k: _Resp({}, 404)) is None
     assert rating_feeds.securityscorecard("a.test", creds, get=lambda *a, **k: _Resp({"score": 87, "grade": "B"}))["score"] == 87.0
     answers = iter([_Resp({"results": [{"guid": "g-1", "name": "A"}]}),
@@ -254,3 +266,14 @@ def test_the_quarter_report_covers_every_critical_supplier(db):
     assert rated["rows"] == [["Payroll Co", 2, 70.0, 66, "D", -14.0, 75.0, None, 1]]
     assert unrated["rows"] == [["Quiet Co", "Never", "No domain on record"]]
     assert json.dumps(content)                                              # frozen as JSON
+
+
+def test_a_providers_risk_counts_are_kept_with_its_rating(db, monkeypatch):
+    found = {"score": 72.0, "grade": "B", "risks": {"critical": 1, "high": 3, "medium": 0, "low": 2, "info": 5}}
+    monkeypatch.setattr(rating_feeds, "credentials", lambda db, tid, integration: {"api_key": "k"})
+    monkeypatch.setitem(rating_feeds.FETCH, "upguard", lambda domain, creds: found)
+    feeds.RatingFeedConnector("upguard").poll(db, db.get(Vendor, 1), None, NOW)
+    db.commit()
+    rating = db.query(TPRAExternalRating).one()
+    assert (rating.provider, rating.score, rating.details) == ("UpGuard", 72.0, {"risks": found["risks"]})
+    assert outside_in._ratings(db, [1])[1]["UpGuard"][0]["risks"] == found["risks"]
