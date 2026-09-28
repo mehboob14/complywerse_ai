@@ -900,6 +900,7 @@ _COLUMN_ADDS = [
     ("grc_risks", "custom_values", "JSON", None),
     # Vendor onboarding requests (vendor_risk/tpra/intake.py).
     ("grc_vendors", "intake", "JSON", None),
+    ("grc_vendors", "custom_values", "JSON", None),
     ("grc_vendors", "intake_status", "VARCHAR(20)", "ix_grc_vendors_intake_status"),
     ("grc_vendors", "requested_by", "INTEGER", None),
     ("grc_vendors", "submitted_at", "TIMESTAMP", None),

@@ -27,6 +27,7 @@ import TpraLifecycle from './_tpra/TpraLifecycle';
 import DependenciesPanel from './_tpra/DependenciesPanel';
 import ExposurePanel from './_tpra/ExposurePanel';
 import OutsideInPanel from './_tpra/OutsideInPanel';
+import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
 
 interface Vendor {
   id: number;
@@ -37,6 +38,7 @@ interface Vendor {
   vendor_type: string | null;
   industry: string | null;
   website: string | null;
+  custom_values?: Record<string, unknown> | null;
   inherent_risk_score: number | null;
   residual_risk_score: number | null;
   risk_rating: string | null;
@@ -170,6 +172,7 @@ export default function VendorDetailPage() {
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
   const vendorId = Number(params.id);
+  const { data: vendorFieldSettings } = useModuleSettings('vendors');
   const { hasPermission } = usePermissions();
   const canEdit = hasPermission('vendor_risk:vendors:edit');
   const canCreate = hasPermission('vendor_risk:vendors:create');
@@ -512,6 +515,17 @@ export default function VendorDetailPage() {
             <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
               <h3 className="text-sm font-semibold text-slate-900 mb-2">Notes</h3>
               <p className="text-sm text-gray-600">{vendor.notes}</p>
+            </div>
+          )}
+          {hasCustomFields(vendorFieldSettings, vendor.custom_values) && (
+            <div className="col-span-full bg-white rounded-xl border border-gray-200 p-3 sm:p-4">
+              <h3 className="text-sm font-semibold text-slate-900 mb-2">Your fields</h3>
+              <CustomValuesEditor moduleKey="vendors" values={vendor.custom_values}
+                onSave={async (next) => {
+                  if (!next) return;
+                  await vendorRiskApi.updateVendor(vendorId, { custom_values: next });
+                  await queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] });
+                }} />
             </div>
           )}
         </div>

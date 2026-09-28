@@ -40,7 +40,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from ....models import Evidence, TPRAEvidenceLink, TPRASurfaceScan, TPRAVendorProduct, Vendor
-from . import adverse_media, monitoring, outside_in, rating_feeds, ratings
+from . import adverse_media, monitoring, monitoring_policy, outside_in, rating_feeds, ratings
 from .bootstrap import get_tiering_config
 
 logger = logging.getLogger(__name__)
@@ -70,6 +70,8 @@ class MonitoringConnector:
     reaches_internet: bool = False
     every_days: Optional[int] = None   # one cadence for every vendor, instead of the tier's
     cadence: Optional[dict] = None     # or its own days per tier, instead of monitoring.POLL_EVERY_DAYS
+    # Which of the tenant's cadences it follows (monitoring_policy): checks, or the slower scans.
+    cadence_key: str = "check_every_days"
     batch: Optional[int] = None        # fewer vendors per run for a slow feed
 
     def is_configured(self, db: Session, tenant_id: int) -> bool:
@@ -240,6 +242,7 @@ class SurfaceScanConnector(MonitoringConnector):
     kind = "ratings"
     reaches_internet = True
     cadence = outside_in.SCAN_EVERY_DAYS
+    cadence_key = "scan_every_days"
     batch = 10                         # a scan can take a minute
 
     def is_configured(self, db: Session, tenant_id: int) -> bool:
@@ -260,6 +263,7 @@ class RatingFeedConnector(MonitoringConnector):
     kind = "ratings"
     reaches_internet = True
     cadence = outside_in.SCAN_EVERY_DAYS
+    cadence_key = "scan_every_days"
 
     def __init__(self, integration: str):
         self.integration, self.provider = integration, rating_feeds.PROVIDERS[integration]
@@ -302,12 +306,14 @@ def run_connectors(db: Session, tenant_id: int, now: Optional[datetime] = None, 
     """Poll every configured feed for a tenant, each vendor on its tier's cadence."""
     now = now or datetime.utcnow()
     results = {}
+    days = monitoring_policy.for_tenant(db, tenant_id)
     for connector in CONNECTORS:
         if not connector.is_configured(db, tenant_id):
             continue
         tally = {"polled": 0, "failed": 0, "new_signals": 0, "verified": 0}
+        cadence = days.get(connector.cadence_key) or connector.cadence
         for vendor, last in monitoring.due_vendors(db, tenant_id, connector.provider, now, connector.batch or batch,
-                                                   every_days=connector.every_days, cadence=connector.cadence):
+                                                   every_days=connector.every_days, cadence=cadence):
             try:
                 with db.begin_nested():
                     for draft in connector.poll(db, vendor, last, now):

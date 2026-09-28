@@ -643,7 +643,8 @@ def ratings_quarter(db: Session, tenant_id: int, start: date, end: date, today: 
         scan = last_scan.get(v.id)
         serious = None
         if scan is not None:
-            counted = set(outside_in.score(scan.findings or [], waivers[v.id], end)["counted"])
+            counted = set(outside_in.score(scan.findings or [], waivers[v.id], end,
+                                           outside_in.rules(db, v.tenant_id))["counted"])
             serious = len({f["key"] for f in scan.findings or []
                            if f["key"] in counted and f["severity"] in ("critical", "high")})
         was = before.get((v.id, outside_in.PROVIDER))

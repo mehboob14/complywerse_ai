@@ -35,6 +35,7 @@ export interface VendorView {
   failed: { at: string; error: string | null } | null;
   history: Point[]; ratings: Record<string, Point[]>; waivers: Waiver[];
   categories: Record<string, string>; points: Record<Severity, number>; every_days: Record<string, number>;
+  grades?: Record<string, number>; category_cap?: number;
 }
 export interface PortfolioRow {
   vendor: { id: number; name: string; tier: string | null }; domains: string[]; score: number | null; grade: string | null;
@@ -43,8 +44,13 @@ export interface PortfolioRow {
 export interface Portfolio {
   items: PortfolioRow[]; grades: Record<string, number>; average: number | null; unscanned: number; no_domain: number;
   expiring_waivers: Array<Waiver & { vendor: { id: number; name: string } }>; enabled: boolean; shodan: boolean;
-  every_days: Record<string, number>;
+  every_days: Record<string, number>; grade_bands?: Record<string, number>;
 }
+
+/** "every 7 days" in words: a week, a month, a quarter... */
+export const everyDays = (d: number) =>
+  d === 1 ? 'daily' : d === 7 ? 'weekly' : d === 30 ? 'monthly' : d === 90 ? 'quarterly' : d === 180 ? 'twice a year'
+    : d === 365 ? 'yearly' : `every ${d} days`;
 
 export const SCAN_PROVIDER = 'Outside-in scan';
 export const SEVERITY_ORDER: Severity[] = ['critical', 'high', 'medium', 'low'];

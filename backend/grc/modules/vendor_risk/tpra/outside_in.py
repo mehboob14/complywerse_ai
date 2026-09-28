@@ -34,7 +34,7 @@ from ....models import (
     GRCUser, TPRAExternalRating, TPRAMonitoringCursor, TPRASurfaceScan, TPRASurfaceWaiver, Tenant, Vendor, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
-from . import intake, monitoring, ratings, rbac, service
+from . import intake, monitoring, monitoring_policy, ratings, rbac, service
 from .bootstrap import get_tiering_config
 
 logger = logging.getLogger(__name__)
@@ -45,9 +45,10 @@ CATEGORIES = {
     "tls": "Certificates and encryption", "web": "Web hardening", "email": "Email protection",
     "exposure": "Exposed services", "vulns": "Known vulnerabilities", "software": "Out-of-date software",
 }
-POINTS = {"critical": 30, "high": 15, "medium": 6, "low": 2}
-CATEGORY_CAP = 40
-SCAN_EVERY_DAYS = {"critical": 7, "high": 30, "medium": 90, "low": 180}
+# The defaults; a tenant sets its own (monitoring_policy.py).
+POINTS = monitoring_policy.POINTS
+CATEGORY_CAP = monitoring_policy.CATEGORY_CAP
+SCAN_EVERY_DAYS = monitoring_policy.SCAN_EVERY_DAYS
 MAX_DOMAINS = 10
 MAX_NAMES = 60            # names taken from certificate logs per domain, before resolving
 MAX_HOSTS = 12            # hosts looked at per scan, apex and www of each domain first
@@ -254,8 +255,13 @@ def shodan_host(ip: str, key: str, get: Callable = requests.get) -> dict:
 
 # ── the score ────────────────────────────────────────────────────────────────
 
-def _grade(score: int) -> str:
-    return "A" if score >= 90 else "B" if score >= 80 else "C" if score >= 70 else "D" if score >= 55 else "F"
+def _grade(score: int, grades: Optional[Dict[str, int]] = None) -> str:
+    return monitoring_policy.grade(score, grades)
+
+
+def rules(db: Session, tenant_id: int) -> dict:
+    """The tenant's points, category cap, grades and scan cadence."""
+    return monitoring_policy.for_tenant(db, tenant_id)
 
 
 def live_waivers(waivers: Iterable[TPRASurfaceWaiver], today: date) -> List[TPRASurfaceWaiver]:
@@ -266,21 +272,25 @@ def waiver_for(finding: dict, waivers: Iterable[TPRASurfaceWaiver]) -> Optional[
     return next((w for w in waivers if w.finding_key == finding["key"] and (not w.host or w.host == finding.get("host"))), None)
 
 
-def score(findings: List[dict], waivers: Iterable[TPRASurfaceWaiver], today: date) -> dict:
-    """{score, grade, categories, counted} for these findings with the waivers in date."""
+def score(findings: List[dict], waivers: Iterable[TPRASurfaceWaiver], today: date, rules: Optional[dict] = None) -> dict:
+    """{score, grade, categories, counted} for these findings with the waivers in date,
+    by the tenant's rules (monitoring_policy.merged) or the defaults."""
+    points = (rules or {}).get("scan_points") or POINTS
+    cap = (rules or {}).get("scan_category_cap") or CATEGORY_CAP
     active = live_waivers(waivers, today)
     worst: Dict[str, dict] = {}
     for f in findings:
         if waiver_for(f, active):
             continue
         held = worst.get(f["key"])
-        if held is None or POINTS[f["severity"]] > POINTS[held["severity"]]:
+        if held is None or points[f["severity"]] > points[held["severity"]]:
             worst[f["key"]] = f
     taken = {c: 0 for c in CATEGORIES}
     for f in worst.values():
-        taken[f["category"]] += POINTS[f["severity"]]
-    total = max(0, 100 - sum(min(CATEGORY_CAP, pts) for pts in taken.values()))
-    return {"score": total, "grade": _grade(total), "categories": {c: max(0, 100 - pts) for c, pts in taken.items()},
+        taken[f["category"]] += points[f["severity"]]
+    total = max(0, 100 - sum(min(cap, pts) for pts in taken.values()))
+    return {"score": total, "grade": _grade(total, (rules or {}).get("grades")),
+            "categories": {c: max(0, 100 - pts) for c, pts in taken.items()},
             "counted": sorted(worst)}
 
 
@@ -405,7 +415,7 @@ def complete(db: Session, scan: TPRASurfaceScan, vendor: Vendor, now: Optional[d
         scan.status, scan.finished_at, scan.error = "failed", now, f"{exc}"[:500]
         return []
     waivers = waivers_of(db, vendor)
-    result = score(findings, waivers, now.date())
+    result = score(findings, waivers, now.date(), rules(db, vendor.tenant_id))
     scan.hosts, scan.findings, scan.finished_at, scan.status = hosts, findings, now, "done"
     scan.technologies = technologies(hosts)
     if not any(h["live"] or h["tls_expires"] for h in hosts):
@@ -520,13 +530,15 @@ def vendor_view(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = D
     waivers = waivers_of(db, v)
     active = live_waivers(waivers, today)
     names = _names(db, [w.created_by for w in waivers])
+    tenant_rules = rules(db, v.tenant_id)
     view = None
     if latest is not None:
-        now_score = score(latest.findings or [], waivers, today) if latest.score is not None else None
+        now_score = score(latest.findings or [], waivers, today, tenant_rules) if latest.score is not None else None
         findings = []
         for f in latest.findings or []:
             w = waiver_for(f, active)
-            findings.append({**f, "points": POINTS[f["severity"]], "category_label": CATEGORIES.get(f["category"]),
+            findings.append({**f, "points": tenant_rules["scan_points"][f["severity"]],
+                             "category_label": CATEGORIES.get(f["category"]),
                              "waiver": _waiver_row(w, today, names) if w else None})
         view = {"id": latest.id, "at": latest.finished_at or latest.started_at, "domains": latest.domains,
                 "hosts": latest.hosts or [], "findings": findings,
@@ -544,7 +556,8 @@ def vendor_view(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = D
         "history": [{"at": s.finished_at or s.started_at, "score": s.score, "grade": s.grade} for s in reversed(done) if s.score is not None],
         "ratings": _ratings(db, [v.id]).get(v.id, {}),
         "waivers": [_waiver_row(w, today, names) for w in sorted(waivers, key=lambda w: w.created_at, reverse=True)],
-        "categories": CATEGORIES, "points": POINTS, "every_days": SCAN_EVERY_DAYS,
+        "categories": CATEGORIES, "points": tenant_rules["scan_points"], "every_days": tenant_rules["scan_every_days"],
+        "grades": tenant_rules["grades"], "category_cap": tenant_rules["scan_category_cap"],
     }
 
 
@@ -568,13 +581,14 @@ def portfolio(db: Session = Depends(get_db), user: GRCUser = Depends(require_aut
         waivers.setdefault(w.vendor_id, []).append(w)
     rated = _ratings(db, [v.id for v in vendors])
     names = _names(db, [w.created_by for ws in waivers.values() for w in ws])
+    tenant_rules = rules(db, tid)
     rows, grades = [], {g: 0 for g in "ABCDF"}
     expiring = []
     for v in vendors:
         own = scans.get(v.id, [])
         ws = waivers.get(v.id, [])
         latest = own[0] if own else None
-        now_score = score(latest.findings or [], ws, today) if latest and latest.score is not None else None
+        now_score = score(latest.findings or [], ws, today, tenant_rules) if latest and latest.score is not None else None
         counted = set(now_score["counted"]) if now_score else set()
         serious = len({f["key"] for f in (latest.findings or []) if f["key"] in counted
                        and f["severity"] in ("critical", "high")}) if latest else 0
@@ -599,7 +613,7 @@ def portfolio(db: Session = Depends(get_db), user: GRCUser = Depends(require_aut
         "no_domain": sum(1 for r in rows if not r["domains"]),
         "expiring_waivers": sorted(expiring, key=lambda w: w["expires_on"]),
         "enabled": policy_on(db, tid), "shodan": bool((_sources(db, tid).get("shodan") or {}).get("api_key")),
-        "every_days": SCAN_EVERY_DAYS,
+        "every_days": tenant_rules["scan_every_days"], "grade_bands": tenant_rules["grades"],
     }
 
 

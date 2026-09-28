@@ -13,7 +13,7 @@ import { vendorSecurityApi } from '@/lib/api';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { fmtDate } from '../_lib/tprmShared';
 import { TIER_CLS } from '../_lib/intake/types';
-import { GradeBadge, type Portfolio } from '../_lib/security/ui';
+import { GradeBadge, everyDays, type Portfolio } from '../_lib/security/ui';
 
 const GRADES = ['A', 'B', 'C', 'D', 'F'] as const;
 const TIERS = ['critical', 'high', 'medium', 'low'];
@@ -44,8 +44,12 @@ export default function SecurityRatingsPage() {
           <h1 className="text-xl font-semibold text-slate-900">Security ratings</h1>
           <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
             How each supplier&apos;s websites and domains look from outside: certificates, web hardening, email spoofing
-            protection and, with a Shodan key, exposed services and known vulnerabilities. Critical suppliers are scanned
-            weekly, high monthly, others quarterly or twice a year.
+            protection and, with a Shodan key, exposed services and known vulnerabilities.
+            {data?.every_days && <> Scanned by tier: critical {everyDays(data.every_days.critical)}, high {everyDays(data.every_days.high)},
+              medium {everyDays(data.every_days.medium)}, low {everyDays(data.every_days.low)}.</>}
+            {data?.grade_bands && <> Grades: A from {data.grade_bands.A}, B from {data.grade_bands.B}, C from {data.grade_bands.C},
+              D from {data.grade_bands.D}, F below. </>}
+            <Link href="/vendor-risk/settings#scan-scoring" className="text-primary-700 hover:underline">Change these</Link>
           </p>
         </div>
         <Link href="/vendor-risk/reports" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">

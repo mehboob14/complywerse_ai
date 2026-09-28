@@ -12,6 +12,7 @@ from ....models import (
     GRCUser, Tenant, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ....services.module_settings import clean_record_values
 from ..tpra import rbac
 
 router = APIRouter(tags=["Vendors"])
@@ -43,6 +44,8 @@ class VendorCreate(BaseModel):
     owner_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     notes: Optional[str] = None
+    # The tenant's own fields (services/module_settings.py, module "vendors").
+    custom_values: Optional[dict] = None
     # Intake duplicate-relationship check: set True to create despite a name/website match.
     allow_duplicate: Optional[bool] = False
 
@@ -76,6 +79,8 @@ class VendorUpdate(BaseModel):
     # TPRA additive fields (lifecycle_stage / trackers managed via dedicated endpoints)
     reassessment_cadence_days: Optional[int] = None
     contract_document_id: Optional[int] = None
+    # Only the fields sent change; a field sent as null is cleared.
+    custom_values: Optional[dict] = None
 
 
 # ── Serializers ───────────────────────────────────────────────────
@@ -119,6 +124,7 @@ def serialize_vendor(v: Vendor, include_counts: bool = False) -> dict:
         "remediation_actions": getattr(v, "remediation_actions", None) or [],
         # Set when the vendor came in as an onboarding request (tpra/onboarding.py).
         "intake_status": getattr(v, "intake_status", None),
+        "custom_values": getattr(v, "custom_values", None) or {},
         "created_at": v.created_at.isoformat() if v.created_at else None,
         "updated_at": v.updated_at.isoformat() if v.updated_at else None,
     }
@@ -225,8 +231,13 @@ def create_vendor(
                 detail=f"A vendor named “{existing.name}” already exists (ID {existing.id}). It may be the same relationship.",
             )
 
+    try:
+        custom_values = clean_record_values(db, tenant_id, "vendors", payload.custom_values, creating=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     vendor = Vendor(
         tenant_id=tenant_id,
+        custom_values=custom_values,
         name=payload.name,
         description=payload.description,
         tier=payload.tier,
@@ -410,6 +421,12 @@ def update_vendor(
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "custom_values" in update_data:
+        try:
+            vendor.custom_values = clean_record_values(db, vendor.tenant_id, "vendors", update_data.pop("custom_values"),
+                                                       current=vendor.custom_values, creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     justification = " ".join((update_data.pop("tier_justification", None) or "").split())
     # Changing the tier of a vendor whose tier was computed is an override: it
     # needs a reason, and goes on the audit trail with what the engine said.

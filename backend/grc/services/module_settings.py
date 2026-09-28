@@ -151,6 +151,28 @@ MODULES: Dict[str, Dict[str, Any]] = {
         "priorities": (),
         "defaults": {"fields": []},
     },
+    "vendors": {
+        "label": "Third-Party Risk",
+        "record": "Supplier",
+        "sections": ("fields", "lists"),
+        "permissions": {"view": "vendor_risk:vendors:view", "edit": "vendor_risk:config:edit"},
+        "priorities": (),
+        # Free text throughout: records already hold whatever was typed before.
+        "lists": {
+            "vendor_type": {"label": "Supplier type", "free_text": True, "options": _options(
+                "Software as a service", "Software we install", "Professional services", "Hosting or infrastructure",
+                "Outsourced business process", "Hardware", "Other")},
+            "industry": {"label": "Industry", "free_text": True, "options": _options(
+                "Financial services", "Technology", "Telecommunications", "Healthcare", "Professional services",
+                "Logistics", "Manufacturing", "Retail", "Public sector", "Other")},
+            "questionnaire_category": {"label": "Questionnaire category", "free_text": True, "options": _options(
+                ("security", "Security"), ("privacy", "Privacy"), ("compliance", "Compliance"),
+                ("operational", "Operational"), ("financial", "Financial"), ("general", "General"))},
+            "document_type": {"label": "Supplier document type", "free_text": True, "options": _options(
+                "Document", "Policy", "Procedure", "Form", "Register", "Agreement", "Report", "Plan", "Attestation")},
+        },
+        "defaults": {"fields": []},
+    },
     "risks": {
         "label": "Risk Register",
         "record": "Risk",

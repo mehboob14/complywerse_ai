@@ -68,6 +68,8 @@ class Vendor(Base):
     stakeholder_ids = Column(JSON, nullable=True)
     notify_emails = Column(Text, nullable=True)
     domains = Column(JSON, nullable=True)            # other domains beyond the website, for outside-in scans
+    # The tenant's own fields on a supplier (services/module_settings.py, module "vendors").
+    custom_values = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

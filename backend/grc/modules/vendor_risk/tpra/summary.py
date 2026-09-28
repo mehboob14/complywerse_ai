@@ -200,7 +200,8 @@ def summary(db: Session, tenant_id: int, vendor: Vendor, today: date, narrative:
                                                         TPRASurfaceScan.status == "done")
             .order_by(TPRASurfaceScan.started_at.desc()).first())
     waivers = outside_in.waivers_of(db, vendor)
-    now_score = outside_in.score(scan.findings or [], waivers, today) if scan is not None and scan.score is not None else None
+    now_score = (outside_in.score(scan.findings or [], waivers, today, outside_in.rules(db, vendor.tenant_id))
+                 if scan is not None and scan.score is not None else None)
     decide = contract_rules.decide_days(db, tenant_id)
     deals = [contract_rules.describe(c, vendor, today, decide) for c in db.query(TPRAContract).filter(
         TPRAContract.vendor_id == vendor.id, TPRAContract.deleted_at.is_(None))]

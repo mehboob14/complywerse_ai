@@ -10,13 +10,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { clsx } from 'clsx';
 import {
   AlertCircle, BellRing, CalendarClock, ChevronsDownUp, ChevronsUpDown, Coins, FileCheck2, Gauge, Layers, ListChecks,
-  Loader2, Mail, MessageSquareText, Radio, Save, Search, Settings, SlidersHorizontal, type LucideIcon,
+  Loader2, Mail, MessageSquareText, Radar, Radio, Save, Search, Settings, SlidersHorizontal, TableProperties, type LucideIcon,
 } from 'lucide-react';
 import { tpraApi, vendorEmailsApi, vendorRiskApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import { FieldsEditor, ListsEditor, liveFields, useModuleSettings } from '@/components/settings/CustomFields';
 import ExposureSection, { exposureProblems, exposureSummary, type Quant } from './_Exposure';
 import { EvidenceEditor, FactorsEditor, activeEvidence, type EvidenceDraft, type Named } from './_Lists';
 import QuestionsEditor, {
@@ -29,14 +30,17 @@ interface ReminderPolicy {
   escalate_to: string[]; checkin_every_days?: number; contract_before_days?: number; contract_notify?: string[];
 }
 interface TierRules { template_ids: number[]; evidence: string[]; approver_role: string | null; reassess_on: string }
+interface MonitoringPolicy {
+  adverse_media: boolean; outside_in: boolean; check_every_days: Record<string, number>; scan_every_days: Record<string, number>;
+  scan_points: Record<string, number>; scan_category_cap: number; grades: Record<string, number>;
+}
 interface Defaults {
   weights: Record<string, number>; thresholds: Record<string, number>; cadence_days: Record<string, number>;
   reminder_policy: ReminderPolicy; scoring_policy?: { partial_credit: number }; tier_policy?: Record<string, TierRules>;
-  quantification?: Quant;
+  quantification?: Quant; monitoring_policy?: Partial<MonitoringPolicy>;
 }
 interface Customisation extends QuestionsDraft, EvidenceDraft { factors: Named[] }
 interface ConfigResp extends Defaults {
-  monitoring_policy?: { adverse_media?: boolean; outside_in?: boolean };
   customisation?: Customisation;
   defaults: Defaults;
   meta: {
@@ -53,7 +57,8 @@ interface Draft {
   tier_policy: Record<string, TierRules>;
   cadence_days: Record<string, number>;
   reminder_policy: ReminderPolicy;
-  monitoring_policy: { adverse_media: boolean; outside_in: boolean };
+  monitoring_policy: Pick<MonitoringPolicy, 'adverse_media' | 'outside_in' | 'check_every_days' | 'scan_every_days'>;
+  scan_scoring: Pick<MonitoringPolicy, 'scan_points' | 'scan_category_cap' | 'grades'>;   // sent within monitoring_policy
   scoring_policy: { partial_credit: number };
   quantification: Quant;
   custom_questions: QuestionsDraft;          // these three are sent together as `customisation`
@@ -70,9 +75,14 @@ function toDraft(c: ConfigResp, from: Defaults): Draft {
     tier_policy: clone(from.tier_policy || {}),
     cadence_days: { ...from.cadence_days },
     reminder_policy: { ...clone(from.reminder_policy), escalate_to: [...(from.reminder_policy.escalate_to || [])] },
-    monitoring_policy: from === c
-      ? { adverse_media: !!c.monitoring_policy?.adverse_media, outside_in: !!c.monitoring_policy?.outside_in }
-      : { adverse_media: false, outside_in: false },
+    ...(() => {
+      const m = { ...(c.defaults.monitoring_policy || {}), ...(from.monitoring_policy || {}) } as MonitoringPolicy;
+      return {
+        monitoring_policy: { adverse_media: !!m.adverse_media, outside_in: !!m.outside_in,
+          check_every_days: { ...m.check_every_days }, scan_every_days: { ...m.scan_every_days } },
+        scan_scoring: { scan_points: { ...m.scan_points }, scan_category_cap: m.scan_category_cap, grades: { ...m.grades } },
+      };
+    })(),
     scoring_policy: { partial_credit: from.scoring_policy?.partial_credit ?? 0.5 },
     quantification: clone((from.quantification || c.quantification) as Quant),
     // The defaults have none of the organisation's own questions, factors or evidence types.
@@ -132,6 +142,8 @@ export default function VendorRiskSettingsPage() {
     ...TPRM_QUERY_OPTS,
   });
 
+  const { data: recordSettings } = useModuleSettings('vendors');
+  const [recordPart, setRecordPart] = useState<'fields' | 'lists'>('fields');
   const saved = useMemo(() => (data ? toDraft(data, data) : null), [data]);
   const [draft, setDraft] = useState<Draft | null>(null);
   useEffect(() => { if (saved) setDraft(clone(saved)); }, [saved]);
@@ -168,6 +180,8 @@ export default function VendorRiskSettingsPage() {
         if (k === 'custom_questions') Object.assign(custom, draft!.custom_questions);
         else if (k === 'custom_factors') custom.factors = draft!.custom_factors;
         else if (k === 'custom_evidence') Object.assign(custom, draft!.custom_evidence);
+        else if (k === 'scan_scoring') body.monitoring_policy = { ...(body.monitoring_policy as object || {}), ...draft!.scan_scoring };
+        else if (k === 'monitoring_policy') body.monitoring_policy = { ...(body.monitoring_policy as object || {}), ...draft!.monitoring_policy };
         else body[k] = draft![k];
       });
       if (Object.keys(custom).length) body.customisation = custom;
@@ -235,6 +249,15 @@ export default function VendorRiskSettingsPage() {
     ...questionsProblems(cq).map((p) => `Onboarding questions: ${p}`),
     ...(draft.custom_factors.some((f) => !f.archived && !f.label.trim()) ? ['Every factor needs a name'] : []),
     ...(draft.custom_evidence.evidence.some((e) => !e.archived && !e.label.trim()) ? ['Every evidence type needs a name'] : []),
+    ...(() => {
+      const pts = draft.scan_scoring.scan_points;
+      const g = draft.scan_scoring.grades;
+      return [
+        ...(pts.critical >= pts.high && pts.high >= pts.medium && pts.medium >= pts.low ? []
+          : ['Scan scoring: a more severe finding must take off at least as many points']),
+        ...(g.A > g.B && g.B > g.C && g.C > g.D ? [] : ['Scan scoring: each grade must start above the next']),
+      ];
+    })(),
   ];
 
   const sections: Array<{ group: string; items: SectionDef[] }> = [
@@ -481,12 +504,32 @@ export default function VendorRiskSettingsPage() {
         summary: `News search ${draft.monitoring_policy.adverse_media ? 'on' : 'off'} · Scanning from outside ${draft.monitoring_policy.outside_in ? 'on' : 'off'} · Lapsing certificates always watched`,
         body: () => {
           const m = draft.monitoring_policy;
+          const cadenceRow = (field: 'check_every_days' | 'scan_every_days', tier: string, max: number) => (
+            <label key={tier} className="block rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
+              {TIER_LABEL[tier]}
+              <span className="mt-1 flex items-center gap-1">
+                <input type="number" min={1} max={max} disabled={!canEdit} value={m[field][tier] ?? ''}
+                  aria-label={`${TIER_LABEL[tier]} supplier: days between ${field === 'check_every_days' ? 'checks' : 'scans'}`}
+                  onChange={(e) => set('monitoring_policy', { ...m, [field]: { ...m[field], [tier]: Number(e.target.value) } })}
+                  className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm tabular-nums disabled:bg-slate-50" />
+                <span className="text-slate-400">days</span>
+              </span>
+              <span className="mt-0.5 block text-[11px] text-slate-400">{days(m[field][tier])}</span>
+            </label>
+          );
           return (
             <>
-              <Help>
-                Certificates and reports on file that lapse are always watched. Each supplier is checked on its tier’s cadence:
-                critical daily, high weekly, medium monthly, low quarterly.
-              </Help>
+              <Help>Certificates and reports on file that lapse are always watched, on the cadence below.</Help>
+              <div className="mb-3 rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-medium text-slate-800">How often each supplier is checked</p>
+                <p className="mb-2 text-[11px] text-slate-500">Lapsed certificates and, when it is on, the news search, by the supplier’s tier.</p>
+                <div className="grid gap-2 sm:grid-cols-4">{TIERS.map((k) => cadenceRow('check_every_days', k, 365))}</div>
+              </div>
+              <div className="mb-3 rounded-lg border border-slate-200 p-3">
+                <p className="text-sm font-medium text-slate-800">How often each supplier is scanned from outside</p>
+                <p className="mb-2 text-[11px] text-slate-500">The outside-in scan and any connected ratings service, by the supplier’s tier.</p>
+                <div className="grid gap-2 sm:grid-cols-4">{TIERS.map((k) => cadenceRow('scan_every_days', k, 730))}</div>
+              </div>
               <label className="flex items-start gap-2 rounded-lg border border-slate-200 p-3 text-sm text-slate-700">
                 <input type="checkbox" className="mt-1" disabled={!canEdit} checked={m.adverse_media}
                   onChange={(e) => set('monitoring_policy', { ...m, adverse_media: e.target.checked })} />
@@ -505,15 +548,99 @@ export default function VendorRiskSettingsPage() {
                   Scan each supplier’s websites and domains from outside
                   <span className="mt-0.5 block text-[11px] text-slate-500">
                     Looks at what any visitor sees: certificates, HTTPS and protective headers, and email spoofing protection, plus
-                    exposed services and known vulnerabilities when a Shodan key is connected. Nothing is port-scanned. Critical
-                    suppliers weekly, high monthly, medium quarterly, low twice a year. A supplier’s first scan sets its baseline;
-                    after that a new high or critical finding raises an alert.
+                    exposed services and known vulnerabilities when a Shodan key is connected. Nothing is port-scanned. A supplier’s
+                    first scan sets its baseline; after that a new high or critical finding raises an alert.
                   </span>
                 </span>
               </label>
             </>
           );
         },
+      },
+    ] },
+    { group: 'Security ratings', items: [
+      {
+        id: 'scan-scoring', keys: ['scan_scoring'], icon: Radar, title: 'How an outside-in scan is scored',
+        keywords: 'security rating score grade points severity category cap outside-in scan',
+        summary: `A from ${draft.scan_scoring.grades.A}, B ${draft.scan_scoring.grades.B}, C ${draft.scan_scoring.grades.C}, D ${draft.scan_scoring.grades.D} · a critical finding takes off ${draft.scan_scoring.scan_points.critical}`,
+        body: () => {
+          const sc = draft.scan_scoring;
+          const numIn = (value: number, onChange: (n: number) => void, label: string) => (
+            <input type="number" min={0} max={100} disabled={!canEdit} value={value} aria-label={label}
+              onChange={(e) => onChange(Number(e.target.value))}
+              className="w-full rounded-lg border border-slate-300 bg-white px-2 py-1 text-right text-sm tabular-nums disabled:bg-slate-50" />
+          );
+          return (
+            <>
+              <Help>
+                A supplier’s score starts at 100. Each weakness a scan finds takes off its severity’s points, once however many
+                of the supplier’s hosts share it, and no one category can take off more than the cap. A waived finding does not
+                count until its waiver ends. The grade follows from the score.
+              </Help>
+              <div className="mb-3 rounded-lg border border-slate-200 p-3">
+                <p className="mb-2 text-sm font-medium text-slate-800">Points a finding takes off, by severity</p>
+                <div className="grid gap-2 sm:grid-cols-4">
+                  {(['critical', 'high', 'medium', 'low'] as const).map((sev) => (
+                    <label key={sev} className="block rounded-lg bg-slate-50 p-2 text-xs capitalize text-slate-600">
+                      {sev}
+                      <span className="mt-1 block">{numIn(sc.scan_points[sev], (n) => set('scan_scoring', { ...sc, scan_points: { ...sc.scan_points, [sev]: n } }), `Points for a ${sev} finding`)}</span>
+                    </label>
+                  ))}
+                </div>
+                <Row label="The most one category (for example email protection) can take off" htmlFor="scan-cap">
+                  <input id="scan-cap" type="number" min={1} max={100} className={inputCls} disabled={!canEdit} value={sc.scan_category_cap}
+                    onChange={(e) => set('scan_scoring', { ...sc, scan_category_cap: Number(e.target.value) })} />
+                  <Unit>points</Unit>
+                </Row>
+              </div>
+              <div className="rounded-lg border border-slate-200 p-3">
+                <p className="mb-2 text-sm font-medium text-slate-800">Where each grade starts</p>
+                <div className="grid gap-2 sm:grid-cols-5">
+                  {(['A', 'B', 'C', 'D'] as const).map((g) => (
+                    <label key={g} className="block rounded-lg bg-slate-50 p-2 text-xs text-slate-600">
+                      Grade {g} from
+                      <span className="mt-1 block">{numIn(sc.grades[g], (n) => set('scan_scoring', { ...sc, grades: { ...sc.grades, [g]: n } }), `Score where grade ${g} starts`)}</span>
+                    </label>
+                  ))}
+                  <p className="flex items-center rounded-lg bg-slate-50 p-2 text-xs text-slate-500">F below {sc.grades.D}</p>
+                </div>
+              </div>
+            </>
+          );
+        },
+      },
+    ] },
+    { group: 'Supplier records', items: [
+      {
+        id: 'record', keys: [], icon: TableProperties, title: 'Fields and dropdown lists on a supplier',
+        keywords: 'custom fields supplier record form dropdown list supplier type industry questionnaire category document type',
+        summary: recordSettings
+          ? `${liveFields(recordSettings).length} fields of your own · lists for ${Object.values(recordSettings.lists || {}).map((l) => l.label.toLowerCase()).join(', ')}`
+          : 'Your own fields on the supplier form, and the choices in its dropdowns',
+        body: () => (
+          <>
+            <Help>
+              Fields of your own appear on the Add supplier form (under Custom fields) and on each supplier’s Overview. The
+              lists are the choices offered for supplier type, industry, questionnaire category and supplier document type.
+              This section saves with its own button; taking a field or an option out keeps what suppliers already hold.
+            </Help>
+            {recordSettings ? (
+              <>
+                <div className="mb-3 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5" role="tablist" aria-label="Fields or lists">
+                  {(['fields', 'lists'] as const).map((part) => (
+                    <button key={part} type="button" role="tab" aria-selected={recordPart === part} onClick={() => setRecordPart(part)}
+                      className={clsx('rounded-md px-3 py-1 text-sm font-medium', recordPart === part ? 'bg-white text-slate-900 shadow-sm ring-1 ring-slate-200' : 'text-slate-500 hover:text-slate-800')}>
+                      {part === 'fields' ? 'Your fields' : 'Dropdown lists'}
+                    </button>
+                  ))}
+                </div>
+                {!canEdit ? <p className="text-xs text-slate-500">Changing these needs the vendor_risk:config:edit permission.</p>
+                  : recordPart === 'fields' ? <FieldsEditor moduleKey="vendors" settings={recordSettings} />
+                    : <ListsEditor moduleKey="vendors" settings={recordSettings} />}
+              </>
+            ) : <p className="text-xs text-slate-500">Loading…</p>}
+          </>
+        ),
       },
     ] },
     { group: 'Questionnaires', items: [

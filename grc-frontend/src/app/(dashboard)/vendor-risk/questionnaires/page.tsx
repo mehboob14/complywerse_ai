@@ -6,6 +6,7 @@ import { vendorRiskApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
+import { listOptions, useModuleSettings } from '@/components/settings/CustomFields';
 import {
   ClipboardList,
   Loader2,
@@ -191,6 +192,7 @@ const labelClass = 'block text-sm font-medium text-gray-800 mb-1';
 
 
 export default function VendorQuestionnairesPage() {
+  const { data: categorySettings } = useModuleSettings('vendors');
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('vendor_risk:questionnaires:create');
@@ -523,10 +525,10 @@ export default function VendorQuestionnairesPage() {
     : undefined;
 
   // Items for dropdowns
-  const categoryItems = CATEGORIES.map((c) => ({
-    value: c,
-    label: c.charAt(0).toUpperCase() + c.slice(1),
-  }));
+  // The organisation's own categories (Settings), the shipped ones until it sets them.
+  const categoryItems = listOptions(categorySettings, 'questionnaire_category', undefined,
+    CATEGORIES.map((c) => ({ value: c, label: c.charAt(0).toUpperCase() + c.slice(1) })))
+    .map((o) => ({ value: o.value, label: o.label }));
 
   const questionTypeItems = [
     { value: 'text', label: 'Text Answer' },

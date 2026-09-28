@@ -23,7 +23,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, ratings, quantification
+from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, monitoring_policy, ratings, quantification
 from .stages import stages_payload, is_valid_stage
 from .schema_migrations import ensure_tpra_columns
 
@@ -376,7 +376,7 @@ class ConfigIn(BaseModel):
     reminder_policy: Optional[dict] = None  # see bootstrap.DEFAULT_TIERING_CONFIG["reminder_policy"]
     scoring_policy: Optional[dict] = None   # {partial_credit: 0..1}, frozen into each questionnaire version
     tier_policy: Optional[dict] = None      # {tier: {template_ids, evidence, approver_role, reassess_on}}
-    monitoring_policy: Optional[dict] = None  # {adverse_media: bool, outside_in: bool}
+    monitoring_policy: Optional[dict] = None  # feeds on or off, check and scan cadence, scan scoring (tpra/monitoring_policy.py)
     quantification: Optional[dict] = None     # exposure model constants, see tpra/quantification.py
     customisation: Optional[dict] = None      # the tenant's own questions, factors, evidence (tpra/customisation.py)
 
@@ -1746,11 +1746,11 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
         "reminder_policy": cfg["reminder_policy"],
         "scoring_policy": cfg["scoring_policy"],
         "tier_policy": tier_policy.merged(cfg.get("tier_policy")),
-        "monitoring_policy": cfg.get("monitoring_policy") or {},
+        "monitoring_policy": monitoring_policy.merged(cfg.get("monitoring_policy")),
         "quantification": quantification.merged(cfg.get("quantification")),
         "customisation": custom,
         "defaults": {**DEFAULT_TIERING_CONFIG, "tier_policy": tier_policy.DEFAULT_TIER_POLICY,
-                     "quantification": quantification.DEFAULT_QUANT},
+                     "quantification": quantification.DEFAULT_QUANT, "monitoring_policy": monitoring_policy.DEFAULTS},
         "meta": {
             "factor_keys": [f["key"] for f in customisation.factors(custom)],
             "factor_labels": customisation.factor_labels(custom),
@@ -1850,11 +1850,10 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
             raise HTTPException(status_code=400, detail=str(exc))
 
     if body.monitoring_policy is not None:
-        unknown = set(body.monitoring_policy) - {"adverse_media", "outside_in"}
-        if unknown:
-            raise HTTPException(status_code=400, detail=f"Unknown monitoring setting: {', '.join(sorted(unknown))}")
-        row.monitoring_policy = {**(getattr(row, "monitoring_policy", None) or {}),
-                                 **{k: bool(v) for k, v in body.monitoring_policy.items()}}
+        try:
+            row.monitoring_policy = monitoring_policy.clean(body.monitoring_policy, getattr(row, "monitoring_policy", None))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     if body.tier_policy is not None:
         try:
@@ -1892,7 +1891,7 @@ def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = De
             "reminder_policy": {**DEFAULT_TIERING_CONFIG["reminder_policy"], **(row.reminder_policy or {})},
             "scoring_policy": {**DEFAULT_TIERING_CONFIG["scoring_policy"], **(row.scoring_policy or {})},
             "tier_policy": tier_policy.merged(getattr(row, "tier_policy", None)),
-            "monitoring_policy": getattr(row, "monitoring_policy", None) or {},
+            "monitoring_policy": monitoring_policy.merged(getattr(row, "monitoring_policy", None)),
             "quantification": quantification.merged(getattr(row, "quantification", None)),
             "customisation": custom}
 

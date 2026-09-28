@@ -17,6 +17,9 @@ import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader, Animated
 import { StageProgress, stageNumberLabel } from '../_lib/lifecycleShared';
 import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import ImportVendors from './_ImportVendors';
+import {
+  CustomFieldsTab, CustomFieldsTabBar, errorText, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
 
 interface Vendor {
   id: number;
@@ -135,6 +138,10 @@ export default function VendorListPage() {
   });
   // Intake (Stage 01) — start the TPRA lifecycle as soon as the vendor record exists.
   const [startLifecycle, setStartLifecycle] = useState(true);
+  // The organisation's own fields and dropdown lists (Settings, or "Customise form" on the tab).
+  const [tab, setTab] = useState<'details' | 'custom'>('details');
+  const [customValues, setCustomValues] = useState<CustomValues>({});
+  const { data: fieldSettings } = useModuleSettings('vendors');
 
   const { data: vendors, isLoading, error, refetch } = useQuery({
     queryKey: ['vendors'],
@@ -212,6 +219,8 @@ export default function VendorListPage() {
       owner_id: '', services_provided: '', vendor_type: '', industry: '', website: '',
     });
     setStartLifecycle(true);
+    setCustomValues({});
+    setTab('details');
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -235,6 +244,8 @@ export default function VendorListPage() {
     if (formData.contract_end_date) payload.contract_end_date = formData.contract_end_date;
     if (formData.contract_value !== '' && !Number.isNaN(Number(formData.contract_value))) payload.contract_value = Number(formData.contract_value);
     if (formData.owner_id) payload.owner_id = Number(formData.owner_id);
+    const custom = valuesToSave(fieldSettings, customValues);
+    if (custom) payload.custom_values = custom;
 
     createMutation.mutate(payload);
   };
@@ -475,7 +486,9 @@ export default function VendorListPage() {
           </div>
         }
       >
-        <form id="vendor-form" onSubmit={handleSubmit} className="space-y-4">
+        <form id="vendor-form" onSubmit={handleSubmit} onInvalidCapture={(e) => setTab(tabOf(e.target))} className="space-y-4">
+          <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
+          <div data-tab="details" className={tab === 'details' ? 'space-y-4' : 'hidden'}>
           <div className="rounded-lg border border-primary-100 bg-primary-50/60 p-3">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-primary-700">Stage 01 · Intake &amp; Scoping</p>
             <p className="mt-1 text-xs text-slate-600">
@@ -508,21 +521,29 @@ export default function VendorListPage() {
               <label className={LABEL_CLS}>Vendor Type</label>
               <input
                 type="text"
-                placeholder="e.g., SaaS, Cloud, Consulting"
+                list="vendor-type-options"
+                placeholder="Choose or type"
                 value={formData.vendor_type}
                 onChange={(e) => setFormData({ ...formData, vendor_type: e.target.value })}
                 className={INPUT_CLS}
               />
+              <datalist id="vendor-type-options">
+                {listOptions(fieldSettings, 'vendor_type').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </datalist>
             </div>
             <div>
               <label className={LABEL_CLS}>Industry</label>
               <input
                 type="text"
-                placeholder="e.g., Technology, Healthcare"
+                list="vendor-industry-options"
+                placeholder="Choose or type"
                 value={formData.industry}
                 onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
                 className={INPUT_CLS}
               />
+              <datalist id="vendor-industry-options">
+                {listOptions(fieldSettings, 'industry').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </datalist>
             </div>
             <div>
               <label className={LABEL_CLS}>Website</label>
@@ -677,9 +698,13 @@ export default function VendorListPage() {
               Stage 01 so the vendor enters the 11-stage flow immediately. You can also start it later from the vendor page.
             </span>
           </label>
+          </div>
+          <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
+            <CustomFieldsTab moduleKey="vendors" values={customValues} onChange={setCustomValues} />
+          </div>
           {createMutation.isError && !((createMutation.error as { response?: { status?: number } })?.response?.status === 409) && (
             <div className="text-sm text-red-600 bg-red-50 p-3 rounded-lg">
-              Failed to create vendor. Please check the form and try again.
+              {errorText(createMutation.error, 'Failed to create vendor. Please check the form and try again.')}
             </div>
           )}
         </form>
