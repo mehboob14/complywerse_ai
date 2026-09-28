@@ -504,6 +504,10 @@ class SyncService:
                             ) or current.startswith("Nessus-Host-")
                             if not is_auto:
                                 continue
+                        # The scanner note only fills an EMPTY description —
+                        # never overwrite text a user wrote.
+                        if key == "description" and current:
+                            continue
                         if current != val:
                             setattr(existing, key, val)
                             changed = True

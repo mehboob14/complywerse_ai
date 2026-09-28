@@ -58,7 +58,6 @@ import AttachmentsPanel from './_tabs/AttachmentsPanel';
 import CompliancePanel from './_tabs/CompliancePanel';
 import ScopeAuthorizationCard from './_ScopeAuthorizationCard';
 import TrajectoryPanel from './_tabs/TrajectoryPanel';
-import SbpInventoryPanel from './_tabs/SbpInventoryPanel';
 import CriticalityPanel from './_tabs/CriticalityPanel';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
 import { GuideMarker, useGuide } from '@/cyber-assurance/components/guide';
@@ -101,7 +100,7 @@ type TabType = 'overview' | 'details' | 'compliance' | 'controls' | 'evidence' |
   | 'software' | 'relationships' | 'discovery' | 'lifecycle' | 'assignments' | 'activity'
   // Notes / Alerts / History — the last reference tabs, now backed by real
   // endpoints (Notes + History) and a derived feed (Alerts).
-  | 'alerts' | 'notes' | 'history' | 'sbp';
+  | 'alerts' | 'notes' | 'history';
 
 interface LinkedControl {
   id: number;
@@ -265,7 +264,7 @@ interface AssetDetailData {
   }> | null;
   security_posture?: {
     has_antivirus?: boolean; antivirus_products?: string[];
-    has_edr?: boolean; edr_products?: string[];
+    has_edr?: boolean; edr_products?: string[]; edr_stopped?: string[];
     endpoint_protected?: boolean; security_tools?: string[];
     categories?: Record<string, number>; software_total?: number; computed_at?: string;
   } | null;
@@ -348,7 +347,7 @@ export default function AssetDetailPage() {
     'overview', 'details', 'compliance', 'controls', 'evidence', 'risks',
     'vulnerabilities', 'criticality', 'trajectory', 'mapping-recommendations',
     'software', 'relationships', 'discovery', 'lifecycle', 'assignments',
-    'activity', 'alerts', 'notes', 'history', 'sbp',
+    'activity', 'alerts', 'notes', 'history',
   ]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -750,7 +749,6 @@ export default function AssetDetailPage() {
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
     ...(!outsideOnly ? [{ id: 'compliance' as TabType, label: 'Compliance', icon: Cpu }] : []),
     { id: 'trajectory', label: 'Trajectory', icon: Network },
-    { id: 'sbp', label: 'SBP Inventory', icon: Building2 },
     // Criticality Assessments tab hidden until wired to real data (was demo/seed). Panel code kept.
     // { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
@@ -825,7 +823,6 @@ export default function AssetDetailPage() {
               </>
             )}
             {activeTab === 'trajectory' && <TrajectoryPanel assetId={assetId} />}
-            {activeTab === 'sbp' && <SbpInventoryPanel assetId={assetId} />}
             {activeTab === 'compliance' && (
               <RoomScanProvider>
                 {/* CompliancePanel now owns the whole Compliance experience
