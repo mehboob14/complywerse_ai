@@ -631,6 +631,20 @@ def promote_observation_typed(db: Session, obs: DiscoveryObservation,
     return asset
 
 
+def _hw_blank(asset: ITAsset, col: str) -> bool:
+    """May the machine's own reading fill this column? Yes when it's empty, or
+    when it's a manufacturer that is only the sweep's NIC vendor (IEEE OUI, which
+    the resolver files as manufacturer): an Intel network card doesn't make an
+    HP laptop an Intel machine, so the real system manufacturer replaces it."""
+    cur = getattr(asset, col, None)
+    if cur in (None, "", 0):
+        return True
+    pp = getattr(asset, "platform_properties", None)
+    fp = (pp.get("fingerprint") if isinstance(pp, dict) else None) or {}
+    return (col == "manufacturer" and fp.get("vendor_source") == "ieee_oui"
+            and cur == fp.get("vendor"))
+
+
 def _fill_columns_from_deep(asset: ITAsset, sections: Dict[str, Any]) -> None:
     """Derive the flat hardware columns from the RICH deep sections so the
     summary card and the deep card are always in agreement — the deep collector
@@ -649,7 +663,7 @@ def _fill_columns_from_deep(asset: ITAsset, sections: Dict[str, Any]) -> None:
     def _set(col: str, val: Any) -> None:
         if val in (None, "", 0):
             return
-        if getattr(asset, col, None) in (None, "", 0):
+        if _hw_blank(asset, col):
             setattr(asset, col, val)
 
     def _to_int(v: Any) -> Optional[int]:
@@ -715,7 +729,7 @@ def collect_host(db: Session, asset: ITAsset, profile: CredentialProfile,
     # Auto-discovered hardware (vCPU / RAM / disk / OEM / serial / fqdn / mac) —
     # fill blanks, never clobber a curated value.
     for col, val in (hardware or {}).items():
-        if val is not None and getattr(asset, col, None) in (None, "", 0):
+        if val is not None and _hw_blank(asset, col):
             setattr(asset, col, val)
 
     # A wizard-added host arrives with host_name == the IP the operator typed —
