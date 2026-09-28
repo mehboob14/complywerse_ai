@@ -22,7 +22,9 @@ export default function CyberAssuranceLayout({
   return (
     <Providers>
       <GuideProvider>
-        <div className="platform-ui compact-density cw-dashboard">
+        {/* relative: contains absolutely-positioned content (sr-only text, tooltips) inside the
+            scroll area, so it can't stretch the document and add a second scrollbar. */}
+        <div className="platform-ui compact-density cw-dashboard relative h-full">
           {children}
         </div>
         {/* Guide mode slide-over — renders nothing until a marker is clicked. */}

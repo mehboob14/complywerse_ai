@@ -18,6 +18,7 @@ import { discoveryApi } from '@/cyber-assurance/lib/api';
 import { useTabParam } from '@/cyber-assurance/lib/useTabParam';
 import ConnectWizardPage, { PLATFORMS, PLATFORM_GROUPS, type Platform } from '../admin/integrations/connect/page';
 import AgentsAdminPage from '../admin/agents/page';
+import NetworkMap from './_NetworkMap';
 import '../assets/_suite/asset-suite.css';
 import './discovery-antimetal.css';
 import './discovery-command.css';
@@ -28,11 +29,12 @@ import './discovery-command.css';
 // 'score' (the standalone attack-surface scorecard) was removed — external
 // assets and their hygiene grade live in the IT Asset Inventory and on the
 // asset's own Overview, not in a separate Discovery page.
-type Tab = 'overview' | 'discover' | 'connections' | 'inbox' | 'runs';
+type Tab = 'overview' | 'discover' | 'map' | 'connections' | 'inbox' | 'runs';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'overview',    label: 'Overview' },
   { id: 'discover',    label: 'Discovery' },
+  { id: 'map',         label: 'Network map' },
   { id: 'runs',        label: 'Scan history' },
   { id: 'connections', label: 'Connections' },
   { id: 'inbox',       label: 'Review queue' },
@@ -974,7 +976,7 @@ function RunDeviceRow({ o, onOpen }: { o: any; onOpen: () => void }) {
   const dn = rdName(o);
   const tier = rdTier(o);
   const resultCell = o.resolved_asset_id
-    ? <a href={`/cyber-assurance/assets/${o.resolved_asset_id}`} onClick={(e) => e.stopPropagation()} style={{ color: C.green, fontWeight: 600 }}>{RD_RES[o.resolution] || o.resolution} · #{o.resolved_asset_id}</a>
+    ? <a href={`/assets/${o.resolved_asset_id}`} onClick={(e) => e.stopPropagation()} style={{ color: C.green, fontWeight: 600 }}>{RD_RES[o.resolution] || o.resolution} · #{o.resolved_asset_id}</a>
     : <span style={{ color: o.resolution === 'review' ? '#a06a12' : C.muted }}>{RD_RES[o.resolution] || o.resolution}</span>;
   return (
     <div onClick={onOpen} title="Open full device details"
@@ -1062,7 +1064,7 @@ function RunDeviceModal({ o, onClose }: { o: any; onClose: () => void }) {
           <Field label="Last seen" value={dash(o.observed_at ? fmt(o.observed_at) : null)} />
           <Field label="Management status" value={RD_MGMT[o.resolution] || o.resolution} />
           <Field label="Result" value={RD_RES[o.resolution] || o.resolution} />
-          <Field label="Asset ID" value={o.resolved_asset_id ? <a href={`/cyber-assurance/assets/${o.resolved_asset_id}`} style={{ color: C.green, fontWeight: 600 }}>#{o.resolved_asset_id}</a> : '—'} />
+          <Field label="Asset ID" value={o.resolved_asset_id ? <a href={`/assets/${o.resolved_asset_id}`} style={{ color: C.green, fontWeight: 600 }}>#{o.resolved_asset_id}</a> : '—'} />
         </div>
       </div>
     </div>
@@ -1695,7 +1697,7 @@ function DeviceExplainerModal({ device, onClose }: { device: any; onClose: () =>
                 <strong style={{ fontSize: 15, color: C.ink }}>{d.headline}</strong>
                 {ai.data
                   ? <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: .3, color: C.teal, border: `1px solid ${C.teal}`, borderRadius: 6, padding: '1px 6px' }}>AI</span>
-                  : <span title="Complyverse’s built-in diagnosis. The AI wording is loading (or OPENAI_API_KEY is unset)." style={{ fontSize: 10, fontWeight: 700, letterSpacing: .3, color: C.faint, border: `1px solid ${C.bInput}`, borderRadius: 6, padding: '1px 6px' }}>RULES</span>}
+                  : <span title="Ava’s built-in diagnosis. The AI wording is loading (or OPENAI_API_KEY is unset)." style={{ fontSize: 10, fontWeight: 700, letterSpacing: .3, color: C.faint, border: `1px solid ${C.bInput}`, borderRadius: 6, padding: '1px 6px' }}>RULES</span>}
               </div>
               <div style={{ fontSize: 13, color: C.muted2, lineHeight: 1.6, marginBottom: 14 }}>{d.why}</div>
               {Array.isArray(d.steps) && d.steps.length > 0 && (
@@ -1989,7 +1991,7 @@ function CsDeviceRow({ d, checked, onToggle, onConnect, onAdopt, adopting }: any
       </div>
       <div style={{ textAlign: 'right' }}>
         {inInv ? (
-          <a href={`/cyber-assurance/assets/${d.asset_id}`} style={{ font: `600 13.5px ${FONT}`, color: C.green }}>View</a>
+          <a href={`/assets/${d.asset_id}`} style={{ font: `600 13.5px ${FONT}`, color: C.green }}>View</a>
         ) : inReview ? (
           <span style={{ font: `500 12.5px ${FONT}`, color: C.muted }}>Resolve in Inbox</span>
         ) : !attemptable ? (
@@ -2575,6 +2577,7 @@ export default function AssetDiscoveryPage() {
       {tab === 'connections' && <ConnectionsTab />}
       {tab === 'inbox' && <InboxView />}
       {tab === 'runs' && <Runs />}
+      {tab === 'map' && <NetworkMap />}
     </div>
   );
 }

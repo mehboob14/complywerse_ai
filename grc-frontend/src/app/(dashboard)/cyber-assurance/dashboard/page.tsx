@@ -1,532 +1,354 @@
 'use client';
 
 /**
- * Complyverse — Performance Overview.
- * Redesign visual (hero score ring, KPI strip, funnel, cards) from the approved mock,
- * wired to LIVE tenant data — no sample/mock numbers, no fabricated people.
+ * Complyverse — Performance: the executive (C-level) view across every cyber module.
  *
- * Two lenses:
- *  - Administrator: org-wide exposure index (derived), KPIs, EPSS, new-findings trend,
- *    needs-attention (ranked by exploitability), exposure funnel, severity mix, by-domain.
- *  - Team: ownership & workload from real assignee data.
+ * Answers, above the fold: how exposed are we, how bad, where, and is it improving.
+ * Module lenses below (vulnerabilities, attack surface, inventory, pentest, risk,
+ * CIS, CTEM) each link into their module.
  *
- * Anything with no honest backing in this tenant (MTTR, SLA-achievement %, per-user "my"
- * queue, resolved-trend, month-over-month deltas, score history) is intentionally NOT shown.
- * recharts is mocked in this repo, so charts are hand-rolled inline SVG/CSS.
+ * Honesty rules: every number is read live from a module endpoint (or the read-only
+ * /exec-dashboard/summary aggregate); nothing is sampled, trended or delta'd unless a
+ * real series exists. A module with no data shows an empty state + CTA, never a 0 score.
+ * Each query is independent, so a slow (risk posture scores every asset live) or failing
+ * module only affects its own card. recharts is mocked here → charts are inline SVG/CSS.
  */
-import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Link from 'next/link';
-import apiClient, { vulnManagementApi, discoveryApi, compliancePluginsApi } from '@/cyber-assurance/lib/api';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Activity, AlertTriangle, ArrowRight, Boxes, Bug, ClipboardCheck, Globe, RefreshCw, ShieldAlert } from 'lucide-react';
+import apiClient, { compliancePluginsApi, discoveryApi, riskPostureApi } from '@/cyber-assurance/lib/api';
+import { SCORECARD_QUERY_KEYS } from '@/cyber-assurance/components/dashboard/scorecard-query-keys';
 import {
-  ShieldCheck, Users, Download, ChevronRight, Flame, Bug, Globe, Activity,
-  ShieldAlert, Server, Clock, CheckCircle2, Radar, Boxes, Target, ArrowRight,
-} from 'lucide-react';
+  BAND, BAND_ORDER, CARD_SHADOW, Card, Empty, Eyebrow, FONT, Figure, Key, Loading, Pill, Skel, T, Unavailable,
+  alpha, nfmt, pctOf, plural, toBand, type Band,
+} from './_components/kit';
+import { FlowChart, Gauge, NEW_C, PartLegend, RES_C, Sparkline, StackBar, type Part, type Week } from './_components/charts';
+import {
+  AttackSurface, CisCompliance, CtemProgramme, InventoryHealth, PenTest, RiskDrivers, TopAssets, VulnExposure, busyOf, isExternalAsset,
+  type AssetsDash, type CisOverview, type Ctem, type Devices, type Easm, type ExecSummary, type Inventory, type Qs, type RiskDash,
+} from './_components/lenses';
 
-/* ---------------- palette (styles/tokens.css) ---------------- */
-const AC = '#005B96';
-const SEC = '#334155';
-const TRACK = '#F1F3F9';
-// c = vivid (bars/dots), bg = tint (pill background), text = AA-safe pill text (>=4.5:1 on bg)
-const SEV: Record<string, { c: string; bg: string; text: string }> = {
-  Critical: { c: '#B91C1C', bg: '#FDECEC', text: '#B91C1C' },
-  High: { c: '#EA580C', bg: '#FFF1E7', text: '#9A3412' },
-  Medium: { c: '#D97706', bg: '#FEF4E4', text: '#B45309' },
-  Low: { c: '#2563EB', bg: '#E9F0FE', text: '#2563EB' },
-  Info: { c: '#64748B', bg: '#F1F5F9', text: '#475569' },
+type Trends = {
+  buckets?: (string | { date: string })[];
+  discovered?: (number | { count: number })[];
+  resolved?: (number | { count: number })[];
+  summary?: { total_discovered?: number; total_resolved?: number; mttr_days_within_window?: number | null };
 };
-const SEV_ORDER = ['Critical', 'High', 'Medium', 'Low', 'Info'] as const;
 
-/* ---------------- data helpers ---------------- */
-const CANON: Record<string, string> = { critical: 'Critical', high: 'High', medium: 'Medium', low: 'Low', info: 'Info', informational: 'Info' };
-const normSev = (s?: string) => CANON[(s || '').toLowerCase()] || 'Info';
-const hasExploit = (v: any) => !!(v.kev_flag || v.is_kev || v.exploit_available || (v.public_exploit_count ?? 0) > 0 || (typeof v.epss_score === 'number' && v.epss_score >= 0.1));
-const isKev = (v: any) => !!(v.kev_flag || v.is_kev);
-const ownerOf = (v: any) => ((v.assignee_name || v.owner || '').trim()) || 'Unassigned';
-const isClosed = (v: any) => ['remediated', 'verified', 'closed', 'resolved'].includes((v.status || '').toLowerCase().replace(/\s+/g, '_'));
-const seenDate = (v: any) => v.first_seen || v.first_detected || v.created_at || v.detected_at || v.last_seen || null;
-const daysSince = (d?: string | null) => (d ? Math.max(0, Math.floor((Date.now() - new Date(d).getTime()) / 86400000)) : null);
-const nfmt = (n: number) => n.toLocaleString();
-const pct = (num: number, den: number) => (den > 0 ? Math.round((num / den) * 100) : 0);
+// Keys shared with the module pages (same fetcher + payload) so their caches, refetches
+// and invalidations (e.g. tuning risk weights) flow straight into this view.
+const KEYS = {
+  summary: ['exec-dashboard.summary'],
+  trends: ['exec-dashboard.trends-90d'],
+  history: ['exec-dashboard.vuln-open-history'],
+  risk: ['risk-posture.dashboard'],
+  inv: [...SCORECARD_QUERY_KEYS.assets],
+  assets: ['exec-dashboard.assets'],
+  cis: ['compliance-plugins.assets-overview'],
+  easm: ['exec-dashboard.easm'],
+  devices: ['disc-discovered-devices', 'all'],
+  ctem: ['exec-dashboard.ctem'],
+};
+const ALL_KEYS = Object.values(KEYS);
+const get = (url: string) => async () => (await apiClient.get(url)).data;
 
-/* ---------------- shared bits ---------------- */
-const cardCls = 'rounded-2xl border border-[#E2E5EC] bg-white px-5 py-[18px] shadow-[0_1px_2px_rgba(16,24,40,.04)]';
+export default function PerformancePage() {
+  const qc = useQueryClient();
+  const summary = useQuery<ExecSummary>({ queryKey: KEYS.summary, queryFn: get('/exec-dashboard/summary'), retry: 1 });
+  const trends = useQuery<Trends>({ queryKey: KEYS.trends, queryFn: get('/vuln-management/dashboard/trends?period=90d'), retry: 1 });
+  const history = useQuery<{ series?: { date: string; value: number }[] }>({ queryKey: KEYS.history, queryFn: get('/enriched-dashboard/metric-trend?metric=vuln_open&days=90'), retry: false });
+  const risk = useQuery<RiskDash>({ queryKey: KEYS.risk, queryFn: async () => (await riskPostureApi.dashboard()).data, staleTime: 5 * 60_000, retry: 1 });
+  const inv = useQuery<Inventory | null>({
+    queryKey: KEYS.inv,
+    // Same fetcher as InventoryScorecard / InventoryRedesign (null on failure) — the key is shared.
+    queryFn: async () => { try { return (await apiClient.get('/assets/inventory-overview')).data; } catch { return null; } },
+  });
+  const assets = useQuery<AssetsDash>({ queryKey: KEYS.assets, queryFn: get('/assets/dashboard'), retry: 1 });
+  const cis = useQuery<CisOverview>({ queryKey: KEYS.cis, queryFn: async () => (await compliancePluginsApi.assetsOverview()).data, retry: 1 });
+  const easm = useQuery<Easm>({ queryKey: KEYS.easm, queryFn: async () => (await discoveryApi.easmScorecard()).data, retry: 1 });
+  const devices = useQuery<Devices>({ queryKey: KEYS.devices, queryFn: async () => (await discoveryApi.discoveredDevices()).data, retry: 1 });
+  const ctem = useQuery<Ctem>({ queryKey: KEYS.ctem, queryFn: get('/erm/ctem/scopes/portfolio'), retry: 1 });
+  const mine = [summary, trends, history, risk, inv, assets, cis, easm, devices, ctem];
+  const fetching = mine.some((q) => q.isFetching);
+  // Sources that failed on their last attempt (inventory's fetcher returns null instead of throwing).
+  const failed = mine.filter((q) => q.isError).length + (inv.isSuccess && inv.data === null ? 1 : 0);
 
-function CardTitle({ title, desc }: { title: string; desc?: string }) {
+  const F = summary.data?.findings;
+  const I = inv.data;
+  const assetsN = I?.counts?.assets ?? assets.data?.total_assets ?? null;
+  const openN = F?.open ?? I?.counts?.open_vulnerabilities ?? null;
+  const critHigh = F ? F.by_severity.critical + F.by_severity.high : I?.attention_queue?.open_critical_high_vulns ?? null;
+
+  /* 90-day flow: daily buckets → weeks ending today (the only always-real series). */
+  const flow = useMemo(() => {
+    const t = trends.data;
+    if (!t?.buckets?.length) return null;
+    const cnt = (x: unknown) => (typeof x === 'number' ? x : Number((x as { count?: number })?.count) || 0);
+    const dates = t.buckets.map((b) => (typeof b === 'string' ? b : b?.date));
+    const weeks: Week[] = [];
+    for (let end = dates.length; end > 0; end -= 7) {
+      const start = Math.max(0, end - 7);
+      let added = 0, resolved = 0;
+      for (let i = start; i < end; i++) { added += cnt(t.discovered?.[i]); resolved += cnt(t.resolved?.[i]); }
+      weeks.unshift({ from: dates[start], to: dates[end - 1], added, resolved });
+    }
+    const added = t.summary?.total_discovered ?? weeks.reduce((s, w) => s + w.added, 0);
+    const resolved = t.summary?.total_resolved ?? weeks.reduce((s, w) => s + w.resolved, 0);
+    return { weeks, added, resolved, mttr: t.summary?.mttr_days_within_window ?? null };
+  }, [trends.data]);
+
+  // "Live data" moves only once EVERY source has settled — not when the first fast one lands
+  // while risk posture (scores every asset live, ~8s) is still computing.
+  const latest = Math.max(0, ...mine.map((q) => q.dataUpdatedAt || 0));
+  const [updated, setUpdated] = useState(0);
+  useEffect(() => { if (!fetching && latest) setUpdated(latest); }, [fetching, latest]);
+  // One click refetches every source on the page — active or not, loaded or errored — and
+  // marks the shared keys stale for the module pages too.
+  const refresh = () => { ALL_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey, refetchType: 'all' })); };
+
   return (
-    <>
-      <h3 className="m-0 text-[13.5px] font-semibold text-slate-900">{title}</h3>
-      {desc && <p className="mb-3 mt-0.5 text-[11.5px] text-slate-500">{desc}</p>}
-    </>
-  );
-}
+    <div data-exec-dash className="mx-auto flex w-full max-w-[1950px] flex-col gap-3 pb-5 text-[#0F172A]" style={{ fontFamily: FONT, zoom: 0.8 /* one knob: page at 80% so a window shows more; max-w = 1560/0.8 */ }}>
+      {/* Slightly greyer canvas on this page only, so the white cards lift off it. */}
+      <style>{'main:has([data-exec-dash]){background:#EDF0F5}'}</style>
+      <h1 className="sr-only">Performance — executive cyber posture</h1>
 
-function Ring({ pct: p, size, stroke, color, children }: { pct: number; size: number; stroke: number; color: string; children: React.ReactNode }) {
-  const r = size / 2 - stroke / 2 - 2, C = 2 * Math.PI * r, c = size / 2;
-  const clamped = Math.max(0, Math.min(100, p));
-  return (
-    <div className="relative" style={{ width: size, height: size }}>
-      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={c} cy={c} r={r} fill="none" stroke="#EFF5FA" strokeWidth={stroke} />
-        <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${(clamped / 100) * C} ${C}`} />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">{children}</div>
-    </div>
-  );
-}
-
-function Donut({ rows, total, size }: { rows: { label: string; n: number }[]; total: number; size: number }) {
-  let acc = 0;
-  const grad = total > 0
-    ? `conic-gradient(${rows.filter((s) => s.n > 0).map((s) => { const from = acc; acc += (s.n / total) * 360; return `${SEV[s.label].c} ${from.toFixed(1)}deg ${acc.toFixed(1)}deg`; }).join(',')})`
-    : TRACK;
-  return (
-    <div className="relative shrink-0" style={{ width: size, height: size }}>
-      <div className="rounded-full" style={{ width: size, height: size, background: grad }} />
-      <div className="absolute flex flex-col items-center justify-center rounded-full bg-white" style={{ inset: size * 0.14 }}>
-        <b className="text-[20px] text-slate-900">{nfmt(total)}</b>
-        <span className="text-[10px] text-slate-500">open</span>
-      </div>
-    </div>
-  );
-}
-
-function HBars({ rows, fill }: { rows: { label: string; n: number; color: string; sub?: string }[]; fill?: boolean }) {
-  const max = Math.max(1, ...rows.map((r) => r.n));
-  // `fill` spreads the bars over the full card height so the card has no dead space.
-  return (
-    <div className={fill ? 'mt-1 flex flex-1 flex-col justify-around gap-2' : 'flex flex-col gap-2'}>
-      {rows.map((r) => (
-        <div key={r.label} className="flex items-center gap-2.5 text-[12.5px]">
-          <span className="w-32 shrink-0 truncate text-slate-700" title={r.label}>{r.label}</span>
-          <span className={`block ${fill ? 'h-3' : 'h-2.5'} flex-1 overflow-hidden rounded-md`} style={{ background: TRACK }}>
-            <i className="block h-full rounded-md" style={{ width: `${(r.n / max) * 100}%`, background: r.color }} />
+      {/* ── Executive summary ── */}
+      <section aria-label="Executive summary" className={`flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[14px] border border-[#E2E5EC] bg-white px-4 py-3 ${CARD_SHADOW}`} style={{ borderLeft: `3px solid ${T.base}` }}>
+        <div className="min-w-0 flex-1 basis-[260px]">
+          <Eyebrow>Executive summary</Eyebrow>
+          <p className="m-0 mt-0.5 text-[13.5px] leading-[1.5] text-[#0F172A]" aria-live="polite">
+            {summarySentence({ loading: inv.isLoading || summary.isLoading || trends.isLoading, assetsN, openN, critHigh, flow })}
+          </p>
+        </div>
+        <div className="flex items-center gap-3 text-[11.5px] text-[#64748B]">
+          <span aria-live="polite">
+            {updated ? `Live data · ${new Date(updated).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : 'Loading live data…'}
+            {!fetching && failed > 0 && <span className="ml-2 inline-flex"><Warn>{plural(failed, 'source')} didn&rsquo;t respond</Warn></span>}
           </span>
-          <b className="w-8 text-right tabular-nums text-slate-900">{nfmt(r.n)}</b>
+          <button type="button" onClick={refresh} disabled={fetching}
+            className="inline-flex h-8 items-center gap-1.5 rounded-[9px] border border-[#E2E5EC] bg-white px-3 text-[12px] font-semibold text-[#334155] hover:bg-[#F6F7FB] disabled:cursor-default disabled:opacity-70">
+            <RefreshCw size={13} aria-hidden className={fetching ? 'animate-spin' : ''} style={{ color: T.base }} />{fetching ? 'Refreshing' : 'Refresh'}
+          </button>
         </div>
-      ))}
+      </section>
+
+      {/* ── Hero: risk posture · 90-day flow ── */}
+      <div className="grid grid-cols-1 gap-3 xl:grid-cols-12">
+        <PostureHero risk={risk} assetsN={assetsN} />
+        <FlowCard q={trends} flow={flow} history={history.data?.series ?? null} historyLoading={history.isLoading} />
+      </div>
+
+      {/* ── KPI strip ── */}
+      <nav aria-label="Key indicators" className="grid grid-cols-1 gap-2.5 min-[480px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <Kpi icon={<Boxes size={15} />} label="Assets under management" href="/cyber-assurance/assets" loading={inv.isLoading && assets.isLoading} busy={busyOf(inv, assets)}
+          value={nfmt(assetsN)}
+          sub={I?.attention_queue ? (I.attention_queue.assets_without_owner ? <Warn>{nfmt(I.attention_queue.assets_without_owner)} without an owner</Warn> : 'every asset has an owner') : 'in the IT asset inventory'} />
+        <Kpi icon={<Bug size={15} />} label="Open critical & high" href="/cyber-assurance/vulnerabilities" loading={summary.isLoading && inv.isLoading} busy={busyOf(summary)}
+          value={nfmt(critHigh)}
+          sub={F ? `${nfmt(F.by_severity.critical)} critical · ${nfmt(F.by_severity.high)} high` : openN != null ? `of ${nfmt(openN)} open findings` : 'findings unavailable'} />
+        <Kpi icon={<Globe size={15} />} label="Internet-exposed findings" href="/cyber-assurance/vulnerabilities" loading={summary.isLoading} busy={busyOf(summary)}
+          value={F ? nfmt(F.internet_exposed) : '—'}
+          sub={F ? (F.open ? `${pctOf(F.internet_exposed, F.open)}% of ${nfmt(F.open)} open findings` : 'no open findings') : 'unavailable'} />
+        <Kpi icon={<ShieldAlert size={15} />} label="External posture grade" href="/cyber-assurance/asset-discovery" loading={easm.isLoading} busy={busyOf(easm)}
+          value={easm.data?.summary?.graded ? (easm.data.summary.avg_grade ?? '—') : '—'}
+          sub={easm.data?.summary?.graded
+            ? `avg ${easm.data.summary.avg_score ?? '—'}/100 · ${nfmt(easm.data.summary.graded)} of ${nfmt(easm.data.summary.total)} hosts graded`
+            : easm.data ? <Cta>No external scan yet · Run one</Cta> : 'unavailable'} />
+        <Kpi icon={<Activity size={15} />} label="Severe & elevated risk" href="/cyber-assurance/risk-posture" loading={risk.isLoading} loadingNote="scoring assets…" busy={busyOf(risk)}
+          value={risk.data?.summary ? nfmt((risk.data.summary.by_band.severe ?? 0) + (risk.data.summary.by_band.elevated ?? 0)) : '—'}
+          sub={risk.data?.summary ? `${nfmt(risk.data.summary.by_band.severe ?? 0)} severe · ${nfmt(risk.data.summary.by_band.elevated ?? 0)} elevated of ${nfmt(risk.data.summary.asset_count)}` : 'unavailable'} />
+        <Kpi icon={<ClipboardCheck size={15} />} label="CIS benchmark coverage" href="/cyber-assurance/assets?tab=cis" loading={cis.isLoading} busy={busyOf(cis)}
+          value={cis.data?.totals?.scanned ? `${Math.round(cis.data.totals.avg_pass_rate)}%` : '—'}
+          sub={cis.data?.totals
+            ? (cis.data.totals.scanned ? `pass rate · ${nfmt(cis.data.totals.scanned)} of ${nfmt(cis.data.totals.assets)} assets scanned` : <Cta>No CIS scan yet · Run a CIS scan</Cta>)
+            : 'unavailable'} />
+      </nav>
+
+      {/* ── Module lenses ──
+         Every 12-col row sums to 12 (no empty cell): row 1 = the four vuln tiles (their own
+         full-width sub-grid); row 2 = Most-exposed (8) + Attack-surface (4); row 3 = the three
+         mid cards (4·3); row 4 = CIS (6) + CTEM (6). Rows STRETCH (equal heights, common
+         baseline, no hole beside a short card) and each Card body is a flex column its content
+         fills — lists spread, tables grow, empty / loading / error states centre in the full
+         height — so there is no white card bottom either, in any state. */}
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-12">
+        <VulnExposure q={summary} />
+        <TopAssets q={summary} risk={risk} />
+        <AttackSurface devices={devices} easm={easm} />
+        <InventoryHealth inv={inv} assets={assets} />
+        <RiskDrivers risk={risk} />
+        <PenTest q={summary} />
+        <CisCompliance q={cis} />
+        <CtemProgramme q={ctem} />
+      </div>
     </div>
   );
 }
 
-/* weekly new-findings bars — dynamic max, no hardcoded divisor */
-function WeeklyBars({ weeks }: { weeks: { label: string; n: number }[] }) {
-  const max = Math.max(1, ...weeks.map((w) => w.n));
-  return (
-    <div className="flex min-h-[110px] flex-1 items-end gap-1.5">
-      {weeks.map((w, i) => (
-        <div key={i} className="flex h-full min-w-0 flex-1 flex-col justify-end">
-          <div className="mb-[3px] text-center text-[9px] tabular-nums text-slate-400">{w.n || ''}</div>
-          <div className="flex min-h-[80px] items-end">
-            <i className="block w-full rounded-t-[3px]" style={{ height: `${(w.n / max) * 100}%`, minHeight: w.n > 0 ? 3 : 0, background: i === weeks.length - 1 ? AC : '#B3CDE0' }} />
-          </div>
-          <div className="mt-1 h-3 truncate text-center text-[9px] text-slate-400">{w.label}</div>
-        </div>
-      ))}
-    </div>
-  );
+/* ---------- executive sentence (plain template over live numbers) ---------- */
+function summarySentence({ loading, assetsN, openN, critHigh, flow }: {
+  loading: boolean; assetsN: number | null; openN: number | null; critHigh: number | null;
+  flow: { added: number; resolved: number } | null;
+}): ReactNode {
+  if (loading) return <Skel h={16} w="80%" className="my-1" />;
+  if (critHigh == null && openN == null) return 'Live posture data is unavailable right now — module cards below show what did load.';
+  const B = ({ children }: { children: ReactNode }) => <b className="font-semibold">{children}</b>;
+  const across = assetsN != null ? <> across <B>{nfmt(assetsN)}</B> assets</> : null;
+  const lead = critHigh ? <><B>{nfmt(critHigh)}</B> critical or high {critHigh === 1 ? 'finding is' : 'findings are'} open{across}</> : <>No critical or high findings are open{across}</>;
+  let trend: ReactNode = null;
+  if (flow) {
+    const { added, resolved } = flow;
+    trend = !added && !resolved ? <>; none opened or resolved in 90 days</>
+      : !resolved ? <>; <B>none</B> resolved in 90 days ({nfmt(added)} new)</>
+        : resolved >= added ? <>; backlog down <B>{nfmt(resolved - added)}</B> in 90 days ({nfmt(resolved)} resolved vs {nfmt(added)} new)</>
+          : <>; backlog up <B>{nfmt(added - resolved)}</B> in 90 days ({nfmt(added)} new vs {nfmt(resolved)} resolved)</>;
+  }
+  return <>{lead}{trend}.</>;
 }
 
-function healthColor(h: string) { return h === 'At risk' ? '#B91C1C' : h === 'Watch' ? '#D97706' : '#047857'; }
+/* ---------- KPI tile ---------- */
+const Warn = ({ children }: { children: ReactNode }) => (
+  <span className="inline-flex items-center gap-1"><AlertTriangle size={12} aria-hidden style={{ color: T.warning }} />{children}</span>
+);
+const Cta = ({ children }: { children: ReactNode }) => <span className="font-semibold text-[#005B96]">{children} →</span>;
 
-/* module scorecard — one card per pipeline stage (Discovery, Inventory, CIS,
-   Vulnerabilities, CTEM). Higher score = better; shows a real empty state when the
-   stage has no data yet, so an empty tenant reads as "get started", not a fake 0. */
-const grade = (s: number) => (s >= 90 ? 'A' : s >= 75 ? 'B' : s >= 60 ? 'C' : s >= 40 ? 'D' : 'F');
-const scoreColor = (s: number) => (s >= 75 ? '#047857' : s >= 40 ? '#B45309' : '#B91C1C');
-function Scorecard({ icon, name, href, score, unit, driver, emptyCta }: {
-  icon: React.ReactNode; name: string; href: string; score: number | null;
-  unit?: string; driver: string; emptyCta?: string;
+function Kpi({ icon, label, value, sub, href, loading, loadingNote, busy }: {
+  icon: ReactNode; label: string; value: ReactNode; sub: ReactNode; href: string; loading?: boolean; loadingNote?: string; busy?: boolean;
 }) {
-  const empty = score == null;
-  const col = empty ? '#94A3B8' : scoreColor(score);
   return (
-    <Link href={href} className={`${cardCls} group flex min-w-0 flex-1 basis-[232px] flex-col gap-3 !py-4 transition hover:border-[#C7D2E4] hover:shadow-[0_4px_16px_rgba(16,24,40,.08)]`}>
-      <div className="flex items-center gap-2">
-        <span className="grid h-8 w-8 place-items-center rounded-lg" style={{ background: 'rgba(0,91,150,.08)', color: AC }}>{icon}</span>
-        <span className="text-[13.5px] font-semibold text-slate-900">{name}</span>
-        <ArrowRight size={15} className="ml-auto text-slate-300 transition group-hover:translate-x-0.5 group-hover:text-slate-500" />
-      </div>
-      <div className="flex items-center gap-3">
-        <Ring pct={empty ? 0 : score} size={74} stroke={7} color={empty ? '#E2E8F0' : col}>
-          {empty ? <span className="text-[16px] font-bold text-slate-300">—</span>
-            : <><span className="text-[19px] font-bold leading-none text-slate-900">{score}</span>{unit && <span className="text-[8.5px] text-slate-400">{unit}</span>}</>}
-        </Ring>
-        <div className="min-w-0">
-          {!empty && <span className="inline-block rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ background: col + '1f', color: col }}>Grade {grade(score)}</span>}
-          <div className={`${empty ? '' : 'mt-1.5'} text-[12px] text-slate-500`}>{driver}</div>
-          {empty && emptyCta && <div className="mt-1 text-[11.5px] font-semibold" style={{ color: AC }}>{emptyCta} →</div>}
-        </div>
-      </div>
+    <Link href={href} aria-busy={busy || undefined} className={`group relative flex min-w-0 flex-col rounded-[12px] border border-[#E2E5EC] bg-white px-3 py-2.5 ${CARD_SHADOW} transition hover:-translate-y-px hover:border-[#C7D2E4] hover:shadow-[0_8px_22px_rgba(16,24,40,.12)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#005B96]`}>
+      <span className="flex items-center gap-2 text-[11.5px] font-medium text-[#64748B]">
+        <span aria-hidden className="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[8px]" style={{ background: alpha(T.base, 0.08), color: T.base }}>{icon}</span>
+        {/* two-line slot: 1- and 2-line labels keep every tile's value on the same baseline
+            (the corner arrow is out of flow so the label keeps its width at 1366px) */}
+        <span className="flex min-h-[29px] min-w-0 flex-1 items-center pr-3 leading-[1.25]">{label}</span>
+      </span>
+      <ArrowRight size={13} aria-hidden className="absolute right-2.5 top-3 text-[#CBD5E1] transition group-hover:translate-x-0.5 group-hover:text-[#64748B]" />
+      {loading ? (
+        <span className="mt-2.5 flex flex-col gap-1.5"><Skel h={24} w="45%" /><span className="text-[11px] text-[#94A3B8]">{loadingNote ?? 'loading…'}</span></span>
+      ) : (
+        <span className={`flex flex-col transition-opacity duration-200 ${busy ? 'opacity-50' : ''}`}>
+          <span className="mt-1.5 text-[22px] font-semibold leading-[1.1] text-[#0F172A]">{value}</span>
+          <span className="mt-1 text-[11.5px] leading-[1.4] text-[#64748B]">{sub}</span>
+        </span>
+      )}
     </Link>
   );
 }
 
-/* ================= page ================= */
-export default function PerformanceOverview() {
-  const [view, setView] = useState<'admin' | 'team'>('admin');
-  const isAdmin = view === 'admin';
+/* ---------- hero: risk posture ---------- */
+function PostureHero({ risk, assetsN }: { risk: Qs<RiskDash>; assetsN: number | null }) {
+  const d = risk.data;
+  const s = d?.summary;
+  const x = useMemo(() => {
+    if (!d) return null;
+    const avg = (xs: typeof d.assets) => {
+      const k = xs.filter((a) => a.score != null);
+      return k.length ? k.reduce((t, a) => t + (a.score as number), 0) / k.length : null;
+    };
+    const ext = d.assets.filter(isExternalAsset), int = d.assets.filter((a) => !isExternalAsset(a));
+    const top = d.assets.filter((a) => a.score != null).sort((a, b) => (b.score as number) - (a.score as number)).slice(0, 4);
+    return { ext: ext.length, extAvg: avg(ext), int: int.length, intAvg: avg(int), top };
+  }, [d]);
+  const band: Band = toBand(null, s?.avg_score);
+  const tone = BAND[band];
+  const parts: Part[] = BAND_ORDER.map((k) => ({ key: k, label: BAND[k].label, n: s?.by_band?.[k] ?? 0, c: BAND[k].c }));
+  if (s?.by_band?.unknown) parts.push({ key: 'unknown', label: 'Unscored', n: s.by_band.unknown, c: BAND.unknown.c });
 
-  const { data: vulns = [], isLoading, dataUpdatedAt } = useQuery({
-    queryKey: ['perf-vulns'],
-    queryFn: async () => {
-      const r = await vulnManagementApi.vulnerabilities.getAll({ include_closed: true, limit: 1000 });
-      return (Array.isArray(r.data) ? r.data : (r.data as any)?.items || []) as any[];
-    },
-  });
-  const { data: assets = [] } = useQuery({
-    queryKey: ['perf-assets'],
-    queryFn: async () => {
-      const r = await apiClient.get('/assets', { params: { limit: 1000 } });
-      return (Array.isArray(r.data) ? r.data : (r.data as any)?.items || []) as any[];
-    },
-  });
-  const { data: domainAgg } = useQuery({
-    queryKey: ['perf-domains'],
-    queryFn: async () => (await vulnManagementApi.vulnerabilities.getDomains({ include_closed: false })).data as {
-      domains: Array<{ family: string; total: number; worst_severity: string }>;
-    },
-  });
-  // Per-module scorecard inputs — each defensive + optional so an empty tenant or a
-  // missing endpoint degrades to the card's empty state rather than erroring.
-  const { data: disc } = useQuery({
-    queryKey: ['perf-discovery'],
-    queryFn: async () => (await discoveryApi.discoveredDevices()).data as { devices: any[]; runs: any[]; latest_run_id: number | null },
-    retry: false,
-  });
-  const { data: cisOv } = useQuery({
-    queryKey: ['perf-cis'],
-    queryFn: async () => (await compliancePluginsApi.assetsOverview()).data as any,
-    retry: false,
-  });
-  const { data: ctemPf } = useQuery({
-    queryKey: ['perf-ctem'],
-    queryFn: async () => (await apiClient.get('/erm/ctem/scopes/portfolio')).data as any,
-    retry: false,
-  });
-
-  const m = useMemo(() => {
-    const open = vulns.filter((v) => !isClosed(v));
-    const sev: Record<string, number> = { Critical: 0, High: 0, Medium: 0, Low: 0, Info: 0 };
-    open.forEach((v) => { sev[normSev(v.severity)]++; });
-    const kev = open.filter(isKev).length;
-    const exploitable = open.filter(hasExploit).length;
-    const withCve = open.filter((v) => v.cve_id).length;
-    const internetAssets = assets.filter((a) => a.internet_facing || a.is_internet_facing || a.external).length;
-    const cvss = open.map((v) => Number(v.cvss_score)).filter((n) => !isNaN(n) && n > 0);
-    const avgCvss = cvss.length ? cvss.reduce((a, b) => a + b, 0) / cvss.length : 0;
-    const agingOld = open.filter((v) => (daysSince(seenDate(v)) ?? 0) > 30).length;
-    const resolved = vulns.length - open.length;
-
-    // weekly new-findings (last 12 weeks) from first_seen
-    const wk = 7 * 86400000, now = Date.now();
-    const weeks = Array.from({ length: 12 }, (_, i) => {
-      const end = now - (11 - i) * wk;
-      const d = new Date(end);
-      return { label: `${d.getMonth() + 1}/${d.getDate()}`, start: end - wk, end, n: 0 };
-    });
-    vulns.forEach((v) => { const s = seenDate(v); if (!s) return; const t = new Date(s).getTime(); const b = weeks.find((w) => t > w.start && t <= w.end); if (b) b.n++; });
-
-    // exposure funnel
-    const funnel = [
-      { label: 'All open findings', n: open.length, color: '#94A3B8' },
-      { label: 'With a CVE', n: withCve, color: '#3279A3' },
-      { label: 'Exploitable', n: exploitable, color: '#EA580C' },
-      { label: 'Actively exploited', n: kev, color: '#B91C1C' },
-    ];
-
-    // EPSS buckets
-    const epss = [
-      { label: '≥ 50%', n: open.filter((v) => (v.epss_score ?? 0) >= 0.5).length, color: SEV.Critical.c },
-      { label: '10–50%', n: open.filter((v) => (v.epss_score ?? 0) >= 0.1 && (v.epss_score ?? 0) < 0.5).length, color: SEV.High.c },
-      { label: '1–10%', n: open.filter((v) => (v.epss_score ?? 0) >= 0.01 && (v.epss_score ?? 0) < 0.1).length, color: SEV.Medium.c },
-      { label: '< 1%', n: open.filter((v) => (v.epss_score ?? 0) < 0.01).length, color: SEV.Low.c },
-    ];
-
-    // needs attention — real, ranked by KEV then EPSS then CVSS, no owners
-    const attention = [...open]
-      .sort((a, b) => (Number(isKev(b)) - Number(isKev(a))) || ((b.epss_score ?? 0) - (a.epss_score ?? 0)) || (Number(b.cvss_score || 0) - Number(a.cvss_score || 0)))
-      .slice(0, 6)
-      .map((v) => {
-        const s = normSev(v.severity);
-        const bits = [s, v.cvss_score ? `CVSS ${Number(v.cvss_score).toFixed(1)}` : null,
-          typeof v.epss_score === 'number' ? `EPSS ${Math.round(v.epss_score * 100)}%` : null,
-          isKev(v) ? 'CISA KEV' : null].filter(Boolean);
-        return { id: v.id, dot: SEV[s].c, title: [v.cve_id, v.title].filter(Boolean).join(' — ') || 'Finding', sub: bits.join(' · ') };
-      });
-
-    // by domain (server aggregate, worst-severity coloured)
-    const byDomain = (domainAgg?.domains?.length
-      ? domainAgg.domains.slice(0, 7).map((d) => ({ label: d.family, n: d.total, color: SEV[normSev(d.worst_severity)].c }))
-      : Object.entries(open.reduce((acc: Record<string, number>, v) => { const d = v.family || v.domain || v.category || 'General'; acc[d] = (acc[d] || 0) + 1; return acc; }, {}))
-          .map(([label, n]) => ({ label, n: n as number, color: AC })).sort((a, b) => b.n - a.n).slice(0, 7));
-
-    // ownership (real assignee)
-    const owners: Record<string, { open: number; critical: number; oldest: number }> = {};
-    open.forEach((v) => { const o = ownerOf(v); owners[o] = owners[o] || { open: 0, critical: 0, oldest: 0 }; owners[o].open++; if (normSev(v.severity) === 'Critical') owners[o].critical++; const d = daysSince(seenDate(v)) ?? 0; if (d > owners[o].oldest) owners[o].oldest = d; });
-    const team = Object.entries(owners).map(([name, s]) => ({ name, ...s })).sort((a, b) => b.open - a.open);
-    const unassigned = owners['Unassigned']?.open || 0;
-    const oldest = Math.max(0, ...team.map((t) => t.oldest));
-
-    // derived exposure index (0-100, higher=better). SLA weight dropped (no remediation data).
-    const oc = open.length || 1;
-    const drivers = [
-      { label: 'Publicly exploitable', n: exploitable, ratio: exploitable / oc, w: 0.4, color: SEV.High.c },
-      { label: 'Actively exploited (KEV)', n: kev, ratio: kev / oc, w: 0.3, color: SEV.Critical.c },
-      { label: 'Aging > 30 days', n: agingOld, ratio: agingOld / oc, w: 0.3, color: SEV.Medium.c },
-    ];
-    const penalty = drivers.reduce((a, d) => a + d.w * d.ratio, 0) * 100;
-    const index = Math.max(0, Math.min(100, Math.round(100 - penalty)));
-    const grade = index >= 85 ? 'A' : index >= 70 ? 'B' : index >= 55 ? 'C' : index >= 40 ? 'D' : 'E';
-
-    return { open: open.length, sev, kev, exploitable, withCve, internetAssets, avgCvss, agingOld, resolved,
-      weeks: weeks.map(({ label, n }) => ({ label, n })), funnel, epss, attention, byDomain, team, unassigned, oldest, index, grade, drivers, total: vulns.length };
-  }, [vulns, assets, domainAgg]);
-
-  const exportCsv = () => {
-    const head = ['ID', 'Title', 'CVE', 'Severity', 'CVSS', 'EPSS', 'KEV', 'Status', 'Owner'];
-    const body = vulns.map((v) => [v.id, v.title, v.cve_id, v.severity, v.cvss_score, v.epss_score, isKev(v) ? 'yes' : '', v.status, ownerOf(v)]);
-    const csv = [head, ...body].map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    const a = document.createElement('a'); a.href = url; a.download = 'ava-findings.csv'; a.click(); URL.revokeObjectURL(url);
-  };
-
-  const gradeColor = m.index >= 70 ? '#047857' : m.index >= 40 ? '#B45309' : '#B91C1C';
-
-  /* ---- module scorecards (defensive: no data → null score → empty state) ---- */
-  const devs = disc?.devices || [];
-  const discInInv = devs.filter((d: any) => d.in_inventory).length;
-  const discConnected = devs.filter((d: any) => d.connected).length;
-  const discCoverage = devs.length ? Math.round((discInInv / devs.length) * 100) : null;
-  const profiled = assets.filter((a: any) => a.os_family).length;
-  const invScore = assets.length ? Math.round((profiled / assets.length) * 100) : null;
-  const cisPass = cisOv?.passed ?? cisOv?.total_passed ?? cisOv?.summary?.passed ?? null;
-  const cisFail = cisOv?.failed ?? cisOv?.total_failed ?? cisOv?.summary?.failed ?? null;
-  const cisScored = cisPass != null && cisFail != null && (cisPass + cisFail) > 0;
-  const cisScore = cisScored ? Math.round((cisPass / (cisPass + cisFail)) * 100) : null;
-  // Score from findings when any exist — findings can arrive (scanner import)
-  // before the asset inventory is populated; only a truly empty tenant is "—".
-  const vulnScore = vulns.length || assets.length ? m.index : null;
-  const ctemScopes = Array.isArray(ctemPf?.scopes) ? ctemPf.scopes.length
-    : (ctemPf?.scope_count ?? (Array.isArray(ctemPf?.portfolio) ? ctemPf.portfolio.length : 0));
-  const ctemScore = ctemScopes > 0 ? (ctemPf?.avg_score ?? ctemPf?.portfolio_score ?? null) : null;
-
-  return (
-    <div className="mx-auto flex max-w-[1320px] flex-col gap-4 py-1 text-slate-900" style={{ fontFamily: "var(--font-poppins), 'Poppins', system-ui, sans-serif" }}>
-      {/* head row */}
-      <div className="mb-1 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="m-0 text-[20px] font-semibold tracking-[-.02em]">Performance</h1>
-          <div className="mt-0.5 text-[12.5px] text-slate-500">
-            {isAdmin
-              ? `Organisation-wide cyber posture · ${nfmt(m.open)} open findings · ${nfmt(assets.length)} assets`
-              : `Ownership & workload · ${m.team.length} owner${m.team.length === 1 ? '' : 's'} · ${nfmt(m.unassigned)} unassigned`}
+  let body: ReactNode;
+  if (risk.isLoading) body = (
+    <div className="flex flex-1 flex-wrap items-center gap-6">
+      <div className="relative max-w-full shrink-0"><Gauge value={null} color={T.faint} label="Risk posture loading" /></div>
+      <div className="min-w-0 flex-1 basis-[220px]"><Loading rows={5} note={`Scoring ${assetsN != null ? plural(assetsN, 'asset') : 'every asset'} live from scan, hardening and business-impact signals — this takes a few seconds.`} /></div>
+    </div>
+  );
+  else if (!d || !s) body = <Unavailable what="Risk posture" href="/cyber-assurance/risk-posture" />;
+  else if (!s.scored_count || s.avg_score == null) body = <Empty icon={<Activity size={16} />} title="No asset has a risk score yet" body="Scores appear once assets carry scan, hardening or business-impact data." href="/cyber-assurance/risk-posture" cta="Open Risk Posture" />;
+  else body = (
+    <div className="flex flex-1 flex-wrap items-stretch gap-x-7 gap-y-4">
+      <div className="flex max-w-full shrink-0 flex-col items-center justify-center">
+        <div className="relative max-w-full">
+          <Gauge value={s.avg_score} color={tone.c} label={`Average asset risk ${s.avg_score.toFixed(1)} of 100, band ${tone.label}`} />
+          <div className="pointer-events-none absolute inset-x-0 bottom-[24px] flex flex-col items-center">
+            <span className="text-[30px] font-semibold leading-none text-[#0F172A]">{s.avg_score.toFixed(1)}</span>
+            <span className="mt-1 text-[10.5px] text-[#94A3B8]">avg risk / 100</span>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="inline-flex gap-0.5 rounded-[11px] bg-[#EAEBF3] p-[3px]">
-            {(['admin', 'team'] as const).map((k) => (
-              <button
-                key={k}
-                onClick={() => setView(k)}
-                aria-pressed={view === k}
-                className="inline-flex h-[34px] items-center gap-1.5 rounded-[9px] border-0 px-4 text-[12.5px] font-semibold"
-                style={{ background: view === k ? '#fff' : 'transparent', color: view === k ? AC : '#6B7280', boxShadow: view === k ? '0 1px 2px rgba(16,24,40,.08)' : 'none' }}
-              >
-                {k === 'admin' ? <ShieldCheck size={15} /> : <Users size={15} />}
-                {k === 'admin' ? 'Administrator' : 'Team'}
-              </button>
-            ))}
-          </div>
-          <button onClick={exportCsv} className="inline-flex h-9 items-center gap-1.5 rounded-[9px] border border-[#E2E5EC] bg-white px-3.5 text-[12.5px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(16,24,40,.04)] hover:bg-[#F6F7FB]">
-            <Download size={15} color={AC} />Export findings (CSV)
-          </button>
-        </div>
+        <div className="mt-1 flex items-center gap-2"><Pill tone={tone} /><span className="text-[11.5px] text-[#64748B]">{tone.desc}</span></div>
+        {x && (
+          <p className="m-0 mt-2 text-center text-[11px] leading-[1.5] text-[#64748B]">
+            External {nfmt(x.ext)} · avg {x.extAvg == null ? '—' : x.extAvg.toFixed(1)}<br />Internal {nfmt(x.int)} · avg {x.intAvg == null ? '—' : x.intAvg.toFixed(1)}
+          </p>
+        )}
       </div>
-
-      {isLoading ? (
-        <div className="grid h-80 place-items-center text-slate-500">Loading live performance data…</div>
-      ) : isAdmin ? (
-        <div className="flex flex-col gap-4">
-          {/* Module scorecards — the pipeline, each stage its own score */}
-          <div>
-            <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[.06em] text-slate-500">Module scores</div>
-            {/* Fixed grid so the 5th scorecard (CTEM) never wraps alone and stretches full-width. */}
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-5">
-              <Scorecard icon={<Radar size={16} />} name="Discovery" href="/cyber-assurance/asset-discovery"
-                score={discCoverage} unit="% onboarded"
-                driver={devs.length ? `${nfmt(devs.length)} found · ${nfmt(discInInv)} in inventory` : 'No discovery runs yet'}
-                emptyCta="Run a discovery scan" />
-              <Scorecard icon={<Boxes size={16} />} name="Inventory" href="/cyber-assurance/assets"
-                score={invScore} unit="% profiled"
-                driver={assets.length ? `${nfmt(assets.length)} asset${assets.length === 1 ? '' : 's'} · ${nfmt(profiled)} profiled` : 'No assets yet'}
-                emptyCta="Connect a device" />
-              <Scorecard icon={<ShieldCheck size={16} />} name="CIS Benchmarks" href="/cyber-assurance/assets?tab=cis"
-                score={cisScore} unit="% pass"
-                driver={cisScored ? `${nfmt(cisPass)}/${nfmt(cisPass + cisFail)} checks pass` : 'No CIS scans yet'}
-                emptyCta="Run a CIS scan" />
-              <Scorecard icon={<Bug size={16} />} name="Vulnerabilities" href="/cyber-assurance/vulnerabilities"
-                score={vulnScore} unit="exposure"
-                driver={m.open ? `${nfmt(m.open)} open · ${nfmt(m.sev.Critical)} critical` : (vulns.length || assets.length ? 'No open findings — clean' : 'No assets to assess')}
-                emptyCta="Bring findings in" />
-              <Scorecard icon={<Target size={16} />} name="CTEM" href="/cyber-assurance/vulnerabilities/ctem-scopes"
-                score={ctemScore} unit="managed"
-                driver={ctemScopes > 0 ? `${nfmt(ctemScopes)} scope${ctemScopes === 1 ? '' : 's'} tracked` : 'No exposure scope yet'}
-                emptyCta={ctemScopes > 0 ? undefined : 'Create a scope'} />
-            </div>
-          </div>
-
-          {/* Attack surface (discovery) · Severity mix · Needs attention */}
-          <div className="flex flex-wrap gap-4">
-            <div className={`${cardCls} flex min-w-0 flex-1 basis-[320px] flex-col`}>
-              <CardTitle title="Attack surface" desc="What discovery found vs what's under management" />
-              {devs.length ? (
-                <HBars fill rows={[
-                  { label: 'Discovered', n: devs.length, color: '#94A3B8' },
-                  { label: 'Connectable', n: discConnected, color: '#3279A3' },
-                  { label: 'In inventory', n: discInInv, color: '#047857' },
-                ]} />
-              ) : <div className="flex flex-1 items-center justify-center py-6 text-center text-[12px] text-slate-400">No discovered devices yet.</div>}
-            </div>
-
-            <div className={`${cardCls} flex min-w-0 flex-1 basis-[320px] flex-col`}>
-              <CardTitle title="Severity mix" desc={`${nfmt(m.open)} open findings by severity`} />
-              {m.open ? (
-                <div className="flex flex-1 flex-wrap items-center justify-center gap-5">
-                  <Donut rows={SEV_ORDER.map((l) => ({ label: l, n: m.sev[l] }))} total={m.open} size={128} />
-                  <div className="flex min-w-[140px] max-w-[240px] flex-1 flex-col gap-1.5 text-[12px]">
-                    {SEV_ORDER.map((l) => (
-                      <span key={l} className="flex items-center gap-2">
-                        <i className="inline-block h-2 w-2 rounded-[3px]" style={{ background: SEV[l].c }} />
-                        <span className="text-slate-700">{l}</span>
-                        <b className="ml-auto tabular-nums text-slate-900">{nfmt(m.sev[l])}</b>
-                        <span className="w-9 text-right text-[11px] text-slate-400">{pct(m.sev[l], m.open)}%</span>
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ) : <div className="flex flex-1 items-center justify-center py-6 text-center text-[12px] text-slate-400">No open findings yet.</div>}
-            </div>
-
-            <div className={`${cardCls} flex min-w-0 flex-1 basis-80 flex-col`}>
-              <CardTitle title="Needs attention" desc="Ranked by active exploitation, EPSS and CVSS" />
-              {m.attention.length === 0 ? (
-                <div className="flex flex-1 items-center justify-center py-6 text-[12px] text-slate-400">No open findings.</div>
-              ) : (
-                <div className="flex flex-1 flex-col gap-1">
-                  {m.attention.slice(0, 4).map((a) => (
-                    <Link key={a.id} href={`/cyber-assurance/vulnerabilities/${a.id}`} className="flex items-start gap-2.5 rounded-[10px] px-2 py-[7px] text-inherit hover:bg-[#F6F7FB]">
-                      <i className="mt-1.5 block h-2 w-2 shrink-0 rounded-full" style={{ background: a.dot }} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[12.5px] font-semibold text-slate-900" title={a.title}>{a.title}</span>
-                        <span className="mt-px block truncate text-[11.5px] text-slate-500" title={a.sub}>{a.sub}</span>
-                      </span>
-                      <ChevronRight size={14} className="mt-1 shrink-0 text-slate-400" />
+      <div className="flex min-w-0 flex-1 basis-[250px] flex-col">
+        <div className="mb-2 flex items-baseline justify-between gap-2"><Eyebrow>Assets by risk band</Eyebrow><span className="text-[11.5px] text-[#64748B]">{nfmt(s.scored_count)} of {nfmt(s.asset_count)} scored</span></div>
+        <StackBar parts={parts} label="Assets by risk band" height={14} />
+        <div className="mt-2.5"><PartLegend parts={parts} total={s.asset_count} cols={2} /></div>
+        {x && x.top.length > 0 && (
+          <div className="mt-auto pt-4">
+            <Eyebrow className="mb-1.5">Highest risk</Eyebrow>
+            <ol className="m-0 flex list-none flex-col p-0">
+              {x.top.map((a) => {
+                const b = BAND[toBand(a.band?.label, a.score)];
+                return (
+                  <li key={a.id}>
+                    <Link href={`/cyber-assurance/risk-posture/asset/${a.id}`} className="flex items-center gap-2.5 rounded-[8px] px-1.5 py-[5px] text-[12px] hover:bg-[#F6F7FB]">
+                      <span className="min-w-0 flex-1 truncate font-medium text-[#0F172A]" title={a.name}>{a.name}</span>
+                      <span className="shrink-0 text-[10.5px] font-medium uppercase tracking-[.04em] text-[#94A3B8]">{isExternalAsset(a) ? 'External' : 'Internal'}</span>
+                      <b className="w-[34px] shrink-0 text-right font-semibold tabular-nums text-[#0F172A]">{(a.score as number).toFixed(1)}</b>
+                      <span className="w-[74px] shrink-0 text-right"><Pill tone={b} /></span>
                     </Link>
-                  ))}
-                  {m.attention.length > 4 && (
-                    <Link href="/cyber-assurance/vulnerabilities" className="mt-auto flex items-center justify-center gap-1 rounded-[10px] px-2 py-2 text-[12px] font-semibold hover:bg-[#F6F7FB]" style={{ color: AC }}>
-                      View all {m.attention.length} findings <ChevronRight size={13} />
-                    </Link>
-                  )}
-                </div>
-              )}
-            </div>
+                  </li>
+                );
+              })}
+            </ol>
           </div>
-
-          {/* New findings weekly · Exposure funnel */}
-          <div className="flex flex-wrap gap-4">
-            <div className={`${cardCls} flex min-w-0 flex-1 basis-[380px] flex-col`}>
-              <CardTitle title="New findings — weekly" desc="First-seen date, last 12 weeks" />
-              <WeeklyBars weeks={m.weeks} />
-            </div>
-            <div className={`${cardCls} min-w-0 flex-1 basis-[380px]`}>
-              <CardTitle title="Exposure funnel" desc={`How ${nfmt(m.open)} open findings narrow to what matters`} />
-              {m.open ? (
-                <div className="flex flex-col gap-2">
-                  {m.funnel.map((f, i) => (
-                    <div key={f.label} className="flex items-center gap-2.5">
-                      <span className="w-32 shrink-0 text-[12px] text-slate-700">{f.label}</span>
-                      <span className="flex flex-1 items-center gap-2">
-                        <span className="flex h-[26px] items-center rounded-[7px] pl-2.5 text-[12px] font-semibold tabular-nums text-white" style={{ width: `${Math.max(9, pct(f.n, m.funnel[0].n))}%`, background: f.color }}>{nfmt(f.n)}</span>
-                        {i > 0 && <span className="text-[10.5px] text-slate-400">{pct(f.n, m.funnel[i - 1].n)}%</span>}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : <div className="py-6 text-center text-[12px] text-slate-400">No open findings to funnel yet.</div>}
-            </div>
-          </div>
-        </div>
-      ) : (
-        /* ===== TEAM / OWNERSHIP ===== */
-        <div className="flex flex-col gap-4">
-          <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))' }}>
-            {[
-              { label: 'Open (team)', value: nfmt(m.open), sub: `${m.team.length} owner${m.team.length === 1 ? '' : 's'}`, color: AC, icon: <Bug size={13} /> },
-              { label: 'Unassigned', value: nfmt(m.unassigned), sub: 'need an owner', color: SEV.High.c, icon: <Users size={13} /> },
-              { label: 'Resolved', value: nfmt(m.resolved), sub: 'all-time', color: '#047857', icon: <CheckCircle2 size={13} /> },
-              { label: 'Critical open', value: nfmt(m.sev.Critical), sub: 'need triage', color: SEV.Critical.c, icon: <Flame size={13} /> },
-              { label: 'Oldest open', value: `${m.oldest}d`, sub: 'since first seen', color: SEV.Medium.c, icon: <Clock size={13} /> },
-            ].map((k) => (
-              <div key={k.label} className="relative min-w-0 overflow-hidden rounded-xl border border-[#E2E5EC] bg-white px-3.5 py-[11px] shadow-[0_1px_2px_rgba(16,24,40,.04)]">
-                <span className="absolute bottom-3 left-0 top-3 w-[3px] rounded-r" style={{ background: k.color }} />
-                <div className="flex items-center gap-1.5 text-[10.5px] font-semibold uppercase tracking-[.05em] text-slate-500"><span style={{ color: k.color }}>{k.icon}</span>{k.label}</div>
-                <div className="mt-1 text-[22px] font-bold tabular-nums text-slate-900">{k.value}</div>
-                <div className="mt-0.5 text-[11.5px] text-slate-400">{k.sub}</div>
-              </div>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-4">
-            <div className={`${cardCls} min-w-0 flex-1 basis-[380px]`}>
-              <CardTitle title="Workload by owner" desc="Open findings per owner" />
-              <HBars rows={m.team.slice(0, 8).map((t, i) => ({ label: t.name, n: t.open, color: t.name === 'Unassigned' ? '#94A3B8' : i === 0 ? AC : '#3279A3' }))} />
-            </div>
-            <div className={`${cardCls} flex min-w-0 flex-1 basis-[380px] flex-col`}>
-              <CardTitle title="New findings — weekly" desc="Findings landing on the team, last 12 weeks" />
-              <WeeklyBars weeks={m.weeks} />
-            </div>
-          </div>
-
-          <div className={cardCls}>
-            <CardTitle title="Ownership" desc="Per-owner queue health — open load, criticals, and the oldest untouched finding" />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[520px] border-collapse">
-                <thead>
-                  <tr>
-                    {['Owner', 'Open', 'Critical', 'Oldest open', 'Health'].map((h, i) => (
-                      <th key={h} className={`border-b border-[#E2E5EC] px-2.5 py-[7px] text-[10.5px] font-semibold uppercase tracking-[.05em] text-slate-500 ${i >= 1 && i <= 3 ? 'text-right' : 'text-left'}`}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {m.team.map((t) => {
-                    const health = t.critical > 0 || t.oldest > 30 ? 'At risk' : t.oldest > 14 ? 'Watch' : 'Healthy';
-                    return (
-                      <tr key={t.name}>
-                        <td className="border-b border-[#F6F7FB] px-2.5 py-[7px] text-[12.5px] font-semibold text-slate-900">{t.name}</td>
-                        <td className="border-b border-[#F6F7FB] px-2.5 py-[7px] text-right text-[12.5px] font-semibold tabular-nums text-slate-900">{nfmt(t.open)}</td>
-                        <td className="border-b border-[#F6F7FB] px-2.5 py-[7px] text-right text-[12.5px] font-semibold tabular-nums" style={{ color: t.critical > 0 ? '#B91C1C' : SEC }}>{t.critical || '—'}</td>
-                        <td className="border-b border-[#F6F7FB] px-2.5 py-[7px] text-right text-[12.5px] tabular-nums text-slate-700">{t.oldest ? `${t.oldest}d` : '—'}</td>
-                        <td className="border-b border-[#F6F7FB] px-2.5 py-[7px] text-[12px]">
-                          <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: healthColor(health) }}>
-                            <i className="inline-block h-[7px] w-[7px] rounded-full" style={{ background: healthColor(health) }} />{health}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="pb-1 text-[11px] text-slate-400">
-        Computed live from your vulnerability register &amp; asset inventory{dataUpdatedAt ? ` · updated ${new Date(dataUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''} · Drill in from <Link href="/cyber-assurance/vulnerabilities" className="text-[#005B96]">Vulnerabilities →</Link>
+        )}
       </div>
     </div>
+  );
+  return (
+    <Card title="Risk posture" sub="Mean asset risk · 0–100, higher is worse" href="/cyber-assurance/risk-posture" cta="Open Risk Posture" busy={busyOf(risk)} className="xl:col-span-7">
+      {body}
+    </Card>
+  );
+}
+
+/* ---------- hero: is it improving? ---------- */
+function FlowCard({ q, flow, history, historyLoading }: {
+  q: Qs<Trends>; flow: { weeks: Week[]; added: number; resolved: number; mttr: number | null } | null;
+  history: { date: string; value: number }[] | null; historyLoading: boolean;
+}) {
+  const pts = (history ?? []).map((p) => Number(p.value)).filter((n) => Number.isFinite(n));
+  let body: ReactNode;
+  if (q.isLoading) body = <Loading rows={6} />;
+  else if (!flow) body = <Unavailable what="Finding trend" href="/cyber-assurance/vulnerabilities" />;
+  else body = (
+    <div className="flex flex-1 flex-col">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <Figure label="New" value={nfmt(flow.added)} sub="first detected" />
+        <Figure label="Resolved" value={nfmt(flow.resolved)} sub="closed" />
+        <Figure label="Net change" value={`${flow.added - flow.resolved > 0 ? '+' : ''}${nfmt(flow.added - flow.resolved)}`} sub="open backlog" />
+        <Figure label="MTTR" value={flow.mttr == null ? '—' : `${Math.round(flow.mttr)}d`} sub={flow.mttr == null ? 'none resolved' : 'mean time to fix'} />
+      </div>
+      <FlowChart weeks={flow.weeks} />
+      <div className="mt-auto flex flex-wrap items-center gap-x-4 gap-y-1 pt-1 text-[11.5px] text-[#334155]">
+        <span className="inline-flex items-center gap-1.5"><Key c={NEW_C} />New findings</span>
+        <span className="inline-flex items-center gap-1.5"><Key c={RES_C} />Resolved</span>
+        <span className="ml-auto inline-flex items-center gap-2 whitespace-nowrap text-[11px] text-[#64748B]">
+          Open backlog history:
+          {historyLoading ? <Skel h={10} w={60} /> : pts.length >= 2
+            ? <Sparkline points={pts} width={96} height={22} label={`Open findings over the last ${pts.length} daily snapshots, latest ${pts[pts.length - 1]}`} />
+            : <span className="italic text-[#94A3B8]">no daily snapshots yet</span>}
+        </span>
+      </div>
+    </div>
+  );
+  return (
+    <Card title="Is it improving?" sub="Opened vs resolved · last 90 days" href="/cyber-assurance/vulnerabilities" cta="Open register" busy={busyOf(q)} className="xl:col-span-5">
+      {body}
+    </Card>
   );
 }

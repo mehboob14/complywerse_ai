@@ -9,6 +9,7 @@ worker updates it through the lifecycle, committing after each transition so the
 UI can poll live status/progress and offer a stop.
 """
 import logging
+import re
 import threading
 import time
 from datetime import datetime
@@ -114,35 +115,96 @@ def _find_reusable_scan_id(db: Session, tenant_id: int, run: "HostedScanRun") ->
     return None
 
 
+def _target_nets(targets: Optional[str]) -> List[Any]:
+    """IP networks parsed from a hosted-scan target string (hosts / CIDRs).
+    Hostnames and ranges are skipped — they can only match an unscoped profile."""
+    import ipaddress
+    nets = []
+    for tok in re.split(r"[\s,]+", targets or ""):
+        if not tok:
+            continue
+        try:
+            nets.append(ipaddress.ip_network(tok, strict=False))
+        except ValueError:
+            pass
+    return nets
+
+
+def _pick_host_profiles(profiles: List[Any], targets: Optional[str], explicit: bool) -> List[Any]:
+    """Rank host-login profiles best-match-first for THESE targets: a profile whose
+    applies_to_cidrs covers a target beats an unscoped one, then priority, then id
+    (Nessus tries credentials in the order given). Explicit operator picks are all
+    kept in that order. With no picks, auto-select the best ONE per kind
+    (winrm/ssh) among the profiles that apply — the asset's own saved login is the
+    opt-in, same rule the pentest lane uses (_scan_credentials_for).
+    # ponytail: one login per kind on auto — several passwords for one account
+    # risk a lockout; the operator can still multi-pick explicitly."""
+    import ipaddress
+    nets = _target_nets(targets)
+
+    def _scope(p) -> int:  # 0 = CIDR covers a target, 1 = unscoped (any host), 2 = scoped elsewhere
+        cidrs = p.applies_to_cidrs or []
+        if not cidrs:
+            return 1
+        for c in cidrs:
+            try:
+                n = ipaddress.ip_network(c, strict=False)
+            except (ValueError, TypeError):
+                continue
+            if any(n.overlaps(t) for t in nets):
+                return 0
+        return 2
+
+    ranked = sorted(profiles, key=lambda p: (_scope(p), p.priority or 0, p.id or 0))
+    if explicit:
+        return ranked
+    out, seen = [], set()
+    for p in ranked:
+        if _scope(p) == 2 or p.kind in seen:
+            continue
+        seen.add(p.kind)
+        out.append(p)
+    return out
+
+
 def _resolve_credentials(
-    db: Session, tenant_id: int, credential_profile_ids: Optional[Sequence[int]]
+    db: Session, tenant_id: int, credential_profile_ids: Optional[Sequence[int]],
+    targets: Optional[str] = None,
 ) -> Optional[List[Dict[str, Any]]]:
     """Resolve tenant credential profiles into the scan-level list create_scan()
     wants. Reuses the discovery credential store (`grc_credential_profiles`) and
     the SAME decrypt path deep-collect uses (grc.crypto.decrypt_secret) — no new
-    store, no new crypto. Maps winrm→windows / ssh→ssh. Returns None when nothing
-    usable so the scan stays unauthenticated. Secrets are never logged."""
+    store, no new crypto. Maps winrm→windows / ssh→ssh. Explicit ids are used as
+    picked (best match for `targets` first); with none, the stored host login(s)
+    that apply to `targets` are attached automatically (see _pick_host_profiles) —
+    a scan of an asset with a saved login must not silently run unauthenticated.
+    Returns None when nothing usable. Secrets are never logged."""
     from grc.crypto import decrypt_secret
     from grc.models import CredentialProfile
 
     out: List[Dict[str, Any]] = []
-    # Host logins (WinRM/SSH) — only the ones the operator attached to this scan.
+    q = db.query(CredentialProfile).filter(
+        CredentialProfile.tenant_id == tenant_id,
+        CredentialProfile.is_active.is_(True),
+        CredentialProfile.kind.in_(("winrm", "ssh")),
+    )
     if credential_profile_ids:
-        profiles = db.query(CredentialProfile).filter(
-            CredentialProfile.tenant_id == tenant_id,
-            CredentialProfile.id.in_(list(credential_profile_ids)),
-            CredentialProfile.is_active.is_(True),
-            CredentialProfile.kind.in_(("winrm", "ssh")),
-        ).order_by(CredentialProfile.priority, CredentialProfile.id).all()
-        for p in profiles:
-            secret = decrypt_secret(p.secret_encrypted)
-            if p.kind == "winrm":
-                out.append({"type": "windows", "username": p.username,
-                            "password": secret, "domain": p.domain})
-            else:  # ssh
-                out.append({"type": "ssh", "username": p.username,
-                            "password": secret if p.secret_kind == "password" else None,
-                            "private_key": secret if p.secret_kind == "ssh_key" else None})
+        q = q.filter(CredentialProfile.id.in_(list(credential_profile_ids)))
+    for p in _pick_host_profiles(q.all(), targets, explicit=bool(credential_profile_ids)):
+        secret = decrypt_secret(p.secret_encrypted)
+        if not (p.username and secret):
+            continue
+        if p.kind == "winrm":
+            user, domain = p.username, p.domain
+            if not domain and "\\" in user:          # CORP\alice -> domain CORP, user alice
+                domain, user = user.split("\\", 1)
+            out.append({"type": "windows", "username": user,
+                        "password": secret, "domain": domain, "profile": p.name})
+        else:  # ssh
+            out.append({"type": "ssh", "username": p.username,
+                        "password": secret if p.secret_kind == "password" else None,
+                        "private_key": secret if p.secret_kind == "ssh_key" else None,
+                        "profile": p.name})
 
     # SNMP — ALWAYS include the tenant's active community strings, regardless of
     # what host logins were picked. Nessus reads network gear / printers over
@@ -214,8 +276,10 @@ def run_hosted_scan(
         # Decrypt here (fails loud if SESSION_SECRET rotated), so a bad
         # credential lands the run in 'failed' rather than silently scanning
         # unauthenticated when the operator asked for a credentialed scan.
-        credentials = _resolve_credentials(db, tenant_id, credential_profile_ids)
-        name = run.scan_name or "Ava hosted scan"
+        credentials = _resolve_credentials(db, tenant_id, credential_profile_ids, targets=run.targets)
+        logger.info("Hosted scan (run=%s) host logins attached: %s", run_id,
+                    [c.get("profile") for c in (credentials or []) if c.get("type") != "snmp"] or "none")
+        name = run.scan_name or "ComplyVerse hosted scan"
         # Re-scan of the same targets → reuse the prior Nessus scan in place so
         # the verified-fixed auto-close loop can fire (see _find_reusable_scan_id).
         # First scan of these targets (or a stale/deleted scan) → create a new one.
@@ -427,7 +491,7 @@ def _demo():
 
     run = types.SimpleNamespace(
         id=7, tenant_id=1, connection_id=1, targets="10.0.0.1",
-        scan_name="Ava hosted scan", policy_id=None, nessus_scan_id=None,
+        scan_name="ComplyVerse hosted scan", policy_id=None, nessus_scan_id=None,
         status="creating", progress=0, hosts_total=None, hosts_done=None,
         vulns_new=None, vulns_total=None, error=None, triggered_by_user_id=None,
         finished_at=None,
@@ -510,7 +574,7 @@ def _demo():
     _mod = sys.modules[__name__]
     orig_resolve = _mod._resolve_credentials
     _fake_creds = [{"type": "windows", "username": "svc", "password": "x", "domain": "CORP"}]
-    _mod._resolve_credentials = lambda db, tid, ids: _fake_creds if ids else None
+    _mod._resolve_credentials = lambda db, tid, ids, targets=None: _fake_creds if ids else None
     try:
         result = run_hosted_scan(_DB(), 7, 1, credential_profile_ids=[1],
                                  poll_timeout_s=5, poll_interval_s=0.001)
@@ -553,6 +617,17 @@ def _demo():
     _gdb = _GoneDB()
     _gone = _poll_and_sync(_gdb, run, 7, 1, _UntouchedAdapter(), 42, poll_interval_s=0.001, poll_timeout_s=5)
     assert _gone["status"] == "deleted" and _touched["n"] == 0 and _gdb.commits == 0, (_gone, _touched, _gdb.commits)
+    # Credential pick for the targets: a CIDR-scoped match beats an unscoped login,
+    # one per kind on auto, scoped-elsewhere never attached; explicit picks are all
+    # kept, best match first (Nessus tries them in order).
+    def _P(i, kind, cidrs):
+        return types.SimpleNamespace(id=i, kind=kind, applies_to_cidrs=cidrs, priority=100, name=f"p{i}")
+    _profs = [_P(15, "winrm", None), _P(16, "ssh", ["68.183.198.54/32"]), _P(23, "winrm", ["10.11.10.0/24"]), _P(26, "winrm", None)]
+    assert [p.id for p in _pick_host_profiles(_profs, "10.11.10.54", explicit=False)] == [23]
+    assert [p.id for p in _pick_host_profiles(_profs, "192.168.1.5", explicit=False)] == [15]
+    assert [p.id for p in _pick_host_profiles(_profs, "192.168.1.5, 68.183.198.54", explicit=False)] == [16, 15]
+    assert [p.id for p in _pick_host_profiles([_profs[3], _profs[0]], "192.168.1.5", explicit=True)] == [15, 26]
+    assert _pick_host_profiles([_profs[2]], "192.168.1.5", explicit=False) == []
     # unit-check the progress parser independently
     assert _progress_from_detail({"hosts": [{"progress": "100/100"}, {"progress": "0/100"}]}) == (50, 2, 1)
     assert _progress_from_detail({}) == (None, None, None)

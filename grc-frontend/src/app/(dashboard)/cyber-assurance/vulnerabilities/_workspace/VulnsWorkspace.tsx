@@ -14,7 +14,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Search, Download, Plus, Upload, Crosshair, Loader2, Building2, Clock, BarChart3, Target } from 'lucide-react';
+import { Search, Download, Plus, Upload, FileSpreadsheet, Crosshair, Loader2, Building2, Clock, BarChart3, Target } from 'lucide-react';
 import { shortenVulnTitle, type Vulnerability } from './lib';
 import CtemScopesRedesign from '../ctem-scopes/CtemScopesRedesign';
 
@@ -73,7 +73,7 @@ export interface VulnsWorkspaceProps {
   onView: (vuln: Vulnerability) => void; onEdit?: (vuln: Vulnerability) => void; onAssign?: (vuln: Vulnerability) => void;
   onChangeStatus?: (vuln: Vulnerability) => void; onDelete?: (vuln: Vulnerability) => void;
   onBulkAssign?: (ids: number[]) => void; onOpenFull: (id: number) => void;
-  onTemplate: () => void; onBulkUpload: () => void; onAdd: () => void;
+  onTemplate: () => void; onBulkUpload: () => void; onImport: () => void; onAdd: () => void;
   bulkUploadState?: 'idle' | 'uploading' | 'done' | 'error'; bulkUploadMsg?: string | null;
 }
 
@@ -93,7 +93,7 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
   const {
     vulns, filteredVulns, dashboard, domains = [], loading = false,
     registerType, setRegisterType, renderNcaRegister,
-    searchTerm, setSearchTerm, canCreate, onView, onOpenFull, onTemplate, onBulkUpload, onAdd,
+    searchTerm, setSearchTerm, canCreate, onView, onOpenFull, onTemplate, onBulkUpload, onImport, onAdd,
     bulkUploadState = 'idle', bulkUploadMsg,
   } = props;
 
@@ -185,6 +185,7 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
           <Link href="/cyber-assurance/vulnerabilities/choke-points" style={{ ...btn, textDecoration: 'none' }}><Crosshair size={15} />Choke points</Link>
           {canCreate && <button style={btn} onClick={onTemplate}><Download size={15} />Template</button>}
           {canCreate && <button style={btn} onClick={onBulkUpload} disabled={bulkUploadState === 'uploading'}>{bulkUploadState === 'uploading' ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}Bulk Upload</button>}
+          {canCreate && <button style={btn} onClick={onImport}><FileSpreadsheet size={15} />Import</button>}
           {canCreate && <button style={btnGreen} onClick={onAdd}><Plus size={15} />{isNca ? 'Add NCA Entry' : 'Add Vulnerability'}</button>}
         </div>
       </div>

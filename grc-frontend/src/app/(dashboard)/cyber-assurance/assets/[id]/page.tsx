@@ -58,6 +58,7 @@ import AttachmentsPanel from './_tabs/AttachmentsPanel';
 import CompliancePanel from './_tabs/CompliancePanel';
 import ScopeAuthorizationCard from './_ScopeAuthorizationCard';
 import TrajectoryPanel from './_tabs/TrajectoryPanel';
+import SbpInventoryPanel from './_tabs/SbpInventoryPanel';
 import CriticalityPanel from './_tabs/CriticalityPanel';
 import { RoomScanProvider, useRoomScan } from './_room-scan-context';
 import { GuideMarker, useGuide } from '@/cyber-assurance/components/guide';
@@ -100,7 +101,7 @@ type TabType = 'overview' | 'details' | 'compliance' | 'controls' | 'evidence' |
   | 'software' | 'relationships' | 'discovery' | 'lifecycle' | 'assignments' | 'activity'
   // Notes / Alerts / History — the last reference tabs, now backed by real
   // endpoints (Notes + History) and a derived feed (Alerts).
-  | 'alerts' | 'notes' | 'history';
+  | 'alerts' | 'notes' | 'history' | 'sbp';
 
 interface LinkedControl {
   id: number;
@@ -347,7 +348,7 @@ export default function AssetDetailPage() {
     'overview', 'details', 'compliance', 'controls', 'evidence', 'risks',
     'vulnerabilities', 'criticality', 'trajectory', 'mapping-recommendations',
     'software', 'relationships', 'discovery', 'lifecycle', 'assignments',
-    'activity', 'alerts', 'notes', 'history',
+    'activity', 'alerts', 'notes', 'history', 'sbp',
   ]);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -749,6 +750,7 @@ export default function AssetDetailPage() {
     // CIS Module Updated drop — Compliance / room scan (HostApplicationsPanel + ComplianceTab).
     ...(!outsideOnly ? [{ id: 'compliance' as TabType, label: 'Compliance', icon: Cpu }] : []),
     { id: 'trajectory', label: 'Trajectory', icon: Network },
+    { id: 'sbp', label: 'SBP Inventory', icon: Building2 },
     // Criticality Assessments tab hidden until wired to real data (was demo/seed). Panel code kept.
     // { id: 'criticality', label: 'Criticality Assessments', icon: ShieldCheck },
   ];
@@ -823,6 +825,7 @@ export default function AssetDetailPage() {
               </>
             )}
             {activeTab === 'trajectory' && <TrajectoryPanel assetId={assetId} />}
+            {activeTab === 'sbp' && <SbpInventoryPanel assetId={assetId} />}
             {activeTab === 'compliance' && (
               <RoomScanProvider>
                 {/* CompliancePanel now owns the whole Compliance experience
@@ -1290,14 +1293,14 @@ function AssetContextRail({
         </button>
         {/* Spec cross-links: one click to CIS scan history + composite risk posture. */}
         <Link
-          href={`/cyber-assurance/compliance-plugins/asset/${assetId}`}
+          href={`/compliance-plugins/asset/${assetId}`}
           className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
           title="View this asset's CIS plugin runs (Plugin Automation → per-asset)"
         >
           <PackageSearch className="h-3.5 w-3.5" strokeWidth={1.75} /> CIS scans
         </Link>
         <Link
-          href={`/cyber-assurance/risk-posture/asset/${assetId}`}
+          href={`/risk-posture/asset/${assetId}`}
           className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
           title="View this asset's composite risk posture (5-dimension breakdown)"
         >
@@ -2246,7 +2249,7 @@ function DetailsTab({ asset }: { asset: AssetDetailData }) {
             <div>
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Replacement Asset</span>
               <p className="text-sm text-slate-700">
-                <Link href={`/cyber-assurance/assets/${asset.replacement_asset_id}`} className="text-blue-600 hover:underline">
+                <Link href={`/assets/${asset.replacement_asset_id}`} className="text-blue-600 hover:underline">
                   {asset.replacement_asset_name || `Asset #${asset.replacement_asset_id}`}
                 </Link>
               </p>
@@ -2691,7 +2694,7 @@ function VulnerabilitiesTab({
                     )}
                   </td>
                   <td className="whitespace-nowrap px-4 py-2.5 text-right">
-                    <Link href={`/cyber-assurance/vulnerabilities/${vuln.vulnerability_id}`} className="text-sm font-medium text-teal-600 hover:underline">
+                    <Link href={`/vulnerabilities/${vuln.vulnerability_id}`} className="text-sm font-medium text-teal-600 hover:underline">
                       View
                     </Link>
                     <button
@@ -3407,7 +3410,7 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
       </td>
       <td className="px-3 py-2 align-top text-right">
         <Link
-          href={`/cyber-assurance/assets/criticality-assessments?open=${kind}:${item.id}`}
+          href={`/assets/criticality-assessments?open=${kind}:${item.id}`}
           className="text-xs font-medium text-blue-600 hover:underline"
         >
           Open →
@@ -3429,13 +3432,13 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
           </p>
           <div className="mt-4 inline-flex items-center gap-2">
             <Link
-              href={`/cyber-assurance/assets/criticality-assessments?create=isca&asset=${assetId}`}
+              href={`/assets/criticality-assessments?create=isca&asset=${assetId}`}
               className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
             >
               + New Information System assessment
             </Link>
             <Link
-              href={`/cyber-assurance/assets/criticality-assessments?create=iaca&asset=${assetId}`}
+              href={`/assets/criticality-assessments?create=iaca&asset=${assetId}`}
               className="inline-flex items-center gap-1.5 rounded-md border border-blue-300 bg-white px-3 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50"
             >
               + New Infrastructure Asset assessment
@@ -3492,13 +3495,13 @@ function CriticalityAssessmentsTab({ assetId }: { assetId: number }) {
 
           <div className="flex items-center gap-2">
             <Link
-              href={`/cyber-assurance/assets/criticality-assessments?create=isca&asset=${assetId}`}
+              href={`/assets/criticality-assessments?create=isca&asset=${assetId}`}
               className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
             >
               + New ISCA
             </Link>
             <Link
-              href={`/cyber-assurance/assets/criticality-assessments?create=iaca&asset=${assetId}`}
+              href={`/assets/criticality-assessments?create=iaca&asset=${assetId}`}
               className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
             >
               + New IACA
@@ -3933,7 +3936,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {hostInGroup ? (
                     <Link
-                      href={`/cyber-assurance/assets/${hostInGroup.id}?tab=compliance`}
+                      href={`/assets/${hostInGroup.id}?tab=compliance`}
                       className="inline-flex items-center gap-1.5 rounded-md bg-purple-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-purple-700"
                     >
                       <Network className="h-3.5 w-3.5" />
@@ -3941,7 +3944,7 @@ function ComplianceTab({ asset }: { asset: AssetDetailData }) {
                     </Link>
                   ) : asset.ip_address ? (
                     <Link
-                      href={`/cyber-assurance/assets?ip_address=${encodeURIComponent(asset.ip_address)}`}
+                      href={`/assets?ip_address=${encodeURIComponent(asset.ip_address)}`}
                       className="inline-flex items-center gap-1.5 rounded-md border border-purple-300 bg-white px-3 py-1.5 text-xs font-medium text-purple-700 hover:bg-purple-50"
                       title="Find the host asset that shares this IP"
                     >

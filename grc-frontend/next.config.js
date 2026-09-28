@@ -31,7 +31,8 @@ const nextConfig = {
     // The rewrites below proxy /api/* to the backend. Next abandons a proxied
     // request after 30 s by default and answers a bare 500, while nginx and the
     // browser's API client both allow 15 min — so long operations (applying a
-    // controls scope on a small server) failed with no error message.
+    // controls scope on a small server, risk-posture aggregates on a busy box)
+    // failed with no error message.
     proxyTimeout: 900000,
   },
   // Increase timeout for long-running API operations

@@ -454,7 +454,10 @@ class HostedScanRequest(BaseModel):
     policy_id: Optional[str] = None
     # SCAN-LEVEL credentials (from the discovery credential store) to inject so
     # Nessus authenticates into the target hosts. Typically one winrm + one ssh
-    # profile; Nessus applies the right one per host. Empty = unauthenticated.
+    # profile; Nessus applies the right one per host. Empty = the stored host
+    # login(s) whose scope covers the targets are attached automatically
+    # (hosted_scan._pick_host_profiles); a scan is unauthenticated only when
+    # no active winrm/ssh profile applies.
     credential_profile_ids: Optional[List[int]] = None
 
 

@@ -45,3 +45,6 @@ from ._71_tpra_shadow_saas import *  # noqa: F401,F403 - software in use that no
 from ._72_tpra_fair import *  # noqa: F401,F403 - FAIR analyses of supplier loss scenarios
 from ._73_tpra_email_templates import *  # noqa: F401,F403 - a tenant's own wording for TPRM emails
 from ._74_tpra_action_items import *  # noqa: F401,F403 - planned actions on a supplier
+from ._pentest_scan_jobs import PentestScanJob  # noqa: F401 - pentest live scan jobs (M2)
+from ._pentest_exploit_results import PentestExploitResult  # noqa: F401 - pentest persisted exploit results (M2)
+from ._pentest_event_log import PentestEventLog  # noqa: F401 - AVA/GRC pentest all-stage event log

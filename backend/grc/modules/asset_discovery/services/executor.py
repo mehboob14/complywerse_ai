@@ -78,6 +78,8 @@ logger = logging.getLogger(__name__)
 # a phone on 5060. This is what turns "Unknown / no ports" into a real type.
 NETWORK_SWEEP_PORTS: tuple = (
     445, 22, 3389, 5985, 5986,      # host login: SMB / SSH / RDP / WinRM
+    135,                            # host login: WMI/DCOM endpoint mapper — without it a
+                                    # WMI-only Windows box can never read as reachable
     80, 443, 8080, 8443,            # web management consoles
     9100, 515, 631,                 # printer: JetDirect / LPD / IPP
     554,                            # IP camera: RTSP
@@ -98,6 +100,21 @@ NETWORK_SWEEP_PORTS: tuple = (
 # Ports that mean "an agentless credential can actually be used here".
 WINRM_PORTS = (5985, 5986)
 SSH_PORT = 22
+
+# SPEED: the pure database/service ports (Postgres/MySQL/MSSQL/Oracle/K8s/LDAP/
+# Mongo/Redis/Elasticsearch). A real box running one of these ALSO answers a
+# presence port (SSH/RDP/SMB/web) — nobody administers a DB host with zero
+# remote login — so we only probe these on a host that already showed life.
+# That skips ~10 dead 2.5s timeouts on every empty address in a /24, which is
+# almost all of them. Presence ports keep 5060 (SIP): the client firewall
+# SYN-proxies it for the whole subnet, so a 5060 echo is enough to keep a ghost
+# VISIBLE + labelled (don't-drop rule) but NOT enough to trigger the DB sweep.
+# ponytail: heuristic gate — a box exposing ONLY a raw DB port and no
+# SSH/RDP/SMB/web/SNMP would be missed; if that ever appears, drop it back into
+# the presence tuple. One runnable check lives in the module self-test.
+_SERVICE_ONLY_PORTS = frozenset({5432, 3306, 1433, 1521, 6443, 389, 636, 27017, 6379, 9200})
+_PRESENCE_PORTS: tuple = tuple(p for p in NETWORK_SWEEP_PORTS if p not in _SERVICE_ONLY_PORTS)
+_SERVICE_PORTS_ORDERED: tuple = tuple(p for p in NETWORK_SWEEP_PORTS if p in _SERVICE_ONLY_PORTS)
 
 # Type of the injectable probe: (ip, port, timeout_s) -> result dict with a
 # 'status' of 'reachable'|'unreachable' and optional 'hostname'/'rtt_ms'.
@@ -291,6 +308,7 @@ def _sweep_host(
     ip: str, probe: ProbeFn, timeout_s: float,
     fingerprinter: FingerprintFn = noop_fingerprint,
     mac: Optional[str] = None,
+    cancelled: Optional[Callable[[], bool]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Probe one host: TCP presence across NETWORK_SWEEP_PORTS, then a
     protocol-aware fingerprint (SNMP/DNS over UDP, SSH/HTTP banners). Returns a
@@ -299,18 +317,38 @@ def _sweep_host(
 
     ``fingerprinter`` is injectable and defaults to a no-op so unit tests do no
     real network I/O; production passes ``fingerprint.fingerprint_host``."""
+    if cancelled is not None and cancelled():
+        return None
     open_ports: List[int] = []
-    hostname = None
-    rtt = None
-    for port in NETWORK_SWEEP_PORTS:
-        try:
-            res = probe(ip, port, timeout_s)
-        except Exception:  # noqa: BLE001 — a probe error is a non-answer
-            continue
-        if res.get("status") == "reachable":
-            open_ports.append(port)
-            hostname = hostname or res.get("hostname")
-            rtt = rtt if rtt is not None else res.get("rtt_ms")
+    meta: Dict[str, Any] = {}   # first hostname / rtt seen, across both phases
+
+    def _scan(ports) -> bool:
+        """Probe each port, recording opens. Returns True if cancelled mid-scan."""
+        for port in ports:
+            if cancelled is not None and cancelled():
+                return True
+            try:
+                res = probe(ip, port, timeout_s)
+            except Exception:  # noqa: BLE001 — a probe error is a non-answer
+                continue
+            if res.get("status") == "reachable":
+                open_ports.append(port)
+                if res.get("hostname") and not meta.get("hostname"):
+                    meta["hostname"] = res.get("hostname")
+                if res.get("rtt_ms") is not None and meta.get("rtt_ms") is None:
+                    meta["rtt_ms"] = res.get("rtt_ms")
+        return False
+
+    # Phase 1 — presence + identity ports (everything except the raw DB ports).
+    if _scan(_PRESENCE_PORTS):
+        return None
+    # Phase 2 — raw DB/service ports ONLY if a REAL presence port answered. A lone
+    # 5060 (the firewall SIP echo) does not count, so ghost addresses skip these
+    # 10 extra timeouts — the bulk of the speedup on a mostly-empty /24.
+    if any(p != 5060 for p in open_ports) and _scan(_SERVICE_PORTS_ORDERED):
+        return None
+    hostname = meta.get("hostname")
+    rtt = meta.get("rtt_ms")
     # Protocol-aware fingerprint. Runs even when NO TCP port answered, because an
     # SNMP-only router or a DNS box has no open TCP port yet must still be found.
     try:
@@ -331,6 +369,7 @@ def _sweep_targets(
     targets: List[str], *, probe: ProbeFn, timeout_s: float, max_workers: int,
     rate_limit_per_min: Optional[int] = None,
     fingerprinter: FingerprintFn = noop_fingerprint,
+    cancelled: Optional[Callable[[], bool]] = None,
 ) -> List[Dict[str, Any]]:
     """Probe a list of hosts concurrently and return the reachable ones.
 
@@ -343,8 +382,10 @@ def _sweep_targets(
         return findings
 
     def _probe_batch(batch: List[str]) -> None:
+        if cancelled is not None and cancelled():
+            return
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
-            futs = {pool.submit(_sweep_host, ip, probe, timeout_s, fingerprinter): ip for ip in batch}
+            futs = {pool.submit(_sweep_host, ip, probe, timeout_s, fingerprinter, cancelled=cancelled): ip for ip in batch}
             for fut in as_completed(futs):
                 res = fut.result()
                 if res:
@@ -378,6 +419,17 @@ def _sweep_targets(
 # a "firewall echo" — kept and visible, never hidden, so the operator still decides.
 _ARTIFACT_MIN_HOSTS = 24       # only engage on a big scope (a /24-ish sweep)
 _ARTIFACT_FRACTION = 0.5       # "open on > half the range" == a proxy, not a host
+
+# Per-port probe timeout. 1s is fine on a LAN but too tight over a VPN/IPsec
+# tunnel (real hosts sit behind extra hops), so real services get missed while
+# the firewall's local SYN-proxy still answers fast. Default 2.5s; override with
+# DISCOVERY_PROBE_TIMEOUT for very high-latency links.
+_PROBE_TIMEOUT = float(os.getenv("DISCOVERY_PROBE_TIMEOUT", "2.5"))
+# Sweep concurrency. 32 parallel probes saturate a thin VPN/IPsec tunnel — the
+# flood inflates latency so even OPEN ports time out (real hosts then mis-read as
+# dead / firewall echoes) and the tunnel goes unusable mid-scan. Lower it (e.g. 8)
+# for a high-latency tunnel so probes stay reliable. Override DISCOVERY_MAX_WORKERS.
+_MAX_WORKERS = int(os.getenv("DISCOVERY_MAX_WORKERS", "32"))
 
 # In-process cancel signals, keyed by run_id. Deleting the campaign/run row alone
 # never stopped a scan — the background sweep thread kept probing. A Stop button
@@ -443,6 +495,7 @@ def _run_job(
     exclusions: Set[str], *, probe: ProbeFn, timeout_s: float, max_workers: int,
     rate_limit_per_min: Optional[int] = None,
     fingerprinter: FingerprintFn = noop_fingerprint,
+    cancelled: Optional[Callable[[], bool]] = None,
 ) -> int:
     """Probe one job's targets and write an observation per reachable host.
     Returns the number of hosts seen. Raises on a target set that's too large so
@@ -462,7 +515,12 @@ def _run_job(
     findings = _sweep_targets(
         targets, probe=probe, timeout_s=timeout_s, max_workers=max_workers,
         rate_limit_per_min=rate_limit_per_min, fingerprinter=fingerprinter,
+        cancelled=cancelled,
     )
+    # A SIP/IPS/LB that SYN-proxies a port for the whole subnet ghosts every
+    # address; discount range-wide artifact ports and relabel the echoes (kept,
+    # not dropped) so the UI can categorise/filter them.
+    findings = _flag_firewall_artifacts(findings, len(targets))
 
     # ── ARP-based liveness enrichment ───────────────────────────────────────
     # The TCP sweep above resolved ARP for the hosts it touched. Reading the
@@ -486,6 +544,12 @@ def _run_job(
                 # honest "discovered, identity unknown" asset — evidence is ARP +
                 # MAC only. Do NOT infer WHY it is silent (firewall, isolation,
                 # sleep, UDP-only…). Record it so it is visible in discovery.
+                # ponytail: the OS ARP cache can hold STALE entries for minutes
+                # after a host goes offline, so an arp_only finding can be a false
+                # positive (a down host still cached). It lands as weak `pending`
+                # evidence (never an auto-created asset) and ages out on the next
+                # run that no longer sees it. Upgrade path: gate on a fresh ARP
+                # reachability flag / active liveness touch before recording.
                 fp = {"udp_services": []}
                 fp.update(_classify_fp([], fp))  # device_type='unknown'
                 findings.append({"ip": ip, "hostname": None, "open_ports": [],
@@ -610,7 +674,10 @@ def _run_job(
         db.add(DiscoveryObservation(
             tenant_id=run.tenant_id, run_id=run.id, job_id=job.id,
             source="cidr", observed_at=now,
-            host_name=f.get("hostname"), ip_address=f["ip"], mac_address=f.get("mac"),
+            # NetBIOS / reverse-DNS name from the fingerprint is the fallback when
+            # the raw TCP probe learned no name — this is what fills a Windows
+            # host's computer name for the credential-free (adopt) path.
+            host_name=f.get("hostname") or fp.get("hostname"), ip_address=f["ip"], mac_address=f.get("mac"),
             # probed_ports records what this sweep actually checked, so a later
             # step can tell "WinRM was closed" from "we never looked". Without
             # it, observations written by an older build would be wrongly read
@@ -745,8 +812,8 @@ def execute_run(
     run_id: int,
     *,
     probe: Optional[ProbeFn] = None,
-    timeout_s: float = 1.0,
-    max_workers: int = 32,
+    timeout_s: float = _PROBE_TIMEOUT,
+    max_workers: int = _MAX_WORKERS,
     fingerprinter: Optional[FingerprintFn] = None,
 ) -> DiscoveryRun:
     """Execute a previously-created run: a job per include scope, probe each,
@@ -785,6 +852,8 @@ def execute_run(
     run.status = "running"
     run.started_at = datetime.utcnow()
     db.commit()
+    cancel_ev = _thr.Event()
+    _CANCEL_EVENTS[run_id] = cancel_ev
 
     include_scopes = [s for s in campaign.scopes if not s.exclude]
     rate_limit = campaign.rate_limit_hosts_per_min
@@ -801,6 +870,8 @@ def execute_run(
     errors: List[str] = []
 
     for scope in include_scopes:
+        if cancel_ev.is_set():
+            break
         # ad_ou scopes are accepted by config but have no network executor yet.
         # domain scopes are EASM seeds — they run the outside-in collector, not
         # the network sweep (which would expand a domain to zero IPs).
@@ -838,7 +909,8 @@ def execute_run(
                 else:
                     seen = _run_job(db, run, job, scope, exclusions,
                                     probe=probe, timeout_s=timeout_s, max_workers=max_workers,
-                                    rate_limit_per_min=rate_limit, fingerprinter=fp_fn)
+                                    rate_limit_per_min=rate_limit, fingerprinter=fp_fn,
+                                    cancelled=cancel_ev.is_set)
             db.commit()  # release the savepoint's work to the run
             total_hosts += seen
             # observations for this job = its findings (host_seen == obs written)
@@ -863,7 +935,9 @@ def execute_run(
     # Honest status: failed only if NOTHING succeeded; otherwise succeeded with
     # per-job errors recorded on the job rows and summarised here.
     any_ok = any(j.status == "succeeded" for j in run.jobs)
-    if errors and not any_ok:
+    if cancel_ev.is_set():
+        run.status = "cancelled"
+    elif errors and not any_ok:
         run.status = "failed"
     else:
         run.status = "succeeded"
@@ -876,6 +950,7 @@ def execute_run(
     campaign.last_run_at = run.finished_at
 
     db.commit()
+    _CANCEL_EVENTS.pop(run_id, None)
 
     # Resolve this run's observations into assets: confident matches auto-merge,
     # unknown hosts auto-create as 'discovered', ambiguous go to the review
@@ -910,6 +985,22 @@ def execute_run(
             db.rollback()
         except Exception:
             logger.exception("discovery: rollback after domain-hierarchy failure failed for run %s", run.id)
+
+    # Network topology: walk the discovered network gear over SNMP (LLDP/CDP/FDB)
+    # and store the neighbour tables on each device's observation, so the Network
+    # map (built on read from discovered devices) can draw the measured switch
+    # tree. Best-effort — a silent switch just keeps the inferred gateway star, and
+    # a failure never fails the run.
+    try:
+        from .network_topology import collect_snmp_topology
+        collect_snmp_topology(db, run.tenant_id)
+        db.commit()
+    except Exception:
+        logger.exception("discovery: SNMP topology collection failed for run %s", run.id)
+        try:
+            db.rollback()
+        except Exception:
+            logger.exception("discovery: rollback after SNMP topology failure failed for run %s", run.id)
 
     # Host-centric collapse: when several EASM DNS names resolve to ONE machine
     # (same IP + same apex domain), fold them into a single host asset with the
@@ -991,8 +1082,8 @@ def start_run(
     trigger: str = "manual",
     user=None,
     probe: Optional[ProbeFn] = None,
-    timeout_s: float = 1.0,
-    max_workers: int = 32,
+    timeout_s: float = _PROBE_TIMEOUT,
+    max_workers: int = _MAX_WORKERS,
 ) -> DiscoveryRun:
     """Synchronous create-then-execute. Used by scheduled tasks (which are
     already off the request path) and by tests that want a deterministic,
@@ -1022,3 +1113,20 @@ if __name__ == "__main__":  # pragma: no cover — quick self-check for the ghos
                "fingerprint": {}, "mac": None} for i in range(3)]
     assert len(_flag_firewall_artifacts(_small, 3)) == 3, "small scope must not be filtered"
     print("executor firewall-artifact self-check OK")
+
+    # ── Two-phase sweep gate: DB ports only after a REAL presence port ────────
+    def _mk_probe(open_set):
+        dialed: List[int] = []
+        def _p(ip, port, t):
+            dialed.append(port)
+            return {"status": "reachable"} if port in open_set else {"status": "closed"}
+        return _p, dialed
+    _pe, _de = _mk_probe({5060})            # firewall echo ONLY
+    _re = _sweep_host("10.0.0.9", _pe, 0.0)
+    assert _re and _re["open_ports"] == [5060], f"echo host must stay visible: {_re}"
+    assert not any(p in _SERVICE_ONLY_PORTS for p in _de), "DB ports must be skipped for a 5060-only ghost"
+    _pr, _dr = _mk_probe({22, 5060})        # real Linux box (+ the echo)
+    _rr = _sweep_host("10.0.0.10", _pr, 0.0)
+    assert _rr and 22 in _rr["open_ports"], "real host lost its SSH port"
+    assert set(_SERVICE_ONLY_PORTS).issubset(set(_dr)), "DB ports must be probed once a presence port answered"
+    print("executor two-phase sweep self-check OK")
