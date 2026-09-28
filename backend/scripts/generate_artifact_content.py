@@ -483,7 +483,7 @@ def main() -> None:
         if args.framework and fw_key != args.framework:
             continue
         fw_name = fw.get("name", fw_key)
-        bucket = content.setdefault(fw_key, {})
+        bucket = content.get(fw_key, {})              # created below only when something is written to it
         for art in fw.get("artifacts", []):
             aid = art.get("artifact_id")
             if not aid or (only and aid not in only):
@@ -498,6 +498,7 @@ def main() -> None:
                 continue
             try:
                 res = generate_one(client, fw_name, art, args.model)
+                bucket = content.setdefault(fw_key, bucket)
                 bucket[aid] = {
                     "title": art.get("name"), "type": art.get("type"),
                     "control_ref": art.get("control_ref"), "format": art.get("format"),
