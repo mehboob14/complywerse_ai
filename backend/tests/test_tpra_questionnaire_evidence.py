@@ -16,6 +16,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from grc.models import TPRAActionItem  # read by the action plan, check-in and alert sweeps
 from grc.models import TPRACheckin  # read by the check-in schedule
 from grc.models import (
     TPRAMonitoringSignal, Base, Evidence, EvidenceQualityCheck, GRCUser, Tenant, TPRAApproval, TPRAAuditLog, TPRAContract,
@@ -31,7 +32,7 @@ from grc.routers.auth_router import require_auth
 _TABLES = [Tenant, GRCUser, Vendor, VendorAssessment, VendorQuestionnaireTemplate, VendorQuestionnaireResponse,
            VendorQuestionnaireEvidence, TPRATemplateVersion, TPRAQuestion, TPRAQuestionResponse, TPRAFinding,
            TPRATieringConfig, TPRAAuditLog, Evidence, EvidenceQualityCheck, TPRAEvidenceLink, TPRAContract,
-           TPRAControlObligation, TPRAApproval, TPRARiskAcceptance, TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin]
+           TPRAControlObligation, TPRAApproval, TPRARiskAcceptance, TPRARiskSnapshot, TPRAMonitoringSignal, TPRACheckin, TPRAActionItem]
 
 QUESTIONS = [
     {"id": "isms", "text": "Do you run an information security programme?", "type": "yes_no",

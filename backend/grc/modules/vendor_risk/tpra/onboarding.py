@@ -368,7 +368,13 @@ def _describe(row: TPRAAuditLog) -> str:
 @router.get("/intake/procurement")
 def procurement_status(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """Suppliers procurement is waiting on: requested, or in onboarding review."""
-    tids = _tids(user, db)
+    items = waiting_on_review(db, _tids(user, db))
+    return {"items": items, "total": len(items)}
+
+
+def waiting_on_review(db: Session, tids: List[int]) -> List[dict]:
+    """The suppliers waiting on onboarding review, oldest first, with where each
+    is and the last thing that happened to it (also the weekly digest's list)."""
     rows = (db.query(Vendor).filter(Vendor.tenant_id.in_(tids), Vendor.deleted_at.is_(None))
             .filter((Vendor.intake_status.in_(("submitted", "in_review"))) | (Vendor.status == "onboarding"))
             .order_by(Vendor.submitted_at.asc().nullslast(), Vendor.created_at.asc()).all())
@@ -397,7 +403,7 @@ def procurement_status(db: Session = Depends(get_db), user: GRCUser = Depends(re
             "last_update": {"at": entry.created_at, "what": _describe(entry), "by": names.get(entry.actor_id)}
             if entry else None,
         })
-    return {"items": items, "total": len(items)}
+    return items
 
 
 # ── bulk import / mass update ────────────────────────────────────────────────

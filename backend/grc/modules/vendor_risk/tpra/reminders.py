@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from typing import Callable, Dict, List, Optional, Sequence, Tuple
 
 from sqlalchemy import or_
@@ -32,8 +32,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Role, Tenant, TPRAContract, TPRAFinding, TPRAReminder, TPRARemediation, TPRARiskAcceptance, TPRASurfaceWaiver,
-    UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
+    Role, Tenant, TPRAActionItem, TPRAContract, TPRAFinding, TPRAMonitoringSignal, TPRAReminder, TPRARemediation,
+    TPRARiskAcceptance, TPRASurfaceWaiver, UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
 )
 from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
 from . import contracts as contract_rules, tier_policy
@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 _INACTIVE_VENDOR = ("retired", "offboarded", "inactive", "terminated", "requested", "rejected")
 _REMEDIATION_DONE = ("completed", "complete", "closed", "verified", "cancelled", "canceled", "done")
 _MAX_DAYS = 3650
+_SEVERITY_RANK = {"low": 1, "medium": 2, "high": 3, "critical": 4}
+_ALERT_TYPES = ("breach", "adverse_media", "vulnerability")   # worked on the Breach alerts page
+ALERT_LOOKBACK_DAYS = 7    # turning alert emails on does not send the backlog
 
 
 # ── policy ───────────────────────────────────────────────────────────────────
@@ -65,7 +68,15 @@ def clean_policy(raw: dict, current: dict) -> dict:
             if not low <= number <= _MAX_DAYS:
                 raise ValueError(f"{key.replace('_', ' ')} must be between {low} and {_MAX_DAYS}")
             policy[key] = number
-        elif key in ("escalate_to", "contract_notify"):
+        elif key == "alert_min_severity":
+            if value not in _SEVERITY_RANK:
+                raise ValueError(f"Alert emails start at one of: {', '.join(_SEVERITY_RANK)}")
+            policy[key] = value
+        elif key == "digest_weekday":
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 6:
+                raise ValueError("The digest day must be 0 (Monday) to 6 (Sunday)")
+            policy[key] = value
+        elif key in ("escalate_to", "contract_notify", "alert_notify", "digest_to"):
             if not isinstance(value, list) or len(value) > 20:
                 raise ValueError(f"{key.replace('_', ' ').capitalize()} must be a list of at most 20 entries")
             targets = []
@@ -278,6 +289,41 @@ def due_notices(db: Session, tenant_id: int, today: date, policy: dict) -> List[
             f"The waiver of '{w.finding_key}' on {v.name} is {_when(w.expires_on, today, 'past its end')}",
             f"/vendor-risk/vendors/{v.id}?tab=outside-in", [w.created_by, v.owner_id], once=True)
 
+    # 9. A supplier's action plan: a to-do from its date, weekly while it stays
+    #    open; an automatic action that could not happen, once.
+    from .action_plans import link_for, people_for  # here: action_plans reads this module's vendor statuses
+    for item in db.query(TPRAActionItem).filter(
+            TPRAActionItem.tenant_id == tenant_id, TPRAActionItem.status.in_(("scheduled", "failed"))):
+        v = vendors.get(item.vendor_id)
+        if v is None or (v.status or "").lower() in _INACTIVE_VENDOR:
+            continue
+        if item.status == "failed":
+            add("action_failed", "action", item.id, v.id, item.due_on,
+                f"The planned '{item.title}' for {v.name} could not happen. {item.result or ''}".strip(),
+                link_for(item), people_for(item, v), once=True, before_days=0)
+        elif item.kind == "todo":
+            add("action_due", "action", item.id, v.id, item.due_on,
+                f"{item.title} ({v.name}) is {_when(item.due_on, today)}", link_for(item), people_for(item, v),
+                before_days=0)
+
+    # 10. New alerts: one that is verified and at or above the tenant's severity
+    #     is emailed once to the supplier's owner and whoever the policy names.
+    floor = _SEVERITY_RANK.get(policy.get("alert_min_severity") or "high", 3)
+    alert_people = escalation_users(db, policy.get("alert_notify") or [])
+    for s in db.query(TPRAMonitoringSignal).filter(
+            TPRAMonitoringSignal.tenant_id == tenant_id, TPRAMonitoringSignal.deleted_at.is_(None),
+            TPRAMonitoringSignal.created_at >= datetime.combine(today - timedelta(days=ALERT_LOOKBACK_DAYS), time.min)):
+        v = vendors.get(s.vendor_id)
+        if (v is None or (v.status or "").lower() in _INACTIVE_VENDOR or s.verified is False or s.acknowledged
+                or (s.triage_status or "") in ("not_relevant", "closed")
+                or _SEVERITY_RANK.get((s.severity or "").lower(), 0) < floor):
+            continue
+        add("alert_new", "signal", s.id, v.id, _day(s.created_at),
+            f"New {(s.severity or '').lower()} alert on {v.name}: {s.title or s.signal_type.replace('_', ' ')}",
+            f"/vendor-risk/alerts?alert={s.id}" if s.signal_type in _ALERT_TYPES
+            else f"/vendor-risk/vendors/{v.id}?stage=monitoring",
+            [v.owner_id, *alert_people], once=True, before_days=0)
+
     return notices
 
 
@@ -363,7 +409,8 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
             counts["no_recipient"] += 1
             continue
         for user_id, escalated in people:
-            subject, message, _ = words.render("escalation" if escalated else "reminder", {
+            key = "escalation" if escalated else "alert" if notice.kind == "alert_new" else "reminder"
+            subject, message, _ = words.render(key, {
                 "title": notice.title, "link": notice.link, "vendor": vendor_names.get(notice.vendor_id),
                 "days_overdue": notice.overdue_days})
             try:
@@ -382,5 +429,38 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
                 logger.exception("tprm reminder %s:%s to user %s failed",
                                  notice.subject_type, notice.subject_id, user_id)
                 counts["failed"] += 1
+    counts["digest"] = _digest(db, tenant_id, today, policy, words, deliver)
     db.commit()
     return counts
+
+
+def _digest(db: Session, tenant_id: int, today: date, policy: dict, words,
+            deliver: Callable[[Session, int, int, str, str], None]) -> int:
+    """Once a week, on the tenant's day, the suppliers waiting on onboarding
+    review, to whoever the policy names. Nothing is sent when none are waiting."""
+    people = escalation_users(db, policy.get("digest_to") or [])
+    if not people or today.weekday() != int(policy.get("digest_weekday") or 0):
+        return 0
+    from .onboarding import waiting_on_review  # here: onboarding imports this package's service
+    items = waiting_on_review(db, [tenant_id])
+    if not items:
+        return 0
+    lines = [f"- {i['name']}: {i['stage']['label']}, waiting {i['days_waiting']} days"
+             + (f"; last: {i['last_update']['what']}" if i["last_update"] else "") for i in items]
+    subject, message, _ = words.render("procurement_digest", {
+        "count": len(items), "list": "\n".join(lines), "link": "/vendor-risk/procurement"})
+    sent = 0
+    for user_id in people:
+        try:
+            with db.begin_nested():
+                db.add(TPRAReminder(tenant_id=tenant_id, kind="procurement_digest", subject_type="tenant",
+                                    subject_id=tenant_id, recipient_id=user_id, period=today, escalation=0,
+                                    due_on=today))
+                db.flush()
+                deliver(db, tenant_id, user_id, subject, message)
+            sent += 1
+        except IntegrityError:
+            pass                                   # this week's digest already went to them
+        except Exception:  # noqa: BLE001 — no row is kept, so the next run retries
+            logger.exception("tprm procurement digest to user %s failed", user_id)
+    return sent

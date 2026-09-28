@@ -2679,6 +2679,15 @@ export const vendorEmailsApi = {
   test: (key: string) => apiClient.post(`/vendor-risk/email-templates/${key}/test`),
 };
 
+// A supplier's action plan: dated to-dos, and planned sends, check-ins and reassessments (tpra/action_plans.py).
+export const vendorActionsApi = {
+  forVendor: (vendorId: number) => apiClient.get(`/vendor-risk/vendors/${vendorId}/actions`),
+  all: (params?: { scope?: 'all' | 'mine'; state?: 'open' | 'due' | 'failed' | 'done' | 'all' }) =>
+    apiClient.get('/vendor-risk/actions', { params: params || {} }),
+  plan: (vendorId: number, data: Record<string, unknown>) => apiClient.post(`/vendor-risk/vendors/${vendorId}/actions`, data),
+  change: (id: number, data: Record<string, unknown>) => apiClient.patch(`/vendor-risk/actions/${id}`, data),
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

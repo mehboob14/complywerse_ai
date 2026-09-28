@@ -114,10 +114,16 @@ def send_reminders_for_tenant(self, tenant_slug: str, db: Session = None) -> dic
     from ..modules.vendor_risk.tpra.bootstrap import get_tiering_config
     from ..modules.vendor_risk.tpra.reminders import run
 
+    from ..modules.vendor_risk.tpra.action_plans import fire_due
+
     tenant = db.query(Tenant).first()
     if not tenant:
         return {"status": "skipped", "tenant_slug": tenant_slug, "reason": "no_tenant"}
+    # Planned sends, check-ins and reassessments whose date has come happen first,
+    # so one that could not happen is told about in the same run.
+    actions = fire_due(db, tenant.id)
     counts = run(db, tenant.id, get_tiering_config(db, tenant.id)["reminder_policy"])
+    counts.update({f"actions_{k}": v for k, v in actions.items()})
     logger.info("tprm reminders tenant=%s %s", tenant_slug, counts)
     return {"status": "ok", "tenant_slug": tenant_slug, **counts}
 

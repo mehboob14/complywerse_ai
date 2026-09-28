@@ -81,14 +81,22 @@ def state_of(due: date, last: Optional[TPRACheckin], today: date) -> str:
 def schedule(db: Session, tenant_id: int, today: date, every: Optional[int] = None) -> List[dict]:
     """Every vendor in use with its check-in due date and state. Sweeps that
     already hold the reminder policy pass its interval in."""
+    from .action_plans import requested_checkins  # here: action_plans reads vendors this module scopes
+
     every = every or cadence(db, tenant_id)
     lasts, approvals = latest(db, tenant_id), approved_on(db, tenant_id)
+    asked = requested_checkins(db, tenant_id)
     out = []
     for v in db.query(Vendor).filter(Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None)):
         if not in_scope(v):
             continue
         last = lasts.get(v.id)
         due = due_date(v, last, approvals.get(v.id), every)
+        # A check-in planned for a date (action_plans.py) is due then, unless one was done since.
+        since = last.completed_at.date() if last else None
+        planned = [d for d in asked.get(v.id, []) if since is None or d > since]
+        if planned:
+            due = min(due, min(planned))
         out.append({"vendor": v, "last": last, "due": due, "state": state_of(due, last, today)})
     return out
 

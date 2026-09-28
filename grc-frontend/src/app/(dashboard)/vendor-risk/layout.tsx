@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  AlertTriangle, BellRing, Building2, CalendarCheck, ClipboardList, Cpu, FileQuestion, FileSignature, FileText, Inbox, Layers,
+  AlertTriangle, BellRing, Building2, CalendarCheck, CalendarClock, ClipboardList, Cpu, FileQuestion, FileSignature, FileText, Inbox, Layers,
   EyeOff, ShieldAlert, Sigma,
   LayoutDashboard,
   PackageCheck, Radar, Radio, Settings, Share2, Shield, type LucideIcon,
@@ -18,6 +18,7 @@ const GROUPS: Array<{ title: string; items: Item[] }> = [
   { title: 'Overview', items: [
     { name: 'Dashboard', href: '/vendor-risk', icon: LayoutDashboard, exact: true },
     { name: 'Attention', href: '/vendor-risk/attention', icon: BellRing },
+    { name: 'Planned actions', href: '/vendor-risk/actions', icon: CalendarClock },
   ] },
   { title: 'Suppliers', items: [
     { name: 'Requests', href: '/vendor-risk/intake', icon: Inbox },

@@ -28,6 +28,7 @@ import { Help, Row, Section, TargetsPicker, TIERS, TIER_LABEL, Unit, fieldCls, i
 interface ReminderPolicy {
   enabled: boolean; remind_before_days: number; repeat_every_days: number; escalate_after_days: number;
   escalate_to: string[]; checkin_every_days?: number; contract_before_days?: number; contract_notify?: string[];
+  alert_min_severity?: string; alert_notify?: string[]; digest_to?: string[]; digest_weekday?: number;
 }
 interface TierRules { template_ids: number[]; evidence: string[]; approver_role: string | null; reassess_on: string }
 interface MonitoringPolicy {
@@ -416,9 +417,9 @@ export default function VendorRiskSettingsPage() {
       },
       {
         id: 'reminders', keys: ['reminder_policy'], icon: BellRing, title: 'Reminders and escalation',
-        keywords: 'reminder escalation overdue check-in contract notify email',
+        keywords: 'reminder escalation overdue check-in contract notify email alert digest procurement weekly',
         summary: r.enabled
-          ? `On · ${r.remind_before_days} days before · then every ${r.repeat_every_days} days · escalated after ${r.escalate_after_days} days overdue`
+          ? `On · ${r.remind_before_days} days before · then every ${r.repeat_every_days} days · escalated after ${r.escalate_after_days} days overdue · alerts emailed from ${r.alert_min_severity || 'high'}`
           : 'Off: no reminders are sent',
         body: () => {
           const off = !canEdit || !r.enabled;
@@ -468,6 +469,32 @@ export default function VendorRiskSettingsPage() {
                   </p>
                   <TargetsPicker value={r.contract_notify || []} onChange={(v) => setR({ contract_notify: v })} directory={directory} disabled={off} />
                 </div>
+              </div>
+              <div className="mt-2 border-t border-slate-100 pt-2">
+                <Row label="Email a new alert from this severity up" htmlFor="r-alert"
+                  help="Verified alerts only, once each. The supplier's owner is told, and whoever is added below.">
+                  <select id="r-alert" disabled={off} value={r.alert_min_severity || 'high'} onChange={(e) => setR({ alert_min_severity: e.target.value })}
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm disabled:bg-slate-50">
+                    {['critical', 'high', 'medium', 'low'].map((sv) => <option key={sv} value={sv}>{sv.charAt(0).toUpperCase() + sv.slice(1)}</option>)}
+                  </select>
+                </Row>
+                <TargetsPicker value={r.alert_notify || []} onChange={(v) => setR({ alert_notify: v })} directory={directory} disabled={off}
+                  placeholder="Also tell about new alerts…" />
+              </div>
+              <div className="mt-3 border-t border-slate-100 pt-2">
+                <p className="text-sm text-slate-700">Weekly digest of suppliers waiting on onboarding review</p>
+                <p className="mb-1.5 text-[11px] text-slate-500">
+                  Where each supplier is and how long it has waited, once a week. None is sent when nobody is named or nobody is waiting.
+                </p>
+                <TargetsPicker value={r.digest_to || []} onChange={(v) => setR({ digest_to: v })} directory={directory} disabled={off}
+                  placeholder="Send the digest to…" />
+                <Row label="Sent on" htmlFor="r-digest-day">
+                  <select id="r-digest-day" disabled={off || !(r.digest_to || []).length} value={r.digest_weekday ?? 0}
+                    onChange={(e) => setR({ digest_weekday: Number(e.target.value) })}
+                    className="rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm disabled:bg-slate-50">
+                    {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d, i) => <option key={d} value={i}>{d}</option>)}
+                  </select>
+                </Row>
               </div>
             </>
           );

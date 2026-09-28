@@ -19,14 +19,14 @@ from typing import Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import (
     AttentionActivity, AttentionState, Evidence, GRCUser, TPRAApproval, TPRACheckin, TPRAContract,
     TPRAControlObligation, TPRAEvidenceLink, TPRAFinding, TPRAMonitoringSignal, TPRARiskAcceptance,
-    TPRARiskSnapshot,
+    TPRAActionItem, TPRARiskSnapshot,
     Vendor, VendorAssessment, VendorQuestionnaireResponse, get_db,
 )
 from ....routers.auth_router import get_user_tenants, require_auth
@@ -57,6 +57,8 @@ CONDITIONS: Dict[str, tuple] = {
     "tier_overridden": ("Tier set by hand", 45),
     "signal_unverified": ("Unverified alert", 30),
     "questionnaire_untouched": ("Questionnaire not started", 40),
+    "action_due": ("Planned action due", 57),
+    "action_failed": ("Planned action could not happen", 68),
 }
 _LAPSED_BONUS = 15              # a date that has passed outranks one that is coming
 _TIER_BONUS = {"critical": 6, "high": 3, "low": -3}
@@ -102,13 +104,14 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
         if (v.status or "").lower() not in _INACTIVE_VENDOR}
     vendor_ids = list(vendors) or [-1]
 
-    def add(condition, record_type, record_id, vendor, since, title, badge, link, tone="amber", lapsed=False):
+    def add(condition, record_type, record_id, vendor, since, title, badge, link, tone="amber", lapsed=False,
+            people=None):
         label, base = CONDITIONS[condition]
         items.append({
             "key": f"{condition}:{record_type}:{record_id}",
             "condition": condition, "label": label, "record_type": record_type, "record_id": record_id,
             "vendor_id": vendor.id, "vendor_name": vendor.name, "vendor_tier": vendor.tier,
-            "owner_id": vendor.owner_id, "title": title, "badge": badge, "tone": tone,
+            "owner_id": vendor.owner_id, "people": list(people or []), "title": title, "badge": badge, "tone": tone,
             "since": since.isoformat(), "link": link,
             "priority": base + (_LAPSED_BONUS if lapsed else 0)
             + _TIER_BONUS.get((vendor.tier or "").lower(), 0),
@@ -375,6 +378,26 @@ def open_items(db: Session, tenant_id: int, today: date, policy: dict) -> List[d
             f"{v.name}: its owner reported a change — {(c.change_notes or '')[:140]}",
             "Reported at check-in", f"/vendor-risk/vendors/{v.id}")
 
+    # A supplier's action plan: to-dos whose date has come, and automatic actions
+    # that could not happen, for whoever they are for.
+    from .action_plans import link_for, people_for
+    for item in db.query(TPRAActionItem).filter(
+            TPRAActionItem.tenant_id == tenant_id,
+            or_(and_(TPRAActionItem.status == "scheduled", TPRAActionItem.kind == "todo", TPRAActionItem.due_on <= today),
+                and_(TPRAActionItem.status == "failed",
+                     TPRAActionItem.due_on >= today - timedelta(days=SIGNAL_LOOKBACK_DAYS)))):
+        v = vendors.get(item.vendor_id)
+        if v is None:
+            continue
+        if item.status == "failed":
+            add("action_failed", "action", item.id, v, item.due_on, f"{v.name}: {item.title} — {item.result or ''}",
+                "Could not happen", link_for(item), tone="red", people=people_for(item, v))
+        else:
+            late = (today - item.due_on).days
+            add("action_due", "action", item.id, v, item.due_on, f"{v.name}: {item.title}",
+                _countdown(item.due_on, today, "Due") if late else "Due today", link_for(item),
+                lapsed=late > 0, people=people_for(item, v))
+
     return items
 
 
@@ -410,7 +433,8 @@ def queue(db: Session, tenant_id: int, user_id: Optional[int], scope: str = "por
             "snooze_reason": s.snooze_reason if snoozed else None,
             "state": "closed" if closed else "snoozed" if snoozed else "open",
         })
-        if scope == "mine" and user_id != (item["assignee_id"] or item["owner_id"]):
+        if scope == "mine" and user_id != (item["assignee_id"] or item["owner_id"]) \
+                and not (item["assignee_id"] is None and user_id in item["people"]):
             continue
         counts[item["state"]] += 1
         if item["state"] == "open":

@@ -41,6 +41,13 @@ DEFAULT_TIERING_CONFIG = {
         "repeat_every_days": 7,
         "escalate_after_days": 14,
         "escalate_to": [],          # ["role:<role name>", "user:<id>"]
+        # New verified alerts at or above this severity are emailed to the
+        # supplier's owner and these people; a weekly digest of suppliers
+        # waiting on onboarding review goes to the digest people on the day given.
+        "alert_min_severity": "high",
+        "alert_notify": [],
+        "digest_to": [],
+        "digest_weekday": 0,        # Monday
     },
     # What a "Partial" answer is worth, 0..1. Frozen into each questionnaire
     # version when it is sent, so changing it never rescores old answers.

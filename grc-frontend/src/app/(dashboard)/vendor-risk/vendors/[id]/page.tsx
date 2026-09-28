@@ -27,6 +27,7 @@ import TpraLifecycle from './_tpra/TpraLifecycle';
 import DependenciesPanel from './_tpra/DependenciesPanel';
 import ExposurePanel from './_tpra/ExposurePanel';
 import OutsideInPanel from './_tpra/OutsideInPanel';
+import ActionPlanPanel from './_tpra/ActionPlanPanel';
 import { CustomValuesEditor, hasCustomFields, useModuleSettings } from '@/components/settings/CustomFields';
 
 interface Vendor {
@@ -151,7 +152,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
-type TabType = 'lifecycle' | 'overview' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'overview' | 'actions' | 'dependencies' | 'exposure' | 'outside-in' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -312,6 +313,7 @@ export default function VendorDetailPage() {
   const tabs: { key: TabType; label: string; count?: number }[] = [
     { key: 'lifecycle', label: 'Lifecycle' },
     { key: 'overview', label: 'Overview' },
+    { key: 'actions', label: 'Action plan' },
     { key: 'dependencies', label: 'Dependencies' },
     { key: 'exposure', label: 'Exposure' },
     { key: 'outside-in', label: 'Outside-in' },
@@ -604,6 +606,13 @@ export default function VendorDetailPage() {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Action plan Tab — dated to-dos, and sends, check-ins and reassessments on a date */}
+      {activeTab === 'actions' && (
+        <div role="tabpanel" id="vendor-tabpanel-actions" aria-labelledby="vendor-tab-actions" tabIndex={0} className="focus:outline-none">
+          <ActionPlanPanel vendorId={vendorId} />
         </div>
       )}
 
