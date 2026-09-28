@@ -223,17 +223,16 @@ def send_questionnaire_invite(self, tenant_slug: str, response_id: int,
         return {"status": "skipped", "reason": "no_recipient_or_token"}
     tenant = db.query(Tenant).first()
     vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
+    from ..modules.vendor_risk.tpra.emails import render
+
     vendor_name = vendor.name if vendor else "your organization"
     link = f"{(base_url or '').rstrip('/')}/vendor-risk/questionnaires/{qr.token}"
-    verb = "Reminder: please complete" if is_reminder else "Please complete"
-    subject = f"{'Reminder — ' if is_reminder else ''}Security questionnaire for {vendor_name}"
-    body_html = (
-        f"<p>Hello,</p><p>{verb} the security assessment questionnaire for "
-        f"<strong>{vendor_name}</strong>.</p>"
-        f'<p><a href="{link}">Open the questionnaire</a></p>'
-        f"<p>Or paste this link into your browser:<br>{link}</p>"
-    )
-    body_text = f"{verb} the security questionnaire for {vendor_name}: {link}"
+    due = f"on {qr.due_date:%d %b %Y}" if getattr(qr, "due_date", None) else "as soon as you can"
+    values = {"vendor": vendor_name, "link": link, "due": due, "when": f"due {due}",
+              "organisation": tenant.name if tenant else "",
+              "title": f"Reminder: please complete the security questionnaire for {vendor_name}"}
+    subject, body_text, body_html = render(db, qr.tenant_id, "questionnaire_reminder" if is_reminder else "questionnaire_invite",
+                                           values)
     result = send_email(db, tenant.id if tenant else qr.tenant_id, qr.respondent_email,
                         subject, body_html, body_text)
     if result.get("success"):

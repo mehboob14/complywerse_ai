@@ -32,7 +32,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ....models import (
-    Role, TPRAContract, TPRAFinding, TPRAReminder, TPRARemediation, TPRARiskAcceptance, TPRASurfaceWaiver,
+    Role, Tenant, TPRAContract, TPRAFinding, TPRAReminder, TPRARemediation, TPRARiskAcceptance, TPRASurfaceWaiver,
     UserRole, Vendor, VendorAssessment, VendorQuestionnaireResponse,
 )
 from .portal import WAITING_ON_VENDOR as _WAITING_ON_VENDOR, link as portal_link
@@ -307,8 +307,9 @@ def _deliver(db: Session, tenant_id: int, user_id: int, subject: str, message: s
 
 def _deliver_external(db: Session, tenant_id: int, email: str, subject: str, message: str) -> None:
     from ...workflow_engine.services.email_service import send_email
+    from .emails import to_html
 
-    html = "".join(f"<p>{line}</p>" for line in message.split("\n\n"))
+    html = to_html(message, {})
     result = send_email(db, tenant_id, email, subject[:500], html, message)
     if not result.get("success"):
         raise RuntimeError(result.get("message") or "email is not configured")
@@ -324,15 +325,19 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
         return counts
     escalate_after = int(policy.get("escalate_after_days", 14))
     escalation = escalation_users(db, policy.get("escalate_to") or [])
+    from .emails import Wordings
+    words = Wordings(db, tenant_id)
+    vendor_names = dict(db.query(Vendor.id, Vendor.name).filter(Vendor.tenant_id == tenant_id))
+    organisation = db.query(Tenant.name).filter(Tenant.id == tenant_id).scalar()
 
     for notice in due_notices(db, tenant_id, today, policy):
         counts["owed"] += 1
         if notice.email:
             # The respondent has no account: recipient 0 stands for them, and the
             # notice id keeps it to one email per questionnaire per period.
-            message = (f"{notice.title}.\n\n"
-                       + (f"Open the questionnaire: {notice.link}" if notice.link
-                          else "Use the link in your original invitation."))
+            subject, message, _ = words.render("questionnaire_reminder", {
+                "title": notice.title, "vendor": vendor_names.get(notice.vendor_id), "when": _when(notice.due_on, today),
+                "link": notice.link or "the link in your original invitation", "organisation": organisation})
             try:
                 with db.begin_nested():
                     db.add(TPRAReminder(
@@ -341,7 +346,7 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
                         period=notice.period, escalation=0, due_on=notice.due_on, detail=notice.email[:255],
                     ))
                     db.flush()
-                    deliver_external(db, tenant_id, notice.email, notice.title, message)
+                    deliver_external(db, tenant_id, notice.email, subject, message)
                 counts["sent"] += 1
             except IntegrityError:
                 counts["already_sent"] += 1
@@ -355,9 +360,10 @@ def run(db: Session, tenant_id: int, policy: dict, today: Optional[date] = None,
         if not people:
             counts["no_recipient"] += 1
             continue
-        message = f"{notice.title}.\n\nOpen: {notice.link}"
         for user_id, escalated in people:
-            subject = f"{'Escalation: ' if escalated else ''}{notice.title}"
+            subject, message, _ = words.render("escalation" if escalated else "reminder", {
+                "title": notice.title, "link": notice.link, "vendor": vendor_names.get(notice.vendor_id),
+                "days_overdue": notice.overdue_days})
             try:
                 with db.begin_nested():
                     db.add(TPRAReminder(

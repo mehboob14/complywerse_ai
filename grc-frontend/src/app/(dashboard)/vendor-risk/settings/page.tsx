@@ -4,6 +4,7 @@
 // & scoring engines actually read: inherent-risk factor weights, tier thresholds,
 // and reassessment cadence. Previously hard-coded / not tunable.
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Settings, Save, RotateCcw, Loader2, AlertCircle, SlidersHorizontal, Gauge, CalendarClock, BellRing, ListChecks, Layers, Radio } from 'lucide-react';
@@ -238,7 +239,8 @@ export default function VendorRiskSettingsPage() {
             Covers reassessments, questionnaires waiting on a vendor, remediation, risk acceptances, contracts and
             stakeholders&apos; yearly check-ins.
             One notice when the window opens, then one per repeat period once overdue. An expired risk acceptance
-            is marked expired and stops mitigating its finding.
+            is marked expired and stops mitigating its finding. The wording of every email we send is set under
+            {' '}<Link href="/vendor-risk/settings/emails" className="text-primary-700 hover:underline">Emails</Link>.
           </p>
           <div className="space-y-2">
             {([

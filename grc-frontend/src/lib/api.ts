@@ -2669,6 +2669,15 @@ export const vendorSummaryApi = {
   narrative: (vendorId: number) => apiClient.post(`/vendor-risk/vendors/${vendorId}/summary/narrative`, {}, { timeout: 180000 }),
 };
 
+// The emails third-party risk sends, in the tenant's own words (tpra/emails.py).
+export const vendorEmailsApi = {
+  list: () => apiClient.get('/vendor-risk/email-templates'),
+  preview: (key: string, data: { subject: string; body: string }) => apiClient.post(`/vendor-risk/email-templates/${key}/preview`, data),
+  save: (key: string, data: { subject: string; body: string }) => apiClient.put(`/vendor-risk/email-templates/${key}`, data),
+  reset: (key: string) => apiClient.delete(`/vendor-risk/email-templates/${key}`),
+  test: (key: string) => apiClient.post(`/vendor-risk/email-templates/${key}/test`),
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

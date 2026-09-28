@@ -485,8 +485,13 @@ def act(db: Session, tenant_id: int, actor_id: int, *, condition: str, record_ty
 
     if action == "assign" and assignee_id and assignee_id != actor_id:
         from ...workflow_engine.services.notification_service import send_workflow_notification
-        send_workflow_notification(db, tenant_id=tenant_id, subject=f"Assigned to you: {item['title']}"[:500],
-                                   message=f"{item['title']}.\n\nOpen: {item['link']}",
+        from .emails import render
+        by = db.get(GRCUser, actor_id) if actor_id else None
+        subject, message, _ = render(db, tenant_id, "attention_assigned", {
+            "title": item["title"], "link": item["link"], "vendor": item["vendor_name"],
+            "assigned_by": (by.display_name or by.username or by.email) if by else "A colleague"})
+        send_workflow_notification(db, tenant_id=tenant_id, subject=subject,
+                                   message=message,
                                    workflow_instance_id=None, user_ids=[assignee_id],
                                    channels=["in_app"], notification_type="assignment")
     return item

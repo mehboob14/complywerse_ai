@@ -22,6 +22,7 @@ from .tpra.alerts import router as tpra_alerts_router
 from .tpra.shadow_saas import router as tpra_shadow_saas_router
 from .tpra.fair import router as tpra_fair_router
 from .tpra.summary import router as tpra_summary_router
+from .tpra.emails import router as tpra_emails_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -44,6 +45,8 @@ router.include_router(tpra_shadow_saas_router)
 router.include_router(tpra_fair_router)
 # A supplier on a few printable pages, with its NIST CSF 2.0 profile.
 router.include_router(tpra_summary_router)
+# The emails third-party risk sends, in the tenant's own words.
+router.include_router(tpra_emails_router)
 router.include_router(vendors_router)
 router.include_router(assessments_router)
 router.include_router(questionnaires_router)
