@@ -38,7 +38,7 @@ from ....models import GRCUser, TPRAFairAnalysis, TPRASurfaceScan, Vendor, get_d
 from ....routers.auth_router import get_user_tenants, require_auth
 from . import quantification as q, rbac, service
 
-router = APIRouter(tags=["Vendor FAIR analyses"])
+router = APIRouter(tags=["Vendor comply analyses"])
 
 EFFECTS = ("confidentiality", "integrity", "availability")
 PRIMARY = {"response": "Response", "productivity": "Productivity", "replacement": "Replacement"}
@@ -406,7 +406,7 @@ def export_one(analysis_id: int, db: Session = Depends(get_db), user: GRCUser = 
     a, v = _analysis(db, analysis_id, _tids(user, db))
     out = io.StringIO()
     w = csv.writer(out)
-    w.writerow(["FAIR analysis", a.name])
+    w.writerow(["Comply analysis", a.name])
     w.writerow(["Supplier", v.name])
     w.writerow(["Effect", a.effect])
     w.writerow([])

@@ -1,6 +1,6 @@
 'use client';
 
-// One FAIR analysis: its factors as ranges, where the prefilled ones came from,
+// One Comply analysis: its factors as ranges, where the prefilled ones came from,
 // and what thousands of simulated years say a year could cost.
 
 import { useEffect, useMemo, useState } from 'react';
@@ -91,7 +91,7 @@ export default function FairAnalysisPage() {
   });
   const remove = useMutation({
     mutationFn: () => vendorFairApi.remove(analysisId),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-fair'] }); router.push('/vendor-risk/fair'); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['tprm-fair'] }); router.push('/vendor-risk/comply-analysis'); },
   });
 
   if (isLoading || (a && !text)) return <div className="flex items-center gap-2 py-10 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading…</div>;
@@ -101,7 +101,7 @@ export default function FairAnalysisPage() {
 
   return (
     <div className="space-y-5">
-      <Link href="/vendor-risk/fair" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"><ArrowLeft className="h-3.5 w-3.5" /> All analyses</Link>
+      <Link href="/vendor-risk/comply-analysis" className="inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"><ArrowLeft className="h-3.5 w-3.5" /> All analyses</Link>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <input aria-label="Name" value={meta.name} onChange={(e) => setMeta({ ...meta, name: e.target.value })} disabled={!canEdit}

@@ -1,6 +1,6 @@
 'use client';
 
-// FAIR analyses: one loss scenario at one supplier, taken apart factor by factor
+// Comply analyses: one loss scenario at one supplier, taken apart factor by factor
 // and simulated into the range of what a year could cost.
 
 import { useEffect, useRef, useState } from 'react';
@@ -38,14 +38,14 @@ export default function FairPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">FAIR analyses</h1>
+          <h1 className="text-xl font-semibold text-slate-900">Comply analyses</h1>
           <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
-            One loss scenario at one supplier, taken apart the FAIR way: how often a threat acts, how often that becomes a
+            One loss scenario at one supplier, taken apart factor by factor: how often a threat acts, how often that becomes a
             loss, and what each loss costs. Every factor is a range; thousands of simulated years show what a year could cost.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button type="button" onClick={async () => download((await vendorFairApi.exportAll()).data as Blob, 'fair-analyses.csv')}
+          <button type="button" onClick={async () => download((await vendorFairApi.exportAll()).data as Blob, 'comply-analyses.csv')}
             disabled={!data?.items.length} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             <Download className="h-4 w-4" /> Export
           </button>
@@ -88,7 +88,7 @@ export default function FairPage() {
               {data.items.map((a) => (
                 <tr key={a.id} className="hover:bg-slate-50">
                   <td className="px-4 py-3">
-                    <Link href={`/vendor-risk/fair/${a.id}`} className="font-medium text-slate-900 hover:text-primary-700 hover:underline">{a.name}</Link>
+                    <Link href={`/vendor-risk/comply-analysis/${a.id}`} className="font-medium text-slate-900 hover:text-primary-700 hover:underline">{a.name}</Link>
                     <p className="flex items-center gap-1.5 text-xs text-slate-500">
                       {a.vendor.name}
                       {a.vendor.tier && <span className={clsx('inline-flex rounded-full border px-1.5 text-[11px] capitalize', TIER_CLS[a.vendor.tier])}>{a.vendor.tier}</span>}
@@ -131,16 +131,16 @@ function NewAnalysis({ vendorId, onClose }: { vendorId: number | null; onClose: 
       const pre = (await vendorFairApi.prefill(Number(vendor), effect)).data as { inputs: object; notes: string[]; name: string };
       return (await vendorFairApi.create({ vendor_id: Number(vendor), effect, name: pre.name, inputs: pre.inputs, notes: pre.notes })).data as FairAnalysis;
     },
-    onSuccess: (a) => router.push(`/vendor-risk/fair/${a.id}`),
+    onSuccess: (a) => router.push(`/vendor-risk/comply-analysis/${a.id}`),
     onError: (e) => toast({ type: 'error', title: 'Could not start the analysis', message: errText(e, 'Try again.') }),
   });
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label="New FAIR analysis"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4" role="dialog" aria-modal="true" aria-label="New Comply analysis"
       onKeyDown={(e) => { if (e.key === 'Escape') onClose(); }}>
       <form className="w-full max-w-md space-y-4 rounded-xl bg-white p-5 shadow-xl" onSubmit={(e) => { e.preventDefault(); start.mutate(); }}>
         <div className="flex items-start justify-between">
           <div>
-            <h2 className="text-base font-semibold text-slate-900">New FAIR analysis</h2>
+            <h2 className="text-base font-semibold text-slate-900">New Comply analysis</h2>
             <p className="text-xs text-slate-500">It starts from what we hold about the supplier; every number says where it came from, and all of it can be changed.</p>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" className="rounded p-1 text-slate-400 hover:bg-slate-100"><X className="h-4 w-4" /></button>

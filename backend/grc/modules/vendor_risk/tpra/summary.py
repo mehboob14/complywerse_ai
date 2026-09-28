@@ -248,7 +248,7 @@ def summary(db: Session, tenant_id: int, vendor: Vendor, today: date, narrative:
                                                   "Least liability cap"],
                [["Exposure model (all scenarios)", f"{exposure['annual']['chance']:.0%}", _money(exposure["annual"]["mean"], currency),
                  _money(exposure["annual"]["p95"], currency), None]]
-               + [[f"FAIR: {a.name}", f"{(a.result or {}).get('annual', {}).get('chance', 0):.0%}",
+               + [[f"Comply analysis: {a.name}", f"{(a.result or {}).get('annual', {}).get('chance', 0):.0%}",
                    _money((a.result or {}).get("annual", {}).get("mean"), currency),
                    _money((a.result or {}).get("annual", {}).get("p95"), currency),
                    _money((a.result or {}).get("liability_cap"), currency)] for a in fairs],

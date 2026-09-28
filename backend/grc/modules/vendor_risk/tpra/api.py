@@ -1759,6 +1759,22 @@ def get_config(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
     }
 
 
+@router.get("/config/directory")
+def config_directory(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The roles and people a setting can name: who approves a tier, who hears of
+    an escalation or a contract. Offered as choices so a typo cannot silently
+    point a reminder at nobody."""
+    from ....models import Role
+    from sqlalchemy import or_
+    tids = _tids(user, db)
+    roles = sorted({r.name for r in db.query(Role).filter(or_(Role.tenant_id.in_(tids), Role.tenant_id.is_(None)))
+                    if (r.name or "").strip()}, key=str.lower)
+    people = [{"id": u.id, "name": u.display_name or u.username or u.email}
+              for u in db.query(GRCUser).filter(GRCUser.is_active.is_(True))
+              .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())]
+    return {"roles": roles, "people": people}
+
+
 @router.put("/config")
 def put_config(body: ConfigIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """Update the tenant's tiering config. Weights are normalized to sum 1.0;
