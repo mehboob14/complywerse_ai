@@ -126,18 +126,19 @@ export default function ExternalQuestionnairePage() {
 
   // Offline: download the questionnaire as a workbook, answer it, upload it back.
   const [importing, setImporting] = useState(false);
-  const downloadWorkbook = async () => {
+  const downloadWorkbook = async (as: 'xlsx' | 'pdf' = 'xlsx') => {
     setError(null);
     try {
-      const res = await apiClient.get(`/vendor-risk/questionnaires/external/${token}/workbook`, { responseType: 'blob' });
+      const res = await apiClient.get(`/vendor-risk/questionnaires/external/${token}/${as === 'pdf' ? 'pdf' : 'workbook'}`,
+        { responseType: 'blob' });
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `questionnaire-${data?.questionnaire_id ?? ''}.xlsx`;
+      a.download = `questionnaire-${data?.questionnaire_id ?? ''}.${as}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
-      setError('The workbook could not be downloaded.');
+      setError(as === 'pdf' ? 'The PDF could not be downloaded.' : 'The workbook could not be downloaded.');
     }
   };
   const importWorkbook = async (file: File) => {
@@ -531,17 +532,21 @@ export default function ExternalQuestionnairePage() {
                   <FileSpreadsheet className="h-4 w-4 text-primary-600" /> Prefer a spreadsheet?
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-gray-600">
-                  Download the questionnaire, answer it offline, and upload it here. Your answers are saved as a draft to
-                  check before you submit.
+                  Download the questionnaire as a workbook or a fillable PDF, answer it offline, and upload it here. Your
+                  answers are saved as a draft to check before you submit.
                 </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <button type="button" onClick={downloadWorkbook}
+                  <button type="button" onClick={() => downloadWorkbook('xlsx')}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
                     <Download className="h-3.5 w-3.5" /> Download workbook
                   </button>
+                  <button type="button" onClick={() => downloadWorkbook('pdf')}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    <Download className="h-3.5 w-3.5" /> Download fillable PDF
+                  </button>
                   <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                    {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Upload completed workbook
-                    <input type="file" accept=".xlsx" className="sr-only" disabled={importing}
+                    {importing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Upload completed workbook or PDF
+                    <input type="file" accept=".xlsx,.pdf" className="sr-only" disabled={importing}
                       onChange={(e) => { const f = e.target.files?.[0]; if (f) importWorkbook(f); e.target.value = ''; }} />
                   </label>
                 </div>

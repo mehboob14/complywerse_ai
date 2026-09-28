@@ -202,3 +202,38 @@ def test_import_shows_what_it_would_do_then_applies_all_or_nothing(db, as_user):
                                                                                      ["personal data", "invoices"])
     assert db.query(Vendor).filter_by(name="Known Ltd").one().data_access_level == "internal"
     assert as_user(8).post("/vendors/import", files={"file": ("v.csv", good, "text/csv")}).status_code == 403
+
+
+def test_a_section_can_be_for_some_roles_to_see_and_others_to_answer(db, as_user):
+    from grc.models import Role, TPRATieringConfig, UserRole
+    from grc.modules.vendor_risk.tpra import customisation
+    custom = customisation.clean({
+        "sections": [{"key": "c_legal", "title": "Legal review"}],
+        "questions": [{"key": "c_clauses", "section": "c_legal", "type": "text", "label": "Unusual clauses?", "required": True}],
+        "section_roles": {"impact": {"answer": ["Risk"]}, "c_legal": {"see": ["Legal"], "answer": ["Legal"]}},
+    }, None)
+    with pytest.raises(ValueError, match="not a section"):
+        customisation.clean({"section_roles": {"nowhere": {"see": ["Legal"]}}}, custom)
+    db.add(TPRATieringConfig(tenant_id=1, config_key="default", is_active=True, customisation=custom))
+    db.commit()
+
+    requester = as_user(8)
+    sections = {s["key"]: s for s in requester.get("/intake/questions").json()["sections"]}
+    assert "c_legal" not in sections                                   # not theirs to see
+    assert sections["impact"]["can_answer"] is False and sections["data"]["can_answer"] is True
+    vid = requester.post("/intake/requests", json={"name": "Payroll Co"}).json()["id"]
+    theirs = {k: v for k, v in FULL.items() if not k.startswith("impact") and k != "critical_function"}
+    refused = requester.put(f"/vendors/{vid}/intake", json={"answers": {"impact_outage": "severe"}})
+    assert refused.status_code == 403 and "answered by someone else" in refused.json()["detail"]
+    reasons = {k: v for k, v in WHY.items() if k != "critical_function"}   # that question is in the Risk section
+    saved = requester.put(f"/vendors/{vid}/intake", json={"answers": theirs, "justifications": reasons})
+    assert saved.status_code == 200 and saved.json()["problems"] == []    # the rest is for others to answer
+    assert requester.post(f"/vendors/{vid}/intake/submit").json()["intake_status"] == "submitted"
+
+    team = as_user(7)                                                      # the review team sees and answers it all
+    keys = [p["key"] for p in team.get(f"/vendors/{vid}/intake").json()["problems"]]
+    assert "impact_outage" in keys and "c_clauses" in keys
+    db.add(Role(id=3, tenant_id=1, name="Legal"))
+    db.add(UserRole(user_id=8, role_id=3, tenant_id=1))
+    db.commit()
+    assert "c_legal" in {s["key"] for s in requester.get("/intake/questions").json()["sections"]}

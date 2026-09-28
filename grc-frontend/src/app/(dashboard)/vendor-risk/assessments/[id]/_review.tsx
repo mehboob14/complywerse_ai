@@ -70,13 +70,14 @@ export function ReviewBar({ qr, assessmentId, canEdit }: { qr: ReviewableRespons
     onSuccess: () => { setError(null); refresh(); },
     onError: (e) => setError(errorText(e)),
   });
-  const downloadBook = async () => {
+  const downloadBook = async (as: 'xlsx' | 'pdf' = 'xlsx') => {
     try {
-      const res = await vendorRiskApi.downloadQuestionnaireWorkbook(qr.id);
+      const res = as === 'pdf' ? await vendorRiskApi.downloadQuestionnairePdf(qr.id)
+        : await vendorRiskApi.downloadQuestionnaireWorkbook(qr.id);
       const url = URL.createObjectURL(res.data as Blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `questionnaire-${qr.id}.xlsx`;
+      a.download = `questionnaire-${qr.id}.${as}`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (e) {
@@ -117,13 +118,16 @@ export function ReviewBar({ qr, assessmentId, canEdit }: { qr: ReviewableRespons
       )}
       {canEdit && WAITING.includes(qr.status) && (
         <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={downloadBook} className={`${btn} border-gray-200 text-gray-600 hover:bg-gray-50`}>
+          <button type="button" onClick={() => downloadBook('xlsx')} className={`${btn} border-gray-200 text-gray-600 hover:bg-gray-50`}>
             <Download className="h-3.5 w-3.5" /> Download workbook
+          </button>
+          <button type="button" onClick={() => downloadBook('pdf')} className={`${btn} border-gray-200 text-gray-600 hover:bg-gray-50`}>
+            <Download className="h-3.5 w-3.5" /> Download fillable PDF
           </button>
           <label className={`${btn} cursor-pointer border-gray-200 text-gray-600 hover:bg-gray-50`}>
             {importBook.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />}
-            Import the vendor&apos;s workbook
-            <input type="file" accept=".xlsx" className="sr-only" disabled={importBook.isPending}
+            Import the vendor&apos;s workbook or PDF
+            <input type="file" accept=".xlsx,.pdf" className="sr-only" disabled={importBook.isPending}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) importBook.mutate(f); e.target.value = ''; }} />
           </label>
           <label className="inline-flex items-center gap-1.5 text-gray-600"

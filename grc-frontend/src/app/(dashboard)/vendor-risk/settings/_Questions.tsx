@@ -23,6 +23,8 @@ export interface QuestionsDraft {
   builtin_sections: Record<string, { title: string }>;
   builtin: Record<string, BuiltinChange>;
   questions: CustomQuestion[];
+  /** Who sees and who answers a section, by role; empty is everyone. */
+  section_roles?: Record<string, { see?: string[]; answer?: string[] }>;
 }
 export interface BuiltinQuestion {
   key: string; type: string; label: string; required?: boolean; justify?: boolean; show_if?: string;
@@ -65,9 +67,37 @@ export function questionsProblems(d: QuestionsDraft): string[] {
   return out;
 }
 
-export default function QuestionsEditor({ value, onChange, builtin, factors, evidence, savedKeys, canEdit }: {
+function RolePicker({ label, value, roles, canEdit, onChange }: {
+  label: string; value: string[]; roles: string[]; canEdit: boolean; onChange: (next: string[]) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+      <span className="w-28 shrink-0">{label}</span>
+      {value.length === 0 && <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-slate-600">Everyone</span>}
+      {value.map((r) => (
+        <span key={r} className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white py-0.5 pl-2 pr-1 text-slate-700">
+          {r}
+          {canEdit && (
+            <button type="button" aria-label={`Remove ${r}`} onClick={() => onChange(value.filter((x) => x !== r))}
+              className="rounded-full px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">×</button>
+          )}
+        </span>
+      ))}
+      {canEdit && roles.filter((r) => !value.includes(r)).length > 0 && (
+        <select value="" aria-label={`${label}: add a role`} onChange={(e) => e.target.value && onChange([...value, e.target.value])}
+          className="rounded-lg border border-dashed border-slate-300 bg-white px-2 py-0.5 text-xs text-slate-600">
+          <option value="">+ Only a role…</option>
+          {roles.filter((r) => !value.includes(r)).map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      )}
+    </div>
+  );
+}
+
+export default function QuestionsEditor({ value, onChange, builtin, factors, evidence, savedKeys, canEdit, roles = [] }: {
   value: QuestionsDraft; onChange: (next: QuestionsDraft) => void; builtin: BuiltinSection[];
   factors: Array<{ key: string; label: string }>; evidence: Record<string, string>; savedKeys: Set<string>; canEdit: boolean;
+  roles?: string[];
 }) {
   const [sectionKey, setSectionKey] = useState(builtin[0]?.key || '');
   const [openKey, setOpenKey] = useState<string | null>(null);
@@ -138,6 +168,16 @@ export default function QuestionsEditor({ value, onChange, builtin, factors, evi
   };
   const activeHere = own.filter((q) => !q.archived);
   const removed = own.filter((q) => q.archived);
+  const rule = (current && value.section_roles?.[current.key]) || {};
+  const setRule = (part: 'see' | 'answer', next: string[]) => {
+    if (!current) return;
+    const all = { ...(value.section_roles || {}) };
+    const merged = { ...(all[current.key] || {}), [part]: next };
+    if (!merged.see?.length) delete merged.see;
+    if (!merged.answer?.length) delete merged.answer;
+    if (Object.keys(merged).length) all[current.key] = merged; else delete all[current.key];
+    onChange({ ...value, section_roles: all });
+  };
 
   return (
     <div>
@@ -175,6 +215,11 @@ export default function QuestionsEditor({ value, onChange, builtin, factors, evi
               <input value={current.title} disabled={!canEdit} onChange={(e) => retitle(e.target.value)}
                 className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-sm text-slate-800 disabled:bg-slate-50" />
             </label>
+            <div className="w-full space-y-1 pt-1">
+              <RolePicker label="Who sees it" value={rule.see || []} roles={roles} canEdit={canEdit} onChange={(v) => setRule('see', v)} />
+              <RolePicker label="Who answers it" value={rule.answer || []} roles={roles} canEdit={canEdit} onChange={(v) => setRule('answer', v)} />
+              <p className="text-[11px] text-slate-400">The review team always sees and answers every section. A requester who cannot answer a section is not held up by it.</p>
+            </div>
             {!current.builtin && canEdit && (
               <button type="button" disabled={activeHere.length > 0}
                 title={activeHere.length ? 'Move or remove its questions first' : 'Remove this section'}

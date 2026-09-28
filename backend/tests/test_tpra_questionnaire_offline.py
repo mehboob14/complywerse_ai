@@ -195,3 +195,29 @@ def test_an_analyst_imports_a_returned_workbook_on_the_vendors_attestation(db, h
     qr = db.get(VendorQuestionnaireResponse, qr_id)
     assert (qr.status, qr.attested_name, qr.attested_title) == ("submitted", "Sam Vendor", "CISO")
     assert [a.action for a in db.query(TPRAAuditLog).filter(TPRAAuditLog.entity == "questionnaire")] == ["import"]
+
+
+def test_a_fillable_pdf_goes_out_and_comes_back_through_the_same_upload(db, http):
+    from PyPDF2 import PdfReader, PdfWriter
+    vendor, main, _ = _templates(db)
+    token, qr_id = _send(http, vendor, main)
+    blank = http.get(f"/vendor-risk/questionnaires/external/{token}/pdf")
+    assert blank.status_code == 200 and blank.content[:4] == b"%PDF"
+    reader = PdfReader(io.BytesIO(blank.content))
+    writer = PdfWriter()
+    writer.clone_document_from_reader(reader)
+    writer.add_metadata(dict(reader.metadata or {}))
+    for page in writer.pages:
+        writer.update_page_form_field_values(page, {"q0_subs": "No", "q1_mfa": "Partial", "q2_pen": "Annually",
+                                                    "q3_notes": "We are ISO certified.", "c1_mfa": "Contractors next."})
+    filled = io.BytesIO()
+    writer.write(filled)
+    back = http.post(f"/vendor-risk/questionnaires/external/{token}/workbook",
+                     files={"file": ("answers.pdf", filled.getvalue(), "application/pdf")})
+    assert back.status_code == 200, back.text
+    qr = db.get(VendorQuestionnaireResponse, qr_id)
+    assert qr.responses == {"subs": "no", "mfa": "partial", "pen": "annual", "notes": "We are ISO certified."}
+    assert qr.vendor_comments == {"mfa": "Contractors next."}
+    assert http.post(f"/vendor-risk/questionnaires/external/{token}/workbook",
+                     files={"file": ("answers.docx", b"x", "application/octet-stream")}).status_code == 415
+    assert http.get(f"/vendor-risk/questionnaire-responses/{qr_id}/pdf").status_code == 200

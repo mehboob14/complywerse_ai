@@ -92,7 +92,8 @@ function toDraft(c: ConfigResp, from: Defaults): Draft {
       const cu = from === c ? c.customisation : undefined;
       return {
         custom_questions: { sections: clone(cu?.sections || []), builtin_sections: clone(cu?.builtin_sections || {}),
-          builtin: clone(cu?.builtin || {}), questions: clone(cu?.questions || []) as CustomQuestion[] },
+          builtin: clone(cu?.builtin || {}), questions: clone(cu?.questions || []) as CustomQuestion[],
+          section_roles: clone(cu?.section_roles || {}) },
         custom_factors: clone(cu?.factors || []),
         custom_evidence: { evidence: clone(cu?.evidence || []), evidence_builtin: clone(cu?.evidence_builtin || {}) },
       };
@@ -270,7 +271,8 @@ export default function VendorRiskSettingsPage() {
         summary: questionsSummary(cq, builtin.sections),
         body: () => (
           <QuestionsEditor value={cq} onChange={(next) => set('custom_questions', next)} builtin={builtin.sections}
-            factors={factorList} evidence={evidenceKinds} savedKeys={savedQuestionKeys} canEdit={canEdit} />
+            factors={factorList} evidence={evidenceKinds} savedKeys={savedQuestionKeys} canEdit={canEdit}
+            roles={directory?.roles || []} />
         ),
       },
       {

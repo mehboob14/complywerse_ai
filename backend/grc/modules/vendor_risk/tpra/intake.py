@@ -109,6 +109,10 @@ def spec(custom: Optional[dict] = None) -> dict:
     for s in c.get("sections") or []:
         if not s.get("archived"):
             sections.append({"key": s["key"], "title": s["title"], "builtin": False, "questions": []})
+    roles = c.get("section_roles") if isinstance(c.get("section_roles"), dict) else {}
+    for s in sections:
+        rule = roles.get(s["key"]) or {}
+        s["see"], s["answer"] = list(rule.get("see") or []), list(rule.get("answer") or [])
     where = {s["key"]: s for s in sections}
     for q in sorted(c.get("questions") or [], key=lambda q: (q.get("order") or 0, q["key"])):
         merged = {**q, "builtin": False}
@@ -118,9 +122,20 @@ def spec(custom: Optional[dict] = None) -> dict:
     return {"sections": sections, "questions": every}
 
 
-def catalogue(custom: Optional[dict] = None) -> dict:
-    return {"sections": spec(custom)["sections"], "levels": list(LEVELS), "statuses": list(STATUSES),
-            "min_reason": _MIN_REASON}
+def for_person(sections: List[dict], roles, team: bool) -> List[dict]:
+    """The sections a person sees, each saying whether they answer it. The review
+    team sees and answers every section; an empty role list means everyone."""
+    mine = set(roles or ())
+    out = []
+    for s in sections:
+        if team or not s.get("see") or mine & set(s["see"]):
+            out.append({**s, "can_answer": team or not s.get("answer") or bool(mine & set(s["answer"]))})
+    return out
+
+
+def catalogue(custom: Optional[dict] = None, roles=None, team: bool = True) -> dict:
+    return {"sections": for_person(spec(custom)["sections"], roles, team), "levels": list(LEVELS),
+            "statuses": list(STATUSES), "min_reason": _MIN_REASON}
 
 
 # ── cleaning ─────────────────────────────────────────────────────────────────
@@ -212,8 +227,10 @@ def _asked(question: dict, answers: dict) -> bool:
     return not gate or answers.get(gate) == "yes"
 
 
-def problems(intake: Optional[dict], vendor: Optional[Vendor] = None, custom: Optional[dict] = None) -> List[dict]:
-    """What stops the request being submitted, one line per question asked."""
+def problems(intake: Optional[dict], vendor: Optional[Vendor] = None, custom: Optional[dict] = None,
+             roles=None, team: bool = True) -> List[dict]:
+    """What stops the request being submitted, one line per question asked. Only
+    the sections this person answers count: the rest are for others to answer."""
     answers = (intake or {}).get("answers") or {}
     reasons = (intake or {}).get("justifications") or {}
     out = []
@@ -222,7 +239,8 @@ def problems(intake: Optional[dict], vendor: Optional[Vendor] = None, custom: Op
             out.append({"key": "name", "message": "Give the supplier's name"})
         if vendor.owner_id is None:
             out.append({"key": "owner_id", "message": "Name the business owner"})
-    for question in (q for s in spec(custom)["sections"] for q in s["questions"]):
+    for question in (q for s in for_person(spec(custom)["sections"], roles, team) if s["can_answer"]
+                     for q in s["questions"]):
         if not _asked(question, answers):
             continue
         value = answers.get(question["key"])

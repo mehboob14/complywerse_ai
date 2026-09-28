@@ -19,7 +19,7 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..tpra import portal, rbac, versions
 from ..tpra import questionnaire_evidence as qevidence
-from ..tpra import follow_ups, workbook
+from ..tpra import follow_ups, questionnaire_pdf, workbook
 from ..tpra.service import write_audit
 
 logger = logging.getLogger(__name__)
@@ -977,12 +977,26 @@ def _workbook_file(db: Session, qr: VendorQuestionnaireResponse) -> Response:
         "Content-Disposition": f'attachment; filename="questionnaire-{qr.id}.xlsx"'})
 
 
+def _pdf_file(db: Session, qr: VendorQuestionnaireResponse) -> Response:
+    questions = versions.questions_for(db, qr)
+    db.commit()                      # a link sent before versions existed is pinned now
+    vendor = db.query(Vendor).filter(Vendor.id == qr.vendor_id).first()
+    content = questionnaire_pdf.build(qr, questions, vendor.name if vendor else "your organisation",
+                                      qevidence.locked(qr, questions))
+    return Response(content=content, media_type="application/pdf", headers={
+        "Content-Disposition": f'attachment; filename="questionnaire-{qr.id}.pdf"'})
+
+
 async def _read_workbook(db: Session, qr: VendorQuestionnaireResponse, file: UploadFile) -> dict:
-    if not (file.filename or "").lower().endswith(".xlsx"):
-        raise HTTPException(status_code=415, detail="Upload the .xlsx workbook downloaded for this questionnaire")
-    content = await file.read(workbook.MAX_BYTES + 1)
+    """A completed workbook or fillable PDF, whichever was downloaded."""
+    name = (file.filename or "").lower()
+    if not name.endswith((".xlsx", ".pdf")):
+        raise HTTPException(status_code=415,
+                            detail="Upload the .xlsx workbook or the PDF downloaded for this questionnaire")
+    module = questionnaire_pdf if name.endswith(".pdf") else workbook
+    content = await file.read(module.MAX_BYTES + 1)
     try:
-        return workbook.read(content, qr, versions.questions_for(db, qr))
+        return module.read(content, qr, versions.questions_for(db, qr))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -991,6 +1005,13 @@ async def _read_workbook(db: Session, qr: VendorQuestionnaireResponse, file: Upl
 def external_workbook(token: str, db: Session = Depends(get_db)):
     """The questionnaire as a workbook, to answer offline. No auth — token validated."""
     return _workbook_file(db, _validate_external_token(token, db))
+
+
+@router.get("/questionnaires/external/{token}/pdf")
+def external_pdf(token: str, db: Session = Depends(get_db)):
+    """The questionnaire as a fillable PDF, to answer offline. No auth — token validated.
+    It comes back through the workbook upload, which takes either."""
+    return _pdf_file(db, _validate_external_token(token, db))
 
 
 @router.post("/questionnaires/external/{token}/workbook")
@@ -1015,6 +1036,15 @@ def download_workbook(
     current_user: GRCUser = Depends(require_auth),
 ):
     return _workbook_file(db, _response_or_404(db, current_user, response_id))
+
+
+@router.get("/questionnaire-responses/{response_id}/pdf")
+def download_pdf(
+    response_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    return _pdf_file(db, _response_or_404(db, current_user, response_id))
 
 
 @router.post("/questionnaire-responses/{response_id}/workbook")

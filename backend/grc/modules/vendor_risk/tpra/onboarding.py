@@ -72,6 +72,12 @@ def _may_edit(db: Session, user: GRCUser, v: Vendor) -> bool:
     return _can(db, user, "vendors", "edit")
 
 
+def _roles(db: Session, user: GRCUser) -> List[str]:
+    from ....models import Role, UserRole
+    return [name for (name,) in db.query(Role.name).join(UserRole, UserRole.role_id == Role.id)
+            .filter(UserRole.user_id == user.id)]
+
+
 def _custom(db: Session, tenant_id: int) -> dict:
     """The tenant's own questions, factors and evidence types (tpra/customisation.py)."""
     return get_tiering_config(db, tenant_id).get("customisation") or {}
@@ -91,7 +97,8 @@ def _preview(db: Session, v: Vendor) -> dict:
 def questions(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """The questions as this tenant asks them, and the factors a tier is made of."""
     custom = _custom(db, _tids(user, db)[0])
-    return {**intake.catalogue(custom), "factors": customisation.factors(custom)}
+    return {**intake.catalogue(custom, _roles(db, user), _can(db, user, "intake", "review")),
+            "factors": customisation.factors(custom)}
 
 
 @router.get("/intake/people")
@@ -211,7 +218,8 @@ def _payload(db: Session, user: GRCUser, v: Vendor) -> dict:
         "requested_by": v.requested_by, "submitted_at": v.submitted_at,
         "intake": v.intake or {"answers": {}, "justifications": {}},
         "intake_status": v.intake_status,
-        "problems": intake.problems(v.intake, v, _custom(db, v.tenant_id)),
+        "problems": intake.problems(v.intake, v, _custom(db, v.tenant_id), _roles(db, user),
+                                    _can(db, user, "intake", "review")),
         "preview": _preview(db, v),
         "can_edit": _may_edit(db, user, v),
         "can_review": _can(db, user, "intake", "review"),
@@ -268,6 +276,19 @@ def _apply_vendor_part(db: Session, v: Vendor, part: VendorPart) -> None:
         setattr(v, key, value.strip() if isinstance(value, str) else value)
 
 
+def _may_answer(db: Session, user: GRCUser, custom: dict, patch: dict) -> None:
+    """Answers only in the sections this person answers (tpra/customisation.py)."""
+    if _can(db, user, "intake", "review"):
+        return
+    spec = intake.spec(custom)
+    allowed = {s["key"] for s in intake.for_person(spec["sections"], _roles(db, user), False) if s["can_answer"]}
+    for key in list(patch["answers"]) + list(patch["justifications"]):
+        section = spec["questions"][key].get("section")
+        if section not in allowed:
+            title = next((s["title"] for s in spec["sections"] if s["key"] == section), section)
+            raise PermissionError(f"The {title} section is answered by someone else")
+
+
 @router.put("/vendors/{vendor_id}/intake")
 def save_intake(vendor_id: int, body: IntakeIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """Save as you go: partial answers are fine until the request is submitted."""
@@ -277,8 +298,11 @@ def save_intake(vendor_id: int, body: IntakeIn, db: Session = Depends(get_db), u
     custom = _custom(db, v.tenant_id)
     try:
         patch = intake.clean(body.answers, body.justifications, custom)
+        _may_answer(db, user, custom, patch)
         if body.vendor is not None:
             _apply_vendor_part(db, v, body.vendor)
+    except PermissionError as exc:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(exc))
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
     v.intake = intake.merge(v.intake, patch)
@@ -303,7 +327,7 @@ def submit(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depend
     v = _vendor(db, vendor_id, _tids(user, db))
     if not _may_edit(db, user, v):
         raise HTTPException(status.HTTP_403_FORBIDDEN, "Only the requester or the review team can submit this")
-    missing = intake.problems(v.intake, v, _custom(db, v.tenant_id))
+    missing = intake.problems(v.intake, v, _custom(db, v.tenant_id), _roles(db, user), _can(db, user, "intake", "review"))
     if missing:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, {"message": "Some answers are missing", "problems": missing})
     _move(db, v, user, "submitted")

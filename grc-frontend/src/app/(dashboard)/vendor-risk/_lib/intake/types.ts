@@ -13,7 +13,11 @@ export interface Question {
   options?: Array<{ value: string; label: string; archived?: boolean; points?: number }>;
 }
 
-export interface Section { key: string; title: string; questions: Question[] }
+export interface Section {
+  key: string; title: string; questions: Question[];
+  /** Roles who see it and who answer it (empty: everyone); whether this person answers it. */
+  see?: string[]; answer?: string[]; can_answer?: boolean;
+}
 
 export interface Factor { key: string; label: string; builtin: boolean }
 

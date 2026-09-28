@@ -2299,6 +2299,8 @@ export const vendorRiskApi = {
   // Offline: the questionnaire as a workbook, and a completed one back in.
   downloadQuestionnaireWorkbook: (responseId: number) =>
     apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/workbook`, { responseType: 'blob' }),
+  downloadQuestionnairePdf: (responseId: number) =>
+    apiClient.get(`/vendor-risk/questionnaire-responses/${responseId}/pdf`, { responseType: 'blob' }),
   importQuestionnaireWorkbook: (responseId: number, file: File, submit: boolean) => {
     const form = new FormData();
     form.append('file', file);

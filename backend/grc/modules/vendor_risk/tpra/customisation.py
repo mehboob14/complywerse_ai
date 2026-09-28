@@ -13,7 +13,9 @@ rules, the reports and the exposure model read them. Around them a tenant can:
   raises it to its level;
 * name evidence a yes asks the supplier for, on top of what its tier asks;
 * add its own tiering factors, which join the weights, and its own evidence
-  types, which join the list each tier picks from.
+  types, which join the list each tier picks from;
+* say which roles see a section of the form and which answer it (the review
+  team always sees and answers all of it).
 
 Keys are made from the names when things are added and never change, so answers
 and evidence stay attached when something is renamed. Taking something out
@@ -45,7 +47,8 @@ BUILTIN_EVIDENCE: Dict[str, str] = {
     "dpa": "Signed data processing agreement",
     "financials": "Audited financial statements",
 }
-PARTS = ("factors", "evidence", "evidence_builtin", "sections", "builtin_sections", "builtin", "questions")
+PARTS = ("factors", "evidence", "evidence_builtin", "sections", "builtin_sections", "builtin", "questions",
+         "section_roles")
 KEY = re.compile(r"^c_[a-z0-9_]{1,36}$")
 _VALUE = re.compile(r"^[a-z0-9_]{1,40}$")
 _MAX = {"factors": 15, "evidence": 60, "sections": 10, "questions": 150, "options": 30}
@@ -311,5 +314,31 @@ def clean(raw, current: Optional[dict]) -> dict:
         out["builtin"] = _builtin_questions(raw["builtin"], out)
     if "questions" in raw:
         out["questions"] = _questions(raw["questions"], out)
+    if "section_roles" in raw:
+        out["section_roles"] = _section_roles(raw["section_roles"], out)
     _check(out)
+    return out
+
+
+def _section_roles(raw, current: dict) -> dict:
+    """{section: {"see": [role], "answer": [role]}}; an empty list means everyone."""
+    if not isinstance(raw, dict):
+        raise ValueError("Who sees and answers each section must be given per section")
+    known = {s["key"] for s in intake.SECTIONS} | {s["key"] for s in current["sections"] if not s.get("archived")}
+    out = {}
+    for key, rule in raw.items():
+        if key not in known:
+            raise ValueError(f"'{key}' is not a section of the form")
+        if not isinstance(rule, dict) or set(rule) - {"see", "answer"}:
+            raise ValueError("Each section says who sees it and who answers it")
+        kept = {}
+        for part in ("see", "answer"):
+            roles = rule.get(part) or []
+            if not isinstance(roles, list) or len(roles) > 20:
+                raise ValueError("At most 20 roles see or answer a section")
+            names = list(dict.fromkeys(_text(r, "A role", 100) for r in roles))
+            if names:
+                kept[part] = names
+        if kept:
+            out[key] = kept
     return out

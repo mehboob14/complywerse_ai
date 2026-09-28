@@ -192,8 +192,14 @@ export default function IntakeForm({
         <SupplierSection vendor={vendor} people={people} editable={editable} setField={setField} problems={problems} />
       ) : current ? (
         <div className="space-y-4">
+          {current.can_answer === false && (
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+              This section is answered by {current.answer?.length ? current.answer.join(' or ') : 'someone else'}; you can read it.
+            </p>
+          )}
           {current.questions.filter((q) => !q.show_if || answers[q.show_if] === 'yes').map((q) => (
-            <QuestionRow key={q.key} q={q} value={answers[q.key]} reason={reasons[q.key] || ''} editable={editable}
+            <QuestionRow key={q.key} q={q} value={answers[q.key]} reason={reasons[q.key] || ''}
+              editable={editable && current.can_answer !== false}
               minReason={catalogue.min_reason} problem={problems.find((p) => p.key === q.key)?.message}
               onAnswer={(v) => setAnswer(q.key, v)} onReason={(v) => setReason(q.key, v)} />
           ))}
