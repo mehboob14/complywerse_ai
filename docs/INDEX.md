@@ -14,6 +14,9 @@ Central index of project documentation. Start with [SETUP.md](SETUP.md) to run t
 ## Product
 - [COMPLYVERSE_GRC_PRODUCT_MASTER_CAPABILITIES.md](COMPLYVERSE_GRC_PRODUCT_MASTER_CAPABILITIES.md) — Product feature matrix (modules × submodules × actions).
 
+## Integrations
+- [thomson-reuters-integration-plan.md](thomson-reuters-integration-plan.md) — World-Check One (LSEG) screening, CLEAR enrichment and Regulatory Intelligence feeds: design, decisions, phases, verification.
+
 ## Frontend / design
 - [DESIGN_REFERENCE.md](DESIGN_REFERENCE.md) — Tailwind design tokens, component patterns, white-theme conventions.
 

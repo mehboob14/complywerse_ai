@@ -7,8 +7,11 @@ stored in the dev-mode (base64) format; SIMULATED connections need no secrets.
 """
 from __future__ import annotations
 
+import ipaddress
+import socket
 from datetime import datetime
 from typing import Any, Dict, Optional
+from urllib.parse import urlsplit
 
 from sqlalchemy.orm import Session
 
@@ -25,6 +28,36 @@ class ConnectionError_(ValueError):
 
 class NotConfigured(LookupError):
     """No active connection for this provider in this tenant."""
+
+
+def _is_internal_ip(ip: str) -> bool:
+    addr = ipaddress.ip_address(ip)
+    return (addr.is_private or addr.is_loopback or addr.is_link_local or addr.is_reserved
+            or addr.is_multicast or addr.is_unspecified)
+
+
+def validate_provider_url(url: str, label: str = "URL") -> str:
+    """Tenant admins can edit provider URLs, so refuse anything that is not HTTPS or
+    that points into the platform's own network (SSRF guard): IP literals and
+    hostnames resolving to private / loopback / link-local / reserved addresses.
+    Hostnames that do not resolve are allowed (they cannot be reached anyway)."""
+    v = (url or "").strip()
+    parts = urlsplit(v)
+    if parts.scheme.lower() != "https" or not parts.hostname:
+        raise ConnectionError_(f"{label} must be an https:// URL")
+    host = parts.hostname
+    try:
+        infos = socket.getaddrinfo(host, parts.port or 443, proto=socket.IPPROTO_TCP)
+    except (socket.gaierror, UnicodeError, OSError):
+        infos = []
+    try:
+        ips = [host] if ipaddress.ip_address(host) else []
+    except ValueError:
+        ips = []
+    ips += [i[4][0] for i in infos]
+    if any(_is_internal_ip(ip.split("%")[0]) for ip in ips):
+        raise ConnectionError_(f"{label} must point to a public provider host, not an internal address")
+    return v
 
 
 def get_connection(db: Session, tenant_id: int, provider: str) -> Optional[TRProviderConnection]:
@@ -84,9 +117,7 @@ def upsert_connection(
         conn.name = name.strip()[:200] or meta["label"]
     if base_url_value is not None:
         v = base_url_value.strip()
-        if v and not v.lower().startswith("https://"):
-            raise ConnectionError_("Base URL must use https://")
-        conn.base_url = v or None
+        conn.base_url = validate_provider_url(v, "Base URL") if v else None
 
     allowed_secret = {f["key"] for f in meta["credential_fields"]}
     allowed_config = {f["key"] for f in meta["config_fields"]}
@@ -111,9 +142,12 @@ def upsert_connection(
 
     if config_in is not None:
         cfg = dict(conn.config or {})
+        url_labels = {f["key"]: f["label"] for f in meta["config_fields"] if f["kind"] == "url"}
         for k, v in config_in.items():
             if k not in allowed_config:
                 raise ConnectionError_(f"Unknown setting '{k}'")
+            if k in url_labels and v:
+                v = validate_provider_url(str(v), url_labels[k])
             cfg[k] = v
         conn.config = cfg
 
