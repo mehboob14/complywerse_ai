@@ -694,6 +694,13 @@ _COLUMN_ADDS = [
     ("grc_risks", "root_cause", "TEXT", None),
     ("grc_risks", "consequences", "TEXT", None),
     ("grc_risks", "recommendations", "TEXT", None),
+    # ── Thomson Reuters / LSEG integration (docs/thomson-reuters-integration-plan.md).
+    # Live-feed provenance on monitoring signals; applied at tenant-engine init so
+    # every signal query sees the columns before the first request. ──
+    ("grc_tpra_monitoring_signals", "external_id", "VARCHAR(200)",
+     "ix_grc_tpra_monitoring_signals_external_id"),
+    ("grc_tpra_monitoring_signals", "source_ref", "JSON", None),
+    ("grc_tpra_monitoring_signals", "simulated", "BOOLEAN DEFAULT FALSE", None),
     # ── TPRA productionization (11-stage versioned lifecycle). New TPRA tables
     # (grc_tpra_*, grc_risk_domains) are auto-created via create_all; only these
     # additive columns on the existing vendor tables need an ALTER on live DBs. ──

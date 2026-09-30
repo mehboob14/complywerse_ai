@@ -180,6 +180,10 @@ def s_signal(s: TPRAMonitoringSignal) -> dict:
         "triggered_assessment_id": s.triggered_assessment_id, "acknowledged": s.acknowledged,
         "acknowledged_by": getattr(s, "acknowledged_by", None),
         "acknowledged_at": getattr(s, "acknowledged_at", None),
+        # Live-feed provenance (None / False for manually-logged signals).
+        "external_id": getattr(s, "external_id", None),
+        "simulated": bool(getattr(s, "simulated", False)),
+        "source_ref": getattr(s, "source_ref", None),
         "row_version": s.row_version,
     }
 
@@ -1358,39 +1362,12 @@ def create_signal(vendor_id: int, body: SignalIn, db: Session = Depends(get_db),
     tids = _tids(user, db)
     v = _vendor(db, vendor_id, tids)
     rbac.require_write(db, user, "monitoring", "create")
-    sig = TPRAMonitoringSignal(
-        tenant_id=v.tenant_id, vendor_id=v.id, signal_type=body.signal_type,
-        severity=body.severity or "medium", source=body.source, title=body.title, detail=body.detail,
-        occurred_at=body.occurred_at or datetime.utcnow(),
+    # Shared with the live monitoring connectors (Thomson Reuters / LSEG feeds) so
+    # manual and automated signals trigger reassessments identically.
+    sig, triggered, _created = service.ingest_signal(
+        db, v, signal_type=body.signal_type, severity=body.severity, source=body.source,
+        title=body.title, detail=body.detail, occurred_at=body.occurred_at, actor_id=user.id,
     )
-    db.add(sig)
-    db.flush()
-    triggered = None
-    if should_trigger_reassessment(sig.signal_type, sig.severity):
-        # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
-        # version already open in the diligence phase), attach this signal to it
-        # rather than superseding + restarting, which would discard in-flight
-        # progress and let a burst of signals spawn a storm of reassessments.
-        active = service.get_active_assessment(db, v)
-        _in_flight = (
-            active is not None
-            and (active.version_no or 1) > 1
-            and active.lifecycle_status == "active"
-            and active.current_stage not in ("monitoring", "reassessment")
-        )
-        if _in_flight:
-            sig.triggered_reassessment = True
-            sig.triggered_assessment_id = active.id
-            triggered = active.id
-        else:
-            new = service.create_reassessment_version(
-                db, v, actor_id=user.id, reason=f"Auto-triggered by {sig.signal_type} signal",
-                triggered_signal=sig,
-            )
-            triggered = new.id
-    service.write_audit(db, v.tenant_id, entity="signal", action="create",
-                        vendor_id=v.id, entity_id=sig.id, actor_id=user.id, to_value=body.signal_type,
-                        extra={"triggered_assessment_id": triggered})
     db.commit()
     return {"signal": s_signal(sig), "triggered_reassessment_id": triggered}
 

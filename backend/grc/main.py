@@ -236,6 +236,10 @@ app.include_router(framework_templates_router)
 app.include_router(vuln_management_router)
 app.include_router(chatbot_router)
 app.include_router(vendor_risk_router)
+# Thomson Reuters / LSEG data-provider connections (World-Check One, CLEAR,
+# Regulatory Intelligence). Own /tr-integrations prefix — additive, no overlap.
+from .integrations_tr.router import router as tr_integrations_router  # noqa: E402
+app.include_router(tr_integrations_router)
 # Business Continuity Management — unique /bcm prefix, order-independent.
 app.include_router(bcm_router)
 app.include_router(auditor_portal_router)

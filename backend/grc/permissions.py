@@ -525,6 +525,21 @@ PERMISSION_MATRIX = [
                 "name": "templates",
                 "display_name": "Questionnaire Templates",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "screening",
+                "display_name": "Sanctions / PEP Screening (World-Check One)",
+                "actions": ["view", "run", "resolve"]
+            },
+            {
+                "name": "enrichment",
+                "display_name": "Due-Diligence Enrichment (CLEAR)",
+                "actions": ["view", "run"]
+            },
+            {
+                "name": "integrations",
+                "display_name": "Data Provider Connections",
+                "actions": ["view", "manage"]
             }
         ]
     }

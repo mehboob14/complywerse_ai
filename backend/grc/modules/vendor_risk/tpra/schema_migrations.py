@@ -27,6 +27,10 @@ _TPRA_ADDS = [
     ("grc_tpra_monitoring_signals", "acknowledged_at", "TIMESTAMP"),
     ("grc_tpra_monitoring_signals", "row_version", "INTEGER"),
     ("grc_tpra_monitoring_signals", "deleted_at", "TIMESTAMP"),
+    # Thomson Reuters / LSEG live-feed provenance (also in compliance _COLUMN_ADDS).
+    ("grc_tpra_monitoring_signals", "external_id", "VARCHAR(200)"),
+    ("grc_tpra_monitoring_signals", "source_ref", "JSON"),
+    ("grc_tpra_monitoring_signals", "simulated", "BOOLEAN"),
 ]
 
 

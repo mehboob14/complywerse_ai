@@ -335,6 +335,11 @@ class TPRAMonitoringSignal(Base):
     acknowledged = Column(Boolean, default=False)
     acknowledged_by = Column(Integer, nullable=True)      # who cleared the signal
     acknowledged_at = Column(DateTime, nullable=True)     # when it was cleared
+    # Live-feed provenance (Thomson Reuters / LSEG integration). `external_id` is the
+    # provider event key used to dedup repeated polls; NULL for manually-logged signals.
+    external_id = Column(String(200), nullable=True, index=True)
+    source_ref = Column(JSON, nullable=True)              # e.g. {match_id, subject_id}
+    simulated = Column(Boolean, default=False)            # produced by a simulated provider
     row_version = Column(Integer, default=1)
     deleted_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -1,29 +1,22 @@
-"""Continuous-monitoring connector framework (extension point / scaffolding).
+"""Continuous-monitoring connector framework.
 
-TPRA monitoring signals are entered MANUALLY today. This module is the seam for
-LIVE outside-in feeds — BitSight / SecurityScorecard / UpGuard security ratings,
-breach & adverse-media monitoring, financial-health, and certificate expiry — so a
-provider can be plugged in without touching signal ingest or the reassessment
-trigger.
+Monitoring signals can be entered MANUALLY, and live outside-in feeds plug in
+here: a ``MonitoringConnector`` polls its provider for a tenant and returns
+``SignalDraft`` rows, which ``run_connectors`` ingests through the SAME
+``service.ingest_signal`` path as manual entry (dedup by ``external_id``, then the
+existing ``should_trigger_reassessment`` + in-flight debounce).
 
-To add a real feed:
-  1. Subclass ``MonitoringConnector`` and implement ``poll(db, tenant_id)`` against
-     the provider API (read credentials from env or a tenant secret store), returning
-     a list of ``SignalDraft``.
-  2. Register the instance in ``CONNECTORS`` (e.g. ``CONNECTORS.append(BitSightConnector())``).
-  3. The ``poll_monitoring_connectors_sweep`` Celery beat task ingests the drafts on a
-     schedule, dedups by ``external_id``, writes ``TPRAMonitoringSignal`` rows, and
-     fires the existing ``should_trigger_reassessment`` path.
-
-Until a provider + credentials are configured, ``CONNECTORS`` is empty and monitoring
-stays MANUAL (the UI is labelled accordingly). Full row-ingestion + external_id dedup
-lands with the first real provider (needs an additive ``external_id`` column via
-``schema_migrations._TPRA_ADDS``).
+Connectors are tenant-aware: ``is_configured(db, tenant_id)`` is true only when
+that tenant has an active connection (credentials are per tenant). The built-in
+World-Check One (LSEG) ongoing-screening connector is registered lazily by
+``_ensure_builtin_connectors``. The ``poll_monitoring_connectors_sweep`` Celery
+beat task runs this every 6 hours.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy.orm import Session
@@ -42,6 +35,9 @@ class SignalDraft:
     detail: Optional[str] = None
     source: Optional[str] = None      # provider name, e.g. "BitSight"
     external_id: Optional[str] = None  # provider event id — dedup key for ingest
+    occurred_at: Optional[datetime] = None
+    source_ref: Optional[dict] = None  # e.g. {"match_id": 12, "subject_id": 3}
+    simulated: bool = False            # produced by a simulated provider
 
 
 class MonitoringConnector:
@@ -50,45 +46,100 @@ class MonitoringConnector:
     provider: str = "base"
     requires_credentials: bool = True
 
-    def is_configured(self) -> bool:
-        """True only when credentials/config are present. Real connectors check env
-        or a tenant secret store; the base is never configured (manual monitoring)."""
+    def is_configured(self, db: Optional[Session] = None, tenant_id: Optional[int] = None) -> bool:
+        """True only when this tenant has credentials/config for the feed. The base
+        is never configured (manual monitoring)."""
         return False
 
     def poll(self, db: Session, tenant_id: int) -> List[SignalDraft]:  # pragma: no cover
         raise NotImplementedError
 
 
-# Registered live connectors — EMPTY until a provider + credentials are wired in.
-# Adding one here (and its is_configured/poll) is all that's needed to go from
-# manual monitoring to a live feed.
+# Registered live connectors. Built-ins are appended by _ensure_builtin_connectors;
+# CONNECTORS.append(MyConnector()) still works for additional feeds.
 CONNECTORS: List[MonitoringConnector] = []
+_BUILTINS_LOADED = False
 
 
-def any_connector_configured() -> bool:
+def _ensure_builtin_connectors() -> None:
+    global _BUILTINS_LOADED
+    if _BUILTINS_LOADED:
+        return
+    _BUILTINS_LOADED = True
+    try:
+        from .screening import WorldCheckOneConnector
+        if not any(c.provider == WorldCheckOneConnector.provider for c in CONNECTORS):
+            CONNECTORS.append(WorldCheckOneConnector())
+    except ImportError:
+        logger.debug("built-in monitoring connectors unavailable")
+    except Exception:  # noqa: BLE001 — a broken optional feed must not break monitoring
+        logger.exception("failed to register built-in monitoring connectors")
+
+
+def any_connector_configured(db: Optional[Session] = None, tenant_id: Optional[int] = None) -> bool:
     """Whether at least one live monitoring feed is configured (drives the honest
     'Manual monitoring' vs 'Continuous monitoring' labelling)."""
-    return any(c.is_configured() for c in CONNECTORS)
+    _ensure_builtin_connectors()
+    for c in CONNECTORS:
+        try:
+            if c.is_configured(db, tenant_id):
+                return True
+        except Exception:  # noqa: BLE001
+            logger.exception("monitoring connector %s is_configured failed", c.provider)
+    return False
+
+
+def ingest_drafts(db: Session, tenant_id: int, drafts: List[SignalDraft]) -> dict:
+    """Persist drafts via service.ingest_signal. Returns counts. Caller commits."""
+    from ....models import Vendor
+    from . import service
+
+    created = duplicates = skipped = 0
+    for d in drafts:
+        vendor = db.query(Vendor).filter(
+            Vendor.id == d.vendor_id, Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None),
+        ).first()
+        if vendor is None:
+            skipped += 1
+            continue
+        _sig, _trig, was_created = service.ingest_signal(
+            db, vendor, signal_type=d.signal_type, severity=d.severity, source=d.source,
+            title=d.title, detail=d.detail, occurred_at=d.occurred_at, actor_id=None,
+            external_id=d.external_id, source_ref=d.source_ref, simulated=d.simulated,
+        )
+        if was_created:
+            created += 1
+        else:
+            duplicates += 1
+    return {"created": created, "duplicates": duplicates, "skipped": skipped}
 
 
 def run_connectors(db: Session, tenant_id: int) -> dict:
     """Poll every configured connector for a tenant and ingest its signal drafts.
-
-    A no-op while ``CONNECTORS`` is empty. When a real provider is registered, this
-    is where each draft is deduped by ``external_id`` and turned into a
-    ``TPRAMonitoringSignal`` (reusing the create-signal + reassessment-trigger path).
-    Failures in one connector never abort the sweep."""
-    ingested = 0
+    Failures in one connector never abort the sweep (its work is rolled back to a
+    savepoint so other connectors' signals still land)."""
+    _ensure_builtin_connectors()
+    ingested = duplicates = 0
+    errors: List[str] = []
     for c in CONNECTORS:
-        if not c.is_configured():
+        try:
+            if not c.is_configured(db, tenant_id):
+                continue
+        except Exception:  # noqa: BLE001
+            logger.exception("monitoring connector %s is_configured failed (tenant=%s)", c.provider, tenant_id)
             continue
+        nested = db.begin_nested()
         try:
             drafts = c.poll(db, tenant_id) or []
-        except Exception:  # noqa: BLE001 — a flaky feed must not break the sweep
+            counts = ingest_drafts(db, tenant_id, drafts)
+            nested.commit()
+        except Exception as exc:  # noqa: BLE001 — a flaky feed must not break the sweep
+            nested.rollback()
             logger.exception("monitoring connector %s poll failed (tenant=%s)", c.provider, tenant_id)
+            errors.append(f"{c.provider}: {exc.__class__.__name__}")
             continue
-        # Row-ingestion (dedup by external_id + create_signal + trigger) is added with
-        # the first live provider; counting here exercises the wiring end-to-end.
-        ingested += len(drafts)
-        logger.info("monitoring connector %s: %d draft(s) (tenant=%s)", c.provider, len(drafts), tenant_id)
-    return {"connectors": len(CONNECTORS), "ingested": ingested}
+        ingested += counts["created"]
+        duplicates += counts["duplicates"]
+        logger.info("monitoring connector %s: %d new signal(s), %d duplicate(s) (tenant=%s)",
+                    c.provider, counts["created"], counts["duplicates"], tenant_id)
+    return {"connectors": len(CONNECTORS), "ingested": ingested, "duplicates": duplicates, "errors": errors}

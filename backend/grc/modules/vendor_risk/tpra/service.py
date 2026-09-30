@@ -888,3 +888,78 @@ def ensure_active_assessment(db: Session, vendor: Vendor, actor_id: Optional[int
                 vendor_id=vendor.id, assessment_id=a.id, entity_id=a.id, actor_id=actor_id,
                 to_value=a.id, reason="initial assessment", extra={"version_no": 1})
     return a
+
+
+# ── Monitoring-signal ingest (shared by the manual route and live connectors) ─
+
+def ingest_signal(
+    db: Session, vendor: Vendor, *, signal_type: str, severity: Optional[str] = "medium",
+    source: Optional[str] = None, title: Optional[str] = None, detail: Optional[str] = None,
+    occurred_at: Optional[datetime] = None, actor_id: Optional[int] = None,
+    external_id: Optional[str] = None, source_ref: Optional[dict] = None, simulated: bool = False,
+) -> tuple:
+    """Create a monitoring signal and, when it qualifies, open (or attach to) a
+    reassessment. Returns ``(signal, triggered_assessment_id, created)``.
+
+    Extracted verbatim from ``POST /vendors/{id}/signals`` so manual entry and live
+    feeds behave identically. ``external_id`` (provider event key) dedups repeated
+    polls: an existing live signal with the same key is returned with created=False.
+    Caller owns the commit.
+    """
+    from .engine_monitoring import should_trigger_reassessment
+
+    if external_id:
+        existing = db.query(TPRAMonitoringSignal).filter(
+            TPRAMonitoringSignal.tenant_id == vendor.tenant_id,
+            TPRAMonitoringSignal.vendor_id == vendor.id,
+            TPRAMonitoringSignal.external_id == external_id,
+            TPRAMonitoringSignal.deleted_at.is_(None),
+        ).first()
+        if existing is not None:
+            return existing, existing.triggered_assessment_id, False
+
+    sig = TPRAMonitoringSignal(
+        tenant_id=vendor.tenant_id, vendor_id=vendor.id, signal_type=signal_type,
+        severity=severity or "medium", source=source, title=title, detail=detail,
+        occurred_at=occurred_at or datetime.utcnow(),
+    )
+    # Provenance columns are only set for live-feed signals, so a manual signal's
+    # INSERT is unchanged.
+    if external_id is not None:
+        sig.external_id = external_id
+    if source_ref is not None:
+        sig.source_ref = source_ref
+    if simulated:
+        sig.simulated = True
+    db.add(sig)
+    db.flush()
+    triggered = None
+    if should_trigger_reassessment(sig.signal_type, sig.severity):
+        # Dedup / debounce — if a reassessment is already IN FLIGHT (a superseding
+        # version already open in the diligence phase), attach this signal to it
+        # rather than superseding + restarting, which would discard in-flight
+        # progress and let a burst of signals spawn a storm of reassessments.
+        active = get_active_assessment(db, vendor)
+        _in_flight = (
+            active is not None
+            and (active.version_no or 1) > 1
+            and active.lifecycle_status == "active"
+            and active.current_stage not in ("monitoring", "reassessment")
+        )
+        if _in_flight:
+            sig.triggered_reassessment = True
+            sig.triggered_assessment_id = active.id
+            triggered = active.id
+        else:
+            new = create_reassessment_version(
+                db, vendor, actor_id=actor_id, reason=f"Auto-triggered by {sig.signal_type} signal",
+                triggered_signal=sig,
+            )
+            triggered = new.id
+    extra = {"triggered_assessment_id": triggered}
+    if external_id:
+        extra["external_id"] = external_id
+    write_audit(db, vendor.tenant_id, entity="signal", action="create",
+                vendor_id=vendor.id, entity_id=sig.id, actor_id=actor_id, to_value=signal_type,
+                extra=extra)
+    return sig, triggered, True

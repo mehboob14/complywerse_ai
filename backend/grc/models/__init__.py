@@ -28,6 +28,7 @@ from ._53_choke_point_models import *  # noqa: F401,F403 - CTEM choke-point anal
 from ._54_itsm_ticket_link_models import *  # noqa: F401,F403 - ITSM ticket links (Phase 5)
 from ._55_ai_control_proposal_models import *  # noqa: F401,F403 - AI control proposals (P5)
 from ._56_scf_catalog_models import *  # noqa: F401,F403 - SCF canonical catalog + tenant overlay
+from ._57_tr_integration_models import *  # noqa: F401,F403 - Thomson Reuters / LSEG data providers (WC1, CLEAR, TRRI)
 from ._pentest_scan_jobs import PentestScanJob  # noqa: F401 - pentest live scan jobs (M2)
 from ._pentest_exploit_results import PentestExploitResult  # noqa: F401 - pentest persisted exploit results (M2)
 from ._pentest_event_log import PentestEventLog  # noqa: F401 - AVA/GRC pentest all-stage event log
