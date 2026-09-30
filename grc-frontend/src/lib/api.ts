@@ -2426,6 +2426,64 @@ export const tpraApi = {
   deleteSignal: (signalId: number) => apiClient.delete(`/vendor-risk/tpra/signals/${signalId}`),
 };
 
+// ── Thomson Reuters / LSEG data providers (World-Check One, CLEAR, Regulatory
+// Intelligence). Connections are per tenant; secrets are write-only.
+export type TrProvider = 'lseg_world_check_one' | 'tr_clear' | 'tr_regulatory_intelligence';
+
+export const trDataApi = {
+  // Connections (TPRM → Settings → Data providers)
+  listConnections: (module?: 'tprm' | 'governance') =>
+    apiClient.get('/tr-integrations/connections', { params: module ? { module } : {} }),
+  getConnection: (provider: TrProvider) => apiClient.get(`/tr-integrations/connections/${provider}`),
+  saveConnection: (provider: TrProvider, data: {
+    mode?: 'simulated' | 'live'; name?: string; base_url?: string;
+    credentials?: Record<string, string>; clear_credentials?: string[];
+    config?: Record<string, unknown>; is_active?: boolean;
+  }) => apiClient.put(`/tr-integrations/connections/${provider}`, data),
+  testConnection: (provider: TrProvider) => apiClient.post(`/tr-integrations/connections/${provider}/test`),
+  wc1Groups: () => apiClient.get('/tr-integrations/connections/lseg_world_check_one/wc1/groups'),
+
+  // Key people
+  listPeople: (vendorId: number, includeDeleted = false) =>
+    apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/people`, { params: { include_deleted: includeDeleted } }),
+  createPerson: (vendorId: number, data: Record<string, unknown>) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/people`, data),
+  updatePerson: (personId: number, data: Record<string, unknown>) =>
+    apiClient.put(`/vendor-risk/tpra/people/${personId}`, data),
+  deletePerson: (personId: number) => apiClient.delete(`/vendor-risk/tpra/people/${personId}`),
+  restorePerson: (personId: number) => apiClient.post(`/vendor-risk/tpra/people/${personId}/restore`),
+
+  // World-Check One screening
+  vendorScreening: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/screening`),
+  runScreening: (vendorId: number, subjectIds?: number[]) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/screening/run`, { subject_ids: subjectIds }),
+  setOngoing: (vendorId: number, enabled: boolean, subjectIds?: number[]) =>
+    apiClient.put(`/vendor-risk/tpra/vendors/${vendorId}/screening/ongoing`, { enabled, subject_ids: subjectIds }),
+  screeningQueue: (params?: {
+    resolution_status?: string; hit_class?: string; vendor_id?: number; sync_status?: string;
+    skip?: number; limit?: number;
+  }) => apiClient.get('/vendor-risk/tpra/screening/matches', { params: params || {} }),
+  screeningSummary: () => apiClient.get('/vendor-risk/tpra/screening/summary'),
+  getMatch: (matchId: number, profile = false) =>
+    apiClient.get(`/vendor-risk/tpra/screening/matches/${matchId}`, { params: { profile } }),
+  resolutionOptions: () => apiClient.get('/vendor-risk/tpra/screening/resolution-options'),
+  resolveMatch: (matchId: number, data: {
+    status: string; risk_level?: string; reason?: string; remark?: string; row_version?: number;
+  }) => apiClient.put(`/vendor-risk/tpra/screening/matches/${matchId}/resolution`, data),
+  retrySync: (matchId: number) => apiClient.post(`/vendor-risk/tpra/screening/matches/${matchId}/sync`),
+  liveFeeds: () => apiClient.get('/vendor-risk/tpra/monitoring/live-feeds'),
+
+  // CLEAR enrichment
+  vendorEnrichment: (vendorId: number) => apiClient.get(`/vendor-risk/tpra/vendors/${vendorId}/enrichment`),
+  clearSearch: (vendorId: number, data: { person_id?: number; name?: string; glb_purpose?: string; dppa_purpose?: string }) =>
+    apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/enrichment/clear/search`, data),
+  clearReport: (vendorId: number, data: {
+    candidate_id: string; person_id?: number; entity_name?: string; glb_purpose?: string; dppa_purpose?: string;
+  }) => apiClient.post(`/vendor-risk/tpra/vendors/${vendorId}/enrichment/clear/report`, data),
+  raiseFlagFinding: (reportId: number, flagKey: string, severity?: string) =>
+    apiClient.post(`/vendor-risk/tpra/enrichment/${reportId}/flags/${flagKey}/finding`, { severity }),
+};
+
 // ── Tenant artifacts (documents) — the same store the compliance ArtifactsTab uses.
 // Reused by the TPRA lifecycle by namespacing framework_key = `tpra-vendor-{id}`.
 export const artifactsApi = {

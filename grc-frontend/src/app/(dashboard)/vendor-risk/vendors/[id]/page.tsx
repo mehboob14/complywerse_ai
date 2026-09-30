@@ -24,6 +24,7 @@ import {
 import Link from 'next/link';
 import { MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import TpraLifecycle from './_tpra/TpraLifecycle';
+import ScreeningPanel from './_tpra/ScreeningPanel';
 
 interface Vendor {
   id: number;
@@ -146,7 +147,7 @@ const getSeverityBadge = (severity: string) => {
   return styles[severity?.toLowerCase()] || 'bg-slate-50 text-slate-700 border border-slate-200';
 };
 
-type TabType = 'lifecycle' | 'overview' | 'assessments' | 'sla' | 'incidents';
+type TabType = 'lifecycle' | 'screening' | 'overview' | 'assessments' | 'sla' | 'incidents';
 
 const TIER_OPTIONS = ['critical', 'high', 'medium', 'low'];
 const STATUS_OPTIONS = ['active', 'under_review', 'onboarding', 'offboarded', 'suspended'];
@@ -179,14 +180,19 @@ export default function VendorDetailPage() {
   const deepLinkStage = searchParams?.get('stage') || null;
   const deepLinkFindingRaw = searchParams?.get('finding');
   const deepLinkFinding = deepLinkFindingRaw && !Number.isNaN(Number(deepLinkFindingRaw)) ? Number(deepLinkFindingRaw) : null;
+  const deepLinkTab = searchParams?.get('tab') || null;
   const deepLinkApplied = useRef(false);
   useEffect(() => {
     if (deepLinkApplied.current) return;
     if (deepLinkStage || deepLinkFinding != null) {
       setActiveTab('lifecycle');
       deepLinkApplied.current = true;
+    } else if (deepLinkTab === 'screening') {
+      // ?tab=screening — from the portfolio Screening queue / monitoring signals.
+      setActiveTab('screening');
+      deepLinkApplied.current = true;
     }
-  }, [deepLinkStage, deepLinkFinding]);
+  }, [deepLinkStage, deepLinkFinding, deepLinkTab]);
   const [showEditModal, setShowEditModal] = useState(false);
   const [showAssessmentModal, setShowAssessmentModal] = useState(false);
   const [showIncidentModal, setShowIncidentModal] = useState(false);
@@ -301,6 +307,7 @@ export default function VendorDetailPage() {
 
   const tabs: { key: TabType; label: string; count?: number }[] = [
     { key: 'lifecycle', label: 'Lifecycle' },
+    { key: 'screening', label: 'Screening' },
     { key: 'overview', label: 'Overview' },
     { key: 'assessments', label: 'Assessments', count: vendor.assessments_count },
     { key: 'sla', label: 'SLA Tracking', count: vendor.sla_records_count },
@@ -435,6 +442,13 @@ export default function VendorDetailPage() {
             initialFindingId={deepLinkFinding}
             onChanged={() => queryClient.invalidateQueries({ queryKey: ['vendor', vendorId] })}
           />
+        </div>
+      )}
+
+      {/* Screening Tab — key people, World-Check One screening, CLEAR enrichment */}
+      {activeTab === 'screening' && (
+        <div role="tabpanel" id="vendor-tabpanel-screening" aria-labelledby="vendor-tab-screening" tabIndex={0} className="focus:outline-none">
+          <ScreeningPanel vendorId={vendorId} />
         </div>
       )}
 

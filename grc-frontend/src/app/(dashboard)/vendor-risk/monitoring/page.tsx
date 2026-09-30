@@ -9,7 +9,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Radio, AlertCircle, ChevronLeft, ChevronRight, RefreshCw, BellRing, Check, Loader2, ArrowUpRight, ArrowDownWideNarrow, Clock } from 'lucide-react';
-import { tpraApi } from '@/lib/api';
+import { tpraApi, trDataApi } from '@/lib/api';
 import { PageLoader } from '@/components/ui';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -20,9 +20,12 @@ interface Signal {
   id: number; vendor_id: number; vendor_name: string | null; signal_type: string;
   severity: string; title: string | null; source: string | null; detail: string | null;
   occurred_at: string | null; acknowledged: boolean; triggered_reassessment: boolean;
+  simulated?: boolean;
 }
 const PAGE = 25;
-const TYPES = ['security_rating', 'breach', 'adverse_media', 'financial', 'sla', 'cert_expiry'];
+const TYPES = ['security_rating', 'breach', 'adverse_media', 'financial', 'sla', 'cert_expiry',
+  // World-Check One (LSEG) ongoing screening
+  'sanctions', 'pep', 'law_enforcement', 'watchlist'];
 // Lower index = more severe. Drives the severity-first sort.
 const SEV_RANK: Record<string, number> = { critical: 0, high: 1, medium: 2, low: 3, info: 4 };
 
@@ -53,6 +56,14 @@ export default function MonitoringFeedPage() {
     placeholderData: keepPreviousData,
     ...TPRM_QUERY_OPTS,
   });
+
+  // Which live feeds are connected — keeps the page subtitle honest.
+  const { data: feeds } = useQuery({
+    queryKey: ['tprm-live-feeds'],
+    queryFn: async () => (await trDataApi.liveFeeds()).data as { any_configured: boolean; items: { provider: string; configured: boolean; mode: string | null }[] },
+    ...TPRM_QUERY_OPTS,
+  });
+  const wc1Feed = feeds?.items.find((f) => f.provider === 'lseg_world_check_one' && f.configured);
 
   // Acknowledge — same update-signal endpoint the per-vendor SignalsPanel uses
   // (tpraApi.updateSignal). The portfolio feed doesn't surface row_version, so we
@@ -91,7 +102,11 @@ export default function MonitoringFeedPage() {
     <div className="space-y-4">
       <div>
         <h1 className="text-lg font-semibold text-slate-900">Monitoring Signals</h1>
-        <p className="text-sm text-slate-500">Manually-logged signals for now — connect a ratings feed (BitSight / SecurityScorecard / UpGuard) to refresh automatically.</p>
+        <p className="text-sm text-slate-500">
+          {wc1Feed
+            ? <>World-Check One ongoing screening feeds new sanctions / PEP / adverse-media matches here automatically{wc1Feed.mode === 'simulated' ? ' (simulated mode)' : ''}, alongside manually-logged signals.</>
+            : <>Manually-logged signals for now — connect a live feed (e.g. World-Check One ongoing screening under Settings → Data providers) to refresh automatically.</>}
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-2.5">
@@ -153,7 +168,10 @@ export default function MonitoringFeedPage() {
         <div className={`overflow-hidden rounded-xl border border-gray-200 bg-white ${isFetching ? 'opacity-70' : ''}`}>
           <div className="divide-y divide-gray-100">
             {items.map((s) => {
-              const goToVendor = () => router.push(`/vendor-risk/vendors/${s.vendor_id}`);
+              // World-Check One screening signals land on the vendor's Screening tab.
+              const screeningSignal = ['sanctions', 'pep', 'law_enforcement', 'watchlist'].includes(s.signal_type)
+                || (s.signal_type === 'adverse_media' && (s.source || '').startsWith('World-Check'));
+              const goToVendor = () => router.push(`/vendor-risk/vendors/${s.vendor_id}${screeningSignal ? '?tab=screening' : ''}`);
               return (
                 <div key={s.id} className="flex items-start gap-3 px-4 py-3 hover:bg-gray-50">
                   <span className="mt-1.5 h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: SEV_HEX[s.severity] || '#94a3b8' }} aria-hidden="true" />
@@ -166,6 +184,9 @@ export default function MonitoringFeedPage() {
                       </button>
                       <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${sevBadgeCls(s.severity)}`}>{titleCase(s.severity)} severity</span>
                       <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600">{titleCase(s.signal_type)}</span>
+                      {s.simulated && (
+                        <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700" title="From the simulated provider — not real screening data">Simulated</span>
+                      )}
                       {s.triggered_reassessment && (
                         <span className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700"><RefreshCw className="h-3 w-3" strokeWidth={1.75} /> reassessment</span>
                       )}

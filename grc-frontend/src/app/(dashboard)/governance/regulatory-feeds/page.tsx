@@ -108,7 +108,18 @@ interface FeedItem {
   regulatory_change_id: number | null;
   processed_at: string | null;
   created_at: string;
+  // Thomson Reuters Regulatory Intelligence items carry provider metadata.
+  external_metadata?: {
+    jurisdiction?: string[]; regulator?: string[]; topics?: string[];
+    document_type?: string | null; effective_date?: string | null; simulated?: boolean;
+  } | null;
 }
+
+// Thomson Reuters Regulatory Intelligence source type (connection is configured
+// under Vendor Risk → Settings → Data providers).
+const TRRI_TYPE = 'tr_regulatory_intelligence';
+const TRRI_DEFAULT_URL = 'https://api.thomsonreuters.com/regulatory-intelligence/v1';
+const splitList = (v: string) => v.split(',').map((x) => x.trim()).filter(Boolean);
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   new: { bg: 'bg-blue-500/20', text: 'text-blue-400', label: 'New' },
@@ -150,6 +161,9 @@ export default function RegulatoryFeedsPage() {
     country: '',
     category: 'general',
     poll_interval_hours: 24,
+    ri_jurisdictions: '',
+    ri_regulators: '',
+    ri_topics: '',
   });
   const queryClient = useQueryClient();
   const { hasPermission, hasAnyPermission, isAdmin } = usePermissions();
@@ -252,7 +266,13 @@ export default function RegulatoryFeedsPage() {
 
   const createFeedMutation = useMutation({
     mutationFn: async (feedData: typeof newFeed) => {
-      const response = await apiClient.post('/governance/regulatory-feeds/sources', feedData);
+      const { ri_jurisdictions, ri_regulators, ri_topics, ...base } = feedData;
+      const payload = base.source_type === TRRI_TYPE
+        ? { ...base, provider_query: {
+            jurisdictions: splitList(ri_jurisdictions), regulators: splitList(ri_regulators), topics: splitList(ri_topics),
+          } }
+        : base;
+      const response = await apiClient.post('/governance/regulatory-feeds/sources', payload);
       return response.data;
     },
     onSuccess: () => {
@@ -266,6 +286,9 @@ export default function RegulatoryFeedsPage() {
         country: '',
         category: 'general',
         poll_interval_hours: 24,
+        ri_jurisdictions: '',
+        ri_regulators: '',
+        ri_topics: '',
       });
     },
   });
@@ -701,8 +724,8 @@ export default function RegulatoryFeedsPage() {
                   const isExpanded = expandedItems.has(item.id);
 
                   return (
-                    <>
-                      <tr key={item.id} className="cursor-pointer hover:bg-white/50">
+                    <Fragment key={item.id}>
+                      <tr className="cursor-pointer hover:bg-white/50">
                         <td onClick={() => toggleItemExpanded(item.id)}>
                           {isExpanded ? (
                             <ChevronDown className="h-4 w-4 text-gray-600" />
@@ -729,6 +752,21 @@ export default function RegulatoryFeedsPage() {
                             <p className="text-xs text-gray-700 mt-1 line-clamp-2">
                               {getItemDescription(item)}
                             </p>
+                            {item.external_metadata && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {item.external_metadata.simulated && (
+                                  <span className="rounded border border-violet-200 bg-violet-50 px-1.5 text-[10px] font-semibold uppercase text-violet-700">Simulated</span>
+                                )}
+                                {[...(item.external_metadata.jurisdiction || []), ...(item.external_metadata.regulator || []),
+                                  ...(item.external_metadata.document_type ? [item.external_metadata.document_type] : [])]
+                                  .slice(0, 4).map((chip) => (
+                                    <span key={chip} className="rounded bg-gray-100 px-1.5 text-[10px] text-gray-700">{chip}</span>
+                                  ))}
+                                {item.external_metadata.effective_date && (
+                                  <span className="rounded bg-gray-100 px-1.5 text-[10px] text-gray-700">Effective {item.external_metadata.effective_date}</span>
+                                )}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td>
@@ -915,7 +953,7 @@ export default function RegulatoryFeedsPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
                   );
                 })
               )}
@@ -975,6 +1013,49 @@ export default function RegulatoryFeedsPage() {
             />
           </div>
           <div>
+            <label className="block text-sm font-medium text-gray-800 mb-1" htmlFor="feed-source-kind">
+              Source
+            </label>
+            <select
+              id="feed-source-kind"
+              value={newFeed.source_type === TRRI_TYPE ? TRRI_TYPE : 'rss'}
+              onChange={(e) => {
+                const isRi = e.target.value === TRRI_TYPE;
+                setNewFeed({
+                  ...newFeed,
+                  source_type: isRi ? TRRI_TYPE : 'rss',
+                  source_url: isRi ? TRRI_DEFAULT_URL : '',
+                  regulator: isRi && !newFeed.regulator ? 'Multiple (Thomson Reuters)' : newFeed.regulator,
+                });
+              }}
+              className="input w-full"
+            >
+              <option value="rss">RSS / Atom feed</option>
+              <option value={TRRI_TYPE}>Thomson Reuters Regulatory Intelligence</option>
+            </select>
+          </div>
+          {newFeed.source_type === TRRI_TYPE ? (
+            <div className="space-y-3 rounded-lg border border-gray-200 p-3">
+              <p className="text-xs text-gray-600">
+                Pulls regulatory documents through your organisation&apos;s Regulatory Intelligence connection
+                (Vendor Risk → Settings → Data providers; simulated mode available). New items flow into the list
+                below for AI analysis and conversion into Regulatory Changes.
+              </p>
+              {[
+                { key: 'ri_jurisdictions' as const, label: 'Jurisdictions', ph: 'e.g. United Kingdom, European Union' },
+                { key: 'ri_regulators' as const, label: 'Regulators', ph: 'e.g. FCA, EBA (optional)' },
+                { key: 'ri_topics' as const, label: 'Topics', ph: 'e.g. Outsourcing, Operational resilience (optional)' },
+              ].map((f) => (
+                <div key={f.key}>
+                  <label className="block text-sm font-medium text-gray-800 mb-1" htmlFor={`ri-${f.key}`}>{f.label}</label>
+                  <input id={`ri-${f.key}`} type="text" value={newFeed[f.key]} placeholder={f.ph} className="input w-full"
+                    onChange={(e) => setNewFeed({ ...newFeed, [f.key]: e.target.value })} />
+                </div>
+              ))}
+              <p className="text-[11px] text-gray-500">Comma-separated. Leave blank to receive everything your subscription covers.</p>
+            </div>
+          ) : (
+          <div>
             <label className="block text-sm font-medium text-gray-800 mb-1">
               RSS Feed URL *
             </label>
@@ -987,6 +1068,7 @@ export default function RegulatoryFeedsPage() {
               placeholder="https://example.com/rss/feed.xml"
             />
           </div>
+          )}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="block text-sm font-medium text-gray-800 mb-1">

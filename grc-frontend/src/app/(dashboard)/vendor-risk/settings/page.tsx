@@ -12,6 +12,7 @@ import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
+import DataProviders from './_DataProviders';
 
 interface ConfigResp {
   weights: Record<string, number>;
@@ -169,7 +170,12 @@ export default function VendorRiskSettingsPage() {
         </div>
       </section>
 
-      <p className="text-[11px] text-gray-400">Integrations &amp; template defaults are managed elsewhere; questionnaire templates live under the Questionnaires tab.</p>
+      {/* Thomson Reuters / LSEG data providers (World-Check One, CLEAR, Regulatory Intelligence) */}
+      <div id="data-providers" className="scroll-mt-4">
+        <DataProviders />
+      </div>
+
+      <p className="text-[11px] text-gray-400">Scanner integrations &amp; template defaults are managed elsewhere; questionnaire templates live under the Questionnaires tab.</p>
     </div>
   );
 }
