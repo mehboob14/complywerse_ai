@@ -9,6 +9,7 @@ from .routers import (
 )
 from .tpra.api import router as tpra_router
 from .tpra.dashboard import router as tpra_dashboard_router
+from .tpra.screening_api import router as tpra_screening_router
 
 router = APIRouter(prefix="/vendor-risk", tags=["Vendor Risk Management"])
 
@@ -23,6 +24,9 @@ router.include_router(lifecycle_router)
 router.include_router(tpra_router)
 # Program dashboard + risk-trend (read-only aggregation over TPRA tables + snapshots).
 router.include_router(tpra_dashboard_router)
+# World-Check One (LSEG) screening of vendors + key people (Thomson Reuters / LSEG
+# integration). New paths only under /vendor-risk/tpra — additive.
+router.include_router(tpra_screening_router)
 
 
 @router.get("")

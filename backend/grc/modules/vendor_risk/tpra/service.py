@@ -367,7 +367,20 @@ def advance_stage(
     write_audit(db, assessment.tenant_id, entity="stage", action="transition",
                 vendor_id=vendor.id, assessment_id=assessment.id, entity_id=cur.id if cur else None,
                 actor_id=actor_id, from_value=current_key, to_value=nxt_key or current_key, reason=note)
+    if nxt_key == "dd_planning":
+        _auto_screen(db, vendor, actor_id)
     return {"advanced": True, "from": current_key, "to": nxt_key or current_key, "blockers": []}
+
+
+def _auto_screen(db: Session, vendor: Vendor, actor_id: Optional[int]) -> None:
+    """World-Check One auto-screen on entering Due Diligence Planning (plan §6.1,
+    decision D). Savepoint-isolated inside screening.maybe_auto_screen; a no-op
+    unless the tenant enabled World-Check One with auto-screen on."""
+    try:
+        from .screening import maybe_auto_screen
+        maybe_auto_screen(db, vendor, actor_id=actor_id)
+    except Exception:  # noqa: BLE001 — never break a lifecycle transition
+        logger.warning("auto-screen hook failed for vendor %s", getattr(vendor, "id", "?"), exc_info=True)
 
 
 def record_gate_decision(
@@ -841,6 +854,9 @@ def create_reassessment_version(
     if triggered_signal is not None:
         triggered_signal.triggered_reassessment = True
         triggered_signal.triggered_assessment_id = new.id
+
+    # A reassessment re-enters Due Diligence Planning → re-screen (same hook).
+    _auto_screen(db, vendor, actor_id)
 
     write_audit(db, vendor.tenant_id, entity="assessment", action="create",
                 vendor_id=vendor.id, assessment_id=new.id, entity_id=new.id, actor_id=actor_id,

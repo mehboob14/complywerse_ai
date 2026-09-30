@@ -11,14 +11,15 @@ from typing import Dict, List
 from ..models import TR_PROVIDER_WC1, TR_PROVIDER_CLEAR, TR_PROVIDER_TRRI
 
 # Default mapping of a POSITIVE screening resolution → TPRA finding (decision Q6 /
-# plan §6.3). `blocking` marks the finding as a failed critical control, which the
-# existing gate engine turns into a findings/approval-gate blocker.
+# plan §6.3). As everywhere in TPRA, a CRITICAL finding is a failed critical control:
+# the existing gate engine (count_open_critical) blocks the findings + approval gates
+# on it, and enforce_critical_invariant suspends an already-onboarded vendor (G).
 DEFAULT_FINDING_MAP: Dict[str, dict] = {
-    "sanctions":       {"severity": "critical", "domain": "compliance",   "blocking": True},
-    "law_enforcement": {"severity": "high",     "domain": "compliance",   "blocking": False},
-    "pep":             {"severity": "high",     "domain": "compliance",   "blocking": False},
-    "adverse_media":   {"severity": "medium",   "domain": "reputational", "blocking": False},
-    "other":           {"severity": "medium",   "domain": "compliance",   "blocking": False},
+    "sanctions":       {"severity": "critical", "domain": "compliance"},
+    "law_enforcement": {"severity": "high",     "domain": "compliance"},
+    "pep":             {"severity": "high",     "domain": "compliance"},
+    "adverse_media":   {"severity": "medium",   "domain": "reputational"},
+    "other":           {"severity": "medium",   "domain": "compliance"},
 }
 
 # Monitoring-signal severity for a NEW ongoing-screening match, by hit class.
@@ -57,6 +58,9 @@ PROVIDERS: Dict[str, dict] = {
             _f("ongoing_screening_tiers", "Enable ongoing screening for tiers", "multiselect", required=False,
                options=[{"value": t, "label": t.title()} for t in ("critical", "high", "medium", "low")],
                default=["critical", "high"]),
+            _f("finding_map", "Positive match → finding mapping", "finding_map", required=False,
+               help_text="Severity and risk domain of the finding raised per hit class. A critical "
+                         "finding blocks the Findings and Approval gates."),
         ],
         "docs_url": "https://developers.lseg.com/en/api-catalog/customer-and-third-party-screening/world-check-one-api",
     },

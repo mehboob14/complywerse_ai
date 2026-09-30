@@ -184,3 +184,27 @@ def send_questionnaire_invite(self, tenant_slug: str, response_id: int,
         logger.warning("questionnaire invite NOT sent (email not configured?) response=%s: %s",
                        response_id, result.get("message"))
     return {"status": "sent" if result.get("success") else "not_configured", **result}
+
+
+# ── World-Check One screening (Thomson Reuters / LSEG integration) ───────────
+
+@celery_app.task(
+    base=TenantTask,
+    bind=True,
+    name="grc.tasks.tprm.screen_vendor_task",
+    queue="parsing",
+    max_retries=2,
+    default_retry_delay=300,
+)
+def screen_vendor_task(self, tenant_slug: str, vendor_id: int, actor_id: int = None, db: Session = None) -> dict:
+    """Screen a vendor + its key people against World-Check One (queued by the
+    auto-screen-at-Due-Diligence hook for LIVE connections)."""
+    from ..models import Vendor
+    from ..modules.vendor_risk.tpra.screening import screen_vendor
+
+    vendor = db.query(Vendor).filter(Vendor.id == vendor_id, Vendor.deleted_at.is_(None)).first()
+    if vendor is None:
+        return {"status": "skipped", "reason": "no_vendor"}
+    summary = screen_vendor(db, vendor, actor_id=actor_id, trigger="auto_dd_planning")
+    db.commit()
+    return {"status": "ok", **{k: v for k, v in summary.items() if k != "subjects"}}
