@@ -26,6 +26,12 @@ from .seed import DEMO_VENDOR_NAME
 
 # Child→parent order so plain DROPs work even without CASCADE.
 TPRA_TABLES = [
+    # Thomson Reuters / LSEG integration (children before parents).
+    "grc_tpra_screening_matches",
+    "grc_tpra_screening_subjects",
+    "grc_tpra_vendor_people",
+    "grc_tpra_enrichment_reports",
+    "grc_tr_provider_connections",
     "grc_tpra_shared_assessments",
     "grc_tpra_evidence_links",
     "grc_tpra_risk_snapshots",
@@ -61,6 +67,12 @@ ADDED_COLUMNS = [
     ("grc_vendor_assessments", "team_roster"),
     ("grc_tpra_findings", "linked_risk_id"),
     ("grc_tpra_findings", "linked_issue_id"),
+    # Thomson Reuters / LSEG integration
+    ("grc_tpra_monitoring_signals", "external_id"),
+    ("grc_tpra_monitoring_signals", "source_ref"),
+    ("grc_tpra_monitoring_signals", "simulated"),
+    ("grc_regulatory_feed_sources", "provider_query"),
+    ("grc_regulatory_feed_items", "external_metadata"),
 ]
 
 # Demo-only cleanup: tables that reference the demo vendor by vendor_id.
