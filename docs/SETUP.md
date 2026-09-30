@@ -525,6 +525,26 @@ All backend API routes are served under the `/grc` mount point. The frontend pro
 
 ---
 
+## Thomson Reuters / LSEG data providers
+
+World-Check One (LSEG) screening, Thomson Reuters CLEAR enrichment and Thomson
+Reuters Regulatory Intelligence are configured **per tenant** under
+**Vendor Risk → Settings → Data providers**. Design and decisions:
+[thomson-reuters-integration-plan.md](thomson-reuters-integration-plan.md).
+
+- **Simulated mode** (default) needs nothing — it makes no external calls and
+  labels everything it produces as SIMULATED.
+- **Live mode** requires `CONNECTOR_MASTER_KEY` in `backend/.env` (credentials are
+  Fernet-encrypted at rest; saving live credentials is refused without it), the
+  tenant's own provider credentials, and outbound HTTPS from the backend **and**
+  the Celery worker to the provider hosts.
+- Background work runs on the existing `parsing` queue + Celery beat:
+  World-Check One ongoing screening every 6 h (`tprm-monitoring-connector-poll`)
+  and Regulatory Intelligence feeds hourly (`regulatory-feeds-poll`; RSS stays
+  manual unless `REGULATORY_FEEDS_AUTO_POLL_RSS=1`).
+- New permissions to grant: `vendor_risk:screening:view|run|resolve`,
+  `vendor_risk:enrichment:view|run`, `vendor_risk:integrations:view|manage`.
+
 ## Proxy Configuration
 
 The Next.js frontend proxies all API calls to the FastAPI backend:
