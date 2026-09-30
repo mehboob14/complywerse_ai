@@ -439,3 +439,88 @@ def retry_failed_syncs(db: Session, tenant_id: int, limit: int = 200) -> int:
         TPRAScreeningMatch.tenant_id == tenant_id, TPRAScreeningMatch.sync_status.in_(("failed", "pending")),
     ).limit(limit).all()
     return sum(1 for m in rows if sync_resolution(db, m))
+
+
+# ── ongoing screening → monitoring signals (Phase 2) ─────────────────────────
+
+_SIGNAL_TYPE = {"sanctions": "sanctions", "pep": "pep", "law_enforcement": "law_enforcement",
+                "adverse_media": "adverse_media", "other": "watchlist"}
+_ONGOING_LOOKBACK = timedelta(days=7)
+
+
+def _signal_severity(m: TPRAScreeningMatch) -> str:
+    sev = SIGNAL_SEVERITY.get(m.hit_class, "low")
+    if m.hit_class == "adverse_media" and (m.match_strength or "") in ("STRONG", "EXACT"):
+        sev = "high"
+    return sev
+
+
+def poll_ongoing(db: Session, tenant_id: int) -> List[SignalDraft]:
+    """Pull ongoing-screening updates since the stored cursor, upsert the new
+    matches (first_seen_via='ongoing') and return one signal draft per NEW match.
+    Also retries resolution syncs that failed earlier. Provider failures are
+    recorded on the connection and yield no drafts (the sweep carries on)."""
+    conn = connections.get_connection(db, tenant_id, TR_PROVIDER_WC1)
+    if conn is None or not conn.is_active:
+        return []
+    client = registry.wc1_client(conn)
+    started = datetime.utcnow().replace(microsecond=0)
+    cursor = (conn.cache or {}).get("wc1_ongoing_cursor") or \
+        (started - _ONGOING_LOOKBACK).isoformat() + "Z"
+    drafts: List[SignalDraft] = []
+    try:
+        case_ids = client.ongoing_updates(cursor)
+        for cid in case_ids:
+            subjects = db.query(TPRAScreeningSubject).filter(
+                TPRAScreeningSubject.tenant_id == tenant_id, TPRAScreeningSubject.external_case_id == cid,
+                TPRAScreeningSubject.deleted_at.is_(None),
+            ).all()
+            if not subjects:
+                continue
+            results = client.get_results(cid)
+            for s in subjects:
+                created = _upsert_matches(db, s, results, client.simulated, "ongoing")
+                s.last_screened_at = datetime.utcnow()
+                _recompute_status(db, s)
+                for m in created:
+                    label = m.hit_class.replace("_", " ")
+                    drafts.append(SignalDraft(
+                        vendor_id=s.vendor_id, signal_type=_SIGNAL_TYPE.get(m.hit_class, "watchlist"),
+                        severity=_signal_severity(m),
+                        title=f"New {SOURCE_LABEL} {label} match — {s.submitted_name}"[:255],
+                        detail=(f"Ongoing screening matched '{m.matched_name or '—'}' "
+                                f"({m.match_strength or 'unknown strength'}; "
+                                f"{', '.join(m.categories or []) or 'no categories'}). "
+                                f"Resolve it in the vendor's Screening tab."),
+                        source=SOURCE_LABEL, external_id=f"wc1:{cid}:{m.external_result_id}",
+                        source_ref={"match_id": m.id, "subject_id": s.id}, simulated=bool(client.simulated),
+                        occurred_at=datetime.utcnow(),
+                    ))
+        retry_failed_syncs(db, tenant_id)
+    except (ProviderError, ValueError) as e:
+        connections.record_result(conn, False, f"Ongoing screening poll failed: {e}")
+        logger.warning("wc1 ongoing poll failed tenant=%s: %s", tenant_id, e)
+        return []
+    cache = dict(conn.cache or {})
+    cache["wc1_ongoing_cursor"] = started.isoformat() + "Z"
+    conn.cache = cache
+    connections.record_result(conn, True)
+    db.flush()
+    return drafts
+
+
+class WorldCheckOneConnector(MonitoringConnector):
+    """Registered in monitoring_connectors.CONNECTORS; polled every 6h by the
+    existing ``poll_monitoring_connectors_sweep`` beat task."""
+
+    provider = TR_PROVIDER_WC1
+    requires_credentials = True
+
+    def is_configured(self, db: Optional[Session] = None, tenant_id: Optional[int] = None) -> bool:
+        if db is None or tenant_id is None:
+            return False
+        conn = connections.get_connection(db, tenant_id, TR_PROVIDER_WC1)
+        return bool(conn is not None and conn.is_active)
+
+    def poll(self, db: Session, tenant_id: int) -> List[SignalDraft]:
+        return poll_ongoing(db, tenant_id)

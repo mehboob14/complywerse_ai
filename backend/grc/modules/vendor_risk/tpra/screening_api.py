@@ -441,3 +441,23 @@ def retry_sync(match_id: int, db: Session = Depends(get_db), user: GRCUser = Dep
     ok = screening.sync_resolution(db, m)
     db.commit()
     return {"synced": ok, "sync_status": m.sync_status, "sync_error": m.sync_error}
+
+
+@router.get("/monitoring/live-feeds")
+def live_feeds(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Which live monitoring feeds are connected for this tenant — drives the
+    honest 'manual' vs 'continuous' labelling on the Monitoring page."""
+    tids = _tids(user, db)
+    from .monitoring_connectors import CONNECTORS, _ensure_builtin_connectors
+    _ensure_builtin_connectors()
+    out = []
+    for c in CONNECTORS:
+        try:
+            configured = c.is_configured(db, tids[0])
+        except Exception:  # noqa: BLE001
+            configured = False
+        conn = connections.get_connection(db, tids[0], c.provider) if c.provider in (TR_PROVIDER_WC1,) else None
+        out.append({"provider": c.provider, "configured": bool(configured),
+                    "mode": conn.mode if conn else None, "last_success_at": conn.last_success_at if conn else None,
+                    "last_error": conn.last_error if conn else None})
+    return {"items": out, "any_configured": any(i["configured"] for i in out)}

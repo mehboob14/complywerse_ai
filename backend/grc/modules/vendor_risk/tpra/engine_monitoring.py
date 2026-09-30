@@ -10,8 +10,9 @@ from typing import Optional
 
 from .stages import cadence_days_for
 
-# Signal types that always warrant a reassessment regardless of severity.
-ALWAYS_TRIGGER_TYPES = {"breach"}
+# Signal types that always warrant a reassessment regardless of severity. A new
+# sanctions match (World-Check One ongoing screening) is treated like a breach.
+ALWAYS_TRIGGER_TYPES = {"breach", "sanctions"}
 # Severities that warrant a reassessment for any signal type.
 TRIGGER_SEVERITIES = {"high", "critical"}
 
