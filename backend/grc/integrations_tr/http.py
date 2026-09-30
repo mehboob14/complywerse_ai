@@ -85,7 +85,7 @@ def request(
     data: Optional[dict] = None,
     params: Optional[dict] = None,
     timeout: float = 30.0,
-    cert=None,
+    verify=True,
     limiter: Optional[RateLimiter] = None,
     limiter_key: str = "default",
     max_retries: int = 3,
@@ -100,7 +100,7 @@ def request(
             limiter.acquire(limiter_key, sleep=sleep)
         hdrs = headers() if callable(headers) else (headers or {})
         try:
-            with httpx.Client(timeout=timeout, cert=cert, transport=_TRANSPORT) as client:
+            with httpx.Client(timeout=timeout, verify=verify, transport=_TRANSPORT) as client:
                 resp = client.request(method, url, headers=hdrs, content=content, data=data, params=params)
         except (httpx.TimeoutException, httpx.TransportError) as exc:
             if attempt >= max_retries:

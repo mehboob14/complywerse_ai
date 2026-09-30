@@ -22,7 +22,8 @@ def wc1_client(conn):
 def clear_client(conn):
     if conn.mode == "live":
         from .clear import ClearClient
-        return ClearClient(connections.base_url(conn), connections.credentials(conn))
+        return ClearClient(connections.base_url(conn), connections.credentials(conn),
+                           connections.effective_config(conn))
     from .simulated_clear import SimulatedClearClient
     return SimulatedClearClient()
 

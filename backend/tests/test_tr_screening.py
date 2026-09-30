@@ -21,7 +21,7 @@ from grc.models import (
     TPRARiskAcceptance, TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
     TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink, TPRARiskSnapshot,
     TRProviderConnection, TPRAVendorPerson, TPRAScreeningSubject, TPRAScreeningMatch,
-    TR_PROVIDER_WC1,
+    TPRAEnrichmentReport, TR_PROVIDER_WC1,
 )
 from grc.integrations_tr import connections, http as trhttp
 from grc.modules.vendor_risk.tpra import service, screening, screening_api
@@ -33,6 +33,7 @@ _TABLES = [
     TPRARiskAcceptance, TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
     TPRAAuditLog, TPRATieringConfig, TPRARiskDomain, TPRAEvidenceLink, TPRARiskSnapshot,
     TRProviderConnection, TPRAVendorPerson, TPRAScreeningSubject, TPRAScreeningMatch,
+    TPRAEnrichmentReport,
 ]
 
 

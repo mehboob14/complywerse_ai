@@ -84,6 +84,10 @@ PROVIDERS: Dict[str, dict] = {
         "config_fields": [
             _f("default_glb_purpose", "Default GLB permissible purpose", required=False),
             _f("default_dppa_purpose", "Default DPPA permissible purpose", required=False),
+            _f("search_path", "Search endpoint path", required=False, default="/v3/business/searchResults",
+               help_text="From your CLEAR S2S guide (UNVERIFIED default)."),
+            _f("report_path", "Report endpoint path", required=False, default="/v3/business/reportResults",
+               help_text="From your CLEAR S2S guide (UNVERIFIED default)."),
         ],
         "docs_url": "https://developerportal.thomsonreuters.com/clear-system-system",
     },

@@ -461,3 +461,115 @@ def live_feeds(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
                     "mode": conn.mode if conn else None, "last_success_at": conn.last_success_at if conn else None,
                     "last_error": conn.last_error if conn else None})
     return {"items": out, "any_configured": any(i["configured"] for i in out)}
+
+
+# ── CLEAR due-diligence enrichment (Phase 4) ─────────────────────────────────
+
+from . import enrichment  # noqa: E402
+from ....models import TPRAEnrichmentReport, TR_PROVIDER_CLEAR  # noqa: E402
+
+_ENRICH_VIEW = ["vendor_risk:enrichment:view", "vendor_risk:enrichment:run", "erm:risks:edit"]
+
+
+def s_report(r: TPRAEnrichmentReport) -> dict:
+    return {
+        "id": r.id, "vendor_id": r.vendor_id, "person_id": r.person_id, "entity_name": r.entity_name,
+        "external_report_id": r.external_report_id, "permissible_purpose": r.permissible_purpose or {},
+        "risk_score": r.risk_score, "flags": r.flags or [], "summary": r.summary or {},
+        "requested_by": r.requested_by, "fetched_at": r.fetched_at, "simulated": bool(r.simulated),
+    }
+
+
+def _enrich_http(e: Exception) -> HTTPException:
+    if isinstance(e, connections.NotConfigured):
+        return HTTPException(status.HTTP_409_CONFLICT, str(e))
+    if isinstance(e, enrichment.EnrichmentError):
+        return HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    return HTTPException(status.HTTP_502_BAD_GATEWAY, f"CLEAR: {e}")
+
+
+@router.get("/vendors/{vendor_id}/enrichment")
+def vendor_enrichment(vendor_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    v = _vendor(db, vendor_id, tids)
+    if not rbac.user_has_any_permission(db, user, _ENRICH_VIEW):
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Permission denied — requires vendor_risk:enrichment:view")
+    c = connections.get_connection(db, v.tenant_id, TR_PROVIDER_CLEAR)
+    cfg = connections.effective_config(c) if c else {}
+    return {
+        "connection": {"configured": c is not None, "active": bool(c and c.is_active),
+                       "mode": c.mode if c else None, "status": c.status if c else "not_configured",
+                       "default_glb_purpose": cfg.get("default_glb_purpose"),
+                       "default_dppa_purpose": cfg.get("default_dppa_purpose")},
+        "reports": [s_report(r) for r in enrichment.list_reports(db, v)],
+    }
+
+
+class ClearSearchIn(BaseModel):
+    person_id: Optional[int] = None
+    name: Optional[str] = None
+    glb_purpose: Optional[str] = None
+    dppa_purpose: Optional[str] = None
+
+
+@router.post("/vendors/{vendor_id}/enrichment/clear/search")
+def clear_search(vendor_id: int, body: ClearSearchIn, db: Session = Depends(get_db),
+                 user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    v = _vendor(db, vendor_id, tids)
+    rbac.require_write(db, user, "enrichment", "run")
+    try:
+        out = enrichment.search(db, v, person_id=body.person_id, name=body.name,
+                                glb=body.glb_purpose, dppa=body.dppa_purpose)
+    except (connections.NotConfigured, enrichment.EnrichmentError, ProviderError) as e:
+        db.rollback()
+        raise _enrich_http(e)
+    db.commit()
+    return out
+
+
+class ClearReportIn(BaseModel):
+    candidate_id: str
+    person_id: Optional[int] = None
+    entity_name: Optional[str] = None
+    glb_purpose: Optional[str] = None
+    dppa_purpose: Optional[str] = None
+
+
+@router.post("/vendors/{vendor_id}/enrichment/clear/report", status_code=status.HTTP_201_CREATED)
+def clear_report(vendor_id: int, body: ClearReportIn, db: Session = Depends(get_db),
+                 user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    v = _vendor(db, vendor_id, tids)
+    rbac.require_write(db, user, "enrichment", "run")
+    try:
+        rep = enrichment.run_report(db, v, candidate_id=body.candidate_id, actor_id=user.id,
+                                    person_id=body.person_id, entity_name=body.entity_name,
+                                    glb=body.glb_purpose, dppa=body.dppa_purpose)
+    except (connections.NotConfigured, enrichment.EnrichmentError, ProviderError, ValueError) as e:
+        db.rollback()
+        raise _enrich_http(e)
+    db.commit()
+    return s_report(rep)
+
+
+class RaiseFindingIn(BaseModel):
+    severity: Optional[str] = None
+
+
+@router.post("/enrichment/{report_id}/flags/{flag_key}/finding", status_code=status.HTTP_201_CREATED)
+def clear_raise_finding(report_id: int, flag_key: str, body: RaiseFindingIn = RaiseFindingIn(),
+                        db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    tids = _tids(user, db)
+    rep = db.query(TPRAEnrichmentReport).filter(TPRAEnrichmentReport.id == report_id,
+                                                TPRAEnrichmentReport.tenant_id.in_(tids)).first()
+    if rep is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Report not found")
+    rbac.require_write(db, user, "findings", "create")
+    try:
+        f = enrichment.raise_finding(db, rep, flag_key, actor_id=user.id, severity=body.severity)
+    except enrichment.EnrichmentError as e:
+        db.rollback()
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+    db.commit()
+    return {"finding_id": f.id, "severity": f.severity, "domain": f.domain, "report": s_report(rep)}
