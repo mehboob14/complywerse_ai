@@ -107,6 +107,8 @@ PROVIDERS: Dict[str, dict] = {
         "config_fields": [
             _f("token_url", "OAuth token URL", "url", required=False,
                help_text="Leave blank to use <base URL>/oauth2/token."),
+            _f("documents_path", "Documents endpoint path", required=False, default="/documents",
+               help_text="From your Regulatory Intelligence API docs (UNVERIFIED default)."),
         ],
         "docs_url": "https://developerportal.thomsonreuters.com/regulatory-intelligence/getting_started/about-the-regulatory-intelligence-api",
     },

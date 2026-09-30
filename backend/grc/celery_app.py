@@ -70,6 +70,8 @@ celery_app = Celery(
         # `notification` queue spins up.
         "grc.tasks.exceptions",
         "grc.tasks.tprm",
+        # Thomson Reuters Regulatory Intelligence scheduled feed polling.
+        "grc.tasks.regulatory_feeds",
         # Phase 7 — Cloud connector sync. Lives on `parsing` until the
         # dedicated `sync` queue spins up.
         "grc.tasks.cloud_sync",
@@ -153,6 +155,7 @@ celery_app.conf.update(
         # until the dedicated `notification` queue lands.
         "grc.tasks.exceptions.*": {"queue": "parsing"},
         "grc.tasks.tprm.*": {"queue": "parsing"},
+        "grc.tasks.regulatory_feeds.*": {"queue": "parsing"},
         # Phase 7 — cloud connector sync. Shares `parsing` for now.
         "grc.tasks.cloud_sync.*": {"queue": "parsing"},
         # External-connector framework (ticketing / SIEM / pentest / collab /
@@ -218,6 +221,14 @@ celery_app.conf.update(
         "tprm-monitoring-connector-poll": {
             "task": "grc.tasks.tprm.poll_monitoring_connectors_sweep",
             "schedule": 6 * 60 * 60,
+            "options": {"queue": "parsing"},
+        },
+        # Governance — scheduled regulatory-feed polling (hourly tick; each source
+        # honours its poll_interval_hours). Regulatory Intelligence sources only
+        # unless REGULATORY_FEEDS_AUTO_POLL_RSS=1, so RSS stays manual by default.
+        "regulatory-feeds-poll": {
+            "task": "grc.tasks.regulatory_feeds.poll_regulatory_feeds_sweep",
+            "schedule": 60 * 60,
             "options": {"queue": "parsing"},
         },
         # Phase 7 — Cloud connector sync fan-out. Every 6 hours; per-row

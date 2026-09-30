@@ -13,6 +13,8 @@ class RegulatoryFeedSourceCreate(BaseModel):
     category: Optional[str] = None
     is_active: bool = True
     poll_interval_hours: int = 24
+    # Regulatory Intelligence query (source_type 'tr_regulatory_intelligence').
+    provider_query: Optional[dict] = None
 
 
 class RegulatoryFeedSourceUpdate(BaseModel):
@@ -24,6 +26,7 @@ class RegulatoryFeedSourceUpdate(BaseModel):
     category: Optional[str] = None
     is_active: Optional[bool] = None
     poll_interval_hours: Optional[int] = None
+    provider_query: Optional[dict] = None
 
 
 class RegulatoryFeedAssignee(BaseModel):
@@ -70,6 +73,7 @@ class RegulatoryFeedSourceResponse(BaseModel):
     updated_at: datetime
     assignees: List[RegulatoryFeedAssignee] = []
     assignee_count: int = 0
+    provider_query: Optional[dict] = None
 
     class Config:
         from_attributes = True
@@ -91,6 +95,7 @@ class RegulatoryFeedItemResponse(BaseModel):
     ai_analysis: Optional[Dict[str, Any]]
     created_at: datetime
     feed_source_name: Optional[str] = None
+    external_metadata: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True

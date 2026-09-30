@@ -89,6 +89,7 @@ def serialize_feed_source(source: RegulatoryFeedSource) -> RegulatoryFeedSourceR
         updated_at=source.updated_at,
         assignees=assignees,
         assignee_count=len(assignees),
+        provider_query=getattr(source, "provider_query", None),
     )
 
 
@@ -108,7 +109,8 @@ def serialize_feed_item(item: RegulatoryFeedItem) -> RegulatoryFeedItemResponse:
         processed_at=item.processed_at,
         ai_analysis=item.ai_analysis,
         created_at=item.created_at,
-        feed_source_name=item.feed_source.name if item.feed_source else None
+        feed_source_name=item.feed_source.name if item.feed_source else None,
+        external_metadata=getattr(item, "external_metadata", None),
     )
 
 
@@ -233,6 +235,38 @@ Return ONLY valid JSON, no other text."""
             status_code=500,
             detail=f"AI analysis failed: {str(e)}"
         )
+
+
+# Source types. 'tr_regulatory_intelligence' pulls from the Thomson Reuters
+# Regulatory Intelligence API (per-tenant connection under /tr-integrations);
+# every other type keeps the original RSS/Atom poller, unchanged.
+TRRI_SOURCE_TYPE = "tr_regulatory_intelligence"
+VALID_SOURCE_TYPES = ["rss", "atom", "api", TRRI_SOURCE_TYPE]
+_QUERY_KEYS = ("jurisdictions", "regulators", "topics", "document_types", "keywords")
+
+
+def _clean_provider_query(q: Optional[dict]) -> Optional[dict]:
+    """Keep only known keys, as lists of trimmed non-empty strings."""
+    if not q:
+        return None
+    out = {}
+    for k in _QUERY_KEYS:
+        v = q.get(k)
+        if isinstance(v, str):
+            v = [x for x in v.split(",")]
+        if isinstance(v, list):
+            vals = [str(x).strip() for x in v if str(x).strip()][:50]
+            if vals:
+                out[k] = vals
+    return out or None
+
+
+def poll_feed(source: RegulatoryFeedSource, db: Session, tenant_id: int) -> FeedPollResult:
+    """Poll a source with the poller for its type."""
+    if source.source_type == TRRI_SOURCE_TYPE:
+        from ..regulatory_intelligence import poll_trri_feed
+        return poll_trri_feed(source, db, tenant_id)
+    return poll_rss_feed(source, db, tenant_id)
 
 
 def poll_rss_feed(source: RegulatoryFeedSource, db: Session, tenant_id: int) -> FeedPollResult:
@@ -391,7 +425,7 @@ def create_feed_source(
             detail="User not assigned to any tenant"
         )
     
-    valid_source_types = ["rss", "atom", "api"]
+    valid_source_types = VALID_SOURCE_TYPES
     if source.source_type not in valid_source_types:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -407,7 +441,8 @@ def create_feed_source(
         regulator=source.regulator,
         category=source.category,
         is_active=source.is_active,
-        poll_interval_hours=source.poll_interval_hours
+        poll_interval_hours=source.poll_interval_hours,
+        provider_query=_clean_provider_query(source.provider_query),
     )
     
     db.add(db_source)
@@ -466,8 +501,10 @@ def update_feed_source(
     
     update_data = source_update.model_dump(exclude_unset=True)
     
+    if "provider_query" in update_data:
+        update_data["provider_query"] = _clean_provider_query(update_data["provider_query"])
     if "source_type" in update_data:
-        valid_source_types = ["rss", "atom", "api"]
+        valid_source_types = VALID_SOURCE_TYPES
         if update_data["source_type"] not in valid_source_types:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -651,7 +688,7 @@ def poll_feed_source(
             detail="Feed source not found"
         )
     
-    result = poll_rss_feed(source, db, source.tenant_id)
+    result = poll_feed(source, db, source.tenant_id)
     return result
 
 
@@ -675,7 +712,7 @@ def poll_all_feeds(
     
     results = []
     for source in sources:
-        result = poll_rss_feed(source, db, tenant_id)
+        result = poll_feed(source, db, tenant_id)
         results.append(result)
     
     return results
@@ -1112,7 +1149,8 @@ def create_feed_source(
         regulator=source_data.regulator or "Unknown",
         category=source_data.category or "general",
         is_active=source_data.is_active if source_data.is_active is not None else True,
-        poll_interval_hours=source_data.poll_interval_hours or 24
+        poll_interval_hours=source_data.poll_interval_hours or 24,
+        provider_query=_clean_provider_query(source_data.provider_query),
     )
     db.add(db_source)
     db.commit()

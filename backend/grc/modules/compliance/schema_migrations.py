@@ -701,6 +701,9 @@ _COLUMN_ADDS = [
      "ix_grc_tpra_monitoring_signals_external_id"),
     ("grc_tpra_monitoring_signals", "source_ref", "JSON", None),
     ("grc_tpra_monitoring_signals", "simulated", "BOOLEAN DEFAULT FALSE", None),
+    # Regulatory Intelligence as a Governance regulatory-feed source.
+    ("grc_regulatory_feed_sources", "provider_query", "JSON", None),
+    ("grc_regulatory_feed_items", "external_metadata", "JSON", None),
     # ── TPRA productionization (11-stage versioned lifecycle). New TPRA tables
     # (grc_tpra_*, grc_risk_domains) are auto-created via create_all; only these
     # additive columns on the existing vendor tables need an ALTER on live DBs. ──

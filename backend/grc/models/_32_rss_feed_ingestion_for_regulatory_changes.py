@@ -21,6 +21,10 @@ class RegulatoryFeedSource(Base):
     last_polled_at = Column(DateTime, nullable=True)
     last_successful_poll = Column(DateTime, nullable=True)
     items_processed = Column(Integer, default=0)
+    # Thomson Reuters Regulatory Intelligence sources (source_type
+    # 'tr_regulatory_intelligence'): {jurisdictions, regulators, topics,
+    # document_types, keywords}. NULL for RSS/Atom sources.
+    provider_query = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
@@ -58,6 +62,9 @@ class RegulatoryFeedItem(Base):
     regulatory_change_id = Column(Integer, ForeignKey("grc_regulatory_changes.id"), nullable=True, index=True)
     processed_at = Column(DateTime, nullable=True)
     ai_analysis = Column(JSON, nullable=True)
+    # Provider metadata for API-sourced items (e.g. Regulatory Intelligence:
+    # jurisdiction, regulator, topics, document type, effective date). NULL for RSS.
+    external_metadata = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     tenant = relationship("Tenant")
