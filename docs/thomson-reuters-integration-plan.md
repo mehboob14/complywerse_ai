@@ -1,6 +1,7 @@
 # Thomson Reuters / LSEG Integration — Build Plan
 
-> Status: **DRAFT — awaiting sign-off before any feature code.**
+> Status: **APPROVED (2026-09-30) — Phases 0–6 built; Phase 7 (live cut-over) needs customer credentials.**
+> See §13 for what was built, deviations from this draft, and verification.
 > Scope: integrate three external data products into ComplyVerse:
 >
 > 1. **World-Check One** (LSEG — formerly Thomson Reuters) → TPRM sanctions / PEP / adverse-media
@@ -415,7 +416,7 @@ Teardown: extend `tpra/teardown.py` to drop the new tables/columns (reversible, 
 
 ---
 
-## 12. Open decisions for sign-off
+## 12. Decisions — LOCKED (2026-09-30: all recommendations accepted)
 
 - **A. World-Check One API version.** v2 (HMAC; best public documentation) now with v3 behind the
   same interface later, **or** target v3 first (LSEG's recommendation for new customers, but its
@@ -435,4 +436,105 @@ Teardown: extend `tpra/teardown.py` to drop the new tables/columns (reversible, 
   (auto-**suspend** vendor until the critical finding is remediated/accepted) — **recommended** —
   or notify only?
 
-Once A–G are confirmed, Phase 0 starts.
+All seven were confirmed as recommended (A: WC1 v2 HMAC with pluggable auth · B: CLEAR flags advisory · C: TRRI REST · D: auto-screen at DD Planning · E: ongoing screening for critical/high · F: DOB/nationality optional · G: auto-suspend).
+
+
+---
+
+## 13. Build log (2026-09-30)
+
+Each phase was committed separately on `claude/peaceful-hawking-j80na9` after the full
+backend suite passed and the frontend type-check held its baseline.
+
+| Phase | Commit scope | New tests |
+|---|---|---|
+| 0 Foundation | `grc/integrations_tr/` (http, catalog, connections, registry, wc1 signer/client, simulated), `/tr-integrations` router, `service.ingest_signal`, tenant-aware connector framework, permissions | 20 |
+| 1 WC1 screening | key people, `tpra/screening.py`, `tpra/screening_api.py`, auto-screen hook, `screen_vendor_task` | 23 |
+| 2 Ongoing screening | `WorldCheckOneConnector`, cursor poll → signals, `sanctions` always triggers, live-feeds endpoint | 8 |
+| 4 CLEAR | `integrations_tr/clear.py` + simulated, `tpra/enrichment.py`, enrichment endpoints | 12 |
+| 5 Regulatory Intelligence | `integrations_tr/trri.py` + simulated, `governance/regulatory_intelligence.py`, source type + dispatch, hourly beat | 9 |
+| 3 UI | Settings → Data providers, vendor **Screening** tab (people, matches, resolution drawer, CLEAR card), portfolio **Screening** queue, Monitoring + Governance feed touches | tsc |
+| 6 Hardening | SSRF guard on admin-editable provider URLs, teardown extended, `.env.example`, `SETUP.md`, this log | 7 |
+
+(Phase 3 UI was built after 4–5 so each screen was built once with every provider in place.)
+
+**Verification (final):**
+- Backend `pytest` **622 passed / 0 failed** (543 pre-existing + 79 new).
+- Frontend `tsc --noEmit` **96 errors = the pre-existing baseline, 0 new** (older docs quote 67 — the
+  codebase had drifted to 96 before this work); `next build` succeeds; ESLint clean on touched files
+  (one pre-existing warning).
+- **Real environment run** (Postgres 16 + Redis + the real FastAPI app, simulated providers): a
+  41-call API scenario (connections, key people, screening, resolution → critical finding → findings
+  register, ongoing-screening poll → signal → auto-reassessment, manual signal route, CLEAR search →
+  report → finding, Regulatory Intelligence source → poll → dedup) — **0 failures**.
+- **Existing-tenant upgrade**: new columns/tables were dropped from a provisioned tenant DB, the app
+  restarted, and the engine-init self-heal restored all 5 columns + 5 tables before the first request;
+  existing endpoints returned 200.
+- **Savepoint isolation on Postgres**: with the screening table deliberately broken, advancing a vendor
+  into Due Diligence Planning still committed (auto-screen skipped + logged); with it healthy, the
+  transition auto-screened the vendor.
+- **Browser pass** (Next dev + Chromium via Playwright, real backend): Data providers settings,
+  vendor Screening tab, resolve drawer (incl. profile load + save), add key person → Screen now, CLEAR
+  search → report, Screening queue, Monitoring, vendor Lifecycle, Governance → add a Regulatory
+  Intelligence source — **0 page errors / 0 console errors**.
+- Found in passing: a pre-existing React key warning on the regulatory-feeds item list (fixed — keyed
+  `Fragment`), and a pre-existing platform-wide invisible toast title (`Toast.tsx` uses `text-white` on
+  a light background) — left out of scope and raised as a separate task.
+
+### Deviations from the draft (and why)
+
+- **Connections live in a dedicated table `grc_tr_provider_connections`**, not
+  `grc_integration_connections`. Several existing screens/runners list *every* row of that
+  table without a category filter (legacy scanner Integrations list, compliance-plugin runs);
+  putting these providers there risked them appearing in — or being executed by — unrelated
+  features. Same Fernet helper (`services/connector_credentials`). The per-connection cache
+  (WC1 groups/toolkit, cursors, simulated state) is a `cache` JSON column, not a separate table.
+- **Router prefix `/tr-integrations`** instead of `/integrations/tr`, so it can never be shadowed
+  by the legacy `/integrations/{connection_id}` routes.
+- **Scheduled regulatory-feed polling is TRRI-only by default.** Existing RSS sources stay manual
+  (today's behaviour) unless `REGULATORY_FEEDS_AUTO_POLL_RSS=1`.
+- **A "finding blocks" rule = severity `critical`**, matching the existing gate engine
+  (`count_open_critical`); the finding map therefore configures severity + domain only.
+- **CLEAR endpoint paths are settings** (`search_path`, `report_path`) and the report is parsed
+  generically by section keyword, because the S2S schemas are not public.
+- **`POST /regulatory-feeds/sources` is defined twice** in the existing router (the first is the
+  one FastAPI serves). Both now accept `provider_query`; the duplication itself was left as-is.
+
+### Security notes
+
+- Secrets write-only via the API, Fernet-encrypted at rest; saving any credential (and any live
+  connection) is refused without `CONNECTOR_MASTER_KEY`.
+- **SSRF guard**: admin-editable provider URLs (base URL, token URL) must be `https://` and may not be
+  IP literals or hostnames resolving to private / loopback / link-local / reserved addresses.
+- CLEAR client certificate + key are loaded into an `SSLContext`; the PEM temp files (0600, private
+  dir) are deleted immediately after loading. CLEAR XML is parsed with entity resolution and network
+  access disabled.
+- Screening data is PII: views need `vendor_risk:screening:view` (or run/resolve / `erm:risks:edit`);
+  resolving needs the dedicated `vendor_risk:screening:resolve` (no generic fallback).
+- TRRI access tokens live only in process memory; provider payloads are never logged.
+
+### Safety properties (how "don't break existing functionality" was enforced)
+
+- Additive only: new tables via `create_all`; new columns on existing tables registered in the
+  **engine-init** self-heal (`compliance/schema_migrations._COLUMN_ADDS`) so they exist before any
+  query; reversible via `tpra/teardown.py --drop-tables --drop-columns`.
+- The signal route's logic was moved verbatim into `service.ingest_signal`; the existing route test
+  (`test_auto_trigger_dedups_when_reassessment_in_flight`) and a new test asserting the unchanged response + audit shape (`test_manual_signal_route_behaviour_unchanged`) pass.
+- The auto-screen hook inside `advance_stage` / `create_reassessment_version` runs in a **SAVEPOINT**
+  with a catch-all: a provider outage or even a failed query can never fail a lifecycle transition
+  (tests: `test_transition_survives_screening_failure`, `test_transition_unaffected_without_connection`).
+- No new behaviour unless a tenant admin enables a provider; everything simulated is labelled.
+
+## 14. Phase 7 — live cut-over checklist (needs the customer's credentials/docs)
+
+1. Set `CONNECTOR_MASTER_KEY`; allow egress to the provider hosts from backend + Celery workers.
+2. **World-Check One:** confirm the contract's API version (v2 vs v3) and host; verify the HMAC
+   string-to-sign against LSEG's published test vector; confirm `ongoingScreeningUpdates` query
+   syntax, resolution-toolkit shape, `categories` values used by `classify_hit`, rate limits.
+3. **CLEAR:** obtain the S2S guide; set `search_path`/`report_path`; confirm business search/report
+   XML element names (`GroupId`, `Name`, section names) against `clear.derive_flags`; confirm auth
+   (certificate only vs certificate + basic).
+4. **Regulatory Intelligence:** confirm token URL, documents list endpoint + filter parameter names
+   and metadata field names against `trri.normalise_document`.
+5. Run each provider's **Test connection**, screen a known test entity, resolve a match and confirm
+   it appears resolved in the provider's own UI; poll one TRRI source.
