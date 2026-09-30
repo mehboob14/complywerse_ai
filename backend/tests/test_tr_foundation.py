@@ -182,6 +182,22 @@ def test_live_mode_requires_all_required_credentials(db, master_key):
     assert "API secret" in str(ei.value)
 
 
+@pytest.mark.parametrize("url", [
+    "https://127.0.0.1/v2", "https://10.1.2.3/v2", "https://169.254.169.254/latest", "https://[::1]/x",
+    "https://localhost/v2", "ftp://example.test",
+])
+def test_rejects_internal_or_non_https_provider_urls(db, url):
+    with pytest.raises(connections.ConnectionError_):
+        connections.upsert_connection(db, 1, TR_PROVIDER_WC1, base_url_value=url)
+
+
+def test_rejects_internal_token_url(db):
+    from grc.models import TR_PROVIDER_TRRI
+    with pytest.raises(connections.ConnectionError_) as ei:
+        connections.upsert_connection(db, 1, TR_PROVIDER_TRRI, config_in={"token_url": "https://192.168.0.5/token"})
+    assert "token URL" in str(ei.value)
+
+
 def test_rejects_non_https_base_url_and_unknown_fields(db):
     with pytest.raises(connections.ConnectionError_):
         connections.upsert_connection(db, 1, TR_PROVIDER_WC1, base_url_value="http://insecure.test")
