@@ -89,14 +89,16 @@ export function Toast({ id, title, message, type, duration = 5000, onDismiss }: 
           <Icon size={20} />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-white">{title}</p>
+          {/* Token vars, not text-slate-*: outside .platform-ui (the root toast stack), globals.css
+              forces text-slate-500…900, hover: variants included, to --color-muted. */}
+          <p className="text-sm font-medium text-[var(--color-text)]">{title}</p>
           {message && (
             <p className="mt-1 text-sm text-slate-600">{message}</p>
           )}
         </div>
         <button
           onClick={handleDismiss}
-          className="flex-shrink-0 text-slate-600 hover:text-white transition-colors"
+          className="flex-shrink-0 text-[var(--color-muted)] hover:text-[var(--color-text)] transition-colors"
           aria-label="Dismiss notification"
         >
           <X size={16} />
