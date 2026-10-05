@@ -5,18 +5,20 @@
  *
  *  - Header + a single "Link manually" button (type-picker popup, one entry
  *    point for every module instead of a picker per section).
- *  - Filter pills per module: linked count + "+N" AI-suggestion badge.
- *  - ONE consolidated AI-suggestions feed: every target fanned out in parallel,
+ *  - One pill per record type with its linked count and a "+N" suggestion
+ *    badge. Clicking a pill opens what is linked (so a count always has
+ *    records behind it), each with Open and Unlink, and narrows the feed below.
+ *  - ONE consolidated suggestions feed: every target fanned out in parallel,
  *    a single "Analyzing…" indicator, suggestions streamed in sorted by match,
  *    each row dismissible + linkable, plus a "Link N strong matches" bulk action.
- *  - The detailed linked-records lists collapse below (kept out of the way so
- *    the default view stays short).
+ *    Rule-based targets (`immediate`) run on open; AI targets wait for the assessment.
  */
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useQueries } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
-import { Sparkles, Plus, X, ChevronDown, ChevronLeft, Search, Loader2, Shield } from 'lucide-react';
+import { Sparkles, Plus, X, ChevronLeft, Search, Loader2, Shield, ExternalLink, Unlink, Lock } from 'lucide-react';
 
 export interface AiLinkRec {
   id: number;
@@ -25,26 +27,49 @@ export interface AiLinkRec {
   subtitle?: string | null;
   confidence?: number | null;
   rationale?: string | null;
-  meta?: { framework_id?: number } | null;
+  meta?: { framework_id?: number; scf_id?: string; artifact_name?: string; kind?: string; record_id?: number } | null;
 }
 
 // Lucide icons are forwardRef components — ComponentType<any> accepts them.
 type IconType = React.ComponentType<any>;
 
 export interface LcSuggestTarget {
-  key: 'controls' | 'risks' | 'assets' | 'incidents' | 'policy_statements';
+  key: string;
   badgeLabel: string;
   icon: IconType;
   linkedIds: Set<number>;
   onLinkMany: (recs: AiLinkRec[]) => void;
   busy?: boolean;
+  /** Needs no assessment (a rule, not a model): runs as soon as the page opens. */
+  immediate?: boolean;
+}
+
+/** One linked record, as shown when its pill is opened. */
+export interface LcLinkedItem {
+  key: string;
+  code?: string | null;
+  title: string;
+  subtitle?: string | null;
+  tag?: string | null;
+  href?: string;
+  onUnlink?: () => void;
+  /** Why it cannot be unlinked from here (a test sample). */
+  locked?: string;
+}
+
+export interface LcLinkedGroup {
+  heading?: string;
+  items: LcLinkedItem[];
 }
 
 export interface LcPill {
-  key: string; // matches a suggest-target key, or 'assessments'
+  key: string; // matches a suggest-target key, or e.g. 'assessments'
   label: string;
   icon: IconType;
   linkedCount: number;
+  groups: LcLinkedGroup[];
+  /** Said when nothing is linked, e.g. where this type is linked from. */
+  hint?: string;
 }
 
 export interface LcManualType {
@@ -67,11 +92,53 @@ const matchStyle = (p: number) =>
 
 const typeBadge: Record<string, string> = {
   controls: 'border-emerald-200 text-emerald-700',
+  common_controls: 'border-teal-200 text-teal-700',
   policy_statements: 'border-sky-200 text-sky-700',
   risks: 'border-rose-200 text-rose-700',
   assets: 'border-primary-200 text-primary-700',
   incidents: 'border-orange-200 text-orange-700',
+  audit_observations: 'border-violet-200 text-violet-700',
 };
+
+const MANUAL_SHOWN = 50;
+
+function LinkedRow({ item }: { item: LcLinkedItem }) {
+  return (
+    <div className="flex items-start justify-between gap-2 px-3 py-2">
+      <div className="min-w-0">
+        <span className="flex flex-wrap items-center gap-1.5">
+          {item.code && <span className="font-mono text-xs text-slate-600">{item.code}</span>}
+          {item.tag && (
+            <span className="rounded-full border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-500">{item.tag}</span>
+          )}
+        </span>
+        <span className="block text-sm font-medium text-slate-800">{item.title}</span>
+        {item.subtitle && <span className="block text-xs text-slate-500">{item.subtitle}</span>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2.5 pt-0.5">
+        {item.href && (
+          <Link href={item.href} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline">
+            Open <ExternalLink className="h-3 w-3" />
+          </Link>
+        )}
+        {item.onUnlink && (
+          <button
+            type="button"
+            onClick={() => { if (window.confirm('Remove this link? The evidence stays in the library.')) item.onUnlink?.(); }}
+            className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 hover:text-rose-600"
+          >
+            <Unlink className="h-3 w-3" /> Unlink
+          </button>
+        )}
+        {item.locked && (
+          <span title={item.locked} className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+            <Lock className="h-3 w-3" /> Test sample
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function LinksCoverage({
   evidenceId,
@@ -79,20 +146,15 @@ export default function LinksCoverage({
   suggestTargets,
   pills,
   manualTypes,
-  linkedRecords,
-  totalLinked,
 }: {
   evidenceId: number;
   autoRunKey?: number;
   suggestTargets: LcSuggestTarget[];
   pills: LcPill[];
   manualTypes: LcManualType[];
-  linkedRecords?: React.ReactNode;
-  totalLinked: number;
 }) {
   const [filter, setFilter] = useState<string | null>(null);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
-  const [showLinked, setShowLinked] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualType, setManualType] = useState<string | null>(null);
   const [manualSearch, setManualSearch] = useState('');
@@ -105,7 +167,7 @@ export default function LinksCoverage({
         const r = await apiClient.post(`/evidence-mgmt/ai/${evidenceId}/recommend-links`, null, { params: { target: t.key } });
         return r.data as { recommendations: AiLinkRec[]; ai_available: boolean };
       },
-      enabled,
+      enabled: enabled || !!t.immediate,
       staleTime: Infinity,
       retry: false,
     })),
@@ -113,6 +175,7 @@ export default function LinksCoverage({
 
   const anyLoading = results.some((q) => q.isFetching);
   const started = enabled || results.some((q) => q.isFetching || !!q.data);
+  const failed = results.length > 0 && results.every((q) => q.isError);
   const anyBusy = suggestTargets.some((t) => t.busy);
 
   // Flatten → filter out linked + dismissed → sort by match desc.
@@ -139,10 +202,15 @@ export default function LinksCoverage({
 
   const rerun = () => results.forEach((q) => q.refetch());
 
+  const openManual = (type: string | null) => { setManualOpen(true); setManualType(type); setManualSearch(''); };
+  const activePill = filter ? pills.find((p) => p.key === filter) || null : null;
+  const activeGroups = activePill ? activePill.groups.filter((g) => g.items.length > 0) : [];
+
   const activeManual = manualType ? manualTypes.find((t) => t.key === manualType) : null;
-  const manualItems = (activeManual?.items || []).filter((it) =>
+  const manualMatches = (activeManual?.items || []).filter((it) =>
     !manualSearch || it.label.toLowerCase().includes(manualSearch.toLowerCase()) || (it.sub || '').toLowerCase().includes(manualSearch.toLowerCase())
   );
+  const manualItems = manualMatches.slice(0, MANUAL_SHOWN);
 
   return (
     <div className="space-y-4">
@@ -157,14 +225,14 @@ export default function LinksCoverage({
         </div>
         <button
           type="button"
-          onClick={() => { setManualOpen(true); setManualType(null); setManualSearch(''); }}
+          onClick={() => openManual(null)}
           className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
         >
           <Plus className="h-4 w-4" strokeWidth={2} /> Link manually
         </button>
       </div>
 
-      {/* Filter pills — linked count + suggestion badge */}
+      {/* One pill per record type — linked count + suggestion badge. Click: what is linked. */}
       <div className="flex flex-wrap gap-1.5">
         {pills.map((p) => {
           const sc = suggestCount[p.key] ?? 0;
@@ -174,6 +242,7 @@ export default function LinksCoverage({
               key={p.key}
               type="button"
               onClick={() => setFilter(active ? null : p.key)}
+              aria-pressed={active}
               className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                 active
                   ? 'border-primary-500 bg-primary-50 text-primary-700'
@@ -191,12 +260,51 @@ export default function LinksCoverage({
         })}
       </div>
 
-      {/* Consolidated AI suggestions feed */}
+      {/* What is linked under the opened pill */}
+      {activePill && (
+        <div className="rounded-xl border border-slate-200 bg-white">
+          <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
+            <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700">
+              <activePill.icon className="h-4 w-4 text-primary-600" strokeWidth={1.75} />
+              {activePill.label} linked
+              <span className="font-normal text-slate-400">· {activePill.linkedCount}</span>
+            </span>
+            <button type="button" onClick={() => setFilter(null)} aria-label="Close" className="text-slate-400 hover:text-slate-700">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {activeGroups.length === 0 ? (
+            <p className="px-3 py-3 text-xs text-slate-500">
+              Nothing is linked yet.{activePill.hint ? ` ${activePill.hint}` : ''}
+              {manualTypes.some((t) => t.key === activePill.key) && (
+                <button type="button" onClick={() => openManual(activePill.key)} className="ml-1 font-medium text-primary-600 hover:underline">
+                  Link manually
+                </button>
+              )}
+            </p>
+          ) : (
+            <div className="max-h-80 divide-y divide-slate-100 overflow-y-auto">
+              {activeGroups.map((g, gi) => (
+                <div key={gi}>
+                  {g.heading && (
+                    <p className="bg-slate-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.heading}</p>
+                  )}
+                  <div className="divide-y divide-slate-50">
+                    {g.items.map((it) => <LinkedRow key={it.key} item={it} />)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Consolidated suggestions feed */}
       <div className="rounded-xl border border-dashed border-primary-300 bg-primary-50/40 p-3 sm:p-4">
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
             <span className="inline-flex items-center gap-1.5 font-semibold text-primary-700">
-              <Sparkles className="h-4 w-4" strokeWidth={1.75} /> AI suggestions
+              <Sparkles className="h-4 w-4" strokeWidth={1.75} /> Suggestions
             </span>
             {visible.length > 0 && <span className="text-slate-500">· {visible.length} to review</span>}
             {anyLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-primary-500" />}
@@ -219,7 +327,9 @@ export default function LinksCoverage({
           )}
         </div>
 
-        {!started ? (
+        {failed ? (
+          <p className="py-1 text-xs text-rose-600">Suggestions could not be loaded. Use Re-run to try again.</p>
+        ) : !started ? (
           <p className="py-1 text-xs text-slate-500">Suggestions appear here once the evidence has been assessed.</p>
         ) : anyLoading && visible.length === 0 ? (
           <div className="flex items-center gap-2 py-2 text-xs text-slate-500"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Analyzing evidence…</div>
@@ -263,22 +373,6 @@ export default function LinksCoverage({
           </div>
         )}
       </div>
-
-      {/* Detailed linked records — collapsed by default to keep the view short.
-          Omitted here when the caller renders them full-width elsewhere. */}
-      {linkedRecords && (
-        <div className="rounded-xl border border-slate-200 bg-white">
-          <button
-            type="button"
-            onClick={() => setShowLinked((v) => !v)}
-            className="flex w-full items-center justify-between px-4 py-3 text-left"
-          >
-            <span className="text-sm font-medium text-slate-700">Linked records ({totalLinked})</span>
-            <ChevronDown className={`h-4 w-4 text-slate-400 transition-transform ${showLinked ? 'rotate-180' : ''}`} />
-          </button>
-          {showLinked && <div className="border-t border-slate-100 p-4">{linkedRecords}</div>}
-        </div>
-      )}
 
       {/* Link-manually popup: pick a type, then the item */}
       {manualOpen && (
@@ -328,7 +422,7 @@ export default function LinksCoverage({
                     <p className="py-4 text-center text-xs text-slate-400">Nothing to link.</p>
                   ) : (
                     <div className="space-y-1">
-                      {manualItems.slice(0, 50).map((it) => (
+                      {manualItems.map((it) => (
                         <button
                           key={it.value}
                           type="button"
@@ -342,6 +436,11 @@ export default function LinksCoverage({
                           <Plus className="h-4 w-4 shrink-0 text-primary-600" />
                         </button>
                       ))}
+                      {manualMatches.length > MANUAL_SHOWN && (
+                        <p className="pt-1 text-center text-[11px] text-slate-400">
+                          Showing {MANUAL_SHOWN} of {manualMatches.length} — search to narrow.
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>

@@ -42,6 +42,25 @@ class AIClauseLinkCreate(BaseModel):
     matching_rationale: Optional[str] = None
 
 
+@router.get("/common-control-options")
+def list_common_control_options(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Every common (SCF) control this organisation can link evidence to, for the manual picker.
+
+    `available-controls` returns the first 50 alphabetically and does not scope by tenant, so a picker
+    built on it could never reach most of the 1,534 controls. `scf_id` is the id people know and the key
+    the Assurance link endpoint takes ("IAC-01"); `code` is the table's own ("SCF-IAC-01").
+    """
+    user_tenants = get_user_tenants(current_user, db)
+    rows = (db.query(NormalizedControl.id, NormalizedControl.scf_id, NormalizedControl.code, NormalizedControl.name)
+            .filter(NormalizedControl.scf_id.isnot(None),     # the catalogue and the tenant's own; legacy rows have none
+                    or_(NormalizedControl.tenant_id.is_(None), NormalizedControl.tenant_id.in_(user_tenants)))
+            .order_by(NormalizedControl.scf_id.asc()).all())
+    return {"controls": [{"id": r.id, "scf_id": r.scf_id, "code": r.code, "name": r.name} for r in rows]}
+
+
 @router.get("/available-controls")
 def list_available_controls(
     q: Optional[str] = Query(None, description="Search term for framework or control titles"),
@@ -123,11 +142,16 @@ def serialize_control_mapping(mapping: EvidenceControlMapping) -> dict:
         "framework_control_id": mapping.framework_control_id,
         "parsed_control_id": mapping.parsed_control_id,
         "uploaded_framework_id": mapping.uploaded_framework_id,
+        # The artifact a file was linked as, how fully, and whether it is a test sample (cannot be unlinked here).
+        "clause_reference": mapping.clause_reference,
+        "coverage_type": mapping.coverage_type,
+        "is_locked": bool(mapping.is_locked),
     }
     
     if mapping.normalized_control:
         result["normalized_control"] = {
             "id": mapping.normalized_control.id,
+            "scf_id": mapping.normalized_control.scf_id,
             "code": mapping.normalized_control.code,
             "name": mapping.normalized_control.name,
             "statement": mapping.normalized_control.statement,
@@ -210,13 +234,18 @@ def get_evidence_controls(
     
     by_framework = {}
     normalized_controls = []
-    
+    # Mappings that resolve to neither a common control nor a framework control: the count includes
+    # them, so they are listed too instead of leaving a number with nothing behind it.
+    unresolved = []
+
     for mapping in mappings:
         serialized = serialize_control_mapping(mapping)
-        
+        placed = False
+
         if mapping.normalized_control:
             normalized_controls.append(serialized)
-        
+            placed = True
+
         if mapping.framework_control:
             fc = mapping.framework_control
             if fc.objective and fc.objective.domain and fc.objective.domain.framework:
@@ -230,6 +259,7 @@ def get_evidence_controls(
                         "controls": []
                     }
                 by_framework[fw_key]["controls"].append(serialized)
+                placed = True
 
         elif mapping.parsed_control and mapping.parsed_control.uploaded_framework:
             fw = mapping.parsed_control.uploaded_framework
@@ -242,13 +272,21 @@ def get_evidence_controls(
                     "controls": []
                 }
             by_framework[fw_key]["controls"].append(serialized)
-    
+            placed = True
+
+        if not placed:
+            serialized["control_code"] = mapping.control_code
+            serialized["framework_name"] = mapping.framework_name
+            serialized["clause_reference"] = mapping.clause_reference
+            unresolved.append(serialized)
+
     return {
         "evidence_id": evidence_id,
         "evidence_name": evidence.name,
         "total_mappings": len(mappings),
         "normalized_controls": normalized_controls,
-        "by_framework": list(by_framework.values())
+        "by_framework": list(by_framework.values()),
+        "unresolved": unresolved,
     }
 
 
@@ -422,6 +460,12 @@ def unlink_evidence_from_control(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Control mapping not found"
+        )
+    if mapping.is_locked:
+        # A test sample: the control's own testing record depends on it (as the Assurance tab says).
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This file is a test sample; remove it from its test procedure instead.",
         )
     
     db.delete(mapping)

@@ -6,6 +6,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import apiClient, { evidenceAIApi, QuickAssessResponse, assetsApi } from '@/lib/api';
 import type { ITAsset } from '@/types';
 import { MultiSelectDropdown } from '@/components/ui';
+import CommonControlSuggest, { type CommonControlRec } from './_CommonControlSuggest';
 import {
   FileCheck,
   Loader2,
@@ -137,6 +138,8 @@ export default function EvidencePage() {
   // auditors and reviewers want a quick look, not a context switch.
   const [previewFile, setPreviewFile] = useState<EvidenceFile | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  // Common controls the file just uploaded can stand for (offered once, right after the upload).
+  const [suggest, setSuggest] = useState<{ id: number; name: string; recs: CommonControlRec[] } | null>(null);
   const queryClient = useQueryClient();
 
   const { data: evidenceTypes } = useQuery({
@@ -165,7 +168,7 @@ export default function EvidencePage() {
       }
       return res;
     },
-    onSuccess: () => {
+    onSuccess: async (res) => {
       // Legacy keys (kept for any old lists) …
       queryClient.invalidateQueries({ queryKey: ['evidence-items'] });
       queryClient.invalidateQueries({ queryKey: ['evidence-summary'] });
@@ -175,6 +178,17 @@ export default function EvidencePage() {
       queryClient.invalidateQueries({ queryKey: ['ev-ws-summary'] });
       queryClient.invalidateQueries({ queryKey: ['ev-ws-expiring'] });
       setIsUploadModalOpen(false);
+      // Say which common controls a document like this can stand for, while the person is here.
+      const created = res.data as { id?: number; name?: string } | undefined;
+      if (created?.id) {
+        try {
+          const r = await apiClient.post(`/evidence-mgmt/ai/${created.id}/recommend-links`, null, { params: { target: 'common_controls' } });
+          const recs = (r.data?.recommendations || []) as CommonControlRec[];
+          if (recs.length) setSuggest({ id: created.id, name: created.name || 'This file', recs });
+        } catch {
+          // a bonus: the evidence page offers the same suggestions again
+        }
+      }
     },
   });
 
@@ -193,6 +207,10 @@ export default function EvidencePage() {
           isLoading={uploadMutation.isPending}
           evidenceTypes={evidenceTypes || []}
         />
+      )}
+
+      {suggest && (
+        <CommonControlSuggest evidence={{ id: suggest.id, name: suggest.name }} recs={suggest.recs} onClose={() => setSuggest(null)} />
       )}
 
       {/* Shared in-browser file viewer for the central evidence list.

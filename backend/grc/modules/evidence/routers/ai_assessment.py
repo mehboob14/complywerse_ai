@@ -23,8 +23,13 @@ from ....models import (
     # Cross-module link candidate pools + their link tables (AI recommend-links).
     Risk, RiskEvidenceLink, ITAsset, AssetEvidenceLink,
     RiskIncident, EvidenceIncidentLink, PolicyStatement, EvidencePolicyLink,
+    # Audit observations of every kind, and the common (SCF) control library.
+    AuditObservation, AuditObservationEvidenceLink, Issue, IssueEvidenceLink, AuditIssueProfile,
+    NormalizedControl,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..common_control_match import artifact_index as _common_artifact_index, recommend as _recommend_common
+from ...automation.evidence_match import EvidenceDoc
 
 router = APIRouter(prefix="/ai", tags=["Evidence - AI Assessment"])
 
@@ -1697,7 +1702,144 @@ def recommend_targets(
 # → LLM rank → keyword fallback). The frontend links the chosen items via the
 # existing /cross-links endpoints. Already-linked items are excluded.
 
-_LINK_TARGETS = ("risks", "assets", "incidents", "policy_statements", "controls")
+_LINK_TARGETS = ("risks", "assets", "incidents", "policy_statements", "controls", "audit_observations",
+                 "common_controls")
+
+# Issue register rows that are audit findings: imported from an audit register workbook (they carry an
+# AuditIssueProfile), typed as an audit finding, or raised from an audit.
+_AUDIT_ISSUE_TYPES = ("audit_finding",)
+_AUDIT_ISSUE_SOURCES = ("audit",)
+
+
+def audit_observation_id(kind: str, record_id: int) -> int:
+    """One number for a recommendation row: statutory observations as themselves, issue-register rows
+    negated, so the two tables' ids can never collide in the page's linked-id sets."""
+    return record_id if kind == "statutory" else -record_id
+
+
+def _audit_observation_candidates(db: Session, evidence_id: int, user_tenants: List[int]) -> List[dict]:
+    """Audit observations of every kind this evidence could support, not yet linked to it.
+
+    Two registers hold them: statutory audit observations (regulator requirements, observations,
+    findings, recommendations) and the issue register, where regulatory, internal-audit, pen-test,
+    self-identified and credit-review findings live as issues with an audit profile.
+    """
+    out: List[dict] = []
+    try:
+        linked = {r[0] for r in db.query(AuditObservationEvidenceLink.observation_id)
+                  .filter(AuditObservationEvidenceLink.evidence_id == evidence_id).all()}
+        rows = (db.query(AuditObservation)
+                .filter(AuditObservation.tenant_id.in_(user_tenants), AuditObservation.status != "cancelled")
+                .order_by(desc(AuditObservation.updated_at)).limit(300).all())
+        for o in rows:
+            if o.id in linked:
+                continue
+            label = (o.observation_type or "observation").replace("_", " ").title()
+            out.append({
+                "id": audit_observation_id("statutory", o.id), "code": o.code, "title": o.title,
+                "subtitle": " · ".join(x for x in (f"Statutory audit {label.lower()}", o.regulator_source,
+                                                   o.audit_period, (o.status or "").replace("_", " ")) if x),
+                "kwtext": f"{o.title or ''} {o.description or ''} {o.regulation_reference or ''} "
+                          f"{o.management_response or ''} {o.area_domain or ''} {o.category or ''}",
+                "meta": {"kind": "statutory", "record_id": o.id},
+            })
+    except Exception:  # noqa: BLE001 — a tenant without the statutory audit tables still gets the rest
+        logger.warning("audit observation candidates (statutory) unavailable", exc_info=True)
+        db.rollback()
+    try:
+        linked = {r[0] for r in db.query(IssueEvidenceLink.issue_id)
+                  .filter(IssueEvidenceLink.evidence_id == evidence_id).all()}
+        rows = (db.query(Issue, AuditIssueProfile)
+                .outerjoin(AuditIssueProfile, AuditIssueProfile.issue_id == Issue.id)
+                .filter(Issue.tenant_id.in_(user_tenants),
+                        or_(AuditIssueProfile.id.isnot(None), Issue.issue_type.in_(_AUDIT_ISSUE_TYPES),
+                            Issue.source_type.in_(_AUDIT_ISSUE_SOURCES)),
+                        or_(Issue.workflow_state.is_(None), Issue.workflow_state != "cancelled"),
+                        or_(AuditIssueProfile.id.is_(None), AuditIssueProfile.deleted_at.is_(None)))
+                .order_by(desc(Issue.id)).limit(400).all())
+        for issue, prof in rows:
+            if issue.id in linked:
+                continue
+            how = (getattr(prof, "type_of_audit", None) or getattr(prof, "source_label", None)
+                   or getattr(prof, "regulator", None) or (issue.issue_type or "audit finding").replace("_", " "))
+            out.append({
+                "id": audit_observation_id("issue", issue.id), "code": issue.code, "title": issue.title,
+                "subtitle": " · ".join(x for x in (f"Audit register · {how}" if prof is not None else f"Audit finding · {how}",
+                                                   getattr(prof, "risk_rating", None) or issue.severity,
+                                                   (issue.workflow_state or "").replace("_", " ")) if x),
+                "kwtext": " ".join(str(x or "") for x in (
+                    issue.title, issue.description, getattr(prof, "issue_text", None), getattr(prof, "recommendation", None),
+                    getattr(prof, "corrective_actions", None), getattr(prof, "management_action_plan", None),
+                    getattr(prof, "report_name", None), getattr(prof, "condition", None))),
+                "meta": {"kind": "issue", "record_id": issue.id},
+            })
+    except Exception:  # noqa: BLE001
+        logger.warning("audit observation candidates (issue register) unavailable", exc_info=True)
+        db.rollback()
+    return out
+
+
+def _common_index():
+    """The consolidated evidence sets as an artifact index, built once."""
+    global _COMMON_INDEX
+    if _COMMON_INDEX is None:
+        from ...automation.router import _consolidated_evidence
+        _COMMON_INDEX = _common_artifact_index(_consolidated_evidence())
+    return _COMMON_INDEX
+
+
+_COMMON_INDEX = None
+
+
+def recommend_common_controls(db: Session, evidence: Evidence, limit: int = 10) -> dict:
+    """Common (SCF) controls whose required artifacts look like this evidence. Model-free: SCF's licence
+    does not allow AI to be given its text, and the match can be explained term by term."""
+    from sqlalchemy import or_ as _or
+    tenant_id = evidence.tenant_id
+    nc_rows = (db.query(NormalizedControl.id, NormalizedControl.scf_id, NormalizedControl.name)
+               .filter(NormalizedControl.scf_id.isnot(None),
+                       _or(NormalizedControl.tenant_id.is_(None), NormalizedControl.tenant_id == tenant_id)).all())
+    by_scf = {scf: (nc_id, name) for nc_id, scf, name in nc_rows}
+
+    mappings = (db.query(EvidenceControlMapping.control_code, EvidenceControlMapping.artifact_key,
+                         NormalizedControl.scf_id)
+                .outerjoin(NormalizedControl, NormalizedControl.id == EvidenceControlMapping.normalized_control_id)
+                .filter(EvidenceControlMapping.evidence_id == evidence.id).all())
+    linked_controls = {scf or code for code, _key, scf in mappings if scf or code}
+    linked_artifacts: dict = {}
+    for code, key, scf in mappings:
+        if key and (scf or code):
+            linked_artifacts.setdefault(key, []).append(scf or code)
+
+    applicable = None
+    try:
+        from ....modules.scf.scope_service import get_applicable_scf_ids
+        applicable = get_applicable_scf_ids(db, tenant_id) or None     # empty = scope not set: every control
+    except Exception:  # noqa: BLE001 — no SCF catalog on this tenant
+        applicable = None
+
+    doc = EvidenceDoc(
+        id=evidence.id, name=evidence.name or "", file_name=evidence.file_name or "",
+        evidence_type=evidence.evidence_type or "", description=getattr(evidence, "description", "") or "",
+        summary=evidence.content_summary or "", text=evidence.ocr_content or "", status=evidence.status or "",
+    )
+    found = _recommend_common(doc, _common_index(), applicable=applicable, linked_controls=linked_controls,
+                              linked_artifacts=linked_artifacts, names={k: v[1] for k, v in by_scf.items()}, limit=limit)
+    recs = []
+    for c in found["recommendations"]:
+        nc = by_scf.get(c["scf_id"])
+        if nc is None:
+            continue
+        also = f" · also asked by {c['also_asked_by']} other control{'s' if c['also_asked_by'] != 1 else ''}" if c["also_asked_by"] else ""
+        recs.append({
+            "id": nc[0], "code": c["scf_id"], "title": nc[1],
+            "subtitle": f"Asks for “{c['artifact']}”{also}",
+            "confidence": c["score"] / 100, "coverage_type": "full" if c["signal"] == "same_artifact" else "supporting",
+            "rationale": c["reason"], "link_source": "rule",
+            "meta": {"scf_id": c["scf_id"], "artifact_name": c["artifact"], "signal": c["signal"],
+                     "in_scope": bool(applicable and c["scf_id"] in applicable) if applicable else None},
+        })
+    return {"recommendations": recs, "candidate_count": found["candidate_count"]}
 
 
 def _linked_ids(db: Session, model, id_col, evidence_id: int) -> set:
@@ -1705,6 +1847,9 @@ def _linked_ids(db: Session, model, id_col, evidence_id: int) -> set:
 
 
 def _link_candidates(db: Session, target: str, evidence_id: int, user_tenants: List[int]) -> List[dict]:
+    if target == "audit_observations":
+        return _audit_observation_candidates(db, evidence_id, user_tenants)
+
     if target == "controls":
         # Pool = parsed framework controls in scope; exclude already-mapped ones.
         # Each candidate carries meta.framework_id so the caller can link via
@@ -1787,13 +1932,15 @@ _LINK_CATEGORY_LABEL = {
     "incidents": "incidents",
     "policy_statements": "policy statements",
     "controls": "compliance framework controls",
+    "audit_observations": "audit observations and audit findings (regulatory, internal audit, statutory, self-identified)",
+    "common_controls": "common controls",
 }
 
 
 @router.post("/{evidence_id}/recommend-links")
 def recommend_links(
     evidence_id: int,
-    target: str = Query(..., description="risks | assets | incidents | policy_statements"),
+    target: str = Query(..., description="risks | assets | incidents | policy_statements | controls | audit_observations | common_controls"),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
@@ -1810,6 +1957,15 @@ def recommend_links(
     validate_evidence_access(current_user, evidence, db)
 
     user_tenants = get_user_tenants(current_user, db)
+
+    if target == "common_controls":
+        # No model: see recommend_common_controls.
+        found = recommend_common_controls(db, evidence)
+        return {
+            "evidence_id": evidence_id, "target": target, "ai_available": False, "model_free": True,
+            "candidate_count": found["candidate_count"], "recommendations": found["recommendations"],
+        }
+
     excerpt = (evidence.content_summary or evidence.ocr_content
                or f"{evidence.name or ''}. {getattr(evidence, 'description', '') or ''}")[:3500]
 

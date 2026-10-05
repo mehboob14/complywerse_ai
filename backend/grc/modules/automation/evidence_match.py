@@ -160,6 +160,28 @@ def _coverage(terms: Set[str], presence: Dict[str, float], df: Dict[str, int], n
     return sum(w * presence.get(t, 0.0) for t, w in weights.items()) / total if total else 0.0
 
 
+def document_presence(doc: EvidenceDoc) -> Tuple[Dict[str, float], Dict[str, str]]:
+    """term -> how strongly the document is about it, and the field that said so.
+
+    Computed once per document so one file can be scored against thousands of
+    artifacts (the reverse question: which controls ask for a document like this).
+    """
+    presence: Dict[str, float] = {}
+    strongest_field: Dict[str, str] = {}
+    for fname, counts in doc.fields().items():
+        for term in counts:
+            # Two-letter acronyms (AI, HR, DR, IT) are everywhere in prose: an
+            # evidence summary reading "Unable to parse AI response" once made
+            # an encryption policy the top match for "AI Policy". They count only
+            # when they are part of what the file is called.
+            if len(term) <= 2 and fname != "name":
+                continue
+            if FIELD_PRESENCE[fname] > presence.get(term, 0.0):
+                presence[term] = FIELD_PRESENCE[fname]
+                strongest_field[term] = fname
+    return presence, strongest_field
+
+
 def text_score(artifact_name: str, artifact_description: str, doc: EvidenceDoc,
                df: Dict[str, int], n_docs: int) -> Tuple[int, List[str], bool]:
     """(0-100, matched name terms, whether every match came only from extracted text).
@@ -171,25 +193,18 @@ def text_score(artifact_name: str, artifact_description: str, doc: EvidenceDoc,
     that appear in no document never inflate the denominator the way a rarity-
     weighted maximum did.
     """
+    presence, strongest_field = document_presence(doc)
+    return score_with_presence(artifact_name, artifact_description, presence, strongest_field, df, n_docs)
+
+
+def score_with_presence(artifact_name: str, artifact_description: str, presence: Dict[str, float],
+                        strongest_field: Dict[str, str], df: Dict[str, int],
+                        n_docs: int) -> Tuple[int, List[str], bool]:
+    """`text_score` for a document whose `document_presence` is already known."""
     name_terms = set(tokenize(artifact_name))
     if not name_terms:
         return 0, [], False
     desc_terms = set(tokenize(artifact_description)) - name_terms
-    fields = doc.fields()
-
-    presence: Dict[str, float] = {}
-    strongest_field: Dict[str, str] = {}
-    for fname, counts in fields.items():
-        for term in counts:
-            # Two-letter acronyms (AI, HR, DR, IT) are everywhere in prose: an
-            # evidence summary reading "Unable to parse AI response" once made
-            # an encryption policy the top match for "AI Policy". They count only
-            # when they are part of what the file is called.
-            if len(term) <= 2 and fname != "name":
-                continue
-            if FIELD_PRESENCE[fname] > presence.get(term, 0.0):
-                presence[term] = FIELD_PRESENCE[fname]
-                strongest_field[term] = fname
 
     distinctive = {t for t in name_terms if _term_weight(t) == 1.0}
     matched = sorted(t for t in distinctive if presence.get(t))

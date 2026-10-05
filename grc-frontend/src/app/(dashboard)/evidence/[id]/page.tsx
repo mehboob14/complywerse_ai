@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
-import { InlineLinkPicker, PageLoader, AnimatedModal, RightSlidePanel } from '@/components/ui';
+import { InlineLinkPicker, PageLoader, AnimatedModal, RightSlidePanel, useToast } from '@/components/ui';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import {
   ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
@@ -13,11 +13,12 @@ import {
   AlertTriangle, Eye, Trash2, Send, Sparkles,
   History, FileSpreadsheet, Shield, Building2, Info, Image, Settings,
   ShieldCheck, ClipboardList, ExternalLink, Plus, X,
-  ChevronRight, Search, ChevronLeft
+  ChevronRight, Search, ChevronLeft, FileSearch
 } from 'lucide-react';
 import Link from 'next/link';
 import EvidenceTimeline from './_EvidenceTimeline';
-import LinksCoverage from './_LinksCoverage';
+import LinksCoverage, { type AiLinkRec as LcRec } from './_LinksCoverage';
+import { auditObservationId, controlCounts, linkedGroups } from './_linkedGroups';
 import RelationshipsPanel from './_RelationshipsPanel';
 import AuditReadinessCard from './_AuditReadinessCard';
 import ReviewerActionPanel from './_ReviewerActionPanel';
@@ -172,6 +173,7 @@ interface AllLinksResponse {
   incidents: { total: number; links: Array<{ id: number; incident_id: number; link_type: string | null; incident: { id: number; title: string; severity: string; status: string } | null }> };
   policy_statements: { total: number; links: Array<{ id: number; policy_statement_id: number; link_type: string | null; policy_statement: { id: number; statement_code: string; statement_summary: string | null; status: string; document_id?: number | null; document_title?: string | null; document_code?: string | null; source_section?: string | null; source_page?: number | null } | null }> };
   assessments?: { total: number; links: Array<{ id: number; assessment_item_id: number; assessment_id: number | null; assessment_name: string | null; assessment_type: string | null; assessment_status: string | null; item_number: string | null; area_domain: string | null; control_description: string | null; link_status: string; created_at: string | null }> };
+  audit_observations?: { total: number; links: Array<{ id: number; kind: string; record_id: number; link_type: string | null; code: string | null; title: string | null; status: string | null; priority: string | null; source: string | null; created_at: string | null }> };
   total_links: number;
 }
 
@@ -179,8 +181,10 @@ interface ControlsResponse {
   evidence_id: number;
   evidence_name: string;
   total_mappings: number;
-  normalized_controls: Array<{ id: number; normalized_control: { id: number; code: string; name: string } | null }>;
-  by_framework: Array<{ framework_id: number; framework_name: string; framework_code: string; controls: Array<{ id: number; framework_control?: { id: number; code: string; name: string } | null; parsed_control?: { id: number; control_id: string; title: string } | null }> }>;
+  normalized_controls: Array<{ id: number; clause_reference?: string | null; coverage_type?: string | null; is_locked?: boolean; normalized_control: { id: number; code: string; name: string; scf_id?: string | null } | null }>;
+  by_framework: Array<{ framework_id: number; framework_name: string; framework_code: string; controls: Array<{ id: number; coverage_type?: string | null; is_locked?: boolean; framework_control?: { id: number; code: string; name: string } | null; parsed_control?: { id: number; control_id: string; title: string } | null }> }>;
+  // mappings that no longer resolve to a control: counted in total_mappings, so listed too
+  unresolved?: Array<{ id: number; control_code?: string | null; framework_name?: string | null; clause_reference?: string | null; coverage_type?: string | null; is_locked?: boolean }>;
 }
 
 const STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -335,6 +339,18 @@ export default function EvidenceDetailPage() {
     enabled: true,
   });
 
+  // Every common (SCF) control, for the manual picker: `available-controls` stops at 50.
+  const { data: commonControlOptions } = useQuery<{ controls: Array<{ id: number; scf_id: string; code: string; name: string }> }>({
+    queryKey: ['common-control-options'],
+    queryFn: async () => (await apiClient.get('/evidence-mgmt/links/common-control-options')).data,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: auditOptions } = useQuery<{ options: Array<{ id: number; code: string | null; title: string | null; subtitle: string | null; kind: string; record_id: number }> }>({
+    queryKey: ['evidence-audit-options', evidenceId],
+    queryFn: async () => (await apiClient.get(`/evidence-mgmt/cross-links/${evidenceId}/audit-observation-options`)).data,
+  });
+
   const { data: risksList } = useQuery<Array<{ id: number; title: string }>>({
     queryKey: ['risks-list'],
     queryFn: async () => {
@@ -430,7 +446,11 @@ export default function EvidenceDetailPage() {
   const runAssessmentMutation = useMutation({
     mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`),
     onMutate: () => setAssessError(null),
-    onError: (error: any) => setAssessError(error?.response?.data?.detail || 'AI assessment could not run. Please try again.'),
+    onError: (error: any) => {
+      setAssessError(error?.response?.data?.detail || 'AI assessment could not run. Please try again.');
+      // Still offer what matching can find from the name and description.
+      setRecommendNonce((n) => n + 1);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
@@ -515,7 +535,13 @@ export default function EvidenceDetailPage() {
     },
   });
 
+  const { toast } = useToast();
+  const linkFailed = (what: string) => (e: any) =>
+    toast({ type: 'error', title: `Could not ${what}`, message: e?.response?.data?.detail || 'Please try again.' });
+  const unlinkFailed = linkFailed('remove the link');
+
   const unlinkControlMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (mappingId: number) => 
       apiClient.delete(`/evidence-mgmt/links/${evidenceId}/controls/${mappingId}`),
     onSuccess: () => {
@@ -525,6 +551,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkRiskMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/risks/${linkId}`),
     onSuccess: () => {
@@ -533,6 +560,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkAssetMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/assets/${linkId}`),
     onSuccess: () => {
@@ -541,6 +569,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkIncidentMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/incidents/${linkId}`),
     onSuccess: () => {
@@ -549,6 +578,7 @@ export default function EvidenceDetailPage() {
   });
 
   const unlinkPolicyMutation = useMutation({
+    onError: unlinkFailed,
     mutationFn: (linkId: number) => 
       apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/policy-statements/${linkId}`),
     onSuccess: () => {
@@ -644,6 +674,41 @@ export default function EvidenceDetailPage() {
   const bulkLinkIncidents = useMutation({
     mutationFn: (ids: number[]) => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/incidents`, { incident_ids: ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] }),
+  });
+
+  // A common control is linked through the Assurance endpoint, as the artifact it asks for, so the
+  // control's own Evidence tab shows the file against that artifact.
+  const bulkLinkCommonControls = useMutation({
+    mutationFn: (recs: LcRec[]) => Promise.all(recs.filter((r) => r.meta?.scf_id).map((r) =>
+      apiClient.post(`/automation/common/controls/${encodeURIComponent(r.meta!.scf_id!)}/assurance/evidence`, {
+        evidence_id: evidenceId, artifact_name: r.meta?.artifact_name || null,
+      }))),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
+    },
+    onError: linkFailed('link the common control'),
+  });
+  const refreshAudit = () => {
+    queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] });
+    queryClient.invalidateQueries({ queryKey: ['evidence-audit-options', evidenceId] });
+  };
+  // Two registers, two endpoints: statutory audit observations, and findings in the issue register.
+  const bulkLinkAudit = useMutation({
+    mutationFn: async (recs: LcRec[]) => {
+      const statutory = recs.filter((r) => r.meta?.kind !== 'issue').map((r) => r.meta?.record_id ?? r.id);
+      const issues = recs.filter((r) => r.meta?.kind === 'issue').map((r) => r.meta?.record_id ?? -r.id);
+      if (statutory.length) await apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/audit-observations`, { observation_ids: statutory });
+      if (issues.length) await apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/audit-issues`, { issue_ids: issues });
+    },
+    onSuccess: refreshAudit,
+    onError: linkFailed('link the audit observation'),
+  });
+  const unlinkAuditMutation = useMutation({
+    mutationFn: ({ kind, linkId }: { kind: string; linkId: number }) =>
+      apiClient.delete(`/evidence-mgmt/cross-links/${evidenceId}/${kind === 'issue' ? 'audit-issues' : 'audit-observations'}/${linkId}`),
+    onSuccess: refreshAudit,
+    onError: unlinkFailed,
   });
 
   const unlockAssessmentMutation = useMutation({
@@ -773,6 +838,15 @@ export default function EvidenceDetailPage() {
   const statusStyle = getStatusStyle(evidence.status);
   const ocrStatusStyle = getOCRStatusStyle(evidence.ocr_status);
   const TypeIcon = getTypeIcon(evidence.evidence_type);
+  const counts = controlCounts(controlsData);
+  const linked = linkedGroups(controlsData, allLinks, {
+    control: (id) => unlinkControlMutation.mutate(id),
+    risk: (id) => unlinkRiskMutation.mutate(id),
+    asset: (id) => unlinkAssetMutation.mutate(id),
+    incident: (id) => unlinkIncidentMutation.mutate(id),
+    policy: (id) => unlinkPolicyMutation.mutate(id),
+    audit: (kind, linkId) => unlinkAuditMutation.mutate({ kind, linkId }),
+  });
 
   return (
     <div className="risk-workspace -m-4 space-y-4 lg:-m-5">
@@ -1105,23 +1179,28 @@ export default function EvidenceDetailPage() {
                 <LinksCoverage
                   evidenceId={evidenceId}
                   autoRunKey={recommendNonce}
-                  totalLinked={
-                    (controlsData?.total_mappings ?? 0) +
-                    (allLinks?.policy_statements?.total ?? 0) +
-                    (allLinks?.assessments?.total ?? 0) +
-                    (allLinks?.risks?.total ?? 0) +
-                    (allLinks?.assets?.total ?? 0) +
-                    (allLinks?.incidents?.total ?? 0)
-                  }
                   pills={[
-                    { key: 'controls', label: 'Controls', icon: Shield, linkedCount: controlsData?.total_mappings ?? 0 },
-                    { key: 'policy_statements', label: 'Policies', icon: FileText, linkedCount: allLinks?.policy_statements?.total ?? 0 },
-                    { key: 'assessments', label: 'Assessments', icon: ClipboardList, linkedCount: allLinks?.assessments?.total ?? 0 },
-                    { key: 'risks', label: 'Risks', icon: AlertTriangle, linkedCount: allLinks?.risks?.total ?? 0 },
-                    { key: 'assets', label: 'Assets', icon: Building2, linkedCount: allLinks?.assets?.total ?? 0 },
-                    { key: 'incidents', label: 'Incidents', icon: AlertCircle, linkedCount: allLinks?.incidents?.total ?? 0 },
+                    { key: 'controls', label: 'Controls', icon: Shield, linkedCount: counts.framework, groups: linked.controls },
+                    { key: 'common_controls', label: 'Common controls', icon: ShieldCheck, linkedCount: counts.common, groups: linked.common_controls },
+                    { key: 'policy_statements', label: 'Policies', icon: FileText, linkedCount: allLinks?.policy_statements?.total ?? 0, groups: linked.policy_statements },
+                    { key: 'assessments', label: 'Assessments', icon: ClipboardList, linkedCount: allLinks?.assessments?.total ?? 0, groups: linked.assessments, hint: 'Assessments link evidence from the assessment item itself.' },
+                    { key: 'audit_observations', label: 'Audit observations', icon: FileSearch, linkedCount: allLinks?.audit_observations?.total ?? 0, groups: linked.audit_observations },
+                    { key: 'risks', label: 'Risks', icon: AlertTriangle, linkedCount: allLinks?.risks?.total ?? 0, groups: linked.risks },
+                    { key: 'assets', label: 'Assets', icon: Building2, linkedCount: allLinks?.assets?.total ?? 0, groups: linked.assets },
+                    { key: 'incidents', label: 'Incidents', icon: AlertCircle, linkedCount: allLinks?.incidents?.total ?? 0, groups: linked.incidents },
                   ]}
                   suggestTargets={[
+                    {
+                      // A rule, not a model: asks the control library which controls want a document like this one.
+                      key: 'common_controls', badgeLabel: 'COMMON CONTROL', icon: ShieldCheck, immediate: true, busy: bulkLinkCommonControls.isPending,
+                      linkedIds: new Set((controlsData?.normalized_controls || []).map((m) => m.normalized_control?.id).filter((x): x is number => typeof x === 'number')),
+                      onLinkMany: (recs) => bulkLinkCommonControls.mutate(recs),
+                    },
+                    {
+                      key: 'audit_observations', badgeLabel: 'AUDIT OBSERVATION', icon: FileSearch, busy: bulkLinkAudit.isPending,
+                      linkedIds: new Set((allLinks?.audit_observations?.links || []).map((l) => auditObservationId(l.kind, l.record_id))),
+                      onLinkMany: (recs) => bulkLinkAudit.mutate(recs),
+                    },
                     {
                       key: 'controls', badgeLabel: 'CONTROL', icon: Shield, busy: bulkLinkControls.isPending,
                       linkedIds: new Set((controlsData?.by_framework || []).flatMap((fw) => fw.controls.map((m) => m.parsed_control?.id).filter((x): x is number => typeof x === 'number'))),
@@ -1153,6 +1232,19 @@ export default function EvidenceDetailPage() {
                       key: 'controls', label: 'Control', icon: Shield,
                       items: (availableControls?.frameworks || []).flatMap((fw) => fw.controls.map((c) => ({ value: `${fw.id}:${c.id}`, label: `${c.control_id} — ${c.title}`, sub: fw.name }))),
                       onPick: (v) => { const [fwId, ctrlId] = v.split(':').map(Number); bulkLinkControls.mutate([{ framework_id: fwId, control_id: ctrlId }]); },
+                    },
+                    {
+                      key: 'common_controls', label: 'Common control', icon: ShieldCheck,
+                      items: (commonControlOptions?.controls || []).map((c) => ({ value: c.scf_id, label: `${c.scf_id} — ${c.name}` })),
+                      onPick: (scfId) => bulkLinkCommonControls.mutate([{ id: 0, meta: { scf_id: scfId } }]),
+                    },
+                    {
+                      key: 'audit_observations', label: 'Audit observation', icon: FileSearch,
+                      items: (auditOptions?.options || []).map((o) => ({ value: `${o.kind}:${o.record_id}`, label: `${o.code ? `${o.code} — ` : ''}${o.title || 'Untitled'}`, sub: o.subtitle ?? undefined })),
+                      onPick: (v) => {
+                        const [kind, id] = v.split(':');
+                        bulkLinkAudit.mutate([{ id: auditObservationId(kind, Number(id)), meta: { kind, record_id: Number(id) } }]);
+                      },
                     },
                     {
                       key: 'risks', label: 'Risk', icon: AlertTriangle,

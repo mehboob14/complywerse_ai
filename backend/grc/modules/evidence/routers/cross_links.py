@@ -1,6 +1,7 @@
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 
@@ -9,9 +10,11 @@ from ....models import (
     PolicyStatementCompliance,
     RiskEvidenceLink, AssetEvidenceLink, EvidenceIncidentLink, EvidencePolicyLink,
     AssessmentItemEvidence, ComplianceAssessmentDocumentItem,
+    AuditObservation, AuditObservationEvidenceLink, AuditObservationActivity,
+    Issue, IssueEvidenceLink, IssueActivity, AuditIssueProfile,
     GRCUser, get_db
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, require_tenant_permission
 from sqlalchemy.orm.attributes import flag_modified
 
 
@@ -76,6 +79,20 @@ class IncidentLinkCreate(BaseModel):
 class PolicyStatementLinkCreate(BaseModel):
     statement_ids: List[int]
     link_type: Optional[str] = None
+
+
+class AuditObservationLinkCreate(BaseModel):
+    observation_ids: List[int]
+    link_type: Optional[str] = None      # proof | remediation | investigation
+
+
+class AuditIssueLinkCreate(BaseModel):
+    issue_ids: List[int]
+    link_type: Optional[str] = None
+
+
+_AUDIT_LINK_TYPES = ("proof", "remediation", "investigation")
+_require_issue_edit = require_tenant_permission("issue_management:issues:edit")
 
 
 def get_evidence_with_tenant_check(evidence_id: int, user: GRCUser, db: Session) -> Evidence:
@@ -651,6 +668,8 @@ def get_all_evidence_links(
     ).filter(
         AssessmentItemEvidence.evidence_id == evidence_id
     ).all()
+
+    audit_links = _audit_observation_links(db, evidence_id)
     
     return {
         "evidence_id": evidence_id,
@@ -723,5 +742,171 @@ def get_all_evidence_links(
                 for link in assessment_links
             ]
         },
+        "audit_observations": {"total": len(audit_links), "links": audit_links},
         "total_links": len(risk_links) + len(asset_links) + len(incident_links) + len(policy_links)
     }
+
+
+def _audit_observation_links(db: Session, evidence_id: int) -> List[dict]:
+    """Every audit observation this evidence supports, from both registers, in one list.
+
+    `kind` says which register a row is in (statutory audit observation, or an issue-register finding);
+    `id` is the link row to remove and `record_id` the observation or issue it points at.
+    """
+    out: List[dict] = []
+    try:
+        for ln in (db.query(AuditObservationEvidenceLink).options(joinedload(AuditObservationEvidenceLink.observation))
+                   .filter(AuditObservationEvidenceLink.evidence_id == evidence_id).all()):
+            o = ln.observation
+            out.append({
+                "id": ln.id, "kind": "statutory", "record_id": ln.observation_id, "link_type": ln.relationship_type,
+                "code": getattr(o, "code", None), "title": getattr(o, "title", None),
+                "status": getattr(o, "status", None), "priority": getattr(o, "priority", None),
+                "source": " · ".join(x for x in ("Statutory audit", getattr(o, "regulator_source", None),
+                                                 getattr(o, "audit_period", None)) if x),
+                "created_at": ln.created_at.isoformat() if ln.created_at else None,
+            })
+    except Exception:  # noqa: BLE001 — a tenant without the statutory audit tables
+        db.rollback()
+    try:
+        rows = (db.query(IssueEvidenceLink, Issue, AuditIssueProfile)
+                .join(Issue, Issue.id == IssueEvidenceLink.issue_id)
+                .outerjoin(AuditIssueProfile, AuditIssueProfile.issue_id == Issue.id)
+                .filter(IssueEvidenceLink.evidence_id == evidence_id,
+                        or_(AuditIssueProfile.id.isnot(None), Issue.issue_type.in_(("audit_finding",)),
+                            Issue.source_type.in_(("audit",)))).all())
+        for ln, issue, prof in rows:
+            how = (getattr(prof, "type_of_audit", None) or getattr(prof, "source_label", None)
+                   or getattr(prof, "regulator", None) or "Audit finding")
+            out.append({
+                "id": ln.id, "kind": "issue", "record_id": issue.id, "link_type": ln.relationship_type,
+                "code": issue.code, "title": issue.title, "status": issue.workflow_state or issue.status,
+                "priority": getattr(prof, "risk_rating", None) or issue.severity,
+                "source": f"Audit register · {how}" if prof is not None else f"Audit finding · {how}",
+                "created_at": ln.created_at.isoformat() if ln.created_at else None,
+            })
+    except Exception:  # noqa: BLE001
+        db.rollback()
+    return out
+
+
+@router.get("/{evidence_id}/audit-observation-options")
+def audit_observation_options(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Audit observations of every kind this evidence can still be linked to, for the manual picker."""
+    from .ai_assessment import _audit_observation_candidates
+
+    get_evidence_with_tenant_check(evidence_id, current_user, db)
+    rows = _audit_observation_candidates(db, evidence_id, get_user_tenants(current_user, db))
+    return {"options": [{"id": r["id"], "code": r["code"], "title": r["title"], "subtitle": r["subtitle"],
+                         "kind": r["meta"]["kind"], "record_id": r["meta"]["record_id"]} for r in rows]}
+
+
+@router.post("/{evidence_id}/audit-observations", status_code=status.HTTP_201_CREATED)
+def link_evidence_to_audit_observations(
+    evidence_id: int,
+    link_data: AuditObservationLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Link this evidence to statutory audit observations (as proof, remediation or investigation)."""
+    get_evidence_with_tenant_check(evidence_id, current_user, db)
+    user_tenants = get_user_tenants(current_user, db)
+    link_type = link_data.link_type if link_data.link_type in _AUDIT_LINK_TYPES else "proof"
+    created, skipped = [], []
+    for oid in link_data.observation_ids:
+        obs = db.query(AuditObservation).filter(AuditObservation.id == oid,
+                                                AuditObservation.tenant_id.in_(user_tenants)).first()
+        if obs is None:
+            skipped.append({"observation_id": oid, "reason": "Observation not found or access denied"})
+            continue
+        if db.query(AuditObservationEvidenceLink).filter_by(observation_id=oid, evidence_id=evidence_id).first():
+            skipped.append({"observation_id": oid, "reason": "Link already exists"})
+            continue
+        link = AuditObservationEvidenceLink(observation_id=oid, evidence_id=evidence_id,
+                                            relationship_type=link_type, created_by=current_user.id)
+        db.add(link)
+        db.add(AuditObservationActivity(observation_id=oid, user_id=current_user.id, activity_type="link",
+                                        message=f"Linked evidence #{evidence_id}", payload={"evidence_id": evidence_id}))
+        obs.updated_at = datetime.utcnow()
+        db.flush()
+        created.append({"id": link.id, "observation_id": oid})
+    db.commit()
+    return {"evidence_id": evidence_id, "created_count": len(created), "skipped_count": len(skipped),
+            "created_links": created, "skipped": skipped}
+
+
+@router.delete("/{evidence_id}/audit-observations/{link_id}")
+def delete_evidence_audit_observation_link(
+    evidence_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    get_evidence_with_tenant_check(evidence_id, current_user, db)
+    link = db.query(AuditObservationEvidenceLink).filter(
+        AuditObservationEvidenceLink.id == link_id, AuditObservationEvidenceLink.evidence_id == evidence_id).first()
+    if not link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit observation link not found")
+    db.add(AuditObservationActivity(observation_id=link.observation_id, user_id=current_user.id,
+                                    activity_type="unlink", message=f"Unlinked evidence #{evidence_id}",
+                                    payload={"evidence_id": evidence_id}))
+    db.delete(link)
+    db.commit()
+    return {"message": "Audit observation link removed successfully"}
+
+
+@router.post("/{evidence_id}/audit-issues", status_code=status.HTTP_201_CREATED,
+             dependencies=[Depends(_require_issue_edit)])
+def link_evidence_to_audit_issues(
+    evidence_id: int,
+    link_data: AuditIssueLinkCreate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Link this evidence to audit-register issues (regulatory, internal audit, pen-test, self-identified).
+    Needs the issue-edit permission, as linking evidence from the issue's own page does."""
+    get_evidence_with_tenant_check(evidence_id, current_user, db)
+    user_tenants = get_user_tenants(current_user, db)
+    link_type = link_data.link_type if link_data.link_type in _AUDIT_LINK_TYPES else "proof"
+    created, skipped = [], []
+    for iid in link_data.issue_ids:
+        issue = db.query(Issue).filter(Issue.id == iid, Issue.tenant_id.in_(user_tenants)).first()
+        if issue is None:
+            skipped.append({"issue_id": iid, "reason": "Issue not found or access denied"})
+            continue
+        if db.query(IssueEvidenceLink).filter_by(issue_id=iid, evidence_id=evidence_id).first():
+            skipped.append({"issue_id": iid, "reason": "Link already exists"})
+            continue
+        link = IssueEvidenceLink(issue_id=iid, evidence_id=evidence_id, relationship_type=link_type,
+                                 created_by=current_user.id)
+        db.add(link)
+        db.add(IssueActivity(issue_id=iid, user_id=current_user.id, type="linked",
+                             payload={"target_type": "evidence", "target_id": evidence_id}))
+        db.flush()
+        created.append({"id": link.id, "issue_id": iid})
+    db.commit()
+    return {"evidence_id": evidence_id, "created_count": len(created), "skipped_count": len(skipped),
+            "created_links": created, "skipped": skipped}
+
+
+@router.delete("/{evidence_id}/audit-issues/{link_id}", dependencies=[Depends(_require_issue_edit)])
+def delete_evidence_audit_issue_link(
+    evidence_id: int,
+    link_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    get_evidence_with_tenant_check(evidence_id, current_user, db)
+    link = db.query(IssueEvidenceLink).filter(IssueEvidenceLink.id == link_id,
+                                              IssueEvidenceLink.evidence_id == evidence_id).first()
+    if not link:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Audit issue link not found")
+    db.add(IssueActivity(issue_id=link.issue_id, user_id=current_user.id, type="unlinked",
+                         payload={"target_type": "evidence", "target_id": evidence_id}))
+    db.delete(link)
+    db.commit()
+    return {"message": "Audit issue link removed successfully"}
