@@ -700,7 +700,7 @@ def link_evidence_from_ai_suggestion(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 f"Could not match AI control '{link_data.control_id}' (clause '{link_data.clause_reference}') "
-                f"in framework '{framework.name}'. Please verify the framework upload and run AI assessment again."
+                f"in framework '{framework.name}'. Please verify the framework's controls and run AI assessment again."
             )
         )
 

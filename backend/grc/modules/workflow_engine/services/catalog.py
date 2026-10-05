@@ -446,21 +446,17 @@ ROUTER_MODULE_OVERRIDE: dict[tuple[str, str], tuple[str, str]] = {
     ("governance", "versions"):             ("Governance", "Documents"),
     ("governance", "policy_parser"):        ("Governance", "Documents"),
     ("governance", "policy_exceptions"):    ("Governance", "Documents"),
-    # ── Compliance: Assessments (gap analysis + applicability + fw assessment + control gaps) ──
+    # ── Compliance: Assessments (gap analysis + applicability + control gaps) ──
     ("governance", "applicability"):                ("Compliance", "Assessments"),
     ("governance", "gap_analysis"):                 ("Compliance", "Assessments"),
-    ("framework_upload", "assessment"):             ("Compliance", "Assessments"),
     ("control_library", "gap_analysis"):            ("Compliance", "Assessments"),
     # ── Compliance: Statements ──────────────────────────────────────────────
     ("compliance", "statements"):                   ("Compliance", "Statements"),
     ("compliance", "dashboard"):                    ("Internal",   "Compliance Dashboard"),
-    # ── Compliance: Frameworks (upload + publish + alignment) ────────────────
+    # ── Compliance: Frameworks (library) ─────────────────────────────────────
     ("framework_upload", "upload"):                 ("Compliance", "Frameworks"),
-    ("framework_upload", "publish"):                ("Compliance", "Frameworks"),
-    ("framework_upload", "alignment"):              ("Compliance", "Frameworks"),
-    # ── Compliance: Evidence Requirements (parser + fw evidence + control recs) ─
+    # ── Compliance: Evidence Requirements (parser + control recs) ────────────
     ("framework_upload", "parser"):                 ("Compliance", "Evidence Requirements"),
-    ("framework_upload", "evidence"):               ("Compliance", "Evidence Requirements"),
     ("control_library", "evidence_recs"):           ("Compliance", "Evidence Requirements"),
     # ── Compliance: Controls (ai mapping + comparison + coverage) ────────────
     ("control_library", "ai_mapping"):              ("Compliance", "Controls"),
@@ -517,9 +513,6 @@ FUNCTION_MODULE_OVERRIDE: dict[tuple[str, str], tuple[str, str]] = {
 # (module_dir.name, router_file.stem, fn_name) → custom label string
 # Overrides the auto-generated label text for specific functions.
 LABEL_OVERRIDE: dict[tuple[str, str, str], str] = {
-    # Framework Upload: the auto-label "Analyze And Align Controls" is opaque —
-    # spell out that it maps an uploaded framework's controls onto the library.
-    ("framework_upload", "alignment", "analyze_and_align_controls"): "Map Framework Controls to Library",
     # Dependencies: clarify these act on dependency-level relationships, not global config
     ("erm", "dependencies", "update_appetite"): "Edit Dependency Appetite Level",
     ("erm", "dependencies", "update_control_effectiveness"): "Edit Linked Control Effectiveness",
@@ -537,10 +530,6 @@ LABEL_OVERRIDE: dict[tuple[str, str, str], str] = {
     ("governance", "policy_exceptions", "revoke_exception"): "Revoke Exception",
 
     # ── Duplicate label fixes ─────────────────────────────────────────────────
-    # Compliance > Evidence vs Evidence Requirements (same fn name, different routers)
-    ("framework_upload", "evidence", "delete_evidence"):        "Delete Evidence Requirement",
-    ("framework_upload", "evidence", "upload_evidence"):        "Upload Evidence Requirement",
-
     # Risk Management > RCSA vs Vendor Risk (same fn names, different domains)
     ("erm", "rcsa", "approve_assessment"):                      "Approve RCSA Assessment",
     ("vendor_risk", "assessments", "approve_assessment"):       "Approve Vendor Assessment",
@@ -551,9 +540,7 @@ LABEL_OVERRIDE: dict[tuple[str, str, str], str] = {
     ("vendor_risk", "questionnaires", "update_template"): "Edit Questionnaire Template",
     ("vendor_risk", "questionnaires", "delete_template"):       "Delete Questionnaire Template",
 
-    # Cross-module: Create/Update Assessment (Compliance Framework vs Vendor Risk)
-    ("framework_upload", "assessment", "create_assessment"):    "Create Framework Assessment",
-    ("framework_upload", "assessment", "update_assessment"): "Edit Framework Assessment",
+    # Cross-module: Create/Update Assessment (Vendor Risk)
     ("vendor_risk", "assessments", "create_assessment"):        "Create Vendor Risk Assessment",
     ("vendor_risk", "assessments", "update_assessment"): "Edit Vendor Risk Assessment",
 
@@ -586,7 +573,6 @@ LABEL_OVERRIDE: dict[tuple[str, str, str], str] = {
     ("governance", "regulatory_feeds", "analyze_feed_item"):        "AI: Analyze Feed Item",
     ("governance", "documents", "suggest_policies_for_framework"):  "AI: Suggest Policies For Framework",
     ("framework_upload", "parser", "generate_evidence_requirements"): "AI: Generate Evidence Requirements",
-    ("framework_upload", "parser", "classify_framework"):           "AI: Classify Framework",
     ("erm", "framework_risk_assessments", "generate_framework_questions"): "AI: Generate Framework Questions",
     ("vuln_management", "ai_analysis", "analyze_report"):           "AI: Analyze Report",
     ("vuln_management", "ai_analysis", "suggest_fix"):              "AI: Suggest Fix",
@@ -1401,10 +1387,9 @@ ENDPOINT_EVENT_TYPES: list[_EndpointEvent] = [
      ("vendor_risk.tpra.api.reassess",), None),
     # ── Compliance ────────────────────────────────────────────────────────
     ("compliance_assessment_created", "Compliance assessment created", "Compliance",
-     ("compliance_assessments_router.upload_assessment", "framework_upload.assessment.create_assessment",
-      "dcc_router.initialize_dcc_assessment"), None),
+     ("compliance_assessments_router.upload_assessment", "dcc_router.initialize_dcc_assessment"), None),
     ("compliance_assessment_completed", "Compliance assessment completed", "Compliance",
-     ("compliance_assessments_router.update_assessment", "framework_upload.assessment.update_assessment"),
+     ("compliance_assessments_router.update_assessment",),
      ("status", frozenset({"completed", "complete", "closed"}))),
     ("assessment_item_updated", "Assessment item updated", "Compliance",
      ("compliance_assessments_router.update_assessment_item",), None),

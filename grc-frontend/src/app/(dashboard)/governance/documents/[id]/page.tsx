@@ -1672,7 +1672,7 @@ export default function PolicyDetailPage() {
                   <Loader2 className="h-6 w-6 animate-spin text-primary-400" />
                 </div>
               ) : uploadedFrameworks.length === 0 ? (
-                <p className="text-sm text-slate-600 text-center py-4">No frameworks uploaded yet</p>
+                <p className="text-sm text-slate-600 text-center py-4">No frameworks available yet</p>
               ) : (() => {
                 // Apply the search filter to the framework list. We compute
                 // the visible subset here so both the Select-All checkbox

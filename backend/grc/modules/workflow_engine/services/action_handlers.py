@@ -2081,62 +2081,9 @@ class WorkflowActionHandlers:
                 comp = ctx.get("control_comparison") or []
                 return {"action": "comparison.export", "result": "exported", "rows": len(comp)}
 
-        # ── Frameworks submodule (compliance.frameworks.*) ────────────────────
-        if submodule_key == "frameworks":
-            from ....models import Framework as _Framework
-
-            framework_id = ctx.get("framework_id") or payload.get("framework_id")
-            try: framework_id = int(framework_id) if framework_id else None
-            except Exception: framework_id = None
-
-            if functionality in ("framework", "upload.framework"):
-                # Entry point — record marker only
-                if framework_id:
-                    _save_ctx("framework_id", framework_id); db.commit()
-                return {"action": "framework", "result": "received", "framework_id": framework_id}
-
-            if functionality in ("extract_text_from_framework", "upload.extract_text_from_framework"):
-                fw = db.query(_Framework).filter(_Framework.id==framework_id).first() if framework_id else None
-                _save_ctx("framework_text_extracted", True); db.commit()
-                return {"action": "extract_text_from_framework", "result": "extracted", "framework_id": framework_id, "found": bool(fw)}
-
-            if functionality in ("analyze_and_align_controls", "trigger.analyze_and_align_controls"):
-                ct = db.query(_FC).count() if False else 0
-                from ....models import FrameworkControl as _FC2
-                if framework_id:
-                    ct = db.query(_FC2).filter(_FC2.framework_id==framework_id).count()
-                _save_ctx("analyzed_control_count", ct); db.commit()
-                return {"action": "analyze_and_align_controls", "result": "completed", "framework_id": framework_id, "controls": ct}
-
-            if functionality in ("alignment", "update.alignment"):
-                _save_ctx("alignment_confirmed", True); db.commit()
-                return {"action": "alignment", "result": "updated", "framework_id": framework_id}
-
-            if functionality in ("confirm_alignment", "trigger.confirm_alignment"):
-                fw = db.query(_Framework).filter(_Framework.id==framework_id).first() if framework_id else None
-                if fw and hasattr(fw, "status"):
-                    try: fw.status = "published"
-                    except Exception: pass
-                    db.commit()
-                _save_ctx("framework_published", True); db.commit()
-                return {"action": "confirm_alignment", "result": "published", "framework_id": framework_id}
-
-            if functionality in ("unpublish_framework", "delete.unpublish_framework"):
-                fw = db.query(_Framework).filter(_Framework.id==framework_id).first() if framework_id else None
-                if fw and hasattr(fw, "status"):
-                    try: fw.status = "archived"
-                    except Exception: pass
-                    db.commit()
-                _save_ctx("framework_unpublished", True); db.commit()
-                return {"action": "unpublish_framework", "result": "archived", "framework_id": framework_id}
-
         # ── Evidence requirements submodule (compliance.evidence_requirements.*) ─
         if submodule_key == "evidence_requirements":
             from ....models import ControlEvidenceRequirement as _ER
-
-            if functionality in ("upload_evidence", "create.upload_evidence"):
-                _save_ctx("evidence_requirement_evidence_uploaded", True); db.commit()
-                return {"action": "upload_evidence", "result": "received"}
 
             if functionality in ("generate_for_control", "trigger.generate_for_control"):
                 # Create one EvidenceRequirement linked to the most recent control
@@ -2168,22 +2115,6 @@ class WorkflowActionHandlers:
             if functionality in ("recommendation", "update.recommendation"):
                 _save_ctx("recommendation_updated", True); db.commit()
                 return {"action": "recommendation", "result": "updated"}
-
-            if functionality in ("classify_framework", "trigger.classify_framework"):
-                _save_ctx("framework_classified", True); db.commit()
-                return {"action": "classify_framework", "result": "classified"}
-
-            if functionality in ("parse_framework_document", "trigger.parse_framework_document"):
-                _save_ctx("framework_parsed", True); db.commit()
-                return {"action": "parse_framework_document", "result": "parsed"}
-
-            if functionality in ("verify_parsed_control", "trigger.verify_parsed_control"):
-                _save_ctx("parsed_control_verified", True); db.commit()
-                return {"action": "verify_parsed_control", "result": "verified"}
-
-            if functionality in ("parsed_control", "update.parsed_control"):
-                _save_ctx("parsed_control_updated", True); db.commit()
-                return {"action": "parsed_control", "result": "updated"}
 
         # ── Control library submodule ─────────────────────────────────────────
         if submodule_key == "control_library":

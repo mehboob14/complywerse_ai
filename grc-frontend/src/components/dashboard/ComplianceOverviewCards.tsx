@@ -49,7 +49,6 @@ const SECTION_META: Record<string, { icon: React.ElementType; href: string; shor
 };
 
 const ATTENTION_META: Array<{ key: string; label: string; href: string; color: string }> = [
-  { key: 'frameworks_unpublished', label: 'Frameworks not published', href: '/framework-upload', color: '#f59e0b' },
   { key: 'controls_without_evidence', label: 'Controls without evidence', href: '/controls', color: '#64748b' },
   { key: 'controls_unverified', label: 'Controls unverified', href: '/controls', color: '#8b5cf6' },
   { key: 'controls_untested', label: 'Controls not tested', href: '/control-library', color: '#0ea5e9' },

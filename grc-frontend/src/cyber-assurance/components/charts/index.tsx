@@ -136,7 +136,7 @@ export function RadarChart({ data, size = 200 }: RadarChartProps) {
     return (
       <ChartEmptyState
         title="No framework data"
-        description="Upload frameworks to see maturity scores"
+        description="Maturity scores appear once frameworks are in the library"
         icon={<PieChart className="h-8 w-8 text-slate-500" />}
       />
     );

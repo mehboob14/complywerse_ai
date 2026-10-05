@@ -3,7 +3,7 @@
 import { useRef, useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
-import { committeeApi, apiClient, frameworkUploadApi } from '@/lib/api';
+import { committeeApi, apiClient } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Users,
@@ -399,7 +399,7 @@ export default function CommitteeDetailPage() {
   const { data: availableFrameworks } = useQuery({
     queryKey: ['available-frameworks-for-charter'],
     queryFn: async () => {
-      const response = await frameworkUploadApi.getFrameworks({ limit: 1000 });
+      const response = await apiClient.get('/framework-upload/upload', { params: { limit: 1000 } });
       const payload = response.data as unknown;
       const validStatuses = new Set(['published', 'parsed', 'classified', 'completed']);
       const dedupeByName = (frameworks: any[]) => {
@@ -1273,7 +1273,7 @@ export default function CommitteeDetailPage() {
             <div className="card p-8 text-center">
               <FileText className="h-10 w-10 text-slate-300 mx-auto mb-3" />
               <h3 className="text-lg font-medium text-black mb-2">No Charters Yet</h3>
-              <p className="text-black mb-4">Generate a charter using AI based on your uploaded frameworks, or create one manually.</p>
+              <p className="text-black mb-4">Generate a charter using AI based on your frameworks, or create one manually.</p>
               <button
                 onClick={() => {
                   setAiError(null);
@@ -1991,7 +1991,7 @@ export default function CommitteeDetailPage() {
 
           {!availableFrameworks || availableFrameworks.length === 0 ? (
             <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <p className="text-sm text-black">No frameworks available. Please upload or parse frameworks first.</p>
+              <p className="text-sm text-black">No frameworks are available yet.</p>
             </div>
           ) : (
             <div className="space-y-2 max-h-[60vh] overflow-y-auto border border-slate-200 rounded-lg p-4">

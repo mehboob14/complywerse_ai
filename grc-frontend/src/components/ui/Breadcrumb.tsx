@@ -8,7 +8,6 @@ import { clsx } from 'clsx';
 const pathLabels: Record<string, string> = {
   dashboard: 'Dashboard',
   frameworks: 'Frameworks',
-  'framework-upload': 'Framework Upload',
   controls: 'Controls',
   'control-library': 'Control Library',
   evidence: 'Evidence',

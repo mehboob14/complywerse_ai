@@ -293,11 +293,6 @@ PERMISSION_MATRIX = [
                 "actions": ["view", "create", "edit", "delete"]
             },
             {
-                "name": "framework_upload",
-                "display_name": "Framework Upload",
-                "actions": ["view", "create", "edit", "delete"]
-            },
-            {
                 "name": "framework_mapping",
                 "display_name": "Framework Mapping",
                 "actions": ["view", "create", "edit"]

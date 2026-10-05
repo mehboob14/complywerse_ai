@@ -33,7 +33,8 @@ def test_every_module_that_owns_records_has_nodes():
 
 def test_assessments_are_their_own_module():
     pages = {n["submodule"] for n in PLATFORM_FUNCTION_NODE_TYPES if n["module"] == "Assessments"}
-    assert {"Framework Assessments", "NCA"} <= pages
+    assert {"NCA"} <= pages          # "Framework Assessments" went with the framework upload feature
+    assert "Framework Assessments" not in pages
     assert not [n for n in PLATFORM_FUNCTION_NODE_TYPES
                 if (n["module"], n["submodule"]) == ("Compliance", "Assessments")]
 

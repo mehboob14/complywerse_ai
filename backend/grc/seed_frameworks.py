@@ -165,10 +165,10 @@ def _determine_control_attributes(control_name, control_statement):
 def seed_frameworks(session=None):
     """
     DEPRECATED: Pre-seeded frameworks have been removed from the system.
-    Users should now upload their own framework documents via the Framework Upload feature.
+    Frameworks are loaded by the platform (scripts/batch_parse_frameworks.py); the app no longer uploads them.
     Kept as a no-op so tenant provisioning can call it idempotently.
     """
-    print("Pre-seeded frameworks disabled. Use Framework Upload to add frameworks.")
+    print("Pre-seeded frameworks disabled. Frameworks are loaded by scripts/batch_parse_frameworks.py.")
     return
 
     # Legacy code below - kept for reference but never executed

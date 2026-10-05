@@ -796,7 +796,7 @@ def get_compliance_sections_overview(
     # Measures how compliant the org actually is against its adopted frameworks —
     # controls implemented / evidenced / verified across certification journeys +
     # journey coverage — instead of "did the file parse". (uf_ids is still needed by
-    # the Controls section below, so the upload query stays.)
+    # the Controls section below, so the framework query stays.)
     try:
         ufs = db.query(UploadedFramework.id, UploadedFramework.upload_status,
                        UploadedFramework.published_framework_id,
@@ -805,8 +805,6 @@ def get_compliance_sections_overview(
     except _SQLErr:
         db.rollback(); ufs = []
     uf_ids = [r.id for r in ufs]
-    uf_total = len(ufs)
-    uf_published = sum(1 for r in ufs if r.published_framework_id or r.upload_status == "published")
     # "Adopted" = frameworks classified certification/compliance (the ones you comply
     # against). Includes GLOBAL seed frameworks (tenant_id NULL), not just the few a
     # tenant uploaded itself — journeys run against those global frameworks.
@@ -1122,8 +1120,7 @@ def get_compliance_sections_overview(
                                   "applicable_controls": app_total, "implemented": fw_implemented,
                                   "verified": fw_verified, "approved_evidence": fw_evidenced,
                                   "criteria_met": crit_met, "criteria_total": crit_total,
-                                  "gap_findings": gap_total, "gaps_resolved": gap_resolved,
-                                  "uploaded": uf_total, "published": uf_published}},
+                                  "gap_findings": gap_total, "gaps_resolved": gap_resolved}},
         "controls": {"key": "controls", "label": "Controls", "weight": 0.18,
                      "score": _sec_score(ctrl_metrics), "metrics": ctrl_metrics,
                      "counts": {"total": pfc_total, "verified": pfc_verified,
@@ -1174,15 +1171,13 @@ def get_compliance_sections_overview(
         "sections": sections,
         "attention_queue": {
             # Non-overlapping actionable buckets (a control gap is counted once).
-            "frameworks_unpublished": uf_total - uf_published,
             "controls_without_evidence": (pfc_total - pfc_with_ev) if pfc_total else 0,
             "controls_unverified": (pfc_total - pfc_verified) if pfc_total else 0,
             "controls_untested": (n_wi - len(wi_tested)) if n_wi else 0,
             "overdue_control_tests": overdue_tests,
             "evidence_stale": ev_stale,
             "regulatory_overdue_tasks": reg_overdue_tasks,
-            "total": ((uf_total - uf_published)
-                      + ((pfc_total - pfc_with_ev) if pfc_total else 0) + ev_stale
+            "total": (((pfc_total - pfc_with_ev) if pfc_total else 0) + ev_stale
                       + overdue_tests + reg_overdue_tasks),
         },
         "performance": {

@@ -107,7 +107,6 @@ BY_PREFIX: Dict[str, Place] = {
     "/compliance/nca": ("Assessments", "NCA"),
     "/risks/nca": ("Assessments", "NCA"),
     "/vulnerabilities/nca": ("Assessments", "NCA"),
-    "/framework-upload/assessment": ("Assessments", "Framework Assessments"),
     # Business Continuity
     "/bcm": ("Business Continuity", "Overview"),
     "/bcm/plans": ("Business Continuity", "Continuity Plans"),

@@ -36,7 +36,7 @@ from ..schemas import (
     ImplementationEvidenceCreate, ImplementationEvidenceResponse,
     ProgressSummary, GapAnalysis, EvidenceReviewAction, MessageResponse
 )
-from ..modules.framework_upload.routers.evidence import trigger_ocr_and_assessment_background
+from ..modules.evidence.background import trigger_ocr_and_assessment_background
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/certifications", tags=["Certifications"])

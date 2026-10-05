@@ -2,6 +2,10 @@ from ._16_certification_journey_models import *  # noqa: F401,F403
 
 # =============================================================================
 # 15. Framework Upload & Parsing Models
+#
+# The in-app upload feature (upload, AI parse, parsed-control review, alignment, publish, framework assessments)
+# was removed. These tables stay: they ARE the framework library (frameworks already uploaded, and those loaded by
+# scripts/batch_parse_frameworks.py) that journeys, evidence links, governance mappings and the dashboards read.
 # =============================================================================
 
 class UploadedFramework(Base):

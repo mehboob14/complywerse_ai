@@ -3,7 +3,6 @@
 // /frameworks/manage
 // ─────────────────────────────────────────────────────────────────────────
 // Management surface for the frameworks library:
-//   • Processing frameworks (uploads still being parsed / classified)
 //   • Active certification journeys (the gauge cards)
 //   • Available frameworks (the full library, with Start Journey actions)
 // All sections + mutations preserved verbatim from the legacy /frameworks
@@ -20,7 +19,7 @@ import { SearchInput, PageLoader } from '@/components/ui';
 import {
   FileStack, Loader2, AlertCircle, Shield, Play, ArrowRight,
   Calendar, Target, CheckCircle2, Clock, Trash2, X, Tag,
-  RefreshCw, FileText, Sparkles, CheckCircle, Eye, Upload,
+  Sparkles, CheckCircle, Eye,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -41,7 +40,6 @@ export default function FrameworksManagePage() {
   const [journeyDeleteConfirm, setJourneyDeleteConfirm] = useState<CertificationJourney | null>(null);
   const [journeyDeleteError, setJourneyDeleteError] = useState<string | null>(null);
   const [enhancingFrameworkId, setEnhancingFrameworkId] = useState<number | null>(null);
-  const [classifyingFrameworkId, setClassifyingFrameworkId] = useState<number | null>(null);
   const [frameworkSearch, setFrameworkSearch] = useState('');
 
   const deleteMutation = useMutation({
@@ -70,24 +68,9 @@ export default function FrameworksManagePage() {
     },
   });
 
-  const [retryError, setRetryError] = useState<string | null>(null);
-  const [retrySuccess, setRetrySuccess] = useState<string | null>(null);
-
-  const retryParseMutation = useMutation({
-    mutationFn: async (frameworkId: number) =>
-      apiClient.post(`/framework-upload/parser/${frameworkId}/retry-parse`),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
-      setRetryError(null);
-      setRetrySuccess(data.data?.message || 'Parsing restarted successfully');
-      setTimeout(() => setRetrySuccess(null), 5000);
-    },
-    onError: (error: { response?: { data?: { detail?: string } } }) => {
-      setRetryError(error.response?.data?.detail || 'Failed to retry parsing');
-      setRetrySuccess(null);
-      setTimeout(() => setRetryError(null), 5000);
-    },
-  });
+  // Feedback of the evidence-recommendation action, shown under the search bar.
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const enhanceMutation = useMutation({
     mutationFn: async (frameworkId: number) =>
@@ -95,48 +78,24 @@ export default function FrameworksManagePage() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
       setEnhancingFrameworkId(null);
-      setRetrySuccess(
+      setActionSuccess(
         `Enhancement started for ${data.data?.total_controls || 0} controls. Estimated time: ${data.data?.estimated_time_minutes || 1} minutes.`,
       );
-      setTimeout(() => setRetrySuccess(null), 8000);
+      setTimeout(() => setActionSuccess(null), 8000);
     },
     onError: (error: { response?: { data?: { detail?: string } } }) => {
-      setRetryError(error.response?.data?.detail || 'Failed to start enhancement');
+      setActionError(error.response?.data?.detail || 'Failed to start enhancement');
       setEnhancingFrameworkId(null);
-      setTimeout(() => setRetryError(null), 5000);
+      setTimeout(() => setActionError(null), 5000);
     },
   });
 
-  const classifyMutation = useMutation({
-    mutationFn: async (frameworkId: number) =>
-      apiClient.post(`/framework-upload/parser/${frameworkId}/classify`),
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['uploaded-frameworks'] });
-      setClassifyingFrameworkId(null);
-      setRetrySuccess(data.data?.message || 'Framework classification started');
-      setTimeout(() => setRetrySuccess(null), 5000);
-    },
-    onError: (error: { response?: { data?: { detail?: string } } }) => {
-      setRetryError(error.response?.data?.detail || 'Failed to classify framework');
-      setClassifyingFrameworkId(null);
-      setTimeout(() => setRetryError(null), 5000);
-    },
-  });
-
-  const { data: frameworks, isLoading: frameworksLoading, isFetching } = useQuery({
+  const { data: frameworks, isLoading: frameworksLoading } = useQuery({
     queryKey: ['uploaded-frameworks'],
     queryFn: async () => {
       const response = await apiClient.get('/framework-upload/upload');
       const items = response.data?.items;
       return Array.isArray(items) ? (items as UploadedFramework[]) : [];
-    },
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!Array.isArray(data)) return false;
-      const hasProcessing = data.some((f: UploadedFramework) =>
-        ['draft', 'text_extracted', 'parsing'].includes(f.upload_status),
-      );
-      return hasProcessing ? 3000 : false;
     },
   });
 
@@ -185,39 +144,10 @@ export default function FrameworksManagePage() {
   const frameworksArray = Array.isArray(frameworks) ? frameworks : [];
   const dedupedFrameworks = dedupeFrameworks(frameworksArray);
 
-  const processingFrameworks = dedupedFrameworks.filter(
-    (f: UploadedFramework) =>
-      ['draft', 'text_extracted', 'parsing', 'classifying'].includes(f.upload_status),
-  );
   const completedFrameworks = dedupedFrameworks.filter(
     (f: UploadedFramework) =>
       ['completed', 'published', 'parsed', 'classified'].includes(f.upload_status),
   );
-
-  const getUploadStatusInfo = (status: string) => {
-    switch (status) {
-      case 'draft':
-        return { label: 'Uploaded', color: 'bg-slate-50 text-slate-700', icon: FileText, description: 'File uploaded, waiting for text extraction' };
-      case 'text_extracted':
-        return { label: 'Text Extracted', color: 'bg-slate-100 text-slate-700', icon: FileText, description: 'Text extracted, waiting for AI parsing' };
-      case 'parsing':
-        return { label: 'Parsing Controls', color: 'bg-primary-50 text-primary-700', icon: Sparkles, description: 'AI is extracting controls and requirements' };
-      case 'completed':
-        return { label: 'Ready', color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, description: 'Framework ready to use' };
-      case 'parsed':
-        return { label: 'Parsed', color: 'bg-primary-50 text-primary-700', icon: CheckCircle, description: 'Framework parsed, ready to publish or start certification' };
-      case 'published':
-        return { label: 'Published', color: 'bg-emerald-50 text-emerald-700', icon: CheckCircle, description: 'Framework published and active' };
-      case 'error':
-        return { label: 'Error', color: 'bg-rose-50 text-rose-700', icon: AlertCircle, description: 'An error occurred during processing' };
-      case 'classifying':
-        return { label: 'Classifying Framework', color: 'bg-amber-50 text-amber-700', icon: Sparkles, description: 'AI is analyzing framework type' };
-      case 'classified':
-        return { label: 'Classified', color: 'bg-primary-50 text-primary-700', icon: Tag, description: 'Framework classified, ready to view overview' };
-      default:
-        return { label: status, color: 'bg-slate-50 text-slate-700', icon: FileStack, description: 'Processing' };
-    }
-  };
 
   const availableFrameworks = completedFrameworks.filter(
     (f: UploadedFramework) => !activeCertificationFrameworkIds.has(String(f.id)),
@@ -248,11 +178,9 @@ export default function FrameworksManagePage() {
       .some((value) => value!.toString().toLowerCase().includes(normalizedSearch));
   };
 
-  const filteredProcessingFrameworks = processingFrameworks.filter(frameworkMatchesSearch);
   const filteredActiveCertifications = activeCertifications.filter(certificationMatchesSearch);
   const filteredAvailableFrameworks = availableFrameworks.filter(frameworkMatchesSearch);
   const hasVisibleResults =
-    filteredProcessingFrameworks.length > 0 ||
     filteredActiveCertifications.length > 0 ||
     filteredAvailableFrameworks.length > 0;
 
@@ -293,10 +221,6 @@ export default function FrameworksManagePage() {
 
       {/* Search bar for filtering library + journeys */}
       <div className="flex items-center justify-end gap-3">
-        {/* The upload page has no sidebar entry; this is the way in. */}
-        <Link href="/framework-upload" className="cw-btn-primary inline-flex items-center gap-2 whitespace-nowrap px-3 py-2">
-          <Upload className="h-4 w-4" /> Upload framework
-        </Link>
         <div className="w-full sm:w-72">
           <SearchInput
             value={frameworkSearch}
@@ -313,95 +237,17 @@ export default function FrameworksManagePage() {
         </div>
       )}
 
-      {filteredProcessingFrameworks.length > 0 && (
-        <section>
-          <h2 className="mb-4 flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <RefreshCw className={`h-5 w-5 text-primary-600 ${isFetching ? 'animate-spin' : ''}`} strokeWidth={1.75} />
-            Processing Frameworks
-            <span className="ml-2 text-sm font-normal text-slate-500">Auto-refreshing every 3s</span>
-          </h2>
-
-          {retryError && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-rose-50 border border-rose-200 p-3 text-sm text-rose-700">
-              <AlertCircle className="h-4 w-4" />
-              {retryError}
-            </div>
-          )}
-          {retrySuccess && (
-            <div className="mb-4 flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 p-3 text-sm text-emerald-700">
-              <CheckCircle className="h-4 w-4" />
-              {retrySuccess}
-            </div>
-          )}
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {filteredProcessingFrameworks.map((framework: UploadedFramework) => {
-              const statusInfo = getUploadStatusInfo(framework.upload_status);
-              const StatusIcon = statusInfo.icon;
-              return (
-                <div key={framework.id} className="rounded-xl border border-primary-200 bg-white p-6 shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="rounded-lg bg-primary-50 p-2">
-                      <Sparkles className="h-6 w-6 text-primary-600 animate-pulse" strokeWidth={1.75} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-slate-900 truncate">{stripCertificationPostfix(framework.name)}</h3>
-                      <p className="text-sm text-slate-500">v{framework.version}</p>
-                    </div>
-                  </div>
-
-                  <div className="mt-4 space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium ${statusInfo.color}`}>
-                        {framework.upload_status === 'parsing' ? (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        ) : (
-                          <StatusIcon className="h-3 w-3" />
-                        )}
-                        {statusInfo.label}
-                      </span>
-                    </div>
-                    <p className="text-sm text-slate-500">{statusInfo.description}</p>
-
-                    {framework.upload_status === 'parsing' && (
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-xs text-slate-500">
-                          <span>AI parsing in progress…</span>
-                        </div>
-                        <div className="h-1.5 overflow-hidden rounded-full bg-slate-100">
-                          <div className="h-full w-full rounded-full bg-primary-500 animate-pulse" />
-                        </div>
-                      </div>
-                    )}
-
-                    {framework.controls_count > 0 && (
-                      <div className="flex items-center gap-1 text-xs text-slate-500">
-                        <Shield className="h-3 w-3" />
-                        {framework.controls_count} controls extracted so far
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="mt-4 flex items-center justify-between border-t border-slate-200 pt-3">
-                    <div className="flex items-center gap-1 text-xs text-slate-500">
-                      <Clock className="h-3 w-3" />
-                      Started: {new Date(framework.created_at).toLocaleTimeString()}
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); retryParseMutation.mutate(framework.id); }}
-                      disabled={retryParseMutation.isPending}
-                      className="flex items-center gap-1 rounded px-2 py-1 text-xs font-medium text-orange-600 hover:bg-orange-50 transition-colors disabled:opacity-50"
-                      title="Retry parsing if stuck"
-                    >
-                      <RefreshCw className={`h-3 w-3 ${retryParseMutation.isPending ? 'animate-spin' : ''}`} />
-                      Retry
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+      {actionError && (
+        <div className="flex items-center gap-2 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          <AlertCircle className="h-4 w-4" />
+          {actionError}
+        </div>
+      )}
+      {actionSuccess && (
+        <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          <CheckCircle className="h-4 w-4" />
+          {actionSuccess}
+        </div>
       )}
 
       {filteredActiveCertifications.length > 0 && (
@@ -564,21 +410,6 @@ export default function FrameworksManagePage() {
                   </Link>
                 )}
 
-                {(['uploaded', 'parsed', 'completed', 'published'].includes(framework.upload_status)) && !framework.classification && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setClassifyingFrameworkId(framework.id); classifyMutation.mutate(framework.id); }}
-                    disabled={classifyMutation.isPending && classifyingFrameworkId === framework.id}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-amber-700 hover:bg-amber-100 transition-colors disabled:opacity-50"
-                    title="Classify framework as certification or compliance"
-                  >
-                    {classifyMutation.isPending && classifyingFrameworkId === framework.id ? (
-                      <><Loader2 className="h-4 w-4 animate-spin" /> Classifying…</>
-                    ) : (
-                      <><Sparkles className="h-4 w-4" /> Classify Framework</>
-                    )}
-                  </button>
-                )}
-
                 <div className="flex gap-2 flex-wrap">
                   <Link
                     href={`/controls?framework=${framework.id}`}
@@ -625,7 +456,7 @@ export default function FrameworksManagePage() {
           <div className="cw-card p-12 shadow-sm flex flex-col items-center justify-center text-center">
             <FileStack className="mb-4 h-12 w-12 text-slate-400" />
             <h3 className="text-lg font-medium text-slate-900">No frameworks available</h3>
-            <p className="mt-1 text-slate-500">No frameworks uploaded yet. <Link href="/framework-upload" className="font-medium text-primary-700 hover:underline">Upload a framework</Link> to add your first one.</p>
+            <p className="mt-1 text-slate-500">The framework library is empty.</p>
           </div>
         )}
 

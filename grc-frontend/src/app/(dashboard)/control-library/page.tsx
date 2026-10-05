@@ -1626,7 +1626,7 @@ export default function ControlLibraryPage() {
                       </label>
                     ))}
                     {(!availableFrameworks || availableFrameworks.length === 0) && (
-                      <p className="text-sm text-slate-400">No frameworks uploaded. Please upload frameworks first.</p>
+                      <p className="text-sm text-slate-400">No frameworks are available yet.</p>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-slate-400">Leave empty to analyze all frameworks</p>
@@ -1788,7 +1788,7 @@ export default function ControlLibraryPage() {
                       </label>
                     ))}
                     {(!availableFrameworks || availableFrameworks.length === 0) && (
-                      <p className="text-sm text-slate-400">No frameworks uploaded. Please upload frameworks first.</p>
+                      <p className="text-sm text-slate-400">No frameworks are available yet.</p>
                     )}
                   </div>
                   <p className="mt-1 text-xs text-slate-400">Leave empty to analyze all frameworks</p>

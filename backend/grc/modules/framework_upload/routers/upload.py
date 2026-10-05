@@ -1,58 +1,16 @@
 import os
-import uuid
-from typing import List, Optional
-from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from pydantic import BaseModel
 
 from ....models import (
-    UploadedFramework, ParsedFrameworkControl, FrameworkAssessment,
-    GRCUser, Tenant, get_db, EvidenceControlMapping, Evidence, EvidenceAIAssessment
+    UploadedFramework, ParsedFrameworkControl, GRCUser, get_db,
+    EvidenceControlMapping, EvidenceAIAssessment,
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants
 
-router = APIRouter(prefix="/upload", tags=["Framework Upload - Upload"])
-
-UPLOAD_DIR = "uploads/frameworks"
-
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-
-
-class UploadedFrameworkResponse(BaseModel):
-    id: int
-    tenant_id: Optional[int]
-    name: str
-    description: Optional[str]
-    file_name: str
-    file_path: str
-    file_size: Optional[int]
-    file_type: str
-    upload_status: str
-    parse_error: Optional[str]
-    parsed_at: Optional[datetime]
-    framework_type: Optional[str]
-    source_organization: Optional[str]
-    version: Optional[str]
-    effective_date: Optional[datetime]
-    is_shared: bool
-    is_active: bool
-    uploaded_by: int
-    created_at: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
-
-
-class ExtractTextResponse(BaseModel):
-    framework_id: int
-    file_name: str
-    file_type: str
-    text_content: str
-    text_length: int
-    extraction_status: str
+router = APIRouter(prefix="/upload", tags=["Frameworks - Library"])
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -107,69 +65,6 @@ def serialize_framework(framework: UploadedFramework, controls_count: int = 0) -
         "penalty_for_non_compliance": framework.penalty_for_non_compliance,
         "adoption_approach": framework.adoption_approach
     }
-
-
-@router.post("", status_code=status.HTTP_201_CREATED)
-async def upload_framework(
-    file: UploadFile = File(...),
-    name: str = Form(...),
-    description: Optional[str] = Form(None),
-    framework_type: Optional[str] = Form(None),
-    source_organization: Optional[str] = Form(None),
-    version: Optional[str] = Form(None),
-    tenant_id: Optional[int] = Form(None),
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    if not file.filename:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No file provided"
-        )
-    
-    file_ext = file.filename.lower().split('.')[-1] if '.' in file.filename else ''
-    if file_ext not in ['pdf', 'docx']:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Only PDF and DOCX files are supported"
-        )
-    
-    if tenant_id:
-        validate_tenant_access(current_user, tenant_id, db)
-    else:
-        tenant_id = get_user_primary_tenant(current_user, db)
-    
-    unique_id = str(uuid.uuid4())
-    safe_filename = f"{unique_id}_{file.filename}"
-    file_path = os.path.join(UPLOAD_DIR, safe_filename)
-    
-    content = await file.read()
-    file_size = len(content)
-    
-    with open(file_path, "wb") as f:
-        f.write(content)
-    
-    db_framework = UploadedFramework(
-        tenant_id=tenant_id,
-        name=name,
-        description=description,
-        file_name=file.filename,
-        file_path=file_path,
-        file_size=file_size,
-        file_type=file_ext,
-        upload_status="uploaded",
-        framework_type=framework_type,
-        source_organization=source_organization,
-        version=version,
-        uploaded_by=current_user.id,
-        is_shared=False,
-        is_active=True
-    )
-    db.add(db_framework)
-    db.commit()
-    db.refresh(db_framework)
-    
-    return serialize_framework(db_framework)
 
 
 @router.get("")
@@ -360,96 +255,6 @@ def delete_uploaded_framework(
         )
     
     return None
-
-
-@router.post("/{framework_id}/extract-text")
-def extract_text_from_framework(
-    framework_id: int,
-    db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
-):
-    user_tenants = get_user_tenants(current_user, db)
-    
-    framework = db.query(UploadedFramework).filter(
-        UploadedFramework.id == framework_id
-    ).first()
-    
-    if not framework:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Uploaded framework not found"
-        )
-    
-    if framework.tenant_id and framework.tenant_id not in user_tenants and not framework.is_shared:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this framework"
-        )
-    
-    if not os.path.exists(framework.file_path):
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Framework file not found on disk"
-        )
-    
-    extracted_text = ""
-    
-    try:
-        if framework.file_type == "pdf":
-            from PyPDF2 import PdfReader
-            reader = PdfReader(framework.file_path)
-            text_parts = []
-            for page in reader.pages:
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
-            extracted_text = "\n\n".join(text_parts)
-        
-        elif framework.file_type == "docx":
-            from docx import Document
-            doc = Document(framework.file_path)
-            text_parts = []
-            for paragraph in doc.paragraphs:
-                if paragraph.text.strip():
-                    text_parts.append(paragraph.text)
-            for table in doc.tables:
-                for row in table.rows:
-                    row_text = " | ".join(cell.text.strip() for cell in row.cells if cell.text.strip())
-                    if row_text:
-                        text_parts.append(row_text)
-            extracted_text = "\n".join(text_parts)
-        
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unsupported file type: {framework.file_type}"
-            )
-        
-        framework.upload_status = "text_extracted"
-        framework.updated_at = datetime.utcnow()
-        db.commit()
-        
-        return {
-            "framework_id": framework.id,
-            "file_name": framework.file_name,
-            "file_type": framework.file_type,
-            "text_content": extracted_text,
-            "text_length": len(extracted_text),
-            "extraction_status": "success"
-        }
-    
-    except HTTPException:
-        raise
-    except Exception as e:
-        framework.upload_status = "extraction_failed"
-        framework.parse_error = str(e)
-        framework.updated_at = datetime.utcnow()
-        db.commit()
-        
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to extract text: {str(e)}"
-        )
 
 
 upload_router = router
