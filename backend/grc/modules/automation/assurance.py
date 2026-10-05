@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 from grc.models import (
     ControlWorkEvidence, ControlWorkItem, ControlWorkSample, ControlWorkTest, ControlWorkTestProcedure,
     Evidence, EvidenceControlMapping, GRCUser, NormalizedControl, NormalizedControlLink, SCFCheckResult,
-    SCFControlState, SCFObjective, SCFRelease, get_db,
+    SCFControl, SCFControlState, SCFObjective, SCFRelease, get_db,
 )
 from grc.modules.automation.evidence_match import EvidenceDoc, artifact_key, document_frequencies, rank
 from grc.modules.automation.testing_rules import (
@@ -41,9 +41,11 @@ from grc.modules.automation.testing_rules import (
     population_items, recommended_sample_size, scaffold_procedures, select_sample, suggested_result,
 )
 from grc.modules.automation.router import (
-    _authored_evidence, _mapping_reviews, _normalized_control_id, _require_evidence_edit, _scope_frameworks,
-    consolidated_artifacts_for, evidence_type, requirement_codes_for_control, scoped_required_evidence,
+    _authored_evidence, _connected_providers, _mapping_reviews, _normalized_control_id, _require_evidence_edit,
+    _scope_frameworks, consolidated_artifacts_for, evidence_type, requirement_codes_for_control,
+    scoped_required_evidence,
 )
+from grc.modules.automation.test_plan import build_test_plan, control_applicability, plan_inputs_for
 from grc.modules.control_library.routers.workbench import (
     _FREQ_DAYS, _get_or_create_work_item, _resync_effectiveness as wb_resync_effectiveness,
     _serialize_item, ensure_tables, generate_procedures as wb_generate_procedures,
@@ -337,6 +339,56 @@ def get_control_assurance(
         "evidence": linked,
         "automated": {"state": auto_state, "results": automated},
     }
+
+
+@router.get("/controls/{scf_id}/test-plan")
+def get_control_test_plan(
+    scf_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """What will be tested for this control, how, and whether it applies to this organisation.
+
+    One entry per assessment objective, each with its exact test (NIST SP 800-53A's
+    own procedure where SCF cites one, else a fixed step for the objective's type),
+    the automated checks that cover it, and its applicability. Read-only and model-free.
+    """
+    tenant_id = get_user_primary_tenant(current_user, db)
+    _nc_or_404(db, scf_id, tenant_id)
+
+    # A tenant-authored control is tested against the SCF controls it implements.
+    nc = custom_controls.get_custom(db, tenant_id, scf_id)
+    scf_ids = list(nc.implements_scf_ids or []) if nc is not None else [scf_id]
+
+    scope_row = None
+    try:
+        scope_row = ensure_default_scope(db, tenant_id)
+    except RuntimeError:     # SCF catalog not provisioned for this tenant
+        pass
+    state_row = (db.query(SCFControlState)
+                 .filter(SCFControlState.tenant_id == tenant_id, SCFControlState.scf_id == scf_id,
+                         SCFControlState.scope_id == (scope_row.id if scope_row is not None else -1)).first())
+    state = None if state_row is None else {
+        c: getattr(state_row, c) for c in (
+            "is_applicable", "applicability_source", "applicability_reason", "obligation", "inheritance_type",
+            "provider_vendor_id", "alternative_scf_id", "exception_id")}
+    alternative_title = None
+    if state and state["alternative_scf_id"]:
+        alt = (db.query(SCFControl.name).filter(SCFControl.scf_id == state["alternative_scf_id"])
+               .order_by(SCFControl.release_id.desc()).first())
+        alternative_title = alt[0] if alt else None
+
+    results: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for sid in scf_ids or [scf_id]:
+        for r in _automated_results(db, tenant_id, sid):
+            results[r["check_id"]].append(r)
+
+    return build_test_plan(
+        scf_id, _current_objectives(db, scf_id, tenant_id), applicability=control_applicability(state, alternative_title),
+        scope=None if scope_row is None else {"has_facilities": scope_row.has_facilities,
+                                              "processes_personal_data": scope_row.processes_personal_data},
+        connected=_connected_providers(db, tenant_id), results_by_check=results, **plan_inputs_for(scf_ids),
+    )
 
 
 # ── link / unlink ───────────────────────────────────────────────────────────
@@ -692,7 +744,7 @@ def _current_objectives(db: Session, scf_id: str, tenant_id: Optional[int] = Non
         nc = custom_controls.get_custom(db, tenant_id, scf_id)
         if nc is not None and nc.implements_scf_ids:
             ids = list(nc.implements_scf_ids)
-    return [{"ao_id": o.ao_id, "objective": o.objective, "pptdf": o.pptdf}
+    return [{"ao_id": o.ao_id, "objective": o.objective, "pptdf": o.pptdf, "seq": o.seq, "rigor": o.rigor}
             for o in db.query(SCFObjective)
             .filter(SCFObjective.release_id == release.id, SCFObjective.scf_id.in_(ids))
             .order_by(SCFObjective.scf_id, SCFObjective.seq).all()]

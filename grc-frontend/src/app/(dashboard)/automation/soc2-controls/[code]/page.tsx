@@ -34,6 +34,7 @@ import AssuranceTab from './_assurance/AssuranceTab';
 import { DetailPanel, SummaryCard, Tally } from './_assurance/cards';
 import EvidenceWorkspace from './_assurance/EvidenceWorkspace';
 import AutomatedTests, { type TestGroup } from './_assurance/AutomatedTests';
+import TestPlan, { type TestPlanData } from './_assurance/TestPlan';
 import { LEVELS, MaturityMeter, MaturityPanel } from './_assurance/Maturity';
 import type { Objective } from './_assurance/types';
 import type { ITAsset, Risk } from '@/types';
@@ -1734,6 +1735,15 @@ export default function ControlDetailPage() {
     retry: false,
   });
   const d = detailQ.data;
+  // What will be tested, per objective: feeds the Tests tab, its count and the Overview card. Same key as
+  // the Tests tab's own query, so it is one request.
+  const testPlanQ = useQuery({
+    queryKey: ['automation-test-plan', code],
+    enabled: !!code,
+    queryFn: () => automationApi.getControlTestPlan(code).then((r) => r.data as TestPlanData),
+    retry: false,
+  });
+  const plan = testPlanQ.data;
   const customDetailQ = useQuery({
     queryKey: ['scf-custom-control', code],
     enabled: !!code && (!!d?.custom || detailQ.isError),
@@ -1900,7 +1910,7 @@ export default function ControlDetailPage() {
     { id: 'overview', label: 'Overview' },
     { id: 'assurance', label: 'Assurance' },
     { id: 'evidence', label: 'Evidence', count: evidence.length + (attachedQ.data?.items.length ?? 0) },
-    { id: 'tests', label: 'Tests', count: d?.test_groups?.length ?? control.checks.length },
+    { id: 'tests', label: 'Tests', count: plan?.summary.total ?? d?.test_groups?.length ?? control.checks.length },
     { id: 'artifacts', label: 'Artifacts', count: artifactsTabQ.data?.items.length ?? 0 },
     { id: 'risks', label: 'Risks', count: risksQ.data?.items.length ?? 0 },
     { id: 'assets', label: 'Assets', count: assetsTabQ.data?.items.length ?? 0 },
@@ -2184,6 +2194,28 @@ export default function ControlDetailPage() {
                 )}
               </SummaryCard>
 
+              <SummaryCard title="Test plan" meta={plan ? `${plan.summary.total} test${plan.summary.total === 1 ? '' : 's'}` : undefined}
+                action={plan ? 'Open test plan' : undefined} onAction={() => setTab('tests')}>
+                {plan ? (
+                  <>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1">
+                      <Tally n={plan.summary.applies} label=" apply to you" dot="bg-emerald-500" />
+                      <Tally n={plan.summary.not_applicable} label=" N/A" dot="bg-slate-300" />
+                      <Tally n={plan.summary.automated} label=" automated" dot="bg-violet-500" />
+                    </div>
+                    <p className="mt-2.5 text-[12px] leading-relaxed text-slate-600">
+                      {plan.applicability.state === 'applies'
+                        ? `${plan.summary.nist} follow NIST SP 800-53A, ${plan.summary.standard} use a standard step.`
+                        : plan.applicability.reason}
+                    </p>
+                  </>
+                ) : testPlanQ.isError ? (
+                  <p className="text-[13px] text-slate-500">The test plan could not be loaded.</p>
+                ) : (
+                  <p className="text-[13px] text-slate-400">Loading the tests…</p>
+                )}
+              </SummaryCard>
+
               <SummaryCard title="Automated testing"
                 meta={control.checks.length ? `${control.checks.length} test${control.checks.length === 1 ? '' : 's'}` : undefined}
                 action={control.checks.length ? 'Open tests' : cov?.state === 'connect_one' ? 'See sources and tests' : undefined}
@@ -2300,6 +2332,8 @@ export default function ControlDetailPage() {
         )}
 
         {tab === 'tests' && (
+          <div className="space-y-4">
+          <TestPlan code={code} requiredBy={reqGroups.map((g) => ({ label: g.label, count: g.count }))} />
           <AutomatedTests
             code={code}
             groups={d?.test_groups ?? []}
@@ -2309,8 +2343,10 @@ export default function ControlDetailPage() {
             onRan={() => {
               qc.invalidateQueries({ queryKey: ['automation-common-detail', code] });
               qc.invalidateQueries({ queryKey: ['automation-common'] });
+              qc.invalidateQueries({ queryKey: ['automation-test-plan', code] });
             }}
           />
+          </div>
         )}
 
         {tab === 'artifacts' && <ControlArtifactsPanel code={code} />}

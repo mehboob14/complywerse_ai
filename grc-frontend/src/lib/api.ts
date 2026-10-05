@@ -5467,6 +5467,10 @@ export const automationApi = {
   linkControlEvidence: (code: string, evidenceId: number,
     body: { coverage_type: 'full' | 'partial' | 'supporting'; note?: string }) =>
     apiClient.post(`/automation/common/controls/${encodeURIComponent(code)}/evidence/${evidenceId}`, body),
+  // What will be tested for a control, how, and whether each test applies to this
+  // organisation: one entry per assessment objective.
+  getControlTestPlan: (code: string) =>
+    apiClient.get(`/automation/common/controls/${encodeURIComponent(code)}/test-plan`),
   // Assurance tab: which required artifacts are satisfied, the automated results
   // behind them, and the control's testing record (Control Workbench rows).
   getControlAssurance: (code: string) =>
