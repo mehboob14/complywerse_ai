@@ -75,7 +75,7 @@ export default function CommonControlSuggest({
       onClose={onClose}
       size="lg"
       title={<span className="inline-flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary-600" /> Common controls for this file</span>}
-      subtitle={`“${evidence.name}” looks like a document these controls ask for. Tick the ones to link; you can change links on the evidence page.`}
+      subtitle={`“${evidence.name}” looks like a document these controls ask for.`}
       footer={
         <div className="flex flex-wrap items-center justify-between gap-2">
           <Link href={`/evidence/${evidence.id}`} className="inline-flex items-center gap-1 text-sm font-medium text-primary-600 hover:underline">
@@ -98,6 +98,8 @@ export default function CommonControlSuggest({
         </div>
       }
     >
+      <div className="p-5">
+      <p className="mb-3 text-xs text-slate-500">Tick the ones to link. You can change links any time on the evidence page.</p>
       <ul className="space-y-2">
         {recs.map((r) => {
           const pct = Math.round(r.confidence * 100);
@@ -119,6 +121,7 @@ export default function CommonControlSuggest({
           );
         })}
       </ul>
+      </div>
     </AnimatedModal>
   );
 }

@@ -16,6 +16,7 @@ import { AlertTriangle, ArrowDown, ArrowUp, Check, Loader2, Plus, RotateCcw, Set
 import { useEffect, useState } from 'react';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import ImportFieldsFromTemplate from './ImportFieldsFromTemplate';
 
 export type FieldDef = {
   key: string; label: string; type: string; required: boolean;
@@ -293,6 +294,7 @@ export function FieldsEditor({ moduleKey, settings }: { moduleKey: string; setti
           className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline">
           <Plus className="h-3 w-3" /> Add field
         </button>
+        <ImportFieldsFromTemplate moduleKey={moduleKey} />
         <SaveButton label="Save fields" pending={save.isPending} done={done} onClick={submit} />
       </div>
       {save.isError && <ErrorLine text={errorText(save.error, 'Could not save the fields.')} />}

@@ -9,13 +9,15 @@ edits the asset form, not the audit one.
 import logging
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Body, Cookie, Depends, Header, HTTPException, Request, status
+from fastapi import APIRouter, Body, Cookie, Depends, File, Header, HTTPException, Request, UploadFile, status
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from ..models import GRCUser, get_db
 from ..rich_audit import write_rich_audit_log
 from ..routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
-from ..services.module_settings import MODULES, get_settings, save_settings, spec
+from ..services import field_import
+from ..services.module_settings import MODULES, get_settings, save_settings, sections, spec
 
 logger = logging.getLogger(__name__)
 
@@ -109,3 +111,68 @@ def write_settings(
     except Exception:
         logger.exception("Could not audit the %s settings change", module_key)
     return saved
+
+
+@router.post("/{module_key}/fields/suggest")
+async def suggest_fields(
+    module_key: str,
+    request: Request,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Fields found in a template the person uploads (a sheet, CSV, Word or PDF file), for them to check.
+
+    AI reads the file; only fields the file holds come back. The file is read in memory, not kept, and nothing
+    is saved until the person confirms through `/fields/import`.
+    """
+    module = _check(module_key, "edit", request, token, authorization, db)
+    if "fields" not in sections(module_key):
+        raise HTTPException(status_code=400, detail=f"{module['label']} has no custom fields")
+    settings = get_settings(db, _tenant(current_user, db), module_key)
+    data = await file.read(field_import.MAX_BYTES + 1)
+    if len(data) > field_import.MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"This file is larger than {field_import.MAX_BYTES // (1024 * 1024)} MB.")
+    try:
+        return await run_in_threadpool(field_import.suggest, file.filename or "template", data, settings)
+    except field_import.TemplateError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/{module_key}/fields/import")
+def import_fields(
+    module_key: str,
+    request: Request,
+    payload: Dict[str, Any] = Body(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    token: Optional[str] = Cookie(None, alias="grc_auth_token"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Add the suggested fields the person checked: `{"fields": [{label, type, required, options, help}]}`.
+
+    Fields already on the form are skipped, not doubled. Answers with the saved settings, what was added and
+    what was skipped.
+    """
+    module = _check(module_key, "edit", request, token, authorization, db)
+    tenant_id = _tenant(current_user, db)
+    before = get_settings(db, tenant_id, module_key)
+    try:
+        result = field_import.add_fields(db, tenant_id, module_key, payload.get("fields"), user_id=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    if result["added"]:
+        try:
+            write_rich_audit_log(
+                db, tenant_id=tenant_id, user_id=current_user.id, action="settings_updated",
+                resource_type="module_settings", resource_id=None,
+                before={"fields": before.get("fields")}, after={"fields": result["settings"].get("fields")},
+                summary=(f"{module['label']} custom fields added from a template: "
+                         + ", ".join(f["label"] for f in result["added"])),
+                resource_name=module["label"],
+            )
+        except Exception:
+            logger.exception("Could not audit the %s fields import", module_key)
+    return result
