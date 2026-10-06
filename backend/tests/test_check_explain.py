@@ -41,6 +41,65 @@ def test_explanation_matches_what_the_engine_evaluates():
     assert check_title("aws", "aws.root_mfa") == "Root account has MFA enabled"  # no title: the pass message
 
 
+def test_every_check_is_written_out_as_a_procedure():
+    # the exact written test: where it signs in, what it reads, the rule, what a failure means, what is kept
+    for provider in PROVIDER_API:
+        for check in provider_checks(provider):
+            steps = explain_check(provider, check["id"])["steps"]
+            labels = [s["label"] for s in steps]
+            assert labels[:2] == ["Sign in", "Read"] and "Test" in labels and labels[-1] == "Keep", (provider, check["id"])
+            assert all(s["text"] for s in steps), (provider, check["id"])
+            assert ("Limits" in labels) == (not PROVIDER_API[provider].get("transport")), provider   # the engine's caps
+    do = {s["label"]: s for s in explain_check("digitalocean", "digitalocean.firewalls_present")["steps"]}
+    assert do["Read"]["code"] == "GET /firewalls" and "Droplet network access" in do["Fails when"]["text"]
+    assert "5,000" in do["Limits"]["text"] and "25" in do["Limits"]["text"]
+
+
+def test_the_builtin_aws_checks_are_explained_from_their_definition():
+    from grc.modules.compliance_plugins.runners.explain import explain_quantitative
+    from grc.modules.compliance_plugins.seed_soc2_quantitative import SOC2_QUANTITATIVE_LIBRARY
+    by_key = {s["plugin_key"].split("__", 1)[1]: s for s in SOC2_QUANTITATIVE_LIBRARY}
+    for spec in SOC2_QUANTITATIVE_LIBRARY:
+        d = spec["check_definition"]
+        e = explain_quantitative(d, spec["rationale"], spec["remediation"])
+        assert e["rule"] and e["looks_at"] == d["expect"]["path"] and e["fails_when"] == d["fail_message"], spec["plugin_key"]
+        assert e["call"].endswith("".join(p.capitalize() for p in d["operation"].split("_")) + (
+            " (AccountId = your AWS account id)" if d.get("operation_args") else "")), spec["plugin_key"]
+        assert [s["label"] for s in e["steps"]] == ["Sign in", "Read", "Look at", "Test", "Fails when", "If it cannot read", "Keep"]
+        assert (e["why"], e["fix"]) == (spec["rationale"], spec["remediation"])
+    e = lambda key: explain_quantitative(by_key[key]["check_definition"])   # noqa: E731
+    assert "between 14 and 128" in e("CC6.2__password_policy_min_length")["rule"]          # 115 values read as a range
+    assert "none of the security groups has group name set to “default”" in e("CC6.8__no_open_ssh_world")["rule"]
+    assert "at least one entry in trail list" in e("CC7.2__cloudtrail_enabled")["rule"]
+
+
+def test_a_control_lists_the_written_test_of_every_automated_check_that_reaches_it():
+    # Controls reached through a SOC 2 criterion by a built-in AWS check used to list "0 tests" for it.
+    from grc.modules.automation.router import _test_groups
+    root_mfa = {"plugin_key": "SOC2_QUANTITATIVE_v1__CC6.1__root_mfa_enabled", "source": "aws", "check_ids": [],
+                "binding": "soc2_fallback", "control_status": "not_run", "last_run": None}
+    backups = {"plugin_key": "SOC2_CONNECTORS_v1__digitalocean", "source": "connector", "binding": "covers",
+               "check_ids": ["digitalocean.droplet_backups_enabled"], "control_status": "not_run", "last_run": None}
+
+    def rows(scf_id, connected, last_run=None):
+        groups = _test_groups([{**root_mfa, "last_run": last_run}, backups], connected, scf_id)
+        return {p["provider"]: p for g in groups for p in g["providers"]}
+
+    aws = rows("NET-03", set())["aws"]["tests"]
+    assert [t["id"] for t in aws] == [root_mfa["plugin_key"]] and aws[0]["title"] == "AWS — Root MFA enabled"
+    assert aws[0]["explain"]["steps"][0]["label"] == "Sign in" and aws[0]["result"] is None   # not connected: no result shown
+    assert (aws[0]["binding"], aws[0]["soc2"], aws[0]["covers"]) == ("soc2_fallback", ["CC6.1"], [])
+
+    ran = {"status": "failed", "result_summary": "Root account does NOT have MFA enabled.", "started_at": "2026-10-06T10:00:00"}
+    result = rows("NET-03", {"aws"}, ran)["aws"]["tests"][0]["result"]
+    assert (result["status"], result["detail"], result["checked_at"]) == ("fail", ran["result_summary"], ran["started_at"])
+
+    # a covers match names the objectives it covers for THIS control, never another's
+    do = rows("BCD-11", set())["digitalocean"]["tests"][0]
+    assert do["binding"] == "covers" and do["covers"] and all(t.startswith("BCD-11") for t in do["covers"])
+    assert rows("IAC-01", set())["digitalocean"]["tests"][0]["covers"] == []
+
+
 def test_a_detail_endpoint_is_one_row_not_an_empty_list():
     # /orgs/{org} returns an object. Read as a list it was empty, so the check on
     # it reported "not assessed" forever instead of evaluating.

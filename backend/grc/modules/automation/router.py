@@ -52,6 +52,7 @@ from grc.routers.auth_router import (
 
 from grc.modules.compliance_plugins.seed_soc2_quantitative import (
     BENCHMARK,
+    SOC2_QUANTITATIVE_LIBRARY,
     ensure_soc2_framework_mappings,
     load_soc2_quantitative_catalog,
     seed_soc2_quantitative_plugins,
@@ -77,7 +78,7 @@ from grc.modules.compliance_plugins.runners.connector_setup import (
     connector_setup, form_fields, missing_fields, normalize_domain,
 )
 from grc.modules.compliance_plugins.runners.explain import (
-    check_title, connector_reads, connector_tests, explain_check,
+    check_title, connector_reads, connector_tests, explain_check, explain_quantitative,
 )
 from grc.modules.compliance_plugins.services.credentials import resolve_credentials_for_connection
 from grc.modules.compliance_plugins.services.run_service import execute_plugin
@@ -569,7 +570,46 @@ def _check_result(run_out: Optional[Dict[str, Any]], check_id: str) -> Optional[
     }
 
 
-def _test_groups(linked: List[Dict[str, Any]], connected: set) -> List[Dict[str, Any]]:
+#: The built-in AWS checks by plugin key. They are seeded verbatim from this library, so it is what runs.
+_AWS_CHECKS = {s["plugin_key"]: s for s in SOC2_QUANTITATIVE_LIBRARY}
+_AWS_RESULT_WORD = {"passed": "pass", "failed": "fail", "error": "error"}
+
+
+def _aws_result(run_out: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    """A built-in AWS check is one call and one verdict, so its run is its result."""
+    if not run_out:
+        return None
+    return {"status": _AWS_RESULT_WORD.get(run_out.get("status"), "not_run"), "detail": run_out.get("result_summary"),
+            "population": None, "tested": None, "failing_items": [], "checked_at": run_out.get("started_at")}
+
+
+def _how_matched(check: Dict[str, Any], chk: Dict[str, Any], scf_id: Optional[str]) -> Dict[str, Any]:
+    """How a test reaches the control. A SOC 2 criterion is a broad match, so it is never shown as an exact one."""
+    covers = [t for t in covers_for_check(check) if not scf_id or t.split("_A", 1)[0] == scf_id]
+    return {"binding": chk.get("binding"), "covers": covers, "soc2": list(check.get("controls") or [])}
+
+
+def _tests_of(row: Dict[str, Any], scf_id: Optional[str]) -> List[Dict[str, Any]]:
+    """One entry per automated test a connected-or-not source runs for this control: the exact written
+    test, how it reaches the control, and, once the source is connected, what it last found."""
+    declared = {c.get("id"): c for c in provider_checks(row["provider"])}
+    tests: List[Dict[str, Any]] = []
+    for chk in row["checks"]:
+        for cid in (chk.get("check_ids") or []):
+            tests.append({"id": cid, "title": check_title(row["provider"], cid),
+                          "explain": explain_check(row["provider"], cid),
+                          "result": _check_result(chk.get("last_run"), cid) if row["connected"] else None,
+                          **_how_matched(declared.get(cid) or {}, chk, scf_id)})
+        spec = _AWS_CHECKS.get(chk.get("plugin_key") or "")
+        if spec and not chk.get("check_ids"):
+            tests.append({"id": spec["plugin_key"], "title": spec["title"],
+                          "explain": explain_quantitative(spec["check_definition"], spec.get("rationale"), spec.get("remediation")),
+                          "result": _aws_result(chk.get("last_run")) if row["connected"] else None,
+                          "binding": chk.get("binding"), "covers": [], "soc2": [spec["rule_id"]]})
+    return tests
+
+
+def _test_groups(linked: List[Dict[str, Any]], connected: set, scf_id: Optional[str] = None) -> List[Dict[str, Any]]:
     """The Tests tab, grouped the way a customer has to decide.
 
     A tenant runs one identity provider. Okta, Entra ID and Google Workspace are
@@ -592,14 +632,7 @@ def _test_groups(linked: List[Dict[str, Any]], connected: set) -> List[Dict[str,
 
     for provs in by_cat.values():
         for row in provs.values():
-            # One entry per check this control is bound to: what it does, in words,
-            # and — once the source is connected — what it last found.
-            row["tests"] = [
-                {"id": cid, "title": check_title(row["provider"], cid),
-                 "explain": explain_check(row["provider"], cid),
-                 "result": _check_result(chk.get("last_run"), cid) if row["connected"] else None}
-                for chk in row["checks"] for cid in (chk.get("check_ids") or [])
-            ]
+            row["tests"] = _tests_of(row, scf_id)
 
     groups = []
     for cat, provs in by_cat.items():
@@ -4433,7 +4466,7 @@ def get_common_control(
         # SOC 2 criteria it inherits through while its covers await review
         "binding_via": (sorted({t for chk in linked for t in (chk.get("covers") or [])})
                         if binding_source == "covers" else soc2_codes),
-        "test_groups": _test_groups(linked, connected),
+        "test_groups": _test_groups(linked, connected, ctl.scf_id),
         "related": _related_controls(db, release.id, ctl.scf_id,
                                      slugs=in_scope_slugs or None, applicable=applicable),
         # Deliverables the frameworks name for this control, with whether an

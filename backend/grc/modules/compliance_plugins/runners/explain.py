@@ -10,6 +10,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Optional
 
+from .evidence_engine import MAX_FINDINGS, MAX_ITEMS
 from .live_api_catalog import CONNECTOR_CHECKS, PROVIDER_API
 
 _OP = {
@@ -19,7 +20,8 @@ _OP = {
 _AWS_SERVICE = {
     "backup": "AWS Backup", "rds": "Amazon RDS", "dynamodb": "Amazon DynamoDB", "iam": "AWS IAM",
     "cloudtrail": "AWS CloudTrail", "ec2": "Amazon EC2", "config": "AWS Config", "sts": "AWS STS",
-    "s3": "Amazon S3",
+    "s3": "Amazon S3", "s3control": "Amazon S3 Control", "securityhub": "AWS Security Hub",
+    "guardduty": "Amazon GuardDuty",
 }
 _NOT_ASSESSED = "If there is nothing to check, the result is “not assessed”, never a pass."
 
@@ -135,13 +137,120 @@ def _explain_cloud(provider: str, label: str, check_id: str) -> Optional[Dict[st
     }
 
 
+def _sentence(text: Optional[str]) -> str:
+    text = (text or "").strip()
+    return text if not text or text[-1] in ".!?" else text + "."
+
+
+def _set_phrase(values: Any) -> str:
+    """`is one of` a list; a run of whole numbers reads as a range (14 to 128)."""
+    if isinstance(values, list) and len(values) > 3 and all(isinstance(v, int) for v in values) \
+            and values == list(range(min(values), max(values) + 1)):
+        return f"between {min(values)} and {max(values)}"
+    return f"one of {_value(values)}"
+
+
+def _explain_quantitative(defn: Dict[str, Any], rationale: Optional[str], remediation: Optional[str]) -> Dict[str, Any]:
+    """An AWS check the aws_readonly runner makes: one API call and one expectation on its answer."""
+    service = _AWS_SERVICE.get(defn.get("service"), (defn.get("service") or "").upper())
+    operation = "".join(p.capitalize() for p in (defn.get("operation") or "").split("_"))
+    expect = defn.get("expect") or {}
+    path = expect.get("path") or ""
+    what = _words(path.split(".")[-1])
+    match = expect.get("match") or {}
+    kind = expect.get("kind")
+    if kind == "exists":
+        rule = f"Passes when {what} is present and not empty."
+    elif kind == "list_nonempty":
+        rule = f"Passes when {service} returns at least one entry in {what}."
+    elif kind == "field_equals":
+        rule = f"Passes when {what} is {_value(expect.get('value'))}."
+    elif kind == "field_in":
+        rule = f"Passes when {what} is {_set_phrase(expect.get('value'))}."
+    elif kind == "all_items_field_equals":
+        rule = f"Passes when every one of the {what} has {_words(expect.get('field'))} set to {_value(expect.get('value'))}."
+    elif kind == "no_items_match":
+        rule = f"Passes when none of the {what} has {_words(match.get('field'))} set to {_value(match.get('value'))}."
+    else:
+        rule = defn.get("pass_message")
+    # a call's arguments, with the account id the way a person would say it
+    args = ", ".join(f"{k} = {'your AWS account id' if '${AWS_ACCOUNT_ID}' in str(v) else v}"
+                     for k, v in (defn.get("operation_args") or {}).items())
+    return {
+        "checks": defn.get("pass_message") or rule,
+        "rule": rule,
+        "reads": f"{service} in the {PROVIDER_API.get('aws', {}).get('label', 'AWS')} account and region you connect",
+        "call": f"{service} {operation}" + (f" ({args})" if args else ""),
+        "fields": [],
+        "looks_at": path or None,
+        "fails_when": defn.get("fail_message"),
+        "excludes": None,
+        "when_empty": None,
+        "why": rationale,
+        "fix": remediation,
+    }
+
+
+def _step(label: str, text: str, code: Optional[str] = None) -> Dict[str, Optional[str]]:
+    return {"label": label, "text": text, "code": code}
+
+
+def _steps(label: str, e: Dict[str, Any], *, aws: bool, connector: bool) -> List[Dict[str, Optional[str]]]:
+    """The test as a procedure, in the order it happens.
+
+    Assembled from the explanation's own parts, so the procedure and the explanation cannot say different
+    things. What it states about limits and results is what the engine does (`evidence_engine`,
+    `check_result_recorder`).
+    """
+    steps = [_step("Sign in", (
+        f"Signs in to {label} with the read-only access key you stored for the account and region you connect. "
+        "Only read calls (get, list, describe and similar lookups) are allowed." if aws else
+        f"Signs in to {label} with the read-only credential you stored. It is kept encrypted and cannot change anything."))]
+    kept = f" Only these fields are kept: {', '.join(e['fields'])}." if e.get("fields") else ""
+    reads = e.get("reads") or ""
+    steps.append(_step("Read", (f"Calls {reads}." if aws else f"Reads {reads[:1].lower()}{reads[1:]}.") + kept, e.get("call")))
+    if e.get("looks_at"):
+        steps.append(_step("Look at", "Looks at this part of the answer:", e["looks_at"]))
+    if e.get("excludes"):
+        steps.append(_step("Leave out", e["excludes"]))
+    rule, plain = e.get("rule"), e.get("checks")
+    steps.append(_step("Test", (_sentence(rule) + (f" In plain words: {_sentence(plain)}" if plain and plain != rule else ""))
+                       if rule else _sentence(plain)))
+    if e.get("fails_when"):
+        steps.append(_step("Fails when", _sentence(e["fails_when"])))
+    if e.get("when_empty"):
+        steps.append(_step("Nothing to test", e["when_empty"]))
+    steps.append(_step("If it cannot read", (
+        f"If {label} cannot be reached or refuses the credential, the result is “collection failed”. "
+        "That says nothing about the control, so it never counts as a pass or as a failure.")))
+    if connector:
+        steps.append(_step("Limits", (
+            f"Reads at most {MAX_ITEMS:,} rows per list; with more, only the first {MAX_ITEMS:,} are checked and the "
+            f"result says so. Up to {MAX_FINDINGS} failing items are named.")))
+    steps.append(_step("Keep", (
+        "Each run saves its result with the time it ran" + (", how many items it tested out of how many exist, and the failing items"
+                                                            if connector else "") +
+        ". It counts as evidence until the control’s reassessment window ends.")))
+    return steps
+
+
+def explain_quantitative(defn: Dict[str, Any], rationale: Optional[str] = None,
+                         remediation: Optional[str] = None) -> Dict[str, Any]:
+    """The explanation of a built-in AWS check, from its `check_definition`."""
+    e = _explain_quantitative(defn, rationale, remediation)
+    e["steps"] = _steps(PROVIDER_API.get("aws", {}).get("label", "AWS"), e, aws=True, connector=False)
+    return e
+
+
 def explain_check(provider: str, check_id: str) -> Optional[Dict[str, Any]]:
-    """{checks, rule, reads, call, fields, fails_when, excludes, when_empty} for one check, or None."""
+    """{checks, rule, reads, call, fields, fails_when, excludes, when_empty, steps} for one check, or None."""
     spec = PROVIDER_API.get(provider) or {}
     label = spec.get("label", provider)
-    if spec.get("transport"):
-        return _explain_cloud(provider, label, check_id)
-    return _explain_connector(provider, label, check_id)
+    aws = bool(spec.get("transport"))
+    e = _explain_cloud(provider, label, check_id) if aws else _explain_connector(provider, label, check_id)
+    if e is not None:
+        e["steps"] = _steps(label, e, aws=aws, connector=not aws)
+    return e
 
 
 def check_title(provider: str, check_id: str) -> str:

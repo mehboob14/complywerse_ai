@@ -2333,19 +2333,22 @@ export default function ControlDetailPage() {
 
         {tab === 'tests' && (
           <div className="space-y-4">
-          <TestPlan code={code} requiredBy={reqGroups.map((g) => ({ label: g.label, count: g.count }))} />
-          <AutomatedTests
-            code={code}
-            groups={d?.test_groups ?? []}
-            connectionId={awsConnectionId}
-            bindingSource={bindingSource}
-            bindingVia={d?.binding_via ?? []}
-            onRan={() => {
-              qc.invalidateQueries({ queryKey: ['automation-common-detail', code] });
-              qc.invalidateQueries({ queryKey: ['automation-common'] });
-              qc.invalidateQueries({ queryKey: ['automation-test-plan', code] });
-            }}
-          />
+          <TestPlan code={code} cadence={cadence} requiredBy={reqGroups.map((g) => ({ label: g.label, count: g.count }))}
+            middle={(
+              <AutomatedTests
+                code={code}
+                groups={d?.test_groups ?? []}
+                connectionId={awsConnectionId}
+                bindingSource={bindingSource}
+                bindingVia={d?.binding_via ?? []}
+                cadence={cadence}
+                onRan={() => {
+                  qc.invalidateQueries({ queryKey: ['automation-common-detail', code] });
+                  qc.invalidateQueries({ queryKey: ['automation-common'] });
+                  qc.invalidateQueries({ queryKey: ['automation-test-plan', code] });
+                }}
+              />
+            )} />
           </div>
         )}
 

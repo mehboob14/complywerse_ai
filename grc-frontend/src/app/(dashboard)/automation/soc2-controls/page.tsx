@@ -307,7 +307,12 @@ export default function CommonControlsLibraryPage() {
           )}
         </td>
         <td className="py-2 pr-3 text-xs text-slate-600">{c.sub_type || '—'}</td>
-        <td className="py-2 pr-3 text-right text-xs tabular-nums text-slate-600">{c.checks_count || <span className="text-slate-300">0</span>}</td>
+        <td className="py-2 pr-3 text-right text-xs tabular-nums text-slate-600" onClick={(e) => e.stopPropagation()}>
+          {c.checks_count
+            ? <Link href={`${href(c.control_id)}?tab=tests`} title={`Read the exact written tests for ${c.control_id}`}
+                className="font-semibold text-primary-700 hover:underline">{c.checks_count}</Link>
+            : <span className="text-slate-300">0</span>}
+        </td>
         <td className="py-2 pr-3.5"><ControlStatusPill status={c.overall_status} /></td>
       </tr>
     );

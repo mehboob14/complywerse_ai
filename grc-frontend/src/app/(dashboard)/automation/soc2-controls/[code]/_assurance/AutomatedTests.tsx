@@ -15,6 +15,9 @@ import { ChevronDown, ChevronRight, KeyRound, Loader2, Play, ShieldCheck, Workfl
 import { automationApi } from '@/lib/api';
 import { BrandLogo } from '@/components/integrations/BrandLogo';
 import { ControlStatusPill, type BindingSource, type LinkedCheck } from '@/components/soc2/ui';
+import { RESULT_STATUS, WrittenTest, reachOf, when, type TestExplanation, type TestReach, type TestResult } from './WrittenTest';
+
+export type { TestExplanation };
 
 export const CATEGORY_LABEL: Record<string, string> = {
   scm: 'Source control', identity: 'Identity provider', cloud: 'Cloud and databases',
@@ -24,28 +27,11 @@ export const CATEGORY_LABEL: Record<string, string> = {
   payments: 'Payments', ai: 'AI platform', other: 'Other',
 };
 
-export interface TestExplanation {
-  checks: string;
-  rule: string | null;
-  reads: string;
-  call: string | null;
-  fields: string[];
-  fails_when: string | null;
-  excludes: string | null;
-  when_empty: string | null;
-}
-export interface ProviderTest {
+export interface ProviderTest extends TestReach {
   id: string;
   title: string;
   explain: TestExplanation | null;
-  result: {
-    status: string;
-    detail: string | null;
-    population: number | null;
-    tested: number | null;
-    failing_items: string[];
-    checked_at: string | null;
-  } | null;
+  result: TestResult | null;
 }
 export interface TestGroup {
   category: string;
@@ -53,13 +39,6 @@ export interface TestGroup {
   status: string;
   providers: { provider: string; label: string; connected: boolean; checks: LinkedCheck[]; tests?: ProviderTest[] }[];
 }
-
-// A finding's word → the status vocabulary the pills use.
-const RESULT_STATUS: Record<string, string> = {
-  pass: 'passed', fail: 'failed', error: 'collection_failed', not_run: 'not_run', not_applicable: 'not_run',
-};
-
-const when = (iso?: string | null) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : null);
 
 function errorText(e: unknown, fallback: string): string {
   const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
@@ -99,17 +78,13 @@ function HowItWorks({ code, bindingSource, bindingVia }: { code: string; binding
   );
 }
 
-function TestRow({ test, connected }: { test: ProviderTest; connected: boolean }) {
-  const [open, setOpen] = useState(false);
+function TestRow({ test, connected, cadence, criteria, initialOpen }: {
+  test: ProviderTest; connected: boolean; cadence?: string | null; criteria: string[]; initialOpen: boolean;
+}) {
+  const [open, setOpen] = useState(initialOpen);
   const r = test.result;
   const e = test.explain;
   const counted = r?.tested != null && r?.population != null ? ` · ${r.tested} of ${r.population} checked` : '';
-  const row = (label: string, value: React.ReactNode) => (
-    <>
-      <dt className="font-medium text-slate-500">{label}</dt>
-      <dd className="min-w-0 text-slate-700">{value}</dd>
-    </>
-  );
   return (
     <li className="rounded-lg border border-slate-200 bg-white">
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open}
@@ -121,45 +96,36 @@ function TestRow({ test, connected }: { test: ProviderTest; connected: boolean }
         </span>
         {connected && (r
           ? <ControlStatusPill status={RESULT_STATUS[r.status] || 'not_run'} />
-          : <span className="shrink-0 text-[11px] text-slate-400">Not collected yet</span>)}
+          : <span className="shrink-0 text-[11px] text-slate-500">Not collected yet</span>)}
+        <span className="shrink-0 text-[11px] font-semibold text-primary-700">{open ? 'Hide test' : 'View test'}</span>
       </button>
       {connected && r?.detail && (
         <p className="-mt-1 px-3 pb-2 pl-8 text-[11px] text-slate-500">{r.detail}{counted}</p>
       )}
       {open && (
-        <dl className="grid gap-x-4 gap-y-2 border-t border-slate-100 px-3 py-3 pl-8 text-[12px] leading-relaxed sm:grid-cols-[9rem_1fr]">
-          {e ? (
-            <>
-              {row('What it checks', e.checks)}
-              {e.rule && row('Exact rule', e.rule)}
-              {row('What it reads', <>{e.reads}{e.fields.length > 0 && <span className="text-slate-500"> — only {e.fields.join(', ')}</span>}</>)}
-              {e.call && row('API call', <><code className="rounded bg-slate-100 px-1 py-0.5 text-[11px] text-slate-700">{e.call}</code> <span className="text-slate-500">· read-only</span></>)}
-              {e.fails_when && row('A failure means', e.fails_when)}
-              {e.excludes && row('Leaves out', e.excludes)}
-              {e.when_empty && row('Nothing to check', e.when_empty)}
-            </>
-          ) : row('What it checks', test.title)}
-          {connected && r?.failing_items && r.failing_items.length > 0 && row('Failing now', (
-            <span className="flex flex-wrap gap-1">
-              {r.failing_items.map((item) => (
-                <span key={item} className="rounded bg-rose-50 px-1.5 py-0.5 font-mono text-[11px] text-rose-700">{item}</span>
-              ))}
-            </span>
-          ))}
-          {connected && r?.checked_at && row('Last collected', when(r.checked_at))}
-        </dl>
+        <div className="border-t border-slate-100 px-3 py-3 sm:pl-8">
+          {e
+            ? <WrittenTest explain={e} result={connected ? r : null} reach={reachOf(test, criteria)} cadence={cadence} />
+            : <p className="text-[12px] text-slate-700">{test.title}</p>}
+        </div>
       )}
     </li>
   );
 }
 
-function ProviderCard({ code, provider: p, connectionId, onRan }: {
+function ProviderCard({ code, provider: p, connectionId, onRan, cadence, criteria, expandAll, solo }: {
   code: string;
   provider: TestGroup['providers'][number];
   connectionId?: number | null;
   onRan: () => void;
+  cadence?: string | null;
+  /** The SOC 2 criteria this control goes through, when its tests are matched that way. */
+  criteria: string[];
+  expandAll: boolean;
+  /** The only source for this control: nothing to choose between, so its tests are shown. */
+  solo: boolean;
 }) {
-  const [open, setOpen] = useState(p.connected);
+  const [open, setOpen] = useState(p.connected || solo || expandAll);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const plugin = p.checks[0];
@@ -215,7 +181,7 @@ function ProviderCard({ code, provider: p, connectionId, onRan }: {
       {open && (
         tests.length ? (
           <ol className="mt-3 space-y-2 sm:pl-12">
-            {tests.map((t) => <TestRow key={t.id} test={t} connected={p.connected} />)}
+            {tests.map((t) => <TestRow key={t.id} test={t} connected={p.connected} cadence={cadence} criteria={criteria} initialOpen={expandAll} />)}
           </ol>
         ) : (
           <p className="mt-3 text-[12px] text-slate-500 sm:pl-12">{plugin?.title || 'This source'} evidences this control.</p>
@@ -226,7 +192,7 @@ function ProviderCard({ code, provider: p, connectionId, onRan }: {
 }
 
 export default function AutomatedTests({
-  code, groups, connectionId, onRan, bindingSource, bindingVia,
+  code, groups, connectionId, onRan, bindingSource, bindingVia, cadence,
 }: {
   code: string;
   groups: TestGroup[];
@@ -234,7 +200,13 @@ export default function AutomatedTests({
   onRan: () => void;
   bindingSource?: BindingSource | null;
   bindingVia: string[];
+  /** The control's reassessment cadence: how long a result stays current. */
+  cadence?: string | null;
 }) {
+  // Every test opened at once; the generation remounts the cards so one click really does open them all.
+  const [expand, setExpand] = useState({ all: false, gen: 0 });
+  const total = groups.reduce((n, g) => n + g.providers.reduce((m, p) => m + (p.tests?.length ?? 0), 0), 0);
+  const solo = groups.reduce((n, g) => n + g.providers.length, 0) === 1;
   if (!groups.length) {
     return (
       <section className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
@@ -248,6 +220,15 @@ export default function AutomatedTests({
   return (
     <div className="space-y-4">
       <HowItWorks code={code} bindingSource={bindingSource} bindingVia={bindingVia} />
+      {total > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold text-slate-900">{total} automated test{total === 1 ? '' : 's'} reach {code}</h3>
+          <button type="button" onClick={() => setExpand((s) => ({ all: !s.all, gen: s.gen + 1 }))}
+            className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+            {expand.all ? 'Hide all written tests' : 'Show all written tests'}
+          </button>
+        </div>
+      )}
       {groups.map((g) => {
         const live = g.providers.filter((p) => p.connected);
         return (
@@ -267,7 +248,8 @@ export default function AutomatedTests({
             </header>
             <ul className="divide-y divide-slate-100">
               {g.providers.map((p) => (
-                <ProviderCard key={p.provider} code={code} provider={p} connectionId={connectionId} onRan={onRan} />
+                <ProviderCard key={`${p.provider}-${expand.gen}`} code={code} provider={p} connectionId={connectionId} onRan={onRan}
+                  cadence={cadence} criteria={bindingSource === 'soc2_fallback' ? bindingVia : []} expandAll={expand.all} solo={solo} />
               ))}
             </ul>
           </section>
