@@ -51,6 +51,10 @@ class AccessReviewCampaign(Base):
     rule_framework = Column(String(120), nullable=True)
     rule_ids = Column(JSON, nullable=True)
     rules_run = Column(JSON, nullable=True)
+    # What each rule found, frozen when the checks ran: per rule its result
+    # (pass | fail | not_applicable | not_run), how many it tested, and for a
+    # connector rule the resources that failed. Empty on reviews run before this.
+    rule_results = Column(JSON, nullable=True)
 
     # Audit period the review covers
     period_start = Column(Date, nullable=True)

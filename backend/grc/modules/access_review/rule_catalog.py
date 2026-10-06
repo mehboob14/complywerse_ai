@@ -19,6 +19,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ...models import (
@@ -145,14 +146,30 @@ def _chk_no_approval(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Findin
 _DB_DEFAULT_NAMES = {"postgres", "sa", "root", "admin", "sys", "dba", "mysql", "system"}
 
 
+PERSON, CLOUD_CREDENTIAL, DB_ACCOUNT, SERVICE_ACCOUNT = "person", "cloud_credential", "db_account", "service_account"
+
+
+def account_kind(item: AccessReviewItem) -> str:
+    """What sort of identity a row is. Connectors synthesise an address for what is
+    not a person: DigitalOcean's keys and tokens end `.do` (its database users
+    `.db.<team>.do`), the database connector's accounts end `.db`, PAM accounts `.pam`."""
+    email = (item.email or "").lower()
+    if email.endswith(".do"):
+        return DB_ACCOUNT if ".db." in email else CLOUD_CREDENTIAL
+    if email.endswith(".db"):
+        return DB_ACCOUNT
+    if email.endswith(".pam"):
+        return SERVICE_ACCOUNT
+    return PERSON
+
+
 def _is_db_account(item: AccessReviewItem) -> bool:
-    return bool(item.email) and item.email.endswith(".db")
+    return account_kind(item) == DB_ACCOUNT
 
 
 def _is_cloud_account(item: AccessReviewItem) -> bool:
-    """A cloud credential rather than a person: a key, a token, a database user
-    (DigitalOcean synthesises addresses ending `.do` for these)."""
-    return bool(item.email) and item.email.endswith(".do")
+    """A cloud credential rather than a person: a key or a token."""
+    return account_kind(item) == CLOUD_CREDENTIAL
 
 
 def _item_role_names(item: AccessReviewItem) -> set:
@@ -160,7 +177,9 @@ def _item_role_names(item: AccessReviewItem) -> set:
 
 
 def _chk_db_super(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Finding]:
-    if _is_db_account(item) and "DB Superuser" in _item_role_names(item):
+    # "DB Superuser" is the database connector's word; DigitalOcean's admin role is "primary".
+    if _is_db_account(item) and any(
+            r == "DB Superuser" or "admin (primary)" in r.lower() for r in _item_role_names(item)):
         return [{"finding_type": "db_superuser", "severity": "critical",
                  "title": "Database superuser account",
                  "detail": f"{item.email} holds database superuser — confirm it is an authorised DBA."}]
@@ -285,6 +304,7 @@ def _chk_cloud_orphan(item: AccessReviewItem, ctx: Dict[str, Any]) -> List[Findi
 def _rule(id, domain, name, severity, status, reads, trips, regulation, check=None, default=None, scf=()):
     return {
         "id": id, "domain": domain, "name": name, "severity": severity,
+        "kind": "identity",
         "status": status, "reads": reads, "trips": trips, "regulation": regulation,
         # SCF control ids this rule evidences. The tenant's own crosswalk turns
         # them into whichever frameworks they hold — ISO 27001, SOC 2, PCI DSS,
@@ -293,6 +313,9 @@ def _rule(id, domain, name, severity, status, reads, trips, regulation, check=No
         "check": check,
         # runnable rules default ON; the rest default OFF (can't run anyway).
         "default_enabled": (status == RUNNABLE) if default is None else default,
+        # Which sort of identity it can judge (None = any), the facts it needs
+        # about that identity, and the sources that can supply them (None = any).
+        "kinds": None, "needs": (), "sources": None,
     }
 
 
@@ -415,7 +438,70 @@ RULE_CATALOG: List[Dict[str, Any]] = [
           "last certification date", "access not recertified within the cycle", "SOX", _chk_recert_overdue, scf=("IAC-17",)),
 ]
 
+# What each runnable rule can judge. A rule is not "passed" by an identity it cannot
+# judge: MFA is a fact about a person, not about a storage key, and a source that
+# never reports sign-ins cannot show that somebody has stopped signing in.
+_PEOPLE = (PERSON,)
+_APPLIES: Dict[str, Dict[str, Any]] = {
+    "IDM-01": {"kinds": _PEOPLE},
+    "IDM-04": {"kinds": _PEOPLE, "needs": ("last_sign_in",)},
+    "AUTH-01": {"kinds": _PEOPLE, "needs": ("mfa_enabled",)},
+    "AUTH-02": {"kinds": _PEOPLE},
+    "AUTH-04": {"kinds": _PEOPLE},
+    "PRIV-01": {"kinds": _PEOPLE},
+    "PRIV-02": {"kinds": _PEOPLE},
+    "PRIV-04": {"kinds": _PEOPLE},
+    "PRIV-05": {"kinds": _PEOPLE, "needs": ("mfa_enabled",)},
+    "APRV-01": {"kinds": _PEOPLE},
+    "DEV-02": {"kinds": _PEOPLE, "sources": ("github", "gitlab", "bitbucket", "azure_devops")},
+    "DB-01": {"kinds": (DB_ACCOUNT,), "sources": ("database", "digitalocean")},
+    "DB-02": {"kinds": (DB_ACCOUNT,), "sources": ("database", "digitalocean")},
+    "CLD-02": {"kinds": (CLOUD_CREDENTIAL,), "sources": ("digitalocean", "aws")},
+    "CLD-03": {"kinds": (CLOUD_CREDENTIAL,), "sources": ("digitalocean", "aws")},
+    "CLD-05": {"kinds": (CLOUD_CREDENTIAL,), "sources": ("digitalocean", "aws")},
+    "SAAS-01": {"kinds": _PEOPLE},
+}
+for _rid, _extra in _APPLIES.items():
+    _r = next((x for x in RULE_CATALOG if x["id"] == _rid), None)
+    if _r is not None:
+        _r.update(_extra)
+
 CATALOG_BY_ID = {r["id"]: r for r in RULE_CATALOG}
+
+# Sources that never report a sign-in time: an empty "last sign-in" says nothing about them.
+NO_SIGN_IN_SOURCES = {"digitalocean"}
+_MISSING = {
+    "mfa_enabled": "The source does not report MFA status for this account.",
+    "last_sign_in": "The source does not report sign-ins for this account.",
+}
+_KIND_NOUN = {PERSON: "people", CLOUD_CREDENTIAL: "cloud keys and tokens",
+              DB_ACCOUNT: "database accounts", SERVICE_ACCOUNT: "service accounts"}
+_KIND_ONE = {PERSON: "a person", CLOUD_CREDENTIAL: "a cloud key or token",
+             DB_ACCOUNT: "a database account", SERVICE_ACCOUNT: "a service account"}
+
+
+def item_sources(item: AccessReviewItem) -> set:
+    """The systems that granted this identity something."""
+    return {g.get("source") for g in (item.access_snapshot or []) if isinstance(g, dict) and g.get("source")}
+
+
+def applicability(rule: Dict[str, Any], item: AccessReviewItem) -> Optional[tuple]:
+    """None when the rule can judge this identity. Otherwise (status, reason):
+    `not_applicable` (it judges another sort of account) or `not_run` (the source
+    does not supply what it needs)."""
+    kinds = rule.get("kinds")
+    kind = account_kind(item)
+    if kinds and kind not in kinds:
+        wants = " and ".join(_KIND_NOUN.get(k, k) for k in kinds)
+        return "not_applicable", f"This rule judges {wants}; this is {_KIND_ONE.get(kind, kind)}."
+    for need in rule.get("needs") or ():
+        if need == "mfa_enabled" and item.mfa_enabled is None:
+            return "not_run", _MISSING[need]
+        if need == "last_sign_in" and item.last_sign_in is None:
+            sources = item_sources(item)
+            if sources and sources <= NO_SIGN_IN_SOURCES:
+                return "not_run", _MISSING[need]
+    return None
 
 
 def domain_order() -> List[str]:
@@ -423,6 +509,13 @@ def domain_order() -> List[str]:
     for r in RULE_CATALOG:
         if r["domain"] not in seen:
             seen.add(r["domain"]); out.append(r["domain"])
+    try:
+        from . import connector_rules
+        for r in connector_rules.all_rules():
+            if r.domain not in seen:
+                seen.add(r.domain); out.append(r.domain)
+    except Exception:  # noqa: BLE001 — the library still lists the identity rules
+        pass
     return out
 
 
@@ -562,37 +655,89 @@ def enabled_rules(tenant_db: Session, tenant_id: int, cfg_map: Optional[Dict[str
                      "frameworks_total": refs["total"]}} for r in active]
 
 
-# What a review can run: every rule enabled in the library, the runnable rules that
-# evidence one framework, or a set a person picked.
+# What a review can run: every rule enabled in the library, the rules that evidence
+# one framework, or a set a person picked — in each case the rules of the source it
+# is scoped to (or of every connected source).
 RULE_SCOPES = ("enabled", "framework", "custom")
 
 
-def framework_rule_ids(tenant_db: Session, framework: str) -> List[str]:
-    """The runnable rules that evidence one framework in the tenant's crosswalk."""
-    crosswalk = _crosswalk(tenant_db, sorted({c for r in RULE_CATALOG for c in (r.get("scf") or ())}))
-    return [r["id"] for r in RULE_CATALOG if r["check"] is not None
-            and framework in {slug for scf_id in (r.get("scf") or ()) for slug, _n, _c in crosswalk.get(scf_id, ())}]
+def _configs(tenant_db: Session, tenant_id: int) -> Dict[str, Any]:
+    from ...models import AccessReviewRuleConfig
+    return {c.rule_id: c for c in tenant_db.query(AccessReviewRuleConfig)
+            .filter(AccessReviewRuleConfig.tenant_id == tenant_id).all()}
+
+
+def rule_def(rule_id: str) -> Optional[Dict[str, Any]]:
+    """A rule of either kind as one dict, so the library, the picker and the report treat them alike."""
+    r = CATALOG_BY_ID.get(rule_id)
+    if r is not None:
+        return r
+    from . import connector_rules as cr
+    c = cr.rule(rule_id)
+    if c is None:
+        return None
+    return {"id": c.id, "kind": "connector", "connector": c.connector, "domain": c.domain, "name": c.name,
+            "severity": c.severity, "status": RUNNABLE, "reads": c.reads, "trips": c.trips,
+            "regulation": "—", "scf": tuple(c.scf), "check": None, "default_enabled": True,
+            "kinds": None, "needs": (), "sources": (c.connector,), "fix": c.fix}
+
+
+def applies_to_source(rule: Dict[str, Any], source: Optional[str]) -> bool:
+    """Can a review of `source` (None = every source) run this rule at all?"""
+    sources = rule.get("sources")
+    return not source or not sources or source in sources
+
+
+def connector_rule_defs(tenant_db: Session, tenant_id: int, source: Optional[str] = None) -> List[Dict[str, Any]]:
+    """The connector rules a review of `source` can run — or, with no source, those of
+    every connector that has a credential on file."""
+    from . import connector_rules as cr
+    out: List[Dict[str, Any]] = []
+    for pack in cr.packs().values():
+        if source and pack.connector != source:
+            continue
+        if not source and not cr.connected(tenant_db, tenant_id, pack.connector):
+            continue
+        out.extend(rule_def(r.id) for r in pack.rules)
+    return out
+
+
+def _can_run(rule_id: str) -> bool:
+    r = rule_def(rule_id)
+    return bool(r) and (r.get("kind") == "connector" or r.get("check") is not None)
+
+
+def framework_rule_ids(tenant_db: Session, framework: str, tenant_id: Optional[int] = None,
+                       source: Optional[str] = None) -> List[str]:
+    """The rules that can run and evidence one framework in the tenant's crosswalk,
+    for `source` (None = every connected source)."""
+    pool = [r for r in RULE_CATALOG if r["check"] is not None and applies_to_source(r, source)]
+    pool += connector_rule_defs(tenant_db, tenant_id, source) if tenant_id is not None else []
+    crosswalk = _crosswalk(tenant_db, sorted({c for r in pool for c in (r.get("scf") or ())}))
+    return [r["id"] for r in pool
+            if framework in {slug for scf_id in (r.get("scf") or ()) for slug, _n, _c in crosswalk.get(scf_id, ())}]
 
 
 def resolve_rule_ids(tenant_db: Session, tenant_id: int, scope: Optional[str], framework: Optional[str] = None,
-                     rule_ids: Optional[List[str]] = None) -> List[str]:
+                     rule_ids: Optional[List[str]] = None, source: Optional[str] = None) -> List[str]:
     """The rule ids a review of this scope runs, as the catalog stands today."""
     if scope == "framework" and framework:
-        return framework_rule_ids(tenant_db, framework)
+        return framework_rule_ids(tenant_db, framework, tenant_id, source)
     if scope == "custom":
-        return [rid for rid in dict.fromkeys(rule_ids or []) if (CATALOG_BY_ID.get(rid) or {}).get("check")]
-    return [r["id"] for r in enabled_rules(tenant_db, tenant_id)]
+        return [rid for rid in dict.fromkeys(rule_ids or []) if _can_run(rid)]
+    cfg_map = _configs(tenant_db, tenant_id)
+    ids = [r["id"] for r in enabled_rules(tenant_db, tenant_id, cfg_map) if applies_to_source(r, source)]
+    ids += [r["id"] for r in connector_rule_defs(tenant_db, tenant_id, source)
+            if effective_enabled(r, cfg_map.get(r["id"]))]
+    return ids
 
 
 def rules_with_frameworks(tenant_db: Session, tenant_id: int, rule_ids: List[str],
                           prefer: Optional[str] = None) -> List[Dict[str, Any]]:
     """These rules as a review reports them: the tenant's severity, and the frameworks
     each evidences — the review's own framework first."""
-    from ...models import AccessReviewRuleConfig
-
-    cfg_map = {c.rule_id: c for c in tenant_db.query(AccessReviewRuleConfig)
-               .filter(AccessReviewRuleConfig.tenant_id == tenant_id).all()}
-    rules = [CATALOG_BY_ID[i] for i in rule_ids if i in CATALOG_BY_ID]
+    cfg_map = _configs(tenant_db, tenant_id)
+    rules = [d for d in (rule_def(i) for i in rule_ids) if d]
     crosswalk = _crosswalk(tenant_db, sorted({c for r in rules for c in (r.get("scf") or ())}))
     out = []
     for r in rules:
@@ -602,6 +747,102 @@ def rules_with_frameworks(tenant_db: Session, tenant_id: int, rule_ids: List[str
         out.append({**r, "severity": (cfg.severity if cfg and cfg.severity else r["severity"]),
                     "frameworks": refs["frameworks"], "frameworks_total": refs["total"]})
     return out
+
+
+# ---- what each rule found ------------------------------------------------- #
+def item_rule_results(item: AccessReviewItem, findings: List[Any], rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Every identity rule this identity was tested against: pass, fail — or, when the
+    rule cannot judge it, not_applicable / not_run with the reason. A review that only
+    lists failures cannot show what was checked."""
+    failed = {f.rule_id: f for f in findings if f.rule_id}
+    out = []
+    for rule in rules:
+        if rule.get("kind") == "connector":
+            continue
+        hit = failed.get(rule["id"])
+        skip = None if hit else applicability(rule, item)
+        out.append({
+            "id": rule["id"], "name": rule["name"], "domain": rule["domain"],
+            "severity": (hit.severity if hit else rule["severity"]),
+            "regulation": rule.get("regulation"),
+            "status": "fail" if hit else (skip[0] if skip else "pass"),
+            "detail": hit.detail if hit else (skip[1] if skip else None),
+        })
+    return out
+
+
+_STATUS_ORDER = {"fail": 0, "not_run": 1, "error": 1, "pass": 2, "not_applicable": 3}
+
+
+def identity_rule_results(items: List[AccessReviewItem], findings_by_item: Dict[int, List[Any]],
+                          rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Each identity rule over the whole sample: how many identities it could judge,
+    how many failed, and how many it could not judge (and why). A rule that judged
+    nobody is not_applicable / not_run — never a pass."""
+    out = []
+    for rule in rules:
+        if rule.get("kind") == "connector":
+            continue
+        tested = failed = n_na = n_not_run = 0
+        reasons: Dict[str, int] = {}
+        for it in items:
+            skip = applicability(rule, it)
+            if skip:
+                if skip[0] == "not_applicable":
+                    n_na += 1
+                else:
+                    n_not_run += 1
+                reasons[skip[1]] = reasons.get(skip[1], 0) + 1
+                continue
+            tested += 1
+            if any(f.rule_id == rule["id"] for f in findings_by_item.get(it.id, [])):
+                failed += 1
+        if failed:
+            status = "fail"
+        elif tested:
+            status = "pass"
+        else:
+            status = "not_run" if n_not_run else "not_applicable"
+        reason = max(reasons, key=reasons.get) if reasons and not tested else None
+        out.append({
+            "id": rule["id"], "kind": "identity", "name": rule["name"], "domain": rule["domain"],
+            "severity": rule["severity"], "regulation": rule.get("regulation"),
+            "reads": rule.get("reads"), "trips": rule.get("trips"),
+            "status": status, "reason": reason, "detail": reason,
+            "population": len(items), "tested": tested, "failed": failed, "passed": tested - failed,
+            "not_applicable": n_na, "not_run": n_not_run,
+            "frameworks": rule.get("frameworks") or [], "frameworks_total": rule.get("frameworks_total"),
+        })
+    return out
+
+
+def sort_results(results: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Failing first, then what could not be run, then passes, then what did not apply."""
+    return sorted(results, key=lambda r: (_STATUS_ORDER.get(r["status"], 4), -(r.get("failed") or 0), r["id"]))
+
+
+def attach_rule_meta(results: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Today's name, category and framework clauses on each result. The result itself
+    (status, counts, severity, failures) stays as it was when the checks ran."""
+    by_id = {r["id"]: r for r in rules}
+    out = []
+    for res in results:
+        meta = by_id.get(res["id"]) or {}
+        out.append({**res, "name": meta.get("name") or res.get("name"),
+                    "domain": meta.get("domain") or res.get("domain"),
+                    "severity": res.get("severity") or meta.get("severity"),
+                    "frameworks": meta.get("frameworks") or res.get("frameworks") or [],
+                    "frameworks_total": meta.get("frameworks_total") or res.get("frameworks_total")})
+    return out
+
+
+def all_rule_results(items: List[AccessReviewItem], findings_by_item: Dict[int, List[Any]],
+                     rules: List[Dict[str, Any]], connector_results: Optional[List[Dict[str, Any]]] = None
+                     ) -> List[Dict[str, Any]]:
+    """The review's whole result: identity rules over the sample, plus what each
+    connector rule found."""
+    results = identity_rule_results(items, findings_by_item, rules) + list(connector_results or [])
+    return sort_results(attach_rule_meta(results, rules))
 
 
 def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
@@ -629,6 +870,8 @@ def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
     total = 0
     for item in items:
         for rule in active:
+            if applicability(rule, item):
+                continue              # a rule cannot find what it cannot judge: no finding, and no "pass" either
             for f in rule["check"](item, ctx):
                 tenant_db.add(AccessReviewFinding(
                     tenant_id=tenant_id, campaign_id=campaign_id, item_id=item.id,
@@ -655,6 +898,7 @@ def _crosswalk(tenant_db: Session, scf_ids: List[str]) -> Dict[str, List[tuple]]
                             SCFMapping.requirement_code)
             .join(SCFSource, SCFSource.source_slug == SCFMapping.source_slug)
             .filter(SCFMapping.scf_id.in_(scf_ids))
+            .filter(or_(SCFMapping.match_mode.is_(None), SCFMapping.match_mode != "parent"))
             .distinct()
             .all()
         )
@@ -680,70 +924,102 @@ def _group_frameworks(pairs: List[tuple], limit: int, prefer: Optional[str] = No
     return {"frameworks": ordered[:limit], "total": len(ordered), "all": ordered}
 
 
-def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = None) -> Dict[str, Any]:
-    """Catalog grouped by domain with each rule's effective enabled state, for
-    the Rule Library screen.
+def _clauses(crosswalk: Dict[str, List[tuple]], framework: str, rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The framework's own requirement clauses these rules evidence, each with the rules that answer it."""
+    by_code: Dict[str, List[str]] = {}
+    for r in rules:
+        for scf_id in (r.get("scf") or ()):
+            for slug, _name, code in crosswalk.get(scf_id, ()):
+                if slug == framework and code and r["id"] not in by_code.setdefault(code, []):
+                    by_code[code].append(r["id"])
+    return [{"code": code, "rules": ids} for code, ids in sorted(by_code.items())]
 
-    `framework` is a source slug from the tenant's crosswalk: the catalog then
-    shows only the rules that evidence it, each with that framework's own
-    requirement codes — "which of my rules answer NCA ECC, and against which
-    clauses".
+
+def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = None,
+                 source: Optional[str] = None) -> Dict[str, Any]:
+    """The rule library: every rule grouped by category with its effective enabled
+    state, for the Rule Library screen and the picker.
+
+    `source` (a connector key) narrows it to what a review of that source can run.
+    `framework` (a crosswalk source slug) narrows it to the rules that evidence it,
+    each with that framework's own requirement codes, and adds the clauses they cover.
     """
-    from ...models import AccessReviewRuleConfig
+    from . import connector_rules as cr
 
-    cfg_map = {
-        c.rule_id: c
-        for c in tenant_db.query(AccessReviewRuleConfig)
-        .filter(AccessReviewRuleConfig.tenant_id == tenant_id).all()
-    }
-    crosswalk = _crosswalk(tenant_db, sorted({c for r in RULE_CATALOG for c in (r.get("scf") or ())}))
+    cfg_map = _configs(tenant_db, tenant_id)
+    packs = cr.packs()
+    connected = {key: cr.connected(tenant_db, tenant_id, key) for key in packs}
+
+    # A review of one source is shown what can run on it: the rules that need some
+    # other system (SAP, a firewall appliance) are not that source's business.
+    pool: List[Dict[str, Any]] = [r for r in RULE_CATALOG
+                                  if applies_to_source(r, source) and (not source or r["status"] == RUNNABLE)]
+    for pack in packs.values():
+        if source and pack.connector != source:
+            continue
+        pool.extend(rule_def(r.id) for r in pack.rules)
+    crosswalk = _crosswalk(tenant_db, sorted({c for r in pool for c in (r.get("scf") or ())}))
+
     domains: Dict[str, List[Dict[str, Any]]] = {}
     covered: set = set()
-    counted: Dict[tuple, int] = {}
+    counted: Dict[tuple, Dict[str, int]] = {}
     enabled_n = runnable_n = shown = 0
-    for r in RULE_CATALOG:
+    shown_rules: List[Dict[str, Any]] = []
+    for r in pool:
         cfg = cfg_map.get(r["id"])
         en = effective_enabled(r, cfg)
-        is_runnable = r["status"] == RUNNABLE
+        is_connector = r.get("kind") == "connector"
+        # A connector rule runs once its connector has a credential on file.
+        status = (RUNNABLE if connected.get(r["connector"]) else NEEDS_CONNECTOR) if is_connector else r["status"]
+        is_runnable = status == RUNNABLE
         pairs = [p for scf_id in (r.get("scf") or ()) for p in crosswalk.get(scf_id, ())]
         refs = _group_frameworks(pairs, limit=6)
-        # Counted over the whole catalog, filter or not: the picker keeps every
+        # Counted over the whole pool, framework filter or not: the picker keeps every
         # framework, so choosing one is never a one-way door.
         covered.update(f["slug"] for f in refs["all"])
         for f in refs["all"]:
-            counted[(f["slug"], f["name"])] = counted.get((f["slug"], f["name"]), 0) + 1
+            c = counted.setdefault((f["slug"], f["name"]), {"rules": 0, "runnable": 0})
+            c["rules"] += 1
+            c["runnable"] += 1 if is_runnable else 0
         if framework:
             chosen = [f for f in refs["all"] if f["slug"] == framework]
             if not chosen:
                 continue                      # this rule says nothing about that framework
             refs = {**refs, "frameworks": chosen, "total": 1}
+        label = packs[r["connector"]].label if is_connector else None
         domains.setdefault(r["domain"], []).append({
-            "id": r["id"], "name": r["name"],
+            "id": r["id"], "kind": r.get("kind", "identity"), "name": r["name"],
             "severity": (cfg.severity if cfg and cfg.severity else r["severity"]),
-            "status": r["status"], "reads": r["reads"], "trips": r["trips"],
+            "status": status, "reads": r["reads"], "trips": r["trips"],
             "regulation": r["regulation"], "runnable": is_runnable, "enabled": en,
+            "connector": r.get("connector") if is_connector else None, "connector_label": label,
+            "sources": list(r.get("sources") or []), "fix": r.get("fix"),
             # The tenant's own frameworks this rule evidences.
             "scf": list(r.get("scf") or ()),
             "frameworks": refs["frameworks"], "frameworks_total": refs["total"],
             # every framework it answers to, so the filter can match on any
             "framework_slugs": [f["slug"] for f in refs["all"]],
         })
+        shown_rules.append(r)
         shown += 1
         if is_runnable:
             runnable_n += 1
             if en:
                 enabled_n += 1
-    # Every framework the catalog touches, most-covered first — the filter the
-    # Rule Library offers, drawn from the tenant's own crosswalk rather than a
-    # fixed list of four regulations.
+    # Every framework the pool touches, most-covered first — the filter the library
+    # offers, drawn from the tenant's own crosswalk rather than a fixed list.
     frameworks = sorted(
-        ({"slug": slug, "name": name, "rules": n} for (slug, name), n in counted.items()),
-        key=lambda f: (-f["rules"], f["name"]),
+        ({"slug": slug, "name": name, **n} for (slug, name), n in counted.items()),
+        key=lambda f: (-f["runnable"], -f["rules"], f["name"]),
     )
     return {
-        "summary": {"total": shown, "catalog_total": len(RULE_CATALOG), "runnable": runnable_n,
+        "summary": {"total": shown, "catalog_total": len(pool), "runnable": runnable_n,
                     "enabled_active": enabled_n, "frameworks_covered": len(covered)},
-        "framework": framework,
+        "framework": framework, "source": source,
         "frameworks": frameworks,
+        # the connectors that carry rules of their own, and whether each is connected
+        "connectors": [{"key": p.connector, "label": p.label, "connected": connected[p.connector],
+                        "rules": len(p.rules), "limits": p.limits} for p in packs.values()],
+        "clauses": _clauses(crosswalk, framework, shown_rules) if framework else [],
         "domains": [{"domain": d, "rules": domains.get(d, [])} for d in domain_order()],
     }

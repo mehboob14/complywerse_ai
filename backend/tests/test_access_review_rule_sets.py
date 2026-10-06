@@ -129,6 +129,8 @@ def test_the_report_and_every_export_show_what_each_rule_found(db, api):
     assert book.sheetnames == ["Users", "Rules"]
     rules_sheet = [[c.value for c in row] for row in book["Rules"].iter_rows()]
     assert rules_sheet[0][:3] == ["Rule", "Name", "Category"]
-    assert any(r[0] == "AUTH-01" and r[4] == "Fail" and "SOC 2" in r[7] for r in rules_sheet[1:])
+    col = {name: i for i, name in enumerate(rules_sheet[0])}
+    assert any(r[0] == "AUTH-01" and r[col["Result"]] == "Fail" and "SOC 2" in r[col["Frameworks (clauses)"]]
+               for r in rules_sheet[1:])
     pdf = api.get(f"/access-reviews/{review['id']}/report/export?format=pdf")     # '&' in names and categories
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")

@@ -20,7 +20,9 @@ ITEM_HEADERS = [
     "MFA", "Account", "Privileged", "Terminated", "Last sign-in",
     "Rules failed", "Findings", "Decision",
 ]
-RULE_HEADERS = ["Rule", "Name", "Category", "Severity", "Result", "Failed", "Passed", "Frameworks (clauses)"]
+RULE_HEADERS = ["Rule", "Name", "Category", "Runs on", "Severity", "Result", "Tested", "Failed",
+                "Frameworks (clauses)", "What it found"]
+_RESULT = {"pass": "Pass", "fail": "Fail", "not_run": "Not run", "not_applicable": "Not applicable", "error": "Error"}
 
 
 def item_rows(items: List[Dict[str, Any]]) -> List[List[Any]]:
@@ -54,15 +56,55 @@ def frameworks_text(rule: Dict[str, Any], limit: int = 3) -> str:
     return f"{text} (+{more} more)" if more > 0 else (text or rule.get("regulation") or "—")
 
 
+def _runs_on(rule: Dict[str, Any]) -> str:
+    if rule.get("kind") != "connector":
+        return "Sampled identities"
+    try:
+        from .connector_rules import packs
+        pack = packs().get(rule.get("connector"))
+        return pack.label if pack else str(rule.get("connector") or "")
+    except Exception:  # noqa: BLE001
+        return str(rule.get("connector") or "")
+
+
+def _found(rule: Dict[str, Any]) -> str:
+    """The failing resources of a connector rule, or why a rule could not be judged."""
+    failures = rule.get("failures") or []
+    if failures:
+        shown = "; ".join(f"{f.get('resource')}: {f.get('detail')}" for f in failures[:10])
+        more = (rule.get("failed") or len(failures)) - min(len(failures), 10)
+        return shown + (f" (+{more} more)" if more > 0 else "")
+    return rule.get("reason") or (rule.get("detail") if rule.get("status") != "pass" else "") or ""
+
+
 def rule_rows(rules: List[Dict[str, Any]]) -> List[List[Any]]:
-    return [[r["id"], r["name"], r.get("domain") or "", r.get("severity") or "",
-             "Fail" if r.get("status") == "fail" else "Pass", r.get("failed", 0), r.get("passed", 0),
-             frameworks_text(r)] for r in rules]
+    return [[r["id"], r["name"], r.get("domain") or "", _runs_on(r), r.get("severity") or "",
+             _RESULT.get(r.get("status"), str(r.get("status") or "")), r.get("tested", 0), r.get("failed", 0),
+             frameworks_text(r), _found(r)] for r in rules]
 
 
-def csv_response(stem: str, items: List[Dict[str, Any]]) -> StreamingResponse:
-    from ...routers.search_router import _csv_response
-    return _csv_response(f"{stem}.csv", ITEM_HEADERS, item_rows(items))
+def csv_response(stem: str, items: List[Dict[str, Any]], rules: List[Dict[str, Any]] | None = None) -> StreamingResponse:
+    """Users, then the rules that were checked — result, category, framework."""
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(ITEM_HEADERS)
+    for row in item_rows(items):
+        writer.writerow(row)
+    if rules:
+        writer.writerow([])
+        writer.writerow(RULE_HEADERS)
+        for row in rule_rows(rules):
+            writer.writerow(row)
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{stem}.csv"'},
+    )
 
 
 def xlsx_response(stem: str, items: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -> StreamingResponse:
@@ -90,6 +132,10 @@ def xlsx_response(stem: str, items: List[Dict[str, Any]], rules: List[Dict[str, 
 
 _VERDICTS = {"effective": "Effective", "deficient": "Deficient", "material_weakness": "Material weakness"}
 _SCOPES = {"enabled": "Every rule enabled in the library", "custom": "Rules picked for this review"}
+
+
+def _verdict_reasons(report: Dict[str, Any]) -> str:
+    return "; ".join(report.get("verdict_reasons") or [])
 
 
 def pdf_response(
@@ -131,6 +177,11 @@ def pdf_response(
     verdict = _VERDICTS.get(report.get("verdict", ""), report.get("verdict", ""))
     state = "Sealed" if not report.get("provisional") else f"In progress ({report.get('pending', 0)} still to decide)"
     elems.append(Paragraph(f"Verdict: <b>{verdict}</b> &nbsp;&nbsp; {state}", styles["Normal"]))
+    if _verdict_reasons(report):
+        elems.append(Paragraph(f"Because: {escape(_verdict_reasons(report))}", styles["Normal"]))
+    for note in report.get("connector_notes") or []:
+        if note.get("limits"):
+            elems.append(Paragraph(f"{escape(str(note.get('label') or ''))}: {escape(note['limits'])}", styles["Normal"]))
     cov = round(report["sample_size"] / report["population_size"] * 100) if report.get("population_size") else 0
     elems.append(Paragraph(
         f"Population: {report.get('population_size', 0)} &nbsp; "
@@ -147,10 +198,12 @@ def pdf_response(
 
     rules = report.get("rule_results") or []
     if rules:
-        failed = sum(1 for r in rules if r.get("status") == "fail")
-        elems.append(Paragraph(f"<b>Rules checked</b> — {len(rules) - failed} passed, {failed} failed", styles["Heading3"]))
+        count = lambda s: sum(1 for r in rules if r.get("status") == s)
+        elems.append(Paragraph(
+            f"<b>Rules checked</b> — {count('pass')} passed, {count('fail')} failed, "
+            f"{count('not_run')} not run, {count('not_applicable')} not applicable", styles["Heading3"]))
         elems.append(table([RULE_HEADERS] + rule_rows(rules),
-                           widths=[16 * mm, 55 * mm, 32 * mm, 16 * mm, 13 * mm, 13 * mm, 13 * mm, 115 * mm]))
+                           widths=[15 * mm, 44 * mm, 24 * mm, 22 * mm, 13 * mm, 17 * mm, 11 * mm, 11 * mm, 44 * mm, 70 * mm]))
         elems.append(Spacer(1, 6 * mm))
 
     elems.append(Paragraph("<b>Users certified</b>", styles["Heading3"]))

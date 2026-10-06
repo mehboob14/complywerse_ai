@@ -125,6 +125,8 @@ _COLUMN_ADDS = [
     ("grc_access_review_campaigns", "rule_framework", "VARCHAR(120)"),
     ("grc_access_review_campaigns", "rule_ids", "JSON"),
     ("grc_access_review_campaigns", "rules_run", "JSON"),
+    # What each rule found when the checks ran — frozen, so the report never moves.
+    ("grc_access_review_campaigns", "rule_results", "JSON"),
     ("grc_access_review_campaigns", "ai_summary_at", "TIMESTAMP"),
     # SaaS multi-tenant Entra columns
     ("grc_identity_provider_configs", "entra_directory_id", "VARCHAR(64)"),

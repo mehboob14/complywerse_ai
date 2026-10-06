@@ -12,11 +12,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
 import grc.models as m
-from grc.modules.access_review import collectors
+from grc.modules.access_review import collectors, connector_rules
 from grc.modules.access_review import rule_catalog as rules
 from grc.modules.access_review._ingest import ingest
 
 SOC2, ECC = "aicpa_tsc_soc2", "emea_saudi_arabia_ecc_1_2018"
+
+# the library holds the identity rules and every connector's own rules
+EVERY_RULE = len(rules.RULE_CATALOG) + len(connector_rules.all_rules())
 
 
 @pytest.fixture
@@ -115,7 +118,7 @@ def _crosswalk(db):
 def test_the_library_filters_to_one_framework_and_shows_its_own_clauses(db):
     _crosswalk(db)
     everything = rules.catalog_view(db, 1)
-    assert everything["summary"]["total"] == len(rules.RULE_CATALOG)
+    assert everything["summary"]["total"] == EVERY_RULE
     assert {f["slug"] for f in everything["frameworks"]} == {SOC2, ECC}
 
     ecc = rules.catalog_view(db, 1, framework=ECC)
@@ -123,8 +126,8 @@ def test_the_library_filters_to_one_framework_and_shows_its_own_clauses(db):
     ids = [r["id"] for r in shown]
     assert "AUTH-01" in ids                      # IAC-06 is crosswalked to ECC
     assert "PRIV-05" not in ids                  # its controls answer SOC 2 only
-    assert ecc["summary"]["total"] == len(ids) < len(rules.RULE_CATALOG)
-    assert ecc["summary"]["catalog_total"] == len(rules.RULE_CATALOG)
+    assert ecc["summary"]["total"] == len(ids) < EVERY_RULE
+    assert ecc["summary"]["catalog_total"] == EVERY_RULE
     # every rule shown carries that framework's own clause, and only that one
     assert all(r["frameworks"] == [{"slug": ECC, "name": "EMEA Saudi Arabia ECC-1 2018",
                                     "codes": ["2-2-3-2"]}] for r in shown)
@@ -138,7 +141,7 @@ def test_the_library_filters_to_one_framework_and_shows_its_own_clauses(db):
 def test_an_unmapped_tenant_still_gets_the_whole_catalog(db):
     """A tenant with no SCF release loaded sees every rule, no frameworks."""
     view = rules.catalog_view(db, 1)
-    assert view["summary"]["total"] == len(rules.RULE_CATALOG)
+    assert view["summary"]["total"] == EVERY_RULE
     assert view["frameworks"] == [] and view["summary"]["frameworks_covered"] == 0
 
 
