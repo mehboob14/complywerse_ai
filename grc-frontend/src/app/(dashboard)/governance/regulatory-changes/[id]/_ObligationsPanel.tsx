@@ -100,13 +100,16 @@ export default function ObligationsPanel({ changeId, onTask, initial = {} }: {
     for (const t of tasks) if (t.obligation_id) (out[t.obligation_id] ||= []).push(t);
     return out;
   }, [tasks]);
+  // Item numbers: the circular's own order, 1 to N. The clause the AI read often repeats (several duties sit in one
+  // clause) or is missing, so it is not what identifies a row; the number stays with its row while filters narrow the list.
+  const numberOf = useMemo(() => new Map(all.map((o, i) => [o.id, i + 1])), [all]);
   const shown = useMemo(() => {
     const q = search.trim().toLowerCase();
     return all.filter((o) => (!status || o.compliance_status === status) && (!type || o.obligation_type === type)
       && (!control || controlState(byObligation[o.id]).key === control) && (!toCheck || toCheckOf(o))
-      && (!q || [o.summary, o.quote || '', o.ref || '', ...(o.owners || []).map((w) => w.display_name)]
+      && (!q || String(numberOf.get(o.id)) === q || [o.summary, o.quote || '', o.ref || '', ...(o.owners || []).map((w) => w.display_name)]
         .some((s) => s.toLowerCase().includes(q))));
-  }, [all, status, type, control, toCheck, search, byObligation]);
+  }, [all, status, type, control, toCheck, search, byObligation, numberOf]);
 
   const counts = Object.fromEntries(COMPLIANCE.map((s) => [s.value, all.filter((o) => o.compliance_status === s.value).length]));
   const met = all.filter((o) => controlState(byObligation[o.id]).confirmed > 0).length;
@@ -199,15 +202,18 @@ export default function ObligationsPanel({ changeId, onTask, initial = {} }: {
             {shown.map((o) => {
               const mine = tasksOf[o.id] || [];
               const done = mine.filter((t) => t.status === 'completed').length;
+              const n = numberOf.get(o.id);
               return (
                 <li key={o.id} onClick={() => open(o)} className={`${GRID} cursor-pointer px-4 py-2.5 hover:bg-slate-50`}>
                   <div className="flex min-w-0 items-start gap-2.5">
-                    <span className="mt-0.5 min-w-[2.25rem] shrink-0 rounded bg-slate-100 px-1 py-0.5 text-center font-mono text-[11px] text-slate-700">
-                      {o.ref || '—'}
+                    <span className="mt-0.5 min-w-[2.25rem] shrink-0 rounded bg-slate-100 px-1 py-0.5 text-center font-mono text-[11px] tabular-nums text-slate-700"
+                      title={`Obligation ${n} of ${all.length}`}>
+                      <span className="sr-only">Obligation </span>{n}
                     </span>
                     <div className="min-w-0">
                       <p className="line-clamp-2 text-sm text-slate-900">{o.summary}</p>
                       <p className="mt-0.5 flex flex-wrap gap-x-2 text-[11px] text-slate-500">
+                        {o.ref && <span>Clause {o.ref}</span>}
                         <span>{words(o.obligation_type)}</span>
                         {(o.deadline || o.deadline_text) && <span className="text-rose-700">Due {o.deadline ? fmtDate(o.deadline) : o.deadline_text}</span>}
                         <ControlNote links={byObligation[o.id]} />
@@ -217,13 +223,13 @@ export default function ObligationsPanel({ changeId, onTask, initial = {} }: {
                     </div>
                   </div>
                   <div className="hidden min-w-0 sm:block">
-                    <PeoplePicker value={ownersOf(o)} placeholder="No owner" label={`Owners of clause ${o.ref || o.id}`}
+                    <PeoplePicker value={ownersOf(o)} placeholder="No owner" label={`Owners of obligation ${n}`}
                       onChange={(ids) => save.mutate({ id: o.id, data: { owner_ids: ids } })} />
                   </div>
-                  <PillSelect value={o.compliance_status} options={COMPLIANCE} label={`Compliance with clause ${o.ref || o.id}`}
+                  <PillSelect value={o.compliance_status} options={COMPLIANCE} label={`Compliance with obligation ${n}`}
                     onChange={(v) => save.mutate({ id: o.id, data: { compliance_status: v } })} />
                   <button type="button" onClick={(e) => { e.stopPropagation(); onTask(taskFor(o)); }}
-                    title="Create a task for this obligation" aria-label={`Create a task for clause ${o.ref || o.id}`}
+                    title="Create a task for this obligation" aria-label={`Create a task for obligation ${n}`}
                     className="hidden h-7 w-7 items-center justify-center rounded-md text-slate-400 hover:bg-primary-50 hover:text-primary-700 sm:inline-flex">
                     <ClipboardList className="h-4 w-4" />
                   </button>
@@ -239,7 +245,8 @@ export default function ObligationsPanel({ changeId, onTask, initial = {} }: {
         <ObligationDrawer
           key={current.id}
           o={current}
-          position={at >= 0 ? `${at + 1} of ${order.length}` : undefined}
+          number={numberOf.get(current.id) ?? 0}
+          total={all.length}
           links={byObligation[current.id] || []}
           tasks={tasksOf[current.id] || []}
           onOpenTask={onTask}
@@ -257,15 +264,15 @@ export default function ObligationsPanel({ changeId, onTask, initial = {} }: {
       <AddObligation changeId={changeId} open={adding} onClose={() => setAdding(false)} onAdded={refresh} />
 
       <ConfirmDialog open={!!removing} title="Remove this obligation?" busy={remove.isPending}
-        message={<>Clause {removing?.ref || '—'}: &ldquo;{removing?.summary}&rdquo;. Its control links go with it.</>}
+        message={<>Obligation {removing ? numberOf.get(removing.id) : ''}: &ldquo;{removing?.summary}&rdquo;. Its control links go with it.</>}
         confirmLabel="Remove" onCancel={() => setRemoving(null)} onConfirm={() => removing && remove.mutate(removing.id)} />
     </div>
   );
 }
 
-function ObligationDrawer({ o, position, links, tasks, onOpenTask, onPrev, onNext, onClose, onSave, saving, onLinksChanged,
+function ObligationDrawer({ o, number, total, links, tasks, onOpenTask, onPrev, onNext, onClose, onSave, saving, onLinksChanged,
   onRemove, onTask }: {
-  o: Obligation; position?: string; links: RegLink[]; tasks: Task[]; onOpenTask: (t: Task) => void; onPrev?: () => void;
+  o: Obligation; number: number; total: number; links: RegLink[]; tasks: Task[]; onOpenTask: (t: Task) => void; onPrev?: () => void;
   onNext?: () => void; onClose: () => void; onSave: (data: Record<string, unknown>) => void; saving: boolean;
   onLinksChanged: () => void; onRemove: () => void; onTask: () => void;
 }) {
@@ -286,8 +293,8 @@ function ObligationDrawer({ o, position, links, tasks, onOpenTask, onPrev, onNex
 
   return (
     <RightSlidePanel isOpen onClose={onClose} width="w-full max-w-2xl"
-      title={o.ref ? `Clause ${o.ref}` : 'Obligation'}
-      subtitle={[words(o.obligation_type), position].filter(Boolean).join(' · ')}
+      title={`Obligation ${number} of ${total}`}
+      subtitle={[o.ref && `Clause ${o.ref}`, words(o.obligation_type)].filter(Boolean).join(' · ')}
       footer={(
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" onClick={onRemove}
