@@ -1096,6 +1096,11 @@ _COLUMN_ADDS = [
     ("grc_regulatory_implementation_tasks", "critical_task_id", "INTEGER", "ix_reg_task_critical_task"),
     ("grc_regulatory_obligations", "owner_ids", "JSON", None),
     ("grc_critical_tasks", "linked_regulatory_change_id", "INTEGER", "ix_critical_task_reg_change"),
+    # Committee action items: a priority (its SLA) and a twin in Task Management.
+    ("grc_oversight_actions", "priority", "VARCHAR(20) DEFAULT 'medium'", None),
+    ("grc_oversight_actions", "critical_task_id", "INTEGER", "ix_oversight_action_critical_task"),
+    # Risk register: the priority a person set (blank = from the score).
+    ("grc_risks", "priority", "VARCHAR(20)", None),
     # SCF control plane. The bridge: one NormalizedControl row per SCF control
     # carries its scf_id, so every table already FK'd to grc_normalized_controls
     # (evidence, exceptions, assessments, work items) keeps working unchanged and
@@ -1154,6 +1159,23 @@ def _backfill_regulatory_task_twins(engine: Engine) -> None:
                         made, getattr(engine.url, "database", "?"))
     except Exception:
         logger.exception("regulatory task twin backfill failed on %s", getattr(engine.url, "database", "?"))
+
+
+def _backfill_committee_task_twins(engine: Engine) -> None:
+    """Every committee action without a Task Management twin gets one."""
+    try:
+        insp = inspect(engine)
+        if not (insp.has_table("grc_oversight_actions") and insp.has_table("grc_critical_tasks")):
+            return
+        from ..governance.committee_tasks import backfill
+        with Session(bind=engine) as db:
+            made = backfill(db)
+            db.commit()
+        if made:
+            logger.info("Mirrored %s committee actions into Task Management on %s",
+                        made, getattr(engine.url, "database", "?"))
+    except Exception:
+        logger.exception("committee action twin backfill failed on %s", getattr(engine.url, "database", "?"))
 
 
 def _backfill_framework_assessment_register_type(engine: Engine) -> None:
@@ -1331,6 +1353,9 @@ def _ensure_for_engine(engine: Engine) -> None:
         # Regulatory implementation tasks show in Task Management: a task made
         # before that gets its twin now. Idempotent.
         _backfill_regulatory_task_twins(engine)
+
+        # Committee action items show in Task Management too, the same way.
+        _backfill_committee_task_twins(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

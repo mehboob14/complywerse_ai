@@ -240,6 +240,7 @@ class OversightActionCreate(BaseModel):
     title: str
     description: Optional[str] = None
     action_type: str = "follow_up"  # follow_up, policy_approval, risk_review, audit_response
+    priority: Optional[str] = None  # critical / high / medium / low / info; sets the SLA, medium when left out
     assigned_to: Optional[int] = None
     due_date: Optional[datetime] = None
     linked_policy_id: Optional[int] = None
@@ -252,6 +253,7 @@ class OversightActionUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     action_type: Optional[str] = None
+    priority: Optional[str] = None
     assigned_to: Optional[int] = None
     due_date: Optional[datetime] = None
     status: Optional[str] = None
@@ -277,6 +279,9 @@ class OversightActionResponse(BaseModel):
     assignee_name: Optional[str] = None
     due_date: Optional[datetime]
     status: str
+    priority: str = "medium"
+    sla: Optional[Dict[str, Any]] = None  # where it stands against the SLA for its priority
+    critical_task_id: Optional[int] = None  # its twin in Task Management
     completed_at: Optional[datetime]
     completion_notes: Optional[str]
     linked_policy_id: Optional[int]

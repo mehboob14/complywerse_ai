@@ -482,6 +482,7 @@ class RiskCreate(RiskBase):
     residual_score: Optional[float] = None
     risk_appetite: Optional[str] = None
     status: Optional[str] = "open"
+    priority: Optional[str] = None  # critical / high / medium / low; empty = from the score
     treatment_plan: Optional[str] = None
     root_cause: Optional[str] = None
     consequences: Optional[str] = None
@@ -507,6 +508,7 @@ class RiskUpdate(BaseModel):
     team_id: Optional[int] = None
     business_unit_id: Optional[int] = None
     status: Optional[str] = None
+    priority: Optional[str] = None  # critical / high / medium / low; empty = from the score
     treatment_plan: Optional[str] = None
     root_cause: Optional[str] = None
     consequences: Optional[str] = None
@@ -542,6 +544,10 @@ class RiskResponse(BaseModel):
     residual_score: Optional[float]
     risk_appetite: Optional[str]
     status: str
+    # What a person set (empty = from the score), what the SLA follows, and where the risk stands against it.
+    priority: Optional[str] = None
+    effective_priority: Optional[str] = None
+    sla: Optional[Dict[str, Any]] = None
     treatment_plan: Optional[str]
     root_cause: Optional[str] = None
     consequences: Optional[str] = None

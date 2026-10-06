@@ -349,16 +349,17 @@ def _serialize_task(task, include_relations=False):
     return result
 
 
-def _sync_regulatory(db: Session, task_ids, user_id: Optional[int]) -> None:
-    """Tasks mirrored from a regulatory change: the regulatory task follows the edit.
+def _sync_mirrors(db: Session, task_ids, user_id: Optional[int]) -> None:
+    """Tasks mirrored from a regulatory change or a committee action: the original follows the edit.
     Wrapped so the governance module can never break a Task Management write."""
     try:
-        from ..modules.governance.regulatory_tasks import sync_from_critical_task
+        from ..modules.governance import committee_tasks, regulatory_tasks
         for task_id in task_ids:
-            sync_from_critical_task(db, task_id, user_id=user_id)
+            regulatory_tasks.sync_from_critical_task(db, task_id, user_id=user_id)
+            committee_tasks.sync_from_critical_task(db, task_id, user_id=user_id)
         db.commit()
     except Exception:
-        logger.exception("Regulatory task sync failed for tasks %s", list(task_ids))
+        logger.exception("Mirrored task sync failed for tasks %s", list(task_ids))
         db.rollback()
 
 
@@ -832,7 +833,7 @@ def bulk_action(
         task.updated_at = datetime.utcnow()
 
     db.commit()
-    _sync_regulatory(db, [t.id for t in tasks], current_user.id)
+    _sync_mirrors(db, [t.id for t in tasks], current_user.id)
     return {"updated": updated}
 
 
@@ -1122,7 +1123,7 @@ def update_task(
         db.commit()
     except Exception:
         db.rollback()
-    _sync_regulatory(db, [task.id], current_user.id)
+    _sync_mirrors(db, [task.id], current_user.id)
     db.refresh(task)
     if "assigned_owner_id" in update_data and task.assigned_owner_id and task.assigned_owner_id != old_owner_id:
         _notify_task_event(db, task, "assignment", background_tasks=background_tasks)
@@ -1142,10 +1143,11 @@ def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     try:
-        from ..modules.governance.regulatory_tasks import on_critical_task_deleted
-        on_critical_task_deleted(db, task)
+        from ..modules.governance import committee_tasks, regulatory_tasks
+        regulatory_tasks.on_critical_task_deleted(db, task)
+        committee_tasks.on_critical_task_deleted(db, task)
     except Exception:
-        logger.exception("Could not remove the regulatory task mirrored by task %s", task.id)
+        logger.exception("Could not remove the regulatory task or committee action mirrored by task %s", task.id)
     db.delete(task)
     db.commit()
     return None
@@ -1216,7 +1218,7 @@ def transition_status(
         db.commit()
     except Exception:
         db.rollback()
-    _sync_regulatory(db, [task.id], current_user.id)
+    _sync_mirrors(db, [task.id], current_user.id)
     db.refresh(task)
     return _serialize_task(task)
 

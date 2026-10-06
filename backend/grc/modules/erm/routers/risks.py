@@ -986,6 +986,30 @@ def _attach_source_labels(db: Session, risks: List[Risk]) -> None:
         r.source_label = f"{name} · finding" if tail.startswith("tpra_finding") else name
 
 
+RISK_PRIORITIES = ("critical", "high", "medium", "low")
+
+
+def _clean_priority(value: Optional[str]) -> Optional[str]:
+    """The priority a person set, lower case; empty or "auto" means "from the score" (stored as null)."""
+    text = (value or "").strip().lower()
+    if text in ("", "auto"):
+        return None
+    if text not in RISK_PRIORITIES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Priority must be one of: auto, {', '.join(RISK_PRIORITIES)}")
+    return text
+
+
+def _attach_sla(db: Session, risks: List[Risk]) -> None:
+    """Where each risk stands against the tenant's Risk Register SLA (Settings tab): the SLA follows the risk's
+    effective priority. Sets a transient `sla` attribute read by RiskResponse."""
+    from ....services.module_settings import get_settings, sla_state
+    settings = {tid: get_settings(db, tid, "risks") for tid in {r.tenant_id for r in risks}}
+    for r in risks:
+        r.sla = sla_state(settings[r.tenant_id], status=r.status, due_date=r.due_date,
+                          priority=r.effective_priority, opened_at=r.created_at)
+
+
 @router.get("", response_model=List[RiskResponse])
 def list_risks(
     tenant_id: Optional[int] = None,
@@ -1060,6 +1084,7 @@ def list_risks(
     
     risks = query.order_by(Risk.created_at.desc()).offset(skip).limit(limit).all()
     _attach_source_labels(db, risks)
+    _attach_sla(db, risks)
     return risks
 
 
@@ -1153,6 +1178,7 @@ def create_risk(
         residual_score=residual_score,
         risk_appetite=risk.risk_appetite,
         status=risk.status or "open",
+        priority=_clean_priority(risk.priority),
         treatment_plan=risk.treatment_plan,
         root_cause=getattr(risk, "root_cause", None),
         consequences=getattr(risk, "consequences", None),
@@ -1713,6 +1739,8 @@ def update_risk(
                 db, risk.tenant_id, "risks", update_data["custom_values"], risk.custom_values, creating=False)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    if "priority" in update_data:
+        update_data["priority"] = _clean_priority(update_data["priority"])
 
     # team_id is a transient mapping field — resolve it to a real
     # business_unit_id and don't try to setattr it onto the ORM model

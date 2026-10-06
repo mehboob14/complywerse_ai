@@ -46,6 +46,8 @@ import {
   CustomFieldsTab, CustomFieldsTabBar, errorText, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
 import { PageLoader } from '@/components/ui';
+import { SlaBadge } from '@/components/settings/ModuleSettingsPanel';
+import { PRIORITIES, PriorityPill } from '@/components/settings/PrioritySla';
 import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
 import RiskViewSwitcher from '@/components/risks/RiskViewSwitcher';
@@ -709,6 +711,10 @@ const getScoreColor = (score: number | undefined) => {
   if (score >= 6) return { text: 'text-amber-700', bg: 'bg-amber-50' };
   return { text: 'text-emerald-700', bg: 'bg-emerald-50' };
 };
+
+/** The priority a score falls in when none is set on the risk (the same bands as the dashboard). */
+const priorityForScore = (score: number) =>
+  (score >= 20 ? 'critical' : score >= 12 ? 'high' : score >= 6 ? 'medium' : score > 0 ? 'low' : '');
 
 const getHeatmapCellColor = (likelihood: number, impact: number) => {
   const score = likelihood * impact;
@@ -1603,6 +1609,8 @@ export default function ERMRisksPage() {
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Inherent Rating</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Treatment</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Residual Rating</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Priority</th>
+                    <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">SLA</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider">Owner</th>
                     <th className="px-3 py-2 text-left font-semibold text-slate-600 uppercase tracking-wider whitespace-nowrap">Action</th>
                   </tr>
@@ -1701,6 +1709,13 @@ export default function ERMRisksPage() {
                               {residualRating || '—'}
                             </span>
                           </td>
+                          <td className="px-3 py-2 whitespace-nowrap">
+                            <PriorityPill
+                              priority={risk.effective_priority}
+                              title={risk.priority ? 'Priority set on this risk' : 'Priority from the risk score'}
+                            />
+                          </td>
+                          <td className="px-3 py-2 whitespace-nowrap"><SlaBadge sla={risk.sla} /></td>
                           <td className="px-3 py-2 text-slate-600 whitespace-nowrap">{ownerName || <span className="italic text-slate-400">—</span>}</td>
                           <td className="px-3 py-2">
                             <div className="flex items-center gap-0.5">
@@ -1749,7 +1764,7 @@ export default function ERMRisksPage() {
                         {expanded && (
                           <tr className="bg-primary-50/30">
                             <td></td>
-                            <td colSpan={9} className="px-4 py-3">
+                            <td colSpan={11} className="px-4 py-3">
                               <div className="rounded-lg border border-primary-100 bg-white p-3">
                                 <p className="text-xs font-semibold text-primary-700 uppercase tracking-wider mb-2">NCA Template Fields</p>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-2">
@@ -1953,6 +1968,13 @@ export default function ERMRisksPage() {
                           <span className="text-[10px] uppercase tracking-wide opacity-75">Res</span>
                           <span className="font-semibold">{risk.residual_score || '-'}</span>
                         </span>
+                        <div className="flex w-[68px] justify-center">
+                          <PriorityPill
+                            priority={risk.effective_priority}
+                            title={risk.priority ? 'Priority set on this risk' : 'Priority from the risk score'}
+                          />
+                        </div>
+                        <div className="flex min-w-[104px] justify-center"><SlaBadge sla={risk.sla} /></div>
                         <div className="flex gap-0.5">
                           {canEdit && (
                             <button
@@ -2188,6 +2210,7 @@ function RiskModal({
       ?? (risk as unknown as { business_unit_id?: number } | null)?.business_unit_id
       ?? undefined) as number | undefined,
     status: risk?.status || 'open' as RiskStatus,
+    priority: risk?.priority || '',   // empty = from the score
     inherent_likelihood: risk?.inherent_likelihood || 3,
     inherent_impact: risk?.inherent_impact || 3,
     residual_likelihood: risk?.residual_likelihood || 2,
@@ -3142,6 +3165,29 @@ function RiskModal({
                 />
               )}
             </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">Priority</label>
+              <MultiSelectDropdown
+                title="Priority"
+                items={[
+                  {
+                    value: 'auto',
+                    label: `Auto${priorityForScore(formData.residual_likelihood * formData.residual_impact || formData.inherent_likelihood * formData.inherent_impact) ? ` (${priorityForScore(formData.residual_likelihood * formData.residual_impact || formData.inherent_likelihood * formData.inherent_impact)})` : ''}`,
+                    subLabel: 'From the risk score',
+                  },
+                  ...PRIORITIES,
+                ]}
+                selectedValues={[formData.priority || 'auto']}
+                onApply={(vals) => setFormData({ ...formData, priority: vals[0] && vals[0] !== 'auto' ? vals[0] : '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                size="md"
+              />
+            </div>
+            <p className="self-end pb-2 text-xs text-slate-500">The SLA for this risk follows its priority (Risk register → Settings).</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">

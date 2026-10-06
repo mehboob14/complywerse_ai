@@ -21,6 +21,9 @@ import Link from 'next/link';
 import { SearchInput } from '@/components/ui/SearchInput';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { useModuleSettings } from '@/components/settings/CustomFields';
+import { SlaBadge, type SlaState } from '@/components/settings/ModuleSettingsPanel';
+import { PriorityPill, priorityChoices, slaDays } from '@/components/settings/PrioritySla';
 
 interface Action {
   id: number;
@@ -32,7 +35,9 @@ interface Action {
   description?: string;
   action_type: 'follow_up' | 'policy_approval' | 'risk_review' | 'audit_response';
   status: 'open' | 'in_progress' | 'completed' | 'overdue';
-  due_date: string;
+  priority?: string;
+  sla?: SlaState | null;
+  due_date: string | null;
   assigned_to_id?: number;
   assigned_to_name?: string;
   created_at: string;
@@ -75,10 +80,13 @@ export default function ActionsPage() {
     title: '',
     description: '',
     action_type: 'follow_up',
+    priority: 'medium',
     due_date: '',
   });
   const [aiFile, setAiFile] = useState<File | null>(null);
   const queryClient = useQueryClient();
+  // Task Management's SLA table: the days each priority allows (a person without access just gets no hints).
+  const { data: taskSettings } = useModuleSettings('tasks');
 
   const { data: committees } = useQuery({
     queryKey: ['committees-list'],
@@ -167,6 +175,7 @@ export default function ActionsPage() {
         title: '',
         description: '',
         action_type: 'follow_up',
+        priority: 'medium',
         due_date: '',
       });
       setAiFile(null);
@@ -219,6 +228,7 @@ export default function ActionsPage() {
       committee_id: parseInt(createFormData.committee_id, 10),
       title: createFormData.title.trim(),
       action_type: createFormData.action_type,
+      priority: createFormData.priority,
     };
 
     if (createFormData.meeting_id) payload.meeting_id = parseInt(createFormData.meeting_id, 10);
@@ -420,6 +430,8 @@ export default function ActionsPage() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${typeStyle.bg} ${typeStyle.text}`}>
                       {typeStyle.label}
                     </span>
+                    <PriorityPill priority={action.priority || 'medium'} />
+                    <SlaBadge sla={action.sla} />
                   </div>
                   {action.description && (
                     <p className="text-slate-600 text-sm mb-3">{action.description}</p>
@@ -431,7 +443,7 @@ export default function ActionsPage() {
                     </span>
                     <span className="flex items-center gap-1.5">
                       <Calendar className="h-4 w-4" />
-                      Due: {new Date(action.due_date).toLocaleDateString()}
+                      Due: {action.due_date ? new Date(action.due_date).toLocaleDateString() : '—'}
                     </span>
                     {action.assigned_to_name && (
                       <span className="flex items-center gap-1.5">
@@ -578,14 +590,33 @@ export default function ActionsPage() {
             </div>
 
             <div>
-              <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
-              <input
-                type="date"
-                value={createFormData.due_date}
-                onChange={(e) => setCreateFormData((prev) => ({ ...prev, due_date: e.target.value }))}
-                className="input w-full"
+              <label className="mb-1 block text-sm font-medium text-slate-700">Priority</label>
+              <MultiSelectDropdown
+                title="Priority"
+                items={priorityChoices(taskSettings)}
+                selectedValues={[createFormData.priority]}
+                onApply={(values) =>
+                  setCreateFormData((prev) => ({ ...prev, priority: values[0] || 'medium' }))
+                }
+                multiSelect={false}
+                triggerVariant="input"
               />
             </div>
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Due Date</label>
+            <input
+              type="date"
+              value={createFormData.due_date}
+              onChange={(e) => setCreateFormData((prev) => ({ ...prev, due_date: e.target.value }))}
+              className="input w-full md:max-w-[50%]"
+            />
+            {!createFormData.due_date && slaDays(taskSettings, createFormData.priority) != null && (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Left blank, it is due {slaDays(taskSettings, createFormData.priority)} days from today (the {createFormData.priority} SLA).
+              </p>
+            )}
           </div>
 
           <div>

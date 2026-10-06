@@ -38,6 +38,9 @@ import {
 import Link from 'next/link';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
+import { useModuleSettings } from '@/components/settings/CustomFields';
+import { SlaBadge, type SlaState } from '@/components/settings/ModuleSettingsPanel';
+import { PRIORITIES, PriorityPill, PrioritySlaEditor, priorityChoices, slaDays } from '@/components/settings/PrioritySla';
 
 interface Committee {
   id: number;
@@ -103,7 +106,9 @@ interface Action {
   description?: string;
   action_type: string;
   status: 'open' | 'in_progress' | 'completed' | 'overdue';
-  due_date: string;
+  priority?: string;
+  sla?: SlaState | null;
+  due_date: string | null;
   assigned_to_name?: string;
   meeting_id?: number;
 }
@@ -268,6 +273,7 @@ export default function CommitteeDetailPage() {
     title: '',
     description: '',
     action_type: 'follow_up',
+    priority: 'medium',
     due_date: '',
     assigned_to_id: '',
   });
@@ -337,6 +343,9 @@ export default function CommitteeDetailPage() {
     enabled: !!committee,
     placeholderData: keepPreviousData,
   });
+
+  // Task Management's SLA table: the days each priority allows (a person without access to it just gets no hints).
+  const { data: taskSettings } = useModuleSettings('tasks');
 
   const { data: actions } = useQuery({
     queryKey: ['committee-actions', committeeId],
@@ -483,11 +492,18 @@ export default function CommitteeDetailPage() {
         title: '',
         description: '',
         action_type: 'follow_up',
+        priority: 'medium',
         due_date: '',
         assigned_to_id: '',
       });
       setActionUploadFile(null);
     },
+  });
+
+  // Re-prioritising an action re-dates it (unless the date was chosen) and updates its twin in Task Management.
+  const updateActionMutation = useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) => committeeApi.updateAction(id, data),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['committee-actions', committeeId] }),
   });
 
   const aiRewordActionMutation = useMutation({
@@ -1443,6 +1459,12 @@ export default function CommitteeDetailPage() {
             )}
           </div>
 
+          <PrioritySlaEditor
+            moduleKey="tasks"
+            title="SLA by priority"
+            note="Days an action item has to be done, by its priority. This is Task Management's own SLA table, so a change here applies there too."
+          />
+
           {(!actions || actions.length === 0) && (
             <div className="card p-10 text-center">
               <CheckSquare className="h-12 w-12 text-slate-300 mx-auto mb-3" />
@@ -1457,26 +1479,61 @@ export default function CommitteeDetailPage() {
             </div>
           )}
 
-          {(actions || []).map((action) => (
-            <div key={action.id} className="card p-6">
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-medium text-black">{action.title}</h3>
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
-                      {action.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                  {action.description && <p className="text-black text-sm mt-1">{action.description}</p>}
-                </div>
-              </div>
-              <div className="flex items-center gap-6 mt-3 text-sm text-black">
-                <span>Due: {new Date(action.due_date).toLocaleDateString()}</span>
-                <span>Assigned to: {action.assigned_to_name || 'Pending Assignment'}</span>
-                <span className="capitalize">{action.action_type.replace('_', ' ')}</span>
+          {(actions || []).length > 0 && (
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[880px] text-sm">
+                  <thead className="border-b border-slate-200 bg-slate-50">
+                    <tr className="text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="px-4 py-2.5">Action</th>
+                      <th className="px-3 py-2.5">Priority</th>
+                      <th className="px-3 py-2.5">SLA</th>
+                      <th className="px-3 py-2.5">Due</th>
+                      <th className="px-3 py-2.5">Assigned to</th>
+                      <th className="px-3 py-2.5">Type</th>
+                      <th className="px-3 py-2.5">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {(actions || []).map((action) => (
+                      <tr key={action.id} className="align-top hover:bg-slate-50">
+                        <td className="max-w-[360px] px-4 py-3">
+                          <p className="font-medium text-black">{action.title}</p>
+                          {action.description && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{action.description}</p>}
+                        </td>
+                        <td className="px-3 py-3">
+                          {canCreate ? (
+                            <select
+                              value={action.priority || 'medium'}
+                              onChange={(e) => updateActionMutation.mutate({ id: action.id, data: { priority: e.target.value } })}
+                              disabled={updateActionMutation.isPending}
+                              aria-label={`Priority of ${action.title}`}
+                              className="rounded-md border border-slate-200 bg-white px-1.5 py-0.5 text-xs font-medium capitalize text-slate-700 focus:border-primary-500 focus:outline-none"
+                            >
+                              {[...PRIORITIES, ...(PRIORITIES.some((p) => p.value === action.priority) || !action.priority ? [] : [{ value: action.priority, label: action.priority }])].map((p) => (
+                                <option key={p.value} value={p.value}>{p.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <PriorityPill priority={action.priority || 'medium'} />
+                          )}
+                        </td>
+                        <td className="px-3 py-3"><SlaBadge sla={action.sla} /></td>
+                        <td className="whitespace-nowrap px-3 py-3 text-black">{action.due_date ? new Date(action.due_date).toLocaleDateString() : '—'}</td>
+                        <td className="px-3 py-3 text-black">{action.assigned_to_name || 'Pending Assignment'}</td>
+                        <td className="px-3 py-3 capitalize text-black">{action.action_type.replace(/_/g, ' ')}</td>
+                        <td className="px-3 py-3">
+                          <span className={`rounded-full px-2 py-0.5 text-xs ${STATUS_COLORS[action.status]?.bg} ${STATUS_COLORS[action.status]?.text}`}>
+                            {action.status.replace('_', ' ')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
-          ))}
+          )}
         </div>
       )}
 
@@ -1507,6 +1564,7 @@ export default function CommitteeDetailPage() {
               title: newAction.title.trim(),
               action_type: newAction.action_type,
             };
+            payload.priority = newAction.priority;
             if (newAction.meeting_id) payload.meeting_id = parseInt(newAction.meeting_id, 10);
             if (newAction.description.trim()) payload.description = newAction.description.trim();
             if (newAction.due_date) payload.due_date = newAction.due_date;
@@ -1571,6 +1629,20 @@ export default function CommitteeDetailPage() {
               />
             </div>
             <div>
+              <label className="block text-sm font-medium text-black mb-1">Priority</label>
+              <MultiSelectDropdown
+                title="Priority"
+                items={priorityChoices(taskSettings)}
+                selectedValues={[newAction.priority]}
+                onApply={(values) => setNewAction({ ...newAction, priority: values[0] || 'medium' })}
+                multiSelect={false}
+                triggerVariant="input"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
               <label className="block text-sm font-medium text-black mb-1">Due Date</label>
               <input
                 type="date"
@@ -1578,21 +1650,25 @@ export default function CommitteeDetailPage() {
                 onChange={(e) => setNewAction({ ...newAction, due_date: e.target.value })}
                 className="input w-full"
               />
+              {!newAction.due_date && slaDays(taskSettings, newAction.priority) != null && (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Left blank, it is due {slaDays(taskSettings, newAction.priority)} days from today (the {newAction.priority} SLA).
+                </p>
+              )}
             </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-black mb-1">Assign To</label>
-            <MultiSelectDropdown
-              title="Assign To"
-              items={normalizedTenantUsers.map((u) => ({ value: String(u.id), label: u.name }))}
-              selectedValues={newAction.assigned_to_id ? [newAction.assigned_to_id] : []}
-              onApply={(values) => setNewAction({ ...newAction, assigned_to_id: values[0] || '' })}
-              multiSelect={false}
-              triggerVariant="input"
-              forceSearch
-              placeholder="Leave Unassigned (Pending)"
-            />
+            <div>
+              <label className="block text-sm font-medium text-black mb-1">Assign To</label>
+              <MultiSelectDropdown
+                title="Assign To"
+                items={normalizedTenantUsers.map((u) => ({ value: String(u.id), label: u.name }))}
+                selectedValues={newAction.assigned_to_id ? [newAction.assigned_to_id] : []}
+                onApply={(values) => setNewAction({ ...newAction, assigned_to_id: values[0] || '' })}
+                multiSelect={false}
+                triggerVariant="input"
+                forceSearch
+                placeholder="Leave Unassigned (Pending)"
+              />
+            </div>
           </div>
 
           <div>

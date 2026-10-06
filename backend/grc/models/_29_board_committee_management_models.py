@@ -269,13 +269,17 @@ class OversightAction(Base):
     assigned_to = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     due_date = Column(DateTime, nullable=True)
     status = Column(String(50), default="open")  # open, in_progress, completed, overdue
+    # critical / high / medium / low / info: sets the SLA days (Task Management's SLA table).
+    priority = Column(String(20), default="medium")
     completed_at = Column(DateTime, nullable=True)
     completion_notes = Column(Text, nullable=True)
     linked_policy_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
     linked_risk_id = Column(Integer, ForeignKey("grc_risks.id"), nullable=True, index=True)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+    # The action's twin in Task Management (soft link; governance/committee_tasks.py keeps the two in step).
+    critical_task_id = Column(Integer, nullable=True, index=True)
+
     tenant = relationship("Tenant")
     committee = relationship("GovernanceCommittee", back_populates="oversight_actions")
     meeting = relationship("CommitteeMeeting", back_populates="oversight_actions")

@@ -254,6 +254,16 @@ export interface Risk {
   residual_score?: number;
   risk_appetite?: string;
   status: RiskStatus;
+  /** What a person set (critical / high / medium / low); empty means "from the score". */
+  priority?: string | null;
+  /** What the SLA follows: `priority`, else the band the score falls in. */
+  effective_priority?: string | null;
+  /** Where the risk stands against the Risk Register SLA (list endpoint only). */
+  sla?: {
+    state: 'on_track' | 'due_soon' | 'breached' | 'paused' | 'closed' | 'no_due_date';
+    days_overdue: number | null; due_in_days: number | null; target_days: number | null;
+    implied_due_date: boolean; escalated: boolean;
+  } | null;
   treatment_plan?: string;
   owner_id?: number;
   owner_name?: string;

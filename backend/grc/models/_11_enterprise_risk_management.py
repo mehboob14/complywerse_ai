@@ -4,9 +4,16 @@ from ._10_evidence_management import *  # noqa: F401,F403
 # 8. Enterprise Risk Management
 # =============================================================================
 
+def risk_priority_for_score(score):
+    """The priority a risk's score puts it in: the bands the register dashboard already uses."""
+    if not score:
+        return None
+    return "critical" if score >= 20 else "high" if score >= 12 else "medium" if score >= 6 else "low"
+
+
 class Risk(Base):
     __tablename__ = "grc_risks"
-    
+
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     business_unit_id = Column(Integer, ForeignKey("grc_business_units.id"), nullable=True, index=True)
@@ -37,6 +44,8 @@ class Risk(Base):
     residual_score = Column(Float, nullable=True)
     risk_appetite = Column(String(50), nullable=True)
     status = Column(String(50), default="open")
+    # critical / high / medium / low when a person set it; empty means "from the score" (see effective_priority).
+    priority = Column(String(20), nullable=True)
     treatment_plan = Column(Text, nullable=True)
     # Reviewable AI-assist fields (also user-editable): root-cause analysis and
     # recommended actions, saved into their own columns rather than the description.
@@ -74,6 +83,13 @@ class Risk(Base):
     # endpoint from source_reference (e.g. the vendor name). Class default ensures
     # RiskResponse.from_attributes always finds the attribute.
     source_label = None
+    # Transient: where the risk stands against the Risk Register SLA (set by the list endpoint).
+    sla = None
+
+    @property
+    def effective_priority(self):
+        """The priority the SLA follows: the one set on the risk, else the band its score falls in."""
+        return self.priority or risk_priority_for_score(self.residual_score or self.inherent_score)
 
     tenant = relationship("Tenant", back_populates="risks")
     owner = relationship("GRCUser", back_populates="owned_risks", foreign_keys=[owner_id])

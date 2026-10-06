@@ -33,6 +33,7 @@ from ....schemas import (
     CommitteeDashboardStats, MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .. import committee_tasks
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,7 @@ class ManualOversightActionCreate(BaseModel):
     title: str
     description: Optional[str] = None
     action_type: str = "follow_up"
+    priority: Optional[str] = None
     assigned_to: Optional[int] = None
     due_date: Optional[datetime] = None
     linked_policy_id: Optional[int] = None
@@ -322,11 +324,11 @@ def serialize_minutes(minutes: MeetingMinutes) -> dict:
     }
 
 
-def serialize_action(action: OversightAction) -> dict:
+def serialize_action(action: OversightAction, sla_settings: Optional[dict] = None) -> dict:
     is_overdue = False
     if action.status in ["open", "in_progress"] and action.due_date:
         is_overdue = action.due_date < datetime.utcnow()
-    
+
     return {
         "id": action.id,
         "tenant_id": action.tenant_id,
@@ -343,6 +345,9 @@ def serialize_action(action: OversightAction) -> dict:
         "assignee_name": action.assignee.display_name if action.assignee else None,
         "due_date": action.due_date,
         "status": action.status,
+        "priority": action.priority or "medium",
+        "sla": committee_tasks.sla_of(action, sla_settings),
+        "critical_task_id": action.critical_task_id,
         "completed_at": action.completed_at,
         "completion_notes": action.completion_notes,
         "linked_policy_id": action.linked_policy_id,
@@ -1977,7 +1982,12 @@ def create_oversight_action(
         OversightAction.committee_id == meeting.committee_id
     ).count()
     action_number = action.action_number or f"ACT-{meeting.committee_id}-{action_count + 1:04d}"
-    
+    try:
+        priority, due_date, raised_at = committee_tasks.prepare(
+            db, meeting.tenant_id, action.priority, action.due_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     db_action = OversightAction(
         tenant_id=meeting.tenant_id,
         committee_id=meeting.committee_id,
@@ -1988,15 +1998,19 @@ def create_oversight_action(
         description=action.description,
         action_type=action.action_type,
         assigned_to=action.assigned_to,
-        due_date=action.due_date,
+        priority=priority,
+        due_date=due_date,
+        created_at=raised_at,
         linked_policy_id=action.linked_policy_id,
         linked_risk_id=action.linked_risk_id,
         created_by=current_user.id,
     )
     db.add(db_action)
+    db.flush()
+    committee_tasks.mirror(db, db_action, current_user.id)
     db.commit()
     db.refresh(db_action)
-    
+
     return serialize_action(db_action)
 
 @router.get("/actions")
@@ -2045,8 +2059,9 @@ def list_actions(
     total = query.count()
     actions = query.order_by(OversightAction.due_date.asc().nullslast()).offset(skip).limit(limit).all()
     
+    sla_settings = {tid: committee_tasks.sla_settings(db, tid) for tid in {a.tenant_id for a in actions}}
     return {
-        "items": [serialize_action(a) for a in actions],
+        "items": [serialize_action(a, sla_settings[a.tenant_id]) for a in actions],
         "total": total,
         "skip": skip,
         "limit": limit
@@ -2076,16 +2091,24 @@ def update_action_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action not found")
     
     update_data = action_update.model_dump(exclude_unset=True)
-    
+
     if update_data.get("status") == "completed" and action.status != "completed":
         update_data["completed_at"] = datetime.utcnow()
-    
+    if "priority" in update_data:
+        try:
+            update_data["priority"] = committee_tasks.clean_priority(update_data["priority"])
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        if update_data["priority"] != (action.priority or "medium") and "due_date" not in update_data:
+            update_data["due_date"] = committee_tasks.due_after_reprioritising(db, action, update_data["priority"])
+
     for key, value in update_data.items():
         setattr(action, key, value)
-    
+
+    committee_tasks.mirror(db, action, current_user.id)
     db.commit()
     db.refresh(action)
-    
+
     return serialize_action(action)
 
 
@@ -2119,6 +2142,10 @@ def create_manual_action(
         OversightAction.committee_id == committee.id
     ).count()
     action_number = action.action_number or f"ACT-{committee.id}-{action_count + 1:04d}"
+    try:
+        priority, due_date, raised_at = committee_tasks.prepare(db, committee.tenant_id, action.priority, action.due_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
     db_action = OversightAction(
         tenant_id=committee.tenant_id,
@@ -2130,12 +2157,16 @@ def create_manual_action(
         description=action.description,
         action_type=action.action_type,
         assigned_to=action.assigned_to,
-        due_date=action.due_date,
+        priority=priority,
+        due_date=due_date,
+        created_at=raised_at,
         linked_policy_id=action.linked_policy_id,
         linked_risk_id=action.linked_risk_id,
         created_by=current_user.id,
     )
     db.add(db_action)
+    db.flush()
+    committee_tasks.mirror(db, db_action, current_user.id)
     db.commit()
     db.refresh(db_action)
 
@@ -2295,7 +2326,9 @@ def delete_committee(
     
     if not committee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
-    
+
+    for action in db.query(OversightAction).filter(OversightAction.committee_id == committee.id):
+        committee_tasks.drop_twin(db, action)
     db.delete(committee)
     db.commit()
     return None
