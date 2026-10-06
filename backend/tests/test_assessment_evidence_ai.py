@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 import grc.models as m
+from grc.config import REASONING_HEADROOM
 from grc.models import get_db
 from grc.routers.auth_router import require_auth
 from grc.services import assessment_evidence_ai as advisor
@@ -138,9 +139,10 @@ def test_the_endpoint_keeps_the_result_and_says_when_ai_is_not_set_up(db, monkey
 
 
 @pytest.mark.parametrize("model, sent", [
-    # gpt-6 models answer 400 to max_tokens and to a temperature other than 1, as gpt-5 does.
-    ("gpt-6-luna", {"max_completion_tokens": 4000, "reasoning_effort": "low"}),
-    ("gpt-4o", {"max_tokens": 4000, "temperature": 0.3}),
+    # gpt-6 models answer 400 to max_tokens and to a temperature other than 1, as gpt-5 does; and their hidden
+    # thinking comes out of the same budget as the answer, so the shim adds room for it (gpt-4o is left alone).
+    ("gpt-6-luna", {"max_completion_tokens": 8000 + REASONING_HEADROOM, "reasoning_effort": "low"}),
+    ("gpt-4o", {"max_tokens": 8000, "temperature": 0.3}),
 ])
 def test_old_style_parameters_are_translated_for_reasoning_models(monkeypatch, model, sent):
     import httpx
@@ -184,6 +186,91 @@ def test_an_answer_with_nothing_in_it_is_asked_once_more(db):
     assert "must never be empty" in asked[0][1]["content"]
 
 
+def test_an_answer_in_another_shape_is_still_read(db):
+    """Models asked for one shape now and then give another; each of these used to read as 'empty'."""
+    shapes = {
+        "wrapped": {"result": {"summary": "s", "recommendations": [{"evidence_type": "IdP export", "description": "d"}]}},
+        "renamed": {"Recommended_Evidence": [{"type": "IdP export", "details": "d", "collection": "export it"}]},
+        "bare names": {"summary": "s", "recommendations": ["IdP export", "Signup test"]},
+        "keyed": {"recommendations": {"1": {"evidence_type": "IdP export", "description": "d"}}},
+        "one object": {"recommendation": {"evidence_type": "IdP export", "description": "d"}},
+    }
+    for name, shape in shapes.items():
+        asked = []
+        result = advisor.recommend_evidence(
+            db, _item(db), complete=lambda messages, s=shape: asked.append(messages) or json.dumps(s))
+        assert len(asked) == 1 and result["recommendations"][0]["evidence_type"] == "IdP export", name
+    assert result["recommendations"][0]["priority"] == "medium"                 # absent fields get their defaults
+
+
+def test_every_kind_of_assessment_item_gets_recommendations_even_a_bare_one(db):
+    """The same path serves Cyber Security, NCA, PDPL, DPIA, Digital Operations maturity and every other assessment."""
+    item = _item(db)
+    item.control_description, item.remarks, item.area_domain, item.subdomain_name = None, None, None, None     # a bare row
+    for fmt in [*advisor.FORMAT_GUIDE, "pdpl_assessment_toolkit", "dpia_pia", "nca_container", "standard", None]:
+        db.get(m.ComplianceAssessmentDocument, 3).assessment_format = fmt
+        db.commit()
+        seen = []
+        result = advisor.recommend_evidence(db, item, complete=lambda messages: seen.append(messages[1]["content"]) or json.dumps(
+            {"summary": "s", "recommendations": [{"evidence_type": "Policy", "description": "d"}]}))
+        assert result["recommendations"][0]["evidence_type"] == "Policy" and len(seen) == 1, fmt
+        # the kinds with a guide are asked about in their own terms; the rest get the plain description
+        assert (advisor.FORMAT_GUIDE[fmt].split(".")[0] in seen[0]) if fmt in advisor.FORMAT_GUIDE else "each item is" not in seen[0], fmt
+
+
+def test_a_reply_cut_off_mid_answer_keeps_what_was_finished(db):
+    cut = ('{"summary": "Show it.", "recommendations": [{"evidence_type": "IdP export", "description": "d", '
+           '"priority": "high"}, {"evidence_type": "Signup test", "description": "An 11-char pass')
+    result = advisor.recommend_evidence(db, _item(db), complete=lambda messages: cut)
+    assert [r["evidence_type"] for r in result["recommendations"]] == ["IdP export"]
+    assert result["summary"] == "Show it." and result["recommendations"][0]["priority"] == "high"
+
+
+def test_an_unusable_answer_is_asked_again_and_told_why(db):
+    good = json.dumps({"summary": "s", "recommendations": [{"evidence_type": "Signup test", "description": "d"}]})
+    answers, asked = iter(["", '{"summary": "s", "recommendations": []}', good]), []
+
+    def model(messages):
+        asked.append(messages)
+        return next(answers)
+
+    result = advisor.recommend_evidence(db, _item(db), complete=model)
+    assert len(asked) == advisor.ATTEMPTS == 3 and result["recommendations"][0]["evidence_type"] == "Signup test"
+    assert len(asked[0]) == 2 and "it was empty" in asked[1][-1]["content"]      # the second ask says what was wrong
+    # the last ask drops the library, NIST and catalog lists: nothing for a small model to answer "none" to
+    assert "EXISTING EVIDENCE" in asked[0][1]["content"] and "EXISTING EVIDENCE" not in asked[2][1]["content"]
+    assert "NIST PUBLICATIONS" not in asked[2][1]["content"] and "V2.1.1" in asked[2][1]["content"]
+
+
+def test_three_unusable_answers_save_nothing_and_matches_alone_are_kept(db):
+    asked = []
+    with pytest.raises(advisor.AIEmptyAnswer, match="empty or cut off"):
+        advisor.recommend_evidence(db, _item(db), complete=lambda messages: asked.append(1) or "not json at all")
+    assert len(asked) == advisor.ATTEMPTS
+
+    only_matches = json.dumps({"summary": "s", "recommendations": [], "matches": [
+        {"evidence_id": 102, "reason": "fits", "confidence": 0.9}]})
+    answers = iter([only_matches, "", ""])
+    result = advisor.recommend_evidence(db, _item(db), complete=lambda messages: next(answers))
+    assert result["recommendations"] == [] and [m["evidence_id"] for m in result["matches"]] == [102]
+
+    # ...and when the last, plain ask finally gives recommendations, the matches from the first answer still ride along
+    rescued = json.dumps({"summary": "s", "recommendations": [{"evidence_type": "Signup test", "description": "d"}]})
+    answers = iter([only_matches, "", rescued])
+    result = advisor.recommend_evidence(db, _item(db), complete=lambda messages: next(answers))
+    assert [r["evidence_type"] for r in result["recommendations"]] == ["Signup test"]
+    assert [m["evidence_id"] for m in result["matches"]] == [102]
+
+
+def test_a_draft_that_comes_back_short_is_asked_for_once_more(db):
+    drafts = iter(["# Too short", "# Password Standard\n\n" + "Passwords shall be at least 12 characters. " * 20])
+    rec = {"evidence_type": "Password standard", "description": "d", "document": "standard"}
+    text = advisor.draft_document(_item(db), rec, [], "Demo Bank", complete=lambda messages: next(drafts))
+    assert text.startswith("# Password Standard")
+    with pytest.raises(advisor.AIEmptyAnswer):
+        advisor.draft_document(_item(db), rec, [], "Demo Bank", complete=lambda messages: "# Too short")
+
+
 def test_recommendations_cite_nist_sources_catalog_documents_and_document_kinds(db, monkeypatch):
     monkeypatch.setattr(advisor, "nist_catalog", lambda: ({
         "artifact_id": "NIST-015", "framework_key": "nist_csf_2", "framework": "NIST CSF 2.0",
@@ -207,6 +294,43 @@ def test_recommendations_cite_nist_sources_catalog_documents_and_document_kinds(
     assert result["nist"][0]["url"].startswith("https://csrc.nist.gov/")          # titles and links are ours
     assert [(r["artifact_id"], r["framework_key"], r["reason"]) for r in result["references"]] == [
         ("NIST-015", "nist_csf_2", "covers credentials")]                           # an invented id is dropped
+
+
+def test_the_pdpl_ai_assessment_is_asked_again_when_it_comes_back_empty(db, monkeypatch):
+    """gpt-5-nano answered nothing in 2 of 4 tries (its budget went on thinking) and the page showed an empty box."""
+    import importlib
+    from types import SimpleNamespace
+
+    from grc.main import app
+
+    car = importlib.import_module("grc.routers.compliance_assessments_router")
+    good = json.dumps({"how_to_assess": "Check the DPO appointment letter.", "evidence_examples": ["DPO letter", "Org chart"],
+                       "findings": "f", "remediation": "r", "risk_rating": "High", "priority": "high", "suggested_maturity": 2})
+    sent = []
+
+    def client_saying(*replies):
+        said = iter(replies)
+
+        def create(**kw):
+            sent.append(kw)
+            return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=next(said)))])
+        return SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, 7)
+    try:
+        http, url = TestClient(app), "/compliance/assessments/3/items/30/ai-assess"
+        monkeypatch.setattr(car, "get_openai_client", lambda: client_saying("", '{"how_to_assess": "cut o', good))
+        made = http.post(url)
+        assert made.status_code == 200 and made.json()["draft"]["evidence_examples"] == ["DPO letter", "Org chart"]
+        assert len(sent) == 3 and sent[0]["max_tokens"] == 2500
+
+        sent.clear()
+        monkeypatch.setattr(car, "get_openai_client", lambda: client_saying("", "", ""))
+        refused = http.post(url)                          # never a 200 with every field empty
+        assert refused.status_code == 502 and "empty or cut off" in refused.json()["detail"] and len(sent) == 3
+    finally:
+        app.dependency_overrides.clear()
 
 
 def test_a_recommended_document_is_drafted_exported_and_linked_to_governance(db, monkeypatch):

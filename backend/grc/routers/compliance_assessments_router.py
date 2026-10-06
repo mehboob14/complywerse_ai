@@ -6551,17 +6551,21 @@ def ai_assess_item(
                 "invent a different gap). Make `remediation` a concrete, step-by-step action that "
                 "directly closes THIS gap, and set `risk_rating`/`priority` consistent with it.\n"
             )
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {"role": "system", "content": "You are a PDPL compliance expert. Respond ONLY with valid JSON."},
-                {"role": "user", "content": prompt},
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=800,
-            temperature=0.3,
-        )
-        result = parse_ai_response(response.choices[0].message.content or "{}")
+        messages = [
+            {"role": "system", "content": "You are a PDPL compliance expert. Respond ONLY with valid JSON."},
+            {"role": "user", "content": prompt},
+        ]
+        for _attempt in range(3):       # a model now and then answers nothing (its whole budget spent thinking), or is cut off
+            response = client.chat.completions.create(
+                model=get_openai_model(), messages=messages, response_format={"type": "json_object"},
+                max_tokens=2500, temperature=0.3,
+            )
+            result = parse_ai_response(response.choices[0].message.content or "{}")
+            if result.get("how_to_assess") or result.get("evidence_examples") or result.get("remediation"):
+                break
+        else:                           # say so rather than hand back a draft with every field empty
+            raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                                detail="The AI's answer came back empty or cut off, so nothing was drafted. Try again.")
         return {
             "item_id": item_id,
             "assessment_id": assessment_id,

@@ -98,6 +98,15 @@ def get_openai_base_url() -> str | None:
 # params are translated transparently *only* for those models. gpt-4o and any
 # OpenAI-compatible model are passed through untouched. Idempotent + best-effort
 # (a no-op if the openai SDK isn't importable).
+#
+# A reasoning model's hidden thinking is paid out of the same ``max_completion_tokens`` as its visible
+# answer, so a ceiling sized for the answer alone returns nothing when the model thinks first (gpt-5-nano
+# answered an 800-token request with an empty string in 2 of 4 tries). The old ``max_tokens`` therefore
+# becomes the answer's size *plus* this room to think; it is only a ceiling, so a model that answers
+# straight away is not slower or dearer for it.
+REASONING_HEADROOM = 4000
+
+
 def install_openai_compat_shim() -> bool:
     try:
         from openai.resources.chat import completions as _cc  # type: ignore
@@ -108,7 +117,8 @@ def install_openai_compat_shim() -> bool:
         model = kwargs.get("model")
         if isinstance(model, str) and model.lower().startswith(("gpt-5", "gpt-6", "o1", "o3", "o4")):
             if "max_tokens" in kwargs and "max_completion_tokens" not in kwargs:
-                kwargs["max_completion_tokens"] = kwargs.pop("max_tokens")
+                asked = kwargs.pop("max_tokens")
+                kwargs["max_completion_tokens"] = asked + REASONING_HEADROOM if isinstance(asked, int) else asked
             else:
                 kwargs.pop("max_tokens", None)
             if kwargs.get("temperature") not in (None, 1):

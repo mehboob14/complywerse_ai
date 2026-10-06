@@ -102,6 +102,12 @@ SYSTEM = (
     "item; picking none of them is fine. Return JSON only."
 )
 
+PLAIN_SYSTEM = (
+    "You are a cyber security and compliance assessor. For one assessment item you recommend the evidence "
+    "that would prove it and say how to collect it. Always give 3 to 5 recommendations, specific to the item "
+    "and never generic. Return JSON only."
+)
+
 _WORD = re.compile(r"[a-z][a-z0-9]{2,}")
 _STOP = {
     "the", "and", "for", "that", "with", "this", "from", "are", "was", "all", "any", "not", "use", "used",
@@ -146,7 +152,7 @@ def _configured_key() -> Optional[str]:
     return key
 
 
-def openai_complete(messages: List[Dict[str, str]], *, max_tokens: int = 4000, json_mode: bool = True,
+def openai_complete(messages: List[Dict[str, str]], *, max_tokens: int = 8000, json_mode: bool = True,
                     timeout: float = 60) -> str:
     key = _configured_key()
     if not key:
@@ -155,12 +161,16 @@ def openai_complete(messages: List[Dict[str, str]], *, max_tokens: int = 4000, j
 
     client = OpenAI(api_key=key, base_url=get_openai_base_url(), timeout=timeout)
     # A ceiling, not a target: reasoning models spend part of it thinking before they answer, and
-    # at 1800 an answer listing library matches could be cut off mid-JSON and read as nothing.
+    # at 1800 (then 4000) an answer could be cut off mid-JSON and read as nothing.
     reply = client.chat.completions.create(
         model=get_openai_model(), temperature=0.3, max_tokens=max_tokens, messages=messages,
         **({"response_format": {"type": "json_object"}} if json_mode else {}),
     )
-    return reply.choices[0].message.content or ""
+    choice = reply.choices[0]
+    if choice.finish_reason not in (None, "stop"):             # "length": the ceiling was hit; "content_filter"
+        logger.warning("AI answer stopped early (%s) on %s after %s tokens", choice.finish_reason,
+                       get_openai_model(), getattr(reply.usage, "completion_tokens", "?"))
+    return choice.message.content or ""
 
 
 def _parse(text: str) -> Dict[str, Any]:
@@ -175,6 +185,120 @@ def _parse(text: str) -> Dict[str, Any]:
 
 def _text(value: Any, limit: int) -> str:
     return " ".join(str(value or "").split())[:limit]
+
+
+# ── Reading an answer the way models actually give it ────────────────────────
+# A model asked for one JSON shape now and then returns another: the list under a different name or inside a
+# wrapper object, bare strings for objects, or a reply cut off mid-array. Each used to read as "nothing" and
+# surface as "empty or cut off". They are read here instead, and only a reply with nothing in it is asked again.
+
+ATTEMPTS = 3          # answers asked for before giving up; each unusable one is told what was wrong on the next ask
+_REC_NAMES = {"recommendations", "recommendation", "recommendedevidence", "evidencerecommendations"}
+_REC_FIELDS = {
+    "evidence_type": ("evidencetype", "type", "name", "title", "evidence", "artifact", "artifactname"),
+    "description": ("description", "details", "detail", "whatitmustshow", "whyauditable", "rationale", "purpose"),
+    "how_to_collect": ("howtocollect", "collection", "collectionmethod", "howtoobtain", "howtogather"),
+    "priority": ("priority",),
+    "example_files": ("examplefiles", "examples", "files", "filenames"),
+    "document": ("document", "documentkind"),
+}
+
+
+def _key(name: Any) -> str:
+    return re.sub(r"[^a-z]", "", str(name).lower())
+
+
+def _recommendation_list(data: Any) -> list:
+    """The list kept under any spelling of "recommendations"; a dict of items counts as a list."""
+    for name, value in (data.items() if isinstance(data, dict) else ()):
+        if _key(name) in _REC_NAMES:
+            if isinstance(value, dict):                 # {"1": {...}, "2": {...}}, or one recommendation given bare
+                value = list(value.values()) if all(isinstance(v, dict) for v in value.values()) else [value]
+            if isinstance(value, list):
+                return value
+    return []
+
+
+def _unwrap(data: Dict[str, Any]) -> Dict[str, Any]:
+    """The object that holds the answer: the reply itself, or the one object it wraps ({"result": {...}})."""
+    if _recommendation_list(data) or "matches" in data:
+        return data
+    return next((v for v in data.values() if isinstance(v, dict) and (_recommendation_list(v) or "matches" in v)), data)
+
+
+def _salvage(text: str) -> Dict[str, Any]:
+    """What a cut-off reply still holds: its summary and every recommendation that was finished before the cut."""
+    out: Dict[str, Any] = {}
+    said = re.search(r'"summary"\s*:\s*"((?:[^"\\]|\\.)*)"', text)
+    if said:
+        try:
+            out["summary"] = json.loads(f'"{said.group(1)}"')
+        except json.JSONDecodeError:
+            pass
+    start = re.search(r'"recommendations"\s*:\s*\[', text)
+    if start:
+        decoder, pos, found = json.JSONDecoder(), start.end(), []
+        while True:
+            at = text.find("{", pos)
+            if at < 0 or "]" in text[pos:at]:           # no more objects, or the list closed before the next one
+                break
+            try:
+                obj, pos = decoder.raw_decode(text, at)
+            except json.JSONDecodeError:
+                break                                   # the object the reply was cut inside
+            found.append(obj)
+            after = text[pos:].lstrip()
+            if not after.startswith(","):               # "]" closes the list: what follows is not a recommendation
+                break
+        out["recommendations"] = found
+    return out
+
+
+def _answer(raw: str) -> Dict[str, Any]:
+    """A reply as a dict: the JSON asked for, or what a cut-off one still holds."""
+    data = _parse(raw)
+    if not data and (raw or "").strip():
+        data = _salvage(raw)
+    return _unwrap(data)
+
+
+def _recommendation(raw: Any) -> Optional[Dict[str, Any]]:
+    """One recommendation, from an object (any common spelling of its fields) or a bare name."""
+    if isinstance(raw, str):
+        raw = {"evidence_type": raw}
+    if not isinstance(raw, dict):
+        return None
+    by_key = {_key(k): v for k, v in raw.items() if v}
+    pick = {field: next((by_key[n] for n in names if n in by_key), "") for field, names in _REC_FIELDS.items()}
+    kind, description = _text(pick["evidence_type"], 120), _text(pick["description"], 800)
+    if not (kind or description):
+        return None
+    files = pick["example_files"] if isinstance(pick["example_files"], list) else [pick["example_files"]]
+    priority, document = str(pick["priority"]).lower(), str(pick["document"]).strip().lower()
+    return {
+        "evidence_type": kind or _text(description, 60),
+        "description": description,
+        "how_to_collect": _text(pick["how_to_collect"], 600),
+        "priority": priority if priority in {"high", "medium", "low"} else "medium",
+        "example_files": [_text(f, 80) for f in files if _text(f, 80)][:4],
+        "document": document if document in DOC_KINDS else None,
+    }
+
+
+def _recommendations(answer: Dict[str, Any]) -> List[Dict[str, Any]]:
+    listed = _recommendation_list(answer)
+    # Objects first; a small model now and then answers with bare names, which count only if nothing better came.
+    found = [r for r in (_recommendation(x) for x in listed if isinstance(x, dict)) if r]
+    found = found or [r for r in (_recommendation(x) for x in listed if isinstance(x, str)) if r]
+    return found[:6]
+
+
+def _retry_note(raw: str, answer: Dict[str, Any]) -> str:
+    said = ("it was empty" if not (raw or "").strip()
+            else "it was not the JSON object asked for, or it was cut off" if not answer
+            else 'its "recommendations" list had nothing in it')
+    return (f"Your last reply could not be used: {said}. Reply again with only the JSON object, and put 3 to 5 "
+            'items in "recommendations", each with an "evidence_type" and a "description".')
 
 
 @lru_cache(maxsize=1)
@@ -207,7 +331,7 @@ def _nist_id(said: Any) -> Optional[str]:
     return max(hits, key=lambda nid: len(_NIST_NORM[nid])) if hits else None
 
 
-def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Evidence]) -> str:
+def _item_lines(item: ComplianceAssessmentDocumentItem) -> List[str]:
     assessment = getattr(item, "assessment", None)
     fmt = getattr(assessment, "assessment_format", None) or ""
     lines = [
@@ -225,6 +349,22 @@ def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Eviden
     lines.append(f"CURRENT STATUS: {status}")
     if item.gaps_identified:
         lines.append(f"GAPS NOTED: {_text(item.gaps_identified, 600)}")
+    return lines
+
+
+def build_plain_prompt(item: ComplianceAssessmentDocumentItem) -> str:
+    """Recommendations only: no library, NIST or catalog lists to answer "none" to. The last try uses it."""
+    return "\n".join(_item_lines(item) + [
+        "\nReturn JSON: {\"summary\": \"one or two sentences on what proves this item\", \"recommendations\": "
+        "[{\"evidence_type\": \"short name, e.g. MFA configuration export\", \"description\": \"what it must show "
+        "for THIS item\", \"how_to_collect\": \"where and how to get it: the system, report, export or screen\", "
+        "\"priority\": \"high|medium|low\", \"example_files\": [\"file names\"], \"document\": \"policy|standard|"
+        "procedure|plan|report, or null\"}]}. Give 3-5 recommendations, most important first. \"recommendations\" "
+        "must never be empty."])
+
+
+def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Evidence]) -> str:
+    lines = _item_lines(item)
     lines.append("\nEXISTING EVIDENCE IN THE LIBRARY (id | name | type | summary):")
     if candidates:
         for ev in candidates:
@@ -257,34 +397,8 @@ def build_prompt(item: ComplianceAssessmentDocumentItem, candidates: List[Eviden
     return "\n".join(lines)
 
 
-def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
-                       complete: Optional[Callable[[List[Dict[str, str]]], str]] = None) -> Dict[str, Any]:
-    """The recommendation for one item; the caller stores it on the item."""
-    candidates = shortlist_existing(db, item)
-    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": build_prompt(item, candidates)}]
-    raw = (complete or openai_complete)(messages)
-    answer = _parse(raw)
-    if not answer.get("recommendations") and not answer.get("matches"):
-        raw = (complete or openai_complete)(messages)   # a small model now and then leaves both out; ask once more
-        answer = _parse(raw)
-
-    recommendations = []
-    for rec in (answer.get("recommendations") or [])[:6]:
-        if not isinstance(rec, dict) or not _text(rec.get("evidence_type") or rec.get("description"), 10):
-            continue
-        priority = str(rec.get("priority") or "").lower()
-        files = rec.get("example_files") if isinstance(rec.get("example_files"), list) else []
-        kind = str(rec.get("document") or "").strip().lower()
-        recommendations.append({
-            "evidence_type": _text(rec.get("evidence_type"), 120) or "Evidence",
-            "description": _text(rec.get("description"), 800),
-            "how_to_collect": _text(rec.get("how_to_collect"), 600),
-            "priority": priority if priority in {"high", "medium", "low"} else "medium",
-            "example_files": [_text(f, 80) for f in files if _text(f, 80)][:4],
-            "document": kind if kind in DOC_KINDS else None,
-        })
-
-    by_id = {ev.id: ev for ev in candidates}
+def _matches(answer: Dict[str, Any], by_id: Dict[int, Evidence]) -> List[Dict[str, Any]]:
+    """The library records the answer picked: only ones we showed the model, each once, best first."""
     matches, seen = [], set()
     for match in answer.get("matches") or []:
         if not isinstance(match, dict):
@@ -305,12 +419,39 @@ def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
             "evidence_id": ev.id, "name": ev.name, "file_name": ev.file_name, "evidence_type": ev.evidence_type,
             "status": ev.status, "reason": _text(match.get("reason"), 240), "confidence": round(confidence, 2),
         })
-    matches.sort(key=lambda m: m["confidence"], reverse=True)
+    return sorted(matches, key=lambda m: m["confidence"], reverse=True)
 
-    if not recommendations and not matches:
+
+def recommend_evidence(db: Session, item: ComplianceAssessmentDocumentItem,
+                       complete: Optional[Callable[[List[Dict[str, str]]], str]] = None) -> Dict[str, Any]:
+    """The recommendation for one item; the caller stores it on the item."""
+    candidates = shortlist_existing(db, item)
+    by_id = {ev.id: ev for ev in candidates}
+    messages = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": build_prompt(item, candidates)}]
+    plain = [{"role": "system", "content": PLAIN_SYSTEM}, {"role": "user", "content": build_plain_prompt(item)}]
+    ask, note, best, kept, raw = complete or openai_complete, None, None, [], ""
+    for attempt in range(1, ATTEMPTS + 1):
+        # The second try says what was wrong with the first; the last drops the lists a small model answers "none" to.
+        sent = plain if attempt == ATTEMPTS else messages + ([{"role": "user", "content": note}] if note else [])
+        raw = ask(sent)
+        answer = _answer(raw)
+        recommendations, matches = _recommendations(answer), _matches(answer, by_id)
+        kept = kept or matches                              # an earlier answer's matches stay if the later one has none
+        if recommendations or (matches and best is None):
+            best = (answer, recommendations, matches)       # matches alone are kept unless a later answer does better
+        if recommendations:
+            break
+        logger.info("AI evidence answer %s/%s for item %s had no recommendations: %r", attempt, ATTEMPTS, item.id,
+                    (raw or "")[:200])
+        note = _retry_note(raw, answer)
+    if best is None:
         # Say so rather than keep an empty result over the item's last good one.
-        logger.warning("AI evidence answer for item %s had nothing usable: %r", item.id, (raw or "")[:300])
-        raise AIEmptyAnswer("The AI's answer came back empty or cut off, so nothing was saved. Try again.")
+        logger.warning("AI evidence answers for item %s had nothing usable after %s tries: %r", item.id, ATTEMPTS,
+                       (raw or "")[:300])
+        raise AIEmptyAnswer(f"The AI's answer came back empty or cut off, even after {ATTEMPTS} tries, so nothing was saved. "
+                            "Try again in a moment.")
+    answer, recommendations, matches = best
+    matches = matches or kept
 
     nist, named = [], set()
     for ref in answer.get("nist") or []:
@@ -449,12 +590,15 @@ def draft_document(item: ComplianceAssessmentDocumentItem, rec: Dict[str, Any], 
                    complete: Optional[Callable[[List[Dict[str, str]]], str]] = None,
                    template: Optional[Dict[str, Any]] = None) -> str:
     """One document drafted for the item, in Markdown, ending with the NIST credit line."""
-    text = (complete or _draft_complete)([
+    messages = [
         {"role": "system", "content": DRAFT_SYSTEM},
         {"role": "user", "content": build_draft_prompt(item, rec, nist, organisation, template)},
-    ])
-    text = re.sub(r"^```(?:markdown|md)?\s*|\s*```$", "", (text or "").strip())
-    if len(text) < 400:
+    ]
+    for _attempt in range(2):                            # a draft that comes back empty or cut off is asked for once more
+        text = re.sub(r"^```(?:markdown|md)?\s*|\s*```$", "", ((complete or _draft_complete)(messages) or "").strip())
+        if len(text) >= 400:
+            break
+    else:
         raise AIEmptyAnswer("The AI's draft came back empty or cut off. Try again.")
     sources = ", ".join(n.get("title") or "" for n in nist) or NIST_SOURCES["SP800-53"][0]
     shaped = f"Structured on NIST's {template['name']} ({template['publication']}). " if template else ""
