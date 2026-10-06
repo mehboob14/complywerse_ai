@@ -1,113 +1,241 @@
 'use client';
-// src/app/(dashboard)/compliance/access-reviews/rules/page.tsx
-// Rule Library: the scenario catalog from GET /rules/catalog, grouped by
-// domain, with severity, reads/trips, regulation mapping, enable toggle and
-// "needs connector / needs data" states. Visual spec: Access Reviews.dc.html.
+// Rule library: every rule a review can run — what it reads, when it fails, how to put it right and
+// the frameworks and clauses it evidences. Filter by what it tests (people, or a connected source),
+// by framework, category and whether it can run; switch a rule off to leave it out of reviews that
+// run "every enabled rule".
 
-import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
-import { PageLoader } from '@/components/ui';
-import { useRuleCatalog, useUpdateRule } from '../api';
-import { severityClass } from '../pipeline';
+import { Fragment, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, ListChecks, PlugZap, Search } from 'lucide-react';
+import { clsx } from 'clsx';
+import { PageHeader, PageLoader } from '@/components/ui';
+import { errorText, useRuleCatalog, useUpdateRule } from '../api';
 import type { CatalogRule } from '../types';
+import { Combobox } from '../_components/Combobox';
+import { FrameworkChips, byCategory, shortFramework } from '../_components/RuleResults';
+import { Alert, Badge, Button, FOCUS, Field, SeverityTag, Stat, Switch, inputClass } from '../_components/ui';
+import { usePageTitle } from '../_components/usePageTitle';
 
-// "EMEA Saudi Arabia ECC-1 2018" reads as "ECC-1 2018" on a chip.
-function shortFramework(name: string): string {
-  return name.replace(/^(EMEA|APAC|AMER)\s+/, '').replace(/^(Saudi Arabia|Australia|Japan)\s+/, '')
-    .replace(/\s*\(used for SOC 2\)/, '').slice(0, 22);
-}
+const crumbs = [{ label: 'Compliance', href: '/compliance' }, { label: 'Access reviews', href: '/compliance/access-reviews' }, { label: 'Rule library', href: '/compliance/access-reviews/rules' }];
 
-const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
-const statusMeta: Record<CatalogRule['status'], { label: string; cls: string }> = {
-  runnable: { label: 'Runnable', cls: 'text-emerald-600' },
-  needs_data: { label: 'Needs data feed', cls: 'text-amber-600' },
-  needs_connector: { label: 'Needs connector', cls: 'text-slate-400' },
+const AVAILABILITY: Record<CatalogRule['status'], { label: string; cls: string; Icon: typeof CheckCircle2 }> = {
+  runnable: { label: 'Can run now', cls: 'text-emerald-800', Icon: CheckCircle2 },
+  needs_data: { label: 'Needs a data feed', cls: 'text-amber-900', Icon: AlertTriangle },
+  needs_connector: { label: 'Needs a connected source', cls: 'text-slate-700', Icon: PlugZap },
 };
+type Row = CatalogRule & { domain: string };
 
 export default function RuleLibraryPage() {
-  const router = useRouter();
+  usePageTitle('Rule library');
+  const search = useSearchParams();
   const [framework, setFramework] = useState('');
-  const { data, isLoading } = useRuleCatalog(framework || undefined);
+  const [runsOn, setRunsOn] = useState(search.get('source') ?? '');
+  const [category, setCategory] = useState('');
+  const [availability, setAvailability] = useState<'all' | 'runnable' | 'blocked'>('all');
+  const [q, setQ] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
+  const [announce, setAnnounce] = useState('');
+  const { data, isLoading, isError, error, isFetching } = useRuleCatalog(framework || undefined);
   const update = useUpdateRule();
 
-  // The catalog already comes filtered; the framework's own codes ride along.
-  const domains = useMemo(() => (data?.domains ?? []).filter((d) => d.rules.length), [data]);
+  const all = useMemo<Row[]>(() => (data?.domains ?? []).flatMap((d) => d.rules.map((r) => ({ ...r, domain: d.domain }))), [data]);
+  const categories = useMemo(() => Array.from(new Set(all.map((r) => r.domain))).sort(), [all]);
+  const connectors = data?.connectors ?? [];
   const frameworks = data?.frameworks ?? [];
+  const frameworkName = frameworks.find((f) => f.slug === framework)?.name;
 
-  if (isLoading || !data) return <PageLoader />;
-  const filteredCount = domains.reduce((n, d) => n + d.rules.length, 0);
+  const rows = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return all
+      .filter((r) => !runsOn || (runsOn === 'people' ? r.kind !== 'connector' : r.connector === runsOn))
+      .filter((r) => !category || r.domain === category)
+      .filter((r) => availability === 'all' ? true : availability === 'runnable' ? r.runnable : !r.runnable)
+      .filter((r) => !needle || `${r.id} ${r.name} ${r.reads} ${r.trips}`.toLowerCase().includes(needle));
+  }, [all, runsOn, category, availability, q]);
+  const groups = useMemo(() => byCategory(rows), [rows]);
+  const nameOf = useMemo(() => new Map(all.map((r) => [r.id, r.name])), [all]);
+
+  if (isLoading) return <PageLoader />;
+  if (isError || !data) return <Alert tone="error" title="The rule library could not be loaded">{errorText(error)}</Alert>;
+
+  const filtered = !!(runsOn || category || q || framework || availability !== 'all');
+  const clear = () => { setRunsOn(''); setCategory(''); setQ(''); setFramework(''); setAvailability('all'); };
+  const toggle = (r: Row, on: boolean) => update.mutate({ ruleId: r.id, enabled: on }, {
+    onSuccess: () => setAnnounce(`${r.name} switched ${on ? 'on' : 'off'}.`),
+  });
 
   return (
-    <div className="mx-auto max-w-[1080px] px-8 py-7 pb-16">
-      <button onClick={() => router.push('/compliance/access-reviews')} className="mb-2 inline-flex items-center gap-1.5 text-[12.5px] font-medium text-slate-500"><ChevronLeft size={14} /> Access Reviews</button>
-      <h1 className="text-[23px] font-bold tracking-tight text-slate-900">Rule library</h1>
-      <p className="mb-5 mt-1 text-[13.5px] text-slate-500">Checks that run during Stage 3. Enabled, runnable rules fire on the next review.</p>
+    <div className="space-y-5">
+      <PageHeader title="Rule library" icon={ListChecks} breadcrumbs={crumbs}
+        subtitle="Every rule a review can run: what it reads, when it fails and the frameworks it evidences. Switch a rule off to leave it out of reviews that run every enabled rule." />
 
-      <div className="mb-4 grid grid-cols-3 gap-3.5">
-        {[['Catalog', data.summary.total, framework ? `of ${data.summary.catalog_total ?? data.summary.total} that evidence this framework` : 'rules across all domains'], ['Runnable now', data.summary.runnable, 'with connected data'], ['Frameworks', data.summary.frameworks_covered ?? 0, 'evidenced from your library']].map(([k, v, s]) => (
-          <div key={k as string} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-1.5 text-[11.5px] font-medium text-slate-500">{k}</div>
-            <div className="font-mono text-[25px] font-bold tracking-tight text-slate-900">{v}</div>
-            <div className="mt-0.5 text-[11px] text-slate-400">{s}</div>
+      <section aria-label="Summary">
+        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat label="Rules" value={data.summary.total} hint={framework ? `of ${data.summary.catalog_total ?? data.summary.total} that evidence this framework` : 'across every category'} />
+          <Stat label="Can run now" value={data.summary.runnable} hint="with the sources you have connected" tone="emerald" />
+          <Stat label="Switched on" value={data.summary.enabled_active} hint="run in “every enabled rule” reviews" />
+          <Stat label="Frameworks evidenced" value={data.summary.frameworks_covered ?? frameworks.length} hint="from your own library" />
+        </dl>
+      </section>
+
+      <form role="search" aria-label="Filter the rules" onSubmit={(e) => e.preventDefault()} className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-2 lg:grid-cols-6">
+        <div className="lg:col-span-2">
+          <Field label="Search">
+            {(aria) => (
+              <div className="relative">
+                <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden />
+                <input {...aria} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name, ID, what it reads" className={clsx(inputClass, 'pl-9')} />
+              </div>
+            )}
+          </Field>
+        </div>
+        <Field label="Runs on">
+          {(aria) => (
+            <select {...aria} value={runsOn} onChange={(e) => setRunsOn(e.target.value)} className={inputClass}>
+              <option value="">Everything</option>
+              <option value="people">People in the sample</option>
+              {connectors.map((c) => <option key={c.key} value={c.key}>{c.label}</option>)}
+            </select>
+          )}
+        </Field>
+        <div className="lg:col-span-2">
+          <Field label="Framework" hint={framework ? undefined : `${frameworks.length} frameworks in your library`}>
+            {({ id, ...aria }) => (
+              <Combobox id={id} label="Frameworks" placeholder="Any framework" emptyText="No framework matches." clearLabel="Clear the framework"
+                value={framework} onChange={setFramework} describedBy={aria['aria-describedby']}
+                options={frameworks.map((f) => ({ value: f.slug, label: f.name, hint: `${f.rules} rule${f.rules === 1 ? '' : 's'}` }))} />
+            )}
+          </Field>
+        </div>
+        <Field label="Category">
+          {(aria) => (
+            <select {...aria} value={category} onChange={(e) => setCategory(e.target.value)} className={inputClass}>
+              <option value="">All categories</option>
+              {categories.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          )}
+        </Field>
+        <Field label="Availability">
+          {(aria) => (
+            <select {...aria} value={availability} onChange={(e) => setAvailability(e.target.value as typeof availability)} className={inputClass}>
+              <option value="all">All rules</option>
+              <option value="runnable">Can run now</option>
+              <option value="blocked">Needs a source or data</option>
+            </select>
+          )}
+        </Field>
+        <div className="flex items-end gap-3 sm:col-span-2 lg:col-span-5">
+          <p role="status" className="text-sm text-slate-700">Showing <span className="font-semibold tabular-nums">{rows.length}</span> of {all.length} rules.</p>
+          {filtered && <Button size="sm" variant="ghost" onClick={clear}>Clear filters</Button>}
+        </div>
+      </form>
+
+      {framework && !!data.clauses?.length && (
+        <details className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <summary className={clsx('cursor-pointer rounded-xl px-5 py-3 text-sm font-semibold text-slate-900', FOCUS)}>
+            {data.clauses.length} clause{data.clauses.length === 1 ? '' : 's'} of {shortFramework(frameworkName ?? framework)} are evidenced by these rules
+          </summary>
+          <div role="region" aria-label="Clauses and the rules that answer them" tabIndex={0} className={clsx('relative max-h-80 overflow-y-auto border-t border-slate-100', FOCUS)}>
+            <table className="w-full border-collapse text-left text-sm">
+              <caption className="sr-only">Clauses of {frameworkName} and the rules that answer each</caption>
+              <thead className="sticky top-0 bg-slate-50"><tr className="border-b border-slate-200 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                <th scope="col" className="w-[160px] px-5 py-2">Clause</th><th scope="col" className="px-3 py-2">Rules that answer it</th>
+              </tr></thead>
+              <tbody>
+                {data.clauses.map((c) => (
+                  <tr key={c.code} className="border-b border-slate-100 align-top last:border-0">
+                    <th scope="row" className="px-5 py-2 font-mono text-xs font-medium text-slate-900">{c.code}</th>
+                    <td className="px-3 py-2 text-slate-800">{c.rules.map((id) => `${nameOf.get(id) ?? id} (${id})`).join(' · ')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
+        </details>
+      )}
+
+      <div aria-busy={isFetching} className="space-y-6">
+        {!groups.length && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center text-sm text-slate-700">
+            No rule matches these filters. {filtered && <button type="button" onClick={clear} className={clsx('rounded font-semibold text-teal-800 underline underline-offset-2', FOCUS)}>Clear the filters</button>}
+          </div>
+        )}
+        {groups.map(([domain, list]) => (
+          <section key={domain} aria-labelledby={`cat-${domain.replace(/\W+/g, '-')}`}>
+            <h2 id={`cat-${domain.replace(/\W+/g, '-')}`} className="mb-2 text-base font-semibold text-slate-900">
+              {domain} <span className="text-sm font-normal text-slate-600">({list.length})</span>
+            </h2>
+            <div role="region" aria-label={`${domain} rules`} tabIndex={0} className={clsx('relative overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm', FOCUS)}>
+              <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+                <caption className="sr-only">{domain} rules</caption>
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                    <th scope="col" className="w-[72px] px-4 py-3">On</th>
+                    <th scope="col" className="px-3 py-3">Rule</th>
+                    <th scope="col" className="w-[170px] px-3 py-3">Runs on</th>
+                    <th scope="col" className="w-[110px] px-3 py-3">Severity</th>
+                    <th scope="col" className="w-[250px] px-3 py-3">Frameworks</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {list.map((r) => {
+                    const a = AVAILABILITY[r.status];
+                    const detail = `rule-detail-${r.id}`;
+                    return (
+                      <Fragment key={r.id}>
+                        <tr className={clsx('border-b border-slate-100 align-top', !r.runnable && 'bg-slate-50/60')}>
+                          <td className="px-4 py-3">
+                            <Switch checked={r.enabled && r.runnable} disabled={!r.runnable || (update.isPending && update.variables?.ruleId === r.id)}
+                              label={`Include ${r.name} in reviews`} onChange={(on) => toggle(r, on)} />
+                          </td>
+                          <td className="px-3 py-3">
+                            <button type="button" aria-expanded={open === r.id} aria-controls={detail} onClick={() => setOpen(open === r.id ? null : r.id)}
+                              className={clsx('flex w-full items-start gap-2 rounded text-left', FOCUS)}>
+                              {open === r.id ? <ChevronDown size={16} className="mt-0.5 shrink-0 text-slate-700" aria-hidden /> : <ChevronRight size={16} className="mt-0.5 shrink-0 text-slate-700" aria-hidden />}
+                              <span className="min-w-0">
+                                <span className="block font-semibold text-slate-900">{r.name}</span>
+                                <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+                                  <span className="font-mono text-slate-700">{r.id}</span>
+                                  <span className={clsx('inline-flex items-center gap-1 font-medium', a.cls)}><a.Icon size={13} aria-hidden /> {a.label}</span>
+                                </span>
+                              </span>
+                            </button>
+                          </td>
+                          <td className="px-3 py-3">
+                            <Badge tone={r.kind === 'connector' ? 'sky' : 'slate'}>{r.kind === 'connector' ? r.connector_label || 'A source' : 'People in the sample'}</Badge>
+                          </td>
+                          <td className="px-3 py-3"><SeverityTag severity={r.severity} /></td>
+                          <td className="px-3 py-3"><FrameworkChips refs={r.frameworks} total={r.frameworks_total} max={2} /></td>
+                        </tr>
+                        {open === r.id && (
+                          <tr id={detail} className="border-b border-slate-100 bg-slate-50">
+                            <td />
+                            <td colSpan={4} className="px-3 pb-4 pt-1 text-sm text-slate-800">
+                              <div className="grid gap-4 md:grid-cols-2">
+                                <section aria-label="What it reads"><h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">What it reads</h3><p className="mt-1">{r.reads || '—'}</p></section>
+                                <section aria-label="When it fails"><h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">When it fails</h3><p className="mt-1">{r.trips ? `There is ${r.trips}.` : '—'}</p></section>
+                                {r.fix && <section aria-label="How to put it right" className="md:col-span-2"><h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">How to put it right</h3><p className="mt-1">{r.fix}</p></section>}
+                                {!r.runnable && <p className="md:col-span-2 text-slate-700">{r.status === 'needs_connector' ? `Connect ${r.connector_label || 'the source it reads'} under Sources before this rule can run.` : 'Its data feed is not connected yet, so it cannot run.'}</p>}
+                                <section aria-label="Frameworks" className="md:col-span-2">
+                                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-700">Frameworks and clauses it evidences</h3>
+                                  <div className="mt-1"><FrameworkChips refs={r.frameworks} total={r.frameworks_total} max={12} /></div>
+                                  {!!r.scf?.length && <p className="mt-1 text-xs text-slate-600">Secure Controls Framework: {r.scf.join(', ')}</p>}
+                                </section>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </section>
         ))}
       </div>
-
-      <div className="mb-5 flex flex-wrap items-center gap-3">
-        <span className="text-xs font-semibold text-slate-600">Framework</span>
-        <select value={framework} onChange={(e) => setFramework(e.target.value)}
-          className="min-w-[280px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[13px] outline-none focus:border-[color:var(--color-base)]">
-          <option value="">Every framework ({frameworks.length} in your library)</option>
-          {frameworks.map((f) => (
-            <option key={f.slug} value={f.slug}>{f.name} — {f.rules} rule{f.rules === 1 ? '' : 's'}</option>
-          ))}
-        </select>
-        <span className="font-mono text-[11.5px] text-slate-400">{filteredCount} rules</span>
-        {framework && (
-          <span className="text-[11.5px] text-slate-400">showing each rule&apos;s clause in this framework</span>
-        )}
-      </div>
-
-      {domains.map((d) => (
-        <div key={d.domain} className="mb-[18px]">
-          <div className="mb-2 flex items-center gap-2"><h2 className="text-[13.5px] font-bold text-slate-900">{d.domain}</h2><span className="font-mono text-[11px] text-slate-400">{d.rules.length}</span></div>
-          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-            {d.rules.map((r) => (
-              <div key={r.id} className={`grid grid-cols-[120px_1fr_150px_64px] items-center gap-4 border-b border-slate-100 px-5 py-3.5 ${r.runnable ? '' : 'opacity-60'}`}>
-                <div className="flex flex-col gap-1.5">
-                  <span className="font-mono text-[11.5px] font-semibold text-slate-600">{r.id}</span>
-                  <span className={`text-[11px] font-semibold ${statusMeta[r.status].cls}`}>{statusMeta[r.status].label}</span>
-                </div>
-                <div className="min-w-0">
-                  <div className="mb-1 flex flex-wrap items-center gap-2"><span className="text-[13px] font-semibold text-slate-900">{r.name}</span><span className={`rounded-full px-1.5 py-0.5 text-[9.5px] font-bold uppercase tracking-wide ${severityClass[r.severity]}`}>{r.severity}</span></div>
-                  <div className="text-[11.5px] leading-snug text-slate-600"><span className="text-slate-400">reads</span> {r.reads} <span className="text-slate-400">· trips when</span> {r.trips}</div>
-                </div>
-                <div className="flex flex-wrap gap-1.5" title={(r.frameworks ?? []).map((f) => `${f.name}: ${f.codes.join(', ')}`).join(' | ')}>
-                  {(r.frameworks ?? []).slice(0, 3).map((f) => (
-                    <span key={f.slug} className="rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide text-slate-600">
-                      {shortFramework(f.name)} {f.codes.slice(0, 2).join(', ')}
-                    </span>
-                  ))}
-                  {(r.frameworks_total ?? 0) > 3 && (
-                    <span className="rounded px-1 py-0.5 text-[9.5px] font-semibold text-slate-400">+{(r.frameworks_total ?? 0) - 3} more</span>
-                  )}
-                  {!(r.frameworks ?? []).length && r.regulation !== '—' && r.regulation.split('·').map((x) => (
-                    <span key={x} className="rounded bg-slate-100 px-1.5 py-0.5 text-[9.5px] font-bold tracking-wide text-slate-600">{x.trim()}</span>
-                  ))}
-                </div>
-                <div className="flex justify-end">
-                  <button disabled={!r.runnable} onClick={() => update.mutate({ ruleId: r.id, enabled: !r.enabled })}
-                    className={`h-[22px] w-[38px] rounded-full p-0.5 ${!r.runnable ? 'cursor-not-allowed opacity-50' : ''}`}
-                    style={{ background: r.enabled && r.runnable ? 'var(--color-base)' : '#EEF1F4' }}>
-                    <div className="h-[18px] w-[18px] rounded-full bg-white shadow-sm transition-transform" style={{ transform: r.enabled && r.runnable ? 'translateX(16px)' : 'none' }} />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
+      <p role="status" aria-live="polite" className="sr-only">{announce}</p>
+      {update.isError && <Alert tone="error">{errorText(update.error, 'The rule could not be changed.')}</Alert>}
     </div>
   );
 }

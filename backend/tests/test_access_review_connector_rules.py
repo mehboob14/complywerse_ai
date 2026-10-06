@@ -357,6 +357,7 @@ def test_a_review_of_digitalocean_tests_the_estate_and_reports_each_rule(db, api
     assert report["verdict"] == "deficient" and report["connector_rules_failed"] == 2
     assert any("2 rules failed against the connected estate" in why for why in report["verdict_reasons"])
     assert detail["campaign"]["exceptions_found"] == 2
+    assert sum(report["findings_by_severity"].values()) == report["exceptions_total"] == 2     # the breakdown adds up
 
     # the exports name the failing resources
     csv = api.get(f"/access-reviews/{review['id']}/report/export?format=csv").text

@@ -1,110 +1,119 @@
 'use client';
-// src/app/(dashboard)/compliance/access-reviews/_components/RulePicker.tsx
-// Which rules a review runs: every rule switched on in the library, the rules
-// that evidence one framework, or a set picked by hand — and, whichever it is,
-// exactly which rules that means before anything runs.
+// Which rules a review runs. Three ways to say it — every rule switched on for the source,
+// the rules that evidence one framework, or a set picked by hand — and, whichever it is, the
+// exact rules that means before anything runs: how many test the connected estate directly,
+// how many test the people in the sample, and (for a framework) which of its clauses they answer.
 
-import { useMemo, useState } from 'react';
-import { Check, Search } from 'lucide-react';
-import { MultiSelectDropdown } from '@/components/ui';
+import { useId, useMemo, useState } from 'react';
+import { Search } from 'lucide-react';
+import { clsx } from 'clsx';
 import { useRuleCatalog } from '../api';
-import { severityClass } from '../pipeline';
-import type { CatalogRule, RuleSelection } from '../types';
+import type { CatalogRule, RuleCatalogView, RuleSelection } from '../types';
+import { Combobox } from './Combobox';
+import { shortFramework } from './RuleResults';
+import { Badge, Field, FOCUS, RadioCards, SeverityTag, inputClass } from './ui';
 
-type Rule = CatalogRule & { domain: string };
+export type PickerRule = CatalogRule & { domain: string };
+const flat = (view?: RuleCatalogView): PickerRule[] => (view?.domains ?? []).flatMap((d) => d.rules.map((r) => ({ ...r, domain: d.domain })));
 
-const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
-const SCOPES = [['enabled', 'All enabled rules'], ['framework', 'One framework'], ['custom', 'Pick rules']] as const;
-
-const runnableOf = (domains?: { domain: string; rules: CatalogRule[] }[]): Rule[] =>
-  (domains ?? []).flatMap((d) => d.rules.map((r) => ({ ...r, domain: d.domain }))).filter((r) => r.runnable);
-
-/** The rules a selection runs, as the catalog stands — what the review will check. */
-export function useRulesFor(sel: RuleSelection) {
-  const all = useRuleCatalog();
+/** The rules a selection runs, as the library stands — what the review will test. */
+export function useRulesFor(sel: RuleSelection, source?: string | null) {
+  const all = useRuleCatalog(undefined, source || undefined);
   const framework = sel.rule_scope === 'framework' && sel.rule_framework ? sel.rule_framework : undefined;
-  const scoped = useRuleCatalog(framework);
-  const everything = useMemo(() => runnableOf(all.data?.domains), [all.data]);
+  const scoped = useRuleCatalog(framework, source || undefined);
+  const everything = useMemo(() => flat(all.data).filter((r) => r.runnable), [all.data]);
   const rules = useMemo(() => {
-    if (sel.rule_scope === 'framework') return framework ? runnableOf(scoped.data?.domains) : [];
+    if (sel.rule_scope === 'framework') return framework ? flat(scoped.data).filter((r) => r.runnable) : [];
     if (sel.rule_scope === 'custom') return everything.filter((r) => (sel.rule_ids ?? []).includes(r.id));
     return everything.filter((r) => r.enabled);
   }, [sel, framework, scoped.data, everything]);
-  return { rules, everything, frameworks: all.data?.frameworks ?? [], loading: all.isLoading || (!!framework && scoped.isLoading) };
+  return {
+    rules, everything,
+    frameworks: all.data?.frameworks ?? [],
+    connectors: all.data?.connectors ?? [],
+    clauses: framework ? scoped.data?.clauses ?? [] : [],
+    blocked: flat(all.data).filter((r) => !r.runnable).length,
+    loading: all.isLoading || (!!framework && scoped.isLoading),
+  };
 }
 
 /** Is this a selection a review can run? (a framework picked, or at least one rule) */
 export const selectionReady = (sel: RuleSelection, count: number) =>
   count > 0 && (sel.rule_scope !== 'framework' || !!sel.rule_framework);
 
-export function RulePicker({ value, onChange }: { value: RuleSelection; onChange: (v: RuleSelection) => void }) {
-  const { rules, everything, frameworks, loading } = useRulesFor(value);
+const group = (list: PickerRule[]) => {
+  const out = new Map<string, PickerRule[]>();
+  list.forEach((r) => out.set(r.domain, [...(out.get(r.domain) ?? []), r]));
+  return Array.from(out.entries());
+};
+
+export function RulePicker({ value, onChange, source, sourceLabel }: {
+  value: RuleSelection; onChange: (v: RuleSelection) => void;
+  /** a review scoped to one source runs that source's rules */
+  source?: string | null; sourceLabel?: string | null;
+}) {
+  const base = useId();
+  const { rules, everything, frameworks, connectors, clauses, blocked, loading } = useRulesFor(value, source);
   const [q, setQ] = useState('');
   const picked = new Set(value.rule_ids ?? []);
   const needle = q.trim().toLowerCase();
-
   const set = (patch: Partial<RuleSelection>) => onChange({ ...value, ...patch });
   const toggle = (ids: string[], on: boolean) => {
     const next = new Set(picked);
     ids.forEach((id) => (on ? next.add(id) : next.delete(id)));
     set({ rule_ids: everything.map((r) => r.id).filter((id) => next.has(id)) });
   };
-  const grouped = (list: Rule[]) => {
-    const out = new Map<string, Rule[]>();
-    list.forEach((r) => out.set(r.domain, [...(out.get(r.domain) ?? []), r]));
-    return Array.from(out.entries());
-  };
+  const where = sourceLabel || 'your connected sources';
 
   return (
-    <div>
-      <div className="flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1">
-        {SCOPES.map(([k, label]) => (
-          <button key={k} type="button" onClick={() => set({ rule_scope: k })} style={value.rule_scope === k ? ACCENT : undefined}
-            className={`flex-1 rounded-md px-2.5 py-2 text-[12.5px] font-semibold ${value.rule_scope === k ? 'shadow-sm' : 'text-slate-500'}`}>
-            {label}
-          </button>
-        ))}
-      </div>
+    <div className="space-y-4">
+      <RadioCards legend="Which rules should this review run?" name={`${base}-scope`} columns={3}
+        value={value.rule_scope} onChange={(k) => set({ rule_scope: k })}
+        options={[
+          { value: 'enabled', label: 'Every enabled rule', description: `All rules switched on in the Rule library that can run on ${where}.` },
+          { value: 'framework', label: 'One framework', description: 'Only the rules that evidence a framework you choose, with its own clauses.' },
+          { value: 'custom', label: 'Pick rules', description: 'Choose them one by one.' },
+        ]} />
 
       {value.rule_scope === 'framework' && (
-        <div className="mt-3">
-          <MultiSelectDropdown title="Pick a framework" triggerVariant="input" size="md" multiSelect={false} autoApply forceSearch
-            showAvatars={false} searchPlaceholder="Search frameworks"
-            items={frameworks.map((f) => ({ value: f.slug, label: f.name, subLabel: `${f.rules} rules mapped` }))}
-            selectedValues={value.rule_framework ? [value.rule_framework] : []}
-            onApply={(v) => set({ rule_framework: v[0] || null })} />
-        </div>
+        <Field label="Framework" hint={frameworks.length ? `${frameworks.length} frameworks have rules that can run on ${where}. The number is how many.` : undefined}>
+          {({ id, ...aria }) => (
+            <Combobox id={id} label="Frameworks" placeholder="Search frameworks, e.g. ISO, SOC 2, PCI" emptyText="No framework matches."
+              clearLabel="Clear the framework" value={value.rule_framework ?? ''} onChange={(slug) => set({ rule_framework: slug || null })}
+              describedBy={aria['aria-describedby']}
+              options={frameworks.map((f) => ({ value: f.slug, label: f.name, hint: `${f.runnable} rule${f.runnable === 1 ? '' : 's'}` }))} />
+          )}
+        </Field>
       )}
 
       {value.rule_scope === 'custom' ? (
-        <div className="mt-3 rounded-lg border border-slate-200">
-          <div className="flex items-center gap-2 border-b border-slate-100 px-3 py-2">
-            <Search size={14} className="text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rules"
-              className="min-w-0 flex-1 bg-transparent text-[12.5px] outline-none" />
-            <span className="font-mono text-[11px] text-slate-400">{picked.size} of {everything.length} picked</span>
+        <div className="rounded-lg border border-slate-300 bg-white">
+          <div className="flex flex-wrap items-center gap-3 border-b border-slate-200 px-3 py-2">
+            <div className="relative min-w-[200px] flex-1">
+              <label htmlFor={`${base}-search`} className="sr-only">Search rules</label>
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden />
+              <input id={`${base}-search`} type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search rules" className={clsx(inputClass, 'pl-9')} />
+            </div>
+            <p role="status" className="text-sm text-slate-700"><span className="font-semibold tabular-nums">{picked.size}</span> of {everything.length} picked</p>
           </div>
-          <div className="max-h-64 overflow-y-auto">
-            {grouped(everything.filter((r) => !needle || `${r.id} ${r.name} ${r.domain}`.toLowerCase().includes(needle))).map(([domain, list]) => {
+          <div className="max-h-80 overflow-y-auto">
+            {loading ? <p className="p-4 text-sm text-slate-600">Loading the rules…</p> : group(everything.filter((r) => !needle || `${r.id} ${r.name} ${r.domain}`.toLowerCase().includes(needle))).map(([domain, list]) => {
               const all = list.every((r) => picked.has(r.id));
+              const hid = `${base}-${domain.replace(/\W+/g, '-')}`;
               return (
-                <div key={domain}>
-                  <div className="sticky top-0 flex items-center justify-between bg-slate-50 px-3 py-1.5">
-                    <span className="text-[10.5px] font-bold uppercase tracking-wider text-slate-500">{domain}</span>
-                    <button type="button" onClick={() => toggle(list.map((r) => r.id), !all)} className="text-[11px] font-semibold" style={{ color: 'var(--color-base-strong)' }}>
-                      {all ? 'Clear' : 'All'}
+                <div key={domain} role="group" aria-labelledby={hid}>
+                  <div className="sticky top-0 flex items-center justify-between bg-[#eef1f4] px-3 py-1.5">
+                    <h3 id={hid} className="text-xs font-semibold uppercase tracking-wide text-slate-800">{domain}</h3>
+                    <button type="button" onClick={() => toggle(list.map((r) => r.id), !all)} className={clsx('rounded px-1 text-xs font-semibold text-teal-800 underline underline-offset-2', FOCUS)}>
+                      {all ? 'Clear' : 'Select all'}<span className="sr-only"> in {domain}</span>
                     </button>
                   </div>
                   {list.map((r) => (
-                    <label key={r.id} className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 hover:bg-slate-50">
-                      <span className={`flex h-4 w-4 shrink-0 items-center justify-center rounded border ${picked.has(r.id) ? 'border-transparent' : 'border-slate-300'}`}
-                        style={picked.has(r.id) ? ACCENT : undefined}>
-                        {picked.has(r.id) && <Check size={11} />}
-                      </span>
-                      <input type="checkbox" className="sr-only" checked={picked.has(r.id)} onChange={(e) => toggle([r.id], e.target.checked)} />
-                      <span className="font-mono text-[11px] text-slate-400">{r.id}</span>
-                      <span className="min-w-0 flex-1 truncate text-[12.5px] text-slate-800">{r.name}</span>
-                      <span className={`rounded-full px-1.5 py-0.5 text-[9.5px] font-bold uppercase ${severityClass[r.severity]}`}>{r.severity}</span>
+                    <label key={r.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-slate-50 has-[:focus-visible]:bg-teal-50">
+                      <input type="checkbox" checked={picked.has(r.id)} onChange={(e) => toggle([r.id], e.target.checked)} className="h-4 w-4 shrink-0 accent-teal-700" />
+                      <span className="min-w-0 flex-1 text-sm text-slate-900">{r.name}<span className="ml-2 font-mono text-xs text-slate-600">{r.id}</span></span>
+                      {r.connector_label && <Badge tone="sky">{r.connector_label}</Badge>}
+                      <SeverityTag severity={r.severity} />
                     </label>
                   ))}
                 </div>
@@ -113,38 +122,64 @@ export function RulePicker({ value, onChange }: { value: RuleSelection; onChange
           </div>
         </div>
       ) : (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2.5">
-          {loading ? <p className="text-[12px] text-slate-400">Loading the rules…</p>
-            : value.rule_scope === 'framework' && !value.rule_framework ? (
-              <p className="text-[12px] text-slate-500">Pick a framework to see the rules that evidence it.</p>
-            ) : rules.length === 0 ? (
-              <p className="text-[12px] text-amber-700">No rule that can run today evidences this framework.</p>
-            ) : (
-              <>
-                <p className="mb-1.5 text-[12px] text-slate-600">
-                  <span className="font-semibold text-slate-900">{rules.length} rule{rules.length === 1 ? '' : 's'}</span> will run
-                  {value.rule_scope === 'enabled' ? ' — every rule switched on in the Rule library.' : ', each with this framework’s clause:'}
-                </p>
-                <div className="max-h-40 overflow-y-auto">
-                  {grouped(rules).map(([domain, list]) => (
-                    <div key={domain} className="mb-1">
-                      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{domain}</div>
-                      {list.map((r) => (
-                        <div key={r.id} className="flex items-center gap-2 py-0.5 text-[12px]">
-                          <span className="font-mono text-[10.5px] text-slate-400">{r.id}</span>
-                          <span className="min-w-0 flex-1 truncate text-slate-700">{r.name}</span>
-                          {value.rule_scope === 'framework' && r.frameworks?.[0] && (
-                            <span className="shrink-0 font-mono text-[10.5px] text-slate-500">{r.frameworks[0].codes.slice(0, 2).join(', ')}</span>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-        </div>
+        <Summary rules={rules} loading={loading} scope={value.rule_scope} framework={value.rule_framework} frameworkName={frameworks.find((f) => f.slug === value.rule_framework)?.name}
+          clauses={clauses} connectors={connectors} where={where} />
       )}
+
+      {value.rule_scope === 'custom' && <Summary rules={rules} loading={loading} scope="custom" connectors={connectors} where={where} compact />}
+      {blocked > 0 && !source && (
+        <p className="text-xs text-slate-600">{blocked} more rules in the library need a source that is not connected yet, so they cannot run. See the Rule library.</p>
+      )}
+    </div>
+  );
+}
+
+function Summary({ rules, loading, scope, framework, frameworkName, clauses = [], connectors, where, compact }: {
+  rules: PickerRule[]; loading: boolean; scope: RuleSelection['rule_scope']; framework?: string | null; frameworkName?: string;
+  clauses?: { code: string; rules: string[] }[]; connectors: { key: string; label: string }[]; where: string; compact?: boolean;
+}) {
+  const estate = rules.filter((r) => r.kind === 'connector');
+  const people = rules.length - estate.length;
+  const labels = Array.from(new Set(estate.map((r) => r.connector_label ?? connectors.find((c) => c.key === r.connector)?.label ?? ''))).filter(Boolean);
+  return (
+    <div className="rounded-lg border border-slate-300 bg-slate-50 px-4 py-3 text-sm text-slate-800">
+      {loading ? <p>Loading the rules…</p>
+        : scope === 'framework' && !framework ? <p>Choose a framework to see the rules that evidence it.</p>
+          : rules.length === 0 ? (
+            <p role="status" className="font-medium text-amber-900">
+              {scope === 'framework' ? `No rule that can run on ${where} evidences this framework.` : 'No rule is selected.'}
+            </p>
+          ) : (
+            <>
+              <p role="status">
+                <span className="font-semibold">{rules.length} rule{rules.length === 1 ? '' : 's'}</span> will run
+                {estate.length > 0 && <>: {estate.length} test{estate.length === 1 ? 's' : ''} {labels.join(' and ') || 'the connected estate'} directly</>}
+                {people > 0 && <>{estate.length > 0 ? ' and ' : ': '}{people} test{people === 1 ? 's' : ''} the people in the sample</>}.
+                {scope === 'framework' && frameworkName && clauses.length > 0 && <> Together they answer {clauses.length} clause{clauses.length === 1 ? '' : 's'} of {shortFramework(frameworkName)}.</>}
+              </p>
+              {!compact && (
+                <details className="mt-2">
+                  <summary className={clsx('cursor-pointer rounded text-sm font-semibold text-teal-800 underline underline-offset-2', FOCUS)}>See the rules</summary>
+                  <div role="region" aria-label="The rules that will run" tabIndex={0} className={clsx('relative mt-2 max-h-64 space-y-2 overflow-y-auto rounded', FOCUS)}>
+                    {group(rules).map(([domain, list]) => (
+                      <section key={domain} aria-label={domain}>
+                        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700">{domain}</h4>
+                        <ul className="mt-0.5">
+                          {list.map((r) => (
+                            <li key={r.id} className="flex items-center gap-2 py-0.5">
+                              <span className="font-mono text-xs text-slate-600">{r.id}</span>
+                              <span className="min-w-0 flex-1 truncate">{r.name}</span>
+                              {scope === 'framework' && r.frameworks?.[0] && <span className="shrink-0 font-mono text-xs text-slate-700">{r.frameworks[0].codes.slice(0, 2).join(', ')}</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </>
+          )}
     </div>
   );
 }

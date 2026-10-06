@@ -45,6 +45,10 @@ export interface RuleSelection {
 export interface ConnectorSource {
   key: string;
   label: string;
+  /** identities and access grants this source has put in the population */
+  people?: number;
+  entitlements?: number;
+  last_synced?: string | null;
 }
 
 export interface Finding {
@@ -56,9 +60,13 @@ export interface Finding {
   status: string;                 // 'open' | 'accepted' | 'false_positive'
 }
 
+/** What sort of identity a row is. */
+export type AccountKind = 'person' | 'cloud_credential' | 'db_account' | 'service_account';
+
 export interface ReviewItem {
   id: number;
   user_id: number | null;
+  kind?: AccountKind;
   email?: string | null;
   display_name?: string | null;
   department?: string | null;
@@ -75,6 +83,9 @@ export interface ReviewItem {
   termination_date?: string | null;
   is_privileged: boolean;
   decision: Decision;
+  /** the reviewer's justification and when they decided */
+  decision_comment?: string | null;
+  decision_at?: string | null;
   findings: Finding[];
   evidence_id?: number | null;
   escalation_tier?: number;
@@ -90,25 +101,48 @@ export interface AccessGrant {
   source?: string | null;
 }
 
+/** What a rule found. A rule that judged nothing is never a pass. */
+export type Outcome = 'pass' | 'fail' | 'not_run' | 'not_applicable' | 'error';
+
 export interface RuleResult {
   frameworks?: FrameworkRef[];
+  frameworks_total?: number | null;
   id: string;
   name: string;
   domain: string;
   severity: Severity;
   regulation?: string | null;
-  status: 'pass' | 'fail';
+  status: Outcome;
   detail?: string | null;
+  /** why it could not be judged (not_run / not_applicable) */
+  reason?: string | null;
+  /** 'identity' rules judge the sampled identities; 'connector' rules judge a source's own estate */
+  kind?: 'identity' | 'connector';
+  connector?: string;
   /** present on the review-wide summary, not on a single identity */
   failed?: number;
   passed?: number;
+  /** how many it could judge, of how many there were */
+  tested?: number;
+  population?: number;
+  not_applicable?: number;
+  not_run?: number;
+  /** a connector rule's failing resources */
+  failures?: { resource: string; detail: string }[];
+  truncated?: boolean;
   reads?: string | null;
   trips?: string | null;
+  fix?: string | null;
+  scf?: string[];
 }
+
+/** What a connector cannot show, and which connector it is. */
+export interface ConnectorNote { connector: string; label: string; limits?: string }
 
 export interface CampaignDetail extends Campaign {
   items: ReviewItem[];
   rule_results: RuleResult[];
+  connector_notes?: ConnectorNote[];
 }
 
 export interface Report {
@@ -121,6 +155,10 @@ export interface Report {
   decisions: Record<string, number>;
   verdict: string;                // 'effective' | 'deficient' | 'material_weakness'
   rule_results?: RuleResult[];
+  connector_notes?: ConnectorNote[];
+  /** why the verdict is what it is, in words */
+  verdict_reasons?: string[];
+  connector_rules_failed?: number;
   ai_summary?: string | null;
   exceptions_open?: number;
   rule_scope?: RuleScope;
@@ -135,6 +173,8 @@ export interface Report {
 // GET /access-reviews/dashboard — keys match the backend response exactly.
 export interface DashboardSummary {
   campaigns_total: number;
+  /** rules that failed against a connected estate, in reviews still in progress */
+  connector_rules_failed?: number;
   findings_open: number;
   users_with_open_exceptions: number;
   items_reviewed: number;
@@ -148,6 +188,13 @@ export interface CatalogRule {
   id: string;
   name: string;
   severity: Severity;
+  /** 'connector' rules test a connector's own estate; 'identity' rules test sampled people and accounts */
+  kind?: 'identity' | 'connector';
+  connector?: string | null;
+  connector_label?: string | null;
+  /** the sources that can supply what an identity rule reads (empty = any) */
+  sources?: string[];
+  fix?: string | null;
   status: RuleStatus;
   reads: string;
   trips: string;
@@ -170,9 +217,25 @@ export interface FrameworkRef {
 export interface RuleCatalogView {
   summary: { total: number; catalog_total?: number; runnable: number; enabled_active: number; frameworks_covered?: number };
   /** every framework the catalog evidences, from the tenant's own crosswalk */
-  frameworks?: { slug: string; name: string; rules: number }[];
+  frameworks?: { slug: string; name: string; rules: number; runnable: number }[];
   framework?: string | null;
+  source?: string | null;
+  /** the connectors that carry rules of their own */
+  connectors?: { key: string; label: string; connected: boolean; rules: number; limits?: string }[];
+  /** the framework's own requirement clauses these rules evidence, each with the rules that answer it */
+  clauses?: { code: string; rules: string[] }[];
   domains: { domain: string; rules: CatalogRule[] }[];
+}
+
+/** POST /connectors/{source}/rules/run */
+export interface ConnectorRun {
+  connector: string;
+  label: string;
+  connected: boolean;
+  limits?: string;
+  ran_at: string;
+  read?: Record<string, number>;
+  results: RuleResult[];
 }
 
 /** Connector tiers for the Connect-a-source screen. */

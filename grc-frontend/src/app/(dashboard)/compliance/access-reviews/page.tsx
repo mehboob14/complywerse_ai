@@ -1,178 +1,164 @@
 'use client';
-// src/app/(dashboard)/compliance/access-reviews/page.tsx
-// Landing: KPI summary + guided journey + reviews list (each row shows its
-// pipeline stage). Visual spec: "Access Reviews.dc.html" (landing screen).
+// Reviews: where you land. What needs doing next, how the work is going, and every review
+// in a table you can scan, search and filter. Each row's name is the one link into it.
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { ShieldCheck, Plus, Plug, ListChecks, ChevronRight, Check, Users, Clock, AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { PageLoader } from '@/components/ui';
-import { useCampaigns, useDashboard, useCreateCampaign } from './api';
-import { STAGES, statusToStage, isClosed, scopeLabel } from './pipeline';
+import { CheckCircle2, Clock, Lock, Plus, Search, ShieldCheck } from 'lucide-react';
+import { clsx } from 'clsx';
+import { PageHeader, PageLoader } from '@/components/ui';
+import { errorText, useCampaigns, useConnectors, useDashboard } from './api';
+import { STAGES, isClosed, ruleSetLabel, scopeLabel, statusLabel, statusToStage } from './pipeline';
 import type { Campaign } from './types';
-import { CreateReviewModal } from './_components/CreateReviewModal';
+import { Alert, Badge, Button, ButtonLink, Card, EmptyState, FOCUS, ProgressBar, Stat, inputClass } from './_components/ui';
+import { usePageTitle } from './_components/usePageTitle';
 
-const ACCENT = { background: 'var(--color-base)', color: 'var(--color-on-base)' } as const;
+const crumbs = [{ label: 'Compliance', href: '/compliance' }, { label: 'Access reviews', href: '/compliance/access-reviews' }];
+
+const STATUS_TONE: Record<string, 'slate' | 'sky' | 'amber' | 'emerald'> = {
+  draft: 'slate', population_built: 'sky', sampled: 'sky', in_review: 'amber', completed: 'emerald',
+};
 
 export default function AccessReviewsPage() {
-  const router = useRouter();
-  const { data: campaigns, isLoading } = useCampaigns();
+  usePageTitle('Reviews');
+  const { data: campaigns, isLoading, isError, error, refetch } = useCampaigns();
   const { data: dash } = useDashboard();
-  const [showCreate, setShowCreate] = useState(false);
+  const { data: connectors } = useConnectors();
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<'all' | 'active' | 'sealed'>('all');
 
-  const hasReviews = (campaigns?.length ?? 0) > 0;
-  const hasSource = hasReviews || (dash?.items_total ?? 0) > 0;
-  const allClosed = hasReviews && campaigns!.every((c) => isClosed(c.status));
-  const activeCount = campaigns?.filter((c) => !isClosed(c.status)).length ?? 0;
-  const step = !hasSource ? 1 : !hasReviews ? 2 : 3;
-
-  const primary = useMemo(() => {
-    if (step === 1) return { label: 'Connect a source', go: () => router.push('/compliance/access-reviews/connect') };
-    if (step === 2) return { label: 'Create a review', go: () => setShowCreate(true) };
-    if (allClosed) return { label: 'Start new review', go: () => setShowCreate(true) };
-    const active = campaigns!.find((c) => !isClosed(c.status) && statusToStage(c.status) >= 4);
-    if (active) return { label: 'Continue certifying', go: () => router.push(`/compliance/access-reviews/${active.id}`) };
-    return { label: 'Open latest review', go: () => router.push(`/compliance/access-reviews/${campaigns![0].id}`) };
-  }, [step, allClosed, campaigns, router]);
+  const sourceName = useMemo(() => new Map((connectors?.sources ?? []).map((s) => [s.key, s.label])), [connectors]);
+  const rows = useMemo(() => (campaigns ?? [])
+    .filter((c) => (status === 'all' ? true : status === 'sealed' ? isClosed(c.status) : !isClosed(c.status)))
+    .filter((c) => !q.trim() || `${c.name} ${c.description ?? ''}`.toLowerCase().includes(q.trim().toLowerCase())),
+  [campaigns, q, status]);
 
   if (isLoading) return <PageLoader />;
+  if (isError) {
+    return (
+      <Alert tone="error" title="Your reviews could not be loaded" action={<Button size="sm" onClick={() => refetch()}>Try again</Button>}>
+        {errorText(error)}
+      </Alert>
+    );
+  }
 
-  const reviewed = dash?.items_reviewed ?? 0;
-  const sampled = dash?.items_total ?? 0;
-  const kpis = [
-    { label: 'Active reviews', value: activeCount, sub: 'in progress', Icon: ShieldCheck, tone: 'text-primary-600' },
-    { label: 'Awaiting decision', value: Math.max(sampled - reviewed, 0), sub: 'users to certify', Icon: Clock, tone: 'text-amber-600' },
-    { label: 'Open exceptions', value: dash?.findings_open ?? 0, sub: `${dash?.users_with_open_exceptions ?? 0} users flagged`, Icon: AlertTriangle, tone: 'text-rose-600' },
-    { label: 'Certified', value: sampled ? `${Math.round((reviewed / sampled) * 100)}%` : '0%', sub: `${reviewed} of ${sampled}`, Icon: CheckCircle2, tone: 'text-emerald-600' },
-  ];
+  const hasSource = (connectors?.sources?.length ?? 0) > 0 || (dash?.items_total ?? 0) > 0;
+  const total = campaigns?.length ?? 0;
+  const active = (campaigns ?? []).filter((c) => !isClosed(c.status));
+  const toCertify = Math.max((dash?.items_total ?? 0) - (dash?.items_reviewed ?? 0), 0);
+  const certifiedPct = dash?.items_total ? Math.round(((dash.items_reviewed ?? 0) / dash.items_total) * 100) : 0;
+  const findings = (dash?.findings_open ?? 0) + (dash?.connector_rules_failed ?? 0);
+  const next = active.find((c) => statusToStage(c.status) >= 4) ?? active[0];
 
   return (
-    <div className="mx-auto max-w-[1180px] px-8 py-7 pb-16">
-      {/* header */}
-      <div className="mb-5 flex items-start justify-between gap-5">
-        <div>
-          <h1 className="text-[23px] font-bold tracking-tight text-slate-900">Access Reviews</h1>
-          <p className="mt-1 text-[13.5px] text-slate-500">Certify that every user holds only the access they should — and prove it.</p>
-        </div>
-        <div className="flex shrink-0 gap-2.5">
-          <button onClick={() => router.push('/compliance/access-reviews/connect')} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">
-            <Plug size={15} /> Sources
-          </button>
-          <button onClick={() => router.push('/compliance/access-reviews/rules')} className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3.5 py-2 text-[13px] font-semibold text-slate-600 hover:bg-slate-50">
-            <ListChecks size={15} /> Rule library
-          </button>
-          <button disabled={!hasSource} onClick={() => setShowCreate(true)} style={hasSource ? ACCENT : undefined}
-            className={`inline-flex items-center gap-2 rounded-md px-3.5 py-2 text-[13px] font-semibold ${hasSource ? 'shadow-sm' : 'cursor-not-allowed bg-slate-100 text-slate-400'}`}>
-            <Plus size={15} /> New review
-          </button>
-        </div>
-      </div>
+    <div className="space-y-5">
+      <PageHeader title="Access reviews" icon={ShieldCheck} breadcrumbs={crumbs}
+        subtitle="Certify that every person and account holds only the access it should, test the systems behind them, and keep the evidence."
+        actions={<ButtonLink href="/compliance/access-reviews/new" variant="primary" icon={Plus}>New review</ButtonLink>} />
 
-      {/* guided journey — the single guidance element */}
-      <div className="mb-6 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-stretch">
-          {[
-            { n: 1, title: 'Connect a source', sub: 'Identity & access data', done: hasSource },
-            { n: 2, title: 'Create a review', sub: 'Scope & sample population', done: hasReviews },
-            { n: 3, title: 'Run & certify', sub: 'Decide and seal the report', done: allClosed },
-          ].map((s, i) => {
-            const active = step === s.n;
-            return (
-              <div key={s.n} className={`flex-1 px-6 py-5 ${i < 2 ? 'border-r border-slate-100' : ''} ${active ? 'bg-[color:var(--color-base-soft)]' : ''}`}>
-                <div className="flex items-center gap-3">
-                  <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full font-mono text-sm font-semibold"
-                    style={s.done ? ACCENT : active ? { background: 'var(--color-base-strong)', color: '#fff' } : { background: '#EEF1F4', color: '#8A94A1' }}>
-                    {s.done ? <Check size={15} /> : s.n}
-                  </div>
-                  <div>
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Step {s.n}</div>
-                    <div className={`text-[13.5px] font-semibold ${active || s.done ? 'text-slate-900' : 'text-slate-500'}`}>{s.title}</div>
-                    <div className="mt-0.5 text-xs text-slate-500">{s.sub}</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-          <div className="flex shrink-0 items-center border-l border-slate-100 bg-slate-50 px-6">
-            <button onClick={primary.go} style={ACCENT} className="inline-flex items-center gap-2 whitespace-nowrap rounded-md px-4 py-2.5 text-[13px] font-semibold shadow-sm">
-              {primary.label} <ChevronRight size={15} />
-            </button>
+      {!hasSource ? (
+        <Alert tone="info" title="Start by connecting a source"
+          action={<ButtonLink href="/compliance/access-reviews/connect" size="sm" variant="primary">Connect a source</ButtonLink>}>
+          A review certifies the people and accounts a source reports — Entra ID, Okta, Google Workspace, DigitalOcean and more — and tests the source itself against its rules.
+        </Alert>
+      ) : total === 0 ? (
+        <Alert tone="info" title="You have a source. Create your first review"
+          action={<ButtonLink href="/compliance/access-reviews/new" size="sm" variant="primary">New review</ButtonLink>}>
+          Choose what to review, who to certify and which rules to run. Nothing changes in your systems.
+        </Alert>
+      ) : next ? (
+        <Alert tone="info" title={`Next: ${next.name}`}
+          action={<ButtonLink href={`/compliance/access-reviews/${next.id}`} size="sm" variant="primary">Continue</ButtonLink>}>
+          Stage {Math.min(statusToStage(next.status), 6)} of 6 — {STAGES[Math.min(statusToStage(next.status), 6) - 1].label}.
+          {' '}{STAGES[Math.min(statusToStage(next.status), 6) - 1].desc}
+        </Alert>
+      ) : null}
+
+      <section aria-label="Summary">
+        <dl className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Stat label="Active reviews" value={active.length} hint="not yet sealed" />
+          <Stat label="To certify" value={toCertify} hint="identities awaiting a decision" tone={toCertify ? 'amber' : undefined} />
+          <Stat label="Open findings" value={findings} hint={`${dash?.users_with_open_exceptions ?? 0} identities flagged · ${dash?.connector_rules_failed ?? 0} failed rules on the estate`} tone={findings ? 'rose' : 'emerald'} />
+          <Stat label="Certified" value={`${certifiedPct}%`} hint={`${dash?.items_reviewed ?? 0} of ${dash?.items_total ?? 0} identities`} />
+        </dl>
+      </section>
+
+      <Card title="All reviews" description={total ? `${total} in total` : undefined} padded={false}
+        actions={total > 0 ? (
+          <>
+            <div className="relative">
+              <label htmlFor="review-search" className="sr-only">Search reviews</label>
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-600" aria-hidden />
+              <input id="review-search" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search reviews" className={clsx(inputClass, 'w-56 pl-9')} />
+            </div>
+            <div>
+              <label htmlFor="review-status" className="sr-only">Show</label>
+              <select id="review-status" value={status} onChange={(e) => setStatus(e.target.value as typeof status)} className={inputClass}>
+                <option value="all">All reviews</option>
+                <option value="active">In progress</option>
+                <option value="sealed">Sealed</option>
+              </select>
+            </div>
+          </>
+        ) : undefined}>
+        {total === 0 ? (
+          <div className="p-5">
+            <EmptyState icon={ShieldCheck} title="No reviews yet"
+              action={hasSource ? <ButtonLink href="/compliance/access-reviews/new" variant="primary" icon={Plus}>New review</ButtonLink>
+                : <ButtonLink href="/compliance/access-reviews/connect" variant="primary">Connect a source</ButtonLink>}>
+              Reviews you create appear here, with how far each has got.
+            </EmptyState>
           </div>
-        </div>
-      </div>
-
-      {/* KPI row */}
-      <div className="mb-7 grid grid-cols-4 gap-3.5">
-        {kpis.map((k) => (
-          <div key={k.label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="mb-2.5 flex items-center gap-2"><k.Icon size={16} className={k.tone} /><span className="text-[12.5px] font-medium text-slate-500">{k.label}</span></div>
-            <div className="font-mono text-[27px] font-bold tracking-tight text-slate-900">{k.value}</div>
-            <div className="mt-0.5 text-[11.5px] text-slate-400">{k.sub}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* reviews list */}
-      <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-900">Reviews</h2>
-        {hasReviews && <span className="text-xs text-slate-400">{campaigns!.length} total</span>}
-      </div>
-
-      {hasReviews ? (
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-          <div className="grid grid-cols-[2.4fr_1fr_2.1fr_1fr] gap-4 border-b border-slate-200 bg-slate-50 px-5 py-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
-            <div>Review</div><div>Scope</div><div>Pipeline stage</div><div>Certified</div>
-          </div>
-          {campaigns!.map((c) => <ReviewRow key={c.id} c={c} onOpen={() => router.push(`/compliance/access-reviews/${c.id}`)} />)}
-        </div>
-      ) : (
-        <EmptyState hasSource={hasSource} onPrimary={primary.go} label={primary.label} />
-      )}
-
-      {showCreate && <CreateReviewModal onClose={() => setShowCreate(false)} onCreated={(c) => router.push(`/compliance/access-reviews/${c.id}`)} />}
+        ) : (
+          <>
+            <p role="status" className="sr-only">Showing {rows.length} of {total} reviews.</p>
+            <div role="region" aria-label="Reviews table" tabIndex={0} className={clsx('relative overflow-x-auto', FOCUS)}>
+              <table className="w-full min-w-[820px] border-collapse text-left text-sm">
+                <caption className="sr-only">Access reviews, newest first</caption>
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-700">
+                    <th scope="col" className="px-5 py-3">Review</th>
+                    <th scope="col" className="px-4 py-3">Source and rules</th>
+                    <th scope="col" className="px-4 py-3">Status</th>
+                    <th scope="col" className="w-[200px] px-4 py-3">Certified</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((c) => <ReviewRow key={c.id} c={c} source={c.source ? sourceName.get(c.source) ?? c.source : 'Every source'} />)}
+                  {!rows.length && (
+                    <tr><td colSpan={4} className="px-5 py-8 text-center text-slate-600">No review matches your search.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+      </Card>
     </div>
   );
 }
 
-function ReviewRow({ c, onOpen }: { c: Campaign; onOpen: () => void }) {
-  const stage = statusToStage(c.status);
+function ReviewRow({ c, source }: { c: Campaign; source: string }) {
+  const stage = Math.min(statusToStage(c.status), 6);
   const closed = isClosed(c.status);
-  const pct = c.sample_size ? Math.round((c.items_reviewed_live / c.sample_size) * 100) : 0;
   return (
-    <button onClick={onOpen} className="grid w-full grid-cols-[2.4fr_1fr_2.1fr_1fr] items-center gap-4 border-b border-slate-100 px-5 py-3.5 text-left hover:bg-slate-50">
-      <div className="min-w-0">
-        <div className="truncate text-[13.5px] font-semibold text-slate-900">{c.name}</div>
-        <div className="mt-0.5 font-mono text-[11.5px] text-slate-400">AR-{c.id} · {scopeLabel[c.review_type] ?? c.review_type}</div>
-      </div>
-      <div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">{scopeLabel[c.review_type] ?? c.review_type}</span></div>
-      <div>
-        <div className="mb-1.5 flex items-center gap-1.5">
-          {STAGES.map((s) => {
-            const done = closed || s.n < stage; const cur = !closed && s.n === stage;
-            return <div key={s.n} title={s.label} className="h-[5px] flex-1 rounded-full" style={{ background: done ? 'var(--color-base)' : cur ? 'var(--color-base-strong)' : '#EEF1F4' }} />;
-          })}
-        </div>
-        <div className="text-[11.5px] font-medium text-slate-600">Stage {Math.min(stage, 6)} · {STAGES[Math.min(stage, 6) - 1].label}</div>
-      </div>
-      <div>
-        <div className="font-mono text-[13px] font-semibold text-slate-700">{c.items_reviewed_live}/{c.sample_size}</div>
-        <div className="mt-1.5 h-1 w-[84px] overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: 'var(--color-base)' }} /></div>
-      </div>
-    </button>
-  );
-}
-
-function EmptyState({ hasSource, onPrimary, label }: { hasSource: boolean; onPrimary: () => void; label: string }) {
-  return (
-    <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-14 text-center">
-      <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl" style={{ background: 'var(--color-base-soft)', color: 'var(--color-base-strong)' }}>
-        <ShieldCheck size={24} />
-      </div>
-      <div className="text-[15px] font-semibold text-slate-900">{hasSource ? 'No reviews yet' : 'Connect a source to begin'}</div>
-      <div className="mx-auto mb-4 mt-1 max-w-sm text-[13px] text-slate-500">
-        {hasSource ? 'Create your first review to draw a sample and start certifying access.' : 'Access Reviews pulls users from the identity and access systems you connect — they all feed one user table.'}
-      </div>
-      <button onClick={onPrimary} style={ACCENT} className="inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-[13px] font-semibold shadow-sm">{label} <ChevronRight size={15} /></button>
-    </div>
+    <tr className="border-b border-slate-100 align-top last:border-0 hover:bg-slate-50">
+      <td className="px-5 py-4">
+        <Link href={`/compliance/access-reviews/${c.id}`} className={clsx('rounded font-semibold text-slate-900 underline-offset-2 hover:underline', FOCUS)}>{c.name}</Link>
+        <p className="mt-0.5 text-xs text-slate-600">{scopeLabel[c.review_type] ?? c.review_type} · {c.created_at ? `created ${new Date(c.created_at).toLocaleDateString()}` : ''}</p>
+      </td>
+      <td className="px-4 py-4">
+        <p className="font-medium text-slate-900">{source}</p>
+        <p className="mt-0.5 text-xs text-slate-600">{ruleSetLabel(c)}</p>
+      </td>
+      <td className="px-4 py-4">
+        <Badge tone={STATUS_TONE[c.status] ?? 'slate'} icon={closed ? Lock : c.status === 'in_review' ? Clock : CheckCircle2}>{statusLabel[c.status] ?? c.status}</Badge>
+        <p className="mt-1 text-xs text-slate-600">{closed ? 'Read-only evidence' : `Stage ${stage} of 6 · ${STAGES[stage - 1].label}`}</p>
+      </td>
+      <td className="px-4 py-4">
+        <p className="text-sm tabular-nums text-slate-900">{c.items_reviewed_live} of {c.sample_size}</p>
+        <div className="mt-1.5"><ProgressBar value={c.items_reviewed_live} max={c.sample_size || 1} label={`${c.name}: identities certified`} tone={closed ? 'emerald' : 'teal'} /></div>
+      </td>
+    </tr>
   );
 }

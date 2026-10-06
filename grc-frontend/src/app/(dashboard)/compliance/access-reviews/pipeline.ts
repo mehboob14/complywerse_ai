@@ -3,7 +3,7 @@
 // Keep this in lockstep with the backend status machine in
 // access_review_router.py (_assert_not_completed and the stage endpoints).
 
-import type { CampaignStatus, StageIndex, Severity, Decision } from './types';
+import type { Campaign, CampaignStatus, StageIndex, Severity, Decision } from './types';
 
 export interface StageDef {
   n: StageIndex;
@@ -13,12 +13,12 @@ export interface StageDef {
 }
 
 export const STAGES: StageDef[] = [
-  { n: 1, key: 'sync',    label: 'Sync population', desc: 'Pull every in-scope user from connected sources' },
-  { n: 2, key: 'sample',  label: 'Draw sample',     desc: 'Freeze a snapshot of the sampled users' },
-  { n: 3, key: 'checks',  label: 'Run checks',      desc: 'Apply enabled rules to produce findings' },
-  { n: 4, key: 'certify', label: 'Certify',         desc: 'Decide approve / revoke / exception per user' },
-  { n: 5, key: 'report',  label: 'Report',          desc: 'Generate the verdict and export pack' },
-  { n: 6, key: 'close',   label: 'Close',           desc: 'Seal as read-only audit evidence' },
+  { n: 1, key: 'sync',    label: 'Collect people', desc: 'Gather every in-scope identity from the connected sources.' },
+  { n: 2, key: 'sample',  label: 'Draw sample',    desc: 'Freeze a snapshot of the identities to certify.' },
+  { n: 3, key: 'checks',  label: 'Run rules',      desc: 'Test the sample and the connected estate against the rules.' },
+  { n: 4, key: 'certify', label: 'Certify',        desc: 'Decide approve, revoke or exception for each identity.' },
+  { n: 5, key: 'report',  label: 'Report',         desc: 'Read the verdict and export the evidence.' },
+  { n: 6, key: 'close',   label: 'Seal',           desc: 'Lock the review as read-only audit evidence.' },
 ];
 
 /** Map the backend campaign.status to a 1..6 stage index. */
@@ -48,19 +48,20 @@ export const isClosed = (status: CampaignStatus) => status === 'completed';
 // ---- display helpers (Tailwind classes consistent with the app) ----------
 // Severity is a genuine data-viz scale — critical→low runs rose→orange→amber→
 // slate so the gradient stays legible; info maps to neutral slate.
+// Text is the -800 shade of its tint so every pairing is at least 4.5:1.
 export const severityClass: Record<Severity, string> = {
-  critical: 'bg-rose-100 text-rose-700',
-  high:     'bg-orange-100 text-orange-700',
-  medium:   'bg-amber-100 text-amber-700',
-  low:      'bg-slate-100 text-slate-600',
-  info:     'bg-slate-100 text-slate-600',
+  critical: 'bg-rose-100 text-rose-800',
+  high:     'bg-orange-100 text-orange-800',
+  medium:   'bg-amber-100 text-amber-900',
+  low:      'bg-[#eef1f4] text-slate-700',
+  info:     'bg-[#eef1f4] text-slate-700',
 };
 
 export const decisionClass: Record<Decision, string> = {
-  approved:  'bg-emerald-100 text-emerald-700',
-  revoke:    'bg-rose-100 text-rose-700',
-  exception: 'bg-amber-100 text-amber-700',
-  pending:   'bg-slate-100 text-slate-500',
+  approved:  'bg-emerald-100 text-emerald-800',
+  revoke:    'bg-rose-100 text-rose-800',
+  exception: 'bg-amber-100 text-amber-900',
+  pending:   'bg-[#eef1f4] text-slate-700',
 };
 
 export const decisionLabel: Record<Decision, string> = {
@@ -71,10 +72,10 @@ export const decisionLabel: Record<Decision, string> = {
 // emerald) kept distinct so reviewers can triage at a glance.
 export function riskClass(score: number | null | undefined): string {
   const s = score ?? 0;
-  if (s >= 60) return 'bg-rose-100 text-rose-700';
-  if (s >= 30) return 'bg-orange-100 text-orange-700';
-  if (s > 0)   return 'bg-amber-100 text-amber-700';
-  return 'bg-emerald-100 text-emerald-700';
+  if (s >= 60) return 'bg-rose-100 text-rose-800';
+  if (s >= 30) return 'bg-orange-100 text-orange-800';
+  if (s > 0)   return 'bg-amber-100 text-amber-900';
+  return 'bg-emerald-100 text-emerald-800';
 }
 
 export const scopeLabel: Record<string, string> = {
@@ -82,3 +83,23 @@ export const scopeLabel: Record<string, string> = {
   // what campaigns created before the UI spoke the backend's words carry
   all: 'All users', privileged: 'Privileged', terminated: 'Terminated',
 };
+
+export const statusLabel: Record<CampaignStatus, string> = {
+  draft: 'Not started', population_built: 'People collected', sampled: 'Sample drawn',
+  in_review: 'Certifying', completed: 'Sealed',
+};
+
+/** "EMEA Saudi Arabia ECC-1 2018" reads as "ECC-1 2018" on a chip. */
+export function shortFramework(name: string): string {
+  return name.replace(/^(EMEA|APAC|AMER|Americas)\s+/, '').replace(/^(Saudi Arabia|Australia|Japan|Canada|Spain)\s+/, '')
+    .replace(/\s*\(used for SOC 2\)/, ' (SOC 2)');
+}
+
+/** "ECC-1 2018 rules (36)", "Every enabled rule (18)", "5 picked rules". */
+export function ruleSetLabel(c: Pick<Campaign, 'rule_scope' | 'rule_framework' | 'rule_framework_name' | 'rules_run' | 'rule_ids'>): string {
+  const n = c.rules_run?.length;
+  const count = n !== undefined ? ` (${n})` : '';
+  if (c.rule_scope === 'framework') return `${shortFramework(c.rule_framework_name || c.rule_framework || 'Framework')} rules${count}`;
+  if (c.rule_scope === 'custom') return `${n ?? c.rule_ids?.length ?? 0} picked rules`;
+  return `Every enabled rule${count}`;
+}

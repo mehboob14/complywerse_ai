@@ -6,8 +6,8 @@
 import { useQuery, useMutation, useQueryClient, type UseQueryOptions } from '@tanstack/react-query';
 import { authedFetch } from '@/lib/auth-fetch';
 import type {
-  Campaign, CampaignDetail, ConnectorSource, ReviewItem, Report, DashboardSummary, RuleCatalogView, Decision,
-  RuleSelection,
+  Campaign, CampaignDetail, ConnectorRun, ConnectorSource, ReviewItem, Report, DashboardSummary, RuleCatalogView,
+  Decision, RuleSelection,
 } from './types';
 
 const API = '/api/access-reviews';
@@ -56,11 +56,86 @@ export function useCampaigns(opts?: Partial<UseQueryOptions<Campaign[]>>) {
   });
 }
 
-/** Connected sources — what a review can be scoped to. */
+/** Connected sources — what a review can be scoped to, and the status of each connector. */
+export type ConnectorStatus = {
+  sources: ConnectorSource[]; user_count: number;
+  [connector: string]: unknown;
+};
 export function useConnectors() {
-  return useQuery<{ sources: ConnectorSource[]; user_count: number }>({
+  return useQuery<ConnectorStatus>({
     queryKey: arKeys.connectors(),
-    queryFn: () => authedFetch(`${API}/connectors`).then(json<{ sources: ConnectorSource[]; user_count: number }>),
+    queryFn: () => authedFetch(`${API}/connectors`).then(json<ConnectorStatus>),
+  });
+}
+
+export type Collector = { key: string; label: string; category: string; connected: boolean; reads: string };
+export function useCollectors() {
+  return useQuery<Collector[]>({
+    queryKey: [...arKeys.connectors(), 'collectors'],
+    queryFn: () => authedFetch(`${API}/connectors/collectors`).then(json<{ collectors: Collector[] }>).then((d) => d.collectors ?? []),
+  });
+}
+
+export type ConnectorField = { name: string; label: string; secret?: boolean; ph?: string };
+/** The credential fields of the IGA vendors and business apps, which the server defines. */
+export function useConnectorFields() {
+  return useQuery<Record<string, ConnectorField[]>>({
+    queryKey: [...arKeys.connectors(), 'fields'],
+    queryFn: async () => {
+      const [iga, apps] = await Promise.all([
+        authedFetch(`${API}/connectors/iga/vendors`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+        authedFetch(`${API}/connectors/apps/catalog`).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+      const out: Record<string, ConnectorField[]> = {};
+      (iga?.vendors ?? []).forEach((v: { key: string; fields: ConnectorField[] }) => (out[v.key] = v.fields));
+      (apps?.apps ?? []).forEach((a: { key: string; fields: ConnectorField[] }) => (out[a.key] = a.fields));
+      return out;
+    },
+    staleTime: 5 * 60_000,
+  });
+}
+
+export type SourcePerson = {
+  id: number; email: string; display_name: string; designation?: string | null;
+  account_enabled?: boolean | null; access: string[]; other_access: string[];
+};
+export type SourcePeople = {
+  source: string; label: string; people: SourcePerson[]; total: number;
+  estate?: {
+    droplets?: { name: string; region?: string; status?: string; size?: string; ip?: string | null }[];
+    volumes?: { name: string; size_gb?: number; region?: string; attached_to?: number[] }[];
+    databases?: { name: string; engine?: string; version?: string; region?: string; nodes?: number }[];
+    kubernetes?: { name: string; region?: string; version?: string }[];
+    read?: Record<string, number>;
+    skipped?: { resource: string; reason: string }[];
+  };
+};
+/** Who a source put in the population, what each holds, and the estate behind them. */
+export function useSourcePeople(source: string | null) {
+  return useQuery<SourcePeople>({
+    queryKey: [...arKeys.connectors(), 'people', source],
+    queryFn: () => authedFetch(`${API}/connectors/${encodeURIComponent(source!)}/people`).then(json<SourcePeople>),
+    enabled: !!source,
+  });
+}
+
+/** Connect (or re-sync) a source: the endpoint depends on the kind of connector. */
+export function useSyncSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: { url: string; body?: unknown; form?: FormData }) => {
+      const res = await authedFetch(`${API}${args.url}`, args.form
+        ? { method: 'POST', body: args.form }
+        : { method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(args.body ?? {}) });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(typeof data.detail === 'string' ? data.detail : 'The sync failed.');
+      return data as Record<string, unknown>;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: arKeys.connectors() });
+      qc.invalidateQueries({ queryKey: arKeys.rules() });
+      qc.invalidateQueries({ queryKey: arKeys.dashboard() });
+    },
   });
 }
 
@@ -77,8 +152,8 @@ export function useCampaign(id: number, enabled = true) {
     // Backend returns a NESTED shape { campaign, items }; flatten to CampaignDetail.
     queryFn: () =>
       authedFetch(`${API}/${id}`)
-        .then(json<{ campaign: Campaign; items: ReviewItem[]; rule_results: CampaignDetail['rule_results'] }>)
-        .then((d) => ({ ...d.campaign, items: d.items, rule_results: d.rule_results ?? [] })),
+        .then(json<{ campaign: Campaign; items: ReviewItem[]; rule_results: CampaignDetail['rule_results']; connector_notes?: CampaignDetail['connector_notes'] }>)
+        .then((d) => ({ ...d.campaign, items: d.items, rule_results: d.rule_results ?? [], connector_notes: d.connector_notes ?? [] })),
     enabled: enabled && Number.isFinite(id),
   });
 }
@@ -91,14 +166,26 @@ export function useReport(id: number, enabled = true) {
   });
 }
 
-export function useRuleCatalog(framework?: string) {
+/** The rule library. A framework slug narrows it to the rules that evidence it (with its own clause
+ *  codes); a source narrows it to what a review of that source can run. */
+export function useRuleCatalog(framework?: string, source?: string) {
   return useQuery<RuleCatalogView>({
-    // A framework slug narrows the catalog to the rules that evidence it,
-    // each carrying that framework's own requirement codes.
-    queryKey: [...arKeys.rules(), framework ?? 'all'],
-    queryFn: () => authedFetch(`${API}/rules/catalog${framework ? `?framework=${encodeURIComponent(framework)}` : ''}`)
-      .then(json<RuleCatalogView>),
+    queryKey: [...arKeys.rules(), framework ?? 'all', source ?? 'all'],
+    queryFn: () => {
+      const q = new URLSearchParams();
+      if (framework) q.set('framework', framework);
+      if (source) q.set('source', source);
+      return authedFetch(`${API}/rules/catalog${q.toString() ? `?${q}` : ''}`).then(json<RuleCatalogView>);
+    },
     placeholderData: (prev) => prev,
+  });
+}
+
+/** Test a connected source against its own rules now (read-only; nothing is stored). */
+export function useRunConnectorRules() {
+  return useMutation({
+    mutationFn: (source: string) =>
+      authedFetch(`${API}/connectors/${encodeURIComponent(source)}/rules/run`, { method: 'POST' }).then(json<ConnectorRun>),
   });
 }
 

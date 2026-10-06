@@ -1972,6 +1972,9 @@ def _build_report(tenant_db: Session, c: AccessReviewCampaign, campaign_id: int)
     for f in findings:
         by_type[f.finding_type] = by_type.get(f.finding_type, 0) + 1
         by_severity[f.severity] = by_severity.get(f.severity, 0) + 1
+    # a failed rule on the connected estate is an exception too, so the breakdown adds up to the total
+    for r in _connector_failures(c):
+        by_severity[r.get("severity") or "low"] = by_severity.get(r.get("severity") or "low", 0) + 1
     decisions: Dict[str, int] = {}
     for it in items:
         decisions[it.decision] = decisions.get(it.decision, 0) + 1

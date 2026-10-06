@@ -58,7 +58,7 @@ export function Breadcrumb({ items, showHome = true, className }: BreadcrumbProp
 
   return (
     <nav 
-      className={clsx('flex items-center gap-1 text-xs sm:text-sm', className)}
+      className={clsx('flex flex-wrap items-center gap-1 text-xs sm:text-sm', className)}
       aria-label="Breadcrumb"
     >
       {showHome && (
