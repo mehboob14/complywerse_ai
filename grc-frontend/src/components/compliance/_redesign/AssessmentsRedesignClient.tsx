@@ -52,6 +52,7 @@ interface RawItem {
   gaps_identified: string | null;
   proposed_solution: string | null;
   responsible_party: string | null;
+  assignees?: ControlItem['assignees'];
   timeline: string | null;
   priority: string | null;
   evidence_reference: string | null;
@@ -173,6 +174,7 @@ function mapItem(it: RawItem, auditMaster: boolean): ControlItem {
     gaps_identified: it.gaps_identified,
     proposed_solution: it.proposed_solution,
     responsible_party: it.responsible_party,
+    assignees: it.assignees ?? [],
     timeline: it.timeline,
     evidence_reference: it.evidence_reference,
     remarks: it.remarks,

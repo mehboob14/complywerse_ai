@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import apiClient from '@/lib/api';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 import {
   Shield,
   ChevronDown,
@@ -44,6 +45,7 @@ interface DCCItem {
   gaps_identified: string | null;
   proposed_solution: string | null;
   responsible_party: string | null;
+  assignees?: Assignee[];
   timeline: string | null;
   priority: string | null;
   remarks: string | null;
@@ -184,23 +186,24 @@ function AIPanel({ raw }: { raw: string | null }) {
 function DCCRow({
   item,
   assessmentId,
-  tenantUsers,
   onUpdated,
 }: {
   item: DCCItem;
   assessmentId: number;
-  tenantUsers: TenantUser[];
   onUpdated: (updated: Partial<DCCItem>) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+  const reloadItems = () => queryClient.invalidateQueries({ queryKey: ['dcc-assessment', assessmentId] });
 
   const updateField = useCallback(
     async (field: string, value: string | null) => {
       onUpdated({ [field]: value });
       try {
-        await apiClient.put(`/compliance/assessments/items/${item.id}`, { [field]: value });
+        // The endpoint reads query parameters; a JSON body is ignored, so nothing saved. '' clears a field.
+        await apiClient.put(`/compliance/assessments/items/${item.id}`, null, { params: { [field]: value ?? '' } });
       } catch {
         onUpdated({ [field]: (item as Record<string, unknown>)[field] as string | null });
       }
@@ -298,18 +301,9 @@ function DCCRow({
           </select>
         </td>
 
-        {/* Owner */}
-        <td className="px-3 py-2.5 w-36 hidden lg:table-cell">
-          <select
-            value={item.responsible_party || ''}
-            onChange={(e) => updateField('responsible_party', e.target.value || null)}
-            className="w-full text-xs px-2 py-1 border border-gray-200 rounded-lg bg-white text-gray-700 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-          >
-            <option value="">— Unassigned —</option>
-            {tenantUsers.map((u) => (
-              <option key={u.id} value={u.label}>{u.label}</option>
-            ))}
-          </select>
+        {/* Assigned to */}
+        <td className="px-3 py-2.5 w-44 hidden lg:table-cell">
+          <ItemAssignees itemId={item.id} value={item.assignees} fallback={item.responsible_party} label={item.item_number} onSaved={reloadItems} />
         </td>
 
         {/* Priority */}
@@ -382,11 +376,10 @@ function DCCRow({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs font-medium text-gray-600">Owner</label>
-                  <select value={item.responsible_party || ''} onChange={(e) => updateField('responsible_party', e.target.value || null)} className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-[13px] focus:ring-2 focus:ring-blue-500">
-                    <option value="">— Unassigned —</option>
-                    {tenantUsers.map((u) => <option key={u.id} value={u.label}>{u.label}</option>)}
-                  </select>
+                  <label className="mb-1 block text-xs font-medium text-gray-600">Assigned to</label>
+                  <div className="rounded-lg border border-gray-200 px-1 py-[3px]">
+                    <ItemAssignees itemId={item.id} value={item.assignees} fallback={item.responsible_party} label={item.item_number} onSaved={reloadItems} />
+                  </div>
                 </div>
                 <div>
                   <label className="mb-1 block text-xs font-medium text-gray-600">Priority</label>
@@ -456,12 +449,10 @@ function DCCRow({
 function DomainGroup({
   domain,
   assessmentId,
-  tenantUsers,
   onItemUpdated,
 }: {
   domain: DCCDomain;
   assessmentId: number;
-  tenantUsers: TenantUser[];
   onItemUpdated: (itemId: number, update: Partial<DCCItem>) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
@@ -496,7 +487,7 @@ function DomainGroup({
                 <th className="px-3 py-2 text-left font-medium w-36 hidden md:table-cell">Subdomain</th>
                 <th className="px-3 py-2 text-left font-medium">Control</th>
                 <th className="px-3 py-2 text-left font-medium w-44">Status</th>
-                <th className="px-3 py-2 text-left font-medium w-36 hidden lg:table-cell">Owner</th>
+                <th className="px-3 py-2 text-left font-medium w-44 hidden lg:table-cell">Assigned to</th>
                 <th className="px-3 py-2 text-left font-medium w-28 hidden lg:table-cell">Priority</th>
                 <th className="px-3 py-2 text-left font-medium w-24">Actions</th>
               </tr>
@@ -507,7 +498,6 @@ function DomainGroup({
                   key={item.id}
                   item={item}
                   assessmentId={assessmentId}
-                  tenantUsers={tenantUsers}
                   onUpdated={(update) => onItemUpdated(item.id, update)}
                 />
               ))}
@@ -523,7 +513,7 @@ function DomainGroup({
 
 function exportToExcel(data: DCCData) {
   const rows: unknown[][] = [
-    ['Control Ref', 'Main Domain', 'Subdomain', 'Type', 'Control Description', 'Compliance Status', 'Owner', 'Priority', 'Remarks', 'Corrective Procedures', 'Expected Date'],
+    ['Control Ref', 'Main Domain', 'Subdomain', 'Type', 'Control Description', 'Compliance Status', 'Assigned to', 'Priority', 'Remarks', 'Corrective Procedures', 'Expected Date'],
   ];
   for (const domain of data.domains) {
     for (const item of domain.items) {
@@ -534,7 +524,7 @@ function exportToExcel(data: DCCData) {
         item.control_type || '',
         item.control_description || '',
         item.status_label,
-        item.responsible_party || '',
+        item.assignees?.map((a) => a.name).join(', ') || item.responsible_party || '',
         item.priority || '',
         item.remarks || '',
         item.proposed_solution || '',
@@ -823,7 +813,6 @@ export default function DCCAssessmentTab({
             key={domain.name}
             domain={domain}
             assessmentId={assessmentId}
-            tenantUsers={tenantUsers}
             onItemUpdated={handleItemUpdated}
           />
         ))

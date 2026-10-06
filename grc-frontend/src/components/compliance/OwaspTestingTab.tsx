@@ -18,6 +18,7 @@ import {
 import { AiEvidenceButton, AiEvidenceDialog } from './AiEvidenceAdvisor';
 import apiClient, { assetsApi } from '@/lib/api';
 import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const OWASP_FORMAT = 'owasp_v4_testing_checklist';
 
@@ -37,6 +38,7 @@ interface Item {
   remarks: string | null;
   priority: string | null;
   evidence_count?: number;
+  assignees?: Assignee[];
 }
 interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; }
 interface Asset { id: number; name: string; asset_type?: string; ip_address?: string }
@@ -418,6 +420,10 @@ export default function OwaspTestingTab() {
                                     ))}
                                   </div>
                                 )}
+                              </div>
+                              <div className="shrink-0 sm:w-44">
+                                <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number}
+                                  onSaved={() => qc.invalidateQueries({ queryKey: ['owasp-detail', activeId] })} />
                               </div>
                               <div className="flex shrink-0 items-center gap-1">
                                 <AiEvidenceButton assessmentId={activeId!} itemId={it.id} active={aiFor === it.id} onOpen={() => setAiFor(it.id)} />

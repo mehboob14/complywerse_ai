@@ -12,6 +12,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Bug, ClipboardCheck, AlertTriangle, Loader2, Upload, Trash2, ChevronRight, Search, Shield, ArrowRight, User, CalendarClock } from 'lucide-react';
 import apiClient from '@/lib/api';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
 type Kind = 'vuln' | 'audit' | 'risk';
@@ -35,7 +36,7 @@ const CONF: Record<Kind, KindCfg> = {
     chips: ['type of treatment'], inline: ['risk owner', 'threat', 'deadline for action'] },
 };
 
-interface Item { id: number; item_number: string; area_domain: string | null; control_description: string | null; compliance_status: string; priority: string | null; remarks: string | null; }
+interface Item { id: number; item_number: string; area_domain: string | null; control_description: string | null; compliance_status: string; priority: string | null; remarks: string | null; assignees?: Assignee[]; }
 interface Detail { id: number; name: string; source: string | null; items: Item[]; }
 
 const parseRow = (r: string | null): Record<string, string> => { try { return JSON.parse(r || '{}'); } catch { return {}; } };
@@ -229,7 +230,8 @@ export default function NcaRegisterTab({ kind }: { kind: Kind }) {
                 const sb = bandOf(sev); const rb = res ? bandOf(res.sev) : '';
                 return (
                   <div key={it.id}>
-                    <button onClick={() => setExpanded(open ? null : it.id)} className="flex w-full items-start gap-3 px-4 py-3 text-left hover:bg-slate-50">
+                    <div className="flex items-start gap-3 px-4 py-3 hover:bg-slate-50">
+                    <button onClick={() => setExpanded(open ? null : it.id)} aria-expanded={open} className="flex min-w-0 flex-1 items-start gap-3 text-left">
                       <ChevronRight className={`mt-0.5 h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? 'rotate-90' : ''}`} />
                       <span className="mt-px font-mono text-[11.5px] font-semibold text-slate-500">{it.item_number}</span>
                       <div className="min-w-0 flex-1">
@@ -245,6 +247,11 @@ export default function NcaRegisterTab({ kind }: { kind: Kind }) {
                         {pick(d, cfg.chips) && <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[9.5px] font-medium text-slate-500">{pick(d, cfg.chips)}</span>}
                       </div>
                     </button>
+                    <div className="w-44 shrink-0">
+                      <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number} align="right"
+                        onSaved={() => qc.invalidateQueries({ queryKey: ['nca-reg-detail', activeId] })} />
+                    </div>
+                    </div>
                     {open && (
                       <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
                         <div className="grid gap-x-6 gap-y-1.5 sm:grid-cols-2">{Object.entries(d).map(([k, v]) => <div key={k} className="text-[11.5px]"><span className="font-semibold text-slate-500">{k}:</span> <span className="text-slate-700">{v}</span></div>)}</div>

@@ -414,6 +414,8 @@ _COLUMN_ADDS = [
     ("grc_compliance_assessment_document_items", "closed_at", "TIMESTAMP", None),
     # Per-asset verification status {asset_id: status} for multi-asset assessments (ASVS).
     ("grc_compliance_assessment_document_items", "asset_status", "JSON DEFAULT '{}'::json", None),
+    # Who an item is assigned to: [{"type": "user"|"team", "id": n}].
+    ("grc_compliance_assessment_document_items", "assignees", "JSON DEFAULT '[]'::json", None),
     # Assessment ↔ IT Assets scope (application(s) the assessment verifies).
     ("grc_compliance_assessment_documents", "linked_asset_ids", "JSON DEFAULT '[]'::json", None),
     # Per-asset target ASVS level {asset_id: level} for level-scoped assessments.

@@ -13,6 +13,7 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck, Loader2, Upload, Trash2, ChevronRight, Search, CheckCircle2, XCircle, MinusCircle, Clock, CircleDashed, Paperclip, FileText } from 'lucide-react';
 import apiClient from '@/lib/api';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const DCC_FORMAT = 'nca_dcc_tool';
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
@@ -42,7 +43,7 @@ function enLabel(s: string | null): string {
   return en || t;
 }
 
-interface Item { id: number; item_number: string; area_domain: string | null; subdomain_name: string | null; control_description: string | null; compliance_status: string; priority: string | null; remarks: string | null; evidence_count?: number; }
+interface Item { id: number; item_number: string; area_domain: string | null; subdomain_name: string | null; control_description: string | null; compliance_status: string; priority: string | null; remarks: string | null; evidence_count?: number; assignees?: Assignee[]; }
 interface Detail { id: number; name: string; source: string | null; items: Item[]; }
 
 const STATUS = {
@@ -245,6 +246,10 @@ export default function DccToolTab() {
                                   </>
                                 ); })()}
                                 {it.subdomain_name && <p className="mt-1 text-[10.5px] font-medium text-slate-400">{enLabel(it.subdomain_name)}</p>}
+                              </div>
+                              <div className="shrink-0 lg:w-44">
+                                <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number}
+                                  onSaved={() => qc.invalidateQueries({ queryKey: ['dcc-detail', activeId] })} />
                               </div>
                               <div className="flex shrink-0 flex-wrap items-center gap-1">
                                 <button onClick={() => setEvOpen(evActive ? null : it.id)} title="Evidence" className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[11px] font-semibold transition" style={evActive || evc > 0 ? { borderColor: '#0f766e', color: '#0f766e', backgroundColor: '#e7faf5' } : { borderColor: '#e2e8f0', color: '#64748b' }}><Paperclip className="h-3 w-3" /> {evc > 0 ? evc : 'Ev'}</button>

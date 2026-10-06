@@ -17,6 +17,7 @@ import {
 import { AiEvidenceButton, AiEvidenceDialog } from './AiEvidenceAdvisor';
 import apiClient from '@/lib/api';
 import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
 
@@ -49,6 +50,7 @@ interface Item {
   remarks: string | null;
   maturity_score: number | null;
   evidence_count?: number;
+  assignees?: Assignee[];
 }
 interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; }
 
@@ -353,6 +355,10 @@ export default function MaturityAssessmentTab({ format }: { format: string }) {
                                   {mm.weight && <span>Weight {mm.weight}</span>}
                                   {mm.target != null && <span className="inline-flex items-center gap-0.5"><Target className="h-2.5 w-2.5" />target L{mm.target}</span>}
                                 </div>
+                              </div>
+                              <div className="shrink-0 sm:w-44">
+                                <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number}
+                                  onSaved={() => qc.invalidateQueries({ queryKey: ['maturity-detail', activeId] })} />
                               </div>
                               <div className="flex shrink-0 flex-col items-end gap-1">
                                 <div className="flex items-center gap-1">

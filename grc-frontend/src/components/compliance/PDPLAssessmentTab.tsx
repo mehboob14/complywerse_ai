@@ -28,6 +28,7 @@ import { buildArtifactTemplate } from '@/components/compliance/artifactTemplates
 import { SlaClosurePanel } from '@/components/compliance/_redesign/SlaClosurePanel';
 import type { SlaPolicy, SlaItemInput } from '@/components/compliance/_redesign/slaEngine';
 import { downloadAsFormat } from '@/components/compliance/downloadUtils';
+import ItemAssignees, { type Assignee } from '@/components/compliance/ItemAssignees';
 
 // Per-control linked artifacts come straight from the toolkit's
 // "Evidence to Request" column (stored in evidence_reference), split on ; or
@@ -66,14 +67,14 @@ const PDPL_DOMAINS = [
   'Special Categories', 'Marketing',
 ];
 // Shared grid template so the controls table header and each row line up.
-const PDPL_COLS = '64px minmax(0,1fr) 132px 150px 96px 96px';
+const PDPL_COLS = '64px minmax(0,1fr) 120px 120px 84px 160px 96px';
 
 type Item = {
   id: number; item_number: string | null; area_domain: string | null;
   control_description: string | null; compliance_status: string; maturity_score: number | null;
   gaps_identified: string | null; proposed_solution: string | null; responsible_party: string | null;
   timeline: string | null; priority: string | null; remarks: string | null; remediation_status: string | null;
-  evidence_reference: string | null;
+  evidence_reference: string | null; assignees?: Assignee[];
 };
 type AssessmentDetail = { id: number; name: string; total_items: number; items: Item[] };
 type AssessmentRow = { id: number; name: string; assessment_format?: string | null; total_items?: number };
@@ -81,7 +82,7 @@ type RemediationItem = {
   id: number; control_id: string | null; domain: string | null; pdpl_ref: string | null;
   risk: string | null; gap: string | null; remediation_action: string | null;
   priority: string | null; owner: string | null; target_date: string | null;
-  compliance_status: string; remediation_status: string;
+  compliance_status: string; remediation_status: string; assignees?: Assignee[];
 };
 type RemediationResp = {
   items: RemediationItem[];
@@ -303,6 +304,10 @@ function ControlRow({ item, assessmentId }: { item: Item; assessmentId: number }
           {item.priority
             ? <span className={`inline-flex w-fit items-center rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize ${['critical', 'high'].includes(item.priority.toLowerCase()) ? 'bg-rose-50 text-rose-700' : item.priority.toLowerCase() === 'medium' ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-600'}`}>{item.priority}</span>
             : <span className="text-[11px] text-slate-300">—</span>}
+        </div>
+        {/* Assigned to */}
+        <div className="min-w-0">
+          <ItemAssignees itemId={item.id} value={item.assignees} fallback={item.responsible_party} label={item.item_number ?? undefined} onSaved={invalidate} />
         </div>
         {/* Actions */}
         <div className="flex items-center justify-end gap-1">
@@ -677,7 +682,7 @@ function RemediationPlanView({ assessmentId }: { assessmentId: number }) {
     return items.filter((it) => {
       if (statusFilter && it.remediation_status !== statusFilter) return false;
       if (!q) return true;
-      return [it.control_id, it.domain, it.gap, it.remediation_action, it.owner, it.pdpl_ref].some((v) => (v || '').toLowerCase().includes(q));
+      return [it.control_id, it.domain, it.gap, it.remediation_action, it.owner, it.pdpl_ref, ...(it.assignees ?? []).map((a) => a.name)].some((v) => (v || '').toLowerCase().includes(q));
     });
   }, [items, search, statusFilter]);
   if (isLoading) return <div className="flex items-center justify-center py-16"><Loader2 className="h-6 w-6 animate-spin text-blue-500" /></div>;
@@ -718,7 +723,7 @@ function RemediationPlanView({ assessmentId }: { assessmentId: number }) {
           <table className="min-w-full divide-y divide-gray-100 text-xs">
             <thead className="bg-slate-50">
               <tr className="text-left text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-                {['Control ID', 'Domain', 'PDPL Ref.', 'Gap / Finding', 'Remediation Action', 'Risk', 'Priority', 'Owner', 'Target Date', 'Status'].map((h) => <th key={h} className="px-3 py-2.5">{h}</th>)}
+                {['Control ID', 'Domain', 'PDPL Ref.', 'Gap / Finding', 'Remediation Action', 'Risk', 'Priority', 'Assigned to', 'Target Date', 'Status'].map((h) => <th key={h} className="px-3 py-2.5">{h}</th>)}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -731,7 +736,10 @@ function RemediationPlanView({ assessmentId }: { assessmentId: number }) {
                   <td className="max-w-[200px] px-3 py-2.5 text-slate-600">{it.remediation_action || <span className="text-slate-300">—</span>}</td>
                   <td className="px-3 py-2.5 text-slate-600">{it.risk || '—'}</td>
                   <td className="px-3 py-2.5">{it.priority ? <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ${priorityBadge[it.priority] ?? priorityBadge.low}`}>{it.priority}</span> : '—'}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{it.owner || '—'}</td>
+                  <td className="min-w-[10rem] px-3 py-2.5 text-slate-700">
+                    <ItemAssignees itemId={it.id} value={it.assignees} fallback={it.owner} label={it.control_id ?? undefined}
+                      onSaved={() => { qc.invalidateQueries({ queryKey: ['pdpl-remediation', assessmentId] }); qc.invalidateQueries({ queryKey: ['pdpl-detail', assessmentId] }); }} />
+                  </td>
                   <td className="px-3 py-2.5 text-slate-600">{it.target_date || '—'}</td>
                   <td className="px-3 py-2.5">
                     <select value={it.remediation_status} disabled={setStatus.isPending} onChange={(e) => setStatus.mutate({ id: it.id, status: e.target.value })}
@@ -1326,7 +1334,7 @@ export default function PDPLAssessmentTab() {
             ) : (
               <>
                 <div className="grid items-center gap-3 px-4 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-white" style={{ gridTemplateColumns: PDPL_COLS, backgroundColor: '#177a4a' }}>
-                  <div>Control</div><div>Requirement</div><div>Status</div><div>Maturity</div><div>Priority</div><div className="text-right">Actions</div>
+                  <div>Control</div><div>Requirement</div><div>Status</div><div>Maturity</div><div>Priority</div><div>Assigned to</div><div className="text-right">Actions</div>
                 </div>
                 <ul className="divide-y divide-slate-100">
                   {visibleControls.map((it) => <ControlRow key={it.id} item={it} assessmentId={activeId!} />)}

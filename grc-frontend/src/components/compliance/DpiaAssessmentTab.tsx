@@ -12,11 +12,12 @@ import { useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ShieldAlert, Loader2, Upload, Trash2, CheckCircle2, XCircle, ChevronRight, AlertTriangle } from 'lucide-react';
 import apiClient from '@/lib/api';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const DPIA_FORMAT = 'dpia_pia';
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
 
-interface Item { id: number; item_number: string; area_domain: string | null; subdomain_name: string | null; control_description: string | null; compliance_status: string; remarks: string | null; }
+interface Item { id: number; item_number: string; area_domain: string | null; subdomain_name: string | null; control_description: string | null; compliance_status: string; remarks: string | null; assignees?: Assignee[]; }
 interface Detail { id: number; name: string; source: string | null; items: Item[]; }
 
 const section = (r: string | null) => /Section:\s*(\w+)/i.exec(r || '')?.[1]?.toLowerCase() || '';
@@ -30,12 +31,13 @@ function band(score: number) {
   return { label: '—', color: '#94a3b8', bg: '#f8fafc' };
 }
 
-interface Risk { id: string; category: string; desc: string; subjects: string; l: number; i: number; score: number; rating: string; resL: number; resI: number; resScore: number; resRating: string; owner: string; framework: string; status: string; target: string; controls: string; }
+interface Risk { itemId: number; assignees?: Assignee[]; id: string; category: string; desc: string; subjects: string; l: number; i: number; score: number; rating: string; resL: number; resI: number; resScore: number; resRating: string; owner: string; framework: string; status: string; target: string; controls: string; }
 function toRisk(it: Item): Risk {
   const r = it.remarks;
   const n = (k: string) => { const v = parseInt(field(r, k), 10); return isNaN(v) ? 0 : v; };
   const l = n('L'), i = n('I'), resL = n('ResL'), resI = n('ResI');
   return {
+    itemId: it.id, assignees: it.assignees,
     id: it.item_number, category: it.area_domain || 'Uncategorised', desc: it.control_description || '', subjects: field(r, 'Subjects'),
     l, i, score: Number(field(r, 'Inherent')) || l * i, rating: field(r, 'InherentRating'),
     resL, resI, resScore: Number(field(r, 'Residual')) || resL * resI, resRating: field(r, 'ResidualRating'),
@@ -285,6 +287,8 @@ export default function DpiaAssessmentTab() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-mono text-[11.5px] font-semibold text-slate-500">{r.id}</span>
                           <span className="rounded bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{r.category}</span>
+                          <ItemAssignees itemId={r.itemId} value={r.assignees} label={r.id}
+                            onSaved={() => qc.invalidateQueries({ queryKey: ['dpia-detail', activeId] })} />
                           <span className="ml-auto inline-flex items-center gap-1 text-[11px]">
                             <span className="rounded px-1.5 py-0.5 font-bold" style={{ background: ib.bg, color: ib.color }}>{r.score} {ib.label}</span>
                             {r.resScore > 0 && <><span className="text-slate-300">→</span><span className="rounded px-1.5 py-0.5 font-bold" style={{ background: rb.bg, color: rb.color }}>{r.resScore} {rb.label}</span></>}

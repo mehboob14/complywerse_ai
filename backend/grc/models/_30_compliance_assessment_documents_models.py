@@ -98,6 +98,11 @@ class ComplianceAssessmentDocumentItem(Base):
     # or compliance_status=complied), so aging/closure math has a real date.
     target_date = Column(DateTime, nullable=True)
     closed_at = Column(DateTime, nullable=True)
+    # Who the item is assigned to: any number of people and/or teams, as
+    # [{"type": "user" | "team", "id": n}]. Names are looked up when read (see
+    # services/assessment_assignees.py). responsible_party stays the free text
+    # a workbook may carry.
+    assignees = Column(JSON, default=list)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

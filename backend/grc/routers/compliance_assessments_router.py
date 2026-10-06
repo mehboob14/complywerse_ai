@@ -7,7 +7,7 @@ import json
 import re
 import logging
 import traceback
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Literal, Optional, Tuple
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Query, Request
 from fastapi.responses import StreamingResponse
@@ -30,6 +30,9 @@ from ..models import (
     EvidenceControlMapping, ParsedFrameworkControl, ComplianceSlaPolicy
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..services.assessment_assignees import (
+    clean as clean_assignees, label as assignee_label, lists_for as assignee_lists, missing as missing_assignees,
+)
 
 router = APIRouter(prefix="/compliance/assessments", tags=["Compliance Assessments"])
 
@@ -3916,6 +3919,7 @@ def get_remediation_plan(
     rows = q.order_by(
         ComplianceAssessmentDocument.id, ComplianceAssessmentDocumentItem.id
     ).all()
+    assignees = assignee_lists(db, [item for item, _ in rows])
 
     items = []
     counts = {"open": 0, "in_progress": 0, "closed": 0}
@@ -3925,6 +3929,7 @@ def get_remediation_plan(
         counts[rem_status] = counts.get(rem_status, 0) + 1
         items.append({
             "id": item.id,
+            "assignees": assignees[item.id],
             "assessment_id": doc.id,
             "assessment_name": doc.name,
             "assessment_format": doc.assessment_format,
@@ -5203,6 +5208,7 @@ def get_assessment(
             .all()
         ):
             evidence_counts[row[0]] = row[1]
+    assignees = assignee_lists(db, assessment.items)
 
     items_by_domain = {}
     for item in assessment.items:
@@ -5211,6 +5217,7 @@ def get_assessment(
             items_by_domain[domain] = []
         items_by_domain[domain].append({
             "evidence_count": evidence_counts.get(item.id, 0),
+            "assignees": assignees[item.id],
             "id": item.id,
             "item_number": item.item_number,
             "area_domain": item.area_domain,
@@ -5262,6 +5269,7 @@ def get_assessment(
             {
                 "id": item.id,
                 "evidence_count": evidence_counts.get(item.id, 0),
+                "assignees": assignees[item.id],
                 "item_number": item.item_number,
                 "area_domain": item.area_domain,
                 "control_description": item.control_description,
@@ -5545,6 +5553,44 @@ def update_assessment_item(
     }
 
 
+class _Assignee(BaseModel):
+    type: Literal["user", "team"]
+    id: int
+
+
+class _AssigneesRequest(BaseModel):
+    assignees: List[_Assignee] = []
+
+
+@router.put("/items/{item_id}/assignees")
+def set_item_assignees(
+    item_id: int,
+    payload: _AssigneesRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Assign an item to any number of people and/or teams (empty list = unassigned)."""
+    user_tenants = get_user_tenants(current_user, db)
+    item = db.query(ComplianceAssessmentDocumentItem).filter(
+        ComplianceAssessmentDocumentItem.id == item_id,
+        ComplianceAssessmentDocumentItem.tenant_id.in_(user_tenants),
+    ).first()
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
+
+    wanted = clean_assignees([a.model_dump() for a in payload.assignees])
+    # Only the ones being added need to exist: someone deactivated since they were
+    # assigned stays on the item until a person removes them.
+    unknown = missing_assignees(db, [a for a in wanted if a not in clean_assignees(item.assignees)])
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="Pick people and teams from this workspace's lists.")
+    item.assignees = wanted
+    item.updated_at = datetime.utcnow()
+    db.commit()
+    return {"assignees": assignee_lists(db, [item])[item.id]}
+
+
 # ── Item add / delete ────────────────────────────────────────────────────────
 # Bring add/delete CRUD to parity with criticality assessments. Works for every
 # compliance assessment type since they all share ComplianceAssessmentDocumentItem
@@ -5748,7 +5794,7 @@ def export_assessment(
     headers = [
         "Item #", "Area/Domain", "Control Description", "Compliance Status",
         "Gaps Identified", "Proposed Solution", "Responsible Party",
-        "Timeline", "Priority", "Evidence Reference", "Remarks"
+        "Timeline", "Priority", "Evidence Reference", "Remarks", "Assigned To"
     ]
     ws.append(headers)
     
@@ -5757,6 +5803,7 @@ def export_assessment(
         cell.fill = openpyxl.styles.PatternFill(start_color="366092", end_color="366092", fill_type="solid")
         cell.font = openpyxl.styles.Font(bold=True, color="FFFFFF")
     
+    assignees = assignee_lists(db, assessment.items)
     for item in assessment.items:
         ws.append([
             item.item_number,
@@ -5769,7 +5816,8 @@ def export_assessment(
             item.timeline,
             item.priority,
             item.evidence_reference,
-            item.remarks
+            item.remarks,
+            assignee_label(assignees[item.id]),
         ])
     
     for col_idx in range(1, len(headers) + 1):

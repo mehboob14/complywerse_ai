@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Search, Bell, Download, Plus, ChevronRight, ChevronDown, ChevronLeft,
   Paperclip, Sparkles, Upload, FileText, X, LayoutGrid, Loader2, AlertTriangle, Eye, Save,
@@ -16,6 +16,7 @@ import type { Assessment, ControlItem, ComplianceStatus, Priority, DetailApi, Ev
 import { SlaClosurePanel, type SlaContext } from './SlaClosurePanel';
 import { computeRollup, pointScore, averageScore, rollupScore, fmtDate, DEFAULT_SLA_POLICY, type SlaPolicy, type SlaItemInput } from './slaEngine';
 import AssessmentsBoardOverview from './AssessmentsBoardOverview';
+import ItemAssignees from '../ItemAssignees';
 
 /**
  * Self-contained Compliance Assessments module (Overview → framework lists →
@@ -638,6 +639,8 @@ function AssessmentDetail({
   // lives on each domain header, so a new item is always scoped to its domain.
   const [addDomain, setAddDomain] = useState<string | null>(null);
   const noun = itemNoun(assessment.framework);
+  const queryClient = useQueryClient();
+  const reloadControls = () => queryClient.invalidateQueries({ queryKey: ['redesign-controls', assessment.id] });
   const reuploadRef = useRef<HTMLInputElement>(null);
   const [reuploading, setReuploading] = useState(false);
   const onReupload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -686,7 +689,7 @@ function AssessmentDetail({
       if (statusFilter !== 'all') items = items.filter((c) => c.compliance_status === statusFilter);
       if (priorityFilter !== 'all') items = items.filter((c) => c.priority === priorityFilter);
       if (gapsOnly) items = items.filter((c) => c.compliance_status === 'not_complied' || c.compliance_status === 'in_progress' || c.compliance_status === 'partially_complied');
-      if (term) items = items.filter((c) => c.control_description.toLowerCase().includes(term) || c.item_number.toLowerCase().includes(term) || (c.responsible_party ?? '').toLowerCase().includes(term));
+      if (term) items = items.filter((c) => c.control_description.toLowerCase().includes(term) || c.item_number.toLowerCase().includes(term) || (c.responsible_party ?? '').toLowerCase().includes(term) || (c.assignees ?? []).some((a) => a.name.toLowerCase().includes(term)));
       const pct = Math.round(((all.filter((c) => c.compliance_status === 'complied').length + all.filter((c) => c.compliance_status === 'partially_complied').length * 0.5) / Math.max(1, all.length)) * 100);
       return { name, all, items, pct };
     });
@@ -840,11 +843,11 @@ function AssessmentDetail({
               {open && (
                 <div className="overflow-x-auto border-t border-slate-100">
                   <table className="w-full table-fixed border-collapse">
-                    <colgroup><col style={{ width: 36 }} /><col style={{ width: 58 }} /><col /><col className="hidden lg:table-column" style={{ width: 132 }} /><col className="hidden lg:table-column" style={{ width: 100 }} /><col style={{ width: 130 }} /><col className="hidden md:table-column" style={{ width: 96 }} /><col style={{ width: 64 }} /><col style={{ width: 78 }} /></colgroup>
+                    <colgroup><col style={{ width: 36 }} /><col style={{ width: 58 }} /><col /><col className="hidden lg:table-column" style={{ width: 176 }} /><col className="hidden lg:table-column" style={{ width: 100 }} /><col style={{ width: 130 }} /><col className="hidden md:table-column" style={{ width: 96 }} /><col style={{ width: 64 }} /><col style={{ width: 78 }} /></colgroup>
                     <thead>
                       <tr className="border-b border-[#9fe7d8] bg-[#e7faf5] text-left text-[10px] font-semibold uppercase tracking-wide text-[#0f766e]">
                         <th className="px-2 py-2" /><th className="px-2 py-2">#</th><th className="px-2 py-2">{noun.One}</th>
-                        <th className="hidden px-2 py-2 lg:table-cell">Responsible</th><th className="hidden px-2 py-2 lg:table-cell">Timeline</th>
+                        <th className="hidden px-2 py-2 lg:table-cell">Assigned to</th><th className="hidden px-2 py-2 lg:table-cell">Timeline</th>
                         <th className="px-2 py-2">Status</th><th className="hidden px-2 py-2 md:table-cell">Priority</th>
                         <th className="px-2 py-2">Score</th>
                         <th className="px-3 py-2 text-right">Actions</th>
@@ -859,7 +862,9 @@ function AssessmentDetail({
                             <td className={`border-l-[3px] ${spine} px-2 py-3 text-center align-top`}><ChevronRight className="inline h-[15px] w-[15px] text-slate-400" /></td>
                             <td className="px-2 py-3 align-top font-mono text-[11.5px] font-medium text-slate-400">{c.item_number}</td>
                             <td className="px-2 py-3 align-top"><p className="text-[13px] leading-snug text-slate-800 line-clamp-2">{c.control_description}</p></td>
-                            <td className="hidden truncate px-2 py-3 align-top text-[12px] text-slate-600 lg:table-cell">{c.responsible_party ?? '—'}</td>
+                            <td className="hidden px-1 py-2 align-top lg:table-cell">
+                              <ItemAssignees itemId={Number(c.id)} value={c.assignees} fallback={c.responsible_party} label={c.item_number} onSaved={reloadControls} />
+                            </td>
                             <td className="hidden px-2 py-3 align-top text-[12px] text-slate-600 lg:table-cell">{c.timeline ?? '—'}</td>
                             <td className="px-2 py-3 align-top"><StatusBadge status={c.compliance_status} /></td>
                             <td className="hidden px-2 py-3 align-top md:table-cell"><PriorityBadge priority={c.priority} /></td>
@@ -974,13 +979,12 @@ function ControlRecord({ assessmentId, item, api, onEvidence, onAi, onClose }: {
   onEvidence: () => void; onAi: () => void; onClose?: () => void;
 }) {
   const evCount = item.evidence_count ?? 0;
-  const users = api?.tenantUsers ?? [];
+  const queryClient = useQueryClient();
   const orig = {
     control_description: item.control_description ?? '',
     compliance_status: (item.compliance_status ?? 'in_progress') as string,
     priority: (item.priority ?? '') as string,
     area_domain: item.area_domain ?? '',
-    responsible_party: item.responsible_party ?? '',
     timeline: item.timeline ?? '',
     risk_rating: (item.risk_rating ?? '') as string,
     maturity_score: item.maturity_score == null ? '' : String(item.maturity_score),
@@ -1063,13 +1067,12 @@ function ControlRecord({ assessmentId, item, api, onEvidence, onAi, onClose }: {
         <div>
           <div className="mb-2 text-[10.5px] font-semibold uppercase tracking-[0.08em] text-slate-400">Ownership &amp; Assessment</div>
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-5">
-            <Tile label="Responsible">
-              <select value={f.responsible_party} onChange={(e) => set('responsible_party', e.target.value)} className={inp}>
-                <option value="">Unassigned</option>
-                {!!f.responsible_party && !users.some((u) => u.label === f.responsible_party) && <option value={f.responsible_party}>{f.responsible_party}</option>}
-                {users.map((u) => <option key={u.id} value={u.label}>{u.label}</option>)}
-              </select>
-            </Tile>
+            {/* Not a <Tile>: that helper is re-created on every render, which would close the open picker. */}
+            <div className="rounded-[10px] border border-slate-200 bg-white px-3 py-2.5">
+              <div className={lbl}>Assigned to</div>
+              <ItemAssignees itemId={Number(item.id)} value={item.assignees} fallback={item.responsible_party} label={item.item_number}
+                onSaved={() => queryClient.invalidateQueries({ queryKey: ['redesign-controls', assessmentId] })} />
+            </div>
             <Tile label="Timeline"><input value={f.timeline} onChange={(e) => set('timeline', e.target.value)} placeholder="e.g. Q3-2025" className={inp} /></Tile>
             <Tile label="Risk Rating">
               <select value={f.risk_rating} onChange={(e) => set('risk_rating', e.target.value)} className={inp}>
@@ -1228,7 +1231,7 @@ function SidePanel({
               </div>
               <PanelField label="Area / Domain">{item.area_domain}</PanelField>
               <div className="flex gap-2.5 border-b border-slate-100 px-3.5 py-3">
-                <div className="flex-1"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Responsible Party</div><div className="text-[13px] text-slate-700">{item.responsible_party ?? '—'}</div></div>
+                <div className="flex-1"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Assigned to</div><div className="text-[13px] text-slate-700">{item.assignees?.length ? item.assignees.map((a) => a.name).join(', ') : item.responsible_party ?? '—'}</div></div>
                 <div className="flex-1"><div className="mb-1 text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">Timeline</div><div className="text-[13px] text-slate-700">{item.timeline ?? '—'}</div></div>
               </div>
               <div className="flex gap-2.5 border-b border-slate-100 px-3.5 py-3">

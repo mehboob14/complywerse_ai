@@ -1,6 +1,8 @@
 // Shared types for the Compliance Assessments module.
 // Mirrors the data model in the existing assessments pages.
 
+import type { Assignee } from '../ItemAssignees';
+
 export type ComplianceStatus =
   | 'complied'
   | 'partially_complied'
@@ -22,6 +24,7 @@ export interface ControlItem {
   gaps_identified: string | null;
   proposed_solution: string | null;
   responsible_party: string | null;
+  assignees?: Assignee[]; // people and teams the item is assigned to
   timeline: string | null;
   evidence_reference: string | null;
   remarks: string | null;

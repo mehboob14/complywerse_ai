@@ -20,6 +20,7 @@ import {
 import { AiEvidenceButton, AiEvidenceDialog } from './AiEvidenceAdvisor';
 import apiClient, { assetsApi } from '@/lib/api';
 import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const MASVS_FORMAT = 'mobile_app_security';
 
@@ -40,6 +41,7 @@ interface Item {
   remarks: string | null;
   priority: string | null;
   evidence_count?: number;
+  assignees?: Assignee[];
 }
 interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; }
 interface Asset { id: number; name: string; asset_type?: string; ip_address?: string }
@@ -480,6 +482,10 @@ export default function MobileAppSecurityTab() {
                                   {it.subdomain_name && <span className="font-medium text-slate-500">{it.subdomain_name}</span>}
                                   {m.testing && <span className="truncate">Test: {m.testing}</span>}
                                 </div>
+                              </div>
+                              <div className="shrink-0 sm:w-44">
+                                <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number}
+                                  onSaved={() => qc.invalidateQueries({ queryKey: ['masvs-detail', activeId] })} />
                               </div>
                               <div className="flex shrink-0 items-center gap-1">
                                 <AiEvidenceButton assessmentId={activeId!} itemId={it.id} active={aiFor === it.id} onOpen={() => setAiFor(it.id)} />

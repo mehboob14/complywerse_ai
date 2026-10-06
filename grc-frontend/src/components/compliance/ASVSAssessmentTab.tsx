@@ -17,6 +17,7 @@ import {
 import { AiEvidenceButton, AiEvidenceDialog } from './AiEvidenceAdvisor';
 import apiClient, { assetsApi } from '@/lib/api';
 import { EvidenceQualityNote, type EvidenceQuality } from './EvidenceQualityNote';
+import ItemAssignees, { type Assignee } from './ItemAssignees';
 
 const ASVS_FORMAT = 'asvs_checklist';
 
@@ -37,6 +38,7 @@ interface Item {
   priority: string | null;
   evidence_count?: number;
   asset_status?: Record<string, string>;
+  assignees?: Assignee[];
 }
 interface Detail { id: number; name: string; source: string | null; file_name: string | null; items: Item[]; linked_asset_ids?: number[]; asset_levels?: Record<string, number>; }
 interface Asset { id: number; name: string; asset_type?: string; ip_address?: string }
@@ -488,6 +490,10 @@ export default function ASVSAssessmentTab() {
                                     <span className="font-medium text-slate-500">{it.subdomain_name}</span>
                                   </div>
                                 )}
+                              </div>
+                              <div className="shrink-0 sm:w-44">
+                                <ItemAssignees itemId={it.id} value={it.assignees} label={it.item_number}
+                                  onSaved={() => qc.invalidateQueries({ queryKey: ['asvs-detail', activeId] })} />
                               </div>
                               {oos ? (
                                 <div className="flex shrink-0 items-center">
