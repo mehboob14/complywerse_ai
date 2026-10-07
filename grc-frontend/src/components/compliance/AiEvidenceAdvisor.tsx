@@ -481,7 +481,7 @@ export function AiEvidenceDialog({ assessmentId, item, context, onClose, onLinke
           </div>
 
           <div>
-            <SectionTitle icon={Library}>From your artifacts catalog</SectionTitle>
+            <SectionTitle icon={Library}>Artifacts already available from our catalog to create from</SectionTitle>
             {loading ? <Skeleton rows={1} /> : references.length === 0 ? (
               <p className="text-[12px] text-slate-500">{has ? 'No catalog document fits this requirement.' : 'Matching catalog documents appear here.'}</p>
             ) : (
