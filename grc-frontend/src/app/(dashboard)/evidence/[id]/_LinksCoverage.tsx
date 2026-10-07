@@ -18,7 +18,8 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useQueries } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
-import { Sparkles, Plus, X, ChevronLeft, Search, Loader2, Shield, ExternalLink, Unlink, Lock } from 'lucide-react';
+import { Sparkles, Plus, X, ChevronLeft, ChevronRight, Search, Loader2, Shield, ExternalLink, Unlink, Lock } from 'lucide-react';
+import CommonControlDialog, { type CommonControlRef } from './_CommonControlDialog';
 
 export interface AiLinkRec {
   id: number;
@@ -55,6 +56,10 @@ export interface LcLinkedItem {
   onUnlink?: () => void;
   /** Why it cannot be unlinked from here (a test sample). */
   locked?: string;
+  /** Small counted labels under the title, e.g. the frameworks a control fulfils requirements of. */
+  chips?: Array<{ label: string; count?: number }>;
+  /** A common control: the row opens its details. */
+  control?: CommonControlRef;
 }
 
 export interface LcLinkedGroup {
@@ -70,6 +75,8 @@ export interface LcPill {
   groups: LcLinkedGroup[];
   /** Said when nothing is linked, e.g. where this type is linked from. */
   hint?: string;
+  /** What the linked records add up to, said above them. */
+  summary?: string | null;
 }
 
 export interface LcManualType {
@@ -91,7 +98,6 @@ const matchStyle = (p: number) =>
     : { chip: 'border-slate-200 bg-slate-100 text-slate-500', dot: 'bg-slate-400' };
 
 const typeBadge: Record<string, string> = {
-  controls: 'border-emerald-200 text-emerald-700',
   common_controls: 'border-teal-200 text-teal-700',
   policy_statements: 'border-sky-200 text-sky-700',
   risks: 'border-rose-200 text-rose-700',
@@ -101,20 +107,45 @@ const typeBadge: Record<string, string> = {
 };
 
 const MANUAL_SHOWN = 50;
+const MAX_CHIPS = 4;
 
-function LinkedRow({ item }: { item: LcLinkedItem }) {
+function LinkedRow({ item, onOpen }: { item: LcLinkedItem; onOpen: (c: CommonControlRef) => void }) {
+  const body = (
+    <>
+      <span className="flex flex-wrap items-center gap-1.5">
+        {item.code && <span className="font-mono text-xs text-slate-600">{item.code}</span>}
+        {item.tag && (
+          <span className="rounded-full border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-500">{item.tag}</span>
+        )}
+      </span>
+      <span className="flex items-center gap-1 text-sm font-medium text-slate-800">
+        {item.title}
+        {item.control && <ChevronRight className="h-3.5 w-3.5 shrink-0 text-slate-300 group-hover:text-primary-600" aria-hidden />}
+      </span>
+      {item.subtitle && <span className="block text-xs text-slate-500">{item.subtitle}</span>}
+      {!!item.chips?.length && (
+        <span className="mt-1 flex flex-wrap items-center gap-1">
+          {item.chips.slice(0, MAX_CHIPS).map((c) => (
+            <span key={c.label} title={`${c.count ?? ''} ${c.label} requirement${c.count === 1 ? '' : 's'} fulfilled`.trim()}
+              className="rounded-full border border-teal-100 bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-700">
+              {c.label}{c.count != null && <span className="ml-1 font-semibold">{c.count}</span>}
+            </span>
+          ))}
+          {item.chips.length > MAX_CHIPS && <span className="text-[10px] text-slate-400">+{item.chips.length - MAX_CHIPS} more</span>}
+        </span>
+      )}
+    </>
+  );
   return (
     <div className="flex items-start justify-between gap-2 px-3 py-2">
-      <div className="min-w-0">
-        <span className="flex flex-wrap items-center gap-1.5">
-          {item.code && <span className="font-mono text-xs text-slate-600">{item.code}</span>}
-          {item.tag && (
-            <span className="rounded-full border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium capitalize text-slate-500">{item.tag}</span>
-          )}
-        </span>
-        <span className="block text-sm font-medium text-slate-800">{item.title}</span>
-        {item.subtitle && <span className="block text-xs text-slate-500">{item.subtitle}</span>}
-      </div>
+      {item.control ? (
+        <button type="button" onClick={() => onOpen(item.control!)} aria-label={`Details of ${item.code ?? item.title}: ${item.title}`}
+          className="group -mx-1.5 -my-1 min-w-0 flex-1 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-slate-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500">
+          {body}
+        </button>
+      ) : (
+        <div className="min-w-0">{body}</div>
+      )}
       <div className="flex shrink-0 items-center gap-2.5 pt-0.5">
         {item.href && (
           <Link href={item.href} className="inline-flex items-center gap-1 text-xs font-medium text-primary-600 hover:underline">
@@ -158,6 +189,7 @@ export default function LinksCoverage({
   const [manualOpen, setManualOpen] = useState(false);
   const [manualType, setManualType] = useState<string | null>(null);
   const [manualSearch, setManualSearch] = useState('');
+  const [details, setDetails] = useState<CommonControlRef | null>(null);
 
   const enabled = !!autoRunKey && autoRunKey > 0;
   const results = useQueries({
@@ -273,6 +305,9 @@ export default function LinksCoverage({
               <X className="h-4 w-4" />
             </button>
           </div>
+          {activePill.summary && activeGroups.length > 0 && (
+            <p className="border-b border-slate-100 bg-slate-50/60 px-3 py-1.5 text-xs text-slate-600">{activePill.summary}</p>
+          )}
           {activeGroups.length === 0 ? (
             <p className="px-3 py-3 text-xs text-slate-500">
               Nothing is linked yet.{activePill.hint ? ` ${activePill.hint}` : ''}
@@ -290,7 +325,7 @@ export default function LinksCoverage({
                     <p className="bg-slate-50 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{g.heading}</p>
                   )}
                   <div className="divide-y divide-slate-50">
-                    {g.items.map((it) => <LinkedRow key={it.key} item={it} />)}
+                    {g.items.map((it) => <LinkedRow key={it.key} item={it} onOpen={setDetails} />)}
                   </div>
                 </div>
               ))}
@@ -353,6 +388,10 @@ export default function LinksCoverage({
                       </span>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      {target.key === 'common_controls' && rec.meta?.scf_id && (
+                        <button type="button" onClick={() => setDetails({ scfId: rec.meta!.scf_id!, title: rec.title })}
+                          className="text-xs font-medium text-primary-600 hover:underline">Details</button>
+                      )}
                       <button type="button" onClick={() => dismiss(target.key, rec.id)} className="text-xs font-medium text-slate-400 hover:text-slate-600">Dismiss</button>
                       <button
                         type="button"
@@ -373,6 +412,8 @@ export default function LinksCoverage({
           </div>
         )}
       </div>
+
+      {details && <CommonControlDialog control={details} onClose={() => setDetails(null)} />}
 
       {/* Link-manually popup: pick a type, then the item */}
       {manualOpen && (

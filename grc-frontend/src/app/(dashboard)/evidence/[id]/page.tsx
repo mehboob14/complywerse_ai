@@ -18,7 +18,7 @@ import {
 import Link from 'next/link';
 import EvidenceTimeline from './_EvidenceTimeline';
 import LinksCoverage, { type AiLinkRec as LcRec } from './_LinksCoverage';
-import { auditObservationId, controlCounts, linkedGroups } from './_linkedGroups';
+import { auditObservationId, controlCount, coverageSummary, linkedGroups } from './_linkedGroups';
 import RelationshipsPanel from './_RelationshipsPanel';
 import AuditReadinessCard from './_AuditReadinessCard';
 import ReviewerActionPanel from './_ReviewerActionPanel';
@@ -653,16 +653,6 @@ export default function EvidenceDetailPage() {
 
   // Id-accepting bulk link mutations — no shared state, so the consolidated
   // panel can link one OR many suggestions at once without a race.
-  const bulkLinkControls = useMutation({
-    mutationFn: (links: { framework_id: number; control_id: number }[]) =>
-      apiClient.post(`/evidence-mgmt/links/${evidenceId}/controls`, {
-        control_links: links.map((l) => ({ parsed_control_id: l.control_id, uploaded_framework_id: l.framework_id })),
-      }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-controls', evidenceId] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
-    },
-  });
   const bulkLinkRisks = useMutation({
     mutationFn: (ids: number[]) => apiClient.post(`/evidence-mgmt/cross-links/${evidenceId}/risks`, { risk_ids: ids }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['evidence-cross-links', evidenceId] }),
@@ -838,7 +828,6 @@ export default function EvidenceDetailPage() {
   const statusStyle = getStatusStyle(evidence.status);
   const ocrStatusStyle = getOCRStatusStyle(evidence.ocr_status);
   const TypeIcon = getTypeIcon(evidence.evidence_type);
-  const counts = controlCounts(controlsData);
   const linked = linkedGroups(controlsData, allLinks, {
     control: (id) => unlinkControlMutation.mutate(id),
     risk: (id) => unlinkRiskMutation.mutate(id),
@@ -1180,8 +1169,7 @@ export default function EvidenceDetailPage() {
                   evidenceId={evidenceId}
                   autoRunKey={recommendNonce}
                   pills={[
-                    { key: 'controls', label: 'Controls', icon: Shield, linkedCount: counts.framework, groups: linked.controls },
-                    { key: 'common_controls', label: 'Common controls', icon: ShieldCheck, linkedCount: counts.common, groups: linked.common_controls },
+                    { key: 'common_controls', label: 'Common controls', icon: ShieldCheck, linkedCount: controlCount(controlsData), groups: linked.common_controls, summary: coverageSummary(controlsData) },
                     { key: 'policy_statements', label: 'Policies', icon: FileText, linkedCount: allLinks?.policy_statements?.total ?? 0, groups: linked.policy_statements },
                     { key: 'assessments', label: 'Assessments', icon: ClipboardList, linkedCount: allLinks?.assessments?.total ?? 0, groups: linked.assessments, hint: 'Assessments link evidence from the assessment item itself.' },
                     { key: 'audit_observations', label: 'Audit observations', icon: FileSearch, linkedCount: allLinks?.audit_observations?.total ?? 0, groups: linked.audit_observations },
@@ -1200,11 +1188,6 @@ export default function EvidenceDetailPage() {
                       key: 'audit_observations', badgeLabel: 'AUDIT OBSERVATION', icon: FileSearch, busy: bulkLinkAudit.isPending,
                       linkedIds: new Set((allLinks?.audit_observations?.links || []).map((l) => auditObservationId(l.kind, l.record_id))),
                       onLinkMany: (recs) => bulkLinkAudit.mutate(recs),
-                    },
-                    {
-                      key: 'controls', badgeLabel: 'CONTROL', icon: Shield, busy: bulkLinkControls.isPending,
-                      linkedIds: new Set((controlsData?.by_framework || []).flatMap((fw) => fw.controls.map((m) => m.parsed_control?.id).filter((x): x is number => typeof x === 'number'))),
-                      onLinkMany: (recs) => bulkLinkControls.mutate(recs.filter((r) => r.meta?.framework_id).map((r) => ({ framework_id: r.meta!.framework_id!, control_id: r.id }))),
                     },
                     {
                       key: 'risks', badgeLabel: 'RISK', icon: AlertTriangle, busy: bulkLinkRisks.isPending,
@@ -1228,11 +1211,6 @@ export default function EvidenceDetailPage() {
                     },
                   ]}
                   manualTypes={[
-                    {
-                      key: 'controls', label: 'Control', icon: Shield,
-                      items: (availableControls?.frameworks || []).flatMap((fw) => fw.controls.map((c) => ({ value: `${fw.id}:${c.id}`, label: `${c.control_id} — ${c.title}`, sub: fw.name }))),
-                      onPick: (v) => { const [fwId, ctrlId] = v.split(':').map(Number); bulkLinkControls.mutate([{ framework_id: fwId, control_id: ctrlId }]); },
-                    },
                     {
                       key: 'common_controls', label: 'Common control', icon: ShieldCheck,
                       items: (commonControlOptions?.controls || []).map((c) => ({ value: c.scf_id, label: `${c.scf_id} — ${c.name}` })),

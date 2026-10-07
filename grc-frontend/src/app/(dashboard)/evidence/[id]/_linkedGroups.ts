@@ -2,10 +2,14 @@
  * What is linked to an evidence record, in the shape the "Links & coverage" pills open onto.
  *
  * Every count on a pill is the length of the list built here, so a number never has nothing behind it:
- * controls the platform cannot resolve any more (`unresolved`) are listed too, and assessments are listed
- * (read-only, with a way to open them) rather than counted and hidden.
+ * assessments are listed (read-only, with a way to open them) rather than counted and hidden. Controls
+ * are the common controls (the SCF library and the organisation's own), each with the framework
+ * requirements it fulfils; the framework's own controls are not listed, because a common control covers them.
  */
 import type { LcLinkedGroup, LcLinkedItem } from './_LinksCoverage';
+
+/** The framework requirements a common control fulfils, in the frameworks the organisation is assessed against. */
+export interface FulfilledRequirements { key: string; label: string; codes: string[] }
 
 export interface MappedControl {
   id: number;
@@ -13,18 +17,11 @@ export interface MappedControl {
   coverage_type?: string | null;
   is_locked?: boolean;
   // `scf_id` is the id people know ("IAC-01"); `code` is the table's own ("SCF-IAC-01")
-  normalized_control?: { id: number; code: string; name: string; scf_id?: string | null } | null;
-  framework_control?: { id: number; code: string; name: string } | null;
-  parsed_control?: { id: number; control_id: string; title: string } | null;
-  // set on `unresolved` rows only
-  control_code?: string | null;
-  framework_name?: string | null;
+  normalized_control?: { id: number; code: string; name: string; scf_id?: string | null; requirements?: FulfilledRequirements[] } | null;
 }
 
 export interface ControlsSource {
   normalized_controls: MappedControl[];
-  by_framework: Array<{ framework_name: string; controls: MappedControl[] }>;
-  unresolved?: MappedControl[];
 }
 
 export interface LinksSource {
@@ -53,12 +50,22 @@ const dot = (...parts: Array<string | number | null | undefined>) => parts.filte
 /** An audit observation's id as the recommender numbers it: statutory = its id, issue-register = minus the issue id. */
 export const auditObservationId = (kind: string, recordId: number) => (kind === 'issue' ? -recordId : recordId);
 
-/** Counts for the two control pills. A mapping that is both a common and a framework control counts in both. */
-export function controlCounts(c?: ControlsSource) {
-  return {
-    common: c?.normalized_controls.length ?? 0,
-    framework: (c?.by_framework || []).reduce((n, f) => n + f.controls.length, 0) + (c?.unresolved?.length ?? 0),
-  };
+export const controlCount = (c?: ControlsSource) => c?.normalized_controls.length ?? 0;
+
+/**
+ * What the common controls linked to this evidence add up to: each framework requirement counted once, however many
+ * of the linked controls fulfil it. Null when no framework is in scope, so there is nothing to add up.
+ */
+export function coverageSummary(c?: ControlsSource): string | null {
+  const byFramework = new Map<string, { label: string; codes: Set<string> }>();
+  (c?.normalized_controls || []).forEach((m) => (m.normalized_control?.requirements || []).forEach((r) => {
+    const entry = byFramework.get(r.key) ?? { label: r.label, codes: new Set<string>() };
+    r.codes.forEach((code) => entry.codes.add(code));
+    byFramework.set(r.key, entry);
+  }));
+  const total = Array.from(byFramework.values()).reduce((n, f) => n + f.codes.size, 0);
+  if (!total) return null;
+  return `Together these fulfil ${total} framework requirement${total === 1 ? '' : 's'}: ${Array.from(byFramework.values()).map((f) => `${f.label} ${f.codes.size}`).join(' · ')}.`;
 }
 
 function mappingActions(m: MappedControl, unlink: Unlinkers): Pick<LcLinkedItem, 'onUnlink' | 'locked'> {
@@ -66,37 +73,25 @@ function mappingActions(m: MappedControl, unlink: Unlinkers): Pick<LcLinkedItem,
 }
 
 export function linkedGroups(controls: ControlsSource | undefined, links: LinksSource | undefined, unlink: Unlinkers) {
-  const frameworkGroups: LcLinkedGroup[] = (controls?.by_framework || []).map((f) => ({
-    heading: f.framework_name,
-    items: f.controls.map((m) => ({
-      key: `f${m.id}`,
-      code: m.framework_control?.code ?? m.parsed_control?.control_id ?? null,
-      title: m.framework_control?.name ?? m.parsed_control?.title ?? 'Control',
-      tag: m.coverage_type,
-      ...mappingActions(m, unlink),
-    })),
-  }));
-  const unresolved = (controls?.unresolved || []).map((m): LcLinkedItem => ({
-    key: `u${m.id}`,
-    code: m.control_code ?? null,
-    title: m.clause_reference || m.framework_name || 'Control mapping',
-    subtitle: dot(m.framework_name && m.clause_reference ? m.framework_name : null, 'No longer matches a control in the library'),
-    tag: 'unmatched',
-    ...mappingActions(m, unlink),
-  }));
-
   return {
-    controls: [...frameworkGroups, { heading: unresolved.length ? 'Not matched to a control' : undefined, items: unresolved }],
     common_controls: [{
-      items: (controls?.normalized_controls || []).map((m): LcLinkedItem => ({
-        key: `c${m.id}`,
-        code: m.normalized_control?.scf_id ?? m.normalized_control?.code ?? null,
-        title: m.normalized_control?.name ?? 'Common control',
-        subtitle: m.clause_reference ? `Linked as “${m.clause_reference}”` : null,
-        tag: m.coverage_type,
-        href: m.normalized_control?.scf_id ? `/automation/soc2-controls/${encodeURIComponent(m.normalized_control.scf_id)}` : undefined,
-        ...mappingActions(m, unlink),
-      })),
+      items: (controls?.normalized_controls || []).map((m): LcLinkedItem => {
+        const nc = m.normalized_control;
+        const requirements = nc?.requirements || [];
+        return {
+          key: `c${m.id}`,
+          code: nc?.scf_id ?? nc?.code ?? null,
+          title: nc?.name ?? 'Common control',
+          subtitle: m.clause_reference ? `Linked as “${m.clause_reference}”` : null,
+          tag: m.coverage_type,
+          // The framework requirements it fulfils: one chip per framework, counted.
+          chips: requirements.map((r) => ({ label: r.label, count: r.codes.length })),
+          // Clicking the row opens its details; the page of the control is one more click away.
+          control: nc?.scf_id ? { scfId: nc.scf_id, title: nc.name, linkedAs: m.clause_reference, coverage: m.coverage_type, requirements } : undefined,
+          href: nc?.scf_id ? `/automation/soc2-controls/${encodeURIComponent(nc.scf_id)}` : undefined,
+          ...mappingActions(m, unlink),
+        };
+      }),
     }],
     policy_statements: [{
       items: (links?.policy_statements?.links || []).map((l): LcLinkedItem => {

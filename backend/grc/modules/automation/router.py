@@ -1752,14 +1752,16 @@ def consolidated_artifacts_for(db: Session, tenant_id: int, scf_id: str) -> List
 
 def requirement_codes_for_control(
     db: Session, tenant_id: int, release_id: int, scf_id: str, slugs: List[str],
-    suppressed: set, retargets: Dict[tuple, str],
+    suppressed: set, retargets: Dict[tuple, str], codes: Optional[Dict[str, List[str]]] = None,
 ) -> Dict[str, List[str]]:
     """In-scope requirement codes for an SCF control or a custom one.
 
     Custom controls are not in the crosswalk, so their codes come from their own
     framework links plus whatever the SCF controls they implement discharge.
+    `codes` is what `in_scope_codes` already found, when the caller read the crosswalk for many.
     """
-    codes = in_scope_codes(db, release_id, scf_id, slugs, suppressed, retargets)
+    if codes is None:
+        codes = in_scope_codes(db, release_id, scf_id, slugs, suppressed, retargets)
     if codes:
         return codes
     nc = scf_custom.get_custom(db, tenant_id, scf_id)
@@ -1787,12 +1789,13 @@ def requirement_codes_for_control(
     return out
 
 
-def in_scope_codes(
-    db: Session, release_id: int, scf_id: str, slugs: List[str], suppressed: set, retargets: Dict[tuple, str],
-) -> Dict[str, List[str]]:
-    """This control's requirement codes in each in-scope framework: ours, then SCF's."""
-    out: Dict[str, List[str]] = defaultdict(list)
-    if not slugs:
+def in_scope_codes_many(
+    db: Session, release_id: int, scf_ids: List[str], slugs: List[str], suppressed: set, retargets: Dict[tuple, str],
+) -> Dict[str, Dict[str, List[str]]]:
+    """`in_scope_codes` for several controls, with the crosswalk read once instead of once each."""
+    wanted = set(scf_ids)
+    out: Dict[str, Dict[str, List[str]]] = defaultdict(lambda: defaultdict(list))
+    if not slugs or not wanted:
         return out
     for owner, slug, code in (
         db.query(SCFMapping.scf_id, SCFMapping.source_slug, SCFMapping.requirement_code)
@@ -1800,13 +1803,33 @@ def in_scope_codes(
                 SCFMapping.source_slug.in_(list(slugs)))
         .all()
     ):
-        if _effective_mapping_scf(slug, code, owner, suppressed, retargets) == scf_id and code not in out[slug]:
-            out[slug].append(code)
-    for slug, codes in (_published_scope_codes(db, release_id, list(slugs), suppressed, retargets).get(scf_id) or {}).items():
-        for code in codes:
-            if code not in out[slug]:
-                out[slug].append(code)
+        effective = _effective_mapping_scf(slug, code, owner, suppressed, retargets)
+        if effective in wanted and code not in out[effective][slug]:
+            out[effective][slug].append(code)
+    published = _published_scope_codes(db, release_id, list(slugs), suppressed, retargets)
+    for sid in wanted:
+        for slug, codes in (published.get(sid) or {}).items():
+            for code in codes:
+                if code not in out[sid][slug]:
+                    out[sid][slug].append(code)
     return out
+
+
+def in_scope_codes(
+    db: Session, release_id: int, scf_id: str, slugs: List[str], suppressed: set, retargets: Dict[tuple, str],
+) -> Dict[str, List[str]]:
+    """This control's requirement codes in each in-scope framework: ours, then SCF's."""
+    return in_scope_codes_many(db, release_id, [scf_id], slugs, suppressed, retargets)[scf_id]
+
+
+def requirement_codes_for_controls(
+    db: Session, tenant_id: int, release_id: int, scf_ids: List[str], slugs: List[str],
+    suppressed: set, retargets: Dict[tuple, str],
+) -> Dict[str, Dict[str, List[str]]]:
+    """`requirement_codes_for_control` for each of several controls (SCF or custom), the crosswalk read once."""
+    found = in_scope_codes_many(db, release_id, scf_ids, slugs, suppressed, retargets)
+    return {sid: requirement_codes_for_control(db, tenant_id, release_id, sid, slugs, suppressed, retargets, codes=found[sid])
+            for sid in scf_ids}
 
 
 def _in_scope_requirements(

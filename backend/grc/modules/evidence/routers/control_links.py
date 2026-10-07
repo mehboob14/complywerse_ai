@@ -200,6 +200,38 @@ def serialize_control_mapping(mapping: EvidenceControlMapping) -> dict:
     return result
 
 
+def _requirements_fulfilled(db: Session, tenant_id: int, scf_ids: List[str]) -> dict:
+    """What each common control discharges, in the frameworks this tenant is assessed against.
+
+    The set the control's own page lists (`requirement_codes_for_control`, custom controls included),
+    as {key, label, codes} per framework, so a linked control can say what the evidence it carries
+    is worth without a request per control. Empty when no framework is in scope.
+    """
+    if not scf_ids:
+        return {}
+    from ...automation import router as automation          # imported here: that module pulls in a great deal
+    from ...scf.scope_service import ensure_default_scope
+    from ....models import SCFRelease
+
+    try:
+        scope = ensure_default_scope(db, tenant_id)
+    except RuntimeError:                                     # the SCF catalogue is not provisioned for this tenant
+        return {}
+    frameworks = automation._scope_frameworks(scope)
+    release = (db.query(SCFRelease)
+               .filter(SCFRelease.import_status == "ready", SCFRelease.is_current.is_(True)).first())
+    if release is None or not frameworks:
+        return {}
+    suppressed, retargets = automation._mapping_reviews(db, tenant_id)
+    found = automation.requirement_codes_for_controls(
+        db, tenant_id, release.id, scf_ids, [f["key"] for f in frameworks], suppressed, retargets)
+    return {
+        sid: [{"key": f["key"], "label": f["label"], "codes": sorted(found[sid][f["key"]], key=automation._natural)}
+              for f in frameworks if found.get(sid, {}).get(f["key"])]
+        for sid in scf_ids
+    }
+
+
 @router.get("/{evidence_id}/controls")
 def get_evidence_controls(
     evidence_id: int,
@@ -279,6 +311,16 @@ def get_evidence_controls(
             serialized["framework_name"] = mapping.framework_name
             serialized["clause_reference"] = mapping.clause_reference
             unresolved.append(serialized)
+
+    # Each common control with the framework requirements it fulfils. An enrichment: the list must
+    # still load, and count, if it cannot be worked out.
+    try:
+        fulfils = _requirements_fulfilled(db, evidence.tenant_id, sorted(
+            {m["normalized_control"]["scf_id"] for m in normalized_controls if m["normalized_control"].get("scf_id")}))
+        for m in normalized_controls:
+            m["normalized_control"]["requirements"] = fulfils.get(m["normalized_control"].get("scf_id"), [])
+    except Exception:  # noqa: BLE001
+        logger.exception("could not work out the requirements the controls linked to evidence %s fulfil", evidence_id)
 
     return {
         "evidence_id": evidence_id,
