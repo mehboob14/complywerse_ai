@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import * as XLSX from 'xlsx';
 import apiClient from '@/lib/api';
 import ItemAssignees, { type Assignee } from './ItemAssignees';
+import { EvidenceQualityNote, reviewPollMs, type EvidenceQuality } from './EvidenceQualityNote';
 import {
   Shield,
   ChevronDown,
@@ -240,6 +241,7 @@ function DCCRow({
     },
     enabled: expanded,
     staleTime: 15_000,
+    refetchInterval: (q) => reviewPollMs(q.state.data),
   });
   const onEvFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -416,10 +418,16 @@ function DCCRow({
                       const fileName = String(ev.evidence_file_name || ev.evidence_name || ev.file_name || `Evidence ${i + 1}`);
                       const ext = (fileName.split('.').pop() || 'FILE').toUpperCase().slice(0, 4);
                       return (
-                        <div key={String(ev.id ?? i)} className="flex items-center gap-2.5 rounded-lg border border-gray-200 px-2.5 py-2">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-[9px] font-bold text-blue-600">{ext}</div>
-                          <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-semibold text-gray-800">{String(ev.evidence_name || fileName)}</div><div className="text-[10.5px] text-gray-400">Linked · {String(ev.approval_status || ev.status || 'linked')}</div></div>
-                          <Download className="h-4 w-4 shrink-0 text-gray-300" />
+                        <div key={String(ev.id ?? i)} className="rounded-lg border border-gray-200 px-2.5 py-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-blue-50 text-[9px] font-bold text-blue-600">{ext}</div>
+                            <div className="min-w-0 flex-1"><div className="truncate text-[12.5px] font-semibold text-gray-800">{String(ev.evidence_name || fileName)}</div><div className="text-[10.5px] text-gray-400">Linked · {String(ev.approval_status || ev.status || 'linked')}</div></div>
+                            <Download className="h-4 w-4 shrink-0 text-gray-300" />
+                          </div>
+                          {typeof ev.evidence_id === 'number' && (
+                            <EvidenceQualityNote assessmentId={assessmentId} itemId={item.id} evidenceId={ev.evidence_id} quality={(ev.quality as EvidenceQuality | null) ?? null}
+                              since={ev.created_at as string | undefined} onRechecked={() => refetchEv()} />
+                          )}
                         </div>
                       );
                     })}

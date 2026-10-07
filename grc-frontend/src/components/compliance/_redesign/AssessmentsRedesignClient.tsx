@@ -362,6 +362,9 @@ export default function AssessmentsRedesignClient({ initialTab }: { initialTab?:
           ext: fileExt(fileName),
           meta: `${isFramework ? 'Framework-linked' : 'Linked'} · ${status}${when ? ' · ' + formatDate(when) : ''}`,
           tone: isFramework ? 'teal' : 'slate',
+          evidence_id: ev.evidence_id ?? null,
+          created_at: ev.created_at ?? null,
+          quality: ev.quality ?? null,
         };
       });
     },

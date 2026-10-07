@@ -22,6 +22,16 @@ export type EvidenceQuality = {
   checked_at?: string | null;
 };
 
+const FRESH_MS = 5 * 60 * 1000;
+const fresh = (since?: string | null) => !since || Date.now() - new Date(since).getTime() < FRESH_MS;
+
+/** `refetchInterval` for the list of one item's evidence. The review runs in the background after an
+ *  upload or a link, so ask again every few seconds until each new file has its verdict; a file older
+ *  than a few minutes that never got one is not waited for. */
+export const reviewPollMs = (rows: unknown): number | false =>
+  Array.isArray(rows) && rows.some((r: { evidence_id?: unknown; quality?: unknown; created_at?: string | null } | null) =>
+    r && r.evidence_id && !r.quality && fresh(r.created_at)) ? 4000 : false;
+
 const COVERS = {
   full: { label: 'Proves this item', cls: 'border-emerald-200 bg-emerald-50 text-emerald-800', Icon: CheckCircle2 },
   partial: { label: 'Partly proves it', cls: 'border-amber-200 bg-amber-50 text-amber-800', Icon: AlertTriangle },
@@ -43,13 +53,15 @@ const NOT_REVIEWED: Record<string, { label: string; hint: string; Icon: typeof S
 };
 
 export function EvidenceQualityNote({
-  assessmentId, itemId, evidenceId, quality, onRechecked,
+  assessmentId, itemId, evidenceId, quality, onRechecked, since,
 }: {
   assessmentId: number;
   itemId: number;
   evidenceId: number;
   quality?: EvidenceQuality | null;
   onRechecked?: () => void;
+  /** When the file was attached: a verdict is expected for a few minutes after, not for ever. */
+  since?: string | null;
 }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -80,11 +92,12 @@ export function EvidenceQualityNote({
   );
 
   if (!quality) {
+    const live = fresh(since);
     return (
       <div className="mt-1 flex items-center gap-2 pl-5 text-[11px] text-slate-500">
-        <Loader2 className="h-3 w-3 animate-spin text-slate-400" />
-        Checking this file against the requirement…
-        <CheckButton label="Check now" />
+        {live ? <><Loader2 className="h-3 w-3 animate-spin text-slate-400" /> Rating this file’s maturity against the requirement…</>
+          : <>Not rated against this requirement yet.</>}
+        <CheckButton label={live ? 'Check now' : 'Rate now'} />
         {failed && <span className="text-rose-600">Could not start the check.</span>}
       </div>
     );
@@ -112,7 +125,7 @@ export function EvidenceQualityNote({
       <div className="flex flex-wrap items-center gap-2 text-[11px]">
         <span className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 font-semibold ${covers.cls}`}>
           <covers.Icon className="h-2.5 w-2.5" /> {covers.label}
-          {typeof quality.score === 'number' && <span className="font-normal opacity-80">· {quality.score}/100</span>}
+          {typeof quality.score === 'number' && <span className="font-normal opacity-80" title="How well this file proves this item, out of 100">· maturity {quality.score}/100</span>}
         </span>
         {quality.detail?.as_of && <span className="text-slate-500">as of {quality.detail.as_of}</span>}
         {quality.basis === 'identifier_only' && (

@@ -29,6 +29,7 @@ import { SlaClosurePanel } from '@/components/compliance/_redesign/SlaClosurePan
 import type { SlaPolicy, SlaItemInput } from '@/components/compliance/_redesign/slaEngine';
 import { downloadAsFormat } from '@/components/compliance/downloadUtils';
 import ItemAssignees, { type Assignee } from '@/components/compliance/ItemAssignees';
+import { EvidenceQualityNote, reviewPollMs } from '@/components/compliance/EvidenceQualityNote';
 
 // Per-control linked artifacts come straight from the toolkit's
 // "Evidence to Request" column (stored in evidence_reference), split on ; or
@@ -226,6 +227,7 @@ function ControlRow({ item, assessmentId }: { item: Item; assessmentId: number }
     queryKey: ['pdpl-evidence', item.id],
     queryFn: async () => (await apiClient.get(`/compliance/assessments/${assessmentId}/items/${item.id}/evidence`)).data,
     enabled: open,
+    refetchInterval: (q) => reviewPollMs((q.state.data as { evidence?: unknown } | undefined)?.evidence),
   });
   const libQ = useQuery({
     queryKey: ['evidence-library', evSearch],
@@ -493,10 +495,16 @@ function ControlRow({ item, assessmentId }: { item: Item; assessmentId: number }
               ) : (
                 <ul className="space-y-1.5">
                   {attached.map((e: any) => (
-                    <li key={e.id} className="flex items-center gap-2 rounded-md border border-slate-100 bg-white px-2.5 py-1.5 text-xs">
-                      <FileText className="h-4 w-4 shrink-0 text-slate-400" />
-                      <span className="min-w-0 flex-1 truncate"><span className="font-medium text-slate-700">{e.evidence_name || e.evidence_file_name || 'Evidence'}</span>{e.evidence_file_name && <span className="ml-1 text-slate-400">{e.evidence_file_name}</span>}</span>
-                      {e.evidence_status && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{e.evidence_status}</span>}
+                    <li key={e.id} className="rounded-md border border-slate-100 bg-white px-2.5 py-1.5 text-xs">
+                      <div className="flex items-center gap-2">
+                        <FileText className="h-4 w-4 shrink-0 text-slate-400" />
+                        <span className="min-w-0 flex-1 truncate"><span className="font-medium text-slate-700">{e.evidence_name || e.evidence_file_name || 'Evidence'}</span>{e.evidence_file_name && <span className="ml-1 text-slate-400">{e.evidence_file_name}</span>}</span>
+                        {e.evidence_status && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{e.evidence_status}</span>}
+                      </div>
+                      {typeof e.evidence_id === 'number' && (
+                        <EvidenceQualityNote assessmentId={assessmentId} itemId={item.id} evidenceId={e.evidence_id} quality={e.quality ?? null}
+                          since={e.created_at} onRechecked={() => qc.invalidateQueries({ queryKey: ['pdpl-evidence', item.id] })} />
+                      )}
                     </li>
                   ))}
                 </ul>

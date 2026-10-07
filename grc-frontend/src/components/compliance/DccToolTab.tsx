@@ -14,6 +14,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { ShieldCheck, Loader2, Upload, Trash2, ChevronRight, Search, CheckCircle2, XCircle, MinusCircle, Clock, CircleDashed, Paperclip, FileText } from 'lucide-react';
 import apiClient from '@/lib/api';
 import ItemAssignees, { type Assignee } from './ItemAssignees';
+import { EvidenceQualityNote, reviewPollMs, type EvidenceQuality } from './EvidenceQualityNote';
 
 const DCC_FORMAT = 'nca_dcc_tool';
 const PRIMARY: React.CSSProperties = { background: 'var(--color-base, #14b8a6)', color: '#fff' };
@@ -63,6 +64,7 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
   const { data: ev = [], isLoading } = useQuery<Record<string, unknown>[]>({
     queryKey: ['dcc-ev', itemId],
     queryFn: async () => { const r = await apiClient.get(`/compliance/assessments/${assessmentId}/items/${itemId}/evidence`); return (r.data?.evidence || r.data || []) as Record<string, unknown>[]; },
+    refetchInterval: (q) => reviewPollMs(q.state.data),
   });
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0]; if (!f) return; setUploading(true);
@@ -80,7 +82,14 @@ function EvidencePanel({ assessmentId, itemId, onUploaded }: { assessmentId: num
         <button onClick={() => ref.current?.click()} disabled={uploading} style={PRIMARY} className="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-[11px] font-semibold hover:opacity-90 disabled:opacity-60">{uploading ? <Loader2 className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />} Upload evidence</button>
       </div>
       {isLoading ? <div className="py-1 text-[12px] text-slate-400">Loading…</div> : list.length === 0 ? <div className="py-1 text-[12px] text-slate-400">No evidence yet.</div>
-        : <ul className="space-y-1">{list.map((e, i) => { const name = (e.evidence_name || e.file_name || `Evidence ${i + 1}`) as string; return <li key={(e.id as number) ?? i} className="flex items-center gap-2 text-[12px] text-slate-700"><FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span></li>; })}</ul>}
+        : <ul className="space-y-1">{list.map((e, i) => { const name = (e.evidence_name || e.file_name || `Evidence ${i + 1}`) as string; return (
+          <li key={(e.id as number) ?? i} className="text-[12px] text-slate-700">
+            <div className="flex items-center gap-2"><FileText className="h-3.5 w-3.5 text-slate-400" /> <span className="truncate">{name}</span></div>
+            {typeof e.evidence_id === 'number' && (
+              <EvidenceQualityNote assessmentId={assessmentId} itemId={itemId} evidenceId={e.evidence_id} quality={(e.quality as EvidenceQuality | null) ?? null}
+                since={e.created_at as string | undefined} onRechecked={() => qc.invalidateQueries({ queryKey: ['dcc-ev', itemId] })} />
+            )}
+          </li>); })}</ul>}
     </div>
   );
 }

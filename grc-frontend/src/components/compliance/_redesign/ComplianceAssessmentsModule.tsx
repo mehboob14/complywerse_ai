@@ -17,6 +17,7 @@ import { SlaClosurePanel, type SlaContext } from './SlaClosurePanel';
 import { computeRollup, pointScore, averageScore, rollupScore, fmtDate, DEFAULT_SLA_POLICY, type SlaPolicy, type SlaItemInput } from './slaEngine';
 import AssessmentsBoardOverview from './AssessmentsBoardOverview';
 import ItemAssignees from '../ItemAssignees';
+import { EvidenceQualityNote, reviewPollMs } from '../EvidenceQualityNote';
 
 /**
  * Self-contained Compliance Assessments module (Overview → framework lists →
@@ -1179,6 +1180,7 @@ function SidePanel({
     queryFn: () => (api ? api.loadEvidence(assessmentId, item.id) : Promise.resolve([])),
     enabled: !!api && tab === 'evidence',
     staleTime: 15_000,
+    refetchInterval: (q) => reviewPollMs(q.state.data),
   });
 
   const onFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1256,10 +1258,16 @@ function SidePanel({
               ) : evidence.length > 0 ? evidence.map((e) => {
                 const [bg, fg] = evTone(e.tone);
                 return (
-                  <div key={e.id} className="flex items-center gap-3 rounded-[10px] border border-slate-200 px-3.5 py-3 hover:border-slate-300">
-                    <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg text-[9.5px] font-bold" style={{ background: bg, color: fg }}>{e.ext}</div>
-                    <div className="min-w-0 flex-1"><div className="truncate text-[13px] font-semibold">{e.name}</div><div className="mt-0.5 text-[11px] text-slate-400">{e.meta}</div></div>
-                    <Download className="h-4 w-4 text-slate-300" />
+                  <div key={e.id} className="rounded-[10px] border border-slate-200 px-3.5 py-3 hover:border-slate-300">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg text-[9.5px] font-bold" style={{ background: bg, color: fg }}>{e.ext}</div>
+                      <div className="min-w-0 flex-1"><div className="truncate text-[13px] font-semibold">{e.name}</div><div className="mt-0.5 text-[11px] text-slate-400">{e.meta}</div></div>
+                      <Download className="h-4 w-4 text-slate-300" />
+                    </div>
+                    {typeof e.evidence_id === 'number' && (
+                      <EvidenceQualityNote assessmentId={Number(assessmentId)} itemId={Number(item.id)} evidenceId={e.evidence_id} quality={e.quality ?? null}
+                        since={e.created_at} onRechecked={() => refetchEvidence()} />
+                    )}
                   </div>
                 );
               }) : <div className="py-6 text-center text-[12.5px] text-slate-400">No evidence linked to this control yet.</div>}

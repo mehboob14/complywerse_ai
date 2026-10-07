@@ -15,6 +15,7 @@ import DCCAssessmentTab from '@/components/compliance/DCCAssessmentTab';
 import AuditPlanTab from '@/components/compliance/AuditPlanTab';
 import NcaTab from '@/components/compliance/NcaTab';
 import ItemAssignees, { type Assignee } from '@/components/compliance/ItemAssignees';
+import { EvidenceQualityNote, reviewPollMs, type EvidenceQuality } from '@/components/compliance/EvidenceQualityNote';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   ArrowLeft,
@@ -62,6 +63,8 @@ interface EvidenceUpload {
   control_code?: string;
   confidence_score?: number;
   matching_rationale?: string;
+  /** How well the file proves this item, as the review left it (null until it has run). */
+  quality?: EvidenceQuality | null;
   evidence?: {
     id: number;
     name: string;
@@ -381,6 +384,7 @@ export default function AssessmentDetailPage() {
             control_code: ev.control_code || null,
             confidence_score: ev.confidence_score ?? null,
             matching_rationale: ev.matching_rationale || null,
+            quality: ev.quality ?? null,
             evidence: ev.evidence_id ? {
               id: ev.evidence_id,
               name: ev.evidence_name,
@@ -397,6 +401,7 @@ export default function AssessmentDetailPage() {
       return results;
     },
     enabled: expandedEvidence.size > 0,
+    refetchInterval: (q) => reviewPollMs(Object.values((q.state.data as Record<number, EvidenceUpload[]> | undefined) ?? {}).flat()),
   });
 
   const { data: evidenceLibraryOptions = [], isLoading: isEvidenceLibraryLoading } = useQuery<EvidenceLibraryOption[]>({
@@ -1565,6 +1570,10 @@ export default function AssessmentDetailPage() {
                               </button>
                             )}
                           </div>
+                          {typeof ev.evidence_id === 'number' && (
+                            <EvidenceQualityNote assessmentId={assessmentId} itemId={activePanelItem.id} evidenceId={ev.evidence_id} quality={ev.quality ?? null}
+                              since={ev.created_at} onRechecked={() => refetchEvidence()} />
+                          )}
                         </div>
                       );
                     })}

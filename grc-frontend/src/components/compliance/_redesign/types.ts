@@ -2,6 +2,7 @@
 // Mirrors the data model in the existing assessments pages.
 
 import type { Assignee } from '../ItemAssignees';
+import type { EvidenceQuality } from '../EvidenceQualityNote';
 
 export type ComplianceStatus =
   | 'complied'
@@ -66,6 +67,10 @@ export interface EvidenceRow {
   ext: string;
   meta: string;
   tone?: 'teal' | 'rose' | 'slate';
+  /** The library record, when it was attached and how well the file proves this control (as the API sends them). */
+  evidence_id?: number | null;
+  created_at?: string | null;
+  quality?: EvidenceQuality | null;
 }
 
 export interface AiRec {
