@@ -123,6 +123,18 @@ def test_an_assignment_is_filed_in_the_audit_log_under_its_assessments_page(db):
         == ("Assessments", "Cyber Security")
 
 
+def test_a_saved_item_keeps_its_place_in_the_list(db):
+    """Postgres hands rows back in physical order and saving one rewrites it, so an item that was just
+    assigned (or marked Pass) jumped to the end of the list under the user's cursor. SQLite keeps insertion
+    order whatever happens, so the guard is that the query itself says how to sort."""
+    from sqlalchemy.dialects import postgresql
+    from sqlalchemy.orm import joinedload
+
+    query = db.query(m.ComplianceAssessmentDocument).options(joinedload(m.ComplianceAssessmentDocument.items))
+    sql = str(query.filter(m.ComplianceAssessmentDocument.id == 3).statement.compile(dialect=postgresql.dialect()))
+    assert sql.rstrip().endswith("ORDER BY grc_compliance_assessment_document_items_1.id")
+
+
 def test_a_deleted_team_drops_off_the_item(http, db):
     http.put(URL, json={"assignees": [AMINA, TEAM]})
     db.delete(db.get(m.Team, 2))

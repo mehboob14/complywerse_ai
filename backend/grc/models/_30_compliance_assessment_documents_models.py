@@ -42,8 +42,11 @@ class ComplianceAssessmentDocument(Base):
     
     tenant = relationship("Tenant", back_populates="compliance_assessment_docs")
     creator = relationship("GRCUser")
-    items = relationship("ComplianceAssessmentDocumentItem", back_populates="assessment", cascade="all, delete-orphan")
-    
+    # In file order. Without an ORDER BY Postgres hands rows back in physical order, and saving
+    # one (an assignee, a status) rewrites it, so it jumped to the end of the list under the cursor.
+    items = relationship("ComplianceAssessmentDocumentItem", back_populates="assessment", cascade="all, delete-orphan",
+                         order_by="ComplianceAssessmentDocumentItem.id")
+
     __table_args__ = (
         Index("ix_compliance_assessment_doc_tenant", "tenant_id"),
         Index("ix_compliance_assessment_doc_type", "assessment_type"),
