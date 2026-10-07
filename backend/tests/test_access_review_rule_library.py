@@ -16,7 +16,7 @@ from grc.modules.access_review import collectors, connector_rules
 from grc.modules.access_review import rule_catalog as rules
 from grc.modules.access_review._ingest import ingest
 
-SOC2, ECC = "aicpa_tsc_soc2", "emea_saudi_arabia_ecc_1_2018"
+SOC2, ECC, PCI = "aicpa_tsc_soc2", "emea_saudi_arabia_ecc_1_2018", "pci_dss_401"
 
 # the library holds the identity rules and every connector's own rules
 EVERY_RULE = len(rules.RULE_CATALOG) + len(connector_rules.all_rules())
@@ -136,6 +136,53 @@ def test_the_library_filters_to_one_framework_and_shows_its_own_clauses(db):
     assert ecc["summary"]["frameworks_covered"] == 2
     # a framework nobody evidences empties the list instead of raising
     assert [r for d in rules.catalog_view(db, 1, framework="nope")["domains"] for r in d["rules"]] == []
+
+
+def test_a_mapping_a_reviewer_struck_out_is_gone_from_the_library(db):
+    """The SCF mapping review says a mapping is wrong; the library must not keep showing it."""
+    _crosswalk(db)                                  # IAC-06 → SOC 2 CC6.6 and ECC 2-2-3-2; IAC-06.1 → SOC 2 CC6.1
+    db.add(m.SCFMappingReview(tenant_id=1, source_slug=ECC, requirement_code="2-2-3-2", scf_id="IAC-06",
+                              verdict="suppressed", reviewed_by=1))
+    db.commit()
+    ecc = rules.catalog_view(db, 1, framework=ECC)
+    assert ecc["clauses"] == [] and "AUTH-01" not in {r["id"] for d in ecc["domains"] for r in d["rules"]}
+    assert rules.framework_rule_ids(db, ECC, 1) == []
+    soc2 = rules.catalog_view(db, 1, framework=SOC2)                     # other frameworks keep their mappings
+    assert {c["code"] for c in soc2["clauses"]} == {"CC6.6", "CC6.1"}
+    # a decision that only confirms a mapping changes nothing
+    db.query(m.SCFMappingReview).delete()
+    db.add(m.SCFMappingReview(tenant_id=1, source_slug=ECC, requirement_code="2-2-3-2", scf_id="IAC-06",
+                              verdict="confirmed", reviewed_by=1))
+    db.commit()
+    assert [c["code"] for c in rules.catalog_view(db, 1, framework=ECC)["clauses"]] == ["2-2-3-2"]
+
+
+def test_clauses_come_back_in_the_order_a_person_reads_them(db):
+    """1.10 is after 1.2 and 11.2.1 after 2.2.4 - not the alphabetical order the codes sort in as text."""
+    db.add(m.SCFSource(release_id=1, source_key="k3", source_slug=PCI, display_name="PCI DSS 4.0.1"))
+    db.add_all([m.SCFMapping(release_id=1, scf_id="IAC-06", source_slug=PCI, requirement_code=code)
+                for code in ("11.2.1", "1.10", "2.2.4", "1.2", "8.4.2", "8.4")])
+    db.commit()
+    view = rules.catalog_view(db, 1, framework=PCI)
+    assert [c["code"] for c in view["clauses"]] == ["1.2", "1.10", "2.2.4", "8.4", "8.4.2", "11.2.1"]
+    # a rule's own chip lists its first clauses in that order too
+    mfa = next(r for d in view["domains"] for r in d["rules"] if r["id"] == "AUTH-01")
+    assert mfa["frameworks"][0]["codes"] == ["1.2", "1.10", "2.2.4", "8.4"]
+
+
+def test_a_source_that_answers_for_a_library_framework_says_which(db):
+    """SCF files ISO 27001's Annex A under ISO 27002: searching for ISO 27001 must still find it."""
+    db.add_all([
+        m.SCFSource(release_id=1, source_key="k4", source_slug="iso_27002_2022", display_name="ISO 27002 2022",
+                    framework_slug="iso_27001"),
+        m.SCFSource(release_id=1, source_key="k5", source_slug=PCI, display_name="PCI DSS 4.0.1", framework_slug="pci_dss"),
+        m.SCFMapping(release_id=1, scf_id="IAC-06", source_slug="iso_27002_2022", requirement_code="8.5"),
+        m.SCFMapping(release_id=1, scf_id="IAC-06", source_slug=PCI, requirement_code="8.4"),
+    ])
+    db.commit()
+    by_slug = {f["slug"]: f for f in rules.catalog_view(db, 1)["frameworks"]}
+    assert by_slug["iso_27002_2022"]["library"] == "ISO 27001"
+    assert by_slug[PCI]["library"] is None                     # its own name already says PCI DSS
 
 
 def test_an_unmapped_tenant_still_gets_the_whole_catalog(db):

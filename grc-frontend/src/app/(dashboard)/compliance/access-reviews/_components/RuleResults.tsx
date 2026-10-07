@@ -19,7 +19,7 @@ export function FrameworkChips({ refs, total, max = 3 }: { refs?: FrameworkRef[]
   if (!list.length) return <span className="text-xs text-slate-600">No framework mapped</span>;
   const more = (total ?? list.length) - Math.min(list.length, max);
   return (
-    <ul className="flex flex-wrap gap-1" aria-label="Frameworks this rule evidences">
+    <ul className="flex flex-wrap gap-1" aria-label="Frameworks this rule relates to">
       {list.slice(0, max).map((f) => (
         <li key={f.slug} title={`${f.name}: ${f.codes.join(', ')}`}
           className="max-w-[220px] truncate rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-xs font-medium text-slate-800">
@@ -214,7 +214,7 @@ function RuleRow({ r, open, onToggle, items, onUser, labelFor, compact }: {
                 </section>
               )}
               <section aria-label="Frameworks" className="md:col-span-2">
-                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700">Frameworks and clauses it evidences</h4>
+                <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-700">Frameworks and clauses it relates to</h4>
                 <div className="mt-1"><FrameworkChips refs={r.frameworks} total={r.frameworks_total} max={8} /></div>
                 {!!r.scf?.length && <p className="mt-1 text-xs text-slate-600">Secure Controls Framework: {r.scf.join(', ')}</p>}
               </section>

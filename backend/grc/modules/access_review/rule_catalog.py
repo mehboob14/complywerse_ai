@@ -16,6 +16,7 @@ full auditor catalog is visible, each with the reason it can't run yet.
 """
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional
 
@@ -325,117 +326,117 @@ def _rule(id, domain, name, severity, status, reads, trips, regulation, check=No
 # --------------------------------------------------------------------------- #
 RULE_CATALOG: List[Dict[str, Any]] = [
     # ---- Identity lifecycle ----
-    _rule("IDM-01", "Identity lifecycle", "Terminated still active", "critical", RUNNABLE,
-          "HR termination + account status", "termination date set AND account still enabled", "SOX·SAMA", _chk_ghost, scf=("IAC-07.2", "IAC-15")),
-    _rule("IDM-02", "Identity lifecycle", "Role kept after transfer (mover)", "high", NEEDS_DATA,
-          "department-change history", "dept changed AND old-dept role still held", "SOX", scf=("IAC-07.1", "IAC-17")),
-    _rule("IDM-03", "Identity lifecycle", "Orphan account", "high", NEEDS_DATA,
-          "account ↔ HR identity link", "account has no matching active employee", "SOX·PCI", scf=("IAC-15", "IAC-07")),
-    _rule("IDM-04", "Identity lifecycle", "Dormant access", "medium", RUNNABLE,
-          "last sign-in", "no sign-in > 90 days (or never)", "SOX", _chk_stale, scf=("IAC-15.3", "IAC-17")),
+    _rule("IDM-01", "Identity lifecycle", "Leavers' accounts are disabled", "critical", RUNNABLE,
+          "HR termination + account status", "a leaver whose account is still enabled", "SOX·SAMA", _chk_ghost, scf=("IAC-07.2", "IAC-15")),
+    _rule("IDM-02", "Identity lifecycle", "A mover keeps no access from their old role", "high", NEEDS_DATA,
+          "department-change history", "a person who changed department and still holds a role of the old one", "SOX", scf=("IAC-07.1", "IAC-17")),
+    _rule("IDM-03", "Identity lifecycle", "Every account belongs to a current employee", "high", NEEDS_DATA,
+          "each account's link to an HR record", "an account with no matching active employee", "SOX·PCI", scf=("IAC-15", "IAC-07")),
+    _rule("IDM-04", "Identity lifecycle", "Every active account has signed in within 90 days", "medium", RUNNABLE,
+          "last sign-in", "an active account with no sign-in for over 90 days, or none on record", "SOX", _chk_stale, scf=("IAC-15.3", "IAC-17")),
     # ---- Authentication ----
-    _rule("AUTH-01", "Authentication", "No MFA", "high", RUNNABLE,
-          "mfa_enabled", "active account AND no MFA registered", "PCI·SAMA", _chk_mfa, scf=("IAC-06",)),
-    _rule("AUTH-02", "Authentication", "Shared / generic account", "high", RUNNABLE,
-          "account naming", "account not tied to one named person", "SOX·PCI", _chk_shared, scf=("IAC-15.5", "IAC-09")),
-    _rule("AUTH-04", "Authentication", "Invitation never accepted", "low", RUNNABLE,
-          "invitation status", "a seat was granted and never taken up", "SOX",
+    _rule("AUTH-01", "Authentication", "Every active account has MFA", "high", RUNNABLE,
+          "whether each account has a multi-factor method registered", "an active account with no MFA method registered", "PCI·SAMA", _chk_mfa, scf=("IAC-06",)),
+    _rule("AUTH-02", "Authentication", "Every account belongs to one named person", "high", RUNNABLE,
+          "account naming", "an account that looks shared or generic (such as admin, svc or test)", "SOX·PCI", _chk_shared, scf=("IAC-15.5", "IAC-09")),
+    _rule("AUTH-04", "Authentication", "Every invitation is accepted or withdrawn", "low", RUNNABLE,
+          "invitation status", "a seat that was granted and never taken up", "SOX",
           _chk_pending_invite, scf=("IAC-15", "IAC-07")),
-    _rule("AUTH-03", "Authentication", "SSO not enforced", "medium", NEEDS_DATA,
-          "per-user auth method", "local password login on an SSO-capable app", "—", scf=("IAC-02", "IAC-06")),
+    _rule("AUTH-03", "Authentication", "Applications sign people in through SSO", "medium", NEEDS_DATA,
+          "per-user auth method", "a local password login on an app that supports SSO", "—", scf=("IAC-02", "IAC-06")),
     # ---- Privilege & SoD ----
-    _rule("PRIV-01", "Privilege & SoD", "Over-privileged", "high", RUNNABLE,
-          "roles + department", "privileged role outside IT/Security", "SOX", _chk_over_priv, scf=("IAC-21", "IAC-16")),
-    _rule("PRIV-02", "Privilege & SoD", "SoD toxic combo", "high", RUNNABLE,
-          "role pairs vs SoD rules", "holds both roles of a forbidden pair", "SOX·SAMA", _chk_sod, scf=("HRS-11", "IAC-21")),
-    _rule("PRIV-03", "Privilege & SoD", "Standing admin (no JIT)", "medium", NEEDS_DATA,
-          "assignment type", "permanent privileged role, not time-bound", "—", scf=("IAC-16", "IAC-21")),
-    _rule("PRIV-05", "Privilege & SoD", "Privileged access without MFA", "critical", RUNNABLE,
-          "privileged roles + MFA status", "holds privileged access AND no MFA registered", "SOX·PCI·SAMA",
+    _rule("PRIV-01", "Privilege & SoD", "Privileged access is held only in IT and Security", "high", RUNNABLE,
+          "roles + department", "a privileged role held by someone outside IT or Security", "SOX", _chk_over_priv, scf=("IAC-21", "IAC-16")),
+    _rule("PRIV-02", "Privilege & SoD", "No one holds two roles that must be kept apart", "high", RUNNABLE,
+          "role pairs vs SoD rules", "a person who holds both roles of a forbidden pair", "SOX·SAMA", _chk_sod, scf=("HRS-11", "IAC-21")),
+    _rule("PRIV-03", "Privilege & SoD", "Admin access is time-bound, not standing", "medium", NEEDS_DATA,
+          "assignment type", "a permanent privileged role that is not time-bound", "—", scf=("IAC-16", "IAC-21")),
+    _rule("PRIV-05", "Privilege & SoD", "Every privileged account has MFA", "critical", RUNNABLE,
+          "privileged roles + MFA status", "a privileged account with no MFA method registered", "SOX·PCI·SAMA",
           _chk_priv_no_mfa, scf=("IAC-06.1", "IAC-16")),
-    _rule("PRIV-04", "Privilege & SoD", "Privilege creep", "medium", RUNNABLE,
-          "role count vs peers", "roles accumulated well beyond peer average", "SOX", _chk_creep, scf=("IAC-17", "IAC-21")),
+    _rule("PRIV-04", "Privilege & SoD", "No one holds far more roles than their peers", "medium", RUNNABLE,
+          "role count vs peers", "a person whose roles are well above the average for their department", "SOX", _chk_creep, scf=("IAC-17", "IAC-21")),
     # ---- Authorization ----
-    _rule("APRV-01", "Authorization", "No recorded approval", "low", RUNNABLE,
-          "role assignment approver/source", "held role with no approver or source", "SOX", _chk_no_approval, scf=("IAC-07", "IAC-15")),
+    _rule("APRV-01", "Authorization", "Every role was granted with a recorded approval", "low", RUNNABLE,
+          "role assignment approver/source", "a role held with no recorded approver or source", "SOX", _chk_no_approval, scf=("IAC-07", "IAC-15")),
     # ---- Network devices (needs connector) ----
-    _rule("NET-01", "Network devices", "Default / shared device creds", "critical", NEEDS_CONNECTOR,
-          "device local accounts", "default or shared admin present", "PCI", scf=("IAC-15.5", "IAC-10")),
-    _rule("NET-02", "Network devices", "Not via TACACS+/RADIUS", "high", NEEDS_CONNECTOR,
-          "device AAA config", "local admin auth, not centralized", "PCI", scf=("IAC-02", "IAC-20")),
-    _rule("NET-03", "Network devices", "No MFA on network admin", "high", NEEDS_CONNECTOR,
-          "admin access method", "privileged device access without MFA", "PCI", scf=("IAC-06.1", "IAC-16")),
-    _rule("NET-04", "Network devices", "Firewall any-any rule", "high", NEEDS_CONNECTOR,
-          "firewall ruleset", "overly broad allow rule", "PCI", scf=("NET-04.1", "IAC-20")),
+    _rule("NET-01", "Network devices", "Network devices have no default or shared admin accounts", "critical", NEEDS_CONNECTOR,
+          "device local accounts", "a default or shared admin account on a device", "PCI", scf=("IAC-15.5", "IAC-10")),
+    _rule("NET-02", "Network devices", "Device admins sign in through TACACS+ or RADIUS", "high", NEEDS_CONNECTOR,
+          "device AAA config", "a device that checks admin logins locally instead of centrally", "PCI", scf=("IAC-02", "IAC-20")),
+    _rule("NET-03", "Network devices", "Admin access to network devices requires MFA", "high", NEEDS_CONNECTOR,
+          "admin access method", "privileged access to a device without MFA", "PCI", scf=("IAC-06.1", "IAC-16")),
+    _rule("NET-04", "Network devices", "No firewall rule allows any source to any destination", "high", NEEDS_CONNECTOR,
+          "firewall ruleset", "an overly broad allow rule", "PCI", scf=("NET-04.1", "IAC-20")),
     # ---- DevOps / CI-CD ----
-    _rule("DEV-01", "DevOps / CI-CD", "Secrets in repo", "critical", NEEDS_CONNECTOR,
-          "repo content scan", "hardcoded key/secret found", "PCI·SOX", scf=("TDA-20", "IAC-10")),
-    _rule("DEV-02", "DevOps / CI-CD", "Standing repo / org admin", "high", RUNNABLE,
-          "repo org roles", "permanent owner/admin", "SOX", _chk_repo_admin, scf=("IAC-16", "TDA-20")),
-    _rule("DEV-03", "DevOps / CI-CD", "Long-lived token", "high", NEEDS_CONNECTOR,
-          "PATs / service tokens", "token without expiry or rotation", "PCI", scf=("IAC-10", "CRY-09")),
-    _rule("DEV-04", "DevOps / CI-CD", "Dev has prod deploy", "high", NEEDS_CONNECTOR,
-          "pipeline / prod roles", "developer holds prod deploy rights", "SOX", scf=("HRS-11", "IAC-21")),
+    _rule("DEV-01", "DevOps / CI-CD", "No secrets are stored in code repositories", "critical", NEEDS_CONNECTOR,
+          "repo content scan", "a hard-coded key or secret in a repository", "PCI·SOX", scf=("TDA-20", "IAC-10")),
+    _rule("DEV-02", "DevOps / CI-CD", "Code-platform admin is held only by those who need it", "high", RUNNABLE,
+          "repo org roles", "an account with standing owner or admin rights on a repository or organisation", "SOX", _chk_repo_admin, scf=("IAC-16", "TDA-20")),
+    _rule("DEV-03", "DevOps / CI-CD", "Access tokens expire or are rotated", "high", NEEDS_CONNECTOR,
+          "personal access and service tokens", "a token with no expiry and no rotation", "PCI", scf=("IAC-10", "CRY-09")),
+    _rule("DEV-04", "DevOps / CI-CD", "Developers cannot deploy to production", "high", NEEDS_CONNECTOR,
+          "pipeline / prod roles", "a developer who holds production deploy rights", "SOX", scf=("HRS-11", "IAC-21")),
     # ---- Databases (RUNNABLE once a Tier-3 Database connector is synced) ----
-    _rule("DB-01", "Databases", "Database superuser (DBA)", "critical", RUNNABLE,
-          "DB roles", "account holds DB superuser", "SOX", _chk_db_super, scf=("IAC-16", "IAC-21")),
-    _rule("DB-02", "Databases", "Default / shared DB account", "high", RUNNABLE,
-          "DB account name", "default account (postgres/sa/root…) can log in", "PCI", _chk_db_default, scf=("IAC-15.5", "IAC-10")),
-    _rule("DB-03", "Databases", "Direct prod / PII access", "high", NEEDS_CONNECTOR,
-          "table grants", "direct read on sensitive tables, bypassing app", "GDPR·PCI", scf=("AST-28", "IAC-20")),
-    _rule("DB-04", "Databases", "GRANT ALL / public role", "high", NEEDS_CONNECTOR,
-          "privilege grants", "excessive grant or public-role privileges", "SOX", scf=("IAC-21", "AST-28")),
+    _rule("DB-01", "Databases", "Database superuser is limited to authorised DBAs", "critical", RUNNABLE,
+          "DB roles", "an account holding database superuser", "SOX", _chk_db_super, scf=("IAC-16", "IAC-21")),
+    _rule("DB-02", "Databases", "Default database accounts cannot log in", "high", RUNNABLE,
+          "DB account name", "a default account (postgres, sa, root...) that can log in", "PCI", _chk_db_default, scf=("IAC-15.5", "IAC-10")),
+    _rule("DB-03", "Databases", "Sensitive tables are reached only through the application", "high", NEEDS_CONNECTOR,
+          "table grants", "a direct read grant on a sensitive table that bypasses the application", "GDPR·PCI", scf=("AST-28", "IAC-20")),
+    _rule("DB-04", "Databases", "No database account has blanket or public privileges", "high", NEEDS_CONNECTOR,
+          "privilege grants", "an excessive grant, or privileges given to the public role", "SOX", scf=("IAC-21", "AST-28")),
     # ---- Cloud ----
-    _rule("CLD-01", "Cloud", "Root used / no MFA on root", "critical", NEEDS_CONNECTOR,
-          "root activity + MFA", "root login OR root MFA off", "SOX·PCI", scf=("IAC-06", "IAC-16")),
-    _rule("CLD-02", "Cloud", "Wildcard IAM policy", "critical", RUNNABLE,
+    _rule("CLD-01", "Cloud", "The cloud root account is unused and protected by MFA", "critical", NEEDS_CONNECTOR,
+          "root activity + MFA", "a root login, or a root account without MFA", "SOX·PCI", scf=("IAC-06", "IAC-16")),
+    _rule("CLD-02", "Cloud", "Cloud credentials are limited to the scope they need", "critical", RUNNABLE,
           "cloud credentials + their scope", "a credential with no bucket or scope limit", "SOX",
           _chk_cloud_wildcard, scf=("IAC-21", "IAC-20")),
-    _rule("CLD-03", "Cloud", "Long-lived access key", "high", RUNNABLE,
-          "access keys + age", "key not rotated > 90 days", "PCI", _chk_cloud_key_age, scf=("IAC-10", "IAC-15")),
-    _rule("CLD-04", "Cloud", "Public storage / open SG", "high", NEEDS_CONNECTOR,
-          "bucket ACL + security groups", "public bucket OR 0.0.0.0/0 ingress", "PCI·GDPR", scf=("NET-04.1", "IAC-20")),
-    _rule("CLD-05", "Cloud", "Orphaned cloud user", "high", RUNNABLE,
-          "cloud users ↔ HR", "active cloud user for a leaver", "SOX", _chk_cloud_orphan, scf=("IAC-07.2", "IAC-15.3")),
+    _rule("CLD-03", "Cloud", "Cloud access keys are rotated within 90 days", "high", RUNNABLE,
+          "access keys + age", "a key that has not been rotated in over 90 days", "PCI", _chk_cloud_key_age, scf=("IAC-10", "IAC-15")),
+    _rule("CLD-04", "Cloud", "No storage is public and no security group is open to the world", "high", NEEDS_CONNECTOR,
+          "bucket ACL + security groups", "a public bucket, or an ingress rule open to 0.0.0.0/0", "PCI·GDPR", scf=("NET-04.1", "IAC-20")),
+    _rule("CLD-05", "Cloud", "Cloud users who have left are removed", "high", RUNNABLE,
+          "cloud users matched against HR", "an active cloud user belonging to a leaver", "SOX", _chk_cloud_orphan, scf=("IAC-07.2", "IAC-15.3")),
     # ---- Finance ERP ----
-    _rule("ERP-01", "Finance ERP", "SoD: create vendor + run payment", "critical", NEEDS_CONNECTOR,
-          "ERP roles", "same user holds both entitlements", "SOX·SAMA", scf=("HRS-11", "IAC-21")),
-    _rule("ERP-02", "Finance ERP", "SoD: post + approve journal", "critical", NEEDS_CONNECTOR,
-          "ERP roles", "same user posts AND approves", "SOX", scf=("HRS-11", "IAC-21")),
-    _rule("ERP-03", "Finance ERP", "SAP_ALL / super-user profile", "critical", NEEDS_CONNECTOR,
-          "profiles", "SAP_ALL or equivalent assigned", "SOX", scf=("IAC-16", "IAC-21")),
-    _rule("ERP-04", "Finance ERP", "Firefighter not logged", "high", NEEDS_CONNECTOR,
-          "emergency-access logs", "firefighter use without log/justification", "SOX·SAMA", scf=("IAC-16", "IAC-17")),
-    _rule("ERP-05", "Finance ERP", "Powerful t-code to non-finance", "high", NEEDS_CONNECTOR,
-          "t-code assignments", "sensitive t-code held by non-finance user", "SOX", scf=("IAC-21", "IAC-08")),
-    _rule("ERP-06", "Finance ERP", "Maker-checker not enforced", "high", NEEDS_CONNECTOR,
-          "workflow config", "same user can initiate AND approve", "SAMA", scf=("HRS-11", "IAC-07")),
+    _rule("ERP-01", "Finance ERP", "No one can both create a vendor and run payments", "critical", NEEDS_CONNECTOR,
+          "ERP roles", "a user who holds both entitlements", "SOX·SAMA", scf=("HRS-11", "IAC-21")),
+    _rule("ERP-02", "Finance ERP", "No one can both post and approve a journal", "critical", NEEDS_CONNECTOR,
+          "ERP roles", "a user who both posts and approves", "SOX", scf=("HRS-11", "IAC-21")),
+    _rule("ERP-03", "Finance ERP", "No account holds a super-user profile such as SAP_ALL", "critical", NEEDS_CONNECTOR,
+          "profiles", "SAP_ALL, or an equivalent profile, assigned to an account", "SOX", scf=("IAC-16", "IAC-21")),
+    _rule("ERP-04", "Finance ERP", "Emergency (firefighter) access is logged and justified", "high", NEEDS_CONNECTOR,
+          "emergency-access logs", "firefighter use with no log or justification", "SOX·SAMA", scf=("IAC-16", "IAC-17")),
+    _rule("ERP-05", "Finance ERP", "Sensitive transaction codes are held only by finance users", "high", NEEDS_CONNECTOR,
+          "t-code assignments", "a sensitive t-code held by someone outside finance", "SOX", scf=("IAC-21", "IAC-08")),
+    _rule("ERP-06", "Finance ERP", "The person who initiates cannot also approve", "high", NEEDS_CONNECTOR,
+          "workflow config", "a workflow in which one user can both initiate and approve", "SAMA", scf=("HRS-11", "IAC-07")),
     # ---- Privileged access (PAM) ----
-    _rule("PAM-01", "Privileged access (PAM)", "Standing privileged, not vaulted", "high", NEEDS_CONNECTOR,
-          "privileged accounts vs vault", "privileged account not under PAM", "PCI", scf=("IAC-16", "IAC-16.4")),
-    _rule("PAM-02", "Privileged access (PAM)", "Shared admin password", "high", NEEDS_CONNECTOR,
-          "shared-cred inventory", "admin password shared across people", "PCI", scf=("IAC-15.5", "IAC-10")),
-    _rule("PAM-03", "Privileged access (PAM)", "Break-glass w/o justification", "high", NEEDS_CONNECTOR,
-          "break-glass usage logs", "used without ticket/justification", "SOX", scf=("IAC-16", "IAC-17")),
+    _rule("PAM-01", "Privileged access (PAM)", "Privileged accounts are held in the PAM vault", "high", NEEDS_CONNECTOR,
+          "privileged accounts vs vault", "a standing privileged account that is not under PAM", "PCI", scf=("IAC-16", "IAC-16.4")),
+    _rule("PAM-02", "Privileged access (PAM)", "Admin passwords are not shared between people", "high", NEEDS_CONNECTOR,
+          "shared-cred inventory", "an admin password shared across several people", "PCI", scf=("IAC-15.5", "IAC-10")),
+    _rule("PAM-03", "Privileged access (PAM)", "Break-glass use is justified with a ticket", "high", NEEDS_CONNECTOR,
+          "break-glass usage logs", "break-glass use with no ticket or justification", "SOX", scf=("IAC-16", "IAC-17")),
     # ---- OS / servers ----
-    _rule("OS-01", "OS / servers", "Domain admin sprawl", "critical", NEEDS_CONNECTOR,
-          "domain admin group", "excessive domain-admin members", "SOX", scf=("IAC-16", "IAC-21")),
-    _rule("OS-02", "OS / servers", "Local root/admin not centralized", "high", NEEDS_CONNECTOR,
-          "server local admins", "local admin not via central IdM", "SOX", scf=("IAC-16", "IAC-15")),
+    _rule("OS-01", "OS / servers", "Domain admin has only the members it needs", "critical", NEEDS_CONNECTOR,
+          "domain admin group", "more domain-admin members than are needed", "SOX", scf=("IAC-16", "IAC-21")),
+    _rule("OS-02", "OS / servers", "Local admin on servers is managed centrally", "high", NEEDS_CONNECTOR,
+          "server local admins", "a local admin that is not managed through central identity management", "SOX", scf=("IAC-16", "IAC-15")),
     # ---- SaaS / data ----
-    _rule("SAAS-01", "SaaS / data", "External / guest standing access", "high", RUNNABLE,
-          "guest users", "external user with persistent access", "GDPR", _chk_guest_access, scf=("IAC-03", "IAC-17")),
-    _rule("SAAS-02", "SaaS / data", "Over-shared sensitive files", "medium", NEEDS_CONNECTOR,
-          "sharing settings", "sensitive file shared broadly/public", "GDPR", scf=("IAC-20", "IAC-21")),
+    _rule("SAAS-01", "SaaS / data", "Guests and external users hold no standing access", "high", RUNNABLE,
+          "guest users", "an external user with persistent access", "GDPR", _chk_guest_access, scf=("IAC-03", "IAC-17")),
+    _rule("SAAS-02", "SaaS / data", "Sensitive files are not shared broadly or publicly", "medium", NEEDS_CONNECTOR,
+          "sharing settings", "a sensitive file shared broadly or publicly", "GDPR", scf=("IAC-20", "IAC-21")),
     # ---- Cross-system & approval ----
-    _rule("XSYS-01", "Cross-system & approval", "Toxic cross-system combo", "high", NEEDS_CONNECTOR,
-          "roles across systems", "e.g. AD admin AND DB admin together", "SOX", scf=("HRS-11", "IAC-21")),
-    _rule("XSYS-02", "Cross-system & approval", "Requester = approver", "high", NEEDS_DATA,
-          "request + approval records", "same person requested AND approved", "SOX·SAMA", scf=("HRS-11", "IAC-07")),
-    _rule("XSYS-03", "Cross-system & approval", "Terminated active anywhere", "critical", NEEDS_CONNECTOR,
-          "all systems + HR", "leaver still active in ANY connected system", "SOX·SAMA", scf=("IAC-07.2", "IAC-15.3")),
-    _rule("CERT-01", "Cross-system & approval", "Recertification overdue", "medium", RUNNABLE,
-          "last certification date", "access not recertified within the cycle", "SOX", _chk_recert_overdue, scf=("IAC-17",)),
+    _rule("XSYS-01", "Cross-system & approval", "No one holds a risky combination of access across systems", "high", NEEDS_CONNECTOR,
+          "roles across systems", "a combination such as AD admin and database admin held by one person", "SOX", scf=("HRS-11", "IAC-21")),
+    _rule("XSYS-02", "Cross-system & approval", "No one approves their own request", "high", NEEDS_DATA,
+          "request + approval records", "a person who both requested and approved", "SOX·SAMA", scf=("HRS-11", "IAC-07")),
+    _rule("XSYS-03", "Cross-system & approval", "Leavers are disabled in every connected system", "critical", NEEDS_CONNECTOR,
+          "the accounts in every connected system, matched against HR", "a leaver still active in any connected system", "SOX·SAMA", scf=("IAC-07.2", "IAC-15.3")),
+    _rule("CERT-01", "Cross-system & approval", "Access is recertified within each cycle", "medium", RUNNABLE,
+          "last certification date", "an identity last certified more than a year ago", "SOX", _chk_recert_overdue, scf=("IAC-17",)),
 ]
 
 # What each runnable rule can judge. A rule is not "passed" by an identity it cannot
@@ -609,6 +610,11 @@ _HEADLINE_FRAMEWORKS = (
 _MAX_CODES_PER_FRAMEWORK = 4
 
 
+def _natural_key(code: str) -> list:
+    """Clause codes in the order a person reads them: 1.2 before 1.10, 2.2.4 before 11.2.1."""
+    return [int(p) if p.isdecimal() else p.lower() for p in re.split(r"(\d+)", code or "")]
+
+
 def framework_refs(tenant_db: Session, scf_ids: List[str], limit: int = 6) -> Dict[str, Any]:
     """The tenant's own frameworks that these SCF controls satisfy.
 
@@ -713,7 +719,7 @@ def framework_rule_ids(tenant_db: Session, framework: str, tenant_id: Optional[i
     for `source` (None = every connected source)."""
     pool = [r for r in RULE_CATALOG if r["check"] is not None and applies_to_source(r, source)]
     pool += connector_rule_defs(tenant_db, tenant_id, source) if tenant_id is not None else []
-    crosswalk = _crosswalk(tenant_db, sorted({c for r in pool for c in (r.get("scf") or ())}))
+    crosswalk = _crosswalk(tenant_db, sorted({c for r in pool for c in (r.get("scf") or ())}), tenant_id)
     return [r["id"] for r in pool
             if framework in {slug for scf_id in (r.get("scf") or ()) for slug, _n, _c in crosswalk.get(scf_id, ())}]
 
@@ -738,7 +744,7 @@ def rules_with_frameworks(tenant_db: Session, tenant_id: int, rule_ids: List[str
     each evidences — the review's own framework first."""
     cfg_map = _configs(tenant_db, tenant_id)
     rules = [d for d in (rule_def(i) for i in rule_ids) if d]
-    crosswalk = _crosswalk(tenant_db, sorted({c for r in rules for c in (r.get("scf") or ())}))
+    crosswalk = _crosswalk(tenant_db, sorted({c for r in rules for c in (r.get("scf") or ())}), tenant_id)
     out = []
     for r in rules:
         pairs = [p for scf_id in (r.get("scf") or ()) for p in crosswalk.get(scf_id, ())]
@@ -885,9 +891,25 @@ def run_enabled_rules(tenant_db: Session, *, tenant_id: int, campaign_id: int,
     return total
 
 
-def _crosswalk(tenant_db: Session, scf_ids: List[str]) -> Dict[str, List[tuple]]:
+def _struck_out(tenant_db: Session, tenant_id: Optional[int]) -> set:
+    """(source slug, requirement code, scf id) a reviewer struck out in the SCF mapping review. A mapping
+    that is wrong is wrong here too: this crosswalk reads what that review decided."""
+    if tenant_id is None:
+        return set()
+    from ...models import SCFMappingReview
+    try:
+        return {(r.source_slug, r.requirement_code, r.scf_id)
+                for r in tenant_db.query(SCFMappingReview.source_slug, SCFMappingReview.requirement_code,
+                                         SCFMappingReview.scf_id)
+                .filter(SCFMappingReview.tenant_id == tenant_id, SCFMappingReview.verdict == "suppressed").all()}
+    except Exception:  # noqa: BLE001 — no review table, no decisions
+        return set()
+
+
+def _crosswalk(tenant_db: Session, scf_ids: List[str], tenant_id: Optional[int] = None) -> Dict[str, List[tuple]]:
     """scf id → [(slug, framework name, requirement code)] in one query, so a
-    catalog of 48 rules doesn't make 48 round trips."""
+    catalog of 48 rules doesn't make 48 round trips. Mappings the tenant's
+    reviewers struck out are left out."""
     if not scf_ids:
         return {}
     from ...models import SCFMapping, SCFSource
@@ -904,8 +926,10 @@ def _crosswalk(tenant_db: Session, scf_ids: List[str]) -> Dict[str, List[tuple]]
         )
     except Exception:  # noqa: BLE001 — a tenant without the crosswalk shows none
         return {}
+    struck = _struck_out(tenant_db, tenant_id)
     for scf_id, slug, name, code in rows:
-        out.setdefault(scf_id, []).append((slug, name, code))
+        if (slug, code, scf_id) not in struck:
+            out.setdefault(scf_id, []).append((slug, name, code))
     return out
 
 
@@ -916,7 +940,7 @@ def _group_frameworks(pairs: List[tuple], limit: int, prefer: Optional[str] = No
         if code and code not in entry["codes"]:
             entry["codes"].append(code)
     for entry in by_slug.values():
-        entry["codes"] = sorted(entry["codes"])[:_MAX_CODES_PER_FRAMEWORK]
+        entry["codes"] = sorted(entry["codes"], key=_natural_key)[:_MAX_CODES_PER_FRAMEWORK]
     # The framework a review was scoped to comes first, then the headline ones.
     ordered = sorted(by_slug.values(), key=lambda e: (
         e["slug"] != prefer,
@@ -932,7 +956,27 @@ def _clauses(crosswalk: Dict[str, List[tuple]], framework: str, rules: List[Dict
             for slug, _name, code in crosswalk.get(scf_id, ()):
                 if slug == framework and code and r["id"] not in by_code.setdefault(code, []):
                     by_code[code].append(r["id"])
-    return [{"code": code, "rules": ids} for code, ids in sorted(by_code.items())]
+    return [{"code": code, "rules": ids} for code, ids in sorted(by_code.items(), key=lambda kv: _natural_key(kv[0]))]
+
+
+def _library_names(tenant_db: Session) -> Dict[str, str]:
+    """SCF source slug → the name of the platform framework it stands in for ("iso_27002_2022" → "ISO 27001").
+
+    SCF files ISO 27001's Annex A controls under ISO 27002, so a person looking for ISO 27001 would find no
+    framework of that name; the picker shows which source answers for it."""
+    from ...models import SCFSource
+    try:
+        rows = (tenant_db.query(SCFSource.source_slug, SCFSource.framework_slug)
+                .filter(SCFSource.framework_slug.isnot(None)).distinct().all())
+    except Exception:  # noqa: BLE001 — a tenant without the crosswalk shows none
+        return {}
+    return {slug: fw.replace("_", " ").upper() for slug, fw in rows}
+
+
+def _library_alias(name: Optional[str], library_name: Optional[str]) -> Optional[str]:
+    """The library name, unless the framework's own name already says it ("PCI DSS 4.0.1" needs no "PCI DSS")."""
+    squash = lambda text: re.sub(r"[^a-z0-9]", "", (text or "").lower())  # noqa: E731
+    return library_name if library_name and squash(library_name) not in squash(name) else None
 
 
 def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = None,
@@ -958,7 +1002,7 @@ def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = 
         if source and pack.connector != source:
             continue
         pool.extend(rule_def(r.id) for r in pack.rules)
-    crosswalk = _crosswalk(tenant_db, sorted({c for r in pool for c in (r.get("scf") or ())}))
+    crosswalk = _crosswalk(tenant_db, sorted({c for r in pool for c in (r.get("scf") or ())}), tenant_id)
 
     domains: Dict[str, List[Dict[str, Any]]] = {}
     covered: set = set()
@@ -1008,8 +1052,10 @@ def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = 
                 enabled_n += 1
     # Every framework the pool touches, most-covered first — the filter the library
     # offers, drawn from the tenant's own crosswalk rather than a fixed list.
+    library = _library_names(tenant_db)
     frameworks = sorted(
-        ({"slug": slug, "name": name, **n} for (slug, name), n in counted.items()),
+        ({"slug": slug, "name": name, **n, "library": _library_alias(name, library.get(slug))}
+         for (slug, name), n in counted.items()),
         key=lambda f: (-f["runnable"], -f["rules"], f["name"]),
     )
     return {

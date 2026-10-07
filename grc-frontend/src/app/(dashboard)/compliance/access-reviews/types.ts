@@ -216,13 +216,14 @@ export interface FrameworkRef {
 
 export interface RuleCatalogView {
   summary: { total: number; catalog_total?: number; runnable: number; enabled_active: number; frameworks_covered?: number };
-  /** every framework the catalog evidences, from the tenant's own crosswalk */
-  frameworks?: { slug: string; name: string; rules: number; runnable: number }[];
+  /** every framework the catalog evidences, from the tenant's own crosswalk. `library` names the platform
+   *  framework a source answers for when its own name does not (ISO 27002 2022 → "ISO 27001"). */
+  frameworks?: { slug: string; name: string; rules: number; runnable: number; library?: string | null }[];
   framework?: string | null;
   source?: string | null;
   /** the connectors that carry rules of their own */
   connectors?: { key: string; label: string; connected: boolean; rules: number; limits?: string }[];
-  /** the framework's own requirement clauses these rules evidence, each with the rules that answer it */
+  /** the framework's own requirement clauses these rules relate to (in reading order), each with the rules that answer it */
   clauses?: { code: string; rules: string[] }[];
   domains: { domain: string; rules: CatalogRule[] }[];
 }

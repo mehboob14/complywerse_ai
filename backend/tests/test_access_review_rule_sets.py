@@ -123,7 +123,7 @@ def test_the_report_and_every_export_show_what_each_rule_found(db, api):
     assert {r["id"] for r in report["rule_results"]} >= {"AUTH-01", "PRIV-05"}
 
     csv = api.get(f"/access-reviews/{review['id']}/report/export?format=csv")
-    assert csv.status_code == 200 and "Rules failed" in csv.text and "AUTH-01 No MFA" in csv.text
+    assert csv.status_code == 200 and "Rules failed" in csv.text and "AUTH-01 Every active account has MFA" in csv.text
     xlsx = api.get(f"/access-reviews/{review['id']}/report/export?format=xlsx")
     book = load_workbook(io.BytesIO(xlsx.content))
     assert book.sheetnames == ["Users", "Rules"]

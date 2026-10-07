@@ -55,7 +55,7 @@ export function SourceDrawer({ source, ruleCount, limits, onClose, onResync }: {
           <section aria-label={`Rules for ${source.label}`} className="rounded-xl border border-slate-200 bg-slate-50 p-4">
             <h3 className="text-base font-semibold text-slate-900">Rules for {source.label}</h3>
             <p className="mt-1 text-sm text-slate-700">
-              {plural(ruleCount, 'rule')} test this source&apos;s own configuration, each with the frameworks it evidences. Running them here only reads the source: nothing is stored and no review is created.
+              {plural(ruleCount, 'rule')} test this source&apos;s own configuration, each with the frameworks it relates to. Running them here only reads the source: nothing is stored and no review is created.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="primary" icon={Play} loading={run.isPending} onClick={() => run.mutate(source.key)}>{ran ? 'Run the rules again' : `Run the ${ruleCount} rules now`}</Button>

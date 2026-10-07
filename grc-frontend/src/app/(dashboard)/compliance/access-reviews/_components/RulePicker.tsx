@@ -71,7 +71,7 @@ export function RulePicker({ value, onChange, source, sourceLabel }: {
         value={value.rule_scope} onChange={(k) => set({ rule_scope: k })}
         options={[
           { value: 'enabled', label: 'Every enabled rule', description: `All rules switched on in the Rule library that can run on ${where}.` },
-          { value: 'framework', label: 'One framework', description: 'Only the rules that evidence a framework you choose, with its own clauses.' },
+          { value: 'framework', label: 'One framework', description: 'Only the rules that relate to a framework you choose, with its own clauses.' },
           { value: 'custom', label: 'Pick rules', description: 'Choose them one by one.' },
         ]} />
 
@@ -81,7 +81,7 @@ export function RulePicker({ value, onChange, source, sourceLabel }: {
             <Combobox id={id} label="Frameworks" placeholder="Search frameworks, e.g. ISO, SOC 2, PCI" emptyText="No framework matches."
               clearLabel="Clear the framework" value={value.rule_framework ?? ''} onChange={(slug) => set({ rule_framework: slug || null })}
               describedBy={aria['aria-describedby']}
-              options={frameworks.map((f) => ({ value: f.slug, label: f.name, hint: `${f.runnable} rule${f.runnable === 1 ? '' : 's'}` }))} />
+              options={frameworks.map((f) => ({ value: f.slug, label: f.name, hint: `${f.runnable} rule${f.runnable === 1 ? '' : 's'}${f.library ? ` · ${f.library}` : ''}` }))} />
           )}
         </Field>
       )}
@@ -147,7 +147,7 @@ function Summary({ rules, loading, scope, framework, frameworkName, clauses = []
         : scope === 'framework' && !framework ? <p>Choose a framework to see the rules that evidence it.</p>
           : rules.length === 0 ? (
             <p role="status" className="font-medium text-amber-900">
-              {scope === 'framework' ? `No rule that can run on ${where} evidences this framework.` : 'No rule is selected.'}
+              {scope === 'framework' ? `No rule that can run on ${where} relates to this framework.` : 'No rule is selected.'}
             </p>
           ) : (
             <>
@@ -155,7 +155,7 @@ function Summary({ rules, loading, scope, framework, frameworkName, clauses = []
                 <span className="font-semibold">{rules.length} rule{rules.length === 1 ? '' : 's'}</span> will run
                 {estate.length > 0 && <>: {estate.length} test{estate.length === 1 ? 's' : ''} {labels.join(' and ') || 'the connected estate'} directly</>}
                 {people > 0 && <>{estate.length > 0 ? ' and ' : ': '}{people} test{people === 1 ? 's' : ''} the people in the sample</>}.
-                {scope === 'framework' && frameworkName && clauses.length > 0 && <> Together they answer {clauses.length} clause{clauses.length === 1 ? '' : 's'} of {shortFramework(frameworkName)}.</>}
+                {scope === 'framework' && frameworkName && clauses.length > 0 && <> Together they relate to {clauses.length} clause{clauses.length === 1 ? '' : 's'} of {shortFramework(frameworkName)}.</>}
               </p>
               {!compact && (
                 <details className="mt-2">
