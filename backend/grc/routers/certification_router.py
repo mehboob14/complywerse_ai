@@ -3,7 +3,6 @@ from ..config import get_openai_api_key, get_openai_model
 import os
 import json
 import uuid
-import random
 import logging
 import io
 from typing import List, Optional
@@ -36,7 +35,7 @@ from ..schemas import (
     ImplementationEvidenceCreate, ImplementationEvidenceResponse,
     ProgressSummary, GapAnalysis, EvidenceReviewAction, MessageResponse
 )
-from ..modules.evidence.background import trigger_ocr_and_assessment_background
+from ..services import evidence_review
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 
 router = APIRouter(prefix="/certifications", tags=["Certifications"])
@@ -1147,6 +1146,7 @@ def list_journey_controls(
         for ev in impl.evidence_attachments:
             ai_assessment_status = None
             ai_assessment_summary = None
+            maturity = None
             # evidence_id is the FK to the Evidence library record (populated when linked
             # from the evidence library via link-from-ai or manual linking)
             linked_ev_id = ev.evidence_id
@@ -1154,11 +1154,14 @@ def list_journey_controls(
             if linked_ev_id:
                 linked_evidence = db.query(Evidence).filter(Evidence.id == linked_ev_id).first()
                 if linked_evidence:
+                    maturity = linked_evidence.quality_score
                     latest_assessment = db.query(EvidenceAIAssessment).filter(
                         EvidenceAIAssessment.evidence_id == linked_evidence.id
                     ).order_by(EvidenceAIAssessment.assessed_at.desc()).first()
                     
-                    if latest_assessment:
+                    if evidence_review.state(linked_evidence).get("status") in evidence_review.ACTIVE:
+                        ai_assessment_status = "processing"
+                    elif latest_assessment:
                         ai_assessment_status = "completed"
                         ai_assessment_summary = latest_assessment.content_summary
                     elif linked_evidence.ocr_status == "processing":
@@ -1177,7 +1180,8 @@ def list_journey_controls(
                 "review_status": getattr(ev, 'review_status', None),
                 "linked_evidence_id": linked_ev_id,
                 "ai_assessment_status": ai_assessment_status,
-                "ai_assessment_summary": ai_assessment_summary
+                "ai_assessment_summary": ai_assessment_summary,
+                "maturity": round(maturity) if maturity is not None else None,
             })
 
         existing_linked_ids = {
@@ -1928,8 +1932,9 @@ async def upload_control_evidence(
         with open(file_path, "wb") as f:
             f.write(contents)
         
-        ocr_processable = ['pdf', 'png', 'jpg', 'jpeg']
-        ocr_status_val = "pending" if file_ext and file_ext[1:].lower() in ocr_processable else "not_applicable"
+        from ..modules.evidence.routers.evidence import OCR_PROCESSABLE_TYPES
+
+        ocr_status_val = "pending" if file_ext and file_ext[1:].lower() in OCR_PROCESSABLE_TYPES else "not_applicable"
 
         library_evidence = Evidence(
             tenant_id=journey.tenant_id,
@@ -1979,8 +1984,7 @@ async def upload_control_evidence(
                          or getattr(fc, "statement", None) or ""),
             guidance=implementation.implementation_notes or "",
         )
-        background_tasks.add_task(trigger_ocr_and_assessment_background,
-                                  library_evidence.id, current_user.id, target)
+        evidence_review.start(db, library_evidence, db.info.get("tenant_slug"), target=target, user_id=current_user.id)
 
     return impl_evidence
 
@@ -2006,23 +2010,24 @@ def assess_evidence(
             detail="Evidence not found"
         )
     
-    confidence_score = round(random.uniform(0.6, 0.95), 2)
-    matched_controls = random.sample(range(1, 50), k=random.randint(1, 3))
-    
-    impl_evidence.ai_assessment_status = "assessed"
-    impl_evidence.ai_confidence_score = confidence_score
-    impl_evidence.ai_assessment_notes = f"AI assessment completed. Evidence appears relevant to the control requirements with {int(confidence_score * 100)}% confidence."
-    impl_evidence.ai_matched_controls = matched_controls
-    
-    db.commit()
-    db.refresh(impl_evidence)
-    
+    library = (db.query(Evidence).filter(Evidence.id == impl_evidence.evidence_id).first()
+               if impl_evidence.evidence_id else None)
+    if library is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="This file was attached before the Evidence library kept a copy, so it cannot be rated. Upload it again to have it rated.",
+        )
+    # The AI review of the file itself: read, rated for maturity, matched to clauses. It runs in the background
+    # and the control's list shows where it stands, so this answers at once with what is known now.
+    evidence_review.start(db, library, db.info.get("tenant_slug"), user_id=current_user.id, force=True)
+    review = evidence_review.payload(db, library)
+    running = review["status"] in evidence_review.ACTIVE
     return {
         "id": impl_evidence.id,
-        "ai_confidence_score": impl_evidence.ai_confidence_score,
-        "ai_assessment_status": impl_evidence.ai_assessment_status,
-        "ai_assessment_notes": impl_evidence.ai_assessment_notes,
-        "ai_matched_controls": impl_evidence.ai_matched_controls
+        "ai_confidence_score": round(library.quality_score / 100, 2) if library.quality_score is not None else None,
+        "ai_assessment_status": "processing" if running else ("completed" if review["has_assessment"] else "pending_assessment"),
+        "ai_assessment_notes": library.content_summary if review["has_assessment"] else None,
+        "ai_matched_controls": [],
     }
 
 

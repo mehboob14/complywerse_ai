@@ -222,6 +222,7 @@ from ....schemas import (
     EvidenceRecommendation, MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import evidence_review
 
 router = APIRouter(prefix="/rcsa", tags=["RCSA - Risk and Control Self-Assessment"])
 
@@ -3097,6 +3098,7 @@ async def upload_rcsa_evidence(
     )
     db.add(evidence_link)
     db.commit()
+    evidence_review.rate_upload(db, evidence, current_user.id)
     
     return {
         "id": evidence.id,

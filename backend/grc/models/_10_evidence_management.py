@@ -42,6 +42,8 @@ class Evidence(Base):
     review_comments = Column(Text, nullable=True)
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     approved_at = Column(DateTime, nullable=True)
+    # Where the AI review of the uploaded file stands (services/evidence_review.py): status, step, error, times.
+    ai_review = Column(JSON, nullable=True)
     
     tenant = relationship("Tenant", back_populates="evidence")
     uploader = relationship("GRCUser", back_populates="uploaded_evidence", foreign_keys=[uploaded_by])

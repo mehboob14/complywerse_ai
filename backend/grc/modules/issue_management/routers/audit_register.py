@@ -20,6 +20,7 @@ from ....models import (AuditExtensionRequest, AuditIssueProfile, AuditRegisterI
                         AuditRegisterReport, BusinessUnit, GRCUser, IssueActivity, IssueAssetLink,
                         IssueVulnerabilityLink, RiskIncident, Tenant, get_db)
 from ....routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission
+from ....services import evidence_review
 from ..audit_register import assist, mappings, settings as register_settings, template as T, workflow
 from ..audit_register.crosslinks import REGULATOR_STATUSES, observation_for, sync_crosslinks
 from ..audit_register.export import build_workbook
@@ -740,6 +741,8 @@ async def submit_validation(
            after={"note": note.strip() or None, "files": [n for n, _, _ in uploads],
                   "evidence_ids": result["evidence_ids"]})
     db.commit()
+    for evidence_id in result["evidence_ids"]:
+        evidence_review.rate_upload(db, evidence_id, current_user.id)
     return {**result, **workflow.validation_state(db, profile.issue, profile)}
 
 

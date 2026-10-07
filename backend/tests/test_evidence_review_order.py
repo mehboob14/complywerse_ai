@@ -6,42 +6,72 @@ is waiting on the second, so it runs first.
 """
 from types import SimpleNamespace
 
-from grc.modules.evidence.routers import ai_assessment, evidence as ev_router, ocr
-from grc.services import evidence_quality
+import pytest
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
+
+import grc.models as m
+from grc.modules.evidence.routers import ai_assessment, ocr
+from grc.services import evidence_quality, evidence_review
 
 
-def _run(monkeypatch, target, ocr_status="completed", text="WAF screenshot"):
+@pytest.fixture
+def db():
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    m.Base.metadata.create_all(engine)
+    session = Session(engine)
+    session.add(m.Tenant(id=1, name="Demo Bank", slug="demo"))
+    session.add(m.GRCUser(id=3, username="assessor", email="assessor@bank.example", display_name="Assessor"))
+    session.add(m.Evidence(id=7, tenant_id=1, name="WAF", file_name="waf.jpg", file_type="image/jpeg", uploaded_by=3,
+                           ocr_status="pending", status="draft"))
+    session.commit()
+    yield session
+    session.close()
+
+
+def _run(db, monkeypatch, target, text="WAF screenshot", assessment=None):
+    """Run the review of file 7 with the model calls replaced; returns what was called, in order."""
     calls = []
-    row = SimpleNamespace(id=7, tenant_id=1, file_name="waf.jpg", file_type="image/jpeg", ocr_content=text, uploaded_by=3)
-    db = SimpleNamespace(
-        query=lambda *_: SimpleNamespace(filter=lambda *_: SimpleNamespace(first=lambda: row)),
-        commit=lambda: None, rollback=lambda: None, close=lambda: None)
-    monkeypatch.setattr(ev_router, "open_tenant_session", lambda slug: db)
-    monkeypatch.setattr(ocr, "process_evidence_ocr", lambda e, d: calls.append("ocr") or SimpleNamespace(status=ocr_status))
-    monkeypatch.setattr(ai_assessment, "run_ai_assessment", lambda e, d, user_id=None: calls.append("library assessment"))
+
+    def assess(e, d, user_id=None, report=None, matching=True):
+        calls.append("library assessment")
+        if assessment:
+            assessment()
+
+    def read(evidence, session):
+        calls.append("ocr")
+        evidence.ocr_content = text or None
+        evidence.ocr_status = "completed" if text else "failed"
+        session.commit()
+        return SimpleNamespace(status=evidence.ocr_status, message="")
+
+    monkeypatch.setattr(ocr, "process_evidence_ocr", read)
+    monkeypatch.setattr(ai_assessment, "run_ai_assessment", assess)
     monkeypatch.setattr(evidence_quality, "check_and_save", lambda *a, **k: calls.append("item review"))
-    ev_router.process_evidence_background(7, "demo", target)
+    evidence_review.run(7, "demo", target, open_session=lambda slug: db)
     return calls
 
 
-def test_the_item_review_comes_before_the_library_assessment(monkeypatch):
-    assert _run(monkeypatch, target=object()) == ["ocr", "item review", "library assessment"]
+def test_the_item_review_comes_before_the_library_assessment(db, monkeypatch):
+    assert _run(db, monkeypatch, target=object()) == ["ocr", "item review", "library assessment"]
 
 
-def test_an_upload_with_no_item_is_assessed_for_the_library_only(monkeypatch):
-    assert _run(monkeypatch, target=None) == ["ocr", "library assessment"]
+def test_an_upload_with_no_item_is_assessed_for_the_library_only(db, monkeypatch):
+    assert _run(db, monkeypatch, target=None) == ["ocr", "library assessment"]
 
 
-def test_a_failing_library_assessment_does_not_cost_the_item_its_review(monkeypatch):
-    def fails(e, d, user_id=None):
-        raise RuntimeError("couldn't be read")
+def test_a_failing_library_assessment_does_not_cost_the_item_its_review(db, monkeypatch):
+    def fails():
+        raise RuntimeError("provider said no")
 
-    calls = _run(monkeypatch, target=object())
-    assert "item review" in calls
-    monkeypatch.setattr(ai_assessment, "run_ai_assessment", fails)
-    assert "item review" in _run(monkeypatch, target=object())
+    assert _run(db, monkeypatch, target=object(), assessment=fails) == ["ocr", "item review", "library assessment"]
+    state = evidence_review.state(db.get(m.Evidence, 7))
+    assert state["status"] == "failed" and "provider" not in state["error"]      # the person is not shown the provider's words
 
 
-def test_a_file_with_no_text_is_still_reviewed_against_its_item(monkeypatch):
+def test_a_file_with_no_text_is_still_reviewed_against_its_item(db, monkeypatch):
     """The review records "no readable text" on the row, which is what the screen shows."""
-    assert _run(monkeypatch, target=object(), text="") == ["ocr", "item review"]
+    assert _run(db, monkeypatch, target=object(), text="") == ["ocr", "item review"]
+    state = evidence_review.state(db.get(m.Evidence, 7))
+    assert state["status"] == "failed" and "No text could be read" in state["error"]

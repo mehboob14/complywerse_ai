@@ -43,6 +43,7 @@ from ..models import (
     get_db,
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ..services import evidence_review
 
 logger = logging.getLogger(__name__)
 
@@ -1017,6 +1018,7 @@ async def upload_and_link_evidence(
     db.commit()
     db.refresh(ev)
     db.refresh(link)
+    evidence_review.rate_upload(db, ev, current_user.id)
     return _serialize_evidence(ev, link)
 
 

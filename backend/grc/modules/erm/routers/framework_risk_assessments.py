@@ -19,6 +19,7 @@ from ....models import (
     GRCUser, TenantUser, Evidence, Risk, get_db, UploadedFramework, ParsedFrameworkControl
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import evidence_review
 from ..framework_methodologies import (
     Methodology,
     all_methodologies,
@@ -1487,6 +1488,7 @@ async def upload_question_evidence(
 
     db.commit()
     db.refresh(evidence)
+    evidence_review.rate_upload(db, repo_evidence, current_user.id)
 
     evidence = db.query(FrameworkRiskQuestionEvidence).options(
         joinedload(FrameworkRiskQuestionEvidence.uploader)

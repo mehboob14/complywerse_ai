@@ -48,6 +48,7 @@ from ..modules.access_review import iga as iga_mod
 from ..modules.access_review import apps as apps_mod
 from ..modules.access_review import sampling as sampling_mod
 from .sso_router import _get_config, _require_admin
+from ..services import evidence_review
 
 # Reuse the shared evidence upload dir: backend/grc/uploads/evidence/<tenant_id>
 _EVIDENCE_DIR = os.path.join(
@@ -2075,6 +2076,7 @@ async def upload_item_evidence(
     tenant_db.flush()
     item.evidence_id = ev.id
     tenant_db.commit()
+    evidence_review.rate_upload(tenant_db, ev, admin.id)
     return {"item_id": item.id, "evidence_id": ev.id, "file_name": ev.file_name}
 
 

@@ -69,10 +69,10 @@ def test_the_code_behind_the_removed_feature_is_gone_but_shared_pieces_moved():
     assert not hasattr(tasks, "parse_framework")                      # the document parser went with the upload
     assert hasattr(tasks, "enhance_framework_controls") and hasattr(tasks, "generate_evidence_requirements")
 
-    # the OCR + AI assessment of an uploaded evidence file is shared with certification journeys, so it moved
-    from grc.modules.evidence.background import trigger_ocr_and_assessment_background as moved
+    # reading, rating and clause-matching an uploaded evidence file is shared with certification journeys
+    from grc.services import evidence_review
     certification = importlib.import_module("grc.routers.certification_router")    # the module, not the APIRouter the package exports
-    assert certification.trigger_ocr_and_assessment_background is moved
+    assert certification.evidence_review is evidence_review
 
     from grc.permissions import PERMISSION_MATRIX
     subs = {s["name"] for mod in PERMISSION_MATRIX if mod["module"] == "frameworks" for s in mod["submodules"]}

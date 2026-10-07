@@ -24,6 +24,7 @@ from ....models import (
     GRCUser, get_db, ParsedFrameworkControl, UploadedFramework, NormalizationRun
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import evidence_review
 from ....services.licence_guard import (
     consolidated_recommendations, exclude_restricted, is_restricted_control,
 )
@@ -838,6 +839,7 @@ async def upload_set_evidence(nc_id: int, name: Optional[str] = Form(None),
             coverage_type="full", confidence_score=100.0, created_by_ai=False))
         linked += 1
     db.commit()
+    evidence_review.rate_upload(db, ev, current_user.id)
     return {"evidence_id": ev.id, "name": ev.name, "linked_controls": linked,
             "message": f"Added to the evidence library and linked to {linked} framework controls."}
 
@@ -2438,6 +2440,7 @@ async def upload_evidence_to_group(
 
     db.commit()
     db.refresh(ev)
+    evidence_review.rate_upload(db, ev, current_user.id)
     return {
         "evidence_id": ev.id,
         "name": ev.name,

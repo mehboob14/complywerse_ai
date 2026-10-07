@@ -2,7 +2,6 @@ from typing import List, Optional
 from datetime import datetime, timedelta
 import os
 import uuid
-import threading
 import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File, Form, BackgroundTasks
 from sqlalchemy.orm import Session, joinedload
@@ -15,8 +14,8 @@ from ....models import (
     AssessmentItemEvidence, RCSAResponseEvidence,
     GRCUser, Tenant, get_db, engine
 )
-from ....db import open_tenant_session
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import evidence_review
 
 EVIDENCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "evidence")
 os.makedirs(EVIDENCE_UPLOAD_DIR, exist_ok=True)
@@ -79,98 +78,16 @@ logger = logging.getLogger(__name__)
 
 
 def process_evidence_background(evidence_id: int, tenant_slug: str, target=None):
-    """Background task to process OCR and AI assessment for uploaded evidence.
+    """Read, rate and match an uploaded file, in the calling thread (see `services/evidence_review.py`).
 
-    Runs on upload for OCR-processable files: OCR first, then (once OCR has
-    content) the AI assessment. Failures are LOGGED (not swallowed) so a
-    non-running AI assessment can be diagnosed from the backend logs.
+    `target` is a `services.evidence_quality.QualityTarget` when the upload knows what the file is meant to prove:
+    an assessment item, a requirement, a control. The file is then also rated against that one thing, first.
 
-    `target` is a `services.evidence_quality.QualityTarget` when the upload knows
-    what the file is meant to prove — an assessment item, a requirement, a
-    control. Then the file is also reviewed against that one thing, which is the
-    question the library assessment above cannot answer. Uploads with no target
-    behave exactly as before.
-
-    IMPORTANT: this is database-per-tenant, so the thread MUST open a
-    tenant-scoped session (`open_tenant_session(slug)`). Binding to the master
-    `engine` — as this once did — queries the wrong database, finds no evidence
-    row, and silently returns, which is why auto-OCR never ran.
+    IMPORTANT: this is database-per-tenant, so the review opens a tenant-scoped session
+    (`open_tenant_session(slug)`). Binding to the master `engine`, as this once did, queries the wrong database,
+    finds no evidence row, and silently returns, which is why auto-OCR never ran.
     """
-    from .ocr import process_evidence_ocr
-    from .ai_assessment import run_ai_assessment
-
-    if not tenant_slug:
-        logger.error("process_evidence_background called without tenant_slug for evidence %s", evidence_id)
-        return
-
-    db = open_tenant_session(tenant_slug)
-    try:
-        evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
-        if not evidence:
-            return
-        
-        file_ext = ""
-        if evidence.file_name:
-            file_ext = os.path.splitext(evidence.file_name)[1].lower().strip(".")
-        elif evidence.file_type:
-            mime = evidence.file_type.lower().strip()
-            mime_to_ext = {
-                'application/pdf': 'pdf',
-                'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
-                'text/plain': 'txt',
-                'text/markdown': 'md',
-                'text/csv': 'csv',
-                'application/json': 'json',
-                'application/xml': 'xml',
-                'text/xml': 'xml',
-                'text/html': 'html',
-                'application/rtf': 'rtf',
-                'text/rtf': 'rtf',
-                'image/jpeg': 'jpg',
-                'image/png': 'png',
-                'image/gif': 'gif',
-                'image/bmp': 'bmp',
-                'image/tiff': 'tiff',
-                'image/webp': 'webp',
-            }
-            file_ext = mime_to_ext.get(mime, mime.split("/")[-1] if "/" in mime else "")
-        
-        ocr_done = False
-        if file_ext in OCR_PROCESSABLE_TYPES:
-            try:
-                ocr_done = process_evidence_ocr(evidence, db).status == "completed"
-            except Exception:
-                logger.exception("OCR processing failed for evidence %s", evidence_id)
-                try:
-                    evidence.ocr_status = "failed"
-                    db.commit()
-                except Exception:
-                    db.rollback()
-
-        if target is not None:
-            # Against the one thing it was attached to, and before the library assessment below:
-            # that one reads every framework and takes minutes, and this verdict is what the
-            # person who just attached the file is waiting for. Its own failures are recorded
-            # on the row, so this only guards the unexpected.
-            try:
-                from ....services.evidence_quality import check_and_save
-
-                check_and_save(db, evidence.tenant_id, evidence, target,
-                               user_id=getattr(evidence, "uploaded_by", None))
-            except Exception:
-                logger.exception("Evidence quality check failed for evidence %s", evidence_id)
-
-        if ocr_done and evidence.ocr_content:
-            try:
-                run_ai_assessment(evidence, db, user_id=getattr(evidence, "uploaded_by", None))
-            except Exception:
-                logger.exception("Auto AI-assessment failed for evidence %s after OCR completed", evidence_id)
-        elif ocr_done:
-            logger.warning("Evidence %s OCR completed but produced no content — skipping AI assessment", evidence_id)
-    except Exception:
-        logger.exception("Background OCR/assessment task crashed for evidence %s", evidence_id)
-    finally:
-        db.close()
+    evidence_review.run(evidence_id, tenant_slug, target)
 
 
 router = APIRouter(prefix="/items", tags=["Evidence - Items"])
@@ -239,6 +156,7 @@ def serialize_evidence(evidence: Evidence, include_counts: bool = True, db: Sess
         "review_comments": evidence.review_comments,
         "approved_by": evidence.approved_by,
         "approved_at": evidence.approved_at.isoformat() if evidence.approved_at else None,
+        "ai_review": evidence_review.public(evidence),
         "risk_links_count": len(evidence.risk_links or []) if hasattr(evidence, "risk_links") else 0,
         "asset_links_count": len(evidence.asset_links or []) if hasattr(evidence, "asset_links") else 0,
         "incident_links_count": len(evidence.incident_links or []) if hasattr(evidence, "incident_links") else 0,
@@ -730,12 +648,7 @@ async def upload_evidence(
     db.refresh(db_evidence)
     
     if ocr_status_val == "pending":
-        thread = threading.Thread(
-            target=process_evidence_background,
-            args=(db_evidence.id, tenant.slug),
-            daemon=True
-        )
-        thread.start()
+        evidence_review.start(db, db_evidence, tenant.slug, user_id=current_user.id)
     
     result = serialize_evidence(db_evidence, include_counts=False, db=db)
     result["file_size"] = file_size

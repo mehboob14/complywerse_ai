@@ -35,6 +35,7 @@ from ....models import (
     get_db,
 )
 from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, require_auth
+from ....services import evidence_review
 from ....rich_audit import write_rich_audit_log
 
 logger = logging.getLogger(__name__)
@@ -1203,6 +1204,7 @@ async def upload_evidence(
     obs.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(ln)
+    evidence_review.rate_upload(db, ev, current_user.id)
     return {
         "id": ln.id,
         "evidence_id": ev.id,

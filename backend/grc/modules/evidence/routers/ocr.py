@@ -17,6 +17,7 @@ from openai import OpenAI
 
 from ....models import Evidence, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
+from ....services import evidence_review
 
 router = APIRouter(prefix="/ocr", tags=["Evidence - OCR"])
 logger = logging.getLogger(__name__)
@@ -507,7 +508,11 @@ def process_ocr(
     
     validate_evidence_access(current_user, evidence, db)
     
-    return process_evidence_ocr(evidence, db)
+    result = process_evidence_ocr(evidence, db)
+    if result.status == "completed" and not evidence_review.latest_assessment(db, evidence.id):
+        # a file whose text could not be read was never rated: now it can be
+        evidence_review.rate_upload(db, evidence, current_user.id, matching=True)
+    return result
 
 
 @router.post("/batch-process", response_model=BatchProcessResponse)

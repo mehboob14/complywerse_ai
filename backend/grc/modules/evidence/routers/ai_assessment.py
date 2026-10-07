@@ -16,7 +16,7 @@ from openai import OpenAI
 logger = logging.getLogger(__name__)
 
 from ....models import (
-    Evidence, EvidenceAIAssessment, EvidenceControlMapping, EvidenceAssessmentCache,
+    Evidence, EvidenceAIAssessment, EvidenceControlMapping, EvidenceAssessmentCache, Tenant,
     GRCUser, get_db, Framework, FrameworkDomain, ControlObjective, FrameworkControl,
     UploadedFramework, ParsedFrameworkControl,
     GovernanceDocument, InternalControl, ComplianceAssessmentDocument,
@@ -28,6 +28,7 @@ from ....models import (
     NormalizedControl,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ....services import evidence_review
 from ..common_control_match import artifact_index as _common_artifact_index, recommend as _recommend_common
 from ...automation.evidence_match import EvidenceDoc
 
@@ -41,7 +42,8 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 # v2.2: Include actual control IDs in prompt to prevent hallucination of generic control IDs
 # v2.3: Added mandatory multi-framework analysis requirement
 # v3.0: Intent-based analysis with three-tier matching (explicit/implicit/inferred) and cross-framework equivalence
-PROMPT_VERSION = "3.1"
+# v3.2: asked in two steps: the file is rated first (CORE_ASSESSMENT_PROMPT), then matched to clauses (MAPPING_ASSESSMENT_PROMPT)
+PROMPT_VERSION = "3.2"
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
 MODEL_VERSION = get_openai_model()
@@ -157,6 +159,77 @@ When a control is satisfied in ONE framework, you MUST identify equivalent contr
 5. cross_framework_equivalents should list related controls in OTHER frameworks that address the same security domain
 6. Analyze ALL frameworks provided - do not skip any framework
 7. Write the fields in the order above and list clause_mappings strongest match first, so that a long list cut short loses only its weakest entries, never the gaps and recommendations"""
+
+
+# The assessment runs in two steps. The first rates the file as audit evidence (a few seconds: it reads no
+# frameworks) and is saved at once, so the person sees how mature the file is while the second, which reads every
+# framework and takes minutes, matches it to clauses.
+CORE_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Rate the file below as AUDIT EVIDENCE: how mature is it, what is missing, and what would close the gap. Do NOT map it to framework controls here; that is done separately.
+
+## HOW TO SCORE (each 0-100; be strict and specific, and score only what the text shows)
+- relevance_score: how clearly the file relates to a recognisable security, risk or compliance control, process or obligation.
+- adequacy_score: how well it shows that control OPERATING, not merely existing: real records or settings, scope (systems, populations, sites), the period covered, who reviewed or approved it, results. A policy statement alone, or a screenshot with no date, scope or context, scores low.
+- audit_readiness: whether an auditor could rely on it as it stands: dated or period-bound, attributable to a system or a person, complete and legible, an untouched export rather than a retyped summary, signed or approved where the control needs it.
+- confidence_score: how sure you are of these scores, given the text. It was extracted by OCR, so it may be noisy or partial; lower your confidence when key parts are unreadable.
+
+## EVIDENCE CONTENT:
+{evidence_content}
+
+## REQUIRED JSON RESPONSE FORMAT (JSON only):
+{{
+    "relevance_score": <0-100>,
+    "adequacy_score": <0-100>,
+    "audit_readiness": <0-100>,
+    "confidence_score": <0-100>,
+    "summary": "<2-3 sentences: what this file is and what it shows>",
+    "gaps": ["<what an auditor would still ask for, and how to get it>", ...],
+    "recommendations": ["<the smallest concrete change that would raise the score>", ...],
+    "evidence_text_excerpts": [
+        {{"text": "<relevant excerpt from the evidence>", "relevance": "<what it demonstrates>"}}
+    ]
+}}
+
+Give at most 6 gaps, at most 6 recommendations and at most 4 excerpts."""
+
+MAPPING_ASSESSMENT_PROMPT = """You are a Senior GRC Compliance Expert with 20+ years of experience, holding CISA, CISSP, CRISC, and ISO 27001 Lead Auditor certifications. Find the framework controls this compliance evidence supports, using INTENT-BASED ANALYSIS for regulatory audit purposes: ask what each control is trying to ACHIEVE and whether the evidence demonstrates that intent, rather than requiring exact wording.
+
+## THREE-TIER MATCHING
+- EXPLICIT (confidence 90-100): the evidence states or directly addresses the control requirement.
+- IMPLICIT (confidence 70-89): the evidence addresses it through related mechanisms, so the intent is met without the exact terminology.
+- INFERRED (confidence 50-69): the control can reasonably be derived from the scope or context of the evidence.
+
+## RULES
+1. ONLY use control IDs from the VALID CONTROL IDs below. Never invent or guess a control ID.
+2. Use the EXACT framework names and EXACT control IDs as given.
+3. When a control is met in one framework, look for the equivalent control in the other frameworks too; one piece of evidence often answers several at once.
+4. Every mapping needs a matched_text_excerpt from the evidence. A mapping you cannot support with the text is not a mapping: leave it out.
+5. List the strongest mappings first and give at most 30. Keep every text field to one short sentence.
+
+## AVAILABLE FRAMEWORKS WITH THEIR VALID CONTROL IDs:
+{available_frameworks}
+
+## EVIDENCE CONTENT:
+{evidence_content}
+
+## REQUIRED JSON RESPONSE FORMAT (JSON only):
+{{
+    "clause_mappings": [
+        {{
+            "framework_name": "<EXACT framework name from the list above>",
+            "control_id": "<exact control ID from that framework>",
+            "clause_reference": "<exact clause/sub-clause reference>",
+            "control_title": "<control title>",
+            "match_type": "<explicit|implicit|inferred>",
+            "confidence": <90-100 for explicit, 70-89 for implicit, 50-69 for inferred>,
+            "intent_analysis": "<how the evidence meets the control's purpose>",
+            "matching_rationale": "<why it matches>",
+            "coverage_type": "<full|partial|supporting>",
+            "matched_text_excerpt": "<text from the evidence that supports this mapping>"
+        }}
+    ],
+    "detected_controls": ["<FRAMEWORK: control_code>", ...],
+    "compliance_frameworks": ["<FRAMEWORK: clause>", ...]
+}}"""
 
 
 class BatchAssessRequest(BaseModel):
@@ -849,35 +922,206 @@ def auto_link_controls_with_clause_data(
     return linked_count
 
 
+_SYSTEM = ("You are a Senior GRC Compliance Expert. Provide precise, auditor-defensible assessments. Never hallucinate "
+           "control references - only include controls with explicit evidence support. Respond with a single valid JSON object only.")
+
+
+def _chat_json(messages: list, *, max_tokens: int, timeout: int, attempts: int = 3, beat=None) -> str:
+    """One JSON answer from the model, asked again after a transient error.
+
+    Reasoning is switched off for the models that allow it. This is reading and writing up, and with a long prompt a
+    reasoning model spent its whole ceiling thinking (12,000 then 24,000 tokens) and answered nothing: "couldn't be
+    read". A model with no such setting refuses it, so that attempt is repeated without. `beat` is told before each
+    attempt, so a run that is still asking is not mistaken for one that was lost."""
+    client = get_openai_client()
+    effort = {"reasoning_effort": "none"} if (MODEL_VERSION or "").lower().startswith(("gpt-5", "gpt-6")) else {}
+    last_error = None
+    for attempt in range(attempts):
+        if beat:
+            beat()
+        try:
+            response = client.chat.completions.create(
+                model=MODEL_VERSION,
+                messages=messages,
+                temperature=0,  # dropped by the shim for reasoning models
+                max_tokens=max_tokens,
+                response_format={"type": "json_object"},
+                timeout=timeout,   # the SDK's 10 minutes turned one stalled call into a 12-minute wait
+                **effort,
+            )
+            return response.choices[0].message.content or ""
+        except Exception as api_exc:  # noqa: BLE001
+            last_error = api_exc
+            if effort and "reasoning_effort" in str(api_exc):
+                effort = {}
+                continue
+            logger.warning("AI assessment API attempt %s/%s failed: %s", attempt + 1, attempts, api_exc)
+            if attempt < attempts - 1:
+                time.sleep(1.0 * (attempt + 1))
+    raise last_error or RuntimeError("AI assessment API call failed")
+
+
+def _unreadable() -> HTTPException:
+    # Nothing is saved or cached: no assessment row with placeholder scores, no fake summary on the file.
+    return HTTPException(
+        status_code=502,
+        detail="The AI assessment returned output that couldn't be read, so nothing was saved. Try again.",
+    )
+
+
+def _score(value, default: float = 0.0) -> float:
+    try:
+        return max(0.0, min(100.0, float(value)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _strings(value) -> List[str]:
+    return [str(v).strip() for v in value if str(v).strip()] if isinstance(value, list) else []
+
+
+def _rate(evidence: Evidence, beat=None) -> dict:
+    """The file rated as audit evidence: scores, what it is, what is missing, how to close it. It reads no
+    frameworks, so it takes seconds, and it is what the person who just uploaded the file is waiting to see."""
+    messages = [
+        {"role": "system", "content": _SYSTEM},
+        {"role": "user", "content": CORE_ASSESSMENT_PROMPT.format(evidence_content=(evidence.ocr_content or "")[:12000])},
+    ]
+    for _ in range(2):
+        answer = parse_ai_response(_chat_json(messages, max_tokens=4000, timeout=90, beat=beat))
+        if not answer.get("_parse_failed") and answer.get("summary"):
+            return answer
+    raise _unreadable()
+
+
+def _match(db: Session, evidence: Evidence, beat=None) -> dict:
+    """The framework clauses the file appears to answer, checked against the controls the workspace really holds.
+    This reads every framework and is the slow part (minutes), so it runs after the rating has been saved."""
+    frameworks = get_available_frameworks(db, tenant_id=evidence.tenant_id)
+    if frameworks.startswith("No uploaded frameworks"):
+        return {"clause_mappings": [], "detected_controls": [], "compliance_frameworks": [],
+                "_original_mappings_count": 0, "_validated_mappings_count": 0}
+    messages = [
+        {"role": "system", "content": _SYSTEM},
+        {"role": "user", "content": MAPPING_ASSESSMENT_PROMPT.format(
+            available_frameworks=frameworks, evidence_content=(evidence.ocr_content or "")[:12000])},
+    ]
+    answer = parse_ai_response(_chat_json(messages, max_tokens=12000, timeout=240, attempts=2, beat=beat))
+    if answer.get("_parse_failed"):
+        raise _unreadable()
+    raw = answer.get("clause_mappings", [])
+    # Hallucinated control ids (the generic ISO 27001 ones, say) are dropped before anything is saved.
+    kept = validate_and_filter_clause_mappings(raw, db, evidence.tenant_id)
+    answer["clause_mappings"] = kept
+    # The two lists written after the mappings are lost when a long reply is cut short; they are only the
+    # mappings' own roll-up, so they are rebuilt from the mappings that were kept.
+    for key, field in (("detected_controls", "control_id"), ("compliance_frameworks", "clause_reference")):
+        if not answer.get(key):
+            answer[key] = [f"{m.get('framework_name')}: {m.get(field) or m.get('control_id')}" for m in kept]
+    answer["_original_mappings_count"] = len(raw)
+    answer["_validated_mappings_count"] = len(kept)
+    return answer
+
+
+def _save_rating(db: Session, evidence: Evidence, core: dict, content_hash: str, mode: str,
+                 user_id: Optional[int], started: float) -> EvidenceAIAssessment:
+    """The rating is saved on its own, before the clauses are matched: it becomes the file's quality score at once."""
+    relevance, adequacy, readiness = (_score(core.get(k)) for k in ("relevance_score", "adequacy_score", "audit_readiness"))
+    assessment = EvidenceAIAssessment(
+        evidence_id=evidence.id,
+        relevance_score=relevance,
+        adequacy_score=adequacy,
+        confidence_score=_score(core.get("confidence_score")),
+        audit_readiness=readiness,
+        content_summary=core.get("summary", ""),
+        gap_analysis={"detected_controls": [], "compliance_frameworks": [],
+                      "gaps": _strings(core.get("gaps")), "recommendations": _strings(core.get("recommendations"))},
+        content_hash=content_hash,
+        model_version=MODEL_VERSION,
+        prompt_version=PROMPT_VERSION,
+        assessment_mode=mode,
+        clause_mappings=[],
+        matched_text_excerpts=core.get("evidence_text_excerpts", []),
+        assessed_at=datetime.utcnow(),
+        assessment_duration_ms=int((time.time() - started) * 1000),
+        created_by=user_id,
+    )
+    db.add(assessment)
+    db.flush()
+    evidence.quality_score = relevance * 0.3 + adequacy * 0.4 + readiness * 0.3
+    evidence.content_summary = core.get("summary", "")
+    db.commit()
+    db.refresh(assessment)
+    return assessment
+
+
+def _save_matches(db: Session, evidence: Evidence, assessment: EvidenceAIAssessment, core: dict, matches: dict,
+                  started: float) -> None:
+    # AI clause mappings are stored as suggestions only: a person clicks "Link to Requirement" to make a link.
+    assessment.clause_mappings = matches["clause_mappings"]
+    assessment.gap_analysis = {**(assessment.gap_analysis or {}),
+                               "detected_controls": matches.get("detected_controls", []),
+                               "compliance_frameworks": matches.get("compliance_frameworks", [])}
+    assessment.assessment_duration_ms = int((time.time() - started) * 1000)
+    # Cached whole, under the old shape, so the next upload of the same text is instant.
+    save_cached_assessment(assessment.content_hash, evidence.tenant_id, {**core, **matches}, db)
+    db.commit()
+    db.refresh(assessment)
+
+
+def _core_of(assessment: EvidenceAIAssessment) -> dict:
+    gap = assessment.gap_analysis or {}
+    return {"relevance_score": assessment.relevance_score, "adequacy_score": assessment.adequacy_score,
+            "audit_readiness": assessment.audit_readiness, "confidence_score": assessment.confidence_score,
+            "summary": assessment.content_summary, "gaps": gap.get("gaps", []),
+            "recommendations": gap.get("recommendations", []), "evidence_text_excerpts": assessment.matched_text_excerpts or []}
+
+
+def _fail(exc: Exception) -> HTTPException:
+    error_msg = str(exc)
+    logger.error("AI Assessment Error: %s", error_msg, exc_info=True)
+    if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
+        return HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED, detail="Cloud budget exceeded. Please upgrade your plan.")
+    from ....services.evidence_review import plain
+    return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=plain(exc))
+
+
 def run_ai_assessment(
-    evidence: Evidence, 
-    db: Session, 
+    evidence: Evidence,
+    db: Session,
     mode: str = "initial",
     force_refresh: bool = False,
-    user_id: Optional[int] = None
+    user_id: Optional[int] = None,
+    report=None,
+    matching: bool = True,
 ) -> EvidenceAIAssessment:
-    """Run deterministic AI assessment with caching and clause-level mapping."""
-    
+    """Assess a file with caching and clause-level mapping, in two steps.
+
+    The file is first rated as audit evidence and that rating is saved (seconds); then its framework clauses are
+    matched (minutes). `report(step)` is told which step it is on, so a page can show it; a failure while matching
+    leaves the saved rating in place and is raised. With `matching=False` only the rating is made: for a file
+    uploaded somewhere that has no use for clause suggestions, which can be asked for later."""
+
     if not evidence.ocr_content:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Evidence has no OCR content. Please run OCR first."
         )
-    
+
     # Check for locked assessments
     if mode != "initial":
         existing_locked = db.query(EvidenceAIAssessment).filter(
             EvidenceAIAssessment.evidence_id == evidence.id,
             EvidenceAIAssessment.is_locked == True
         ).first()
-        
+
         if existing_locked and mode == "locked_audit":
             # Return the locked assessment without re-running
             return existing_locked
-    
+
     # Compute content hash for determinism
     content_hash = compute_content_hash(evidence.ocr_content)
-    
+
     # Check cache for deterministic results (unless force refresh)
     if not force_refresh:
         cached_response = get_cached_assessment(content_hash, evidence.tenant_id, db)
@@ -888,7 +1132,7 @@ def run_ai_assessment(
             validated_cached_mappings = validate_and_filter_clause_mappings(
                 raw_cached_mappings, db, evidence.tenant_id
             )
-            
+
             # Create assessment from cache with validated mappings
             assessment = EvidenceAIAssessment(
                 evidence_id=evidence.id,
@@ -912,13 +1156,13 @@ def run_ai_assessment(
                 assessed_at=datetime.utcnow(),
                 created_by=user_id
             )
-            
+
             db.add(assessment)
             db.flush()
-            
+
             # AI clause mappings are stored as suggestions only
             # Users must manually click "Link to Requirement" to create actual links
-            
+
             quality_score = (
                 cached_response.get("relevance_score", 0) * 0.3 +
                 cached_response.get("adequacy_score", 0) * 0.4 +
@@ -926,163 +1170,60 @@ def run_ai_assessment(
             )
             evidence.quality_score = quality_score
             evidence.content_summary = cached_response.get("summary", "")
-            
+
             db.commit()
             db.refresh(assessment)
-            
+
             return assessment
-    
-    # Run fresh AI assessment
+
+    # Run a fresh AI assessment
+    step = {"name": "rating"}
+
+    def beat() -> None:
+        if report:
+            report(step["name"])
+
     try:
-        start_time = time.time()
-        client = get_openai_client()
-        available_frameworks = get_available_frameworks(db, tenant_id=evidence.tenant_id)
-        
-        enhanced_prompt = DETERMINISTIC_ASSESSMENT_PROMPT.format(
-            available_frameworks=available_frameworks,
-            evidence_content=evidence.ocr_content[:12000]
-        )
-        
-        # Deterministic parameters + JSON mode. `response_format=json_object`
-        # forces syntactically valid JSON (the prompt requests JSON), and the
-        # larger token budget stops long responses (20–50+ control mappings)
-        # from truncating into unparseable JSON. The gpt-5.x compat shim maps
-        # max_tokens→max_completion_tokens and drops temperature transparently.
-        messages = [
-            {
-                "role": "system",
-                "content": "You are a Senior GRC Compliance Expert. Provide precise, auditor-defensible assessments with exact clause-level control mappings. Never hallucinate control references - only include controls with explicit evidence support. Respond with a single valid JSON object only."
-            },
-            {
-                "role": "user",
-                "content": enhanced_prompt
-            }
-        ]
-
-        # Reasoning off for the models that allow it. This is a lookup against a long list and a
-        # write-up, and with every framework's controls in the prompt a reasoning model spent its
-        # whole ceiling thinking — 12,000 then 24,000 tokens — and answered nothing ("couldn't be
-        # read"). A model with no such setting refuses it, so that attempt is repeated without.
-        effort = {"reasoning_effort": "none"} if (MODEL_VERSION or "").lower().startswith(("gpt-5", "gpt-6")) else {}
-
-        # Retry the call a couple of times — auto-assessment runs unattended in a
-        # background thread, so a transient API hiccup should self-heal rather
-        # than surface as "AI assessment couldn't run".
-        response = None
-        last_api_error = None
-        for attempt in range(3):
-            try:
-                response = client.chat.completions.create(
-                    model=MODEL_VERSION,
-                    messages=messages,
-                    temperature=0,  # dropped by the shim for reasoning models
-                    max_tokens=12000,
-                    response_format={"type": "json_object"},
-                    timeout=240,   # a normal answer takes 2-3 minutes; the SDK's 10 minutes made one stalled call a 12-minute wait
-                    **effort,
-                )
-                break
-            except Exception as api_exc:  # noqa: BLE001
-                last_api_error = api_exc
-                if effort and "reasoning_effort" in str(api_exc):
-                    effort = {}
-                    continue
-                logger.warning("AI assessment API attempt %s/3 failed: %s", attempt + 1, api_exc)
-                if attempt < 2:
-                    time.sleep(1.0 * (attempt + 1))
-        if response is None:
-            raise last_api_error or RuntimeError("AI assessment API call failed")
-
-        assessment_duration = int((time.time() - start_time) * 1000)
-        ai_result = parse_ai_response(response.choices[0].message.content or "")
-        if ai_result.get("_parse_failed"):
-            # Nothing is saved or cached: no assessment row with placeholder scores,
-            # no fake summary on the file. Every caller already treats an exception
-            # as a failed assessment.
-            raise HTTPException(
-                status_code=502,
-                detail="The AI assessment returned output that couldn't be read, so nothing was saved. Try again.",
-            )
-        
-        # CRITICAL: Validate and filter clause mappings against actual database controls
-        # This prevents hallucinated control IDs (like generic ISO 27001 IDs) from being saved
-        raw_clause_mappings = ai_result.get("clause_mappings", [])
-        validated_clause_mappings = validate_and_filter_clause_mappings(
-            raw_clause_mappings, db, evidence.tenant_id
-        )
-        
-        # Update ai_result with validated mappings for caching
-        ai_result["clause_mappings"] = validated_clause_mappings
-        # The two lists written after the mappings are lost when a long reply is cut short; they are
-        # only the mappings' own roll-up, so they are rebuilt from the mappings that were kept.
-        for key, field in (("detected_controls", "control_id"), ("compliance_frameworks", "clause_reference")):
-            if not ai_result.get(key):
-                ai_result[key] = [f"{m.get('framework_name')}: {m.get(field) or m.get('control_id')}" for m in validated_clause_mappings]
-        ai_result["_original_mappings_count"] = len(raw_clause_mappings)
-        ai_result["_validated_mappings_count"] = len(validated_clause_mappings)
-        
-        # Cache the response for future deterministic retrieval
-        save_cached_assessment(content_hash, evidence.tenant_id, ai_result, db)
-        
-        # Create assessment with full audit trail
-        assessment = EvidenceAIAssessment(
-            evidence_id=evidence.id,
-            relevance_score=float(ai_result.get("relevance_score", 0)),
-            adequacy_score=float(ai_result.get("adequacy_score", 0)),
-            confidence_score=float(ai_result.get("confidence_score", 0)),
-            audit_readiness=float(ai_result.get("audit_readiness", 0)),
-            content_summary=ai_result.get("summary", ""),
-            gap_analysis={
-                "detected_controls": ai_result.get("detected_controls", []),
-                "compliance_frameworks": ai_result.get("compliance_frameworks", []),
-                "gaps": ai_result.get("gaps", []),
-                "recommendations": ai_result.get("recommendations", [])
-            },
-            content_hash=content_hash,
-            model_version=MODEL_VERSION,
-            prompt_version=PROMPT_VERSION,
-            assessment_mode=mode,
-            clause_mappings=validated_clause_mappings,  # Use validated mappings only
-            matched_text_excerpts=ai_result.get("evidence_text_excerpts", []),
-            assessed_at=datetime.utcnow(),
-            assessment_duration_ms=assessment_duration,
-            created_by=user_id
-        )
-        
-        db.add(assessment)
-        db.flush()
-        
-        # AI clause mappings are stored as suggestions only
-        # Users must manually click "Link to Requirement" to create actual links
-        
-        # Update evidence quality score
-        quality_score = (
-            ai_result.get("relevance_score", 0) * 0.3 +
-            ai_result.get("adequacy_score", 0) * 0.4 +
-            ai_result.get("audit_readiness", 0) * 0.3
-        )
-        evidence.quality_score = quality_score
-        evidence.content_summary = ai_result.get("summary", "")
-        
-        db.commit()
-        db.refresh(assessment)
-        
+        started = time.time()
+        beat()
+        core = _rate(evidence, beat=beat)
+        assessment = _save_rating(db, evidence, core, content_hash, mode, user_id, started)
+        if not matching:
+            return assessment
+        step["name"] = "matching"
+        beat()
+        _save_matches(db, evidence, assessment, core, _match(db, evidence, beat=beat), started)
         return assessment
-        
+
     except HTTPException:
         raise
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"AI Assessment Error: {error_msg}", exc_info=True)
-        if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:
-            raise HTTPException(
-                status_code=status.HTTP_402_PAYMENT_REQUIRED,
-                detail="Cloud budget exceeded. Please upgrade your plan."
-            )
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"AI assessment failed: {error_msg}"
-        )
+        raise _fail(e)
+
+
+def run_mapping_stage(evidence: Evidence, db: Session, report=None) -> EvidenceAIAssessment:
+    """Match a file that has already been rated to framework clauses: the retry for a run whose rating was saved
+    but whose matching did not finish."""
+    assessment = (db.query(EvidenceAIAssessment).filter(EvidenceAIAssessment.evidence_id == evidence.id)
+                  .order_by(desc(EvidenceAIAssessment.assessed_at), desc(EvidenceAIAssessment.id)).first())
+    if assessment is None or not evidence.ocr_content:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="This file has not been rated yet.")
+    if assessment.content_hash != compute_content_hash(evidence.ocr_content):      # a new file: rate it afresh
+        return run_ai_assessment(evidence, db, force_refresh=True, user_id=assessment.created_by, report=report)
+
+    def beat() -> None:
+        if report:
+            report("matching")
+
+    try:
+        started = time.time()
+        beat()
+        _save_matches(db, evidence, assessment, _core_of(assessment), _match(db, evidence, beat=beat), started)
+        return assessment
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise _fail(e)
 
 
 @router.post("/{evidence_id}/assess", response_model=AssessmentResultResponse)
@@ -1130,6 +1271,56 @@ def assess_evidence(
         quality_score_updated=True,
         from_cache=from_cache
     )
+
+
+def _tenant_slug(db: Session, evidence: Evidence) -> Optional[str]:
+    slug = db.info.get("tenant_slug")
+    if slug:
+        return slug
+    tenant = db.query(Tenant).filter(Tenant.id == evidence.tenant_id).first()
+    return tenant.slug if tenant else None
+
+
+def _evidence_of(db: Session, evidence_id: int, user: GRCUser) -> Evidence:
+    evidence = db.query(Evidence).filter(Evidence.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence not found")
+    validate_evidence_access(user, evidence, db)
+    return evidence
+
+
+@router.get("/{evidence_id}/review")
+def get_review(
+    evidence_id: int,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Where the AI review of this file stands: reading, rating, matching clauses, done or failed, with the rating
+    and everything it was rated against. Cheap, so a page can ask every few seconds."""
+    return evidence_review.payload(db, _evidence_of(db, evidence_id, current_user))
+
+
+@router.post("/{evidence_id}/review")
+def start_review(
+    evidence_id: int,
+    force: bool = Query(default=False, description="Run it again even if it has finished"),
+    stage: Optional[str] = Query(default=None, description="'mappings' runs only the clause matching of a file already rated"),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """Start the review of this file in the background, unless one is running, and say where it stands. Without
+    `force` it only starts what is missing: a file never reviewed, or one whose run was lost with the server. A run
+    that failed for a reason waits for a person to ask again with `force`."""
+    evidence = _evidence_of(db, evidence_id, current_user)
+    slug = _tenant_slug(db, evidence)
+    if stage == "mappings":
+        evidence_review.start(db, evidence, slug, user_id=current_user.id, only_mappings=True)
+    elif force:
+        evidence_review.start(db, evidence, slug, user_id=current_user.id, force=True)
+    else:
+        evidence_review.ensure(db, evidence, slug, current_user.id)
+    db.refresh(evidence)
+    return evidence_review.payload(db, evidence)
 
 
 @router.post("/{evidence_id}/lock")

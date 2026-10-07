@@ -23,6 +23,7 @@ from ....models import (
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ....services import evidence_review
 from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, monitoring_policy, ratings, quantification
 from .stages import stages_payload, is_valid_stage
 from .schema_migrations import ensure_tpra_columns
@@ -886,6 +887,7 @@ async def upload_assessment_evidence(
                         vendor_id=a.vendor_id, assessment_id=a.id, entity_id=link.id, actor_id=user.id,
                         to_value=ev.name, extra={"evidence_id": ev.id, "finding_id": finding_id})
     db.commit()
+    evidence_review.rate_upload(db, ev, user.id)
     return s_evlink(link, ev)
 
 

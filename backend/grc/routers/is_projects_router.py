@@ -19,6 +19,7 @@ from ..models import (
     Evidence, GRCUser, get_db
 )
 from .auth_router import require_auth, get_user_primary_tenant, require_tenant_permission
+from ..services import evidence_review
 
 MILESTONE_EVIDENCE_DIR = "backend/uploads/is_project_milestone_evidence"
 os.makedirs(MILESTONE_EVIDENCE_DIR, exist_ok=True)
@@ -900,6 +901,7 @@ async def upload_milestone_evidence(
     db.add(link)
     db.commit()
     db.refresh(link)
+    evidence_review.rate_upload(db, evidence, current_user.id)
     return _serialize_milestone_evidence(link)
 
 
