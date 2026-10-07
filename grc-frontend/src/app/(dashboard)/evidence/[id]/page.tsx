@@ -25,6 +25,8 @@ import ReviewerActionPanel from './_ReviewerActionPanel';
 import EvidenceCrossMap from './_EvidenceCrossMap';
 import QualityBreakdownModal from '../_QualityBreakdownModal';
 import OcrContentModal from '../_OcrContentModal';
+import { MatchingNote, MaturityNotes, RatedAgainst, ReviewProgress, reviewActive, useEvidenceReview, type ReviewState } from '../_review';
+import { parseUtc } from '@/lib/serverTime';
 
 interface EvidenceVersion {
   id: number;
@@ -237,7 +239,6 @@ export default function EvidenceDetailPage() {
   const [ocrProcessMessage, setOcrProcessMessage] = useState<string | null>(null);
   const [showLinkModal, setShowLinkModal] = useState(false);
   const [showCrossModule, setShowCrossModule] = useState(false);
-  const [assessError, setAssessError] = useState<string | null>(null);
   const [selectedFrameworkId, setSelectedFrameworkId] = useState<number | null>(null);
   const [selectedControlId, setSelectedControlId] = useState<number | null>(null);
   const [showRiskModal, setShowRiskModal] = useState(false);
@@ -254,12 +255,14 @@ export default function EvidenceDetailPage() {
   const [showQualityOverlay, setShowQualityOverlay] = useState(false);
   const [showOcrOverlay, setShowOcrOverlay] = useState(false);
   const [showDetailsOverlay, setShowDetailsOverlay] = useState(false);
-  // Bumped after an AI assessment completes so the recommendation panels
-  // (cross-module link suggestions + targets-to-map) auto-run in parallel —
-  // no manual "Recommend with AI" click needed. Guarded so the auto-assess
-  // fires exactly once per detail open.
+  // Bumped once the file has been rated (or the review is over without a rating) so the recommendation
+  // panels (cross-module link suggestions + targets-to-map) auto-run — no manual "Recommend with AI" click.
   const [recommendNonce, setRecommendNonce] = useState(0);
-  const autoAssessFiredRef = useRef(false);
+  const bumpedRef = useRef(false);
+  // Where the AI review of this file stands. The server runs it and records it; the page only asks, and asks
+  // the server to start it when the file never had one or its run was lost.
+  const { review, working: reviewWorking, again: reviewAgain, matchAgain } = useEvidenceReview(evidenceId, { start: true });
+  const reviewRunning = reviewActive(review?.status);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editForm, setEditForm] = useState({
     name: '',
@@ -299,7 +302,7 @@ export default function EvidenceDetailPage() {
     refetchIntervalInBackground: true,
   });
 
-  const { data: latestAssessment, refetch: refetchAssessment } = useQuery<LatestAssessment>({
+  const { data: latestAssessment } = useQuery<LatestAssessment>({
     queryKey: ['evidence-assessment', evidenceId],
     queryFn: async () => {
       const response = await apiClient.get(`/evidence-mgmt/ai/${evidenceId}/latest-assessment`);
@@ -436,6 +439,7 @@ export default function EvidenceDetailPage() {
 
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       queryClient.invalidateQueries({ queryKey: ['evidence-ocr', evidenceId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-review', evidenceId] });   // reading it again starts the review
     },
     onError: (error: Error & { response?: { data?: { detail?: string } } }) => {
       const detail = error.response?.data?.detail;
@@ -443,44 +447,16 @@ export default function EvidenceDetailPage() {
     },
   });
 
-  const runAssessmentMutation = useMutation({
-    mutationFn: () => apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`),
-    onMutate: () => setAssessError(null),
-    onError: (error: any) => {
-      setAssessError(error?.response?.data?.detail || 'AI assessment could not run. Please try again.');
-      // Still offer what matching can find from the name and description.
-      setRecommendNonce((n) => n + 1);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-assessment', evidenceId] });
-      // Ensure AI suggested clause mappings and link status refresh immediately
-      queryClient.invalidateQueries({ queryKey: ['evidence-clause-mappings', evidenceId] });
-      queryClient.invalidateQueries({ queryKey: ['evidence-ai-link-status', evidenceId] });
-      refetchAssessment();
-      // Assessment done → kick the recommendation panels to auto-run in parallel.
-      setRecommendNonce((n) => n + 1);
-    },
-  });
-
-  // Auto-run the AI assessment once when the detail opens and OCR is ready but no
-  // assessment exists yet — the system runs it itself (no manual "Assess" button).
-  // If an assessment already exists, we still bump the nonce once so the
-  // recommendation panels auto-populate on open.
+  // The recommendation panels start once there is a rating to work from, or when the review is over without
+  // one (they can still match on the file's name and description).
   useEffect(() => {
-    if (autoAssessFiredRef.current || !evidence) return;
-    if (evidence.ocr_status !== 'completed') return;
-    const hasAssessment = !!latestAssessment || !!evidence.latest_assessment;
-    if (hasAssessment) {
-      autoAssessFiredRef.current = true;
+    if (bumpedRef.current || !evidence) return;
+    const rated = !!latestAssessment || !!evidence.latest_assessment || !!review?.has_assessment;
+    if (rated || review?.status === 'failed' || review?.status === 'unavailable') {
+      bumpedRef.current = true;
       setRecommendNonce((n) => n + 1);
-      return;
     }
-    if (runAssessmentMutation.isPending) return;
-    autoAssessFiredRef.current = true;
-    runAssessmentMutation.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [evidence, latestAssessment]);
+  }, [evidence, latestAssessment, review?.has_assessment, review?.status]);
 
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -757,7 +733,7 @@ export default function EvidenceDetailPage() {
 
   const formatDateTime = (dateString?: string | null) => {
     if (!dateString) return '-';
-    return new Date(dateString).toLocaleString('en-US', {
+    return (parseUtc(dateString) ?? new Date(dateString)).toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -941,10 +917,10 @@ export default function EvidenceDetailPage() {
                 OCR
               </button>
             )}
-            {runAssessmentMutation.isPending && (
+            {reviewRunning && (
               <span className="inline-flex items-center gap-1.5 rounded-md border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700">
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                AI assessing…
+                {review?.step === 'matching' ? 'AI matching clauses…' : 'AI rating…'}
               </span>
             )}
           </div>
@@ -1034,7 +1010,7 @@ export default function EvidenceDetailPage() {
         qualityScore={evidence.quality_score}
         assessment={(evidence.latest_assessment ?? null) as Record<string, unknown> | null}
         ocrStatus={evidence.ocr_status}
-        isAssessing={runAssessmentMutation.isPending}
+        isAssessing={reviewRunning}
       />
 
       <OcrContentModal
@@ -1074,7 +1050,7 @@ export default function EvidenceDetailPage() {
             onClick={() => setShowQualityOverlay(true)}
             className="group flex w-full flex-col rounded-xl border border-slate-200 bg-white p-4 text-left transition-colors hover:border-primary-300 hover:bg-slate-50/60"
           >
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Brain className="h-3.5 w-3.5" strokeWidth={1.75} /> Quality Score</div>
+            <div className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400"><Brain className="h-3.5 w-3.5" strokeWidth={1.75} /> Maturity</div>
             {evidence.quality_score !== null ? (
               <>
                 <div className={`mt-1.5 text-2xl font-bold leading-none ${getQualityScoreTextColor(evidence.quality_score)}`}>{Math.round(evidence.quality_score)}%</div>
@@ -1085,8 +1061,12 @@ export default function EvidenceDetailPage() {
                   <div className={`h-1.5 rounded-full ${getQualityScoreColor(evidence.quality_score)}`} style={{ width: `${evidence.quality_score}%` }} />
                 </div>
               </>
+            ) : reviewRunning ? (
+              <div className="mt-1.5 flex items-center gap-1.5 text-sm text-primary-600"><Loader2 className="h-4 w-4 animate-spin" /> Rating…</div>
+            ) : review?.status === 'failed' || review?.status === 'unavailable' ? (
+              <div className="mt-1.5 text-sm text-amber-700">Could not be rated</div>
             ) : (
-              <div className="mt-1.5 text-sm text-slate-400">Not assessed yet</div>
+              <div className="mt-1.5 text-sm text-slate-400">Not rated yet</div>
             )}
           </button>
 
@@ -1258,23 +1238,6 @@ export default function EvidenceDetailPage() {
 
           {/* RIGHT — AI assessment (as it was previously) */}
           <div className="space-y-4 lg:col-span-7">
-        {assessError && (
-          <div className="cw-card flex items-start gap-2 rounded-xl border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-            <div className="min-w-0 flex-1">
-              <p className="font-medium">AI assessment couldn&apos;t run</p>
-              <p className="text-xs text-red-600">{assessError}</p>
-            </div>
-            <button
-              onClick={() => { setAssessError(null); autoAssessFiredRef.current = true; runAssessmentMutation.mutate(); }}
-              disabled={runAssessmentMutation.isPending}
-              className="shrink-0 rounded-md border border-red-300 bg-white px-2.5 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-            >
-              {runAssessmentMutation.isPending ? 'Retrying…' : 'Retry'}
-            </button>
-          </div>
-        )}
-
         {/* AI Assessment — content summary + AI suggested clause mappings */}
         <div className="cw-card rounded-xl p-4 sm:p-5">
           <AssessmentTab
@@ -1283,10 +1246,13 @@ export default function EvidenceDetailPage() {
             controlsData={controlsData}
             assetsData={allLinks?.assets}
             clauseMappings={clauseMappings}
-            onRunAssessment={() => runAssessmentMutation.mutate()}
+            onRunAssessment={reviewAgain}
+            review={review}
+            working={reviewWorking}
+            onMatchAgain={matchAgain}
             onLock={() => lockAssessmentMutation.mutate()}
             onUnlock={() => unlockAssessmentMutation.mutate()}
-            isRunning={runAssessmentMutation.isPending}
+            isRunning={reviewRunning}
             isLocking={lockAssessmentMutation.isPending}
             isUnlocking={unlockAssessmentMutation.isPending}
             formatDateTime={formatDateTime}
@@ -1622,6 +1588,9 @@ function AssessmentTab({
   assetsData,
   clauseMappings,
   onRunAssessment,
+  review,
+  working,
+  onMatchAgain,
   onLock,
   onUnlock,
   isRunning,
@@ -1642,6 +1611,9 @@ function AssessmentTab({
   assetsData?: AssetsDataType;
   clauseMappings?: ClauseMapping[];
   onRunAssessment: () => void;
+  review?: ReviewState;
+  working: boolean;
+  onMatchAgain: () => void;
   onLock: () => void;
   onUnlock: () => void;
   isRunning: boolean;
@@ -1675,24 +1647,7 @@ function AssessmentTab({
   };
 
   if (!assessment && !evidence.latest_assessment) {
-    const busy = isRunning || evidence.ocr_status !== 'completed';
-    return (
-      <div className="flex flex-col items-center justify-center py-8 text-center">
-        {busy ? (
-          <Loader2 className="mb-4 h-12 w-12 animate-spin text-primary-400" />
-        ) : (
-          <Brain className="mb-4 h-12 w-12 text-slate-400" />
-        )}
-        <p className="text-lg font-medium text-slate-800">
-          {isRunning ? 'AI assessment in progress…' : evidence.ocr_status !== 'completed' ? 'Waiting for OCR…' : 'Preparing AI assessment…'}
-        </p>
-        <p className="text-slate-600">
-          {evidence.ocr_status !== 'completed'
-            ? 'OCR is still processing — the AI assessment runs automatically once it finishes.'
-            : 'The system runs the AI assessment automatically. This card fills in shortly.'}
-        </p>
-      </div>
-    );
+    return <ReviewProgress review={review} ocrStatus={evidence.ocr_status} onAgain={onRunAssessment} again={working} />;
   }
 
   const data = assessment || evidence.latest_assessment;
@@ -1734,6 +1689,13 @@ function AssessmentTab({
         <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">Content summary</p>
         <p className="mt-2 rounded-lg bg-slate-50 p-4 text-sm leading-relaxed text-slate-700">{data.content_summary || 'No summary available'}</p>
       </div>
+
+      <MaturityNotes
+        gaps={assessment?.compliance_gaps ?? evidence.latest_assessment?.gap_analysis?.gaps}
+        recommendations={assessment?.recommendations ?? evidence.latest_assessment?.gap_analysis?.recommendations}
+      />
+      <RatedAgainst checks={review?.checks} />
+      <MatchingNote review={review} onMatchAgain={onMatchAgain} again={working} />
 
       {clauseMappings && clauseMappings.length > 0 && (
         <div className="rounded-lg border border-slate-200 bg-white">

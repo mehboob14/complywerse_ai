@@ -14,6 +14,7 @@ import { ExternalLink, FileText, CheckCircle2, ScanText, Loader2, Trash2 } from 
 import { PageLoader } from '@/components/ui';
 import QualityBreakdownModal from '../_QualityBreakdownModal';
 import OcrContentModal from '../_OcrContentModal';
+import { reviewActive, useEvidenceReview } from '../_review';
 import {
   StatusPill,
   StalePill,
@@ -124,17 +125,19 @@ export function DetailPreview({
     enabled,
     // Poll while OCR/AI is still running so quality + OCR settle without a reload.
     refetchInterval: (query) => {
-      const s = (query.state.data as { ocr_status?: string } | undefined)?.ocr_status;
-      return s === 'pending' || s === 'processing' ? 3000 : false;
+      const d = query.state.data as { ocr_status?: string; ai_review?: { status?: string } } | undefined;
+      return d?.ocr_status === 'pending' || d?.ocr_status === 'processing' || reviewActive(d?.ai_review?.status) ? 3000 : false;
     },
   });
+  // The file's review, and a nudge to start it when it never had one: the preview is where an upload lands.
+  const { review } = useEvidenceReview(evidenceId, { start: true });
   const assessmentQ = useQuery({
     queryKey: ['evidence-assessment', evidenceId],
     queryFn: () => fetchAssessment(evidenceId as number),
     enabled,
     refetchInterval: () => {
-      const s = (detailQ.data as { ocr_status?: string } | undefined)?.ocr_status;
-      return s === 'pending' || s === 'processing' ? 3000 : false;
+      const d = detailQ.data as { ocr_status?: string } | undefined;
+      return d?.ocr_status === 'pending' || d?.ocr_status === 'processing' || reviewActive(review?.status) ? 3000 : false;
     },
   });
   const clausesQ = useQuery({
@@ -171,7 +174,7 @@ export function DetailPreview({
   const reprocessOcr = useMutation({
     mutationFn: () => processOCR(evidenceId as number),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['evidence-ocr', evidenceId] });
+      ['evidence-ocr', 'evidence-review'].forEach((k) => qc.invalidateQueries({ queryKey: [k, evidenceId] }));   // reading it again starts the review
       qc.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
       qc.invalidateQueries({ queryKey: ['ev-ws-items'] });
     },
@@ -266,8 +269,8 @@ export function DetailPreview({
       <div className="space-y-4 px-4 py-4">
         {/* Quality / OCR / Validity tiles */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <Tile label="Quality score" onClick={() => setQualityOpen(true)}>
-            <QualityBar pct={qualityPct} width="w-20" />
+          <Tile label="Maturity" onClick={() => setQualityOpen(true)}>
+            <QualityBar pct={qualityPct} width="w-20" review={review} />
           </Tile>
           <Tile label="OCR" onClick={() => setOcrOpen(true)}>
             <span className="inline-flex items-center gap-1.5">
@@ -363,6 +366,7 @@ export function DetailPreview({
         qualityScore={num(detail.quality_score)}
         assessment={assessment}
         ocrStatus={ocrStatus}
+        isAssessing={reviewActive(review?.status)}
       />
 
       <OcrContentModal

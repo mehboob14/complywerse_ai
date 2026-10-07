@@ -11,6 +11,8 @@
  */
 
 import { Brain, X, Loader2 } from 'lucide-react';
+import { MaturityNotes } from './_review';
+import { parseUtc } from '@/lib/serverTime';
 
 function num(v: unknown): number | null {
   return typeof v === 'number' && !Number.isNaN(v) ? v : null;
@@ -41,7 +43,7 @@ function qualityScoreTextColor(score: number | null) {
 }
 function formatDateTime(dateString?: string | null) {
   if (!dateString) return '-';
-  return new Date(dateString).toLocaleString('en-US', {
+  return (parseUtc(dateString) ?? new Date(dateString)).toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -74,12 +76,16 @@ export default function QualityBreakdownModal({
 
   const summary = str(assessment?.content_summary);
   const assessedAt = str(assessment?.assessed_at);
+  // The two lists come flat from the assessment endpoint and inside `gap_analysis` from the evidence record.
+  const analysis = (assessment?.gap_analysis ?? {}) as { gaps?: string[]; recommendations?: string[] };
+  const gaps = (assessment?.compliance_gaps as string[] | undefined) ?? analysis.gaps ?? [];
+  const todo = (assessment?.recommendations as string[] | undefined)?.length ? (assessment?.recommendations as string[]) : analysis.recommendations ?? [];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
       <div className="w-full max-w-lg rounded-xl bg-white shadow-xl" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between border-b border-slate-200 px-5 py-3">
-          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Brain className="h-4 w-4 text-primary-600" /> Quality breakdown</h3>
+          <h3 className="flex items-center gap-2 text-sm font-semibold text-slate-800"><Brain className="h-4 w-4 text-primary-600" /> Maturity breakdown</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-800"><X className="h-4 w-4" /></button>
         </div>
         <div className="p-5">
@@ -89,7 +95,7 @@ export default function QualityBreakdownModal({
                 <div className={`text-4xl font-bold ${qualityScoreTextColor(qualityScore)}`}>{Math.round(qualityScore)}%</div>
                 <div className="flex-1">
                   <div className="h-2 w-full rounded-full bg-slate-200"><div className={`h-2 rounded-full ${qualityScoreColor(qualityScore)}`} style={{ width: `${qualityScore}%` }} /></div>
-                  <p className="mt-1 text-xs text-slate-500">Overall quality score</p>
+                  <p className="mt-1 text-xs text-slate-500">Overall maturity as audit evidence</p>
                 </div>
               </div>
               {assessment ? (
@@ -114,6 +120,7 @@ export default function QualityBreakdownModal({
                   {summary && (
                     <div className="mt-4 rounded-lg bg-slate-50 p-3 text-xs leading-relaxed text-slate-600"><span className="font-medium text-slate-700">Summary: </span>{summary}</div>
                   )}
+                  <div className="mt-4"><MaturityNotes gaps={gaps} recommendations={todo} stacked /></div>
                   {assessedAt && <p className="mt-2 text-[11px] text-slate-400">Assessed {formatDateTime(assessedAt)}</p>}
                 </div>
               ) : (
@@ -126,13 +133,13 @@ export default function QualityBreakdownModal({
                 <>
                   <Loader2 className="mx-auto mb-2 h-8 w-8 animate-spin text-primary-400" />
                   <p className="text-sm text-slate-500">
-                    {ocrStatus !== 'completed' ? 'Waiting for OCR to finish…' : 'AI assessment in progress…'}
+                    {ocrStatus !== 'completed' ? 'Waiting for the file to be read…' : 'Rating this file…'}
                   </p>
                 </>
               ) : (
                 <>
                   <Brain className="mx-auto mb-2 h-8 w-8 text-slate-300" />
-                  <p className="text-sm text-slate-500">No quality score yet — the system assesses this automatically.</p>
+                  <p className="text-sm text-slate-500">Not rated yet — the system rates every uploaded file automatically.</p>
                 </>
               )}
             </div>

@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter, useParams } from 'next/navigation';
 import { assetsApi, isProjectsApi, risksApi } from '@/lib/api';
 import { RelatedIssuesPanel } from '@/components/issue-management/RelatedIssuesPanel';
+import { EvidenceMaturity } from '@/app/(dashboard)/evidence/_review';
 import {
   Loader2,
   AlertCircle,
@@ -237,14 +238,17 @@ function MilestoneEvidencePanel({ projectId, milestoneId }: { projectId: number;
                 <p className="text-[11px] font-medium text-[var(--color-text)] truncate">{ev.file_name || ev.name}</p>
                 <p className="text-[10px] text-[var(--color-muted)]">{ev.uploaded_by_name || 'Unknown'} • {formatDate(ev.created_at)}</p>
               </div>
-              <button
-                type="button"
-                onClick={() => deleteEvidenceMut.mutate(ev.id)}
-                className="p-1 hover:bg-rose-50 rounded text-rose-500"
-                title="Delete evidence"
-              >
-                <Trash2 size={12} />
-              </button>
+              <div className="flex shrink-0 items-center gap-2">
+                <EvidenceMaturity evidenceId={ev.evidence_id} refresh={['is-project-milestone-evidence']} />
+                <button
+                  type="button"
+                  onClick={() => deleteEvidenceMut.mutate(ev.id)}
+                  className="p-1 hover:bg-rose-50 rounded text-rose-500"
+                  title="Delete evidence"
+                >
+                  <Trash2 size={12} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

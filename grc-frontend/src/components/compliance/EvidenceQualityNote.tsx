@@ -9,6 +9,7 @@
 import { AlertTriangle, CheckCircle2, FileQuestion, Loader2, RefreshCw, ShieldAlert, XCircle } from 'lucide-react';
 import { useState } from 'react';
 import apiClient from '@/lib/api';
+import { parseUtc } from '@/lib/serverTime';
 
 export type EvidenceQuality = {
   status: 'ok' | 'no_text' | 'licence_restricted' | 'failed';
@@ -23,7 +24,7 @@ export type EvidenceQuality = {
 };
 
 const FRESH_MS = 5 * 60 * 1000;
-const fresh = (since?: string | null) => !since || Date.now() - new Date(since).getTime() < FRESH_MS;
+const fresh = (since?: string | null) => !since || Date.now() - (parseUtc(since)?.getTime() ?? 0) < FRESH_MS;   // the server's times carry no zone
 
 /** `refetchInterval` for the list of one item's evidence. The review runs in the background after an
  *  upload or a link, so ask again every few seconds until each new file has its verdict; a file older

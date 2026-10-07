@@ -11,6 +11,7 @@ import { FrameworkChartsOverview } from '../_components/FrameworkChartsOverview'
 import { usePermissions } from '@/hooks/usePermissions';
 import { CertificationJourney, ControlImplementation, ProgressSummary, CertificationControl, SubControlWithEvidence, ControlEvidence, ITAsset } from '@/types';
 import ControlImplementationModal from '@/components/ControlImplementationModal';
+import { EvidenceMaturity } from '@/app/(dashboard)/evidence/_review';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import { SearchInput, MultiSelectDropdown, PageLoader, InlineLinkPicker } from '@/components/ui';
 import { InlineIssueBadge } from '@/components/issue-management/InlineIssueBadge';
@@ -825,10 +826,11 @@ export default function CertificationJourneyPage() {
 
   const assessEvidenceMutation = useMutation({
     mutationFn: async (evidenceId: number) => {
-      return apiClient.post(`/evidence-mgmt/ai/${evidenceId}/assess?force_refresh=true`);
+      return apiClient.post(`/evidence-mgmt/ai/${evidenceId}/review`, null, { params: { force: true } });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['certification-controls', journeyId] });
+      queryClient.invalidateQueries({ queryKey: ['evidence-review'] });
       setAssessingEvidenceId(null);
     },
     onError: () => {
@@ -3030,9 +3032,13 @@ export default function CertificationJourneyPage() {
                               </div>
                             )}
                             <div className="flex items-center gap-2 flex-shrink-0">
-                              <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
-                                {aiBadge.label}
-                              </span>
+                              {ev.linked_evidence_id ? (
+                                <EvidenceMaturity evidenceId={ev.linked_evidence_id} refresh={['certification-controls']} />
+                              ) : (
+                                <span className={`rounded px-2 py-0.5 text-xs ${aiBadge.className}`} title={ev.ai_assessment_summary || ''}>
+                                  {aiBadge.label}
+                                </span>
+                              )}
                               <span className={`rounded px-2 py-0.5 text-xs ${
                                 ev.review_status === 'approved' ? 'bg-emerald-50 text-emerald-700' :
                                 ev.review_status === 'rejected' ? 'bg-rose-50 text-rose-700' :

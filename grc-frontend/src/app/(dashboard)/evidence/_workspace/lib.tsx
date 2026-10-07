@@ -15,8 +15,9 @@ import { useQuery } from '@tanstack/react-query';
 import { frameworksApi } from '@/lib/api';
 import {
   FileText, Image as ImageIcon, ShieldCheck, ClipboardList, FileSpreadsheet, Settings,
-  Eye, AlertTriangle, AlertCircle, Edit2, FileCheck,
+  Eye, AlertTriangle, AlertCircle, Edit2, FileCheck, Loader2,
 } from 'lucide-react';
+import { reviewActive, type ReviewBrief } from '../_review';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export interface EvidenceItem {
@@ -42,6 +43,8 @@ export interface EvidenceItem {
   source_system: string | null;
   content_summary: string | null;
   quality_score: number | null;
+  /** where the AI review of the file stands */
+  ai_review?: ReviewBrief | null;
   submitted_by: number | null;
   submitted_at: string | null;
   reviewed_by: number | null;
@@ -235,8 +238,13 @@ export function qualityBarColor(pct: number | null): string {
   if (pct >= 40) return 'bg-orange-500';
   return 'bg-rose-500';
 }
-export function QualityBar({ pct, width = 'w-14' }: { pct: number | null; width?: string }) {
-  if (pct == null) return <span className="text-slate-300">—</span>;
+export function QualityBar({ pct, width = 'w-14', review }: { pct: number | null; width?: string; review?: ReviewBrief | null }) {
+  if (pct == null) {
+    // No score yet: say whether one is on its way, or that there will not be one without a person.
+    if (reviewActive(review?.status)) return <span className="inline-flex items-center gap-1 text-xs text-primary-600"><Loader2 className="h-3 w-3 animate-spin" /> Rating…</span>;
+    if (review?.status === 'failed' || review?.status === 'unavailable') return <span className="text-xs text-amber-700" title={review.error ?? undefined}>Not rated</span>;
+    return <span className="text-slate-300">—</span>;
+  }
   return (
     <span className="inline-flex items-center gap-2">
       <span className={`h-1.5 ${width} overflow-hidden rounded-full bg-slate-100`}>

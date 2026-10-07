@@ -61,7 +61,8 @@ export const processOCR = (id: number) => apiClient.post(`/evidence-mgmt/ocr/${i
 // (HTTP 200, not deleted) when the item is linked to controls unless force=true.
 export const deleteEvidence = (id: number, force = false) =>
   apiClient.delete(`/evidence-mgmt/items/${id}`, { params: { force } });
-export const runAssessment = (id: number) => apiClient.post(`/evidence-mgmt/ai/${id}/assess`, null, { params: { force_refresh: true } });
+// Starts the review in the background (read, rate, match clauses) and answers at once with where it stands.
+export const runAssessment = (id: number) => apiClient.post(`/evidence-mgmt/ai/${id}/review`, null, { params: { force: true } });
 export const submitForReview = (id: number) => apiClient.post(`/evidence-mgmt/lifecycle/${id}/submit`);
 export const reviewEvidence = (id: number, action: 'approve' | 'reject', comments?: string) =>
   apiClient.post(`/evidence-mgmt/lifecycle/${id}/review`, { action, comments });

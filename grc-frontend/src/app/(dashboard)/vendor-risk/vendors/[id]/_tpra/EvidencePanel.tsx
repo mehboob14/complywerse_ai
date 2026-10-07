@@ -9,6 +9,7 @@ import { Paperclip, Upload, Link2, X, Loader2, FileText, ExternalLink, Search } 
 import { tpraApi, evidenceApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { usePermissions } from '@/hooks/usePermissions';
+import { EvidenceMaturity } from '@/app/(dashboard)/evidence/_review';
 
 interface EvidenceLinkRow {
   id: number;
@@ -166,6 +167,7 @@ export default function EvidencePanel({
               <span className="min-w-0 flex-1 truncate text-xs text-slate-700">{it.name || it.file_name || `Evidence #${it.evidence_id}`}</span>
               {it.evidence_type && <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{it.evidence_type}</span>}
               {it.status && <span className="text-[10px] text-gray-400">{it.status}</span>}
+              <EvidenceMaturity evidenceId={it.evidence_id} refresh={['tpra-evidence']} />
               {canEdit && (
                 <button onClick={() => unlinkMut.mutate(it.id)} disabled={unlinkMut.isPending}
                   title="Remove" className="text-gray-400 hover:text-red-600 disabled:opacity-50">

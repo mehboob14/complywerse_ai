@@ -31,6 +31,7 @@ import {
   typeLabel,
   EvidenceLetterTile,
   ExpiryStatus,
+  QualityBar,
   normPct,
   qualityBarColor,
   qualityTextColor,
@@ -318,13 +319,13 @@ export function RegisterView({
       },
       {
         id: 'quality',
-        header: 'Quality',
+        header: 'Maturity',
         accessor: (row) => normPct(row.quality_score) ?? -1,
         sortable: true,
         render: (row) => {
           const p = normPct(row.quality_score);
           return p == null
-            ? <span className="text-slate-300">—</span>
+            ? <QualityBar pct={null} review={row.ai_review} />
             : <span className={`text-sm font-semibold ${qualityTextColor(p)}`}>{p}%</span>;
         },
       },

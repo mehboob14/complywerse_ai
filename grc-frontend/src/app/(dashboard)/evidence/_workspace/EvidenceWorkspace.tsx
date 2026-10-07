@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { MultiSelectDropdown, useToast } from '@/components/ui';
 import EvidenceViewer, { EvidenceFile } from '@/components/evidence/EvidenceViewer';
+import { reviewActive } from '../_review';
 import type { EvidenceItem } from './lib';
 import { statusLabel } from './lib';
 import {
@@ -55,12 +56,11 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
   const { data: listData, isLoading } = useQuery({
     queryKey: ['ev-ws-items'],
     queryFn: () => fetchItems({ limit: 1000 }),
-    // While any freshly-uploaded item is still being OCR'd / assessed, poll so
-    // its status + quality badges settle live (no manual refresh). Stops once
-    // nothing is pending/processing.
+    // While any freshly-uploaded item is still being read or rated, poll so its status + maturity settle
+    // live (no manual refresh). Stops once nothing is pending, processing or under review.
     refetchInterval: (query) => {
-      const rows = (query.state.data as { items?: Array<{ ocr_status?: string }> } | undefined)?.items ?? [];
-      const busy = rows.some((r) => r.ocr_status === 'pending' || r.ocr_status === 'processing');
+      const rows = (query.state.data as { items?: Array<{ ocr_status?: string; ai_review?: { status?: string | null } | null }> } | undefined)?.items ?? [];
+      const busy = rows.some((r) => r.ocr_status === 'pending' || r.ocr_status === 'processing' || reviewActive(r.ai_review?.status));
       return busy ? 3000 : false;
     },
   });
@@ -113,7 +113,7 @@ export function EvidenceWorkspace({ canCreate, canDelete, onUploadClick }: Evide
     else openFull(id);
   };
   const onApprove = (id: number) => run(() => reviewEvidence(id, 'approve'), 'Approved');
-  const onReassess = (id: number) => run(() => runAssessment(id), 'Re-assessment started');
+  const onReassess = (id: number) => run(() => runAssessment(id), 'Review started: the rating appears here in a few seconds');
   const onDelete = async (id: number) => {
     const it = allItems.find((x) => x.id === id);
     if (!window.confirm(`Delete "${it?.name ?? 'this evidence'}"? This cannot be undone.`)) return;

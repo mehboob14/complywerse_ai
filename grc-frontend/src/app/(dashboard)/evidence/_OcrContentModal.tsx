@@ -10,6 +10,7 @@
  */
 
 import { ScanText, X, Loader2, RefreshCw } from 'lucide-react';
+import { parseUtc } from '@/lib/serverTime';
 
 const OCR_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   pending: { bg: 'bg-slate-100', text: 'text-slate-700', label: 'Pending' },
@@ -21,7 +22,7 @@ const OCR_STATUS_STYLES: Record<string, { bg: string; text: string; label: strin
 
 function formatDateTime(dateString?: string | null) {
   if (!dateString) return '-';
-  return new Date(dateString).toLocaleString('en-US', {
+  return (parseUtc(dateString) ?? new Date(dateString)).toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
