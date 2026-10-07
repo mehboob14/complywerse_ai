@@ -33,6 +33,7 @@ import {
   Save,
   GitCompare,
   ShieldCheck,
+  Settings,
   Trash2,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -214,6 +215,7 @@ const TABS = [
   { id: 'charters', label: 'Charters', icon: FileText },
   { id: 'meetings', label: 'Meetings', icon: Calendar },
   { id: 'actions', label: 'Actions', icon: CheckSquare },
+  { id: 'settings', label: 'Settings', icon: Settings },
 ];
 
 function getStatusIcon(s: string) {
@@ -345,7 +347,7 @@ export default function CommitteeDetailPage() {
   });
 
   // Task Management's SLA table: the days each priority allows (a person without access to it just gets no hints).
-  const { data: taskSettings } = useModuleSettings('tasks');
+  const { data: taskSettings, isLoading: taskSettingsLoading, failureCount: taskSettingsFailures } = useModuleSettings('tasks');
 
   const { data: actions } = useQuery({
     queryKey: ['committee-actions', committeeId],
@@ -1459,12 +1461,6 @@ export default function CommitteeDetailPage() {
             )}
           </div>
 
-          <PrioritySlaEditor
-            moduleKey="tasks"
-            title="SLA by priority"
-            note="Days an action item has to be done, by its priority. This is Task Management's own SLA table, so a change here applies there too."
-          />
-
           {(!actions || actions.length === 0) && (
             <div className="card p-10 text-center">
               <CheckSquare className="h-12 w-12 text-slate-300 mx-auto mb-3" />
@@ -1533,6 +1529,25 @@ export default function CommitteeDetailPage() {
                 </table>
               </div>
             </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'settings' && (
+        <div className="space-y-4">
+          {taskSettings ? (
+            <PrioritySlaEditor
+              moduleKey="tasks"
+              title="SLA by priority"
+              note="Days an action item has to be done, by its priority, for every committee. This is Task Management's own SLA table, so a change here applies there too."
+            />
+          ) : taskSettingsLoading && taskSettingsFailures === 0 ? (
+            <div className="flex justify-center py-10"><Loader2 className="h-5 w-5 animate-spin text-slate-400" /></div>
+          ) : (
+            // The first refusal is enough to say so; the retries that follow would keep a spinner up for seconds.
+            <p className="card p-6 text-sm text-slate-500">
+              The SLA for action items is part of Task Management&apos;s settings. It could not be loaded, and your account may not have access to those settings.
+            </p>
           )}
         </div>
       )}
