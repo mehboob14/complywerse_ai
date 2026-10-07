@@ -157,6 +157,45 @@ def test_a_mapping_a_reviewer_struck_out_is_gone_from_the_library(db):
     assert [c["code"] for c in rules.catalog_view(db, 1, framework=ECC)["clauses"]] == ["2-2-3-2"]
 
 
+def test_a_framework_shows_the_access_clauses_no_rule_answers_yet(db):
+    """A framework brings no rules, so "all of its rules" is said as what is covered and what has no rule yet: its
+    access clauses (those its crosswalk maps to the SCF's identification and authentication family) less the answered."""
+    _crosswalk(db)                                  # IAC-06 → SOC 2 CC6.6, ECC 2-2-3-2; IAC-06.1 → SOC 2 CC6.1
+    db.add_all([
+        m.SCFControl(release_id=1, scf_id="IAC-99", name="Credential Escrow"),          # nothing tests it
+        m.SCFMapping(release_id=1, scf_id="IAC-99", source_slug=SOC2, requirement_code="CC6.10"),
+        m.SCFMapping(release_id=1, scf_id="IAC-99", source_slug=SOC2, requirement_code="CC6.9"),
+        m.SCFMapping(release_id=1, scf_id="IAC-99", source_slug=ECC, requirement_code="2-9-9"),
+        m.SCFMapping(release_id=1, scf_id="GOV-01", source_slug=SOC2, requirement_code="CC1.1"),   # not an access control
+    ])
+    db.commit()
+    soc2 = rules.catalog_view(db, 1, framework=SOC2)
+    assert [g["code"] for g in soc2["gaps"]] == ["CC6.9", "CC6.10"]                     # in the order a person reads them
+    assert soc2["gaps"][0]["scf"] == [{"id": "IAC-99", "name": "Credential Escrow"}]
+    assert soc2["access"] == {"total": 4, "answered": 2}                                # CC6.1 and CC6.6 have rules; CC1.1 is no access clause
+    assert [g["code"] for g in rules.catalog_view(db, 1, framework=ECC)["gaps"]] == ["2-9-9"]
+    # nothing to say about a framework nobody chose, or one the crosswalk does not know
+    assert rules.catalog_view(db, 1)["gaps"] == [] and rules.catalog_view(db, 1)["access"] is None
+    assert rules.catalog_view(db, 1, framework="nope")["gaps"] == []
+
+
+def test_a_gap_follows_the_system_a_review_runs_on_and_the_reviewers_decisions(db):
+    _crosswalk(db)
+    db.add(m.SCFMapping(release_id=1, scf_id="IAC-99", source_slug=SOC2, requirement_code="CC6.9"))
+    db.commit()
+    everywhere = rules.catalog_view(db, 1, framework=SOC2)
+    on_do = rules.catalog_view(db, 1, framework=SOC2, source="digitalocean")      # only what a review of DigitalOcean can run
+    answered_here = {c["code"] for c in on_do["clauses"]}
+    assert {g["code"] for g in on_do["gaps"]} == {"CC6.9", "CC6.6", "CC6.1"} - answered_here
+    assert len(on_do["gaps"]) >= len(everywhere["gaps"])
+    assert on_do["access"]["total"] == everywhere["access"]["total"] == 3
+    # a mapping a reviewer struck out is no access clause
+    db.add(m.SCFMappingReview(tenant_id=1, source_slug=SOC2, requirement_code="CC6.9", scf_id="IAC-99",
+                              verdict="suppressed", reviewed_by=1))
+    db.commit()
+    assert "CC6.9" not in {g["code"] for g in rules.catalog_view(db, 1, framework=SOC2)["gaps"]}
+
+
 def test_clauses_come_back_in_the_order_a_person_reads_them(db):
     """1.10 is after 1.2 and 11.2.1 after 2.2.4 - not the alphabetical order the codes sort in as text."""
     db.add(m.SCFSource(release_id=1, source_key="k3", source_slug=PCI, display_name="PCI DSS 4.0.1"))

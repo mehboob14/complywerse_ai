@@ -225,6 +225,10 @@ export interface RuleCatalogView {
   connectors?: { key: string; label: string; connected: boolean; rules: number; limits?: string }[];
   /** the framework's own requirement clauses these rules relate to (in reading order), each with the rules that answer it */
   clauses?: { code: string; rules: string[] }[];
+  /** the framework's access clauses (those its crosswalk maps to an Identification & Authentication control) that none of
+   *  these rules answers, each with the control that makes it an access clause; `access` counts them all */
+  gaps?: { code: string; scf: { id: string; name: string | null }[] }[];
+  access?: { total: number; answered: number };
   domains: { domain: string; rules: CatalogRule[] }[];
 }
 

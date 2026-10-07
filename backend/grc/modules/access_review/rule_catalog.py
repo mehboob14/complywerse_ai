@@ -979,6 +979,40 @@ def _library_alias(name: Optional[str], library_name: Optional[str]) -> Optional
     return library_name if library_name and squash(library_name) not in squash(name) else None
 
 
+ACCESS_DOMAIN = "IAC"      # the Secure Controls Framework family for identification, authentication and access
+
+
+def _access_gaps(tenant_db: Session, tenant_id: Optional[int], framework: str, answered: set) -> Dict[str, Any]:
+    """The access clauses of a framework that no rule answers: the clauses its crosswalk maps to a control of the
+    SCF's identification and authentication family, less those the listed rules answer. A framework brings no rules
+    of its own, so "all of its rules" can only be said as what is covered and what has no rule yet. Each gap names the
+    control that makes it an access clause. Mappings a reviewer struck out are left out, as everywhere here."""
+    from ...models import SCFControl, SCFMapping
+    try:
+        rows = (tenant_db.query(SCFMapping.requirement_code, SCFMapping.scf_id)
+                .filter(SCFMapping.source_slug == framework, SCFMapping.scf_id.like(f"{ACCESS_DOMAIN}-%"))
+                .filter(or_(SCFMapping.match_mode.is_(None), SCFMapping.match_mode != "parent"))
+                .distinct().all())
+    except Exception:  # noqa: BLE001 — a tenant without the crosswalk shows none
+        return {"gaps": [], "access": None}
+    struck = _struck_out(tenant_db, tenant_id)
+    by_code: Dict[str, set] = {}
+    for code, scf_id in rows:
+        if code and (framework, code, scf_id) not in struck:
+            by_code.setdefault(code, set()).add(scf_id)
+    open_codes = sorted((c for c in by_code if c not in answered), key=_natural_key)
+    wanted = {s for c in open_codes for s in by_code[c]}
+    try:
+        names = dict(tenant_db.query(SCFControl.scf_id, SCFControl.name).filter(SCFControl.scf_id.in_(wanted)).all()) if wanted else {}
+    except Exception:  # noqa: BLE001 — the control names are a courtesy
+        names = {}
+    return {
+        "gaps": [{"code": c, "scf": [{"id": s, "name": names.get(s)} for s in sorted(by_code[c], key=_natural_key)]}
+                 for c in open_codes],
+        "access": {"total": len(by_code), "answered": len(by_code) - len(open_codes)},
+    }
+
+
 def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = None,
                  source: Optional[str] = None) -> Dict[str, Any]:
     """The rule library: every rule grouped by category with its effective enabled
@@ -1058,6 +1092,10 @@ def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = 
          for (slug, name), n in counted.items()),
         key=lambda f: (-f["runnable"], -f["rules"], f["name"]),
     )
+    clauses = _clauses(crosswalk, framework, shown_rules) if framework else []
+    # the framework's access clauses no listed rule answers (for a system, no rule that a review of it can run)
+    gaps = (_access_gaps(tenant_db, tenant_id, framework, {c["code"] for c in clauses})
+            if framework else {"gaps": [], "access": None})
     return {
         "summary": {"total": shown, "catalog_total": len(pool), "runnable": runnable_n,
                     "enabled_active": enabled_n, "frameworks_covered": len(covered)},
@@ -1066,6 +1104,6 @@ def catalog_view(tenant_db: Session, tenant_id: int, framework: Optional[str] = 
         # the connectors that carry rules of their own, and whether each is connected
         "connectors": [{"key": p.connector, "label": p.label, "connected": connected[p.connector],
                         "rules": len(p.rules), "limits": p.limits} for p in packs.values()],
-        "clauses": _clauses(crosswalk, framework, shown_rules) if framework else [],
+        "clauses": clauses, **gaps,
         "domains": [{"domain": d, "rules": domains.get(d, [])} for d in domain_order()],
     }

@@ -100,7 +100,7 @@ export default function RuleLibraryPage() {
         <details className="mt-3 rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm text-slate-800 shadow-sm">
           <summary className={clsx('cursor-pointer rounded text-sm font-semibold text-slate-900', FOCUS)}>How rules, frameworks and sources fit together</summary>
           <ul className="mt-2 list-disc space-y-1.5 pl-5">
-            <li><strong>Rules</strong> are our own catalogue of access tests. A framework brings no rules of its own: choosing one lists the rules whose Secure Controls Framework controls map to its clauses.</li>
+            <li><strong>Rules</strong> are our own catalogue of access tests. A framework brings no rules of its own: choosing one lists the rules whose Secure Controls Framework controls map to its clauses, and the access clauses that no rule tests yet.</li>
             <li><strong>Sources</strong> decide what can run. A rule runs only when a source supplies what it reads: {data.summary.runnable} here read data you already have; {blocked.length} wait for a source, such as DigitalOcean, SAP or your network devices, or for a data feed.</li>
             <li><strong>Runs on</strong> narrows the list to what a review of one system can run. The other rules belong to other systems.</li>
           </ul>
@@ -159,8 +159,9 @@ export default function RuleLibraryPage() {
         </div>
       </form>
 
-      {framework && !!data.clauses?.length && (
-        <ClauseTable clauses={data.clauses} rules={rows} framework={shortFramework(frameworkName ?? framework)} />
+      {framework && (!!data.clauses?.length || !!data.gaps?.length) && (
+        <ClauseTable clauses={data.clauses ?? []} rules={rows} framework={shortFramework(frameworkName ?? framework)}
+          gaps={data.gaps} access={data.access} />
       )}
 
       <div aria-busy={isFetching} className="space-y-6">
