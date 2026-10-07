@@ -14,6 +14,7 @@ import { usePageTitle } from '../_components/usePageTitle';
 import { ALL_VENDORS, CATEGORIES, isConnected, plural, sourceKeys, statFor, type Vendor } from './_parts/catalog';
 import { ConnectDialog } from './_parts/ConnectDialog';
 import { SourceDrawer, type Resolved } from './_parts/SourceDrawer';
+import { SourceRulesDialog } from './_parts/SourceRulesDialog';
 
 const crumbs = [{ label: 'Compliance', href: '/compliance' }, { label: 'Access reviews', href: '/compliance/access-reviews' }, { label: 'Sources', href: '/compliance/access-reviews/connect' }];
 
@@ -34,6 +35,7 @@ export default function SourcesPage() {
   const [filter, setFilter] = useState<Filter>('all');
   const [active, setActive] = useState<Vendor | null>(null);
   const [inspect, setInspect] = useState<{ entry: Entry; resolved: Resolved } | null>(null);
+  const [rulesOf, setRulesOf] = useState<Entry | null>(null);        // the source whose rules are being read
   const [syncing, setSyncing] = useState<string | null>(null);
   const [allTools, setAllTools] = useState(false);
   const [note, setNote] = useState<{ ok: boolean; text: string } | null>(null);
@@ -151,7 +153,7 @@ export default function SourcesPage() {
                   {e.people > 0 && <Badge>{plural(e.people, 'identity', 'identities')}</Badge>}
                   {e.rules > 0 && <Badge tone="sky" icon={ListChecks}>{plural(e.rules, 'rule')}</Badge>}
                 </div>
-                <div className="mt-auto flex gap-2">
+                <div className="mt-auto flex flex-wrap gap-2">
                   {e.vendor ? (e.connected
                     ? <Button size="sm" onClick={() => open(e)} aria-label={`Details for ${e.name}`}>Details</Button>
                     : <Button size="sm" variant="primary" onClick={() => setActive(e.vendor!)} aria-label={`${e.vendor.kind === 'upload' ? 'Upload a file for' : 'Connect'} ${e.name}`}>{e.vendor.kind === 'upload' ? 'Upload' : 'Connect'}</Button>
@@ -160,6 +162,7 @@ export default function SourcesPage() {
                       ? <Button size="sm" onClick={() => open(e)} aria-label={`Details for ${e.name}`}>Details</Button>
                       : <Button size="sm" variant="primary" loading={syncing === e.collector.key} disabled={!!syncing} onClick={() => pullPeople(e.collector!)} aria-label={`Pull people from ${e.name}`}>Pull people</Button>)
                     : <ButtonLink size="sm" href={`/admin?tab=evidence-collectors&connector=${encodeURIComponent(e.collector.key)}`}>Connect<span className="sr-only"> {e.name} under Evidence Collectors</span></ButtonLink>)}
+                  {e.rules > 0 && <Button size="sm" icon={ListChecks} onClick={() => setRulesOf(e)} aria-label={`View the ${plural(e.rules, 'rule')} for ${e.name}`}>View rules</Button>}
                 </div>
               </li>
             ))}
@@ -181,6 +184,11 @@ export default function SourcesPage() {
             setInspect(null);
             if (entry.vendor) setActive(entry.vendor); else if (entry.collector) pullPeople(entry.collector);
           }} />
+      )}
+      {rulesOf && (
+        <SourceRulesDialog source={rulesOf.id} label={rulesOf.name} connected={rulesOf.connected} limits={ruleOf(rulesOf.id)?.limits}
+          onClose={() => setRulesOf(null)}
+          onConnect={rulesOf.vendor && !rulesOf.connected ? () => { const v = rulesOf.vendor!; setRulesOf(null); setActive(v); } : undefined} />
       )}
       {active && <ConnectDialog vendor={active} fields={active.fields ?? fieldsQ.data?.[active.key] ?? []} onClose={() => setActive(null)} />}
     </div>
