@@ -41,7 +41,7 @@ AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("AI_INTEGRATIONS_OPENAI_BASE_UR
 # v2.2: Include actual control IDs in prompt to prevent hallucination of generic control IDs
 # v2.3: Added mandatory multi-framework analysis requirement
 # v3.0: Intent-based analysis with three-tier matching (explicit/implicit/inferred) and cross-framework equivalence
-PROMPT_VERSION = "3.0"
+PROMPT_VERSION = "3.1"
 # the newest OpenAI model is "gpt-5" which was released August 7, 2025.
 # Using gpt-4o for compatibility with Replit AI integrations
 MODEL_VERSION = get_openai_model()
@@ -105,7 +105,9 @@ When a control is satisfied in ONE framework, you MUST identify equivalent contr
     "audit_readiness": <0-100>,
     "confidence_score": <0-100>,
     "summary": "<2-3 sentence description of what this evidence covers>",
-    
+    "gaps": ["<specific gap with remediation suggestion>", ...],
+    "recommendations": ["<actionable recommendation>", ...],
+
     "extracted_policy_statements": [
         "<key policy statement or principle from evidence>",
         "<another key statement>",
@@ -130,9 +132,7 @@ When a control is satisfied in ONE framework, you MUST identify equivalent contr
     
     "detected_controls": ["<FRAMEWORK: control_code>", ...],
     "compliance_frameworks": ["<FRAMEWORK: clause>", ...],
-    "gaps": ["<specific gap with remediation suggestion>", ...],
-    "recommendations": ["<actionable recommendation>", ...],
-    
+
     "evidence_text_excerpts": [
         {{
             "text": "<relevant excerpt from evidence>",
@@ -155,7 +155,8 @@ When a control is satisfied in ONE framework, you MUST identify equivalent contr
 3. For IMPLICIT and INFERRED matches, still provide matched_text_excerpt showing the supporting evidence
 4. Every control in clause_mappings MUST have match_type and intent_analysis fields
 5. cross_framework_equivalents should list related controls in OTHER frameworks that address the same security domain
-6. Analyze ALL frameworks provided - do not skip any framework"""
+6. Analyze ALL frameworks provided - do not skip any framework
+7. Write the fields in the order above and list clause_mappings strongest match first, so that a long list cut short loses only its weakest entries, never the gaps and recommendations"""
 
 
 class BatchAssessRequest(BaseModel):
@@ -603,7 +604,12 @@ def validate_and_filter_clause_mappings(
         # Check if control ID exists in this framework
         normalized_ctrl = normalize_control_code(control_id)
         valid_ids = valid_controls_by_framework[matched_fw_key]
-        
+        # The list the model reads is "ID: title", and it often hands the whole line back as the id.
+        if normalized_ctrl not in valid_ids and ": " in control_id:
+            control_id = control_id.split(": ", 1)[0].strip()
+            mapping = {**mapping, "control_id": control_id}
+            normalized_ctrl = normalize_control_code(control_id)
+
         if normalized_ctrl in valid_ids:
             validated_mappings.append(mapping)
         else:
@@ -953,6 +959,12 @@ def run_ai_assessment(
             }
         ]
 
+        # Reasoning off for the models that allow it. This is a lookup against a long list and a
+        # write-up, and with every framework's controls in the prompt a reasoning model spent its
+        # whole ceiling thinking — 12,000 then 24,000 tokens — and answered nothing ("couldn't be
+        # read"). A model with no such setting refuses it, so that attempt is repeated without.
+        effort = {"reasoning_effort": "none"} if (MODEL_VERSION or "").lower().startswith(("gpt-5", "gpt-6")) else {}
+
         # Retry the call a couple of times — auto-assessment runs unattended in a
         # background thread, so a transient API hiccup should self-heal rather
         # than surface as "AI assessment couldn't run".
@@ -964,12 +976,17 @@ def run_ai_assessment(
                     model=MODEL_VERSION,
                     messages=messages,
                     temperature=0,  # dropped by the shim for reasoning models
-                    max_tokens=8000,
+                    max_tokens=12000,
                     response_format={"type": "json_object"},
+                    timeout=240,   # a normal answer takes 2-3 minutes; the SDK's 10 minutes made one stalled call a 12-minute wait
+                    **effort,
                 )
                 break
             except Exception as api_exc:  # noqa: BLE001
                 last_api_error = api_exc
+                if effort and "reasoning_effort" in str(api_exc):
+                    effort = {}
+                    continue
                 logger.warning("AI assessment API attempt %s/3 failed: %s", attempt + 1, api_exc)
                 if attempt < 2:
                     time.sleep(1.0 * (attempt + 1))
@@ -996,6 +1013,11 @@ def run_ai_assessment(
         
         # Update ai_result with validated mappings for caching
         ai_result["clause_mappings"] = validated_clause_mappings
+        # The two lists written after the mappings are lost when a long reply is cut short; they are
+        # only the mappings' own roll-up, so they are rebuilt from the mappings that were kept.
+        for key, field in (("detected_controls", "control_id"), ("compliance_frameworks", "clause_reference")):
+            if not ai_result.get(key):
+                ai_result[key] = [f"{m.get('framework_name')}: {m.get(field) or m.get('control_id')}" for m in validated_clause_mappings]
         ai_result["_original_mappings_count"] = len(raw_clause_mappings)
         ai_result["_validated_mappings_count"] = len(validated_clause_mappings)
         

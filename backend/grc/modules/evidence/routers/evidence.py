@@ -135,21 +135,10 @@ def process_evidence_background(evidence_id: int, tenant_slug: str, target=None)
             }
             file_ext = mime_to_ext.get(mime, mime.split("/")[-1] if "/" in mime else "")
         
+        ocr_done = False
         if file_ext in OCR_PROCESSABLE_TYPES:
             try:
-                ocr_result = process_evidence_ocr(evidence, db)
-
-                if ocr_result.status == "completed" and evidence.ocr_content:
-                    try:
-                        run_ai_assessment(evidence, db, user_id=getattr(evidence, "uploaded_by", None))
-                    except Exception:
-                        logger.exception(
-                            "Auto AI-assessment failed for evidence %s after OCR completed", evidence_id
-                        )
-                elif ocr_result.status == "completed":
-                    logger.warning(
-                        "Evidence %s OCR completed but produced no content — skipping AI assessment", evidence_id
-                    )
+                ocr_done = process_evidence_ocr(evidence, db).status == "completed"
             except Exception:
                 logger.exception("OCR processing failed for evidence %s", evidence_id)
                 try:
@@ -159,8 +148,10 @@ def process_evidence_background(evidence_id: int, tenant_slug: str, target=None)
                     db.rollback()
 
         if target is not None:
-            # Against the one thing it was attached to. Its own failures are
-            # recorded on the row, so this only guards the unexpected.
+            # Against the one thing it was attached to, and before the library assessment below:
+            # that one reads every framework and takes minutes, and this verdict is what the
+            # person who just attached the file is waiting for. Its own failures are recorded
+            # on the row, so this only guards the unexpected.
             try:
                 from ....services.evidence_quality import check_and_save
 
@@ -168,6 +159,14 @@ def process_evidence_background(evidence_id: int, tenant_slug: str, target=None)
                                user_id=getattr(evidence, "uploaded_by", None))
             except Exception:
                 logger.exception("Evidence quality check failed for evidence %s", evidence_id)
+
+        if ocr_done and evidence.ocr_content:
+            try:
+                run_ai_assessment(evidence, db, user_id=getattr(evidence, "uploaded_by", None))
+            except Exception:
+                logger.exception("Auto AI-assessment failed for evidence %s after OCR completed", evidence_id)
+        elif ocr_done:
+            logger.warning("Evidence %s OCR completed but produced no content — skipping AI assessment", evidence_id)
     except Exception:
         logger.exception("Background OCR/assessment task crashed for evidence %s", evidence_id)
     finally:
