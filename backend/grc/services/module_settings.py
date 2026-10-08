@@ -50,12 +50,33 @@ def _status(key: str, label: str, order: int, *, terminal: bool = False,
 
 
 def _options(*pairs) -> List[Dict[str, Any]]:
-    """Dropdown options from (value, label) pairs, or plain labels."""
+    """Dropdown options from (value, label) pairs, or plain labels.
+
+    A third item is the child options shown when that choice is selected
+    (a category's sub-categories).
+    """
     out = []
     for pair in pairs:
-        value, label = pair if isinstance(pair, tuple) else (pair, pair)
-        out.append({"value": value, "label": label, "archived": False})
+        if isinstance(pair, tuple) and len(pair) == 3:
+            value, label, children = pair
+        elif isinstance(pair, tuple):
+            value, label, children = pair[0], pair[1], ()
+        else:
+            value, label, children = pair, pair, ()
+        row: Dict[str, Any] = {"value": value, "label": label, "archived": False}
+        kids = [str(c).strip() for c in (children or []) if str(c).strip()]
+        if kids:
+            row["children"] = kids
+        out.append(row)
     return out
+
+
+def _builtin(key: str, label: str, kind: str = "text", *, required: bool = False,
+             locked: bool = False, list_key: Optional[str] = None) -> Dict[str, Any]:
+    """A field the form already has. `locked` is the record's name: it can be
+    renamed, not removed, because create still needs it."""
+    return {"key": key, "label": label, "type": kind, "required": required,
+            "locked": locked, "list": list_key}
 
 
 def _audit_sla(by_priority: Dict[str, int]) -> Dict[str, Any]:
@@ -108,9 +129,9 @@ MODULES: Dict[str, Dict[str, Any]] = {
     "assets": {
         "label": "IT Asset Inventory",
         "record": "Asset",
-        "sections": ("fields", "lists"),
+        "sections": ("statuses", "sla", "fields", "lists"),
         "permissions": {"view": "assets:asset_inventory:view", "edit": "assets:asset_inventory:edit"},
-        "priorities": (),
+        "priorities": ("critical", "high", "medium", "low"),
         "lists": {
             "environment": {"label": "Environment", "free_text": False, "options": _options(
                 ("production", "Production"), ("staging", "Staging"), ("development", "Development"),
@@ -140,23 +161,64 @@ MODULES: Dict[str, Dict[str, Any]] = {
                 ("public", "Public"), ("internal", "Internal"), ("confidential", "Confidential"),
                 ("restricted", "Restricted"))},
         },
-        "defaults": {"fields": []},
+        "defaults": {
+            "statuses": [
+                _status("active", "Active", 1, tone="emerald"),
+                _status("inactive", "Inactive", 2, tone="slate", clock="paused"),
+                _status("decommissioned", "Decommissioned", 3, terminal=True, tone="slate"),
+            ],
+            "sla": _audit_sla({"critical": 7, "high": 14, "medium": 30, "low": 90}),
+            "fields": [],
+        },
+        "builtins": [
+            _builtin("name", "Name", required=True, locked=True),
+            _builtin("description", "Description", "textarea"),
+            _builtin("asset_type", "Asset type", "select", required=True),
+            _builtin("vendor", "Vendor", "select", list_key="vendor"),
+            _builtin("location", "Location", "select", list_key="location"),
+            _builtin("environment", "Environment", "select", list_key="environment"),
+            _builtin("network_segment", "Network segment", "select", list_key="network_segment"),
+            _builtin("data_classification", "Data classification", "select", list_key="data_classification"),
+            _builtin("owner", "Owner", "user"),
+            _builtin("status", "Status", "select"),
+        ],
     },
     "vulnerabilities": {
         "label": "Vulnerabilities",
         "record": "Vulnerability",
-        "sections": ("fields",),
+        "sections": ("statuses", "fields"),
         "permissions": {"view": "vulnerabilities:vulnerability_register:view",
                         "edit": "vulnerabilities:vulnerability_register:edit"},
-        "priorities": (),
-        "defaults": {"fields": []},
+        "priorities": ("critical", "high", "medium", "low", "info"),
+        "defaults": {
+            "statuses": [
+                _status("open", "Open", 1, tone="rose", escalate_after_days=2),
+                _status("in_progress", "In progress", 2, tone="amber"),
+                _status("resolved", "Resolved", 3, terminal=True, tone="emerald"),
+                _status("accepted", "Accepted", 4, terminal=True, tone="blue"),
+                _status("closed", "Closed", 5, terminal=True, tone="slate"),
+                _status("false_positive", "False positive", 6, terminal=True, tone="slate"),
+            ],
+            "fields": [],
+        },
+        "builtins": [
+            _builtin("title", "Title", required=True, locked=True),
+            _builtin("description", "Description", "textarea"),
+            _builtin("severity", "Severity", "select", required=True, locked=True),
+            _builtin("cvss", "CVSS score", "number"),
+            _builtin("cve", "CVE ID"),
+            _builtin("cwe", "CWE ID"),
+            _builtin("affected_component", "Affected component"),
+            _builtin("affected_host", "Affected host"),
+            _builtin("due_date", "Due date", "date"),
+        ],
     },
     "vendors": {
         "label": "Third-Party Risk",
         "record": "Supplier",
-        "sections": ("fields", "lists"),
+        "sections": ("statuses", "sla", "fields", "lists"),
         "permissions": {"view": "vendor_risk:vendors:view", "edit": "vendor_risk:config:edit"},
-        "priorities": (),
+        "priorities": ("critical", "high", "medium", "low"),
         # Free text throughout: records already hold whatever was typed before.
         "lists": {
             "vendor_type": {"label": "Supplier type", "free_text": True, "options": _options(
@@ -171,24 +233,181 @@ MODULES: Dict[str, Dict[str, Any]] = {
             "document_type": {"label": "Supplier document type", "free_text": True, "options": _options(
                 "Document", "Policy", "Procedure", "Form", "Register", "Agreement", "Report", "Plan", "Attestation")},
         },
-        "defaults": {"fields": []},
+        "defaults": {
+            "statuses": [
+                _status("active", "Active", 1, tone="emerald"),
+                _status("under_review", "Under review", 2, tone="amber"),
+                _status("onboarding", "Onboarding", 3, tone="blue"),
+                _status("offboarded", "Offboarded", 4, terminal=True, tone="slate"),
+                _status("suspended", "Suspended", 5, clock="paused", tone="slate"),
+            ],
+            "sla": _audit_sla({"critical": 14, "high": 30, "medium": 60, "low": 90}),
+            "fields": [],
+        },
+        "builtins": [
+            _builtin("name", "Vendor name", required=True, locked=True),
+            _builtin("description", "Description", "textarea"),
+            _builtin("vendor_type", "Vendor type", "select", list_key="vendor_type"),
+            _builtin("industry", "Industry", "select", list_key="industry"),
+            _builtin("website", "Website"),
+            _builtin("business_owner", "Business owner", "user"),
+            _builtin("tier", "Tier", "select"),
+            _builtin("data_classification", "Draft data classification", "select"),
+            _builtin("data_types", "Data types in scope"),
+            _builtin("services", "Systems and services in scope"),
+            _builtin("contact_name", "Contact name"),
+            _builtin("contact_email", "Contact email"),
+            _builtin("contact_phone", "Contact phone"),
+            _builtin("contract_start", "Contract start", "date"),
+            _builtin("contract_end", "Contract end", "date"),
+            _builtin("annual_spend", "Annual spend", "number"),
+        ],
     },
     "risks": {
         "label": "Risk Register",
         "record": "Risk",
-        "sections": ("fields", "lists"),
+        "sections": ("statuses", "sla", "fields", "lists"),
         "permissions": {"view": "erm:risks:view", "edit": "erm:risks:edit"},
-        "priorities": (),
+        "priorities": ("critical", "high", "medium", "low"),
         "lists": {
-            "category": {"label": "Risk category", "free_text": False, "options": _options(
-                ("strategic", "Strategic"), ("operational", "Operational"), ("financial", "Financial"),
-                ("compliance", "Compliance"), ("technology", "Technology"), ("third_party", "Third Party"),
-                ("project_change", "Project/Change"), ("internal", "Internal"))},
+            "category": {"label": "Risk category", "free_text": False, "child_label": "Sub-category",
+                         "options": _options(
+                ("strategic", "Strategic", ("Market", "Reputation", "Strategic Planning", "Competitive", "Brand", "Other")),
+                ("operational", "Operational", ("Process", "Human Resources", "Supply Chain", "Business Continuity", "Quality", "Other")),
+                ("financial", "Financial", ("Credit", "Market Risk", "Liquidity", "Accounting", "Budget", "Other")),
+                ("compliance", "Compliance", ("Regulatory", "Legal", "Contractual", "Ethical", "Data Privacy", "Other")),
+                ("technology", "Technology", ("Cybersecurity", "Infrastructure", "Data", "System Availability", "Software", "Other")),
+                ("third_party", "Third Party", ("Vendor", "Outsourcing", "Partnership", "Contractor", "Other")),
+                ("project_change", "Project/Change", ("Project Delivery", "Change Management", "Integration", "Scope", "Other")),
+                ("internal", "Internal", ("Fraud", "Governance", "Culture", "Process Integrity", "Other")))},
             "register_type": {"label": "Register", "free_text": True, "options": _options(
                 "RCSA", "PCI-DSS", "ISO 27001", "SOX", "GDPR", "NIST", "SAMA CSF", "Internal", "Project-Based",
                 "Third-Party", "Other")},
         },
-        "defaults": {"fields": []},
+        "defaults": {
+            "statuses": [
+                _status("open", "Open", 1, tone="rose"),
+                _status("in_treatment", "In treatment", 2, tone="amber"),
+                _status("mitigated", "Mitigated", 3, tone="emerald"),
+                _status("accepted", "Accepted", 4, terminal=True, tone="blue"),
+                _status("closed", "Closed", 5, terminal=True, tone="slate"),
+            ],
+            "sla": _audit_sla({"critical": 14, "high": 30, "medium": 60, "low": 90}),
+            "fields": [],
+        },
+        "builtins": [
+            _builtin("title", "Title", required=True, locked=True),
+            _builtin("description", "Description", "textarea"),
+            _builtin("register_type", "Register type", "select", list_key="register_type"),
+            _builtin("category", "Category", "select", list_key="category"),
+            _builtin("sub_category", "Sub-category", "select"),
+            _builtin("status", "Status", "select"),
+            _builtin("owner", "Business owner", "user"),
+            _builtin("team", "Assigned team", "user"),
+            _builtin("linked_assets", "Linked assets"),
+            _builtin("inherent_likelihood", "Inherent likelihood", "number"),
+            _builtin("inherent_impact", "Inherent impact", "number"),
+            _builtin("residual_likelihood", "Residual likelihood", "number"),
+            _builtin("residual_impact", "Residual impact", "number"),
+            _builtin("root_cause", "Root cause", "textarea"),
+            _builtin("consequences", "Consequences", "textarea"),
+            _builtin("recommendations", "Recommendations", "textarea"),
+            _builtin("treatment_plan", "Treatment plan", "textarea"),
+        ],
+    },
+    "tasks": {
+        "label": "Task Management",
+        "record": "Task",
+        "sections": ("statuses", "sla", "fields", "lists"),
+        "permissions": {"view": "critical_tasks:tasks:view", "edit": "critical_tasks:tasks:create"},
+        "priorities": ("critical", "high", "medium", "low", "info"),
+        "lists": {
+            "priority": {"label": "Priority", "free_text": True, "options": _options(
+                "Critical", "High", "Medium", "Low")},
+            "category": {"label": "Category", "free_text": True, "options": _options(
+                "Remediation", "Implementation", "Review", "Reporting", "Other")},
+            "source": {"label": "Source", "free_text": True, "options": _options(
+                "Audit", "Risk", "Compliance", "Vulnerability", "Manual")},
+            "severity": {"label": "Severity", "free_text": True, "options": _options(
+                "Critical", "High", "Medium", "Low")},
+        },
+        "defaults": {
+            "statuses": [
+                _status("open", "Open", 1, tone="slate"),
+                _status("in_progress", "In progress", 2, tone="amber"),
+                _status("under_review", "Under review", 3, tone="blue"),
+                _status("completed", "Completed", 4, terminal=True, tone="emerald"),
+                _status("verified", "Verified", 5, terminal=True, tone="emerald"),
+                _status("reopened", "Reopened", 6, tone="rose"),
+            ],
+            "sla": _audit_sla({"critical": 7, "high": 30, "medium": 90, "low": 180, "info": 365}),
+            "fields": [],
+        },
+        "builtins": [
+            _builtin("title", "Title", required=True, locked=True),
+            _builtin("description", "Description", "textarea"),
+            _builtin("source", "Source", "select", list_key="source"),
+            _builtin("priority", "Priority", "select", list_key="priority"),
+            _builtin("category", "Category", "select", list_key="category"),
+            _builtin("severity", "Severity", "select", list_key="severity"),
+            _builtin("owners", "Assigned owners", "user"),
+            _builtin("reviewer", "Reviewer", "user"),
+            _builtin("due_date", "Due date", "date"),
+            _builtin("notes", "Evidence / notes", "textarea"),
+        ],
+    },
+    "evidence": {
+        "label": "Evidence",
+        "record": "Evidence",
+        "sections": ("statuses", "sla", "fields", "lists"),
+        "permissions": {"view": "evidence:evidence_library:view", "edit": "evidence:evidence_library:edit"},
+        "priorities": ("critical", "high", "medium", "low"),
+        "lists": {
+            "evidence_type": {"label": "Evidence type", "free_text": False, "options": _options(
+                ("screenshot", "Screenshot"), ("document", "Document"), ("certificate", "Certificate"),
+                ("audit_report", "Audit report"), ("log", "Log"), ("policy", "Policy"),
+                ("procedure", "Procedure"), ("configuration", "Configuration"),
+                ("attestation", "Attestation"), ("training_record", "Training record"),
+                ("access_review", "Access review"), ("vulnerability_scan", "Vulnerability scan"),
+                ("penetration_test", "Penetration test"), ("backup_log", "Backup log"),
+                ("change_record", "Change record"), ("incident_report", "Incident report"),
+                ("validation_material", "Validation material"), ("other", "Other"))},
+        },
+        "defaults": {
+            "statuses": [
+                _status("draft", "Draft", 1, tone="slate"),
+                _status("pending_review", "Pending review", 2, tone="amber"),
+                _status("approved", "Approved", 3, terminal=True, tone="emerald"),
+                _status("rejected", "Rejected", 4, tone="rose"),
+            ],
+            "sla": _audit_sla({"critical": 7, "high": 14, "medium": 30, "low": 60}),
+            "fields": [],
+        },
+        "builtins": [
+            _builtin("name", "Name", required=True, locked=True),
+            _builtin("description", "Description", "textarea"),
+            _builtin("evidence_type", "Evidence type", "select", list_key="evidence_type"),
+            _builtin("owner", "Owner", "user"),
+            _builtin("collection_date", "Collection date", "date"),
+            _builtin("validity", "Validity period", "number"),
+            _builtin("source", "Source system"),
+        ],
+    },
+    "controls": {
+        "label": "Common Controls",
+        "record": "Control",
+        "sections": ("statuses", "sla", "fields"),
+        "permissions": {"view": "controls:control_library:view", "edit": "controls:control_library:edit"},
+        "priorities": ("critical", "high", "medium", "low"),
+        "defaults": {
+            "statuses": [
+                _status("not_started", "Not started", 1, tone="slate"),
+                _status("in_progress", "In progress", 2, tone="amber"),
+                _status("implemented", "Implemented", 3, terminal=True, tone="emerald"),
+            ],
+            "sla": _audit_sla({"critical": 14, "high": 30, "medium": 60, "low": 90}),
+            "fields": [],
+        },
     },
 }
 
@@ -235,9 +454,16 @@ def _merge(module_key: str, module: Dict[str, Any], parts: tuple, merged: Dict[s
     if "lists" in parts:
         saved_lists = stored.get("lists") if isinstance(stored.get("lists"), dict) else {}
         merged["lists"] = {key: {"label": item["label"], "free_text": bool(item.get("free_text")),
-                                 "note": item.get("note"),
+                                 "note": item.get("note"), "child_label": item.get("child_label"),
                                  "options": deepcopy(saved_lists.get(key) or item["options"])}
                            for key, item in (module.get("lists") or {}).items()}
+    layout = stored.get("layout") if isinstance(stored.get("layout"), dict) else {}
+    merged["builtins"] = []
+    for item in module.get("builtins") or []:
+        over = layout.get(item["key"]) if isinstance(layout.get(item["key"]), dict) else {}
+        label = str(over.get("label") or item["label"])
+        hidden = bool(over.get("hidden")) and not item.get("locked")
+        merged["builtins"].append({**item, "label": label, "hidden": hidden})
     merged["module"] = {"key": module_key, "label": module["label"], "record": module["record"],
                         "priorities": list(module["priorities"]), "sections": list(parts),
                         "permissions": dict(module.get("permissions") or {})}
@@ -415,8 +641,23 @@ def _clean_fields(raw: Any, existing: List[Dict[str, Any]]) -> List[Dict[str, An
         kind = str(item.get("type") or "text").lower()
         if kind not in FIELD_TYPES:
             raise ValueError(f"Field type '{kind}' must be one of {', '.join(FIELD_TYPES)}")
+        depends = str(item.get("depends_on") or "").strip() or None
+        groups: Dict[str, List[str]] = {}
         options: List[str] = []
-        if kind in _OPTION_TYPES:
+        if kind in _OPTION_TYPES and depends:
+            raw_groups = item.get("groups") if isinstance(item.get("groups"), dict) else {}
+            for parent, kids in list(raw_groups.items())[:_MAX_OPTIONS]:
+                parent_name = _text(parent, "parent option", 80)
+                cleaned_kids: List[str] = []
+                for kid in (kids or [])[:_MAX_OPTIONS] if isinstance(kids, list) else []:
+                    text = _text(kid, "option", 80, required=False)
+                    if text and text not in cleaned_kids:
+                        cleaned_kids.append(text)
+                if cleaned_kids:
+                    groups[parent_name] = cleaned_kids
+            if not groups:
+                raise ValueError(f"Field '{key}' depends on another dropdown, so add options under at least one choice")
+        elif kind in _OPTION_TYPES:
             values = item.get("options")
             if not isinstance(values, list) or not values:
                 raise ValueError(f"Field '{key}' is a {kind}, so it needs at least one option")
@@ -430,6 +671,8 @@ def _clean_fields(raw: Any, existing: List[Dict[str, Any]]) -> List[Dict[str, An
             "type": kind,
             "required": bool(item.get("required")),
             "options": options,
+            "depends_on": depends,
+            "groups": groups,
             "help": _text(item.get("help"), "help text", 200, required=False),
             "order": _int(item.get("order", index + 1), "field order", 0, 999),
             "archived": bool(item.get("archived")),
@@ -441,6 +684,14 @@ def _clean_fields(raw: Any, existing: List[Dict[str, Any]]) -> List[Dict[str, An
             kept = deepcopy(old)
             kept["archived"] = True
             out.append(kept)
+    live = {f["key"]: f for f in out if not f.get("archived")}
+    for field in live.values():
+        dep = field.get("depends_on")
+        if not dep:
+            continue
+        parent = live.get(dep)
+        if parent is None or parent.get("type") != "select" or parent.get("depends_on"):
+            raise ValueError(f"'{field['label']}' must depend on a single dropdown")
     return sorted(out, key=lambda f: (f["order"], f["label"]))
 
 
@@ -465,13 +716,43 @@ def _clean_lists(raw: Any, module: Dict[str, Any], current: Dict[str, Any]) -> D
             if value.lower() in seen:
                 raise ValueError(f"'{label}' is listed twice in {known[key]['label']}")
             seen.add(value.lower())
-            cleaned.append({"value": value, "label": label, "archived": bool(option.get("archived"))})
+            row = {"value": value, "label": label, "archived": bool(option.get("archived"))}
+            children = []
+            for child in (option.get("children") or [])[:_MAX_OPTIONS]:
+                text = _text(child, "sub-option", 80, required=False)
+                if text and text not in children:
+                    children.append(text)
+            if children:
+                row["children"] = children
+            cleaned.append(row)
         for old in (current.get(key) or {}).get("options") or []:
             if str(old.get("value")).lower() not in seen:
                 cleaned.append({**old, "archived": True})
         if not any(not o["archived"] for o in cleaned):
             raise ValueError(f"{known[key]['label']} needs at least one option in use")
         out[key] = cleaned
+    return out
+
+
+def _clean_layout(raw: Any, module: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+    """Rename or hide a field the form already has. The record's name stays."""
+    known = {item["key"]: item for item in module.get("builtins") or []}
+    if not isinstance(raw, dict):
+        raise ValueError("Existing fields must be given as an object")
+    out: Dict[str, Dict[str, Any]] = {}
+    for key, item in raw.items():
+        spec_row = known.get(str(key))
+        if spec_row is None:
+            raise ValueError(f"'{key}' is not a field on this form")
+        if not isinstance(item, dict):
+            raise ValueError(f"'{spec_row['label']}' needs a label")
+        hidden = bool(item.get("hidden"))
+        if spec_row.get("locked") and hidden:
+            raise ValueError(f"'{spec_row['label']}' can't be removed")
+        out[str(key)] = {
+            "label": _text(item.get("label") or spec_row["label"], "Field label", 80),
+            "hidden": hidden,
+        }
     return out
 
 
@@ -489,9 +770,9 @@ def save_settings(db: Session, tenant_id: int, module_key: str, patch: Dict[str,
     stored = deepcopy(row.config) if row is not None and isinstance(row.config, dict) else {}
 
     for section in patch:
-        if section not in ("statuses", "sla", "fields", "lists") :
+        if section not in ("statuses", "sla", "fields", "lists", "layout"):
             raise ValueError(f"Unknown settings section '{section}'")
-        if section not in parts:
+        if section not in parts and section != "layout":
             raise ValueError(f"{module['label']} has no '{section}' settings")
     # Fields first: an SLA may follow one of them.
     if "fields" in patch:
@@ -505,6 +786,8 @@ def save_settings(db: Session, tenant_id: int, module_key: str, patch: Dict[str,
         driver_values(module, fields, current["sla"]["driver"])   # a field the SLA follows can't be retired
     if "lists" in patch:
         stored["lists"] = _clean_lists(patch["lists"], module, current.get("lists") or {})
+    if "layout" in patch:
+        stored["layout"] = _clean_layout(patch["layout"], module)
 
     if row is None:
         row = ModuleSettings(tenant_id=tenant_id, module_key=module_key, config=stored)
@@ -597,6 +880,28 @@ def sla_state(settings: Dict[str, Any], *, status: Optional[str], due_date: Opti
 
 # ── extra field values ───────────────────────────────────────────────────────
 
+def _choices(field: Dict[str, Any], values: Dict[str, Any]) -> List[str]:
+    """Options a dropdown accepts. A field that depends on another dropdown
+    accepts the group for the parent value in this payload, or any of its
+    groups when the parent was not sent (a partial update)."""
+    groups = field.get("groups") or {}
+    dep = field.get("depends_on")
+    if dep and isinstance(groups, dict) and groups:
+        parent = values.get(dep)
+        parent = parent.strip() if isinstance(parent, str) else parent
+        kids = groups.get(parent) if isinstance(parent, str) else None
+        if isinstance(kids, list) and kids:
+            return list(kids)
+        flat: List[str] = []
+        for row in groups.values():
+            if isinstance(row, list):
+                for kid in row:
+                    if kid not in flat:
+                        flat.append(kid)
+        return flat
+    return list(field.get("options") or [])
+
+
 def validate_custom_values(settings: Dict[str, Any], values: Any, *,
                            partial: bool = False) -> Dict[str, Any]:
     """Clean a record's extra field values against the tenant's definitions.
@@ -621,6 +926,7 @@ def validate_custom_values(settings: Dict[str, Any], values: Any, *,
         if value in (None, "") or value == []:
             cleaned[key] = None
             continue
+        allowed = _choices(field, values)
         if kind == "number":
             try:
                 cleaned[key] = float(value) if not float(value).is_integer() else int(float(value))
@@ -638,8 +944,8 @@ def validate_custom_values(settings: Dict[str, Any], values: Any, *,
             cleaned[key] = text
         elif kind == "select":
             text = _text(value, field["label"], 200)
-            if text not in field["options"]:
-                raise ValueError(f"'{field['label']}' must be one of: {', '.join(field['options'])}")
+            if text not in allowed:
+                raise ValueError(f"'{field['label']}' must be one of: {', '.join(allowed)}")
             cleaned[key] = text
         elif kind == "multiselect":
             if not isinstance(value, list):
@@ -647,8 +953,8 @@ def validate_custom_values(settings: Dict[str, Any], values: Any, *,
             picked = []
             for entry in value[:50]:
                 text = _text(entry, field["label"], 200)
-                if text not in field["options"]:
-                    raise ValueError(f"'{field['label']}' must be one of: {', '.join(field['options'])}")
+                if text not in allowed:
+                    raise ValueError(f"'{field['label']}' must be one of: {', '.join(allowed)}")
                 picked.append(text)
             cleaned[key] = picked
         elif kind == "user":

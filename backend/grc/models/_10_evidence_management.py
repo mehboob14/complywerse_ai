@@ -1,4 +1,5 @@
 from ._09_1_unified_common_control_library_models import *  # noqa: F401,F403
+from sqlalchemy import JSON as _JSON
 
 # =============================================================================
 # 7. Evidence Management
@@ -42,6 +43,8 @@ class Evidence(Base):
     review_comments = Column(Text, nullable=True)
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     approved_at = Column(DateTime, nullable=True)
+    # Tenant-defined fields (services/module_settings.py, module "evidence").
+    custom_values = Column(_JSON, nullable=True)
     # Where the AI review of the uploaded file stands (services/evidence_review.py): status, step, error, times.
     ai_review = Column(JSON, nullable=True)
     

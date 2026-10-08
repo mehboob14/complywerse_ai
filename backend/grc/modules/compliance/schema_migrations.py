@@ -900,7 +900,10 @@ _COLUMN_ADDS = [
     ("grc_it_assets", "custom_values", "JSON", None),
     ("grc_vulnerabilities", "custom_values", "JSON", None),
     ("grc_risks", "custom_values", "JSON", None),
+    ("grc_critical_tasks", "custom_values", "JSON", None),
+    ("grc_evidence", "custom_values", "JSON", None),
     ("grc_evidence", "ai_review", "JSON", None),
+    ("grc_scf_control_state", "custom_values", "JSON", None),
     # Vendor onboarding requests (vendor_risk/tpra/intake.py).
     ("grc_vendors", "intake", "JSON", None),
     ("grc_vendors", "custom_values", "JSON", None),

@@ -290,10 +290,10 @@ IMPACT = {"key": "business_impact", "label": "Business impact", "type": "select"
 
 def test_a_module_only_takes_the_sections_it_offers(db):
     with pytest.raises(ValueError, match="has no 'sla' settings"):
-        ms.save_settings(db, 1, "assets", {"sla": {"due_soon_days": 3}})
+        ms.save_settings(db, 1, "vulnerabilities", {"sla": {"due_soon_days": 3}})
     saved = ms.save_settings(db, 1, "assets", {"lists": {"vendor": ["Temenos", "Microsoft"]}})
     assert [o["value"] for o in ms.list_options(saved, "vendor")] == ["Temenos", "Microsoft"]
-    assert "sla" not in saved and saved["module"]["sections"] == ["fields", "lists"]
+    assert "sla" in saved["module"]["sections"]
 
 
 def test_the_sla_can_follow_a_tenant_dropdown_and_that_field_cannot_be_retired(db):
@@ -380,3 +380,66 @@ def test_a_vulnerability_carries_its_custom_values(db):
     changed = http.put(f"/vulnerabilities/{vid}", json={"custom_values": {"business_impact": "Tier 2"}})
     assert changed.status_code == 200, changed.text
     assert db.get(Vulnerability, vid).custom_values == {"business_impact": "Tier 2"}
+
+
+def test_tasks_evidence_and_controls_are_configurable_forms():
+    """The three modules that used to lean on a separate template now share the form."""
+    assert [o["value"] for o in ms.spec("tasks")["lists"]["priority"]["options"]] == [
+        "Critical", "High", "Medium", "Low"]
+    assert ms.spec("evidence")["lists"]["evidence_type"]["options"][0]["value"] == "screenshot"
+    assert "fields" in ms.spec("controls")["sections"]
+    saved = ms.validate_custom_values(
+        {"fields": [{"key": "cost_centre", "label": "Cost centre", "type": "number", "required": True}]},
+        {"cost_centre": "12"},
+    )
+    assert saved == {"cost_centre": 12.0} or saved == {"cost_centre": 12}
+
+
+def test_a_dropdown_can_depend_on_another_and_a_category_keeps_subcategories():
+    fields = ms._clean_fields([
+        {"key": "area", "label": "Area", "type": "select", "options": ["IT", "Finance"]},
+        {"key": "topic", "label": "Topic", "type": "select", "depends_on": "area",
+         "groups": {"IT": ["Network", "App"], "Finance": ["Ledger"]}},
+    ], [])
+    topic = next(f for f in fields if f["key"] == "topic")
+    assert topic["groups"]["IT"] == ["Network", "App"]
+    settings = {"fields": fields}
+    assert ms.validate_custom_values(settings, {"area": "IT", "topic": "Network"})["topic"] == "Network"
+    with pytest.raises(ValueError, match="must be one of"):
+        ms.validate_custom_values(settings, {"area": "IT", "topic": "Ledger"})
+
+    cat = ms.spec("risks")["lists"]["category"]
+    assert cat["child_label"] == "Sub-category"
+    strategic = next(o for o in cat["options"] if o["value"] == "strategic")
+    assert "Market" in strategic["children"]
+    cleaned = ms._clean_lists(
+        {"category": [{"value": "strategic", "label": "Strategic", "children": ["Market", "Brand"]}]},
+        ms.spec("risks"),
+        {"category": {"options": cat["options"]}},
+    )
+    saved_opt = next(o for o in cleaned["category"] if o["value"] == "strategic")
+    assert saved_opt["children"] == ["Market", "Brand"]
+
+
+def test_registers_ship_sla_days_and_statuses_a_tenant_can_extend():
+    for key in ("risks", "tasks", "evidence", "assets", "vendors", "controls"):
+        module = ms.spec(key)
+        assert "sla" in module["sections"] and "statuses" in module["sections"]
+        assert any(s["terminal"] for s in module["defaults"]["statuses"])
+        assert module["defaults"]["sla"]["by_priority"]["critical"] > 0
+    assert "sla" not in ms.spec("vulnerabilities")["sections"]
+    assert ms.spec("tasks")["defaults"]["sla"]["by_priority"]["info"] == 365
+    cleaned = ms._clean_statuses(ms.spec("risks")["defaults"]["statuses"] + [
+        {"key": "awaiting_regulator", "label": "Awaiting regulator"},
+    ])
+    assert any(s["key"] == "awaiting_regulator" for s in cleaned)
+
+
+def test_an_existing_field_can_be_renamed_or_removed():
+    module = ms.spec("risks")
+    assert any(b["key"] == "title" and b["locked"] for b in module["builtins"])
+    with pytest.raises(ValueError, match="can't be removed"):
+        ms._clean_layout({"title": {"label": "Title", "hidden": True}}, module)
+    assert ms._clean_layout(
+        {"description": {"label": "Narrative", "hidden": True}}, module,
+    )["description"] == {"label": "Narrative", "hidden": True}

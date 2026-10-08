@@ -1015,6 +1015,70 @@ def put_custom_control_checks(
     return _custom_out(db, nc)
 
 
+class ControlFieldsBody(BaseModel):
+    custom_values: Dict[str, Any] = {}
+
+
+def _control_state(db: Session, tenant_id: int, scf_id: str, *, create: bool) -> Optional[SCFControlState]:
+    scope = scope_service.ensure_default_scope(db, tenant_id)
+    row = (
+        db.query(SCFControlState)
+        .filter(
+            SCFControlState.tenant_id == tenant_id,
+            SCFControlState.scope_id == scope.id,
+            SCFControlState.scf_id == scf_id,
+        )
+        .first()
+    )
+    if row is None and create:
+        row = SCFControlState(tenant_id=tenant_id, scope_id=scope.id, scf_id=scf_id)
+        db.add(row)
+        db.flush()
+    return row
+
+
+@router.get("/controls/{scf_id}/fields")
+def get_control_fields(
+    scf_id: str,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Tenant-defined field values on one common control. Empty until someone saves them."""
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        row = _control_state(db, tenant_id, scf_id, create=False)
+    except RuntimeError:
+        raise HTTPException(503, detail={"status": "not_provisioned"})
+    return {"custom_values": (getattr(row, "custom_values", None) or {}) if row else {}}
+
+
+@router.put("/controls/{scf_id}/fields")
+def put_control_fields(
+    scf_id: str,
+    body: ControlFieldsBody,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+    _: bool = Depends(_require_cl_edit),
+):
+    tenant_id = get_user_primary_tenant(current_user, db)
+    try:
+        from grc.services.module_settings import clean_record_values
+        row = _control_state(db, tenant_id, scf_id, create=False)
+        current = getattr(row, "custom_values", None) if row else None
+        cleaned = clean_record_values(
+            db, tenant_id, "controls", body.custom_values, current, creating=not current,
+        )
+        if row is None:
+            row = _control_state(db, tenant_id, scf_id, create=True)
+    except RuntimeError:
+        raise HTTPException(503, detail={"status": "not_provisioned"})
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    row.custom_values = cleaned
+    db.commit()
+    return {"custom_values": row.custom_values or {}}
+
+
 # ── Stage H: assurance & reporting ───────────────────────────────────────────
 
 def _resolve_scope(

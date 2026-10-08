@@ -378,6 +378,8 @@ class CriticalTask(Base):
     approved_by_id = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     approved_at = Column(DateTime, nullable=True)
     approval_comment = Column(Text, nullable=True)
+    # Tenant-defined fields (services/module_settings.py, module "tasks").
+    custom_values = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

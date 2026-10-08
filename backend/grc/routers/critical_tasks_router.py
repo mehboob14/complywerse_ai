@@ -98,6 +98,7 @@ class TaskCreate(BaseModel):
     recurrence_pattern: Optional[str] = None
     recurrence_interval: Optional[int] = 1
     approval_required: Optional[bool] = False
+    custom_values: Optional[dict] = None
 
 
 class TaskUpdate(BaseModel):
@@ -124,6 +125,7 @@ class TaskUpdate(BaseModel):
     recurrence_pattern: Optional[str] = None
     recurrence_interval: Optional[int] = None
     approval_required: Optional[bool] = None
+    custom_values: Optional[dict] = None
 
 
 class StatusTransition(BaseModel):
@@ -310,6 +312,7 @@ def _serialize_task(task, include_relations=False):
         "assigned_owner": _serialize_user(task.assigned_owner),
         "reviewer": _serialize_user(task.reviewer),
         "created_by": _serialize_user(task.created_by),
+        "custom_values": getattr(task, "custom_values", None) or {},
     }
     if include_relations:
         result["sub_tasks"] = [
@@ -1025,10 +1028,17 @@ def create_task(
         assigned_ids = [payload.assigned_owner_id]
     payload_dict["assigned_user_ids"] = assigned_ids
     payload_dict["assigned_owner_id"] = assigned_ids[0] if assigned_ids else payload.assigned_owner_id
+    raw_custom = payload_dict.pop("custom_values", None)
+    try:
+        from ..services.module_settings import clean_record_values
+        custom_values = clean_record_values(db, tenant_id, "tasks", raw_custom, creating=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     task = CriticalTask(
         tenant_id=tenant_id,
         created_by_id=current_user.id,
+        custom_values=custom_values,
         **payload_dict,
     )
     if task.sla_days and not task.due_date:
@@ -1059,6 +1069,14 @@ def update_task(
         raise HTTPException(status_code=404, detail="Task not found")
 
     update_data = payload.model_dump(exclude_unset=True)
+    if "custom_values" in update_data:
+        try:
+            from ..services.module_settings import clean_record_values
+            update_data["custom_values"] = clean_record_values(
+                db, task.tenant_id, "tasks", update_data["custom_values"],
+                getattr(task, "custom_values", None), creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
     if "assigned_owner_id" in update_data:
         _validate_tenant_user(db, update_data["assigned_owner_id"], user_tenants)
     if "reviewer_id" in update_data:

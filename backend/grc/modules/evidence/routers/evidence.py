@@ -1,4 +1,5 @@
 from typing import List, Optional
+import json
 from datetime import datetime, timedelta
 import os
 import uuid
@@ -111,6 +112,7 @@ class EvidenceUpdate(BaseModel):
     source_system: Optional[str] = None
     status: Optional[str] = None
     content_summary: Optional[str] = None
+    custom_values: Optional[dict] = None
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -157,6 +159,7 @@ def serialize_evidence(evidence: Evidence, include_counts: bool = True, db: Sess
         "approved_by": evidence.approved_by,
         "approved_at": evidence.approved_at.isoformat() if evidence.approved_at else None,
         "ai_review": evidence_review.public(evidence),
+        "custom_values": getattr(evidence, "custom_values", None) or {},
         "risk_links_count": len(evidence.risk_links or []) if hasattr(evidence, "risk_links") else 0,
         "asset_links_count": len(evidence.asset_links or []) if hasattr(evidence, "asset_links") else 0,
         "incident_links_count": len(evidence.incident_links or []) if hasattr(evidence, "incident_links") else 0,
@@ -562,6 +565,7 @@ async def upload_evidence(
     source_system: Optional[str] = Form(None),
     owner_id: Optional[int] = Form(None),
     tenant_id: Optional[int] = Form(None),
+    custom_values: Optional[str] = Form(None),
     file: UploadFile = File(...),
     background_tasks: BackgroundTasks = None,
     db: Session = Depends(get_db),
@@ -583,7 +587,19 @@ async def upload_evidence(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
+    parsed_custom = None
+    if custom_values:
+        try:
+            parsed_custom = json.loads(custom_values)
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="custom_values must be JSON")
+        try:
+            from ....services.module_settings import clean_record_values
+            parsed_custom = clean_record_values(db, tenant_id, "evidence", parsed_custom, creating=True)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     file_ext = ""
     if file.filename:
         file_ext = os.path.splitext(file.filename)[1].lower()
@@ -633,7 +649,8 @@ async def upload_evidence(
         source_system=source_system,
         uploaded_by=current_user.id,
         status="draft",
-        ocr_status=ocr_status_val
+        ocr_status=ocr_status_val,
+        custom_values=parsed_custom,
     )
     # owner_id was added later. Set conditionally so older deployments
     # without the column still work.
@@ -678,7 +695,15 @@ def update_evidence(
         )
     
     update_data = evidence_update.model_dump(exclude_unset=True)
-    
+    if "custom_values" in update_data:
+        try:
+            from ....services.module_settings import clean_record_values
+            update_data["custom_values"] = clean_record_values(
+                db, evidence.tenant_id, "evidence", update_data["custom_values"],
+                getattr(evidence, "custom_values", None), creating=False)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+
     for field, value in update_data.items():
         setattr(evidence, field, value)
     
