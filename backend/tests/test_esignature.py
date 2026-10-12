@@ -16,6 +16,7 @@ from fastapi import HTTPException
 from PIL import Image, ImageDraw
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 import grc.models as m
 from grc import audit_logger, rich_audit
@@ -52,7 +53,7 @@ _TABLE = "| Role | Name | Designation | Signature / Date |\n| --- | --- | --- | 
 
 @pytest.fixture
 def db():
-    engine = create_engine("sqlite://")
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)   # the HTTP test runs it on another thread
     m.Base.metadata.create_all(engine)
     with Session(engine) as session:
         session.add(m.Tenant(id=1, name="Demo Bank", slug="demo"))
@@ -262,3 +263,29 @@ def test_an_audit_row_says_that_a_drawing_was_sent_not_what_it_contained():
     assert audit_logger._sanitize_value({"signature_image": png, "comment": "ok"}) == {"signature_image": f"<data URL, {len(png)} chars>", "comment": "ok"}
     assert rich_audit._sanitize({"signature_image": png}) == {"signature_image": f"<data URL, {len(png)} chars>"}
     assert rich_audit.brief_data_url("data:text/plain;base64,aGk=") == "data:text/plain;base64,aGk="      # short ones are left alone
+
+
+# -- over HTTP -------------------------------------------------------------------------
+
+def test_over_http_a_sign_off_carries_the_drawing_and_the_signature_can_be_read_back(db, monkeypatch):
+    from fastapi.testclient import TestClient
+    from grc.main import app
+    from grc.routers.auth_router import require_auth
+
+    monkeypatch.setattr(signoff, "get_user_tenants", lambda user, session: [1])
+    monkeypatch.setattr(esignatures, "get_user_tenants", lambda user, session: [1])
+    app.dependency_overrides[m.get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: _user(db)
+    try:
+        http = TestClient(app)
+        refused = http.post("/governance/documents/5/signoff/sign", json={"comment": "no drawing"})
+        assert refused.status_code == 400 and "signature" in refused.json()["detail"].lower()
+        done = http.post("/governance/documents/5/signoff/sign", json={"comment": "ok", "signature_image": _png()})
+        assert done.status_code == 200 and done.json()["signatures"][0]["esign"]["image_sha256"]
+        sig = db.query(m.ElectronicSignature).one()
+        seen = http.get(f"/governance/esignatures/{sig.id}")
+        assert seen.status_code == 200 and seen.json()["valid"] is True and seen.json()["signer_name"] == "Sara Khan"
+        image = http.get(f"/governance/esignatures/{sig.id}/image")
+        assert image.headers["content-type"] == "image/png" and image.content == sig.image_png
+    finally:
+        app.dependency_overrides.clear()
