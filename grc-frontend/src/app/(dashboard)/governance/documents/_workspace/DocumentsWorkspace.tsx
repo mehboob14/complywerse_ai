@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FolderTree, Table2, KanbanSquare, Plus, Sparkles, LayoutTemplate, Search } from 'lucide-react';
 import { MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
 import { assetsApi, governanceApi } from '@/lib/api';
+import SignDialog from '@/components/governance/SignDialog';
 import type { GovDoc, GovDocNode } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
@@ -198,7 +199,27 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     setReviewDateFor(null); setReviewDate('');
   };
 
-  const onApproveFromRail = (docId: number) => runBulk(() => signOffDocument(docId), 'Signed off');
+  // A sign-off is signed electronically: "Approve" in the rail opens the signature box instead of signing blind.
+  const [signing, setSigning] = useState<{ id: number; title: string; stage?: string } | null>(null);
+  const [signBusy, setSignBusy] = useState(false);
+  const onApproveFromRail = (docId: number) => {
+    const item = myPending?.items?.find((i: { document_id: number }) => i.document_id === docId);
+    setSigning({ id: docId, title: item?.title ?? `Document ${docId}`, stage: item?.stage_label });
+  };
+  const doSign = async (signature: string, comment: string) => {
+    if (!signing) return;
+    setSignBusy(true);
+    try {
+      await signOffDocument(signing.id, signature, comment);
+      toast({ title: 'Signed off', type: 'success' });
+      setSigning(null);
+      refreshAll();
+    } catch (e: unknown) {
+      toast({ title: 'Could not sign', message: (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Try again.', type: 'error' });
+    } finally {
+      setSignBusy(false);
+    }
+  };
 
   // ── register row actions ──
   const onEditDoc = (doc: GovDoc) => (onEditDocument ? onEditDocument(doc) : openDoc(doc.id));
@@ -374,6 +395,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           </aside>
         )}
       </div>
+
+      <SignDialog open={signing != null} title={signing?.title ?? ''} stage={signing?.stage} busy={signBusy} onClose={() => setSigning(null)} onSign={doSign} />
 
       {/* Bulk: assign owner */}
       <RightSlidePanel isOpen={assignOwnerFor != null} onClose={() => setAssignOwnerFor(null)} title={`Assign owner · ${assignOwnerFor?.length ?? 0} documents`}>

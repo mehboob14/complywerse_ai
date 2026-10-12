@@ -4,6 +4,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useParams, useRouter } from 'next/navigation';
 import { attestationApi } from '@/lib/api';
+import SignaturePad from '@/components/governance/SignaturePad';
 import {
   ClipboardCheck,
   ArrowLeft,
@@ -27,6 +28,7 @@ interface Attestation {
   status: 'pending' | 'completed' | 'overdue';
   due_date: string;
   requires_evidence: boolean;
+  requires_signature?: boolean;
   evidence_description?: string;
 }
 
@@ -43,6 +45,7 @@ export default function CompleteAttestationPage() {
   const [comments, setComments] = useState('');
   const [acknowledged, setAcknowledged] = useState(false);
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [signature, setSignature] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: attestation, isLoading, error } = useQuery({
@@ -66,9 +69,10 @@ export default function CompleteAttestationPage() {
   });
 
   const completeMutation = useMutation({
-    mutationFn: async (data: { comments?: string; evidence?: File }) => {
+    mutationFn: async (data: { comments?: string; evidence?: File; signature?: string | null }) => {
       const payload: Record<string, unknown> = {
         user_comments: data.comments || undefined,
+        signature_image: data.signature || undefined,   // the drawn electronic signature, kept and sealed by the server
       };
       // No attestation file-upload endpoint exists (completeAttestation is
       // JSON-only), so record the evidence filename as a reference rather than
@@ -109,9 +113,15 @@ export default function CompleteAttestationPage() {
       return;
     }
     
+    if (attestation?.requires_signature && !signature) {
+      alert('This attestation must be signed. Please draw your signature.');
+      return;
+    }
+
     completeMutation.mutate({
       comments,
       evidence: evidenceFile || undefined,
+      signature,
     });
   };
 
@@ -295,6 +305,20 @@ export default function CompleteAttestationPage() {
         )}
 
         <div className="card p-4">
+          <div className="mb-1 flex items-center gap-2">
+            <h3 className="text-sm font-medium text-slate-900">Signature</h3>
+            <span className={`text-xs ${attestation.requires_signature ? 'text-amber-600' : 'text-slate-500'}`}>
+              {attestation.requires_signature ? 'Required' : 'Optional'}
+            </span>
+          </div>
+          <p className="mb-2 text-xs text-slate-500">
+            Draw your signature with your mouse, finger or pen. It is kept with this attestation together with your name, the time, your IP
+            address and a fingerprint (hash) of what you signed, and added to the audit trail.
+          </p>
+          <SignaturePad onChange={setSignature} />
+        </div>
+
+        <div className="card p-4">
           <h3 className="text-sm font-medium text-slate-900 mb-2">Comments (Optional)</h3>
           <textarea
             value={comments}
@@ -312,7 +336,7 @@ export default function CompleteAttestationPage() {
           <button
             type="submit"
             className="btn-primary flex items-center gap-2 text-sm"
-            disabled={completeMutation.isPending || !acknowledged}
+            disabled={completeMutation.isPending || !acknowledged || (!!attestation.requires_signature && !signature)}
           >
             {completeMutation.isPending ? (
               'Submitting...'

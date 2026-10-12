@@ -28,8 +28,10 @@ import {
   Plus,
   Trash2,
   Shield,
+  PenLine,
 } from 'lucide-react';
 import Link from 'next/link';
+import SignatureSeal from '@/components/governance/SignatureSeal';
 
 interface AttestationRequest {
   id: number;
@@ -44,6 +46,8 @@ interface AttestationRequest {
   evidence_id?: number;
   is_overdue?: boolean;
   days_until_due?: number;
+  esign_id?: number | null;
+  esign_fingerprint?: string | null;
 }
 
 interface EscalationChainItem {
@@ -71,6 +75,7 @@ interface Campaign {
   completed_requests: number;
   completion_rate: number;
   requires_evidence: boolean;
+  requires_signature?: boolean;
   linked_document_id?: number;
   linked_document_title?: string;
   escalation_enabled?: boolean;
@@ -109,6 +114,7 @@ export default function CampaignDetailPage() {
   const [editAttestationText, setEditAttestationText] = useState('');
   const [editDueDate, setEditDueDate] = useState('');
   const [editRequiresEvidence, setEditRequiresEvidence] = useState(false);
+  const [editRequiresSignature, setEditRequiresSignature] = useState(false);
   const [editEscalationEnabled, setEditEscalationEnabled] = useState(false);
   const [editReminderDays, setEditReminderDays] = useState(7);
   const [editEscalationDays, setEditEscalationDays] = useState(3);
@@ -125,6 +131,7 @@ export default function CampaignDetailPage() {
     setEditAttestationText(c.attestation_text || '');
     setEditDueDate(c.due_date ? c.due_date.split('T')[0] : '');
     setEditRequiresEvidence(c.requires_evidence);
+    setEditRequiresSignature(!!c.requires_signature);
     setEditEscalationEnabled(c.escalation_enabled || false);
     setEditReminderDays(c.reminder_days_before ?? 7);
     setEditEscalationDays(c.escalation_days_after ?? 3);
@@ -284,6 +291,7 @@ export default function CampaignDetailPage() {
       attestation_text: editAttestationText || undefined,
       due_date: editDueDate ? new Date(editDueDate).toISOString() : undefined,
       requires_evidence: editRequiresEvidence,
+      requires_signature: editRequiresSignature,
       escalation_enabled: editEscalationEnabled,
       reminder_days_before: editReminderDays,
       escalation_days_after: editEscalationDays,
@@ -481,6 +489,10 @@ export default function CampaignDetailPage() {
             Evidence upload is required for this attestation
           </p>
         )}
+        <p className="text-sm text-slate-500 mt-2 flex items-center gap-1.5">
+          <PenLine className="h-4 w-4" />
+          {campaign.requires_signature ? 'Each person must sign electronically' : 'Signing electronically is optional'}
+        </p>
       </div>
 
       {/* Escalation Chain Setup */}
@@ -673,13 +685,14 @@ export default function CampaignDetailPage() {
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Status</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Completed</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Evidence</th>
+                <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Signature</th>
                 <th className="text-left py-3 px-4 text-sm font-medium text-slate-600">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filteredRequests.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-400 text-sm">
+                  <td colSpan={8} className="py-8 text-center text-slate-400 text-sm">
                     {campaign.status === 'draft' ? 'Activate the campaign to generate attestation requests.' : 'No requests match the current filter.'}
                   </td>
                 </tr>
@@ -724,6 +737,13 @@ export default function CampaignDetailPage() {
                           <span className="text-emerald-600 text-sm">Yes</span>
                         ) : (
                           <span className="text-slate-400 text-sm">No</span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        {request.esign_id && request.esign_fingerprint ? (
+                          <SignatureSeal id={request.esign_id} fingerprint={request.esign_fingerprint} />
+                        ) : (
+                          <span className="text-slate-400 text-sm">-</span>
                         )}
                       </td>
                       <td className="py-3 px-4">
@@ -908,6 +928,16 @@ export default function CampaignDetailPage() {
               className="rounded border-slate-300 text-primary-500 focus:ring-primary-500"
             />
             <span className="text-sm text-slate-700">Require evidence upload</span>
+          </label>
+
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={editRequiresSignature}
+              onChange={(e) => setEditRequiresSignature(e.target.checked)}
+              className="rounded border-slate-300 text-primary-500 focus:ring-primary-500"
+            />
+            <span className="text-sm text-slate-700">Require an electronic signature (otherwise signing is optional)</span>
           </label>
 
           {updateMutation.isError && (

@@ -49,6 +49,7 @@ class AttestationCampaignCreate(BaseModel):
     escalation_days_after: int = 3
     attestation_text: Optional[str] = None
     requires_evidence: bool = False
+    requires_signature: bool = False
     linked_document_id: Optional[int] = None
     escalation_chains: List[EscalationChainCreate] = []
 
@@ -68,6 +69,7 @@ class AttestationCampaignUpdate(BaseModel):
     escalation_days_after: Optional[int] = None
     attestation_text: Optional[str] = None
     requires_evidence: Optional[bool] = None
+    requires_signature: Optional[bool] = None
     linked_document_id: Optional[int] = None
 
 
@@ -89,6 +91,7 @@ class AttestationCampaignResponse(BaseModel):
     escalation_days_after: int
     attestation_text: Optional[str]
     requires_evidence: bool
+    requires_signature: bool = False
     linked_document_id: Optional[int]
     created_by: Optional[int]
     created_at: datetime
@@ -144,6 +147,9 @@ class AttestationRequestResponse(BaseModel):
     evidence_id: Optional[int]
     is_overdue: bool = False
     days_until_due: Optional[int] = None
+    requires_signature: bool = False
+    esign_id: Optional[int] = None            # the drawn signature kept with this attestation, if it was signed
+    esign_fingerprint: Optional[str] = None   # first characters of its SHA-256
 
     class Config:
         from_attributes = True
@@ -152,6 +158,7 @@ class AttestationRequestResponse(BaseModel):
 class AttestationCompleteRequest(BaseModel):
     user_comments: Optional[str] = None
     evidence_id: Optional[int] = None
+    signature_image: Optional[str] = None   # PNG data URL drawn on screen (optional unless the campaign requires it)
 
 
 class AttestationDashboardStats(BaseModel):

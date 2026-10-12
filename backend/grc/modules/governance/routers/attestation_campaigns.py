@@ -22,6 +22,7 @@ from ....schemas import (
     AttestationEscalateResponse, MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services import esign
 
 router = APIRouter(prefix="/attestation-campaigns", tags=["Attestation & Certification Management"])
 
@@ -65,6 +66,7 @@ def build_campaign_response(campaign: AttestationCampaign, db: Session) -> dict:
         "escalation_days_after": campaign.escalation_days_after,
         "attestation_text": campaign.attestation_text,
         "requires_evidence": campaign.requires_evidence,
+        "requires_signature": bool(campaign.requires_signature),
         "linked_document_id": campaign.linked_document_id,
         "created_by": campaign.created_by,
         "created_at": campaign.created_at,
@@ -87,7 +89,8 @@ def build_request_response(req: AttestationRequest, db: Session) -> dict:
     days_until_due = None
     if req.due_date:
         days_until_due = (req.due_date - now).days
-    
+    signed = esign.summaries(db, "attestation_request", [req.id]).get(req.id)
+
     return {
         "id": req.id,
         "tenant_id": req.tenant_id,
@@ -111,7 +114,10 @@ def build_request_response(req: AttestationRequest, db: Session) -> dict:
         "attestation_text": req.attestation_text,
         "evidence_id": req.evidence_id,
         "is_overdue": is_overdue,
-        "days_until_due": days_until_due
+        "days_until_due": days_until_due,
+        "requires_signature": bool(campaign and campaign.requires_signature),
+        "esign_id": signed["id"] if signed else None,
+        "esign_fingerprint": signed["image_sha256"][:16] if signed else None,
     }
 
 
@@ -248,6 +254,7 @@ def create_campaign(
         escalation_days_after=campaign_data.escalation_days_after,
         attestation_text=campaign_data.attestation_text,
         requires_evidence=campaign_data.requires_evidence,
+        requires_signature=campaign_data.requires_signature,
         linked_document_id=campaign_data.linked_document_id,
         created_by=current_user.id,
         status="draft"
@@ -547,7 +554,25 @@ def complete_attestation(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="This attestation requires evidence to be attached"
         )
-    
+    if campaign and campaign.requires_signature and not completion_data.signature_image:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="This attestation must be signed. Draw your signature."
+        )
+
+    if completion_data.signature_image:
+        # The person's drawn signature, kept and sealed with this attestation (and checked before it is completed).
+        statement = att_req.attestation_text or (campaign.attestation_text if campaign else None) or (campaign.name if campaign else "Attestation")
+        document = campaign.linked_document if campaign and campaign.linked_document_id else None
+        esign.record(
+            db, tenant_id=att_req.tenant_id, record_type="attestation_request", record_id=att_req.id,
+            signature_image=completion_data.signature_image, meaning=statement,
+            signer_name=current_user.display_name or current_user.username, signer_user_id=current_user.id,
+            signer_email=current_user.email, signer_title=getattr(current_user, "designation", None), document=document,
+            content_sha256=esign.document_fingerprint(document) if document else esign.fingerprint(text=statement),
+            request=request,
+        )
+
     att_req.status = "completed"
     att_req.completed_at = datetime.utcnow()
     att_req.user_comments = completion_data.user_comments

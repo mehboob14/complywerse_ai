@@ -12,9 +12,10 @@ A clean, self-contained approval system layered on the governance document:
 Deliberately independent of the two legacy approval engines (DocumentApprovalStep
 "approve-one-approves-all" and the template engine) which are over-broad / unwired.
 """
+import hashlib
 from typing import List, Optional, Dict, Set
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
@@ -23,6 +24,7 @@ from ....models import (
     DocumentSignoffAssignment, DocumentSignature,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ....services import esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
 
 router = APIRouter(prefix="/documents", tags=["Governance - Sign-off"])
@@ -48,6 +50,7 @@ class ParticipantsUpdate(BaseModel):
 class SignRequest(BaseModel):
     comment: Optional[str] = None
     signature_text: Optional[str] = None   # typed name of record (defaults to display name)
+    signature_image: Optional[str] = None  # PNG data URL drawn on screen: a formal sign-off is signed electronically
 
 
 class RejectRequest(BaseModel):
@@ -173,6 +176,7 @@ def get_signoff(
     all_sigs = db.query(DocumentSignature).filter(
         DocumentSignature.document_id == document_id
     ).order_by(DocumentSignature.signed_at.asc()).all()
+    esigns = esign.summaries(db, "document_signoff", [s.id for s in all_sigs])
 
     def _part_out(a):
         return {
@@ -209,6 +213,7 @@ def get_signoff(
                 "signer_user_id": s.signer_user_id, "signer_name": signer_names.get(s.signer_user_id),
                 "decision": s.decision, "comment": s.comment,
                 "signed_at": s.signed_at.isoformat() if s.signed_at else None,
+                "esign": esigns.get(s.id),   # the drawn signature kept with this one: id and fingerprints
             } for s in all_sigs
         ],
         "progress": progress,
@@ -289,11 +294,13 @@ def send_for_review(
 def sign_document(
     document_id: int,
     body: SignRequest,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
     """Sign the document in the current user's actionable role. Records a
-    DocumentSignature, stamps the signer's row in the Approval Signoff table, and
+    DocumentSignature with the signer's drawn electronic signature (sealed, see
+    services/esign.py), stamps the signer's row in the Approval Signoff table, and
     advances the document status when the stage completes."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
@@ -306,6 +313,13 @@ def sign_document(
     role_label = _ROLE_LABEL[role_type]
     signer_name = body.signature_text or current_user.display_name or current_user.username
 
+    # A formal sign-off is signed electronically. The drawing is checked before anything changes, and the
+    # document is fingerprinted as the signer saw it, before this sign-off is stamped into it.
+    if not body.signature_image:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Draw your signature to sign this document.")
+    image_sha = hashlib.sha256(esign.image_from_data_url(body.signature_image)).hexdigest()
+    seen_sha = esign.document_fingerprint(doc)
+
     # Stamp the signer's row in the Approval Signoff table (content patch).
     old_content = doc.content
     old_title = doc.title
@@ -313,7 +327,7 @@ def sign_document(
     today = datetime.utcnow().strftime("%Y-%m-%d")
     new_content = _patch_signoff_content(
         old_content,
-        [{"role": role_label, "name": signer_name, "designation": None, "date": f"{today} · Signed"}],
+        [{"role": role_label, "name": signer_name, "designation": None, "date": f"{today} · E-signed {image_sha[:8]}"}],
         {},
     )
     content_changed = new_content != (old_content or "")
@@ -324,11 +338,20 @@ def sign_document(
             change_type="signoff", change_reason=f"{role_label}: {signer_name}", user_id=current_user.id,
         )
 
-    db.add(DocumentSignature(
+    signature = DocumentSignature(
         tenant_id=doc.tenant_id, document_id=document_id, signer_user_id=current_user.id,
         role_type=role_type, role_label=role_label, decision="signed",
         signature_text=signer_name, comment=body.comment, signed_at=datetime.utcnow(),
-    ))
+    )
+    db.add(signature)
+    db.flush()
+    esig = esign.record(
+        db, tenant_id=doc.tenant_id, record_type="document_signoff", record_id=signature.id,
+        signature_image=body.signature_image, meaning=f"{role_label}: {doc.title}", signer_name=signer_name,
+        signer_user_id=current_user.id, signer_email=current_user.email,
+        signer_title=getattr(current_user, "designation", None), document=doc, document_version=old_version,
+        content_sha256=seen_sha, request=request,
+    )
     doc.updated_at = datetime.utcnow()
 
     # Recompute stage completion (include this new signature).
@@ -355,7 +378,9 @@ def sign_document(
         db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id,
         action="signed", field_changed="signoff",
         old_value=None, new_value=f"{role_label}: {signer_name}",
-        action_details=(body.comment or f"Signed as {role_label}") + (f" → {advanced_to}" if advanced_to else ""),
+        action_details=(body.comment or f"Signed as {role_label}")
+        + f" · e-signature {esig.image_sha256[:12]}, seal {esig.seal[:12]}"
+        + (f" → {advanced_to}" if advanced_to else ""),
     )
     db.commit()
     return get_signoff(document_id, db, current_user)

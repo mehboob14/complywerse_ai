@@ -134,6 +134,7 @@ export const bulkPublish = (document_ids: number[]) =>
 
 export const publishDocument = (id: number) => governanceApi.publishDocument(id);
 
-/** Sign off the current user's review/approval stage (records a signature + advances
- *  the sign-off pipeline) — the correct action for a "pending your approval" item. */
-export const signOffDocument = (id: number) => governanceApi.signDocumentOff(id, {});
+/** Sign off the current user's review/approval stage with a drawn electronic signature (records it, seals it and
+ *  advances the sign-off pipeline) — the correct action for a "pending your approval" item. */
+export const signOffDocument = (id: number, signature_image: string, comment?: string) =>
+  governanceApi.signDocumentOff(id, { signature_image, comment: comment || undefined });

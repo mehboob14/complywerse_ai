@@ -28,7 +28,7 @@ from ....models import (
     AttestationCampaign, AuditObservationDocumentLink, BcmPlan, BcmRecoveryStrategy,
     DocumentAttestationAcknowledgment, DocumentAttestationCampaign, DocumentAttestationRecipient,
     DocumentSignature, DocumentSignoffAssignment, DocumentWorkflowAction, DocumentWorkflowInstance,
-    IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
+    ElectronicSignature, IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
     PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
@@ -1070,6 +1070,7 @@ _DELETE_WITH_DOCUMENT = (  # a table goes before the tables it points at
     DocumentAttestationCampaign.document_id,
     PolicyAttestation.document_id,
     DocumentSignature.document_id,
+    ElectronicSignature.document_id,
     DocumentSignoffAssignment.document_id,
     DocumentAnnotation.document_id,
     PolicyReviewHistory.document_id,

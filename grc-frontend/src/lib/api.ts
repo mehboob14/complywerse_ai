@@ -341,7 +341,7 @@ export const governanceApi = {
   }) => apiClient.put(`/governance/documents/${documentId}/signoff/participants`, data),
   sendDocumentForReview: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/send-for-review`, {}),
-  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string }) =>
+  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string; signature_image?: string }) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/sign`, data),
   rejectDocumentSignoff: (documentId: number, data: { comment: string }) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/reject`, data),
@@ -3911,6 +3911,11 @@ export const enrichedDashboardApi = {
   getRegulatoryImpactSummary: () => apiClient.get('/enriched-dashboard/regulatory/impact-summary'),
   getRegulatoryImplementationProgress: () => apiClient.get('/enriched-dashboard/regulatory/implementation-progress'),
   getRegulatoryFeedAnalysis: () => apiClient.get('/enriched-dashboard/regulatory/feed-analysis'),
+};
+
+/** Electronic signatures kept with sign-offs and acknowledgements: who signed, the fingerprints, and whether the seal still holds. */
+export const esignApi = {
+  get: (id: number) => apiClient.get(`/governance/esignatures/${id}`),
 };
 
 export const attestationApi = {

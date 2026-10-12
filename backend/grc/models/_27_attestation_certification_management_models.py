@@ -30,7 +30,8 @@ class AttestationCampaign(Base):
     
     attestation_text = Column(Text, nullable=True)
     requires_evidence = Column(Boolean, default=False)
-    
+    requires_signature = Column(Boolean, default=False)  # the person must draw an electronic signature (services/esign.py)
+
     linked_document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=True, index=True)
     
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)

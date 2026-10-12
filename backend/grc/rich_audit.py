@@ -104,6 +104,13 @@ def is_sensitive_key(key: Any) -> bool:
     k = str(key).lower()
     return k in SENSITIVE_KEYS or any(part in k for part in SENSITIVE_KEY_PARTS)
 
+def brief_data_url(value: Any) -> Any:
+    """A drawn signature or pasted image arrives as a data URL: an audit row says what it was, not its bytes."""
+    if isinstance(value, str) and value.startswith("data:") and len(value) > 200:
+        return f"<data URL, {len(value)} chars>"
+    return value
+
+
 SKIP_INTERNAL_KEYS = {"_sa_instance_state"}
 
 
@@ -127,7 +134,7 @@ def _sanitize(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize(item) for item in value]
     if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
+        return brief_data_url(value)
     return str(value)
 
 

@@ -15,6 +15,7 @@ import {
 import { governanceApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { AnimatedModal, PageLoader, SearchInput } from '@/components/ui';
+import SignatureSeal from '@/components/governance/SignatureSeal';
 
 type Acknowledgment = {
   id: number;
@@ -23,6 +24,8 @@ type Acknowledgment = {
   designation?: string | null;
   acknowledged_at?: string;
   has_signature?: boolean;
+  esign_id?: number | null;
+  esign_fingerprint?: string | null;
   signature_data_url?: string | null;
   signature_url?: string | null;
 };
@@ -684,6 +687,7 @@ function CampaignDetailModal({
                               ) : (
                                 <span className="text-slate-400">—</span>
                               )}
+                              {a.esign_id && a.esign_fingerprint && <SignatureSeal id={a.esign_id} fingerprint={a.esign_fingerprint} thumb={false} />}
                             </td>
                           </tr>
                         );

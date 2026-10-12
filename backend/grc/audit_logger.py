@@ -10,7 +10,7 @@ from starlette.responses import Response
 
 from .models import SessionLocal, AuditLog, GRCUser
 from .routers.auth_router import decode_token
-from .rich_audit import is_sensitive_key
+from .rich_audit import brief_data_url, is_sensitive_key
 
 
 AUDIT_EXCLUDED_PATH_PREFIXES = (
@@ -69,7 +69,7 @@ def _sanitize_value(value: Any) -> Any:
     if isinstance(value, list):
         return [_sanitize_value(item) for item in value]
     if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
+        return brief_data_url(value)
     return str(value)
 
 

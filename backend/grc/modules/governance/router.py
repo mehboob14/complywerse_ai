@@ -21,6 +21,9 @@ router.include_router(regulatory_changes_router, tags=["Regulatory Change Manage
 # Obligation ↔ platform record links (controls first), and each record's own view of them.
 from .regulatory_links import router as regulatory_links_router  # noqa: E402
 router.include_router(regulatory_links_router, tags=["Regulatory Change Management"])
+# Electronic signatures: read and verify what the sign-off and attestation flows keep with their records.
+from .routers.esignatures import router as esignatures_router  # noqa: E402
+router.include_router(esignatures_router, tags=["Governance Sign-off"])
 router.include_router(committees_router, tags=["Board & Committee Management"])
 router.include_router(regulatory_feeds_router, tags=["Regulatory Feed Management"])
 router.include_router(gap_analysis_router, tags=["Policy Gap Analysis"])

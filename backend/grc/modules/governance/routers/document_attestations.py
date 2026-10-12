@@ -33,6 +33,7 @@ from ....models import (
 )
 from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, require_auth
 from ....rich_audit import write_rich_audit_log
+from ....services import esign
 
 logger = logging.getLogger(__name__)
 
@@ -228,7 +229,7 @@ def _signature_data_url(a: DocumentAttestationAcknowledgment) -> Optional[str]:
     return None
 
 
-def _serialize_ack(a: DocumentAttestationAcknowledgment, campaign_id: int) -> dict:
+def _serialize_ack(a: DocumentAttestationAcknowledgment, campaign_id: int, signed: Optional[dict] = None) -> dict:
     preview = _signature_data_url(a)
     return {
         "id": a.id,
@@ -237,6 +238,8 @@ def _serialize_ack(a: DocumentAttestationAcknowledgment, campaign_id: int) -> di
         "designation": a.designation,
         "acknowledged_at": _iso(a.acknowledged_at),
         "has_signature": bool(preview or a.signature_data or a.signature_path),
+        "esign_id": signed["id"] if signed else None,          # the sealed record of the drawn signature
+        "esign_fingerprint": signed["image_sha256"][:16] if signed else None,
         "signature_data_url": preview,
         "signature_url": (
             f"/api/governance/document-attestations/campaigns/{campaign_id}"
@@ -280,7 +283,8 @@ def _serialize_campaign(
             key=lambda a: a.acknowledged_at or datetime.min,
             reverse=True,
         )
-        data["acknowledgments"] = [_serialize_ack(a, campaign.id) for a in acks]
+        signed = esign.summaries(db, "doc_attestation_ack", [a.id for a in acks])
+        data["acknowledgments"] = [_serialize_ack(a, campaign.id, signed.get(a.id)) for a in acks]
     return data
 
 
@@ -751,6 +755,7 @@ def public_acknowledge(
             ),
         )
 
+    esign.image_from_data_url(body.signature_data)      # checked before anything is written
     stored_ref, sig_path = _save_signature(body.signature_data, camp.id)
     ip = request.client.host if request.client else None
     ua = (request.headers.get("user-agent") or "")[:500]
@@ -787,6 +792,13 @@ def public_acknowledge(
         db.add(ack)
         db.flush()
 
+    # The same signature as a sealed record of its own: signing again adds a row, the first is never overwritten.
+    esig = esign.record(
+        db, tenant_id=camp.tenant_id, record_type="doc_attestation_ack", record_id=ack.id,
+        signature_image=body.signature_data, meaning=f"Acknowledged: {camp.name}", signer_name=name,
+        signer_email=email, signer_title=designation, document=camp.document,
+        content_sha256=esign.document_fingerprint(camp.document), request=request,
+    )
     db.commit()
     db.refresh(camp)
     prog = _progress(db, camp)
@@ -795,4 +807,5 @@ def public_acknowledge(
         "message": "Thank you — your acknowledgment has been recorded.",
         "progress": prog,
         "acknowledgment_id": ack.id,
+        "signature_fingerprint": esig.image_sha256[:16],
     }

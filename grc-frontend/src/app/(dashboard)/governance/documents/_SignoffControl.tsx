@@ -10,6 +10,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi, adminApi, teamsApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
+import SignaturePad from '@/components/governance/SignaturePad';
+import SignatureSeal from '@/components/governance/SignatureSeal';
 import {
   Loader2, Send, CheckCircle, XCircle, User, Clock, Users as UsersIcon,
   UserCheck, PenLine, ShieldCheck,
@@ -99,6 +101,7 @@ export function SignOffControlTab({ documentId, doc }: { documentId: number; doc
   const [approvers, setApprovers] = useState<Participant[]>([]);
   const [dirty, setDirty] = useState(false);
   const [signComment, setSignComment] = useState('');
+  const [signature, setSignature] = useState<string | null>(null);
   const [rejectMode, setRejectMode] = useState(false);
   const [rejectComment, setRejectComment] = useState('');
 
@@ -127,8 +130,8 @@ export function SignOffControlTab({ documentId, doc }: { documentId: number; doc
     onError: (e: any) => toast({ type: 'error', title: 'Could not send', message: e?.response?.data?.detail || 'Assign reviewers/approvers first.' }),
   });
   const signMut = useMutation({
-    mutationFn: async () => governanceApi.signDocumentOff(documentId, { comment: signComment || undefined }),
-    onSuccess: () => { toast({ type: 'success', title: 'Signed', message: 'Your signature was recorded on the document.' }); setSignComment(''); invalidate(); },
+    mutationFn: async () => governanceApi.signDocumentOff(documentId, { comment: signComment || undefined, signature_image: signature || undefined }),
+    onSuccess: () => { toast({ type: 'success', title: 'Signed', message: 'Your electronic signature was recorded on the document.' }); setSignComment(''); setSignature(null); invalidate(); },
     onError: (e: any) => toast({ type: 'error', title: 'Sign failed', message: e?.response?.data?.detail || 'Could not sign.' }),
   });
   const rejectMut = useMutation({
@@ -182,7 +185,12 @@ export function SignOffControlTab({ documentId, doc }: { documentId: number; doc
       {myRole && (
         <div className="rounded-xl border-2 border-primary-200 bg-primary-50/40 p-4">
           <p className="text-sm font-semibold text-black mb-1">Awaiting your {myRole === 'reviewer' ? 'review' : 'approval'}</p>
-          <p className="text-xs text-gray-600 mb-3">Signing stamps your name + date into the document&apos;s Approval Signoff table and advances the status.</p>
+          <p className="text-xs text-gray-600 mb-3">
+            Draw your signature below to sign electronically. It is kept with this sign-off together with your name, the time, your IP address and a
+            fingerprint (hash) of the document, and added to the audit trail. Signing stamps your name, date and the signature fingerprint into the
+            document&apos;s Approval Signoff table and advances the status.
+          </p>
+          <div className="mb-3"><SignaturePad onChange={setSignature} /></div>
           <textarea
             value={signComment}
             onChange={(e) => setSignComment(e.target.value)}
@@ -193,7 +201,8 @@ export function SignOffControlTab({ documentId, doc }: { documentId: number; doc
           <div className="flex items-center gap-2">
             <button
               onClick={() => signMut.mutate()}
-              disabled={signMut.isPending}
+              disabled={signMut.isPending || !signature}
+              title={signature ? '' : 'Draw your signature first'}
               className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
             >
               {signMut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} Sign &amp; {myRole === 'reviewer' ? 'Approve Review' : 'Approve'}
@@ -284,6 +293,7 @@ export function SignOffControlTab({ documentId, doc }: { documentId: number; doc
                     <Clock className="h-3 w-3" />{s.signed_at ? new Date(s.signed_at).toLocaleString() : ''}
                   </div>
                   {s.comment && <p className="text-xs text-gray-600 mt-0.5 italic">“{s.comment}”</p>}
+                  {s.esign && <SignatureSeal id={s.esign.id} fingerprint={s.esign.image_sha256} />}
                 </div>
               </div>
             ))}
