@@ -33,6 +33,7 @@ from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ..services.assessment_assignees import (
     clean as clean_assignees, label as assignee_label, lists_for as assignee_lists, missing as missing_assignees,
 )
+from ..services.ai_gateway.field_policies import ai_view
 
 router = APIRouter(prefix="/compliance/assessments", tags=["Compliance Assessments"])
 
@@ -6569,7 +6570,8 @@ def ai_assess_item(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment item not found")
     try:
         client = get_openai_client()
-        kv = _parse_remarks_kv(item.remarks)
+        v = ai_view(item, "assessments.assess_item")        # what the field policy lets this prompt carry
+        kv = _parse_remarks_kv(v["remarks"])
         prompt = (
             "You are a Saudi PDPL (Personal Data Protection Law) compliance assessor. "
             "For the control below, produce STRICT JSON with exactly these keys:\n"
@@ -6585,9 +6587,9 @@ def ai_assess_item(
             "  priority    — one of: low, medium, high, critical\n"
             "  suggested_maturity — integer 0-5 (0=Absent,1=Initial,2=Developing,3=Defined,"
             "4=Managed,5=Optimised): a conservative starting estimate of likely current maturity\n\n"
-            f"Domain: {item.area_domain or 'General'}\n"
+            f"Domain: {v['area_domain'] or 'General'}\n"
             f"PDPL Reference: {kv.get('pdpl ref') or 'N/A'}\n"
-            f"Control: {item.control_description or ''}\n"
+            f"Control: {v['control_description'] or ''}\n"
             f"Assessment question: {kv.get('q') or ''}\n"
         )
         gap_text = (gap or "").strip()

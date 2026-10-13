@@ -1,5 +1,6 @@
 from ....config import get_openai_api_key, get_openai_model
 from ....services.licence_guard import is_restricted_control
+from ....services.ai_gateway.field_policies import ai_view
 
 from typing import List, Optional
 import os
@@ -760,11 +761,13 @@ def generate_bowtie_ai_narrative(
     impact_labels_map = {1: "Insignificant", 2: "Minor", 3: "Moderate", 4: "Major", 5: "Catastrophic"}
     likelihood_labels_map = {1: "Rare", 2: "Unlikely", 3: "Possible", 4: "Likely", 5: "Almost Certain"}
 
+    r = ai_view(risk, "erm.bowtie_narrative")           # what the field policy lets this prompt carry
     threats_info = []
     incidents = risk.incidents or []
     if incidents:
         for inc in incidents:
-            threats_info.append({"title": inc.title, "severity": getattr(inc, 'severity', None)})
+            i = ai_view(inc, "erm.bowtie_narrative")
+            threats_info.append({"title": i["title"], "severity": i["severity"]})
     else:
         threats_info.append({"title": f"Potential {risk.risk_category or 'operational'} threat", "category": risk.risk_category})
 
@@ -812,11 +815,11 @@ def generate_bowtie_ai_narrative(
     prompt = f"""You are a senior risk management analyst. Analyze the following bow-tie risk data and generate a comprehensive plain-English narrative explaining the full causal chain.
 
 Risk Event:
-- Title: {risk.title}
-- Description: {risk.description or 'No description provided'}
-- Category: {risk.risk_category or 'Unspecified'}
-- Inherent Score: {risk.inherent_score or 'N/A'} (Likelihood: {likelihood_labels_map.get(risk.inherent_likelihood, 'N/A')}, Impact: {impact_labels_map.get(risk.inherent_impact, 'N/A')})
-- Residual Score: {risk.residual_score or 'N/A'} (Likelihood: {likelihood_labels_map.get(risk.residual_likelihood, 'N/A')}, Impact: {impact_labels_map.get(risk.residual_impact, 'N/A')})
+- Title: {r['title']}
+- Description: {r['description'] or 'No description provided'}
+- Category: {r['risk_category'] or 'Unspecified'}
+- Inherent Score: {r['inherent_score'] or 'N/A'} (Likelihood: {likelihood_labels_map.get(r['inherent_likelihood'], 'N/A')}, Impact: {impact_labels_map.get(r['inherent_impact'], 'N/A')})
+- Residual Score: {r['residual_score'] or 'N/A'} (Likelihood: {likelihood_labels_map.get(r['residual_likelihood'], 'N/A')}, Impact: {impact_labels_map.get(r['residual_impact'], 'N/A')})
 
 Threats/Causes ({len(threats_info)}):
 {json.dumps(threats_info, indent=2)}

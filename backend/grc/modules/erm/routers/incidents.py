@@ -17,6 +17,7 @@ from ....schemas import (
     MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.ai_gateway.field_policies import ai_view
 from ..schema_migrations import ensure_incident_schema
 from .incident_links import apply_inline_links, serialize_links
 
@@ -119,6 +120,11 @@ def _fallback_incident_suggestion(title: str, description: Optional[str] = None,
         "operational_impact": "Moderate operational disruption",
         "rationale": "Heuristic suggestion generated from incident title and description"
     }
+
+
+def _risk_context(risk) -> str:
+    r = ai_view(risk, "erm.incident_suggest")           # what the field policy lets this prompt carry
+    return f"{r['title']} | category={r['category']} | status={r['status']}"
 
 
 def _ai_suggest_incident_payload(title: str, description: Optional[str], severity: Optional[str], risk_context: Optional[str] = None) -> dict:
@@ -228,13 +234,12 @@ def create_incident(
                 Risk.id == incident.risk_id,
                 Risk.tenant_id == tenant_id
             ).first()
-        risk_context = None
-        if linked_risk:
-            risk_context = f"{linked_risk.title} | category={linked_risk.category} | status={linked_risk.status}"
+        risk_context = _risk_context(linked_risk) if linked_risk else None
+        i = ai_view(incident, "erm.incident_suggest", model="RiskIncident")      # the create payload has the record's fields
         suggestion = _ai_suggest_incident_payload(
-            title=incident.title,
-            description=incident.description,
-            severity=incident.severity,
+            title=i["title"],
+            description=i["description"],
+            severity=i["severity"],
             risk_context=risk_context
         )
 
@@ -300,7 +305,7 @@ def suggest_incident_with_ai(
         ).first()
         if not risk:
             raise HTTPException(status_code=404, detail="Risk not found")
-        risk_context = f"{risk.title} | category={risk.category} | status={risk.status}"
+        risk_context = _risk_context(risk)
 
     return {
         "title": request.title,
@@ -377,9 +382,10 @@ def analyze_incident_with_ai(
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
     
     risks = db.query(Risk).filter(Risk.tenant_id.in_(user_tenants)).all()
+    risk_views = [ai_view(r, "erm.incident_analyze") for r in risks[:30]]      # what the field policy lets this prompt carry
     risk_summary = "\n".join([
-        f"- Risk ID {r.id}: {r.title} (Category: {r.category}, Status: {r.status})"
-        for r in risks[:30]
+        f"- Risk ID {r['id']}: {r['title']} (Category: {r['category']}, Status: {r['status']})"
+        for r in risk_views
     ])
     
     controls = db.query(FrameworkControl).join(
@@ -400,8 +406,8 @@ def analyze_incident_with_ai(
     ).order_by(RiskIncident.incident_date.desc()).limit(20).all()
     
     incident_history = "\n".join([
-        f"- Incident ID {i.id}: {i.title} (Severity: {i.severity}, Date: {i.incident_date.strftime('%Y-%m-%d') if i.incident_date else 'N/A'})"
-        for i in similar_incidents
+        f"- Incident ID {i['id']}: {i['title']} (Severity: {i['severity']}, Date: {i['incident_date'] or 'N/A'})"
+        for i in (ai_view(i, "erm.incident_analyze") for i in similar_incidents)
     ])
     
     prompt = f"""You are a GRC (Governance, Risk, Compliance) expert analyzing a security incident. Analyze the following incident and provide a comprehensive AI-powered assessment.

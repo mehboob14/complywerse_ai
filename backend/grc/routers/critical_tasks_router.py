@@ -17,6 +17,7 @@ from ..models import (
     CriticalTaskTemplate, CriticalTaskApproval, NotificationPreference
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
+from ..services.ai_gateway.field_policies import AliasBook, ai_view
 
 logger = logging.getLogger(__name__)
 
@@ -1780,12 +1781,13 @@ def ai_prioritize_tasks(
 
     task_summaries = []
     for t in tasks:
+        v = ai_view(t, "tasks.prioritize")
         task_summaries.append({
-            "id": t.id, "title": t.title, "current_priority": t.priority,
-            "status": t.status, "category": t.category, "source": t.source,
-            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "id": v["id"], "title": v["title"], "current_priority": v["priority"],
+            "status": v["status"], "category": v["category"], "source": v["source"],
+            "due_date": v["due_date"],
             "sla_status": _calc_sla_status(t),
-            "escalation_level": t.escalation_level,
+            "escalation_level": v["escalation_level"],
         })
 
     client = _get_openai_client()
@@ -1820,18 +1822,8 @@ def ai_analyze_root_cause(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    context = {
-        "title": task.title,
-        "description": task.description,
-        "source": task.source,
-        "source_module": task.source_module,
-        "category": task.category,
-        "priority": task.priority,
-        "severity": task.severity,
-        "status": task.status,
-        "evidence_notes": task.evidence_notes,
-        "comments": [c.content for c in (task.comments or [])],
-    }
+    context = ai_view(task, "tasks.root_cause")
+    context["comments"] = [ai_view(c, "tasks.root_cause")["content"] for c in (task.comments or [])[:20]]
 
     client = _get_openai_client()
     try:
@@ -1902,16 +1894,20 @@ def ai_predict_escalations(
 
     task_data = []
     now = datetime.utcnow()
+    book, names = AliasBook(), {}
     for t in tasks:
+        v = ai_view(t, "tasks.predict_escalations", book=book)
         days_remaining = (t.due_date - now).days if t.due_date else None
+        if t.assigned_owner:
+            names[t.assigned_owner_id] = t.assigned_owner.display_name
         task_data.append({
-            "id": t.id, "title": t.title, "priority": t.priority,
-            "status": t.status, "category": t.category,
-            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "id": v["id"], "title": v["title"], "priority": v["priority"],
+            "status": v["status"], "category": v["category"],
+            "due_date": v["due_date"],
             "days_remaining": days_remaining,
-            "escalation_level": t.escalation_level,
-            "sla_days": t.sla_days,
-            "owner": t.assigned_owner.display_name if t.assigned_owner else "Unassigned",
+            "escalation_level": v["escalation_level"],
+            "sla_days": v["sla_days"],
+            "owner": v["assigned_owner_id"] or "Unassigned",
         })
 
     client = _get_openai_client()
@@ -1925,7 +1921,7 @@ def ai_predict_escalations(
             response_format={"type": "json_object"},
             temperature=0.3,
         )
-        return json.loads(response.choices[0].message.content)
+        return book.restore(json.loads(response.choices[0].message.content), lambda uid: names.get(uid, "an owner"))
     except HTTPException:
         raise
     except Exception as e:
@@ -1948,25 +1944,27 @@ def ai_balance_workload(
     if not tasks:
         return {"suggestions": [], "message": "No active tasks to balance"}
 
+    # People go to the model as P1, P2... and come back as themselves: the answer is mapped by alias, not by display name.
+    book, names = AliasBook(), {}
     workload = {}
     task_data = []
     for t in tasks:
-        owner_name = t.assigned_owner.display_name if t.assigned_owner else "Unassigned"
-        owner_id = t.assigned_owner_id
-        if owner_name not in workload:
-            workload[owner_name] = {"user_id": owner_id, "count": 0, "critical": 0, "high": 0}
-        workload[owner_name]["count"] += 1
-        if t.priority == "Critical":
-            workload[owner_name]["critical"] += 1
-        elif t.priority == "High":
-            workload[owner_name]["high"] += 1
+        v = ai_view(t, "tasks.balance_workload", book=book)
+        owner = v["assigned_owner_id"] or "Unassigned"
+        if t.assigned_owner:
+            names[t.assigned_owner_id] = t.assigned_owner.display_name
+        if owner not in workload:
+            workload[owner] = {"count": 0, "critical": 0, "high": 0}
+        workload[owner]["count"] += 1
+        if v["priority"] == "Critical":
+            workload[owner]["critical"] += 1
+        elif v["priority"] == "High":
+            workload[owner]["high"] += 1
         task_data.append({
-            "id": t.id, "title": t.title, "priority": t.priority,
-            "category": t.category, "owner": owner_name, "owner_id": owner_id,
-            "due_date": t.due_date.isoformat() if t.due_date else None,
+            "id": v["id"], "title": v["title"], "priority": v["priority"],
+            "category": v["category"], "owner": owner,
+            "due_date": v["due_date"],
         })
-
-    owner_name_to_id = {name: info["user_id"] for name, info in workload.items() if info.get("user_id")}
 
     client = _get_openai_client()
     try:
@@ -1981,9 +1979,8 @@ def ai_balance_workload(
         )
         result = json.loads(response.choices[0].message.content)
         for suggestion in result.get("suggestions", []):
-            suggested_name = suggestion.get("suggested_owner", "")
-            suggestion["suggested_owner_id"] = owner_name_to_id.get(suggested_name)
-        return result
+            suggestion["suggested_owner_id"] = book.key(suggestion.get("suggested_owner", ""))
+        return book.restore(result, lambda uid: names.get(uid, "an owner"))
     except HTTPException:
         raise
     except Exception as e:

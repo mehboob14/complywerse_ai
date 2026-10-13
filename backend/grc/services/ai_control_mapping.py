@@ -37,6 +37,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from .ai_gateway.field_policies import ai_view
+
 logger = logging.getLogger(__name__)
 
 PROMPT_VERSION = "p6-ctx-2.0"
@@ -199,15 +201,16 @@ Hard rules:
 
 
 def _vuln_context(vuln, *, cwe_name: Optional[str], nvd_description: Optional[str]) -> str:
+    v = ai_view(vuln, "vulnerabilities.control_proposals", model="Vulnerability")   # what the field policy lets this prompt carry
     return f"""FINDING
-  title: {getattr(vuln, 'title', '') or ''}
-  cve_id: {getattr(vuln, 'cve_id', None) or 'none'}
-  cwe: {getattr(vuln, 'cwe_id', None) or 'none'} — {cwe_name or 'unknown'}
-  cvss_vector: {getattr(vuln, 'cvss_vector', None) or 'none'}
-  severity: {getattr(vuln, 'severity', None) or 'unknown'}
-  scanner_description: {(getattr(vuln, 'description', None) or '')[:1200]}
+  title: {v['title'] or ''}
+  cve_id: {v['cve_id'] or 'none'}
+  cwe: {v['cwe_id'] or 'none'} — {cwe_name or 'unknown'}
+  cvss_vector: {v['cvss_vector'] or 'none'}
+  severity: {v['severity'] or 'unknown'}
+  scanner_description: {v['description'] or ''}
   cve_description (NVD): {(nvd_description or 'n/a')[:800]}
-  epss: {getattr(vuln, 'epss_score', None) if getattr(vuln, 'epss_score', None) is not None else 'n/a'}   in_kev: {bool(getattr(vuln, 'kev_flag', False))}"""
+  epss: {v['epss_score'] if v['epss_score'] is not None else 'n/a'}   in_kev: {bool(v['kev_flag'])}"""
 
 
 def build_judge_prompt(vuln, candidates: List[Dict[str, Any]], *, cwe_name: Optional[str],

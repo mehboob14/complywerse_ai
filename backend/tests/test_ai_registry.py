@@ -111,7 +111,7 @@ def test_lookup_names_the_use_case_of_a_function_and_every_one_for_a_shared_help
 def test_ambient_and_outside_shim_follow_from_the_trigger_and_the_api():
     ids = {u.id: u for u in registry.USE_CASES}
     assert ids["dashboard.ai_insights"].ambient and not ids["erm.risk_treatment_plan"].ambient
-    assert ids["complychat.embeddings"].outside_shim and ids["regulatory.read_circular"].outside_shim
+    assert ids["complychat.embeddings"].outside_shim and not ids["regulatory.read_circular"].outside_shim   # Responses is guarded now
     assert ids["erm.ai_risk_template"].outside_shim and not ids["erm.risk_suggest"].outside_shim
     # nothing that reads scans or images is a click-only feature: both vision paths fire on their own
     assert all(u.ambient for u in registry.USE_CASES if u.modality == "vision")

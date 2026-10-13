@@ -56,6 +56,7 @@ from ....routers.auth_router import (
     get_user_primary_tenant,
     require_tenant_permission,
 )
+from ....services.ai_gateway.field_policies import free_cells
 from ..services.rcsa_template_parser import (
     export_rows_to_excel,
     parse_rcsa_template,
@@ -1062,6 +1063,9 @@ def explain_row(
             from_cache=False,
         )
 
+    # The template's columns are the tenant's own: cells named like a person or a contact stay out of the prompt, the
+    # rest are capped. (The fallback below still shows every populated field to the person reading the screen.)
+    ai_lines = [f"- {label}: {value}" for label, value in free_cells(r.data or {}, key_to_label)]
     prompt = (
         "You are a risk-and-control analyst explaining a single assessment "
         "item from an RCSA (risk and control self-assessment) template to a "
@@ -1079,7 +1083,7 @@ def explain_row(
         f"Template name: {t.name}\n"
         f"Function area: {t.function_area or '—'}\n\n"
         "Assessment-item fields:\n"
-        + "\n".join(field_lines)
+        + "\n".join(ai_lines)
     )
 
     explanation: Optional[str] = None

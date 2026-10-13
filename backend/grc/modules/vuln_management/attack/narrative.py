@@ -220,7 +220,8 @@ def _assessment_facts(view: dict) -> str:
     lines = [
         f"Weakness: {weakness or 'unknown'}",
         f"CVE: {view.get('cve_id')}",
-        f"Asset: {asset.get('name')} (internet_facing={asset.get('internet_facing')}, "
+        # described by what it is, never by name: the story does not need the host's name
+        f"Asset: {asset.get('asset_type') or 'an asset'} (internet_facing={asset.get('internet_facing')}, "
         f"criticality={asset.get('criticality')})",
         f"Other linked assets not covered by this verdict: {len(view.get('other_assets') or [])}",
         "Public-exploit evidence: "

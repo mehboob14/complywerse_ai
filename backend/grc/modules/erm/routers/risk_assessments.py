@@ -22,6 +22,7 @@ from ....models import (
     UploadedFramework, get_db,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.ai_gateway.field_policies import ai_view
 
 logger = logging.getLogger(__name__)
 
@@ -1270,10 +1271,11 @@ def ai_suggest_assessment_risk(
         RiskAssessmentRCSAFinding.assessment_risk_id == assessment_risk_id
     ).all()
 
+    r = ai_view(risk, "erm.assessment_risk_suggest") if risk else None      # what the field policy lets this prompt carry
     risk_context = {
-        "title": risk.title if risk else f"Risk #{ar.risk_id}",
-        "description": risk.description if risk else None,
-        "category": (risk.risk_category or risk.category) if risk else None,
+        "title": r["title"] if r else f"Risk #{ar.risk_id}",
+        "description": r["description"] if r else None,
+        "category": (r["risk_category"] or r["category"]) if r else None,
         "inherent_likelihood": ar.inherent_likelihood,
         "inherent_impact": ar.inherent_impact,
         "inherent_score": ar.inherent_score,
@@ -1294,9 +1296,10 @@ def ai_suggest_assessment_risk(
     incident_info = []
     for li in linked_incidents:
         inc = db.query(RiskIncident).filter(RiskIncident.id == li.incident_id).first()
+        i = ai_view(inc, "erm.assessment_risk_suggest") if inc else None
         incident_info.append({
-            "title": inc.title if inc else f"Incident #{li.incident_id}",
-            "severity": inc.severity if inc else None,
+            "title": i["title"] if i else f"Incident #{li.incident_id}",
+            "severity": i["severity"] if i else None,
             "impact_on_rating": li.impact_on_rating,
         })
 

@@ -1,11 +1,12 @@
 """Every AI use case the platform has: what it is called, what the person gets from it, when it fires, what data it
 reads and where in the code the provider is called.
 
-This is the inventory the AI Governance page shows and the switches act on, and the thing ``tests/test_ai_registry.py``
-checks against the source: a provider call that is not listed here fails the test, and so does a listed call that no
-longer exists. To add a use case: add a ``_uc(...)`` row below, naming the function that makes the call (``callsites``).
-When one function serves several use cases (a shared helper), each use case names the function that starts it
-(``entry``) so a switch can later be placed there.
+This is the inventory the data-protection guard looks use cases up in (``lookup``), the AI Governance page will show, and
+the thing ``tests/test_ai_registry.py`` checks against the source: a provider call that is not listed here fails the
+test, and so does a listed call that no longer exists. To add a use case: add a ``_uc(...)`` row below, naming the
+function that makes the call (``callsites``). When one function serves several use cases (a shared helper), each use
+case names the function that starts it (``entry``). A use case that reads a risk, incident, task, asset, vulnerability
+or assessment record also declares its columns in ``field_policies.py`` (``tests/test_ai_field_policies.py`` checks).
 
 Fields
 - ``id``        ``<module>.<name>``; the module prefix must be a key of ``MODULES``.
@@ -18,8 +19,8 @@ Fields
 - ``profile``   LIB public/library only | STRUCT structured fields | TEXT short free text | DOC long documents |
                 VISION images/scans | PEOPLE directories | CHAT conversational/retrieval | RAW raw target output.
 - ``level``     L0 public .. L4 never to a public model (the profile's usual level; a proposal, refined with the policy).
-- ``apis``      which SDK surface is called; only ``chat`` passes through the shim in ``grc/config.py`` today, so
-                anything else is ``outside_shim`` (responses, embeddings, Anthropic, raw HTTP).
+- ``apis``      which SDK surface is called; ``chat`` and ``responses`` pass through the guard in the shim in
+                ``grc/config.py``, so anything else is ``outside_shim`` (embeddings, Anthropic, raw HTTP).
 """
 from __future__ import annotations
 
@@ -80,13 +81,13 @@ class UseCase:
 
     @property
     def ambient(self) -> bool:
-        """Fires without the person asking for AI (an event or a page load), so it needs its own switch."""
+        """Fires without the person asking for AI (an event or a page load)."""
         return self.trigger in ("view", "auto")
 
     @property
     def outside_shim(self) -> bool:
-        """Reaches a provider through something the central choke point does not cover yet."""
-        return any(api != "chat" for api in self.apis)
+        """Reaches a provider through something the central choke point (chat and Responses) does not cover yet."""
+        return any(api not in ("chat", "responses") for api in self.apis)
 
 
 def _uc(id: str, label: str, value: str, surface: str, trigger: str, profile: str, level: str,

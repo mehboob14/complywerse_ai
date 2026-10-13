@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from ..config import get_openai_api_key, get_openai_base_url, get_openai_model
 from ..models import AssessmentItemEvidence, ComplianceAssessmentDocumentItem, Evidence, Tenant
+from .ai_gateway.field_policies import ai_view
 
 logger = logging.getLogger(__name__)
 
@@ -331,24 +332,31 @@ def _nist_id(said: Any) -> Optional[str]:
     return max(hits, key=lambda nid: len(_NIST_NORM[nid])) if hits else None
 
 
-def _item_lines(item: ComplianceAssessmentDocumentItem) -> List[str]:
+def _assessment_view(item: ComplianceAssessmentDocumentItem, use_case: str) -> Dict[str, Any]:
+    """The assessment sheet's name and format, through the field policy (empty when the item has no sheet)."""
     assessment = getattr(item, "assessment", None)
-    fmt = getattr(assessment, "assessment_format", None) or ""
+    return ai_view(assessment, use_case, model="ComplianceAssessmentDocument") if assessment is not None else {}
+
+
+def _item_lines(item: ComplianceAssessmentDocumentItem) -> List[str]:
+    v = ai_view(item, "assessments.evidence_advice")          # what the field policy lets this prompt carry
+    a = _assessment_view(item, "assessments.evidence_advice")
+    fmt = a.get("assessment_format") or ""
     lines = [
-        f"ASSESSMENT: {getattr(assessment, 'name', None) or 'Assessment'}"
+        f"ASSESSMENT: {a.get('name') or 'Assessment'}"
         + (f" — each item is {FORMAT_GUIDE[fmt]}." if fmt in FORMAT_GUIDE else ""),
-        f"ITEM: {item.item_number or '-'}",
-        f"DOMAIN: {' / '.join(x for x in (item.area_domain, item.subdomain_name) if x) or '-'}",
-        f"REQUIREMENT: {_text(item.control_description, 2000) or '-'}",
+        f"ITEM: {v['item_number'] or '-'}",
+        f"DOMAIN: {' / '.join(x for x in (v['area_domain'], v['subdomain_name']) if x) or '-'}",
+        f"REQUIREMENT: {_text(v['control_description'], 2000) or '-'}",
     ]
-    if item.remarks:
-        lines.append(f"DETAILS: {_text(item.remarks, 500)}")
-    status = item.compliance_status or "-"
-    if item.maturity_score:
-        status += f"; current maturity L{item.maturity_score}"
+    if v["remarks"]:
+        lines.append(f"DETAILS: {_text(v['remarks'], 500)}")
+    status = v["compliance_status"] or "-"
+    if v["maturity_score"]:
+        status += f"; current maturity L{v['maturity_score']}"
     lines.append(f"CURRENT STATUS: {status}")
-    if item.gaps_identified:
-        lines.append(f"GAPS NOTED: {_text(item.gaps_identified, 600)}")
+    if v["gaps_identified"]:
+        lines.append(f"GAPS NOTED: {_text(v['gaps_identified'], 600)}")
     return lines
 
 
@@ -555,14 +563,15 @@ def template_for(title: Any, kind: Any) -> Optional[Dict[str, Any]]:
 
 def build_draft_prompt(item: ComplianceAssessmentDocumentItem, rec: Dict[str, Any], nist: List[Dict[str, Any]],
                        organisation: Optional[str], template: Optional[Dict[str, Any]] = None) -> str:
-    assessment = getattr(item, "assessment", None)
-    fmt = getattr(assessment, "assessment_format", None) or ""
+    v = ai_view(item, "assessments.evidence_draft")           # what the field policy lets this prompt carry
+    a = _assessment_view(item, "assessments.evidence_draft")
+    fmt = a.get("assessment_format") or ""
     kind = rec.get("document") if rec.get("document") in _STRUCTURE else "standard"
     lines = [
         f"ORGANISATION: {organisation or '[Organisation name]'}",
-        f"ASSESSMENT: {getattr(assessment, 'name', None) or 'Assessment'}"
+        f"ASSESSMENT: {a.get('name') or 'Assessment'}"
         + (f" — each item is {FORMAT_GUIDE[fmt]}." if fmt in FORMAT_GUIDE else ""),
-        f"REQUIREMENT {item.item_number or ''}: {_text(item.control_description, 2000)}",
+        f"REQUIREMENT {v['item_number'] or ''}: {_text(v['control_description'], 2000)}",
         f"DOCUMENT TO WRITE: {rec.get('evidence_type')} (a {kind})",
         f"IT MUST SHOW: {rec.get('description') or '-'}",
         f"HOW IT WILL BE USED AS EVIDENCE: {rec.get('how_to_collect') or '-'}",

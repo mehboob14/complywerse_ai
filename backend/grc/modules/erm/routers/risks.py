@@ -1,5 +1,6 @@
 from ....config import get_openai_api_key, get_openai_model
 from ....services.licence_guard import is_restricted_control
+from ....services.ai_gateway.field_policies import ai_view
 
 from typing import Any, Dict, List, Optional
 from datetime import datetime, date
@@ -3123,18 +3124,19 @@ def generate_ai_treatment_plan(
 
     controls_text = "\n".join(f"- {c}" for c in linked_controls) if linked_controls else "No controls currently linked."
 
+    v = ai_view(risk, "erm.risk_treatment_plan")        # what the field policy lets this prompt carry
     prompt = f"""You are an enterprise risk management expert. Generate a detailed, actionable treatment plan for the following risk.
 
-Risk Title: {risk.title}
-Description: {risk.description or 'N/A'}
-Category: {risk.risk_category or risk.category or 'N/A'}
-Inherent Likelihood: {risk.inherent_likelihood or 'N/A'}/5
-Inherent Impact: {risk.inherent_impact or 'N/A'}/5
-Inherent Score: {risk.inherent_score or 'N/A'}
-Residual Likelihood: {risk.residual_likelihood or 'N/A'}/5
-Residual Impact: {risk.residual_impact or 'N/A'}/5
-Residual Score: {risk.residual_score or 'N/A'}
-Current Status: {risk.status or 'N/A'}
+Risk Title: {v['title']}
+Description: {v['description'] or 'N/A'}
+Category: {v['risk_category'] or v['category'] or 'N/A'}
+Inherent Likelihood: {v['inherent_likelihood'] or 'N/A'}/5
+Inherent Impact: {v['inherent_impact'] or 'N/A'}/5
+Inherent Score: {v['inherent_score'] or 'N/A'}
+Residual Likelihood: {v['residual_likelihood'] or 'N/A'}/5
+Residual Impact: {v['residual_impact'] or 'N/A'}/5
+Residual Score: {v['residual_score'] or 'N/A'}
+Current Status: {v['status'] or 'N/A'}
 
 Linked Controls:
 {controls_text}

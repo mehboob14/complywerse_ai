@@ -36,6 +36,7 @@ from ....schemas import (
     MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.ai_gateway.field_policies import pick
 
 router = APIRouter(prefix="/internal-controls", tags=["ERM - Internal Controls"])
 
@@ -124,6 +125,10 @@ def _heuristic_control_enrichment(items: List[dict]) -> List[dict]:
     return enriched
 
 
+_ENRICH_KEYS = ("control_id", "name", "description", "category", "sub_category", "control_type", "frequency",
+                "regulatory_source", "priority", "is_key_control")
+
+
 def _ai_enrich_controls(items: List[dict]) -> List[dict]:
     if not items:
         return []
@@ -132,6 +137,8 @@ def _ai_enrich_controls(items: List[dict]) -> List[dict]:
     if not client:
         return _heuristic_control_enrichment(items)
 
+    # An upload may carry any column (owner, e-mail, department...): the model gets only the ones it enriches.
+    asked = [pick(item, _ENRICH_KEYS) for item in items]
     prompt = f"""You are a GRC controls expert. Enrich internal controls parsed from a manually uploaded file.
 Return ONLY valid JSON array with one object per input item and preserve input order.
 
@@ -148,7 +155,7 @@ Required keys for each object:
 - is_key_control (boolean)
 
 Input items:
-{json.dumps(items, ensure_ascii=False)}
+{json.dumps(asked, ensure_ascii=False)}
 """
 
     try:

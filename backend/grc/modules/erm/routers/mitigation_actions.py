@@ -17,6 +17,7 @@ from ....schemas import (
     MessageResponse
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.ai_gateway.field_policies import ai_view
 
 router = APIRouter(prefix="/mitigation-actions", tags=["ERM - Mitigation Actions"])
 
@@ -89,17 +90,18 @@ def ai_suggest_mitigations(
         existing_action_titles = [a.title for a in existing_actions]
 
     if risk:
+        v = ai_view(risk, "erm.mitigation_suggest")     # what the field policy lets this prompt carry
         prompt = f"""You are an enterprise risk management expert. Given the following risk details, suggest 3-5 concrete mitigation actions.
 
-Risk Title: {risk.title}
-Risk Description: {risk.description or 'N/A'}
-Risk Category: {risk.category or 'N/A'}
-Risk Sub-Category: {risk.risk_sub_category or 'N/A'}
-Inherent Likelihood: {risk.inherent_likelihood or 'N/A'}
-Inherent Impact: {risk.inherent_impact or 'N/A'}
-Residual Likelihood: {risk.residual_likelihood or 'N/A'}
-Residual Impact: {risk.residual_impact or 'N/A'}
-Current Treatment Status: {risk.status or 'N/A'}
+Risk Title: {v['title']}
+Risk Description: {v['description'] or 'N/A'}
+Risk Category: {v['category'] or 'N/A'}
+Risk Sub-Category: {v['risk_sub_category'] or 'N/A'}
+Inherent Likelihood: {v['inherent_likelihood'] or 'N/A'}
+Inherent Impact: {v['inherent_impact'] or 'N/A'}
+Residual Likelihood: {v['residual_likelihood'] or 'N/A'}
+Residual Impact: {v['residual_impact'] or 'N/A'}
+Current Treatment Status: {v['status'] or 'N/A'}
 Existing Controls: {', '.join(existing_controls[:10]) if existing_controls else 'None identified'}
 Existing Mitigation Actions: {', '.join(existing_action_titles) if existing_action_titles else 'None yet'}
 
