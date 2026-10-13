@@ -27,6 +27,7 @@ function Row({ u, onOpen }: { u: UseCaseRow; onOpen: (id: string) => void }) {
             <Chip tone={u.trigger === 'click' ? undefined : 'border-amber-300 text-amber-900'} title="When this feature calls AI">{u.trigger_label}</Chip>
             <Chip tone={LEVEL_TONE[u.level]} title={u.level_meaning}>{u.level} · {u.level_meaning}</Chip>
             {u.field_policy && <Chip tone="border-primary-300 text-primary-800" title="Only the fields this feature needs are read from the record">Fields limited</Chip>}
+            {u.cache_hours > 0 && <Chip tone="border-primary-300 text-primary-800" title="Asked again exactly as before, the answer is reused instead of calling the AI again">Repeats reused for {u.cache_hours >= 48 ? `${Math.round(u.cache_hours / 24)} days` : `${u.cache_hours} h`}</Chip>}
             {!u.guarded && <Chip tone="border-rose-300 text-rose-800" title="This path is not covered by the request check yet">Not yet checked</Chip>}
             {u.modality === 'vision' && <Chip tone="border-rose-300 text-rose-800" title="Pictures are refused">Pictures refused</Chip>}
           </div>

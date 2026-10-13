@@ -45,7 +45,7 @@ def finish(token: contextvars.Token) -> Optional[Dict[str, Any]]:
 
 # The audit rows themselves, and the per-call AI usage meter the OpenAI shim
 # writes inside requests.
-_SKIP_TABLES = {"grc_audit_logs", "ai_usage_events", "ai_call_payloads"}   # the payloads hold prompts: never copy them into audit rows
+_SKIP_TABLES = {"grc_audit_logs", "ai_usage_events", "ai_call_payloads", "ai_result_cache"}   # the payloads hold prompts: never copy them into audit rows
 
 
 def _skip_table(name: str) -> bool:

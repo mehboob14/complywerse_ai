@@ -61,11 +61,35 @@ def _cost(rows) -> Dict[str, Any]:
     return {"cost_usd": float(sum(priced)) if priced else None, "cost_configured": bool(priced)}
 
 
+def _repeats(rows: List[AIUsageEvent]) -> tuple:
+    """(calls, tokens) that asked the model something it had already been asked in this period: same sanitised prompt
+    hash, and not answered from the cache. These are the calls a result cache would have saved."""
+    seen, calls, tokens = set(), 0, 0
+    for r in sorted(rows, key=lambda r: (r.occurred_at, r.id)):
+        report = gateway_of(r)
+        digest = report.get("hash")
+        if not digest or report.get("cache") == "hit" or is_blocked(r):
+            continue
+        if digest in seen:
+            calls += 1
+            tokens += int(r.total_tokens or 0)
+        seen.add(digest)
+    return calls, tokens
+
+
 def _stats(rows: List[AIUsageEvent]) -> Dict[str, Any]:
     blocked = sum(1 for r in rows if is_blocked(r))
+    hits = [r for r in rows if gateway_of(r).get("cache") == "hit"]
+    repeat_calls, repeat_tokens = _repeats(rows)
     return {
         "calls": len(rows), "failed": sum(1 for r in rows if r.status != "success" and not is_blocked(r)), "blocked": blocked,
         "tokens": sum(int(r.total_tokens or 0) for r in rows),
+        "input_tokens": sum(int(r.prompt_tokens or 0) for r in rows), "output_tokens": sum(int(r.completion_tokens or 0) for r in rows),
+        "reasoning_tokens": sum(int(r.reasoning_tokens or 0) for r in rows), "cached_tokens": sum(int(r.cached_tokens or 0) for r in rows),
+        "cache_hits": len(hits), "saved_tokens": sum(int(gateway_of(r).get("saved_tokens") or 0) for r in hits),
+        "repeat_calls": repeat_calls, "repeat_tokens": repeat_tokens,
+        "retries": sum(1 for r in rows if (r.attempt_number or 1) > 1),
+        "with_hash": sum(1 for r in rows if gateway_of(r).get("hash")),
         "protected": sum(1 for r in rows if entities_in(gateway_of(r))),
         "entities": sum(entities_in(gateway_of(r)) for r in rows),
         **_cost(rows),
@@ -121,7 +145,7 @@ def inventory(db, days: int = 30) -> Dict[str, Any]:
                 "id": u.id, "label": u.label, "value": u.value, "surface": u.surface,
                 "trigger": u.trigger, "trigger_label": TRIGGER_LABEL[u.trigger], "profile": u.profile, "level": u.level,
                 "level_meaning": LEVEL_MEANING[u.level], "modality": u.modality, "records": list(u.records),
-                "guarded": not u.outside_shim, "field_policy": u.id in governed,
+                "guarded": not u.outside_shim, "field_policy": u.id in governed, "cache_hours": u.cache_hours,
                 "last_used": last.isoformat() + "Z" if last else None, **_stats(rows),
             })
         if items:

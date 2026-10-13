@@ -162,6 +162,46 @@ def install_openai_compat_shim() -> bool:
         except Exception:
             return None
 
+    def _cache_hours(gw):
+        # Result cache (services/ai_gateway/cache.py): only for a use case the registry marks repeatable, only while the
+        # guard protects (the key is the sanitised prompt) and only for a tenant (the cache lives in its database).
+        if gw is None or gw.mode != "protect" or not gw.context.tenant_slug:
+            return 0
+        try:
+            from .services.ai_gateway import cache, registry
+            use_case = registry.get(gw.report.get("use_case") or "")
+            return use_case.cache_hours if use_case and cache.enabled() else 0
+        except Exception:
+            return 0
+
+    def _from_cache(gw, kwargs, api):
+        if not _cache_hours(gw):
+            return None
+        try:
+            from .services.ai_gateway import cache
+            gw.cache_key = cache.make_key(kwargs, api)
+            found = cache.lookup(gw.context.tenant_slug, gw.cache_key, api)
+            if found is None:
+                gw.report["cache"] = "miss"
+                return None
+            response, tokens = found
+            gw.report.update(cache="hit", saved_tokens=tokens)
+            return response
+        except Exception:
+            return None
+
+    def _keep(gw, kwargs, api, response):
+        # Called with the answer as the model wrote it, before the original values are put back.
+        hours = _cache_hours(gw)
+        if not hours or not getattr(gw, "cache_key", None):
+            return
+        try:
+            from .services.ai_gateway import cache
+            if cache.usable(api, response, kwargs):
+                cache.store(gw.context.tenant_slug, gw.cache_key, gw.report.get("use_case"), api, kwargs.get("model"), response, hours)
+        except Exception:
+            pass
+
     def _guard(kwargs, model, api="chat"):
         # Data protection (services/ai_gateway): what must not leave is replaced or the call is refused (AIBlocked)
         # before the prompt goes anywhere. Returns the handle that restores the answer, or None when the guard is
@@ -214,12 +254,18 @@ def install_openai_compat_shim() -> bool:
                 model = prepare(kwargs)
                 gw = _guard(kwargs, model, api)
                 started_at = time.perf_counter()
+                response = _from_cache(gw, kwargs, api)         # the same request answered before: no call
+                if response is not None:
+                    response = gw.finish(response)
+                    _record(response=response, model=model, started_at=started_at, gw=gw, api=api)
+                    return response
                 try:
                     response = await orig(self, *args, **kwargs)
                 except Exception as exc:
                     _record(error=exc, model=model, started_at=started_at, gw=gw, api=api, payload=_payload(gw, kwargs, api))
                     raise
                 answer = _answer(gw, response)
+                _keep(gw, kwargs, api, response)
                 if gw is not None:
                     response = gw.finish(response)
                 _record(response=response, model=model, started_at=started_at, gw=gw, api=api,
@@ -233,12 +279,18 @@ def install_openai_compat_shim() -> bool:
             model = prepare(kwargs)
             gw = _guard(kwargs, model, api)
             started_at = time.perf_counter()
+            response = _from_cache(gw, kwargs, api)             # the same request answered before: no call
+            if response is not None:
+                response = gw.finish(response)
+                _record(response=response, model=model, started_at=started_at, gw=gw, api=api)
+                return response
             try:
                 response = orig(self, *args, **kwargs)
             except Exception as exc:
                 _record(error=exc, model=model, started_at=started_at, gw=gw, api=api, payload=_payload(gw, kwargs, api))
                 raise
             answer = _answer(gw, response)
+            _keep(gw, kwargs, api, response)
             if gw is not None:
                 response = gw.finish(response)
             _record(response=response, model=model, started_at=started_at, gw=gw, api=api,

@@ -20,6 +20,8 @@ original: for calibration only) or ``off`` (emergency).
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import re
 import time
@@ -50,6 +52,7 @@ class Gateway:
     report: Dict[str, Any]
     context: Any = None                       # the AIUsageContext found before the call (so it is found once)
     seen: Set[str] = field(default_factory=set)       # every value found in the prompt
+    cache_key: Optional[str] = None                   # set by the shim when the use case may be answered from the result cache
 
     # ── the answer ──────────────────────────────────────────────────────────
     def _clean(self, text: str, counts: Counter) -> str:
@@ -327,6 +330,11 @@ def begin(kwargs: Dict[str, Any], mode: str = "protect", api: str = "chat") -> O
             report["note"] = True
             new_messages = _with_note(new_messages)
         write(new_messages)
+        # what the cost report reads: the same prompt twice has the same hash (placeholders are numbered by first
+        # appearance), and the size says whether the call was big because of the question or the data around it
+        report["hash"] = hashlib.sha256(json.dumps(new_messages, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()[:16]
+        report["chars"] = sum(len(t) for t in _texts(new_messages))
+    report["effort"] = kwargs.get("reasoning_effort") or (kwargs.get("reasoning") or {}).get("effort")
     report["ms"] = round((time.perf_counter() - started) * 1000, 1)
     return gateway
 

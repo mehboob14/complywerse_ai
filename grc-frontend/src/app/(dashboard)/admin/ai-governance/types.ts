@@ -5,6 +5,16 @@ export interface Stats {
   failed: number;
   blocked: number;
   tokens: number;
+  input_tokens: number;
+  output_tokens: number;
+  reasoning_tokens: number;
+  cached_tokens: number;
+  cache_hits: number;
+  saved_tokens: number;
+  repeat_calls: number;
+  repeat_tokens: number;
+  retries: number;
+  with_hash: number;
   protected: number;
   entities: number;
   cost_usd: number | null;
@@ -34,6 +44,7 @@ export interface UseCaseRow extends Stats {
   records: string[];
   guarded: boolean;
   field_policy: boolean;
+  cache_hours: number;
   last_used: string | null;
 }
 

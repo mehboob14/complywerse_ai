@@ -74,6 +74,7 @@ class UseCase:
     modality: str = "text"
     apis: Tuple[str, ...] = ("chat",)
     default_enabled: bool = True
+    cache_hours: int = 0          # >0: an identical prompt is answered from the result cache for this long (services/ai_gateway/cache.py)
 
     @property
     def module(self) -> str:
@@ -92,8 +93,9 @@ class UseCase:
 
 def _uc(id: str, label: str, value: str, surface: str, trigger: str, profile: str, level: str,
         records: Tuple[str, ...], *callsites: str, entry: Tuple[str, ...] = (), modality: str = "text",
-        apis: Tuple[str, ...] = ("chat",)) -> UseCase:
-    return UseCase(id, label, value, surface, trigger, profile, level, records, tuple(callsites), tuple(entry), modality, tuple(apis))
+        apis: Tuple[str, ...] = ("chat",), cache: int = 0) -> UseCase:
+    return UseCase(id, label, value, surface, trigger, profile, level, records, tuple(callsites), tuple(entry), modality, tuple(apis),
+                   cache_hours=cache)
 
 
 _R = "modules/erm/routers/"
@@ -319,7 +321,7 @@ USE_CASES: Tuple[UseCase, ...] = (
         "auto", "VISION", "L4", ("upload",), _G + "policy_parser.py:_vision_transcribe_png", modality="vision"),
     _uc("governance.statement_mapping", "Map policy statements to controls",
         "Proposes which controls each statement of a document satisfies.", "Governance › Documents",
-        "auto", "TEXT", "L2", ("document", "control"), "modules/governance/statement_auto_map.py:_ai_match"),
+        "auto", "TEXT", "L2", ("document", "control"), "modules/governance/statement_auto_map.py:_ai_match", cache=168),
     _uc("governance.gap_analysis", "Analyse a document against a framework",
         "Checks a document clause by clause against a framework and lists the gaps.", "Governance › Documents",
         "background", "DOC", "L3", ("document", "framework"), _G + "gap_analysis.py:analyze_clauses_batch"),
@@ -404,7 +406,7 @@ USE_CASES: Tuple[UseCase, ...] = (
     _uc("evidence.link_picker", "Suggest what a file should link to",
         "Suggests the controls, risks, assets and documents a file belongs to.", "Evidence Management",
         "click", "DOC", "L3", ("evidence", "control", "risk", "asset", "document"),
-        "modules/evidence/routers/ai_assessment.py:_ai_select_targets"),
+        "modules/evidence/routers/ai_assessment.py:_ai_select_targets", cache=24),
     _uc("evidence.vision_ocr", "Read scanned evidence with AI vision",
         "A scanned PDF or image is read on our own servers. If no text can be read there, the picture is not sent to an outside AI: it is refused.", "Evidence Management",
         "auto", "VISION", "L4", ("evidence", "upload"), "modules/evidence/routers/ocr.py:extract_text_with_vision",
@@ -472,7 +474,7 @@ USE_CASES: Tuple[UseCase, ...] = (
         "click", "PEOPLE", "L2", ("workflow", "user"), "modules/workflow_engine/routers/ai.py:ai_natural_language_to_workflow"),
     _uc("workflow.suggestions", "Suggest workflows",
         "Suggests workflows worth automating.", "Workflow Engine",
-        "view", "STRUCT", "L1", ("workflow",), "modules/workflow_engine/routers/ai.py:ai_workflow_suggestions"),
+        "view", "STRUCT", "L1", ("workflow",), "modules/workflow_engine/routers/ai.py:ai_workflow_suggestions", cache=24),
     _uc("workflow.optimize", "Optimise a workflow",
         "Suggests improvements to an existing workflow.", "Workflow Engine",
         "click", "STRUCT", "L1", ("workflow",), "modules/workflow_engine/routers/ai.py:ai_optimize_workflow"),
@@ -522,12 +524,12 @@ USE_CASES: Tuple[UseCase, ...] = (
     # ── Dashboard ────────────────────────────────────────────────────────────
     _uc("dashboard.ai_insights", "Dashboard insights",
         "Short observations on compliance posture, shown on the home dashboard.", "Dashboard",
-        "auto", "STRUCT", "L1", ("framework", "evidence", "risk", "rcsa"), "routers/dashboard_router.py:get_ai_insights"),
+        "auto", "STRUCT", "L1", ("framework", "evidence", "risk", "rcsa"), "routers/dashboard_router.py:get_ai_insights", cache=1),
 
     # ── Asset Management ─────────────────────────────────────────────────────
     _uc("assets.discovery_explain", "Explain a discovered device",
         "Explains in plain language what a discovered device probably is.", "Asset Management › Discovery",
-        "view", "STRUCT", "L1", ("asset",), "modules/asset_discovery/services/explainer.py:_ai_rephrase"),
+        "view", "STRUCT", "L1", ("asset",), "modules/asset_discovery/services/explainer.py:_ai_rephrase", cache=24),
     _uc("assets.import_mapping", "Map import columns to asset fields",
         "Proposes which asset field each column of an uploaded file belongs to.", "Asset Management › Import",
         "click", "TEXT", "L2", ("upload", "asset"), "modules/asset_import/ai_assist.py:ai_suggest_mapping"),
@@ -547,7 +549,7 @@ USE_CASES: Tuple[UseCase, ...] = (
         "view", "STRUCT", "L1", ("vulnerability", "asset"), "modules/vuln_management/attack/narrative.py:_call_model"),
     _uc("vulnerabilities.control_proposals", "Propose controls for findings",
         "Maps scanner findings to the controls that address them.", "Vulnerability Management",
-        "background", "TEXT", "L2", ("vulnerability", "control"), "services/ai_control_mapping.py:_chat"),
+        "background", "TEXT", "L2", ("vulnerability", "control"), "services/ai_control_mapping.py:_chat", cache=720),
 
     # ── Controls Automation ──────────────────────────────────────────────────
     _uc("controls_automation.benchmark_select", "Choose benchmarks for an operating system",

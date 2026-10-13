@@ -1,9 +1,65 @@
 'use client';
 
 import { Activity, Ban, Coins, ShieldCheck, TriangleAlert } from 'lucide-react';
+import type { Stats } from './types';
 import { StatCard } from '@/components/ui';
 import { REASONS, fmtNumber, fmtTokens, fmtUsd, fmtWhen } from './format';
 import type { Overview } from './types';
+
+
+const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) + '%' : '–');
+
+/** Where the tokens go: the figures that say which cost levers apply, read from the ledger (nothing is estimated). */
+function Drivers({ t, features }: { t: Stats; features: Array<Stats & { id: string; label: string }> }) {
+  if (t.calls === 0) return null;
+  const fresh = Math.max(0, t.input_tokens - t.cached_tokens);
+  return (
+    <section aria-label="Where the tokens go">
+      <h3 className="mb-2 text-sm font-semibold text-slate-900">Where the tokens go</h3>
+      <ul className="mb-3 grid gap-x-8 gap-y-1 text-sm text-slate-700 sm:grid-cols-2">
+        <li><span className="font-medium text-slate-900">{pct(t.input_tokens, t.tokens)}</span> of tokens are what is sent ({fmtTokens(t.input_tokens)}); {pct(t.output_tokens, t.tokens)} is what comes back ({fmtTokens(t.output_tokens)}).</li>
+        <li>Hidden reasoning is <span className="font-medium text-slate-900">{pct(t.reasoning_tokens, t.output_tokens)}</span> of the output ({fmtTokens(t.reasoning_tokens)}).</li>
+        <li><span className="font-medium text-slate-900">{pct(t.cached_tokens, t.input_tokens)}</span> of the input was read from the provider&apos;s prompt cache at a reduced rate ({fmtTokens(fresh)} was full price).</li>
+        <li>Answered from our own cache: <span className="font-medium text-slate-900">{fmtNumber(t.cache_hits)}</span> calls, saving {fmtTokens(t.saved_tokens)} tokens.</li>
+        <li>
+          Asked again exactly as before and not cached: <span className="font-medium text-slate-900">{fmtNumber(t.repeat_calls)}</span> calls ({fmtTokens(t.repeat_tokens)} tokens)
+          {t.with_hash < t.calls ? <span className="text-slate-700"> · measured on {fmtNumber(t.with_hash)} of {fmtNumber(t.calls)} calls so far</span> : null}.
+        </li>
+        <li>Retried calls: <span className="font-medium text-slate-900">{fmtNumber(t.retries)}</span>.</li>
+      </ul>
+      <div className="overflow-x-auto rounded-lg border border-slate-200">
+        <table className="min-w-full text-sm">
+          <thead>
+            <tr className="border-b border-slate-200 text-left text-xs text-slate-700">
+              <th className="px-3 py-2 font-medium">Feature</th>
+              <th className="px-3 py-2 text-right font-medium">Calls</th>
+              <th className="px-3 py-2 text-right font-medium">In per call</th>
+              <th className="px-3 py-2 text-right font-medium">Out per call</th>
+              <th className="px-3 py-2 text-right font-medium">Reasoning</th>
+              <th className="px-3 py-2 text-right font-medium">Provider cache</th>
+              <th className="px-3 py-2 text-right font-medium">Our cache</th>
+              <th className="px-3 py-2 text-right font-medium">Repeated</th>
+            </tr>
+          </thead>
+          <tbody>
+            {features.map((f) => (
+              <tr key={f.id} className="border-b border-slate-100 last:border-0">
+                <td className="px-3 py-2">{f.label}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(f.calls)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtTokens(Math.round(f.input_tokens / Math.max(1, f.calls)))}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtTokens(Math.round(f.output_tokens / Math.max(1, f.calls)))}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{pct(f.reasoning_tokens, f.output_tokens)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{pct(f.cached_tokens, f.input_tokens)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(f.cache_hits)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{fmtNumber(f.repeat_calls)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 export default function OverviewTab({ data, days, onOpenUseCase }: { data: Overview; days: number; onOpenUseCase: (id: string) => void }) {
   const t = data.totals;
@@ -37,6 +93,8 @@ export default function OverviewTab({ data, days, onOpenUseCase }: { data: Overv
         </p>
       )}
       {data.truncated && <p className="text-sm text-amber-900">Only the most recent 5,000 calls of this period are summarised here.</p>}
+
+      <Drivers t={t} features={data.use_cases} />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section>
