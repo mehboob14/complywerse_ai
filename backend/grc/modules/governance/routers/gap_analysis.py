@@ -24,6 +24,7 @@ from ....models import (
     InternalControl, InternalControlFrameworkLink, DocumentControlLink,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....services.ai_gateway.errors import AIBlocked
 from .policy_parser import extract_text_from_file, _create_version_snapshot
 from ..action_logger import log_governance_action
 
@@ -172,6 +173,8 @@ Return a JSON object with a "findings" array containing one object per clause.""
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to parse OpenAI response: {str(e)}"
         )
+    except AIBlocked:       # the data-protection guard refused: its message is already written for a person
+        raise
     except Exception as e:
         error_msg = str(e)
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:

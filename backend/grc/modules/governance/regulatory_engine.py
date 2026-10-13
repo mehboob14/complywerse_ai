@@ -134,15 +134,6 @@ class QuoteChecker:
 
 # ── Asking the model ─────────────────────────────────────────────────────────
 
-def _record(response, error, model: str, started: float) -> None:
-    try:
-        from ...services.ai_usage import record_provider_attempt
-        record_provider_attempt(response=response, error=error, requested_model=model, provider="openai",
-                                api_family="responses", started_at=started)
-    except Exception:  # noqa: BLE001 — accounting never fails the analysis
-        pass
-
-
 def llm_json(system: str, prompt: str, schema: dict, name: str, *, effort: str = "high",
              max_output_tokens: int = 32000) -> Tuple[dict, str]:
     """One structured answer, and the model that gave it."""
@@ -162,14 +153,11 @@ def llm_json(system: str, prompt: str, schema: dict, name: str, *, effort: str =
         }
         if model.lower().startswith(_REASONING_MODELS):
             kwargs["reasoning"] = {"effort": effort}
-        started = time.time()
-        try:
+        try:                                                      # the shim records the usage, after the data-protection guard
             response = client.responses.create(**kwargs)
         except (NotFoundError, PermissionDeniedError) as exc:     # this key can't use the model
-            _record(None, exc, model, started)
             last = exc
             continue
-        _record(response, None, model, started)
         if getattr(response, "status", "completed") == "incomplete":
             why = getattr(getattr(response, "incomplete_details", None), "reason", None) or "unknown"
             raise RuntimeError(f"The model stopped before finishing ({why}).")

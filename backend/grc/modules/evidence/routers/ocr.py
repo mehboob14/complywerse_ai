@@ -18,6 +18,7 @@ from openai import OpenAI
 from ....models import Evidence, GRCUser, get_db
 from ....routers.auth_router import require_auth, get_user_tenants
 from ....services import evidence_review
+from ....services.ai_gateway.errors import AIBlocked
 
 router = APIRouter(prefix="/ocr", tags=["Evidence - OCR"])
 logger = logging.getLogger(__name__)
@@ -232,7 +233,11 @@ def extract_text_with_tesseract(file_path: str, file_type: str) -> Optional[str]
     try:
         from PIL import Image, ImageOps
         import pytesseract
+        from ...compliance_plugins.pdf_ingest.extract_pages import _resolve_tesseract_cmd
 
+        cmd = _resolve_tesseract_cmd()          # installed but not on PATH is the usual case on Windows
+        if cmd:
+            pytesseract.pytesseract.tesseract_cmd = cmd
         with Image.open(file_path) as image:
             normalized = ImageOps.grayscale(image)
             text = pytesseract.image_to_string(normalized)
@@ -289,6 +294,8 @@ def extract_text_with_vision(file_path: str, file_type: str) -> str:
             max_completion_tokens=4096
         )
         return response.choices[0].message.content or ""
+    except AIBlocked as exc:        # the data-protection guard refused: say so as it is, not as an API error
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc))
     except Exception as e:
         error_msg = str(e)
         if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:

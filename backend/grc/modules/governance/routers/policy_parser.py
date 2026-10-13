@@ -19,6 +19,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ....schemas import ConvertStatementsRequest, InternalControlFromStatementResponse
+from ....services.ai_gateway.errors import AIBlocked
 from ..action_logger import log_governance_action
 
 router = APIRouter(prefix="/documents", tags=["Governance - Policy Parser"])
@@ -337,6 +338,8 @@ def _vision_transcribe_png(client, b64_png: str) -> str:
                 }],
             )
             return (resp.choices[0].message.content or "").strip()
+        except AIBlocked:       # pixels never leave: another model would be refused the same way
+            raise
         except Exception as exc:  # noqa: BLE001
             log.warning("vision OCR model %s failed: %s", model, exc)
             continue
@@ -371,6 +374,8 @@ def _openai_vision_ocr_pdf(pdf_bytes: bytes, max_pages: int | None = None) -> st
                 t = _vision_transcribe_png(client, b64)
                 if t:
                     parts.append(t)
+            except AIBlocked:   # the same refusal for every page: stop at the first
+                break
             except Exception as exc:  # noqa: BLE001
                 log.warning("vision OCR failed on page %s: %s", i, exc)
     finally:
@@ -724,6 +729,8 @@ Return a JSON object with a "statements" array containing all extracted policy s
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=f"Failed to parse OpenAI response: {str(e)}"
             )
+        except AIBlocked:       # the data-protection guard refused: its message is already written for a person
+            raise
         except Exception as e:
             error_msg = str(e)
             if "FREE_CLOUD_BUDGET_EXCEEDED" in error_msg:

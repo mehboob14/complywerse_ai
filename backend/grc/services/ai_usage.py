@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-import inspect
 import json
 import logging
 import os
+import sys
 import time
 import uuid
 from contextlib import contextmanager
@@ -196,36 +196,48 @@ def usage_scope(**values: Any) -> Iterator[AIUsageContext]:
         _context.reset(token)
 
 
+def callsite() -> Optional[tuple[str, str, int]]:
+    """``(path relative to backend/grc, function, line)`` of the code that made a provider call: the nearest frame in
+    backend/grc that is not this module, the shim in ``config.py`` or the data-protection guard."""
+    try:
+        frame = sys._getframe(1)
+    except ValueError:
+        return None
+    for _ in range(24):
+        if frame is None:
+            break
+        filename = frame.f_code.co_filename.replace("\\", "/")
+        if ("/grc/" in filename and not filename.endswith(("/services/ai_usage.py", "/grc/config.py"))
+                and "/services/ai_gateway/" not in filename):
+            return filename.split("/grc/", 1)[1], frame.f_code.co_name, frame.f_lineno
+        frame = frame.f_back
+    return None
+
+
 def _callsite_attribution() -> tuple[str, str, str]:
-    for frame in inspect.stack()[2:24]:
-        filename = frame.filename.replace("\\", "/")
-        if (
-            "/grc/" not in filename
-            or filename.endswith("/services/ai_usage.py")
-            or filename.endswith("/grc/config.py")
-        ):
-            continue
-        relative = filename.split("/grc/", 1)[1]
-        parts = relative.split("/")
-        if parts[0] == "modules" and len(parts) > 1:
-            module = parts[1]
-        elif parts[0] == "routers":
-            stem = parts[-1].removesuffix("_router.py").removesuffix(".py")
-            module = {
-                "critical_tasks": "tasks",
-                "is_projects": "projects",
-                "audit_plan": "audit",
-                "access_review": "access_review",
-                "certification": "certification",
-                "dashboard": "dashboard",
-            }.get(stem, stem)
-        elif parts[0] == "tasks" and len(parts) > 1:
-            module = parts[1].removesuffix(".py")
-        else:
-            module = parts[0].removesuffix(".py")
-        feature = frame.function.strip("_") or "provider_call"
-        return module[:100], feature[:150], f"{relative}:{frame.lineno}"
-    return "unclassified", "provider_call", "unknown"
+    site = callsite()
+    if site is None:
+        return "unclassified", "provider_call", "unknown"
+    relative, function, line = site
+    parts = relative.split("/")
+    if parts[0] == "modules" and len(parts) > 1:
+        module = parts[1]
+    elif parts[0] == "routers":
+        stem = parts[-1].removesuffix("_router.py").removesuffix(".py")
+        module = {
+            "critical_tasks": "tasks",
+            "is_projects": "projects",
+            "audit_plan": "audit",
+            "access_review": "access_review",
+            "certification": "certification",
+            "dashboard": "dashboard",
+        }.get(stem, stem)
+    elif parts[0] == "tasks" and len(parts) > 1:
+        module = parts[1].removesuffix(".py")
+    else:
+        module = parts[0].removesuffix(".py")
+    feature = function.strip("_") or "provider_call"
+    return module[:100], feature[:150], f"{relative}:{line}"
 
 
 def _discover_runtime_context(context: AIUsageContext) -> AIUsageContext:
@@ -235,8 +247,15 @@ def _discover_runtime_context(context: AIUsageContext) -> AIUsageContext:
     local variable names and never reads prompt/response values.
     """
     values: dict[str, Any] = {}
-    for frame in inspect.stack()[2:30]:
-        local = frame.frame.f_locals
+    try:
+        frame = sys._getframe(2)          # skip this function and its caller
+    except ValueError:
+        frame = None
+    for _ in range(28):
+        if frame is None:
+            break
+        local = frame.f_locals
+        frame = frame.f_back
         request = local.get("request") or local.get("http_request")
         if request is not None:
             state = getattr(request, "state", None)
@@ -328,20 +347,13 @@ def _estimate_cost(model: Optional[str], usage: dict[str, Any]) -> tuple[Optiona
         return None, None
 
 
-def record_provider_attempt(
-    *,
-    response: Any = None,
-    error: Optional[BaseException] = None,
-    requested_model: Optional[str] = None,
-    provider: str = "openai",
-    api_family: str = "chat_completions",
-    started_at: Optional[float] = None,
-) -> None:
-    if not enabled():
-        return
-    # Precedence: explicit usage_scope() (authoritative — background workers) >
-    # the per-request holder (reliable request-path tenant/actor) > best-effort
-    # stack inspection (last resort for paths that set neither).
+def resolve_context() -> AIUsageContext:
+    """Who is calling, for which tenant and from where.
+
+    Precedence: explicit usage_scope() (authoritative — background workers) >
+    the per-request holder (reliable request-path tenant/actor) > best-effort
+    stack inspection (last resort for paths that set neither).
+    """
     context = _context.get()
     holder = _request_holder.get()
     if holder:
@@ -355,7 +367,26 @@ def record_provider_attempt(
             request_id=context.request_id or holder.get("request_id"),
             operation_id=context.operation_id or holder.get("request_id"),
         )
-    context = _discover_runtime_context(context)
+    return _discover_runtime_context(context)
+
+
+def record_provider_attempt(
+    *,
+    response: Any = None,
+    error: Optional[BaseException] = None,
+    requested_model: Optional[str] = None,
+    provider: str = "openai",
+    api_family: str = "chat_completions",
+    started_at: Optional[float] = None,
+    context: Optional[AIUsageContext] = None,
+    gateway: Optional[dict] = None,
+) -> None:
+    """``context`` is the one ``resolve_context()`` already found (the data-protection guard resolves it before the
+    call); ``gateway`` is the guard's report for the call (counts and decisions only, never a value)."""
+    if not enabled():
+        return
+    if context is None:
+        context = resolve_context()
     if not context.tenant_slug:
         global _dropped_no_tenant
         _dropped_no_tenant += 1
@@ -367,7 +398,7 @@ def record_provider_attempt(
             site, context.endpoint, _dropped_no_tenant,
         )
         return
-    module, feature, callsite = _callsite_attribution()
+    module, feature, site_label = _callsite_attribution()
     module = context.module_key or module
     feature = context.feature_key or feature
     operation_id = context.operation_id or context.request_id or uuid.uuid4().hex
@@ -410,7 +441,7 @@ def record_provider_attempt(
                 error_type=type(error).__name__ if error else None,
                 duration_ms=duration_ms,
                 attempt_number=_next_attempt(operation_id),
-                usage_metadata={"callsite": callsite},
+                usage_metadata={"callsite": site_label, **({"gateway": gateway} if gateway else {})},
             ))
             db.commit()
         finally:

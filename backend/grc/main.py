@@ -207,6 +207,17 @@ async def audit_log_middleware(request: Request, call_next):
 # cookie header.
 app.add_middleware(ForeignAuthCookieFilter)
 
+
+from .services.ai_gateway.errors import AIBlocked  # noqa: E402
+
+
+@app.exception_handler(AIBlocked)
+async def _ai_blocked(request, exc: AIBlocked):
+    """The data-protection guard refused to send a prompt to a model: a clear 403, not a server error.
+    ``detail`` stays a plain sentence because every screen shows ``detail`` as it is."""
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=403, content={"detail": str(exc), "code": "ai_blocked", "reason": exc.code})
+
 # NCA routers MUST register BEFORE risks_router and vuln_management_router
 # because those expose parametric `/risks/{risk_id}` and `/vulnerabilities/{vuln_id}`
 # routes that would otherwise capture `/risks/nca` and `/vulnerabilities/nca`

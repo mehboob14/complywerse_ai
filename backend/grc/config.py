@@ -127,18 +127,43 @@ def install_openai_compat_shim() -> bool:
                 kwargs["reasoning_effort"] = "low"
         return model
 
-    def _record(response=None, error=None, model=None, started_at=None):
+    def _record(response=None, error=None, model=None, started_at=None, gw=None, gateway=None, api="chat"):
         try:
             from .services.ai_usage import record_provider_attempt
             record_provider_attempt(
                 response=response, error=error, requested_model=model,
-                provider="openai", api_family="chat_completions",
+                provider="openai", api_family="responses" if api == "responses" else "chat_completions",
                 started_at=started_at,
+                context=gw.context if gw is not None else None,
+                gateway=gateway if gateway is not None else (gw.report if gw is not None else None),
             )
         except Exception:
             pass
 
-    def _screen(kwargs):
+    def _guard(kwargs, model, api="chat"):
+        # Data protection (services/ai_gateway): what must not leave is replaced or the call is refused (AIBlocked)
+        # before the prompt goes anywhere. Returns the handle that restores the answer, or None when the guard is
+        # off. A fault in the guard itself refuses the call: the original prompt is never sent instead.
+        # AI_GATEWAY_MODE: protect (default) | monitor (find and count, send the original) | off (emergency).
+        mode = os.environ.get("AI_GATEWAY_MODE", "protect").strip().lower()
+        if mode == "off":
+            return None
+        import logging
+        log = logging.getLogger(__name__)
+        from .services.ai_gateway.errors import AIBlocked
+        try:
+            from .services.ai_gateway import engine
+            return engine.begin(kwargs, "monitor" if mode == "monitor" else "protect", api)
+        except AIBlocked as exc:
+            _record(error=exc, model=model, gateway=exc.report, api=api)
+            raise
+        except Exception as exc:
+            blocked = AIBlocked("gateway_error", "AI was not used because the data-protection check could not run.", rule="B13")
+            log.exception("the data-protection guard failed; the prompt was not sent")
+            _record(error=blocked, model=model, api=api)
+            raise blocked from exc
+
+    def _screen(kwargs, api="chat"):
         # Licence gate: refuse any prompt carrying SCF prose before it leaves the
         # process. Imported lazily, like ai_usage, so this module stays importable
         # on its own. LicenceRestrictedContent propagates; anything else the guard
@@ -148,38 +173,50 @@ def install_openai_compat_shim() -> bool:
         except Exception:
             return
         try:
-            assert_llm_safe(kwargs.get("messages"))
+            if api == "responses":     # instructions + input are the Responses API's messages
+                parts = [kwargs.get("instructions"), kwargs.get("input")]
+                assert_llm_safe([{"role": "user", "content": p} for p in parts if isinstance(p, str)])
+            else:
+                assert_llm_safe(kwargs.get("messages"))
         except LicenceRestrictedContent:
             raise
         except Exception:
             pass
 
-    def _wrap(orig, is_async=False):
+    def _wrap(orig, is_async=False, api="chat"):
+        # api: "chat" (chat completions; legacy parameters are translated for reasoning models) or "responses"
+        prepare = _prepare if api == "chat" else (lambda kwargs: kwargs.get("model"))
         if is_async:
             async def _patched_async(self, *args, **kwargs):
-                _screen(kwargs)
-                model = _prepare(kwargs)
+                _screen(kwargs, api)
+                model = prepare(kwargs)
+                gw = _guard(kwargs, model, api)
                 started_at = time.perf_counter()
                 try:
                     response = await orig(self, *args, **kwargs)
                 except Exception as exc:
-                    _record(error=exc, model=model, started_at=started_at)
+                    _record(error=exc, model=model, started_at=started_at, gw=gw, api=api)
                     raise
-                _record(response=response, model=model, started_at=started_at)
+                if gw is not None:
+                    response = gw.finish(response)
+                _record(response=response, model=model, started_at=started_at, gw=gw, api=api)
                 return response
             _patched_async._grc_compat = True  # type: ignore[attr-defined]
             return _patched_async
 
         def _patched(self, *args, **kwargs):
-            _screen(kwargs)
-            model = _prepare(kwargs)
+            _screen(kwargs, api)
+            model = prepare(kwargs)
+            gw = _guard(kwargs, model, api)
             started_at = time.perf_counter()
             try:
                 response = orig(self, *args, **kwargs)
             except Exception as exc:
-                _record(error=exc, model=model, started_at=started_at)
+                _record(error=exc, model=model, started_at=started_at, gw=gw, api=api)
                 raise
-            _record(response=response, model=model, started_at=started_at)
+            if gw is not None:
+                response = gw.finish(response)
+            _record(response=response, model=model, started_at=started_at, gw=gw, api=api)
             return response
         _patched._grc_compat = True  # type: ignore[attr-defined]
         return _patched
@@ -192,6 +229,17 @@ def install_openai_compat_shim() -> bool:
     if Async is not None and not getattr(Async.create, "_grc_compat", False):
         Async.create = _wrap(Async.create, is_async=True)
         patched_any = True
+    try:     # the Responses API (the regulatory engine) goes through the same guard and the same usage record
+        from openai.resources.responses import responses as _rr  # type: ignore
+        if not getattr(_rr.Responses.create, "_grc_compat", False):
+            _rr.Responses.create = _wrap(_rr.Responses.create, api="responses")
+            patched_any = True
+        AsyncResponses = getattr(_rr, "AsyncResponses", None)
+        if AsyncResponses is not None and not getattr(AsyncResponses.create, "_grc_compat", False):
+            AsyncResponses.create = _wrap(AsyncResponses.create, is_async=True, api="responses")
+            patched_any = True
+    except Exception:
+        pass
     return patched_any
 
 
