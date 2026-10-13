@@ -162,6 +162,15 @@ def install_openai_compat_shim() -> bool:
         except Exception:
             return None
 
+    def _tier(kwargs):
+        # services/ai_gateway/tiers.py: a call that used the platform's default model runs on the light or deep model named
+        # for its use case (AI_MODEL_LIGHT / AI_MODEL_DEEP). Nothing changes while those are unset.
+        try:
+            from .services.ai_gateway import tiers
+            return tiers.apply(kwargs)
+        except Exception:
+            return None
+
     def _cache_hours(gw):
         # Result cache (services/ai_gateway/cache.py): only for a use case the registry marks repeatable, only while the
         # guard protects (the key is the sanitised prompt) and only for a tenant (the cache lives in its database).
@@ -251,8 +260,11 @@ def install_openai_compat_shim() -> bool:
         if is_async:
             async def _patched_async(self, *args, **kwargs):
                 _screen(kwargs, api)
+                tier = _tier(kwargs)
                 model = prepare(kwargs)
                 gw = _guard(kwargs, model, api)
+                if tier and gw is not None:
+                    gw.report["tier"] = tier
                 started_at = time.perf_counter()
                 response = _from_cache(gw, kwargs, api)         # the same request answered before: no call
                 if response is not None:
@@ -276,8 +288,11 @@ def install_openai_compat_shim() -> bool:
 
         def _patched(self, *args, **kwargs):
             _screen(kwargs, api)
+            tier = _tier(kwargs)
             model = prepare(kwargs)
             gw = _guard(kwargs, model, api)
+            if tier and gw is not None:
+                gw.report["tier"] = tier
             started_at = time.perf_counter()
             response = _from_cache(gw, kwargs, api)             # the same request answered before: no call
             if response is not None:

@@ -244,8 +244,10 @@ def _scan_chapter(client, model: str, context: str, chapter: List[Dict[str, Any]
                   k: int, total: int) -> List[int]:
     """One chapter of round 1. Retries once; raises on second failure — a
     silently-skipped chapter would hide part of the library."""
-    user = f"{context}\n\nCHAPTER {k}/{total} OF THE CONTROL LIBRARY (id | code | title | domain | statement)\n" + \
-           "\n".join(_line(c) for c in chapter)
+    # The library chapter comes first and the finding last: the chapter is the same for every finding, so the provider's
+    # prompt cache can reuse it (it matches from the start of the prompt); the finding is the only part that changes.
+    user = f"CHAPTER {k}/{total} OF THE CONTROL LIBRARY (id | code | title | domain | statement)\n" + \
+           "\n".join(_line(c) for c in chapter) + f"\n\n{context}"
     own_ids = {c["id"] for c in chapter}
     last_err: Optional[Exception] = None
     for _ in range(2):

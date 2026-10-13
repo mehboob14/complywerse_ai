@@ -45,6 +45,7 @@ export interface UseCaseRow extends Stats {
   guarded: boolean;
   field_policy: boolean;
   cache_hours: number;
+  tier: 'light' | 'standard' | 'deep';
   last_used: string | null;
 }
 

@@ -81,6 +81,10 @@ class UseCase:
         return self.id.split(".", 1)[0]
 
     @property
+    def tier(self) -> str:
+        return _TIER.get(self.id, "standard")
+
+    @property
     def ambient(self) -> bool:
         """Fires without the person asking for AI (an event or a page load)."""
         return self.trigger in ("view", "auto")
@@ -596,6 +600,24 @@ USE_CASES: Tuple[UseCase, ...] = (
     _uc("pentest.plan", "Plan a test", "Plans the steps of a penetration test.", "Penetration Testing",
         "click", "RAW", "L2", ("scan",), "ava-pentest-engine/ava_pentest/llm.py:plan_with_gpt", apis=("http",)),
 )
+
+# Which model class a use case needs (services/ai_gateway/tiers.py maps a class to a model with AI_MODEL_LIGHT / AI_MODEL_DEEP;
+# a class with no model set keeps the model the call asked for). Everything not listed is "standard".
+#   light  short, structured or wording work whose answer a person reads and edits: a name, a pick from a list, a sentence
+#   deep   long documents judged where a wrong answer costs most: regulation, contracts, audit findings, framework gaps
+TIERS = ("light", "standard", "deep")
+_TIER: Dict[str, str] = {
+    **dict.fromkeys((
+        "administration.audit_log_summary", "erm.internal_control_category", "erm.rcsa_explain_row",
+        "governance.committee_action_summary", "governance.committee_action_reword", "complychat.format_results",
+        "tasks.generate_description", "evidence.link_picker", "assets.import_mapping", "assets.layout_plan",
+        "assets.discovery_explain", "controls_automation.benchmark_select", "controls_automation.benchmark_classify",
+        "controls_automation.normalise_os", "control_library.group_keywords", "control_library.group_summary",
+        "workflow.suggestions", "dashboard.ai_insights"), "light"),
+    **dict.fromkeys((
+        "regulatory.impact_analysis", "regulatory.link_controls", "governance.gap_analysis", "evidence.match_clauses",
+        "third_party.contract_terms", "audit.statutory_observations", "complychat.sql_generate"), "deep"),
+}
 
 _BY_ID: Dict[str, UseCase] = {u.id: u for u in USE_CASES}
 _BY_SITE: Dict[Tuple[str, str], List[UseCase]] = {}

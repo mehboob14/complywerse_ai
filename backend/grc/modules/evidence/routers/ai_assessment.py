@@ -527,8 +527,9 @@ def get_available_frameworks(db: Session, tenant_id: int = None) -> str:
             (UploadedFramework.tenant_id == None)
         )
     
-    uploaded_frameworks = query.all()
-    
+    # In a fixed order: the list leads the prompt, and the provider can only reuse a prompt that starts the same every time.
+    uploaded_frameworks = query.order_by(UploadedFramework.id).all()
+
     for fw in uploaded_frameworks:
         # Fetch ALL actual control IDs from this framework
         controls = db.query(ParsedFrameworkControl).filter(

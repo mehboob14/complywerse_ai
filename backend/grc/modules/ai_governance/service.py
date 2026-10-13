@@ -145,7 +145,7 @@ def inventory(db, days: int = 30) -> Dict[str, Any]:
                 "id": u.id, "label": u.label, "value": u.value, "surface": u.surface,
                 "trigger": u.trigger, "trigger_label": TRIGGER_LABEL[u.trigger], "profile": u.profile, "level": u.level,
                 "level_meaning": LEVEL_MEANING[u.level], "modality": u.modality, "records": list(u.records),
-                "guarded": not u.outside_shim, "field_policy": u.id in governed, "cache_hours": u.cache_hours,
+                "guarded": not u.outside_shim, "field_policy": u.id in governed, "cache_hours": u.cache_hours, "tier": u.tier,
                 "last_used": last.isoformat() + "Z" if last else None, **_stats(rows),
             })
         if items:

@@ -239,3 +239,32 @@ def test_judge_prompt_carries_rules_and_flagged_lines_only(db):
     assert "do NOT select them" in p["system"]                 # patch-mgmt exclusion
     assert "HARDENING weakness" in p["system"]
     assert "pure inventory note" in p["system"]
+
+
+def test_the_library_chapter_leads_the_scan_prompt_so_the_provider_can_reuse_it(db, monkeypatch):
+    """The chapter is the same for every finding and the finding is the only part that changes; the provider's prompt cache
+    matches from the start of the prompt, so the chapter must come first."""
+    monkeypatch.setattr(m, "_CHAPTER_BUDGET", 250)
+    seen = []
+
+    class _Spy(_TwoRound):
+        @property
+        def chat(self):
+            inner = super().chat
+            class _C:
+                class completions:
+                    @staticmethod
+                    def create(**kw):
+                        if "candidate_ids" in kw["messages"][0]["content"]:
+                            seen.append(kw["messages"][1]["content"])
+                        return inner.completions.create(**kw)
+            return _C()
+
+    client = _Spy([], {"suggestions": [], "no_specific_control_reason": "none"})
+    m.suggest_controls(db, _v(id=1, title="TLS 1.0 enabled"), client=client, model="fake")
+    m.suggest_controls(db, _v(id=2, title="SMB signing not required"), client=client, model="fake")
+    first, second = seen[:len(seen) // 2], seen[len(seen) // 2:]
+    assert len(first) == len(second) > 1
+    for a, b in zip(sorted(first), sorted(second)):
+        head_a, head_b = a.split("FINDING")[0], b.split("FINDING")[0]
+        assert head_a.startswith("CHAPTER ") and head_a == head_b and "TLS 1.0" in a and "SMB signing" in b
