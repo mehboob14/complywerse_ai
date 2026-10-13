@@ -19,11 +19,14 @@ from typing import Dict, List, Optional, Set, Tuple
 GRC = Path(__file__).resolve().parents[2]            # backend/grc
 ENGINE = GRC.parents[1] / "ava-pentest-engine"       # repo root / ava-pentest-engine (may be absent in a sparse checkout)
 
-# the end of the dotted call path -> which API family it is (the shim in grc/config.py patches only "chat" today)
+# the end of the dotted call path -> which API family it is. The guard in grc/config.py is in front of
+# chat.completions.create and responses.create (sync and async) only: parse() builds typed objects from the answer
+# before the guard could put the original values back, and stream() cannot be checked, so both count as "other"
+# (outside the guard) and tests/test_ai_registry.py makes any use of them an explicit, visible decision.
 _TAILS = {
-    "chat.completions.create": "chat", "chat.completions.parse": "chat", "chat.completions.stream": "chat",
+    "chat.completions.create": "chat", "chat.completions.parse": "other", "chat.completions.stream": "other",
     "completions.create": "chat",
-    "responses.create": "responses", "responses.parse": "responses", "responses.stream": "responses",
+    "responses.create": "responses", "responses.parse": "other", "responses.stream": "other",
     "embeddings.create": "embeddings",
     "messages.create": "anthropic", "messages.stream": "anthropic",
     "images.generate": "other", "audio.transcriptions.create": "other", "audio.speech.create": "other",

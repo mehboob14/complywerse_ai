@@ -108,6 +108,19 @@ def test_lookup_names_the_use_case_of_a_function_and_every_one_for_a_shared_help
     assert registry.get("erm.risk_treatment_plan").module == "erm" and registry.module_label("erm") == "Risk Management"
 
 
+# Use cases that reach a provider around the guard in the shim (embeddings, another SDK, raw HTTP), by decision. A new
+# path of that kind fails here until someone adds it, knowing that nothing cleans what it sends.
+KNOWN_AROUND_THE_GUARD = {
+    "complychat.embeddings", "erm.ai_risk_template", "pentest.assign_tool", "pentest.choose_exploit", "pentest.choose_tools",
+    "pentest.classify_findings", "pentest.plan", "pentest.verify_exploit",
+}
+
+
+def test_nothing_new_reaches_a_provider_around_the_guard():
+    around = {u.id for u in registry.USE_CASES if u.outside_shim}
+    assert around == KNOWN_AROUND_THE_GUARD, (sorted(around - KNOWN_AROUND_THE_GUARD), sorted(KNOWN_AROUND_THE_GUARD - around))
+
+
 def test_ambient_and_outside_shim_follow_from_the_trigger_and_the_api():
     ids = {u.id: u for u in registry.USE_CASES}
     assert ids["dashboard.ai_insights"].ambient and not ids["erm.risk_treatment_plan"].ambient

@@ -263,6 +263,8 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # AI Governance: the use case a call belonged to (set by the data-protection guard)
+    ("ai_usage_events", "use_case_id", "VARCHAR(150)", "ix_ai_usage_events_use_case_id"),
     # Audit register — columns added after the first tenants already had the
     # tables (the local cfsb tenant was provisioned in between).
     ("grc_audit_register_imports", "client_summary", "JSON DEFAULT '{}'::json", None),

@@ -127,7 +127,7 @@ def install_openai_compat_shim() -> bool:
                 kwargs["reasoning_effort"] = "low"
         return model
 
-    def _record(response=None, error=None, model=None, started_at=None, gw=None, gateway=None, api="chat"):
+    def _record(response=None, error=None, model=None, started_at=None, gw=None, gateway=None, api="chat", payload=None):
         try:
             from .services.ai_usage import record_provider_attempt
             record_provider_attempt(
@@ -136,9 +136,31 @@ def install_openai_compat_shim() -> bool:
                 started_at=started_at,
                 context=gw.context if gw is not None else None,
                 gateway=gateway if gateway is not None else (gw.report if gw is not None else None),
+                payload=payload,
             )
         except Exception:
             pass
+
+    def _answer(gw, response):
+        # The model's own words, taken before the guard puts the original values back. Only while the guard protects:
+        # otherwise the prompt (and so the answer) is the original text and nothing is kept.
+        if gw is None or gw.mode != "protect":
+            return None
+        try:
+            from .services.ai_gateway import ledger
+            return ledger.answer_text(response)
+        except Exception:
+            return None
+
+    def _payload(gw, kwargs, api, answer=None):
+        # What an administrator can read later: the prompt exactly as it was sent (kwargs is the guard's rewrite).
+        if gw is None or gw.mode != "protect":
+            return None
+        try:
+            from .services.ai_gateway import ledger
+            return {"request": ledger.request_snapshot(kwargs, api), "answer": answer}
+        except Exception:
+            return None
 
     def _guard(kwargs, model, api="chat"):
         # Data protection (services/ai_gateway): what must not leave is replaced or the call is refused (AIBlocked)
@@ -195,11 +217,13 @@ def install_openai_compat_shim() -> bool:
                 try:
                     response = await orig(self, *args, **kwargs)
                 except Exception as exc:
-                    _record(error=exc, model=model, started_at=started_at, gw=gw, api=api)
+                    _record(error=exc, model=model, started_at=started_at, gw=gw, api=api, payload=_payload(gw, kwargs, api))
                     raise
+                answer = _answer(gw, response)
                 if gw is not None:
                     response = gw.finish(response)
-                _record(response=response, model=model, started_at=started_at, gw=gw, api=api)
+                _record(response=response, model=model, started_at=started_at, gw=gw, api=api,
+                        payload=_payload(gw, kwargs, api, answer))
                 return response
             _patched_async._grc_compat = True  # type: ignore[attr-defined]
             return _patched_async
@@ -212,11 +236,13 @@ def install_openai_compat_shim() -> bool:
             try:
                 response = orig(self, *args, **kwargs)
             except Exception as exc:
-                _record(error=exc, model=model, started_at=started_at, gw=gw, api=api)
+                _record(error=exc, model=model, started_at=started_at, gw=gw, api=api, payload=_payload(gw, kwargs, api))
                 raise
+            answer = _answer(gw, response)
             if gw is not None:
                 response = gw.finish(response)
-            _record(response=response, model=model, started_at=started_at, gw=gw, api=api)
+            _record(response=response, model=model, started_at=started_at, gw=gw, api=api,
+                    payload=_payload(gw, kwargs, api, answer))
             return response
         _patched._grc_compat = True  # type: ignore[attr-defined]
         return _patched
@@ -246,6 +272,12 @@ def install_openai_compat_shim() -> bool:
 # Install at import time so every layer that imports this module — the running
 # app *and* standalone scripts (e.g. artifact generation) — gets the shim.
 install_openai_compat_shim()
+
+# A tracing service sees a prompt before the shim's data-protection guard has cleaned it (LangSmith wraps the client
+# from outside), so tracing is off for the whole process, whatever the environment says. The tenant's own usage ledger
+# (ai_usage_events, and the sanitised prompts in services/ai_gateway/ledger.py) replaces it.
+for _tracing_flag in ("LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING", "LANGSMITH_TRACING"):
+    os.environ[_tracing_flag] = "false"
 
 
 # ----- LangSmith (AI usage tracing / monitoring) ----------------------------

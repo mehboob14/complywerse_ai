@@ -257,3 +257,47 @@ def test_a_real_feature_is_protected_without_a_single_change_to_its_code(wire, m
     assert out.suggested_recommendations == [f"isolate {CANARIES['asset']}"]
     gateway = wire.records[-1]["gateway"]
     assert gateway["registered"] is True and gateway["use_case"] == "erm.risk_suggest" and gateway["level"] == "L2"
+
+
+def test_a_scanned_pdf_is_read_on_this_server_and_its_pages_are_never_sent(wire, monkeypatch, tmp_path):
+    import io
+    from types import SimpleNamespace
+
+    fitz = pytest.importorskip("fitz")
+    from PIL import Image, ImageDraw, ImageFont
+    from grc.modules.compliance_plugins.pdf_ingest.extract_pages import _resolve_tesseract_cmd
+    from grc.modules.evidence.routers import ocr
+
+    if not _resolve_tesseract_cmd():
+        pytest.skip("Tesseract is not installed on this machine")
+    picture = Image.new("RGB", (1600, 500), "white")
+    try:
+        font = ImageFont.truetype("arial.ttf", 56)
+    except OSError:
+        font = ImageFont.load_default(size=56)
+    ImageDraw.Draw(picture).text((60, 80), "Access review completed on schedule", fill="black", font=font)
+    png = io.BytesIO()
+    picture.save(png, "PNG")
+    pdf = fitz.open()
+    pdf.new_page(width=595, height=842).insert_image(fitz.Rect(20, 100, 575, 300), stream=png.getvalue())
+    path = tmp_path / "scan.pdf"
+    path.write_bytes(pdf.tobytes())
+
+    monkeypatch.setattr(ocr, "get_openai_client", lambda: wire.client)         # any attempt to send the pages would show up
+    assert ocr.extract_text_from_pdf(str(path)) is None                          # no text layer: it really is a scan
+    evidence = SimpleNamespace(id=1, file_name="scan.pdf", file_path=str(path), ocr_status=None, ocr_processed_at=None,
+                               ocr_content=None, tenant_id=1)
+    done = ocr.process_evidence_ocr(evidence, SimpleNamespace(commit=lambda: None))
+    assert done.status == "completed" and "Access review completed on schedule" in done.extracted_text
+    assert evidence.ocr_status == "completed" and wire.bodies == []
+
+
+def test_tracing_to_an_outside_service_is_off_whatever_the_environment_says(monkeypatch):
+    import os
+
+    from grc.services.ai_tracing import wrap_openai_for_tracing
+
+    monkeypatch.setenv("LANGSMITH_API_KEY", "ls-test-key")          # a configured service must not switch it on
+    client = object()
+    assert wrap_openai_for_tracing(client, feature="complychat") is client
+    assert {os.environ[k] for k in ("LANGCHAIN_TRACING_V2", "LANGCHAIN_TRACING", "LANGSMITH_TRACING")} == {"false"}

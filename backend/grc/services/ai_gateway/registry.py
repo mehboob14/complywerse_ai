@@ -315,7 +315,7 @@ USE_CASES: Tuple[UseCase, ...] = (
         "Splits a policy into its individual statements so they can be mapped to controls.", "Governance › Documents",
         "auto", "DOC", "L3", ("document",), _G + "policy_parser.py:parse_policy_statements_with_openai"),
     _uc("governance.vision_ocr", "Read scanned pages with AI vision",
-        "Reads a scanned document or image when no text can be extracted on our own servers.", "Governance › Documents",
+        "A scanned document or image is read on our own servers. If no text can be read there, the picture is not sent to an outside AI: it is refused.", "Governance › Documents",
         "auto", "VISION", "L4", ("upload",), _G + "policy_parser.py:_vision_transcribe_png", modality="vision"),
     _uc("governance.statement_mapping", "Map policy statements to controls",
         "Proposes which controls each statement of a document satisfies.", "Governance › Documents",
@@ -406,7 +406,7 @@ USE_CASES: Tuple[UseCase, ...] = (
         "click", "DOC", "L3", ("evidence", "control", "risk", "asset", "document"),
         "modules/evidence/routers/ai_assessment.py:_ai_select_targets"),
     _uc("evidence.vision_ocr", "Read scanned evidence with AI vision",
-        "Reads a scanned PDF or image when no text can be extracted on our own servers.", "Evidence Management",
+        "A scanned PDF or image is read on our own servers. If no text can be read there, the picture is not sent to an outside AI: it is refused.", "Evidence Management",
         "auto", "VISION", "L4", ("evidence", "upload"), "modules/evidence/routers/ocr.py:extract_text_with_vision",
         modality="vision"),
 
@@ -605,6 +605,21 @@ for _u in USE_CASES:
 
 def get(use_case_id: str) -> Optional[UseCase]:
     return _BY_ID.get(use_case_id)
+
+
+def match_event(callsite: str, feature: str) -> List[UseCase]:
+    """Use cases for a ledger event: by the function the event names, else by the line it was recorded at, else by the
+    file (code moves, and an explicit feature key need not be a function name; a file with one use case is unambiguous)."""
+    path, _, line = (callsite or "").partition(":")
+    hits = [u for (p, fn), ucs in _BY_SITE.items() if p == path and fn.strip("_") == (feature or "") for u in ucs]
+    if not hits and line.isdigit():
+        from . import callsites
+        function = callsites.enclosing_function(path, int(line))
+        if function:
+            hits = lookup(path, function.rsplit(".", 1)[-1])
+    if not hits:
+        hits = [u for (p, _fn), ucs in _BY_SITE.items() if p == path for u in ucs]
+    return list({u.id: u for u in hits}.values())
 
 
 def lookup(path: str, function: str) -> List[UseCase]:

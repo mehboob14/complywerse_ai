@@ -42,6 +42,7 @@ import {
   Zap,
   Bookmark,
   Building2,
+  Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -506,6 +507,7 @@ const ADMIN_POPOVER_ITEMS: Array<{ id: string; label: string; icon: LucideIcon; 
   { id: 'company',          label: 'Company',            icon: Settings },
   { id: 'users',            label: 'User Management',    icon: Users },
   { id: 'ai-usage',         label: 'Token usage',        icon: BarChart3, href: '/admin/ai-usage' },
+  { id: 'ai-governance',    label: 'AI Governance',      icon: Sparkles, href: '/admin/ai-governance' },
   { id: 'roles',            label: 'Role Management',    icon: ShieldCheck },
   { id: 'teams',            label: 'Teams',              icon: Users },
   { id: 'password-policy',  label: 'Password Policy',    icon: Shield },

@@ -23,6 +23,7 @@ class AIUsageEvent(Base):
     module_key = Column(String(100), nullable=False, index=True)
     feature_key = Column(String(150), nullable=False, index=True)
     attribution_source = Column(String(30), nullable=False, default="callsite")
+    use_case_id = Column(String(150), nullable=True, index=True)     # the registry use case the data-protection guard found
     endpoint = Column(String(500), nullable=True)
     http_method = Column(String(10), nullable=True)
 

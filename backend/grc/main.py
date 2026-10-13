@@ -316,6 +316,9 @@ app.include_router(automation_frameworks_router)
 app.include_router(connect_wizard_router)
 app.include_router(access_review_router)
 app.include_router(admin_ai_usage_router)
+# Administration -> AI Governance: what AI is used for and every call that was made (read-only; grc/modules/ai_governance)
+from .modules.ai_governance.router import router as ai_governance_router  # noqa: E402
+app.include_router(ai_governance_router)
 
 # Every route is in: put the write endpoints of route files the workflow
 # catalog's scanner does not read (Controls Automation, Reports, IT assets,

@@ -226,6 +226,24 @@ def extract_text_from_plain_file(file_path: str) -> Optional[str]:
     return extracted_text if extracted_text else None
 
 
+SCAN_PAGE_CAP = 25      # pages of one scanned file read by local OCR (3-5 s a page); the rest is not read
+
+
+def extract_text_from_scanned_pdf(file_path: str) -> Optional[str]:
+    """A PDF with no text layer, read page by page on this server (text layer, then Tesseract): no page image ever
+    leaves the machine."""
+    try:
+        from ...compliance_plugins.pdf_ingest.extract_pages import extract_all_pages
+
+        with open(file_path, "rb") as handle:
+            pages = list(extract_all_pages(handle.read(), max_pages=SCAN_PAGE_CAP))
+    except Exception as exc:
+        logger.warning("Local OCR of the scanned PDF %s failed: %s", file_path, exc)
+        return None
+    text = "\n\n".join(p["text"].strip() for p in pages if (p.get("text") or "").strip())
+    return text or None
+
+
 def extract_text_with_tesseract(file_path: str, file_type: str) -> Optional[str]:
     if file_type not in IMAGE_FILE_TYPES:
         return None
@@ -438,6 +456,8 @@ def process_evidence_ocr(evidence: Evidence, db: Session) -> OCRProcessResponse:
         
         if file_type == "pdf":
             extracted_text = extract_text_from_pdf(resolved_file_path)
+            if not extracted_text:       # a scan: read it here first; the picture itself is never sent anywhere
+                extracted_text = extract_text_from_scanned_pdf(resolved_file_path)
             if not extracted_text:
                 extracted_text = extract_text_with_vision(resolved_file_path, file_type)
         elif file_type in DOCX_FILE_TYPES:

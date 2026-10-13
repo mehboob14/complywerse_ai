@@ -50,3 +50,4 @@ from ._pentest_exploit_results import PentestExploitResult  # noqa: F401 - pente
 from ._pentest_event_log import PentestEventLog  # noqa: F401 - AVA/GRC pentest all-stage event log
 from ._75_tpra_leaks_logos import *  # noqa: F401,F403 - own-domain code leaks and supplier logos
 from ._76_electronic_signatures import *  # noqa: F401,F403 - signatures drawn on screen, sealed and kept with the record
+from ._77_ai_call_payloads import *  # noqa: F401,F403 - the prompts and answers of AI calls, encrypted, kept for a while

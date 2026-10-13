@@ -386,6 +386,11 @@ PERMISSION_MATRIX = [
                 "actions": ["view"]
             },
             {
+                "name": "ai_governance",
+                "display_name": "AI Governance",
+                "actions": ["view", "payloads"]
+            },
+            {
                 "name": "settings",
                 "display_name": "Settings",
                 "actions": ["view", "edit"]

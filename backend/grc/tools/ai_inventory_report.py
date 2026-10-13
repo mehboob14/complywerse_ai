@@ -51,18 +51,7 @@ def _routes(path: str, qualname: str) -> list:
     return methods
 
 
-def match_event(callsite: str, feature: str) -> list:
-    """Use cases for a ledger event: by the function the event names, else by the line it was recorded at, else by the
-    file (code moves, and an explicit feature key need not be a function name; a file with one use case is unambiguous)."""
-    path, _, line = (callsite or "").partition(":")
-    hits = [u for (p, fn), ucs in registry._BY_SITE.items() if p == path and fn.strip("_") == (feature or "") for u in ucs]
-    if not hits and line.isdigit():
-        function = callsites.enclosing_function(path, int(line))
-        if function:
-            hits = registry.lookup(path, function.rsplit(".", 1)[-1])
-    if not hits:
-        hits = [u for (p, _fn), ucs in registry._BY_SITE.items() if p == path for u in ucs]
-    return list({u.id: u for u in hits}.values())
+match_event = registry.match_event
 
 
 def registry_summary() -> list:

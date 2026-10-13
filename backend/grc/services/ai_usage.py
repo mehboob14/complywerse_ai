@@ -380,9 +380,12 @@ def record_provider_attempt(
     started_at: Optional[float] = None,
     context: Optional[AIUsageContext] = None,
     gateway: Optional[dict] = None,
+    payload: Optional[dict] = None,
 ) -> None:
     """``context`` is the one ``resolve_context()`` already found (the data-protection guard resolves it before the
-    call); ``gateway`` is the guard's report for the call (counts and decisions only, never a value)."""
+    call); ``gateway`` is the guard's report for the call (counts and decisions only, never a value); ``payload`` is
+    ``{"request": the prompt as sent, "answer": the model's text}`` to keep, encrypted, for the administrator
+    (services/ai_gateway/ledger.py)."""
     if not enabled():
         return
     if context is None:
@@ -413,7 +416,8 @@ def record_provider_attempt(
 
         db = open_tenant_session(context.tenant_slug)
         try:
-            db.add(AIUsageEvent(
+            event = AIUsageEvent(
+                use_case_id=(gateway or {}).get("use_case") or None,
                 request_id=context.request_id,
                 operation_id=operation_id,
                 background_job_id=context.background_job_id,
@@ -442,8 +446,18 @@ def record_provider_attempt(
                 duration_ms=duration_ms,
                 attempt_number=_next_attempt(operation_id),
                 usage_metadata={"callsite": site_label, **({"gateway": gateway} if gateway else {})},
-            ))
+            )
+            db.add(event)
             db.commit()
+            if payload:         # the event is safe first: keeping the text is separate and may fail on its own
+                try:
+                    from .ai_gateway import ledger
+                    if ledger.store(db, event.id, payload.get("request") or {}, payload.get("answer")):
+                        ledger.purge_sometimes(db)
+                        db.commit()
+                except Exception:
+                    db.rollback()
+                    logger.exception("the prompt of AI call %s could not be kept", event.id)
         finally:
             db.close()
     except Exception:
