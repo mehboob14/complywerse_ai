@@ -35,12 +35,11 @@ if not OPENAI_API_KEY:
 
 # Initialize OpenAI client
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
-api_key_preview = f"{OPENAI_API_KEY[:8]}...{OPENAI_API_KEY[-8:]}"
 logger.info("="*80)
 logger.info("[START] GRC SQL AGENT - PURE SQL MODE (NO CHROMADB)")
 logger.info("="*80)
 logger.info(f"[MODEL] Model: gpt-4o-mini (OpenAI)")
-logger.info(f"[KEY] API Key: {api_key_preview}")
+logger.info("[KEY] API key: configured")      # never log any part of the key
 logger.info(f"[DIR] Config: {backend_env_path}, {env_path}")
 logger.info("[YES] Status: ACTIVE & READY")
 logger.info("="*80)

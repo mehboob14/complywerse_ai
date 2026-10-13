@@ -843,7 +843,7 @@ function AISection({
           )}
           <div className="text-[10px] text-slate-500">
             Generated {entry.ai_generated_at ? new Date(entry.ai_generated_at).toLocaleString() : ''}
-            {entry.ai_model && <span className="ml-1">· model {entry.ai_model}</span>}
+            {entry.ai_model && <span className="ml-1">· {entry.ai_model === 'rules.v1' ? 'rule-based suggestion' : 'AI-generated'}</span>}
           </div>
         </div>
       )}

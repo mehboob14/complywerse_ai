@@ -113,6 +113,11 @@ class AISuggestRequest(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
+def _public_ai_model(model: Optional[str]) -> Optional[str]:
+    """Pages say 'AI', never a model or vendor name; the row keeps the real name, the API shows this."""
+    return model if not model or model == "rules.v1" else "AI"
+
+
 def _serialize(e: AIRiskAssessmentEntry) -> Dict[str, Any]:
     return {
         "id": e.id,
@@ -138,7 +143,7 @@ def _serialize(e: AIRiskAssessmentEntry) -> Dict[str, Any]:
         "ai_suggested_residual_level": e.ai_suggested_residual_level,
         "ai_rationale": e.ai_rationale,
         "ai_generated_at": e.ai_generated_at.isoformat() if e.ai_generated_at else None,
-        "ai_model": e.ai_model,
+        "ai_model": _public_ai_model(e.ai_model),
         "ai_suggestion_accepted": bool(e.ai_suggestion_accepted),
         "source": e.source,
         "source_file_name": e.source_file_name,

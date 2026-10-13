@@ -1,6 +1,7 @@
 from ..config import get_openai_api_key, get_openai_model
 
 import os
+import re
 import json
 import logging
 from typing import Optional
@@ -31,6 +32,9 @@ router = APIRouter(
     tags=["Dashboard"],
     dependencies=[Depends(require_tenant_permission("dashboard:overview:view"))],
 )
+
+# the labels the AI insights prompt uses instead of titles and file names (see get_ai_insights)
+_LABEL = re.compile(r"(?:Evidence|Risk|Mitigation action|RCSA assessment) #\d+(?!\d)")
 
 
 def calculate_framework_compliance(framework_id: int, user_tenants: list, db: Session) -> dict:
@@ -1052,8 +1056,29 @@ def get_ai_insights(
         "pending_assessments": pending_assessments
     }
     
+    # This runs on every dashboard load and every few minutes without a click, so the model sees counts, scores and
+    # labels such as "Risk #12", never titles or file names; the labels are swapped back in the answer below.
+    names: dict = {}
+
+    def _label(kind: str, ident: int, real: str) -> str:
+        names[f"{kind} #{ident}"] = real
+        return f"{kind} #{ident}"
+
+    ai_signals = {
+        "compliance_gaps": compliance_gaps[:5],
+        "expiring_evidence": [{"id": e["id"], "label": _label("Evidence", e["id"], e["name"]),
+                               "days_until_expiry": e["days_until_expiry"]} for e in expiring_evidence[:5]],
+        "risks_without_controls": [{"id": r["id"], "label": _label("Risk", r["id"], r["title"]),
+                                    "risk_category": r["risk_category"], "inherent_score": r["inherent_score"]}
+                                   for r in risks_without_controls[:5]],
+        "overdue_mitigations": [{"id": m["id"], "label": _label("Mitigation action", m["id"], m["title"]),
+                                 "days_overdue": m["days_overdue"], "risk_id": m["risk_id"]} for m in overdue_mitigations[:5]],
+        "pending_assessments": [{"id": a["id"], "label": _label("RCSA assessment", a["id"], a["name"]),
+                                 "status": a["status"], "type": a["type"]} for a in pending_assessments[:5]],
+    }
+
     recommendations = []
-    
+
     try:
         client = get_openai_client()
         if client:
@@ -1061,11 +1086,12 @@ def get_ai_insights(
 
 COMPLIANCE SIGNALS:
 - Compliance Gaps (frameworks below 70% coverage): {json.dumps(compliance_gaps[:5])}
-- Expiring Evidence (next 30 days): {json.dumps(expiring_evidence[:5])}
-- Risks Without Controls: {json.dumps(risks_without_controls[:5])}
-- Overdue Mitigations: {json.dumps(overdue_mitigations[:5])}
-- Pending Assessments: {json.dumps(pending_assessments[:5])}
+- Expiring Evidence (next 30 days): {json.dumps(ai_signals["expiring_evidence"])}
+- Risks Without Controls: {json.dumps(ai_signals["risks_without_controls"])}
+- Overdue Mitigations: {json.dumps(ai_signals["overdue_mitigations"])}
+- Pending Assessments: {json.dumps(ai_signals["pending_assessments"])}
 
+Refer to items by their label exactly as given (for example "Risk #12").
 Generate 4-6 prioritized recommendations. Prioritize by business impact - focus on critical compliance gaps and high-risk items first.
 
 Return ONLY a JSON array of recommendations with this structure:
@@ -1107,10 +1133,16 @@ Use these action_link patterns:
                 response_text = response_text[:-3]
             
             recommendations = json.loads(response_text.strip())
-            
+
+            def _real(text):
+                return _LABEL.sub(lambda m: names.get(m.group(0), m.group(0)), text) if isinstance(text, str) else text
+
             for i, rec in enumerate(recommendations):
                 rec["id"] = i + 1
-            
+                for field in ("title", "rationale", "action_text"):
+                    if field in rec:
+                        rec[field] = _real(rec[field])
+
         else:
             recommendations = generate_deterministic_recommendations(signals, framework_coverage)
             
