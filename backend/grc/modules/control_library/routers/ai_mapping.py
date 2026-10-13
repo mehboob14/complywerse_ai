@@ -251,38 +251,6 @@ Only include pairs with similarity_score >= 0.5."""
         )
 
 
-def extract_control_keywords(control_text: str) -> List[str]:
-    client = get_openai_client()
-    
-    prompt = f"""Extract the key compliance terms and concepts from this control requirement:
-
-{control_text[:1500]}
-
-Return a JSON object with an array of 5-10 key terms:
-{{"keywords": ["term1", "term2", ...]}}"""
-
-    try:
-        response = client.chat.completions.create(
-            model=get_openai_model(),
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a compliance expert extracting key terms. Respond only with valid JSON."
-                },
-                {"role": "user", "content": prompt}
-            ],
-            response_format={"type": "json_object"},
-            max_tokens=500,
-            temperature=0.3
-        )
-        
-        result_text = response.choices[0].message.content or '{"keywords": []}'
-        result = json.loads(result_text)
-        return result.get("keywords", [])
-    except:
-        return []
-
-
 def get_control_text(control_type: str, control_id: int, db: Session) -> Optional[str]:
     """Control text for an AI prompt. Its only callers build prompts, so an SCF
     control is refused here rather than handed back."""

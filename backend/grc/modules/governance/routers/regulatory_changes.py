@@ -914,29 +914,6 @@ def _persist_impact(
     }
 
 
-def _analyze_and_persist(
-    db: Session,
-    change: RegulatoryChange,
-    document_text: str,
-    current_user: GRCUser,
-    *,
-    update_change_fields: bool,
-    title_hint: Optional[str] = None,
-    filename: Optional[str] = None,
-    obligations: Optional[List[dict]] = None,
-) -> dict:
-    """The impact analysis in one go: prompt, answer, written."""
-    from ..regulatory_engine import IMPACT_SCHEMA, llm_json
-
-    prompt, state = _impact_context(db, change, document_text, obligations)
-    try:
-        analysis, _model = llm_json(IMPACT_SYSTEM, prompt, IMPACT_SCHEMA, "regulatory_impact", max_output_tokens=48000)
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"AI extraction failed: {str(e)}")
-    return _persist_impact(db, change, analysis, current_user, state, update_change_fields=update_change_fields,
-                           title_hint=title_hint, filename=filename)
-
-
 def _file_type(filename: str) -> str:
     """The extractor's file type for an upload; anything unknown is sniffed by content."""
     ext = (filename.rsplit(".", 1)[-1] if "." in filename else "").lower()

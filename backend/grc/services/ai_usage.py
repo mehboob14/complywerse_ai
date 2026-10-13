@@ -47,11 +47,17 @@ _request_holder: ContextVar[Optional[dict]] = ContextVar("ai_usage_request_holde
 
 # Process-local diagnostics so a mis-wired call path is visible instead of silent.
 _dropped_no_tenant = 0
+_dropped_sites: dict[str, int] = {}
 
 
 def dropped_event_count() -> int:
     """Number of provider attempts dropped this process for lack of tenant context."""
     return _dropped_no_tenant
+
+
+def dropped_event_sites() -> dict[str, int]:
+    """The same drops by call site (``path:line``): the call paths that need ``usage_scope(tenant_slug=...)``."""
+    return dict(_dropped_sites)
 
 
 def new_request_holder(*, tenant_slug=None, endpoint=None, http_method=None, request_id=None) -> dict:
@@ -353,10 +359,12 @@ def record_provider_attempt(
     if not context.tenant_slug:
         global _dropped_no_tenant
         _dropped_no_tenant += 1
+        site = _callsite_attribution()[2]
+        _dropped_sites[site] = _dropped_sites.get(site, 0) + 1
         logger.warning(
-            "AI usage event dropped: no tenant context resolved (endpoint=%s, dropped_so_far=%d). "
+            "AI usage event dropped: no tenant context resolved (call site=%s, endpoint=%s, dropped_so_far=%d). "
             "Wrap background/non-request provider calls in usage_scope(tenant_slug=...).",
-            context.endpoint, _dropped_no_tenant,
+            site, context.endpoint, _dropped_no_tenant,
         )
         return
     module, feature, callsite = _callsite_attribution()
