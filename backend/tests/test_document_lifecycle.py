@@ -240,7 +240,7 @@ def test_other_organisations_are_untouched_until_switched_on(world, monkeypatch)
         participants(db)
         signoff.send_for_review(5, db, user(db, 1))
         assert obligations(db) == [] and tasks(db) == [] and not life.enabled(db)
-        assert life.sweep(db) == {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0}
+        assert life.sweep(db) == {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0}
         monkeypatch.setattr("grc.config.DOCUMENT_LIFECYCLE_TENANTS", frozenset({"*"}))          # the quick switch for every tenant
         assert life.enabled(db)
 
@@ -284,3 +284,137 @@ def test_deleting_the_document_removes_its_requests_and_their_tasks(world):
         assert obligations(db) and tasks(db)
         delete_document(document_id=5, db=db, current_user=user(db, 1))
         assert obligations(db) == [] and tasks(db) == []
+
+
+# ── the second round: settings, email, workflow actions and events, "my requests" ──
+def sent_channels(monkeypatch):
+    calls = []
+    import grc.modules.workflow_engine.services.notification_service as ns
+    real = ns.send_workflow_notification
+
+    def spy(db, **kw):
+        calls.append((kw["subject"], tuple(kw["channels"])))
+        return real(db, **{**kw, "channels": ["in_app"]})      # no mail server in a test
+    monkeypatch.setattr(ns, "send_workflow_notification", spy)
+    return calls
+
+
+def test_the_organisation_sets_how_long_people_have_and_when_escalation_starts(world):
+    with world.factory() as db:
+        assert life.settings(db, 1)["approval_days"] == 7 and life.settings(db, 1)["ack_days"] == 14
+        saved = life.save_settings(db, 1, {"approval_days": 3, "ack_days": 30, "admin_after_days": 2, "email": False}, 1)
+        assert (saved["approval_days"], saved["ack_days"], saved["admin_after_days"], saved["email"]) == (3, 30, 2, False)
+        for bad in ({"approval_days": 0}, {"ack_days": 999}, {"nope": 1}):
+            with pytest.raises(ValueError):
+                life.save_settings(db, 1, bad, 1)
+        participants(db)
+        signoff.send_for_review(5, db, user(db, 1))
+        assert all(o.due_date < datetime.utcnow() + timedelta(days=3, minutes=1) for o in obligations(db))
+        d = doc(db)
+        d.status = "published"
+        life.ensure_acknowledgements(db, d, 1)
+        assert obligations(db, "acknowledgement")[0].due_date > datetime.utcnow() + timedelta(days=29)
+        ob = db.query(m.DocumentObligation).filter_by(user_id=6, kind="acknowledgement").one()
+        ob.due_date = datetime.utcnow() - timedelta(days=3)
+        db.commit()
+        assert life.sweep(db)["owner_told"] == 1
+        ob.due_date = datetime.utcnow() - timedelta(days=2, hours=1)         # the administrators' wait is now 2 days
+        db.commit()
+        assert life.sweep(db)["admins_told"] == 1
+
+
+def test_requests_are_emailed_and_the_organisation_can_turn_that_off(world, monkeypatch):
+    calls = sent_channels(monkeypatch)
+    with world.factory() as db:
+        participants(db)
+        signoff.send_for_review(5, db, user(db, 1))
+        assert ("Review requested: Access policy", ("in_app", "email")) in calls
+        assert all(o.emailed_at for o in obligations(db, "review"))
+        calls.clear()
+        life.save_settings(db, 1, {"email": False}, 1)
+        signoff.reject_document(5, signoff.RejectRequest(comment="no"), db, user(db, 2))
+        assert calls and all(channels == ("in_app",) for _s, channels in calls)
+
+
+def test_a_publication_alerts_in_the_app_and_the_daily_sweep_sends_one_email_per_person(world, monkeypatch):
+    calls = sent_channels(monkeypatch)
+    with world.factory() as db:
+        d = doc(db)
+        d.status = "published"
+        life.ensure_acknowledgements(db, d, 1)
+        db.commit()
+        assert calls and all(channels == ("in_app",) for _s, channels in calls)       # the whole organisation at once: no mail yet
+        calls.clear()
+        out = life.sweep(db)
+        assert out["emailed"] == 7 and sum(1 for _s, ch in calls if ch == ("in_app", "email")) >= 7
+        calls.clear()
+        assert life.sweep(db)["emailed"] == 0                                           # once
+
+
+def test_the_workflow_can_create_a_real_task_and_request_acknowledgements(world):
+    from grc.modules.workflow_engine.services.action_handlers import WorkflowActionHandlers as H
+
+    with world.factory() as db:
+        instance, definition = SimpleNamespace(id=1, tenant_id=1), SimpleNamespace(id=1, name="Escalate late approvals")
+        out = H._create_policy_review_task(db, instance, definition, {"resource_type": "grc_governance_documents", "resource_id": 5, "due_days": 5})
+        task = db.get(m.CriticalTask, out["task_id"])
+        assert (task.title, task.assigned_user_ids, task.source_module) == ("Review: Access policy", [1], "workflow_engine")
+        assert task.due_date > datetime.utcnow() + timedelta(days=4)
+
+        d = doc(db)
+        assert H._request_attestation(db, instance, definition, {"document_id": 5})["requested"] == 0       # not published yet
+        d.status = "published"
+        db.commit()
+        got = H._request_attestation(db, instance, definition, {"document_id": 5, "assignee_user_ids": [2, 6, 8], "deadline_days": 4})
+        assert got["requested"] == 2                                                                   # the deactivated user is not asked
+        assert {o.user_id for o in obligations(db, "acknowledgement")} == {2, 6}
+
+        # an overdue obligation names its document
+        ob = obligations(db, "acknowledgement")[0]
+        assert life.document_for_event(db, 1, {"resource_type": "grc_document_obligations", "resource_id": ob.id}).id == 5
+
+
+def test_sign_off_and_acknowledgement_raise_events_workflows_can_use():
+    from grc.modules.workflow_engine.services.catalog import ENDPOINT_TRIGGERS, TRIGGER_NODE_TYPES, DUE_DATE_EVENTS
+
+    wanted = {"api.governance.document_signoff.send_for_review": "document_sent_for_review",
+              "api.governance.document_signoff.sign_document": "document_signed_off",
+              "api.governance.document_signoff.reject_document": "document_rejected",
+              "api.governance.document_lifecycle.acknowledge": "document_acknowledged"}
+    for endpoint, key in wanted.items():
+        assert any(k == key for k, _when in ENDPOINT_TRIGGERS[endpoint])
+    keys = {t["key"] for t in TRIGGER_NODE_TYPES}
+    assert set(wanted.values()) | {"document_obligation_overdue"} <= keys
+    assert any(e[0] == "document_obligation_overdue" and e[3] == "DocumentObligation" for e in DUE_DATE_EVENTS)
+
+
+def test_my_requests_across_documents_and_the_settings_routes(world):
+    from grc.models import get_db
+    from grc.modules.governance.routers.document_lifecycle import router
+
+    app = FastAPI()
+    app.include_router(router)
+    db = world.factory()
+    me = {"u": user(db, 6)}
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: me["u"]
+    client = TestClient(app)
+    d = doc(db)
+    d.status = "published"
+    db.add(m.GovernanceDocument(id=6, tenant_id=1, title="Backup policy", doc_type="policy", status="published", current_version="1.0", owner_id=1))
+    db.flush()
+    life.ensure_acknowledgements(db, d, 1)
+    life.ensure_acknowledgements(db, db.get(m.GovernanceDocument, 6), 1)
+    db.commit()
+
+    mine = client.get("/documents/lifecycle/mine").json()
+    assert mine["total"] == 2 and {i["title"] for i in mine["items"]} == {"Access policy", "Backup policy"}
+    assert client.get("/documents/lifecycle/settings").json()["can_edit"] is False
+    assert client.put("/documents/lifecycle/settings", json={"ack_days": 21}).status_code == 403          # not an administrator
+    me["u"] = user(db, 7)
+    got = client.put("/documents/lifecycle/settings", json={"ack_days": 21, "email": False}).json()
+    assert got["settings"]["ack_days"] == 21 and got["settings"]["email"] is False and got["can_edit"]
+    assert client.put("/documents/lifecycle/settings", json={"ack_days": 0}).status_code == 400
+    db.query(m.Tenant).one().slug = "acme"
+    db.commit()
+    assert client.get("/documents/lifecycle/mine").json() == {"enabled": False, "items": []}

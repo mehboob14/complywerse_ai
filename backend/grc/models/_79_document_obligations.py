@@ -3,7 +3,7 @@
 "who has not acknowledged" are plain queries, and each pending row has a twin in Task Management."""
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Index, Integer, String, Text
 
 from ._00_base import Base
 
@@ -30,8 +30,20 @@ class DocumentObligation(Base):
     reminded_at = Column(DateTime, nullable=True)
     escalation_level = Column(Integer, nullable=False, default=0)    # 0 none, 1 owner told, 2 tenant administrators told
     escalated_at = Column(DateTime, nullable=True)
+    emailed_at = Column(DateTime, nullable=True)                  # when the person was emailed about it, if email is on
 
     __table_args__ = (
         Index("ix_doc_obligation_doc_kind", "document_id", "kind", "status"),
         Index("ix_doc_obligation_user", "user_id", "status"),
     )
+
+
+class DocumentLifecycleSettings(Base):
+    """Per organisation: how long approvals and acknowledgements are given and when escalation starts."""
+    __tablename__ = "grc_document_lifecycle_settings"
+
+    id = Column(Integer, primary_key=True)
+    tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, unique=True)
+    config = Column(JSON, nullable=False, default=dict)
+    updated_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)

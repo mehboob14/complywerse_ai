@@ -22,10 +22,15 @@ from typing import Any, Dict, Iterable, List, Optional
 
 logger = logging.getLogger(__name__)
 
-APPROVAL_DAYS = int(os.getenv("DOCUMENT_APPROVAL_DUE_DAYS", "7"))
-ACK_DAYS = int(os.getenv("DOCUMENT_ACK_DUE_DAYS", "14"))
-REMIND_DAYS = 3             # a reminder this many days before the due date
-ADMIN_AFTER_DAYS = 7        # tenant administrators are told this long after the due date
+# Defaults, overridable per organisation (Settings in the Approvals & Acknowledgements tab; ``settings``).
+DEFAULTS: Dict[str, Any] = {
+    "approval_days": int(os.getenv("DOCUMENT_APPROVAL_DUE_DAYS", "7")),     # a reviewer or approver is given this long
+    "ack_days": int(os.getenv("DOCUMENT_ACK_DUE_DAYS", "14")),              # an acknowledgement is given this long
+    "remind_days": 3,                                                       # a reminder this many days before the due date
+    "admin_after_days": 7,                                                  # tenant administrators are told this long after the due date
+    "email": True,                                                          # also email, where the organisation has email set up
+}
+_LIMITS = {"approval_days": (1, 365), "ack_days": (1, 365), "remind_days": (0, 60), "admin_after_days": (1, 365)}
 SOURCE_MODULE = "document_lifecycle"
 SOURCE_TYPE = "DocumentObligation"
 _STAGE_KIND = {"reviewer": "review", "approver": "approval"}
@@ -39,6 +44,37 @@ def enabled(db) -> bool:
 
     tenant = db.query(Tenant).first()
     return bool(tenant and ("*" in DOCUMENT_LIFECYCLE_TENANTS or (tenant.slug or "").lower() in DOCUMENT_LIFECYCLE_TENANTS))
+
+
+def settings(db, tenant_id: int) -> Dict[str, Any]:
+    from ...models import DocumentLifecycleSettings
+
+    row = db.query(DocumentLifecycleSettings).filter(DocumentLifecycleSettings.tenant_id == tenant_id).first()
+    return {**DEFAULTS, **{k: v for k, v in ((row.config if row else None) or {}).items() if k in DEFAULTS}}
+
+
+def save_settings(db, tenant_id: int, patch: Dict[str, Any], user_id: Optional[int] = None) -> Dict[str, Any]:
+    from ...models import DocumentLifecycleSettings
+
+    current = settings(db, tenant_id)
+    for key, value in (patch or {}).items():
+        if key not in DEFAULTS:
+            raise ValueError(f"unknown setting: {key}")
+        if key == "email":
+            current[key] = bool(value)
+            continue
+        low, high = _LIMITS[key]
+        number = int(value)
+        if not low <= number <= high:
+            raise ValueError(f"{key} must be between {low} and {high}")
+        current[key] = number
+    row = db.query(DocumentLifecycleSettings).filter(DocumentLifecycleSettings.tenant_id == tenant_id).first()
+    if row is None:
+        row = DocumentLifecycleSettings(tenant_id=tenant_id, config={})
+        db.add(row)
+    row.config, row.updated_by, row.updated_at = dict(current), user_id, datetime.utcnow()
+    db.commit()
+    return current
 
 
 def _safe(fn):
@@ -65,15 +101,17 @@ def _names(db, ids: Iterable[int]) -> Dict[int, str]:
     return {i: (d or u or f"User #{i}") for i, d, u in rows}
 
 
-def _notify(db, doc, user_ids: Iterable[Optional[int]], subject: str, message: str, kind: str = "info") -> None:
+def _notify(db, doc, user_ids: Iterable[Optional[int]], subject: str, message: str, kind: str = "info", email: bool = False) -> None:
+    """An in-app alert, and an email as well when ``email`` and the organisation has it on (and has email set up)."""
     ids = sorted({int(u) for u in user_ids if u})
     if not ids:
         return
     try:
         from ..workflow_engine.services.notification_service import send_workflow_notification
 
+        channels = ["in_app", "email"] if email and settings(db, doc.tenant_id)["email"] else ["in_app"]
         send_workflow_notification(db, tenant_id=doc.tenant_id, subject=subject[:500], message=message,
-                                   workflow_instance_id=None, user_ids=ids, channels=["in_app"], notification_type=kind)
+                                   workflow_instance_id=None, user_ids=ids, channels=channels, notification_type=kind)
     except Exception:       # noqa: BLE001
         logger.exception("document lifecycle: could not alert users %s", ids)
 
@@ -154,10 +192,20 @@ def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
     kind = _STAGE_KIND[stage]
     asked: List[int] = []
     for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
-        asked += _request(db, doc, kind, _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id), by, APPROVAL_DAYS, a.id)
+        asked += _request(db, doc, kind, _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id), by,
+                          settings(db, doc.tenant_id)["approval_days"], a.id)
     _notify(db, doc, asked, f"{_VERB[kind]} requested: {doc.title}",
             f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
-            f"It is in your tasks and under Governance > Documents > Approvals & Acknowledgements.", "warning")
+            f"It is in your tasks and under Governance > Documents > Approvals & Acknowledgements.", "warning", email=True)
+    _mark_emailed(db, doc.id, kind, asked)
+
+
+def _mark_emailed(db, document_id: int, kind: str, user_ids: Iterable[int]) -> None:
+    ids = list(user_ids)
+    if ids:
+        for ob in _pending(db, document_id, [kind]).all():
+            if ob.user_id in ids and ob.emailed_at is None:
+                ob.emailed_at = datetime.utcnow()
 
 
 def _cancel(db, doc, kinds: Iterable[str]) -> None:
@@ -190,7 +238,7 @@ def on_signed(db, doc, user_id: int, role_type: str, signature_id: Optional[int]
         _open_stage(db, doc, "approver", user_id)
     elif advanced_to == "approved":
         _notify(db, doc, [doc.owner_id, doc.author_id], f"Approved: {doc.title}",
-                f"\"{doc.title}\" has been approved by all its approvers and can be published.", "success")
+                f"\"{doc.title}\" has been approved by all its approvers and can be published.", "success", email=True)
 
 
 @_safe
@@ -201,7 +249,7 @@ def on_rejected(db, doc, user_id: int, role_type: str, comment: str) -> None:
         _close(db, ob, completed=True, by=user_id)
     _cancel(db, doc, ("review", "approval"))
     who = _names(db, [user_id]).get(user_id, "A reviewer")
-    _notify(db, doc, [doc.owner_id, doc.author_id], f"Rejected: {doc.title}", f"{who} rejected \"{doc.title}\": {comment}", "error")
+    _notify(db, doc, [doc.owner_id, doc.author_id], f"Rejected: {doc.title}", f"{who} rejected \"{doc.title}\": {comment}", "error", email=True)
 
 
 @_safe
@@ -236,18 +284,44 @@ def on_status_changed(db, doc, old: Optional[str], new: Optional[str], by: Optio
 
 
 def _ensure_acknowledgements(db, doc, by: Optional[int] = None) -> int:
-    from ...models import DocumentObligation, GRCUser
+    from ...models import DocumentObligation, GRCUser  # noqa: F401
 
     if doc.status != "published":
         return 0
+    return request_acknowledgements(db, doc, None, by or doc.published_by)
+
+
+def request_acknowledgements(db, doc, user_ids: Optional[Iterable[int]] = None, by: Optional[int] = None, days: Optional[int] = None) -> int:
+    """Ask people (everyone active when ``user_ids`` is None) to acknowledge the document, those not already asked or done."""
+    from ...models import DocumentObligation, GRCUser
+
     have = {uid for (uid,) in db.query(DocumentObligation.user_id).filter(
         DocumentObligation.document_id == doc.id, DocumentObligation.kind == "acknowledgement",
         DocumentObligation.status.in_(("pending", "done")))}
-    wanted = [uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.is_active.is_(True)).order_by(GRCUser.id) if uid not in have]
-    asked = _request(db, doc, "acknowledgement", wanted, by or doc.published_by, ACK_DAYS)
+    active = [uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.is_active.is_(True)).order_by(GRCUser.id)]
+    pool = active if user_ids is None else [u for u in dict.fromkeys(int(i) for i in user_ids) if u in set(active)]
+    asked = _request(db, doc, "acknowledgement", [u for u in pool if u not in have], by,
+                     days or settings(db, doc.tenant_id)["ack_days"])
     _notify(db, doc, asked, f"Please acknowledge: {doc.title}",
             f"\"{doc.title}\" has been published. Read it and acknowledge it before the due date; it is in your tasks.", "info")
     return len(asked)
+
+
+def document_for_event(db, tenant_id: int, payload: Dict[str, Any]):
+    """The governance document a workflow event is about: named in the payload, or the document of an obligation."""
+    from ...models import DocumentObligation, GovernanceDocument
+
+    doc_id = payload.get("document_id")
+    rtype, rid = payload.get("resource_type"), payload.get("resource_id")
+    if not doc_id and rtype == "grc_governance_documents":
+        doc_id = rid
+    if not doc_id and rtype == "grc_document_obligations" and rid:
+        ob = db.get(DocumentObligation, int(rid))
+        doc_id = ob.document_id if ob else None
+    try:
+        return db.query(GovernanceDocument).filter(GovernanceDocument.id == int(doc_id), GovernanceDocument.tenant_id == tenant_id).first() if doc_id else None
+    except (TypeError, ValueError):
+        return None
 
 
 ensure_acknowledgements = _safe(_ensure_acknowledgements)
@@ -281,7 +355,7 @@ def acknowledge(db, doc, user, comment: Optional[str] = None, signature_image: O
     ob.status, ob.done_at, ob.comment = "done", datetime.utcnow(), (comment or None)
     _close(db, ob, completed=True, by=user.id)
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="acknowledged",
-                     action_details=f"{name} acknowledged version {doc.current_version}" + (f": {comment}" if comment else ""),
+                     action_details=f"Acknowledged version {doc.current_version}" + (f": {comment}" if comment else ""),
                      field_changed="acknowledgement", old_value=None, new_value=name)
     db.commit()
     return ob
@@ -334,11 +408,18 @@ def timeline(db, doc, names: Dict[int, str], obligations) -> List[Dict[str, Any]
     for a in audit:
         events.append({"at": _iso(a.performed_at), "kind": a.action, "actor": names.get(a.performed_by), "detail": a.action_details,
                        "from": a.old_value, "to": a.new_value})
+    # requests made together (one send, one publication) are one event, not one line per person
+    asked: Dict[tuple, list] = {}
+    for ob in obligations:
+        asked.setdefault((ob.kind, ob.requested_by, ob.requested_at.strftime("%Y-%m-%d %H:%M")), []).append(ob)
+    for (kind, by, _minute), group in asked.items():
+        people = [names.get(o.user_id) for o in group]
+        shown = ", ".join(people[:4]) + (f" and {len(people) - 4} more" if len(people) > 4 else "")
+        due = group[0].due_date
+        events.append({"at": _iso(min(o.requested_at for o in group)), "kind": f"{kind}_requested", "actor": names.get(by),
+                       "detail": f"{_VERB[kind]} asked of {shown}" + (f", due {due:%Y-%m-%d}" if due else ""), "from": None, "to": shown})
     for ob in obligations:
         who = names.get(ob.user_id)
-        events.append({"at": _iso(ob.requested_at), "kind": f"{ob.kind}_requested", "actor": names.get(ob.requested_by),
-                       "detail": f"{_VERB[ob.kind]} asked of {who}, due {ob.due_date:%Y-%m-%d}" if ob.due_date else f"{_VERB[ob.kind]} asked of {who}",
-                       "from": None, "to": who})
         if ob.escalated_at:
             events.append({"at": _iso(ob.escalated_at), "kind": "escalated", "actor": None,
                            "detail": f"{_VERB[ob.kind]} by {who} is overdue; "
@@ -375,7 +456,7 @@ def sweep(db) -> Dict[str, int]:
     from ...models import CriticalTask, DocumentObligation, GovernanceDocument
     from ..access_review.sampling import privileged_user_ids
 
-    out = {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0}
+    out = {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0}
     if not enabled(db):
         return out
     for doc in db.query(GovernanceDocument).filter(GovernanceDocument.status == "published").all():
@@ -384,6 +465,8 @@ def sweep(db) -> Dict[str, int]:
     pending = (db.query(DocumentObligation).filter(DocumentObligation.status == "pending", DocumentObligation.due_date.isnot(None))
                .order_by(DocumentObligation.document_id).all())
     docs = {d.id: d for d in db.query(GovernanceDocument).filter(GovernanceDocument.id.in_({o.document_id for o in pending} or {0}))}
+    cfg = settings(db, next(iter(docs.values())).tenant_id) if docs else dict(DEFAULTS)
+    out["emailed"] = _email_waiting(db, pending, docs)
     owner_notes: Dict[int, List[str]] = {}
     admin_notes: Dict[int, List[str]] = {}
     names = _names(db, {o.user_id for o in pending})
@@ -393,18 +476,18 @@ def sweep(db) -> Dict[str, int]:
             continue
         ct = db.get(CriticalTask, ob.critical_task_id) if ob.critical_task_id else None
         if now < ob.due_date:
-            if ob.reminded_at is None and ob.due_date - now <= timedelta(days=REMIND_DAYS):
+            if ob.reminded_at is None and ob.due_date - now <= timedelta(days=cfg["remind_days"]):
                 _notify(db, doc, [ob.user_id], f"Due soon: {_VERB[ob.kind]} {doc.title}",
-                        f"You are asked to {_VERB[ob.kind].lower()} \"{doc.title}\" by {ob.due_date:%d %b %Y}.", "warning")
+                        f"You are asked to {_VERB[ob.kind].lower()} \"{doc.title}\" by {ob.due_date:%d %b %Y}.", "warning", email=True)
                 ob.reminded_at = now
                 out["reminded"] += 1
             continue
         line = f"{names.get(ob.user_id)} ({_VERB[ob.kind].lower()}, due {ob.due_date:%d %b})"
         if (ob.escalation_level or 0) < 1:
             ob.escalation_level, ob.escalated_at = 1, now
-            _notify(db, doc, [ob.user_id], f"Overdue: {_VERB[ob.kind]} {doc.title}", f"\"{doc.title}\" is overdue for you.", "error")
+            _notify(db, doc, [ob.user_id], f"Overdue: {_VERB[ob.kind]} {doc.title}", f"\"{doc.title}\" is overdue for you.", "error", email=True)
             owner_notes.setdefault(doc.id, []).append(line)
-        elif ob.escalation_level < 2 and now - ob.due_date >= timedelta(days=ADMIN_AFTER_DAYS):
+        elif ob.escalation_level < 2 and now - ob.due_date >= timedelta(days=cfg["admin_after_days"]):
             ob.escalation_level, ob.escalated_at = 2, now
             admin_notes.setdefault(doc.id, []).append(line)
         else:
@@ -415,12 +498,47 @@ def sweep(db) -> Dict[str, int]:
     for doc_id, lines in owner_notes.items():
         doc = docs[doc_id]
         _notify(db, doc, [doc.owner_id, doc.author_id], f"Overdue on \"{doc.title}\"", "Overdue: " + "; ".join(lines[:20])
-                + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error")
+                + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error", email=True)
         out["owner_told"] += len(lines)
     for doc_id, lines in admin_notes.items():
         doc = docs[doc_id]
         _notify(db, doc, admins, f"Still overdue on \"{doc.title}\"", "A week overdue: " + "; ".join(lines[:20])
-                + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error")
+                + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error", email=True)
         out["admins_told"] += len(lines)
     db.commit()
     return out
+
+
+def _email_waiting(db, pending, docs) -> int:
+    """People asked to acknowledge get one email listing what is waiting, not one per document (the first alert was in-app
+    only, because publishing a document asks the whole organisation at once). Returns how many people were emailed."""
+    todo: Dict[int, list] = {}
+    for ob in pending:
+        if ob.emailed_at is None and ob.kind == "acknowledgement" and ob.document_id in docs:
+            todo.setdefault(ob.user_id, []).append(ob)
+    if not todo:
+        return 0
+    anchor = next(iter(docs.values()))
+    if not settings(db, anchor.tenant_id)["email"]:
+        return 0
+    for uid, items in todo.items():
+        titles = sorted({docs[o.document_id].title for o in items})
+        _notify(db, anchor, [uid], f"{len(titles)} document(s) to acknowledge",
+                "Please read and acknowledge: " + "; ".join(titles[:15]) + (f" and {len(titles) - 15} more" if len(titles) > 15 else "") + ".",
+                "info", email=True)
+        for ob in items:
+            ob.emailed_at = datetime.utcnow()
+    return len(todo)
+
+
+def mine(db, user_id: int) -> list:
+    """Everything the user is currently asked to do on documents, across documents."""
+    from ...models import DocumentObligation, GovernanceDocument
+
+    now = datetime.utcnow()
+    rows = (db.query(DocumentObligation, GovernanceDocument).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
+            .filter(DocumentObligation.user_id == user_id, DocumentObligation.status == "pending")
+            .order_by(DocumentObligation.due_date.asc(), DocumentObligation.id).all())
+    return [{"id": ob.id, "kind": ob.kind, "document_id": d.id, "title": d.title, "doc_type": d.doc_type, "status": d.status,
+             "version": ob.document_version, "due_date": _iso(ob.due_date), "overdue": bool(ob.due_date and ob.due_date < now),
+             "escalation_level": ob.escalation_level or 0} for ob, d in rows]

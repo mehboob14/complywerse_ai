@@ -17,6 +17,7 @@ interface Row {
   status: 'pending' | 'done' | 'rejected' | 'cancelled'; version: string | null; requested_at: string | null;
   due_date: string | null; done_at: string | null; comment: string | null; overdue: boolean; escalation_level: number;
 }
+interface LifecycleSettings { approval_days: number; ack_days: number; remind_days: number; admin_after_days: number; email: boolean }
 interface TimelineEvent { at: string | null; kind: string; actor: string | null; detail: string | null }
 interface Lifecycle {
   enabled: boolean;
@@ -45,6 +46,54 @@ function StatusPill({ row }: { row: Row }) {
     : row.overdue ? 'border-rose-300 text-rose-800' : 'border-amber-300 text-amber-900';
   const label = row.status === 'pending' ? (row.overdue ? 'Overdue' : 'Waiting') : row.status === 'done' ? 'Done' : row.status === 'rejected' ? 'Rejected' : 'Not needed';
   return <span className={`inline-block rounded border px-1.5 py-0.5 text-[11px] ${tone}`}>{label}{row.escalation_level > 0 && row.status === 'pending' ? ` · escalated ${row.escalation_level}` : ''}</span>;
+}
+
+function SettingsCard() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState<LifecycleSettings | null>(null);
+  const { data } = useQuery<{ enabled: boolean; settings: LifecycleSettings; can_edit: boolean }>({
+    queryKey: ['document-lifecycle-settings'],
+    queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/settings')).data,
+  });
+  const save = useMutation({
+    mutationFn: async () => (await apiClient.put('/governance/documents/lifecycle/settings', draft)).data,
+    onSuccess: () => { setOpen(false); queryClient.invalidateQueries({ queryKey: ['document-lifecycle-settings'] }); toast({ type: 'success', title: 'Saved', message: 'New requests use these settings.' }); },
+    onError: (e: any) => toast({ type: 'error', title: 'Not saved', message: e?.response?.data?.detail || 'Could not save the settings.' }),
+  });
+  if (!data?.enabled) return null;
+  const s = draft || data.settings;
+  const field = (key: keyof LifecycleSettings, label: string) => (
+    <label className="flex items-center justify-between gap-3 text-xs text-slate-700">
+      {label}
+      <input type="number" min={key === 'remind_days' ? 0 : 1} max={key === 'remind_days' ? 60 : 365} value={s[key] as number} disabled={!data.can_edit}
+        onChange={(e) => setDraft({ ...s, [key]: Number(e.target.value) })}
+        className="w-20 rounded border border-slate-300 bg-white px-2 py-1 text-right text-slate-900 disabled:bg-slate-100" />
+    </label>
+  );
+  return (
+    <section className="rounded-xl border border-slate-300 bg-white p-4">
+      <button type="button" onClick={() => setOpen(!open)} className="text-sm font-semibold text-slate-900">
+        Due dates and escalation {open ? '▾' : '▸'}
+      </button>
+      {!open && <span className="ml-3 text-xs text-slate-600">approvals {data.settings.approval_days} days · acknowledgements {data.settings.ack_days} days · owner told when overdue, administrators after {data.settings.admin_after_days} more</span>}
+      {open && (
+        <div className="mt-3 max-w-md space-y-2">
+          {field('approval_days', 'Days to review or approve')}
+          {field('ack_days', 'Days to acknowledge')}
+          {field('remind_days', 'Remind this many days before the due date')}
+          {field('admin_after_days', 'Tell tenant administrators this many days after it is overdue')}
+          <label className="flex items-center gap-2 text-xs text-slate-700">
+            <input type="checkbox" checked={s.email} disabled={!data.can_edit} onChange={(e) => setDraft({ ...s, email: e.target.checked })} /> Also send email (where email is set up)
+          </label>
+          {data.can_edit
+            ? <button type="button" onClick={() => save.mutate()} disabled={save.isPending || !draft} className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50">Save</button>
+            : <p className="text-xs text-slate-500">Only an administrator can change these.</p>}
+        </div>
+      )}
+    </section>
+  );
 }
 
 export default function LifecycleTab({ documentId, doc }: { documentId: number; doc: any }) {
@@ -182,6 +231,8 @@ export default function LifecycleTab({ documentId, doc }: { documentId: number; 
           ))}
         </ol>
       </section>
+
+      <SettingsCard />
 
       <section className="rounded-xl border border-slate-300 bg-white p-4">
         <h3 className="mb-1 text-sm font-semibold text-slate-900">Discussion</h3>

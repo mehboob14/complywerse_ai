@@ -3,6 +3,8 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
+import apiClient from '@/lib/api';
+import { parseUtc } from '@/lib/serverTime';
 import { GovernanceActionReviewItem } from '@/types';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
 import {
@@ -315,6 +317,16 @@ export default function ApprovalsPage() {
     },
   });
 
+  // Organisations with document lifecycle (cfsb): everything asked of the current user on documents, in one list.
+  const { data: docRequests } = useQuery({
+    queryKey: ['my-document-requests'],
+    queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
+      enabled: boolean; total: number;
+      items: Array<{ id: number; kind: string; document_id: number; title: string; doc_type: string; due_date: string | null; overdue: boolean; escalation_level: number }>;
+    },
+  });
+  const lifecycleOn = !!docRequests?.enabled;
+
   const approveMutation = useMutation({
     mutationFn: async ({ reviewId, comments }: { reviewId: number; comments: string }) => {
       return governanceApi.updateGovernanceAction(reviewId, {
@@ -419,7 +431,36 @@ export default function ApprovalsPage() {
         </div>
       </div>
 
-      {signoffPending && signoffPending.total > 0 && (
+      {lifecycleOn && (
+        <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <ShieldCheck size={16} className="text-primary-600" />
+            <h3 className="text-sm font-semibold text-black">Documents waiting for you</h3>
+            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{docRequests?.total ?? 0}</span>
+          </div>
+          {(docRequests?.items.length ?? 0) === 0 && <p className="text-xs text-gray-500">Nothing to review, approve or acknowledge.</p>}
+          <div className="space-y-1.5">
+            {docRequests?.items.map((it) => (
+              <a
+                key={it.id}
+                href={`/governance/documents/${it.document_id}?tab=lifecycle`}
+                className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 hover:border-primary-300 hover:bg-primary-50/30 transition-colors"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-black truncate">{it.title}</p>
+                  <p className="text-[11px] text-gray-500 capitalize">
+                    {it.kind === 'acknowledgement' ? 'Acknowledge' : it.kind === 'review' ? 'Review' : 'Approve'} · due {parseUtc(it.due_date)?.toLocaleDateString() ?? '-'}
+                    {it.overdue ? ' · overdue' : ''}{it.escalation_level > 0 ? ' · escalated' : ''}
+                  </p>
+                </div>
+                <span className="text-xs font-medium text-primary-600 shrink-0">Open →</span>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!lifecycleOn && signoffPending && signoffPending.total > 0 && (
         <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
           <div className="flex items-center gap-2 mb-2">
             <ShieldCheck size={16} className="text-primary-600" />

@@ -3131,17 +3131,34 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _create_policy_review_task(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """A real task in Task Management: for the people named, else the owner of the document the event is about."""
+        from datetime import timedelta
+        from ....models import CriticalTask
+        from ...governance import doc_lifecycle
+
         policy_category = payload.get("policy_category")
         due_days = int(payload.get("due_days") or 14)
+        doc = doc_lifecycle.document_for_event(db, instance.tenant_id, payload)
+        assignees = _normalize_ids(payload.get("assignee_user_ids") or []) or ([doc.owner_id] if doc and doc.owner_id else [])
+        what = doc.title if doc else (policy_category or "policy")
+        task = CriticalTask(
+            tenant_id=instance.tenant_id, title=(payload.get("title") or f"Review: {what}")[:255],
+            description=payload.get("description") or f"Created by workflow \"{getattr(definition, 'name', '')}\" for {what}.",
+            source="Workflow", source_module="workflow_engine", source_entity_type="WorkflowInstance", source_entity_id=instance.id,
+            category="Compliance", status="Open", priority=str(payload.get("priority") or "Medium").capitalize(),
+            due_date=datetime.utcnow() + timedelta(days=due_days), assigned_user_ids=assignees,
+            assigned_owner_id=assignees[0] if assignees else None)
+        db.add(task)
+        db.flush()
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.create_policy_review_task",
-            message=f"Policy review task created (category={policy_category}, due in {due_days}d)",
-            payload={"policy_category": policy_category, "due_days": due_days},
+            message=f"Task #{task.id} created for {what}, due in {due_days}d, assigned to {assignees or 'nobody'}",
+            payload={"policy_category": policy_category, "due_days": due_days, "task_id": task.id, "assignee_user_ids": assignees},
         ))
-        return {"action": "create_policy_review_task", "policy_category": policy_category, "due_days": due_days}
+        return {"action": "create_policy_review_task", "policy_category": policy_category, "due_days": due_days, "task_id": task.id}
 
     @staticmethod
     def _publish_policy(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
@@ -3196,18 +3213,27 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _request_attestation(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """Ask people (the users named, else everyone) to acknowledge the published document the event is about, for
+        organisations with document lifecycle; they get a task and an alert each."""
+        from ...governance import doc_lifecycle
+
         policy_category = payload.get("policy_category")
         deadline_days = int(payload.get("deadline_days") or 10)
         assignee_ids = _normalize_ids(payload.get("assignee_user_ids") or [])
+        doc = doc_lifecycle.document_for_event(db, instance.tenant_id, payload)
+        asked, note = 0, "no published document to acknowledge"
+        if doc is not None and doc.status == "published" and doc_lifecycle.enabled(db):
+            asked = doc_lifecycle.request_acknowledgements(db, doc, assignee_ids or None, None, deadline_days)
+            note = f"{asked} acknowledgement(s) requested for \"{doc.title}\""
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.request_attestation",
-            message=f"Attestation requested (category={policy_category}, deadline={deadline_days}d, users={assignee_ids})",
-            payload={"policy_category": policy_category, "deadline_days": deadline_days, "assignee_user_ids": assignee_ids},
+            message=f"Attestation requested (category={policy_category}, deadline={deadline_days}d, users={assignee_ids}): {note}",
+            payload={"policy_category": policy_category, "deadline_days": deadline_days, "assignee_user_ids": assignee_ids, "requested": asked},
         ))
-        return {"action": "request_attestation", "policy_category": policy_category, "deadline_days": deadline_days}
+        return {"action": "request_attestation", "policy_category": policy_category, "deadline_days": deadline_days, "requested": asked}
 
     @staticmethod
     def _create_audit_plan(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:

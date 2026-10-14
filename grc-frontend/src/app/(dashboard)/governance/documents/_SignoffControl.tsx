@@ -10,6 +10,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi, adminApi, teamsApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
+import { parseUtc } from '@/lib/serverTime';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import {
@@ -290,7 +291,7 @@ export function SignOffControlTab({ documentId, doc }: { documentId: number; doc
                     <span className="text-gray-500"> — {s.role_label} · {s.decision === 'rejected' ? 'Rejected' : 'Signed'}</span>
                   </p>
                   <div className="flex items-center gap-2 text-[11px] text-gray-500">
-                    <Clock className="h-3 w-3" />{s.signed_at ? new Date(s.signed_at).toLocaleString() : ''}
+                    <Clock className="h-3 w-3" />{s.signed_at ? (parseUtc(s.signed_at)?.toLocaleString() ?? '') : ''}
                   </div>
                   {s.comment && <p className="text-xs text-gray-600 mt-0.5 italic">“{s.comment}”</p>}
                   {s.esign && <SignatureSeal id={s.esign.id} fingerprint={s.esign.image_sha256} />}
