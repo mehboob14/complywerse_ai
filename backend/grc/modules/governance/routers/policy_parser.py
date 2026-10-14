@@ -818,7 +818,11 @@ def serialize_statement(statement: PolicyStatement, compliance_id: Optional[int]
         "updated_at": statement.updated_at.isoformat() if statement.updated_at else None,
         "current_version": current_version,
         "created_by": statement.created_by,
-        "compliance_id": compliance_id
+        "compliance_id": compliance_id,
+        # document sync (cfsb): is this the file's own wording, and has it been edited since
+        "source_match": statement.source_match,
+        "pending_in_document": bool(statement.source_text is not None
+                                    and (statement.statement_text or "").strip() != statement.source_text.strip()),
     }
 
 
@@ -1110,6 +1114,10 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
                     db.add(compliance_record)
 
                 db.commit()
+
+                # Hold each statement to the document's own wording (tenants with document sync only).
+                from ..doc_sync import anchor_after_parse
+                anchor_after_parse(db, document_id, user_id)
 
                 # ── Recommend & link controls (internal ERM + framework) for every
                 # new statement. Dispatched as its OWN background step now that the
@@ -1864,6 +1872,7 @@ def apply_reparse_proposals(
                     statement.ai_confidence = new_data.get("ai_confidence", statement.ai_confidence)
                     statement.ai_extracted_keywords = new_data.get("ai_extracted_keywords", statement.ai_extracted_keywords)
                     statement.updated_at = datetime.utcnow()
+                    statement.source_match = statement.source_text = statement.source_start = None   # matched to the file again below
 
                     _create_version_snapshot(db, statement, "ai_reparse", current_user.id, "Re-parsed from document")
                     accepted += 1
@@ -1919,6 +1928,8 @@ def apply_reparse_proposals(
     )
     db.add(audit)
     db.commit()
+    from ..doc_sync import anchor_after_parse
+    anchor_after_parse(db, document_id, current_user.id)
 
     all_resolved = all(p["status"] != "pending" for p in proposals_data["proposals"])
     if all_resolved:
@@ -1948,6 +1959,60 @@ def apply_reparse_proposals(
         "rejected": rejected,
         "all_resolved": all_resolved
     }
+
+
+class DocumentSyncRequest(BaseModel):
+    change_reason: Optional[str] = None
+
+
+def _sync_target(db: Session, document_id: int, current_user: GRCUser):
+    document = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Governance document not found")
+    validate_document_access(current_user, document, db)
+    return document
+
+
+@router.get("/{document_id}/document-sync")
+def get_document_sync(document_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """Statements edited since the file was last written, and how well statements match the file. Tenants without
+    document sync get ``{"enabled": false}``."""
+    from .. import doc_sync
+
+    document = _sync_target(db, document_id, current_user)
+    return doc_sync.state(db, document) if doc_sync.enabled(db) else {"enabled": False}
+
+
+@router.post("/{document_id}/document-sync/check")
+def check_document_sync(document_id: int, again: bool = False, db: Session = Depends(get_db),
+                        current_user: GRCUser = Depends(require_auth)):
+    """Match the statements to the document's file (statements already matched are kept unless ``again``)."""
+    from .. import doc_sync
+
+    document = _sync_target(db, document_id, current_user)
+    if not doc_sync.enabled(db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document sync is not enabled for this organisation")
+    doc_sync.anchor(db, document, current_user.id, again=again)
+    return doc_sync.state(db, document)
+
+
+@router.post("/{document_id}/document-sync/apply")
+def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session = Depends(get_db),
+                        current_user: GRCUser = Depends(require_auth)):
+    """Write the edited statements into the document's file as a new version."""
+    from .. import doc_sync
+
+    document = _sync_target(db, document_id, current_user)
+    if not doc_sync.enabled(db):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document sync is not enabled for this organisation")
+    try:
+        return doc_sync.apply(db, document, current_user, body.change_reason)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    except LookupError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
 @router.delete("/{document_id}/statements/{statement_id}")

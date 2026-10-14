@@ -30,6 +30,12 @@ class PolicyStatement(Base):
     # Section reference in original document
     source_section = Column(String(255), nullable=True)
     source_page = Column(Integer, nullable=True)
+    # Where the statement sits in the document's file (grc/modules/governance/doc_sync.py, tenants in
+    # DOCUMENT_SYNC_TENANTS): the wording exactly as the file has it, its offset in the file's text, and how it was
+    # matched (exact | corrected | not_found). statement_text differing from source_text = an edit not yet in the file.
+    source_text = Column(Text, nullable=True)
+    source_start = Column(Integer, nullable=True)
+    source_match = Column(String(20), nullable=True)
     
     # Status tracking
     status = Column(String(50), default="active")  # active, deprecated, superseded

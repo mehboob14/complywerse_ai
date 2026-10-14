@@ -12,6 +12,7 @@ import RichTextEditor from '../_RichTextEditor';
 import { SignOffControlTab } from '../_SignoffControl';
 import GovernanceMappingsPage from '../../mappings/page';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
+import DocumentSyncPanel from './_DocumentSyncPanel';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -1089,14 +1090,17 @@ export default function PolicyDetailPage() {
       )}
 
       {activeTab === 'statements' && (
-        <StatementsTab
-          statements={statements}
-          statementsLoading={statementsLoading}
-          documentTitle={document?.title}
-          parsePolicyMutation={parsePolicyMutation}
-          isParsing={isParsing}
-          documentId={id}
-        />
+        <>
+          <DocumentSyncPanel documentId={id} />
+          <StatementsTab
+            statements={statements}
+            statementsLoading={statementsLoading}
+            documentTitle={document?.title}
+            parsePolicyMutation={parsePolicyMutation}
+            isParsing={isParsing}
+            documentId={id}
+          />
+        </>
       )}
 
       {activeTab === 'controls' && (
@@ -3455,6 +3459,12 @@ function StatementsTab({ statements, statementsLoading, parsePolicyMutation, isP
                             </div>
                           </div>
                           <p className="text-sm text-slate-700">{stmt.statement_text || stmt.text}</p>
+                          {stmt.pending_in_document && (
+                            <span className="mt-1 inline-block rounded border border-amber-300 px-1.5 py-0.5 text-[11px] text-amber-900" title="Edited since the document was last written">Edited · not yet in the document</span>
+                          )}
+                          {stmt.source_match === 'not_found' && (
+                            <span className="mt-1 inline-block rounded border border-slate-300 px-1.5 py-0.5 text-[11px] text-slate-700" title="This wording was not found in the document file">Not found in the document</span>
+                          )}
                           {stmt.statement_summary && (
                             <p className="text-xs text-slate-700 mt-1 italic">{stmt.statement_summary}</p>
                           )}

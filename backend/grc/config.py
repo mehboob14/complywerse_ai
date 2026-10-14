@@ -34,6 +34,12 @@ AUDIT_REGISTER_TENANTS = frozenset(
     slug.strip().lower() for slug in os.getenv("AUDIT_REGISTER_TENANTS", "cfsb").split(",") if slug.strip())
 
 
+# Policy statements <-> the original document file: statements are checked against the file's wording and edits are
+# written back into it (a new document version) only for the tenants named here (comma-separated slugs).
+DOCUMENT_SYNC_TENANTS = frozenset(
+    slug.strip().lower() for slug in os.getenv("DOCUMENT_SYNC_TENANTS", "cfsb").split(",") if slug.strip())
+
+
 # ----- OpenAI ---------------------------------------------------------------
 # Default chat-completions model. Centralized so the model can be swapped in a
 # single place; mirrors the literal ``"gpt-4o"`` that was inlined across the
