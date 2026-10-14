@@ -13,6 +13,7 @@ import { SignOffControlTab } from '../_SignoffControl';
 import GovernanceMappingsPage from '../../mappings/page';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import DocumentSyncPanel from './_DocumentSyncPanel';
+import LifecycleTab from './_LifecycleTab';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -297,7 +298,7 @@ const childrenToText = (node: React.ReactNode): string => {
   return '';
 };
 
-type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'sign-off' | 'discussion' | 'review-history';
+type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'sign-off' | 'discussion' | 'review-history' | 'lifecycle';
 
 export default function PolicyDetailPage() {
   const params = useParams();
@@ -331,7 +332,7 @@ export default function PolicyDetailPage() {
   }, [id]);
 
   const searchParams = useSearchParams();
-  const _VALID_TABS = ['viewer', 'statements', 'controls', 'gap-analysis', 'sign-off', 'discussion', 'review-history'];
+  const _VALID_TABS = ['viewer', 'statements', 'controls', 'gap-analysis', 'sign-off', 'discussion', 'review-history', 'lifecycle'];
   const _paramTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<TabKey>(
     (_paramTab && _VALID_TABS.includes(_paramTab) ? _paramTab : 'viewer') as TabKey,
@@ -902,7 +903,21 @@ export default function PolicyDetailPage() {
   const docType = DOC_TYPE_STYLES[document.doc_type] || { icon: FileText, color: 'text-slate-600', bgColor: 'bg-slate-500/20', label: document.doc_type };
   const TypeIcon = docType.icon;
 
-  const tabs: { key: TabKey; label: string; icon: any }[] = [
+  // Organisations with document lifecycle (cfsb) get one tab for approvals, acknowledgements, life cycle and discussion.
+  const { data: lifecycleProbe } = useQuery({
+    queryKey: ['document-lifecycle-enabled', id],
+    queryFn: async () => (await apiClient.get(`/governance/documents/${id}/lifecycle`)).data,
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
+  });
+  const lifecycleOn = !!lifecycleProbe?.enabled;
+  const tabs: { key: TabKey; label: string; icon: any }[] = lifecycleOn ? [
+    { key: 'viewer', label: 'Document Viewer', icon: Eye },
+    { key: 'statements', label: 'Statements', icon: ClipboardList },
+    { key: 'controls', label: 'Mappings', icon: Link2 },
+    { key: 'gap-analysis', label: 'Gap Analysis', icon: BarChart3 },
+    { key: 'lifecycle', label: 'Approvals & Acknowledgements', icon: ShieldCheck },
+  ] : [
     { key: 'viewer', label: 'Document Viewer', icon: Eye },
     { key: 'statements', label: 'Statements', icon: ClipboardList },
     { key: 'controls', label: 'Mappings', icon: Link2 },
@@ -911,6 +926,7 @@ export default function PolicyDetailPage() {
     { key: 'discussion', label: 'Discussion', icon: MessageSquare },
     { key: 'review-history', label: 'Review History', icon: Clock },
   ];
+  const shownTab: TabKey = lifecycleOn && ['sign-off', 'discussion', 'review-history'].includes(activeTab) ? 'lifecycle' : activeTab;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -1060,7 +1076,7 @@ export default function PolicyDetailPage() {
         <nav className="flex gap-1">
           {tabs.map(tab => {
             const TabIcon = tab.icon;
-            const isActive = activeTab === tab.key;
+            const isActive = shownTab === tab.key;
             return (
               <button
                 key={tab.key}
@@ -1404,11 +1420,13 @@ export default function PolicyDetailPage() {
         </div>
       )}
 
-      {activeTab === 'sign-off' && (
+      {shownTab === 'lifecycle' && <LifecycleTab documentId={id} doc={document} />}
+
+      {activeTab === 'sign-off' && !lifecycleOn && (
         <SignOffControlTab documentId={id} doc={document} />
       )}
 
-      {activeTab === 'discussion' && (
+      {activeTab === 'discussion' && !lifecycleOn && (
         <div className="rounded-xl border border-slate-300 bg-white p-4">
           <h3 className="text-sm font-semibold text-slate-900 mb-1">Discussion</h3>
           <p className="text-xs text-slate-500 mb-3">All participants (preparer, reviewers, approvers) can comment here.</p>
@@ -1416,7 +1434,7 @@ export default function PolicyDetailPage() {
         </div>
       )}
 
-      {activeTab === 'review-history' && (
+      {activeTab === 'review-history' && !lifecycleOn && (
         <ReviewHistoryTab documentId={id} document={document} />
       )}
 

@@ -27,7 +27,7 @@ from ....models import (
 from ....models import (
     AttestationCampaign, AuditObservationDocumentLink, BcmPlan, BcmRecoveryStrategy,
     DocumentAttestationAcknowledgment, DocumentAttestationCampaign, DocumentAttestationRecipient,
-    DocumentSignature, DocumentSignoffAssignment, DocumentWorkflowAction, DocumentWorkflowInstance,
+    DocumentSignature, DocumentSignoffAssignment, DocumentObligation, DocumentWorkflowAction, DocumentWorkflowInstance,
     ElectronicSignature, IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
     PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping,
 )
@@ -41,6 +41,8 @@ from ..ai_drafting import (
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+from .. import doc_lifecycle  # noqa: E402
 
 GOVERNANCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "governance")
 os.makedirs(GOVERNANCE_UPLOAD_DIR, exist_ok=True)
@@ -1072,6 +1074,7 @@ _DELETE_WITH_DOCUMENT = (  # a table goes before the tables it points at
     DocumentSignature.document_id,
     ElectronicSignature.document_id,
     DocumentSignoffAssignment.document_id,
+    DocumentObligation.document_id,
     DocumentAnnotation.document_id,
     PolicyReviewHistory.document_id,
     AuditObservationDocumentLink.document_id,
@@ -1114,6 +1117,13 @@ def _clear_document_references(db: Session, document_id: int) -> None:
         target = next(iter(column.expression.foreign_keys)).column.table.name
         return db.query(column.class_).filter(column.in_(owned[target]))
 
+    # the tasks that mirror this document's approvals and acknowledgements go with it
+    from ....models import CriticalTask
+    obligations = select(DocumentObligation.id).where(DocumentObligation.document_id == document_id)
+    for task in db.query(CriticalTask).filter(CriticalTask.source_module == "document_lifecycle",
+                                              CriticalTask.source_entity_id.in_(obligations)).all():
+        db.delete(task)
+    db.flush()
     for column in _UNLINK_FROM_DOCUMENT:
         rows(column).update({column: None}, synchronize_session=False)
     for column in _DELETE_WITH_DOCUMENT:
@@ -1367,6 +1377,8 @@ def bulk_update_status(
             old_value=old_status,
             new_value=bulk_update.status
         )
+        db.flush()
+        doc_lifecycle.on_status_changed(db, doc, old_status, bulk_update.status, current_user.id)
         updated_count += 1
     
     db.commit()
@@ -1401,6 +1413,7 @@ def bulk_archive(
         old_status = doc.status
         doc.status = "archived"
         doc.updated_at = datetime.utcnow()
+        doc_lifecycle.on_status_changed(db, doc, old_status, "archived", current_user.id)
         
         create_audit_log(
             db=db,
@@ -1548,6 +1561,8 @@ def bulk_publish(
         doc.published_by = current_user.id
         doc.published_at = datetime.utcnow()
         doc.updated_at = datetime.utcnow()
+        db.flush()
+        doc_lifecycle.on_status_changed(db, doc, old_status, "published", current_user.id)
 
         create_audit_log(
             db=db,
@@ -1605,6 +1620,8 @@ def update_document_status(
     if new_status == "published":
         document.published_by = current_user.id
         document.published_at = datetime.utcnow()
+    db.flush()
+    doc_lifecycle.on_status_changed(db, document, old_status, new_status, current_user.id)
 
     create_audit_log(
         db=db,
@@ -1670,6 +1687,7 @@ def publish_document(
     
     old_status = document.status
     document.status = "published"
+    doc_lifecycle.on_status_changed(db, document, old_status, "published", current_user.id)
     document.published_by = current_user.id
     document.published_at = datetime.utcnow()
     document.updated_at = datetime.utcnow()

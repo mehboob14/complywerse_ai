@@ -26,6 +26,7 @@ from ....models import (
 from ....routers.auth_router import require_auth, get_user_tenants
 from ....services import esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
+from .. import doc_lifecycle
 
 router = APIRouter(prefix="/documents", tags=["Governance - Sign-off"])
 
@@ -257,6 +258,8 @@ def set_participants(
     _add("prepared_by", prepared)
     _add("reviewer", body.reviewers or [])
     _add("approver", body.approvers or [])
+    db.flush()
+    doc_lifecycle.on_participants_changed(db, doc, current_user.id)
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -286,6 +289,8 @@ def send_for_review(
         action_details=f"Document sent for {'review' if has_reviewers else 'approval'}",
         field_changed="status", old_value="draft", new_value=new_status,
     )
+    db.flush()
+    doc_lifecycle.on_sent(db, doc, current_user.id)
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -382,6 +387,8 @@ def sign_document(
         + f" · e-signature {esig.image_sha256[:12]}, seal {esig.seal[:12]}"
         + (f" → {advanced_to}" if advanced_to else ""),
     )
+    db.flush()
+    doc_lifecycle.on_signed(db, doc, current_user.id, role_type, signature.id, esig.id, advanced_to)
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -418,6 +425,8 @@ def reject_document(
         action="rejected", field_changed="status", old_value=None, new_value="draft",
         action_details=f"Rejected at {role_label}: {body.comment}",
     )
+    db.flush()
+    doc_lifecycle.on_rejected(db, doc, current_user.id, role_type, body.comment)
     db.commit()
     return get_signoff(document_id, db, current_user)
 

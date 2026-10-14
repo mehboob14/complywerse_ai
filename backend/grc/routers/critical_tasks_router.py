@@ -357,10 +357,11 @@ def _sync_mirrors(db: Session, task_ids, user_id: Optional[int]) -> None:
     """Tasks mirrored from a regulatory change or a committee action: the original follows the edit.
     Wrapped so the governance module can never break a Task Management write."""
     try:
-        from ..modules.governance import committee_tasks, regulatory_tasks
+        from ..modules.governance import committee_tasks, doc_lifecycle, regulatory_tasks
         for task_id in task_ids:
             regulatory_tasks.sync_from_critical_task(db, task_id, user_id=user_id)
             committee_tasks.sync_from_critical_task(db, task_id, user_id=user_id)
+            doc_lifecycle.sync_from_critical_task(db, task_id, user_id=user_id)
         db.commit()
     except Exception:
         logger.exception("Mirrored task sync failed for tasks %s", list(task_ids))
@@ -1162,9 +1163,10 @@ def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     try:
-        from ..modules.governance import committee_tasks, regulatory_tasks
+        from ..modules.governance import committee_tasks, doc_lifecycle, regulatory_tasks
         regulatory_tasks.on_critical_task_deleted(db, task)
         committee_tasks.on_critical_task_deleted(db, task)
+        doc_lifecycle.on_critical_task_deleted(db, task)
     except Exception:
         logger.exception("Could not remove the regulatory task or committee action mirrored by task %s", task.id)
     db.delete(task)

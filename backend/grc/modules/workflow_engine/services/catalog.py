@@ -46,6 +46,7 @@ TRIGGER_NODE_TYPES = [
     {"key": "policy_approved",             "label": "Policy approved / published"},
     {"key": "control_review_due",          "label": "Control effectiveness review due"},
     {"key": "attestation_overdue",         "label": "Attestation campaign overdue"},
+    {"key": "document_obligation_overdue", "label": "Document approval or acknowledgement overdue"},
     # ── Audit triggers (Auditor Portal) ───────────────────────────────────────
     {"key": "audit_review_submitted",      "label": "Auditor review submitted"},
     {"key": "audit_control_approved",      "label": "Auditor auto-approved a control"},
@@ -1533,6 +1534,8 @@ DUE_DATE_EVENTS: list[_DueEvent] = [
      "InternalControl", "next_test_date", "upcoming", 14, _LAPSE_DONE),
     ("attestation_overdue", "Attestation campaign overdue", None,
      "AttestationCampaign", "due_date", "overdue", 0, _WORK_DONE),
+    ("document_obligation_overdue", "Document approval or acknowledgement overdue", None,
+     "DocumentObligation", "due_date", "overdue", 0, frozenset({"done", "cancelled", "rejected"})),
     ("committee_action_overdue", "Committee action overdue", None,
      "OversightAction", "due_date", "overdue", 0, _WORK_DONE),
     ("mitigation_action_overdue", "Mitigation action overdue", None,
