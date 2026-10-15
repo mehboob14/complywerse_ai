@@ -2,12 +2,15 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useQuery } from '@tanstack/react-query';
 import {
   FileText,
   AlertTriangle,
   ClipboardCheck,
+  Sparkles,
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { studioApi } from '@/lib/studio/api';
 
 // "Overview" now lives in the sidebar (Governance Oversight) — kept out of this
 // top nav so it isn't duplicated on the documents bar.
@@ -17,12 +20,20 @@ const governanceNavigation = [
   { name: 'Policy Exceptions', href: '/governance/exceptions', icon: AlertTriangle },
 ];
 
+// Shown only to organisations the AI Studio is switched on for.
+const studioTab = { name: 'AI Studio', href: '/governance/documents/studio', icon: Sparkles };
+const STUDIO = '/governance/documents/studio';
+
 export default function GovernanceLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
+  const tabs = studio.data?.enabled
+    ? [governanceNavigation[0], studioTab, ...governanceNavigation.slice(1)]
+    : governanceNavigation;
   // This strip is the sub-nav for the Documents area only (Documents · Attestation ·
   // Policy Exceptions). Other governance pages are reached from the sidebar.
   const showTabs =
@@ -34,13 +45,14 @@ export default function GovernanceLayout({
       {showTabs && (
       <div className="border-b border-slate-200 px-3 sm:px-6 pt-3 overflow-x-auto">
         <div className="flex items-center gap-0 min-w-max">
-          {governanceNavigation.map((item) => {
-            // Exact match for Documents so /documents/attestation doesn't highlight Documents
+          {tabs.map((item) => {
+            // Exact match for Documents so /documents/attestation and /documents/studio don't highlight Documents
             const isActive =
               item.href === '/governance/documents'
                 ? pathname === '/governance/documents' ||
                   (!!pathname?.startsWith('/governance/documents/') &&
-                    !pathname.startsWith('/governance/documents/attestation'))
+                    !pathname.startsWith('/governance/documents/attestation') &&
+                    !pathname.startsWith(STUDIO))
                 : pathname === item.href ||
                   (item.href !== '/governance' && !!pathname?.startsWith(item.href));
             return (

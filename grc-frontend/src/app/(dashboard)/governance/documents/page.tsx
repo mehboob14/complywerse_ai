@@ -8,6 +8,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { usePermissions } from '@/hooks/usePermissions';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
+import { studioApi } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
 import {
@@ -242,6 +243,10 @@ export default function GovernanceDocumentsPage() {
   const [parseResult, setParseResult] = useState<{ documentId: number; count: number } | null>(null);
   const [attestationTargetDocument, setAttestationTargetDocument] = useState<DocumentItem | null>(null);
   const [isAIDraftModalOpen, setIsAIDraftModalOpen] = useState(false);
+  // "AI Draft" is asked for from several places. Organisations the AI Studio is on for are taken to the Studio
+  // (carrying the prefill); everyone else gets the drafting form. Decided once the Studio status is known.
+  const [aiDraftRequested, setAIDraftRequested] = useState(false);
+  const studioStatus = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
   // Recommended Documents picker — opens a categorised browse of pre-curated
   // bank-grade artefacts. Picking one feeds `aiDraftPrefill` into the AI
   // Draft modal which then opens with title + description + doc_type
@@ -331,13 +336,34 @@ export default function GovernanceDocumentsPage() {
     if (returnUrl && returnUrl.startsWith('/governance/documents/')) {
       setAiDraftReturnUrl(returnUrl);
     }
-    setIsAIDraftModalOpen(true);
+    setAIDraftRequested(true);
     // Clean the URL so a refresh / back navigation doesn't loop us back
     // into the modal. router.replace preserves the listing state.
     router.replace('/governance/documents');
     // We only react to the *initial* arrival, not subsequent navigation.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Open the drafting form, or the AI Studio when the organisation has it. The two older drafting routes
+  // (a reference law, an NCA template) only exist in the form, so those stay there.
+  useEffect(() => {
+    if (!aiDraftRequested || !studioStatus.isFetched) return;
+    setAIDraftRequested(false);
+    const p = aiDraftPrefill;
+    if (studioStatus.data?.enabled && !(p?.reference_law_id || p?.nca_template_id)) {
+      const q = new URLSearchParams();
+      if (p?.title) q.set('title', p.title);
+      if (p?.doc_type) q.set('type', p.doc_type);
+      if (p?.description) q.set('description', p.description);
+      if (p?.parent_document_id) q.set('parent', String(p.parent_document_id));
+      if (p?.framework_ids?.length) q.set('frameworks', p.framework_ids.join(','));
+      setAIDraftPrefill(null);
+      setAiDraftReturnUrl(null);
+      router.push(`/governance/documents/studio${q.toString() ? `?${q}` : ''}`);
+      return;
+    }
+    setIsAIDraftModalOpen(true);
+  }, [aiDraftRequested, studioStatus.isFetched, studioStatus.data, aiDraftPrefill, router]);
 
   const invalidateDocumentQueries = () => {
     queryClient.invalidateQueries({ queryKey: ['governance-documents'] });
@@ -764,7 +790,7 @@ export default function GovernanceDocumentsPage() {
         canEdit={canEdit}
         currentUserId={currentUserId}
         onNewDocument={() => setIsUploadModalOpen(true)}
-        onAIDraft={() => setIsAIDraftModalOpen(true)}
+        onAIDraft={() => setAIDraftRequested(true)}
         onTemplates={() => setIsRecommendedOpen(true)}
         onEditDocument={(doc) => handleEdit(doc as unknown as DocumentItem)}
       />
@@ -961,7 +987,7 @@ export default function GovernanceDocumentsPage() {
             if (!prefill) return;
             setAIDraftPrefill(prefill);
             setIsRecommendedOpen(false);
-            setIsAIDraftModalOpen(true);
+            setAIDraftRequested(true);
           }}
         />
       )}

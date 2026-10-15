@@ -1,0 +1,408 @@
+/**
+ * AI Studio API (`/governance/studio`). The studio keeps a document as Markdown and cuts it into blocks; the AI proposes
+ * changes to blocks, the person accepts them. Every call goes through the shared axios client (token + tenant header).
+ */
+import apiClient from '@/lib/api';
+
+const base = '/governance/studio';
+
+// ── types ────────────────────────────────────────────────────────────────────
+export interface StudioStatus {
+  enabled: boolean;
+  ai_configured?: boolean;
+  doc_types?: string[];
+  max_upload_mb?: number;
+}
+
+export interface Instructions {
+  entity_name?: string;
+  logo_asset_id?: number | null;
+  logo_position?: 'header-left' | 'header-center' | 'header-right';
+  logo_required?: boolean;
+  focus_areas?: string;
+  tone?: string;
+  language?: string;
+  audience?: string;
+  citation_style?: string;
+  requirements?: string[];
+  [key: string]: unknown;
+}
+
+export interface Reference {
+  id: number;
+  key: string;
+  kind: 'parent_document' | 'document' | 'framework' | 'upload' | 'template';
+  title: string;
+  label: string | null;
+  source_id: number | null;
+  chars: number;
+  truncated: boolean;
+  include: boolean;
+  scope: { mode?: string; domains?: string[]; count?: number; total?: number } | null;
+  notes: string[];
+}
+
+export interface Session {
+  id: number;
+  title: string;
+  kind: 'new' | 'upload' | 'library';
+  doc_type: string;
+  status: string;
+  document_id: number | null;
+  revision: number;
+  base_label: string | null;
+  instructions: Instructions;
+  settings: { auto_apply?: boolean };
+  template_id: string | null;
+  source: { kind: string | null; name: string | null; in_place: boolean };
+  references: Reference[];
+  reference_chars: number;
+  words: number;
+  blocks: number;
+  created_at: string | null;
+  updated_at: string | null;
+  content?: string;
+}
+
+export type OpStatus = 'pending' | 'accepted' | 'rejected' | 'conflict';
+
+export interface Op {
+  id: string;
+  kind: 'replace' | 'insert' | 'delete' | 'replace_all';
+  start: string;
+  end: string;
+  markdown: string;
+  reason: string;
+  refs: string[];
+  status: OpStatus;
+  why?: string;
+  words_added: number;
+  words_removed: number;
+  before: { index: number; kind: string; text: string }[];
+  before_count: number;
+  after: { kind: string; level?: number; text: string }[];
+  after_count: number;
+}
+
+export interface ReferenceUsed {
+  ref: string;
+  title: string;
+  kind: string;
+  locator: string;
+  quote: string;
+  how: string;
+  basis: 'reference' | 'general_knowledge' | 'instruction';
+  verified: boolean | null;
+  locator_ok: boolean | null;
+}
+
+export interface Verdict {
+  requirement: string;
+  status: 'met' | 'partly' | 'not_met';
+  evidence: string;
+  block?: number | null;
+}
+
+export interface Stats {
+  inserted: number;
+  deleted: number;
+  modified: number;
+  words_added: number;
+  words_removed: number;
+}
+
+export interface Issue {
+  id: string;
+  kind: string;
+  rule: string;
+  severity: 'error' | 'warning' | 'info';
+  block: number | null;
+  quote: string;
+  message: string;
+  suggestion: string | null;
+  fix: Record<string, unknown> | null;
+}
+
+export interface CompareDifference {
+  topic: string;
+  in_a: string;
+  in_b: string;
+  importance: 'high' | 'medium' | 'low';
+  recommendation: string;
+}
+
+export interface Message {
+  id: number;
+  role: 'user' | 'assistant';
+  kind: 'chat' | 'checks' | 'compare';
+  content: string;
+  status: 'working' | 'done' | 'error';
+  stage: string | null;
+  error: string | null;
+  proposal:
+    | null
+    | ({ ops?: Op[]; base_revision?: number; stats?: Stats | null; placeholders?: number; requirements?: Verdict[] } & {
+        issues?: Issue[];
+        summary?: string;
+        revision?: number;
+        differences?: CompareDifference[];
+        recommendation?: string;
+        other_title?: string;
+      });
+  references_used: ReferenceUsed[];
+  questions: string[];
+  notes: string[];
+  base_revision: number | null;
+  usage: { input_tokens?: number; output_tokens?: number; cached_tokens?: number } | null;
+  created_at: string | null;
+}
+
+export interface Revision {
+  number: number;
+  author_type: 'user' | 'ai' | 'import' | 'system' | 'restore';
+  author: string | null;
+  summary: string;
+  stats: Stats | null;
+  created_at: string | null;
+  words: number;
+}
+
+export type Segment = [op: 'equal' | 'insert' | 'delete', text: string];
+
+export interface RedlineRow {
+  status: 'equal' | 'modified' | 'inserted' | 'deleted';
+  kind: 'heading' | 'paragraph' | 'list_item' | 'table' | 'quote' | 'code' | 'hr' | 'raw';
+  level: number;
+  ordered: boolean;
+  base_index: number | null;
+  cur_index: number | null;
+  format_only: boolean;
+  segments?: Segment[];
+  table?: { status: string; cells: Segment[][] }[];
+  was?: { kind: string; level: number };
+}
+
+export interface Redline {
+  rows: RedlineRow[];
+  stats: Stats;
+  from?: number;
+  to?: number;
+  other_title?: string;
+  ai_message?: Message;
+  applied?: string[];
+}
+
+export interface TemplateItem {
+  id: string;
+  name: string;
+  doc_type: string;
+  description: string;
+  content: string;
+  structure: { sections: { key: string; title: string; required?: boolean; annex?: boolean }[] } | null;
+  builtin: boolean;
+  is_default: boolean;
+  replaced_by_default?: boolean;
+  updated_at?: string | null;
+}
+
+export interface LibraryDoc {
+  id: number;
+  title: string;
+  code: string | null;
+  doc_type: string;
+  status: string;
+  version: string;
+  has_file: boolean;
+  has_text: boolean;
+}
+
+export interface FrameworkItem {
+  id: number;
+  name: string;
+  version: string | null;
+  organisation: string | null;
+  controls: number;
+  domains: string[];
+}
+
+export interface Asset {
+  id: number;
+  kind: string;
+  name: string;
+  mime: string;
+  size: number;
+  width: number | null;
+  height: number | null;
+  is_default: boolean;
+  created_at: string | null;
+}
+
+export interface ExportNote {
+  level: 'error' | 'warning' | 'info';
+  rule: string;
+  text: string;
+  count?: number;
+}
+
+export interface ExportOptions {
+  format: 'docx' | 'pdf' | 'md' | 'html';
+  logo_asset_id?: number | null;
+  no_logo?: boolean;
+  entity_name?: string | null;
+  logo_position?: string | null;
+  highlight_placeholders?: boolean;
+}
+
+export interface ReferenceScope {
+  mode?: 'all' | 'domains' | 'controls' | 'query';
+  domains?: string[];
+  control_refs?: string[];
+  query?: string;
+}
+
+export interface MoveToLibrary {
+  title?: string;
+  doc_type?: string;
+  classification?: string;
+  parent_document_id?: number | null;
+  framework_ids?: number[];
+  description?: string;
+}
+
+/** The sentence the server wrote for a failed call (never a stack trace). */
+export function problemOf(error: unknown, fallback = 'Something went wrong. Please try again.'): string {
+  const e = error as { response?: { data?: { detail?: unknown } }; message?: string };
+  const detail = e?.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) return detail;
+  if (Array.isArray(detail) && detail.length) return String((detail[0] as { msg?: string })?.msg || fallback);
+  return fallback;
+}
+
+export function isConflict(error: unknown): boolean {
+  return (error as { response?: { status?: number } })?.response?.status === 409;
+}
+
+// ── calls ────────────────────────────────────────────────────────────────────
+const get = async <T>(path: string, params?: Record<string, unknown>): Promise<T> => (await apiClient.get(`${base}${path}`, { params })).data;
+const post = async <T>(path: string, body?: unknown, params?: Record<string, unknown>): Promise<T> => (await apiClient.post(`${base}${path}`, body ?? {}, { params })).data;
+const put = async <T>(path: string, body?: unknown): Promise<T> => (await apiClient.put(`${base}${path}`, body ?? {})).data;
+const patch = async <T>(path: string, body?: unknown, params?: Record<string, unknown>): Promise<T> => (await apiClient.patch(`${base}${path}`, body ?? {}, { params })).data;
+const del = async <T>(path: string): Promise<T> => (await apiClient.delete(`${base}${path}`)).data;
+
+export const studioApi = {
+  status: () => get<StudioStatus>('/status'),
+  documents: (q = '', limit = 30) => get<{ items: LibraryDoc[] }>('/documents', { q, limit }),
+  frameworks: () => get<{ items: FrameworkItem[] }>('/frameworks'),
+
+  templates: () => get<{ items: TemplateItem[] }>('/templates'),
+  saveTemplate: (body: { session_id?: number; name: string; doc_type?: string; description?: string; content?: string; make_default?: boolean }) =>
+    post<TemplateItem>('/templates', body),
+  updateTemplate: (id: number, body: { name: string; doc_type?: string; description?: string; content?: string; make_default?: boolean }) =>
+    put<TemplateItem>(`/templates/${id}`, body),
+  deleteTemplate: (id: number) => del<{ deleted: boolean }>(`/templates/${id}`),
+
+  sessions: () => get<{ items: Session[] }>('/sessions'),
+  createSession: (body: { kind: 'new' | 'library'; title?: string; doc_type?: string; template_id?: string | null; document_id?: number | null; instructions?: Instructions }) =>
+    post<Session>('/sessions', body),
+  uploadSession: async (file: File, docType: string, title = ''): Promise<Session> => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('doc_type', docType);
+    form.append('title', title);
+    return (await apiClient.post(`${base}/sessions/upload`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
+  session: (id: number) => get<Session>(`/sessions/${id}`),
+  patchSession: (id: number, body: { title?: string; doc_type?: string; instructions?: Instructions; settings?: { auto_apply?: boolean } }) =>
+    patch<Session>(`/sessions/${id}`, body),
+  deleteSession: (id: number) => del<{ deleted: boolean }>(`/sessions/${id}`),
+  saveContent: (id: number, content: string, baseRevision?: number, summary?: string) =>
+    put<{ revision: number; saved: boolean; words: number }>(`/sessions/${id}/content`, { content, base_revision: baseRevision, summary }),
+
+  addReference: (id: number, body: { kind: Reference['kind']; source_id?: number | null; scope?: ReferenceScope; template_id?: string }) =>
+    post<Reference>(`/sessions/${id}/references`, body),
+  uploadReference: async (id: number, file: File): Promise<Reference> => {
+    const form = new FormData();
+    form.append('file', file);
+    return (await apiClient.post(`${base}/sessions/${id}/references/upload`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
+  toggleReference: (id: number, refId: number, include: boolean) => patch<Reference>(`/sessions/${id}/references/${refId}`, {}, { include }),
+  removeReference: (id: number, refId: number) => del<{ deleted: boolean }>(`/sessions/${id}/references/${refId}`),
+  readReference: (id: number, refId: number) => get<Reference & { text: string }>(`/sessions/${id}/references/${refId}`),
+
+  messages: (id: number) => get<{ items: Message[] }>(`/sessions/${id}/messages`),
+  send: (id: number, text: string) => post<Message>(`/sessions/${id}/messages`, { text }),
+  message: (id: number, messageId: number) => get<Message>(`/sessions/${id}/messages/${messageId}`),
+  accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
+    post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message }>(`/sessions/${id}/messages/${messageId}/accept`, body),
+  reject: (id: number, messageId: number, body: { op_ids?: string[] } = {}) => post<{ message: Message }>(`/sessions/${id}/messages/${messageId}/reject`, body),
+  preview: (id: number, messageId: number) => get<Redline>(`/sessions/${id}/messages/${messageId}/redline`),
+
+  checks: (id: number, ai = false) => post<{ revision: number; issues: Issue[]; summary: { total: number; by_kind: Record<string, number>; by_severity: Record<string, number>; must_fill: number }; ai_message?: Message }>(`/sessions/${id}/checks`, {}, { ai }),
+  lastAiCheck: (id: number) => get<{ message: Message | null; stale?: boolean }>(`/sessions/${id}/checks/ai`),
+  fix: (id: number, fix: Record<string, unknown>, message?: string) => post<{ revision: number; content: string }>(`/sessions/${id}/checks/fix`, { fix, message }),
+  fixAll: (id: number, kinds?: string[]) => post<{ fixed: number; revision: number; content: string }>(`/sessions/${id}/checks/fix-all`, { kinds }),
+
+  revisions: (id: number) => get<{ items: Revision[]; base_label: string | null }>(`/sessions/${id}/revisions`),
+  diff: (id: number, from: number, to?: number) => get<Redline>(`/sessions/${id}/diff`, { from, to }),
+  restore: (id: number, number: number) => post<{ revision: number; content: string }>(`/sessions/${id}/restore/${number}`),
+  compare: (id: number, body: { document_id?: number; revision?: number; ai?: boolean }) =>
+    post<Redline>(`/sessions/${id}/compare`, body),
+
+  moveToLibrary: (id: number, body: MoveToLibrary) => post<{ document_id: number; title: string; version: string }>(`/sessions/${id}/move-to-library`, body),
+  saveToDocument: (id: number, body: { change_reason?: string; force?: boolean } = {}) =>
+    post<{ document_id: number; version: string; status: string }>(`/sessions/${id}/save-to-document`, body),
+
+  assets: () => get<{ items: Asset[] }>('/assets'),
+  uploadAsset: async (file: File, makeDefault = false): Promise<Asset> => {
+    const form = new FormData();
+    form.append('file', file);
+    form.append('make_default', String(makeDefault));
+    return (await apiClient.post(`${base}/assets`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
+  },
+  updateAsset: (id: number, body: { name?: string; is_default?: boolean }) => put<Asset>(`/assets/${id}`, body),
+  deleteAsset: (id: number) => del<{ ok: boolean }>(`/assets/${id}`),
+  assetBlob: async (id: number): Promise<Blob> => (await apiClient.get(`${base}/assets/${id}/file`, { responseType: 'blob' })).data,
+
+  exportCheck: (id: number, options: ExportOptions) => post<{ format: string; notes: ExportNote[]; can_export: boolean }>(`/sessions/${id}/export/check`, options),
+  exportFile: async (id: number, options: ExportOptions): Promise<{ blob: Blob; filename: string }> => {
+    const res = await apiClient.post(`${base}/sessions/${id}/export`, options, { responseType: 'blob' });
+    const header = String(res.headers['content-disposition'] || '');
+    const star = /filename\*=UTF-8''([^;]+)/i.exec(header);
+    const plain = /filename="?([^";]+)"?/i.exec(header);
+    return { blob: res.data as Blob, filename: star ? decodeURIComponent(star[1]) : plain ? plain[1] : `document.${options.format}` };
+  },
+};
+
+export function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+}
+
+/** A failed blob download carries its sentence inside the blob. */
+export async function problemOfBlob(error: unknown): Promise<string> {
+  const data = (error as { response?: { data?: Blob } })?.response?.data;
+  if (data instanceof Blob) {
+    try {
+      const parsed = JSON.parse(await data.text());
+      if (typeof parsed?.detail === 'string') return parsed.detail;
+    } catch {
+      /* fall through */
+    }
+  }
+  return problemOf(error);
+}
+
+export const DOC_TYPE_LABEL: Record<string, string> = {
+  policy: 'Policy',
+  standard: 'Standard',
+  procedure: 'Procedure',
+  guideline: 'Guideline',
+  charter: 'Charter',
+  other: 'Other document',
+};

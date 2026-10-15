@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
+import { studioApi, problemOf as studioProblem } from '@/lib/studio/api';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -306,6 +307,14 @@ export default function PolicyDetailPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const id = Number(params.id);
+
+  // Organisations the AI Studio is on for can open this document in it (read, edit, compare, refine through chat).
+  const studioStatus = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
+  const openInStudio = useMutation({
+    mutationFn: () => studioApi.createSession({ kind: 'library', document_id: id }),
+    onSuccess: (s) => router.push(`/governance/documents/studio/${s.id}`),
+    onError: (e) => toast({ title: 'Could not open it in the AI Studio', message: studioProblem(e), type: 'error' }),
+  });
 
   // Restore the operator's scroll position after they round-tripped through
   // /governance/documents to draft a referenced standard. handleDraftReference
@@ -991,6 +1000,16 @@ export default function PolicyDetailPage() {
             <Download className="h-4 w-4" />
             {document.has_file ? 'Download File' : 'Download Draft'}
           </button>
+          {studioStatus.data?.enabled && (
+            <button
+              onClick={() => openInStudio.mutate()}
+              disabled={openInStudio.isPending}
+              className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
+            >
+              {openInStudio.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+              Edit in AI Studio
+            </button>
+          )}
           <button
             onClick={handleEditOpen}
             className="flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 transition-colors"
