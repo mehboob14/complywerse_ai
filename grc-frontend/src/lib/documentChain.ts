@@ -142,7 +142,7 @@ export type ExportFormat = 'xlsx' | 'pdf' | 'csv';
 
 export const ORIGIN_LABEL: Record<string, string> = {
   ai: 'AI-assisted', manual: 'Edited by hand', mixed: 'AI-assisted and edited by hand', revert: 'Taken back', restore: 'Earlier version restored',
-  signoff: 'Sign-off stamp', initial: 'First version', file: 'File replaced', import: 'Imported', unknown: 'Changed', nochange: 'No change to the text',
+  signoff: 'Sign-off stamp', initial: 'The original', file: 'File replaced', import: 'Imported', unknown: 'Changed', nochange: 'No change to the text',
 };
 
 /** "AI · accepted by Olivia", "Edited by Sara", "Taken back by Khalid": who and how, in a few words. */
@@ -182,7 +182,7 @@ export const documentChainApi = {
       versions: BaselineVersion[];
     },
   revert: async (id: number, body: { from_version_id: number; hunks: number[]; hash?: string; reason?: string }) =>
-    (await apiClient.post(`/governance/documents/${id}/change-chain/revert`, body)).data as { version: string; status: string; changes_taken_back: number },
+    (await apiClient.post(`/governance/documents/${id}/change-chain/revert`, body)).data as { version: string; status: string; changes_taken_back: number; notes?: string[] },
   exportFile: async (id: number, format: ExportFormat): Promise<{ blob: Blob; filename: string }> => {
     const res = await apiClient.get(`/governance/documents/${id}/change-chain/export`, { params: { format }, responseType: 'blob' });
     return { blob: res.data as Blob, filename: filenameOf(res.headers?.['content-disposition'], `change-chain.${format}`) };

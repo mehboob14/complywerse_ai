@@ -85,7 +85,7 @@ function VersionCard({ v, current, open, onToggle, onShow }: { v: ChainVersion; 
       {open && (
         <div className="border-t border-slate-200 bg-slate-50 px-3 py-3">
           {v.items.length === 0
-            ? <p className="text-xs text-slate-600">{v.origin === 'initial' ? 'The first version: there is nothing before it to compare with.' : v.comparable ? 'The text did not change in this version.' : 'The file of this version could not be read, so its changes are not listed.'}</p>
+            ? <p className="text-xs text-slate-600">{v.origin === 'initial' ? `The original${v.has_file ? ' file' : ''}: the first version, so there is nothing before it to compare with.` : v.comparable ? 'The text did not change in this version.' : 'The file of this version could not be read, so its changes are not listed.'}</p>
             : <ul className="space-y-2">{v.items.map((it) => <ItemRow key={`${v.id}-${it.n}`} item={it} />)}</ul>}
         </div>
       )}

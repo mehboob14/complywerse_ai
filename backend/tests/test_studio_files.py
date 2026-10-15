@@ -161,13 +161,44 @@ def test_an_uploaded_word_file_moved_to_the_library_stays_a_word_file(world, lib
     saved = Document(doc.file_path)
     assert "every quarter" in "\n".join(p.text for p in saved.paragraphs)                          # the edit is in the file, in the original's formatting
     assert zipfile.ZipFile(doc.file_path).read("word/header1.xml") == zipfile.ZipFile(path).read("word/header1.xml")
-    version = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).one()
-    assert version.version_number == "1.0" and version.file_path == doc.file_path and version.status == "current"
-    # and the session carries on from there: the next edit becomes version 1.1 of the same file
+    # the uploaded file is the original: kept as it was, as version 1.0; what was changed after it is version 1.1 (the file above)
+    first, second = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).order_by(m.GovernanceDocumentVersion.id).all()
+    assert (first.version_number, first.status, first.file_name) == ("1.0", "superseded", "policy.docx")
+    assert open(first.file_path, "rb").read() == open(path, "rb").read() and first.file_path.startswith(str(lib)) and first.file_path != doc.file_path
+    assert (second.version_number, second.status, second.file_path, doc.current_version) == ("1.1", "current", doc.file_path, "1.1")
+    assert second.change_set["items"] and "every year" in second.change_set["items"][0]["before_text"] and "every quarter" in second.change_set["items"][0]["after_text"]
+    # and the session carries on from there: the next edit becomes version 1.2 of the same file
     again = world.http.get(world.api(f"/sessions/{s['id']}")).json()
     world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": again["content"] + "\nPostscript.\n", "base_revision": again["revision"]})
     saved2 = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={}).json()
-    assert saved2["version"] == "1.1" and "Postscript." in "\n".join(p.text for p in Document(world.db.get(m.GovernanceDocument, doc.id).file_path).paragraphs)
+    assert saved2["version"] == "1.2" and "Postscript." in "\n".join(p.text for p in Document(world.db.get(m.GovernanceDocument, doc.id).file_path).paragraphs)
+
+
+def test_an_uploaded_word_file_moved_to_the_library_without_changes_is_the_uploaded_file_itself(world, lib, tmp_path):
+    path = F.corporate_policy(str(tmp_path / "policy.docx"))
+    s = upload(world, path)
+    moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"title": "Information Security Policy"}).json()
+    doc = world.db.get(m.GovernanceDocument, moved["document_id"])
+    only = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).one()
+    assert (only.version_number, only.status, doc.current_version) == ("1.0", "current", "1.0")
+    assert open(doc.file_path, "rb").read() == open(path, "rb").read() and only.file_path == doc.file_path        # not a copy that was re-saved
+    assert doc.file_path.startswith(str(lib)) and not (doc.content or "").strip()
+
+
+def test_an_uploaded_pdf_moved_to_the_library_becomes_text_and_the_pdf_is_kept_as_the_first_version(world, lib, tmp_path):
+    md = "# Retention Policy\n\n## 1. Purpose\n\n" + "Records shall be kept as long as the law requires and no longer. " * 6 + "\n\n## 2. Rules\n\n1. Keep invoices for ten years.\n2. Keep emails for two years.\n"
+    pdf = tmp_path / "retention.pdf"
+    pdf.write_bytes(exporters.to_pdf(md, title="Retention", entity_name="Capital Financial Services Bank", doc_code="POL-9", version="1.0"))
+    s = upload(world, str(pdf), "retention.pdf", "application/pdf")
+    world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"].replace("two years", "three years"), "base_revision": s["revision"]})
+    moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"title": "Retention Policy"}).json()
+    doc = world.db.get(m.GovernanceDocument, moved["document_id"])
+    assert "three years" in doc.content and not doc.file_path and doc.current_version == "1.1"           # a text document: its page and editor are as for any other
+    first, second = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).order_by(m.GovernanceDocumentVersion.id).all()
+    assert (first.version_number, first.file_name, first.file_type, first.status) == ("1.0", "retention.pdf", "pdf", "superseded")
+    assert open(first.file_path, "rb").read() == pdf.read_bytes() and "two years" in first.content and "three years" not in first.content
+    assert (second.version_number, second.status, second.change_type) == ("1.1", "current", "studio") and not second.file_path
+    assert "three years" in second.change_set["items"][0]["after_text"]
 
 
 def test_a_document_can_be_compared_with_a_file_the_person_uploads(world):

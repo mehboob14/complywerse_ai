@@ -38,7 +38,7 @@ _FILE_TEXT_CACHE: Dict[Tuple[int, Optional[int], str], Optional[str]] = {}
 STAGE_LABEL = {"draft": "Draft", "pending_review": "In review", "pending_approval": "In approval", "approved": "Approved",
                "published": "Published", "expired": "Expired", "archived": "Archived", "exception_applied": "Exception applied"}
 ORIGIN_LABEL = {"ai": "AI-assisted", "manual": "Edited by hand", "mixed": "AI-assisted and edited by hand", "revert": "Reverted",
-                "restore": "Earlier version restored", "signoff": "Sign-off stamp", "initial": "First version", "file": "File replaced",
+                "restore": "Earlier version restored", "signoff": "Sign-off stamp", "initial": "The original", "file": "File replaced",
                 "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
 # audit entries that matter to the chain (the rest - views, downloads, field edits - do not)
 _EVENT_ACTIONS = {"created", "sent_for_review", "sent_for_approval", "signed", "rejected", "published", "archived", "status_changed",
@@ -480,12 +480,13 @@ def redline(db, doc, from_version_id: int, to_version_id: Optional[int] = None) 
             break
     for h in result["hunks"]:
         h["by"] = attribute(h, origins)
-    editable = bool((doc.content or "").strip())
+    now_text = document_text(doc)            # the document as it is now: its text, or the text of its file (an uploaded Word or PDF)
+    editable = now_text is not None
     current_hash = result["hash"]
     if to_v is not None and editable:
         # the changes of one version are taken back from the document as it is now: each is found there again by its words
         # (a change edited by a later version is no longer the same change and cannot be taken back on its own)
-        now = compare(base_text, doc.content)
+        now = compare(base_text, now_text)
         current_hash = now["hash"]
         found = {(tuple(h["before_digests"]), tuple(h["after_digests"])): h["id"] for h in now["hunks"]}
         for h in result["hunks"]:
@@ -496,7 +497,7 @@ def redline(db, doc, from_version_id: int, to_version_id: Optional[int] = None) 
             h["current_id"] = h["id"]
             h["can_revert"] = editable and not h["locked"]
     if not editable:
-        why = "This is the document's file: open it in the AI Studio to take a change back."
+        why = "The text of this document's file cannot be read, so a change cannot be taken back here."
     elif to_v is not None:
         why = "This change was changed again by a later version, so it cannot be taken back on its own. Compare with the current document instead."
     else:

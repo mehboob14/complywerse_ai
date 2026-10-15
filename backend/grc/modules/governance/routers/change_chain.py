@@ -65,9 +65,7 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
     """Take chosen changes back to what an earlier version had, leaving every other change as it is. A new version."""
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     _enabled_or_404(db)
-    if not (doc.content or "").strip():
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
-                            detail="This document is its file. Open it in the AI Studio to take a change back.")
+    is_file = not (doc.content or "").strip()            # an uploaded Word or PDF: the file is the document
     base_v = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.id == body.from_version_id,
                                                         GovernanceDocumentVersion.document_id == doc.id).first()
     if base_v is None:
@@ -75,7 +73,9 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
     base_text = C.version_text(base_v)
     if base_text is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The text of that version cannot be read.")
-    old_content = doc.content
+    old_content = C.document_text(doc)
+    if old_content is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The text of this document's file cannot be read, so a change cannot be taken back here.")
     if body.hash and body.hash != C.content_hash(old_content):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="The document was edited while you were looking at it. Open the changes again.")
     wanted = set(body.hunks)
@@ -93,29 +93,43 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
     reason = (body.reason or "").strip() or f"Took back {n} change{'' if n == 1 else 's'} made since version {base_v.version_number}"
     old_title, old_version, old_status = doc.title, doc.current_version or "1.0", doc.status
     name = current_user.display_name or current_user.username or "A user"
-    doc.content, doc.updated_at = new_content, datetime.utcnow()
-    new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
-                                            change_type="revert", change_reason=reason, user_id=current_user.id)
-    db.flush()
-    row = (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id, GovernanceDocumentVersion.version_number == new_version)
-           .order_by(GovernanceDocumentVersion.id.desc()).first())
+    notes: List[str] = []
+    if is_file:
+        # the file is the document: a Word file gets the change written into it (its fonts, header and footer stay), a PDF becomes a
+        # Word copy; the file it replaces stays as the earlier version, so the original is never lost
+        from ..studio import service as studio
+
+        data, notes = studio.file_bytes(db, doc, new_content)
+        row, new_version, _ = studio.write_file_version(db, doc, current_user, data, change_type="revert", summary=reason, reason=reason,
+                                                        done="Changes were taken back")
+    else:
+        doc.content, doc.updated_at = new_content, datetime.utcnow()
+        new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
+                                                change_type="revert", change_reason=reason, user_id=current_user.id)
+        db.flush()
+        row = (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id, GovernanceDocumentVersion.version_number == new_version)
+               .order_by(GovernanceDocumentVersion.id.desc()).first())
+        if row is not None:
+            row.change_summary = reason
     if row is not None:
-        row.change_summary = reason
         cs = C.build_change_set(old_content, new_content, [], default_kind="revert", by=name, by_id=current_user.id, at=datetime.utcnow().isoformat(),
                                 extra={"reverts": {"since_version": base_v.version_number, "changes": n}, "stage_before": old_status})
         for item in cs["items"]:
             item["reason"] = reason
         row.change_set = cs
-    if old_status in ("approved", "published", "exception_applied"):
-        doc.status = "pending_review"
-        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="status_changed", field_changed="status",
-                         old_value=old_status, new_value="pending_review", action_details=f"Changes were taken back (version {new_version}), so it needs approving again")
-        doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", current_user.id)
-    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="content_edited", field_changed="current_version",
-                     old_value=old_version, new_value=new_version, action_details=f"{reason}; version {new_version}"
-                     + ("; sent back to review" if doc.status != old_status else ""))
+    if not is_file:               # (a file's status and history are written with its new version)
+        if old_status in ("approved", "published", "exception_applied"):
+            doc.status = "pending_review"
+            create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="status_changed", field_changed="status",
+                             old_value=old_status, new_value="pending_review", action_details=f"Changes were taken back (version {new_version}), so it needs approving again")
+            doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", current_user.id)
+        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="content_edited", field_changed="current_version",
+                         old_value=old_version, new_value=new_version, action_details=f"{reason}; version {new_version}"
+                         + ("; sent back to review" if doc.status != old_status else ""))
     db.commit()
-    return {"version": new_version, "status": doc.status, "changes_taken_back": n}
+    if is_file:
+        studio.reanchor(db, doc, current_user.id)
+    return {"version": new_version, "status": doc.status, "changes_taken_back": n, "notes": notes}
 
 
 @router.get("/{document_id}/change-chain/export")

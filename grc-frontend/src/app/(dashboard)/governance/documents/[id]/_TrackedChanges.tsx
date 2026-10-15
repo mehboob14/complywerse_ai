@@ -50,7 +50,8 @@ export default function TrackedChanges({ documentId, status, initial, onChanged 
       setReason('');
       for (const key of ['document-chain', 'document-chain-redline', 'document-versions', 'governance-document', 'document-lifecycle']) qc.invalidateQueries({ queryKey: [key] });
       onChanged?.();
-      toast({ type: 'success', title: 'Change taken back', message: `Saved as version ${r.version}.${r.status === 'pending_review' ? ' The document goes back to review.' : ''}` });
+      toast({ type: r.notes?.length ? 'warning' : 'success', title: 'Change taken back',
+        message: `Saved as version ${r.version}.${r.status === 'pending_review' ? ' The document goes back to review.' : ''}${r.notes?.length ? ` ${r.notes.join(' ')}` : ''}` });
     },
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ['document-chain-redline', documentId] });
@@ -72,7 +73,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged 
             className="max-w-[22rem] rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900">
             {[...versions].reverse().map((v, i) => (
               <option key={v.id} value={v.id} disabled={i === 0 && to == null}>
-                v{v.number} · {v.by} · {dateTime(v.at)} · {v.stage_label}{i === 0 ? ' (the current one)' : ''}
+                v{v.number} · {v.by} · {dateTime(v.at)} · {v.stage_label}{i === 0 ? ' (the current one)' : i === versions.length - 1 ? ' (the original)' : ''}
               </option>
             ))}
           </select>
@@ -139,7 +140,7 @@ export function SinceApproved({ documentId, onShow }: { documentId: number; onSh
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-primary-200 bg-primary-50/60 px-3 py-2 text-xs text-slate-800" role="note">
       <GitCompare className="h-4 w-4 shrink-0 text-primary-700" aria-hidden />
       <span className="min-w-0 flex-1">
-        Since {info.approved ? 'the last approved version' : 'the first version'} (v{info.base.number}): <strong>{info.changes} change{info.changes === 1 ? '' : 's'}</strong> in {info.versions} version{info.versions === 1 ? '' : 's'}
+        Since {info.approved ? 'the last approved version' : 'the original'} (v{info.base.number}): <strong>{info.changes} change{info.changes === 1 ? '' : 's'}</strong> in {info.versions} version{info.versions === 1 ? '' : 's'}
         {' '}by {info.people.join(', ')}{info.ai ? ` · ${info.ai} AI-assisted` : ''}.
       </span>
       <button type="button" onClick={() => onShow(info.base.id)} className="font-semibold text-primary-800 underline">See them marked in the document</button>

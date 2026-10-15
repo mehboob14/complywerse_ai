@@ -5,9 +5,12 @@ version, the AI Studio); the studio's part (provenance recorded when a change is
 the tracked changes of a session) through the real studio routes with the AI as a mocked wire."""
 import io
 import json
+import os
+import zipfile
 from datetime import datetime, timedelta
 
 import pytest
+from docx import Document
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -15,9 +18,11 @@ import grc.models as m
 from grc.modules.governance import change_chain as C
 from grc.modules.governance import change_chain_export as X
 from grc.modules.governance.routers import change_chain as chain_routes
+from grc.modules.governance.studio import docx_io, exporters
 from grc.routers.auth_router import require_auth
 
 from _claude_mock import reply
+from test_studio_files import lib, make_library_doc                 # noqa: F401  (lib is a fixture: the library's own folder for files)
 from test_studio_flow import ENTITY, answer, change, world          # noqa: F401  (world is a fixture)
 
 POLICY = """# Access Control Policy
@@ -285,7 +290,7 @@ def test_one_change_is_taken_back_as_a_new_version_and_a_published_document_goes
     assert stale.status_code == 409
 
 
-def test_a_sign_off_record_is_not_taken_back_and_a_document_that_is_its_file_is_sent_to_the_studio(library):
+def test_a_sign_off_record_is_not_taken_back_and_a_file_that_cannot_be_read_cannot_be_taken_back_into(library):
     db = library.db
     doc = db.get(m.GovernanceDocument, 10)
     doc.content = POLICY
@@ -300,9 +305,131 @@ def test_a_sign_off_record_is_not_taken_back_and_a_document_that_is_its_file_is_
     assert red["hunks"][0]["can_revert"] is False
     refused = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [red["hunks"][0]["id"]]})
     assert refused.status_code == 400 and "sign-off" in refused.json()["detail"]
-    doc.content, doc.file_path = "", "/files/policy.docx"
+    doc.content, doc.file_path = "", "/files/policy.docx"                # a document that is a file nobody can read any more
     db.commit()
-    assert library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [0]}).status_code == 400
+    gone = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [0]})
+    assert gone.status_code == 400 and "cannot be read" in gone.json()["detail"]
+    assert library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[0].id}&to={versions[1].id}").json()["can_revert"] is False
+
+
+# ── an uploaded original: the file is the document ───────────────────────────
+def _edit_in_studio(world, doc_id, old, new, *, reason):
+    """Open a library document in the studio, change one wording by hand and save it to the library: the next version."""
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": doc_id}).json()
+    assert old in s["content"], s["content"][:300]
+    put = world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"].replace(old, new), "base_revision": s["revision"]})
+    assert put.status_code == 200
+    saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={"change_reason": reason})
+    assert saved.status_code == 200, saved.text
+    return saved.json()
+
+
+def test_an_uploaded_word_original_keeps_its_history_and_a_change_is_taken_back_into_a_new_file(library, lib):
+    world, db = library, library.db
+    original = make_library_doc(world, lib)                                    # the uploaded file: version 1.0, published
+    before = open(original, "rb").read()
+    assert _edit_in_studio(world, 20, "Review it every year.", "Review it every six months.", reason="Review cycle")["version"] == "1.1"
+
+    c = world.chain(20)
+    assert c["document"]["is_file"] is True and [v["number"] for v in c["versions"]] == ["1.0", "1.1"]
+    uploaded, edited = c["versions"]
+    assert (uploaded["origin"], uploaded["has_file"], uploaded["file_name"]) == ("initial", True, "orig.docx")      # the original is the first file
+    assert edited["changes"] == 1 and edited["has_file"] and edited["reason"] == "Review cycle"
+    assert "every year" in edited["items"][0]["before_text"] and "every six months" in edited["items"][0]["after_text"]
+
+    # the document page: tracked changes against the original, and the change can be taken back there
+    red = world.lib.get(f"/governance/documents/20/change-chain/redline?from={uploaded['id']}").json()
+    assert red["can_revert"] is True and red["why_not"] is None and len(red["hunks"]) == 1 and red["hunks"][0]["can_revert"] is True
+    assert red["hunks"][0]["by"]["by"] == "Olivia Owner"
+    doc = db.get(m.GovernanceDocument, 20)
+    doc.status = "published"                                                   # approved again meanwhile
+    db.commit()
+    first_edit_file = doc.file_path
+    out = world.lib.post("/governance/documents/20/change-chain/revert", json={"from_version_id": uploaded["id"], "hunks": [red["hunks"][0]["id"]],
+                                                                               "hash": red["hash"], "reason": "The cycle was not agreed"})
+    assert out.status_code == 200, out.text
+    assert out.json()["version"] == "1.2" and out.json()["status"] == "pending_review" and out.json()["notes"] == []
+
+    db.refresh(doc)
+    assert doc.file_path not in (original, first_edit_file) and doc.file_type == "docx" and not (doc.content or "").strip()
+    new_file = Document(doc.file_path)
+    para = next(p for p in new_file.paragraphs if p.text.startswith("This policy applies"))
+    assert "Review it every year." in para.text and "six months" not in para.text
+    assert zipfile.ZipFile(doc.file_path).read("word/header1.xml") == zipfile.ZipFile(original).read("word/header1.xml")       # still the original's file
+    assert open(original, "rb").read() == before                              # the uploaded file is untouched
+    rows = {v.version_number: v for v in db.query(m.GovernanceDocumentVersion).filter_by(document_id=20)}
+    assert rows["1.0"].file_path == original and rows["1.1"].file_path == first_edit_file and rows["1.2"].file_path == doc.file_path
+    assert (rows["1.2"].status, rows["1.1"].status, rows["1.2"].change_type, rows["1.2"].change_reason) == ("current", "superseded", "revert", "The cycle was not agreed")
+    assert rows["1.2"].change_set["items"][0]["origin"] == "revert" and rows["1.2"].change_set["reverts"]["since_version"] == "1.0"
+    assert db.query(m.DocumentAuditLog).filter_by(document_id=20, action="status_changed", new_value="pending_review").count() == 2     # the studio save and this
+
+    again = world.chain(20)
+    assert [v["number"] for v in again["versions"]] == ["1.0", "1.1", "1.2"]
+    assert again["versions"][-1]["origin_label"] == "Reverted" and again["versions"][-1]["has_file"] is True
+    nothing = world.lib.get(f"/governance/documents/20/change-chain/redline?from={uploaded['id']}").json()
+    assert nothing["hunks"] == []                                              # back to the original's wording
+    stale = world.lib.post("/governance/documents/20/change-chain/revert", json={"from_version_id": uploaded["id"], "hunks": [0], "hash": red["hash"]})
+    assert stale.status_code == 409                                            # the file changed since that redline was read
+
+
+def test_a_change_to_a_word_original_that_cannot_be_written_into_it_is_taken_back_into_a_clean_copy_and_the_person_is_told(library, lib, monkeypatch):
+    world, db = library, library.db
+    make_library_doc(world, lib, status="draft")
+    _edit_in_studio(world, 20, "Review it every year.", "Review it every six months.", reason="Review cycle")
+    chain = world.chain(20)
+    red = world.lib.get(f"/governance/documents/20/change-chain/redline?from={chain['versions'][0]['id']}").json()
+
+    def refuse(*args, **kwargs):
+        raise docx_io.PatchProblem("block 9 reads differently")
+
+    monkeypatch.setattr(docx_io, "export_in_place", refuse)
+    out = world.lib.post("/governance/documents/20/change-chain/revert", json={"from_version_id": chain["versions"][0]["id"], "hunks": [red["hunks"][0]["id"]]})
+    assert out.status_code == 200 and out.json()["version"] == "1.2" and out.json()["status"] == "draft"
+    assert len(out.json()["notes"]) == 1 and "clean Word document" in out.json()["notes"][0]
+    doc = db.get(m.GovernanceDocument, 20)
+    assert "Review it every year." in "\n".join(p.text for p in Document(doc.file_path).paragraphs)
+
+
+def test_a_change_is_written_into_a_word_file_with_tracked_changes_as_into_a_copy_with_them_accepted_and_no_copy_is_left_behind(library, lib):
+    import _docx_fixtures as F
+    from grc.modules.governance.studio import service as studio
+
+    make_library_doc(library, lib, status="draft", file_fixture=F.tracked_policy)
+    doc = library.db.get(m.GovernanceDocument, 20)
+    text = C.document_text(doc)
+    assert "seven years" in text and "five" not in text                           # the text is the accepted text
+    data, notes = studio.file_bytes(library.db, doc, text.replace("seven years", "ten years"))
+    assert notes == []                                                            # written into the file, not a rebuilt copy
+    body = "\n".join(p.text for p in Document(io.BytesIO(data)).paragraphs)
+    assert "ten years" in body and "five" not in body and "Untouched paragraph." in body
+    assert [f for f in os.listdir(lib) if "twin" in f] == []
+
+
+def test_an_uploaded_pdf_original_is_kept_and_a_change_to_its_word_copy_is_taken_back_into_a_new_word_file(library, lib):
+    world, db = library, library.db
+    md = ("# Retention Policy\n\n## 1. Purpose\n\n" + "Records shall be kept as long as the law requires and no longer. " * 6 + "\n\n"
+          "## 2. Rules\n\n1. Keep invoices for ten years.\n2. Keep emails for two years.\n")
+    pdf = lib / "retention.pdf"
+    pdf.write_bytes(exporters.to_pdf(md, title="Retention", entity_name="Capital Financial Services Bank", doc_code="POL-9", version="1.0"))
+    size = os.path.getsize(pdf)
+    db.add(m.GovernanceDocument(id=21, tenant_id=1, title="Retention Policy", doc_type="policy", status="draft", current_version="1.0", file_name="retention.pdf",
+                                file_path=str(pdf), file_size=size, file_type="pdf", owner_id=1, content=None))
+    db.add(m.GovernanceDocumentVersion(document_id=21, version_number="1.0", change_type="major", title="Retention Policy", file_name="retention.pdf", file_path=str(pdf),
+                                       file_size=size, file_type="pdf", change_summary="Initial version", status="current", created_by=1))
+    db.commit()
+    assert _edit_in_studio(world, 21, "Keep emails for two years.", "Keep emails for three years.", reason="Longer")["version"] == "1.1"
+    c = world.chain(21)
+    uploaded, copy = c["versions"]
+    assert uploaded["file_name"] == "retention.pdf" and copy["file_name"].endswith(".docx") and copy["changes"] == 1       # the PDF stays as the first file
+    red = world.lib.get(f"/governance/documents/21/change-chain/redline?from={uploaded['id']}").json()
+    assert red["can_revert"] is True and "three years" in red["hunks"][0]["after_text"]
+    out = world.lib.post("/governance/documents/21/change-chain/revert", json={"from_version_id": uploaded["id"], "hunks": [red["hunks"][0]["id"]], "hash": red["hash"]})
+    assert out.status_code == 200 and out.json()["version"] == "1.2"
+    doc = db.get(m.GovernanceDocument, 21)
+    assert doc.file_type == "docx" and doc.file_path.endswith(".docx")
+    text = "\n".join(p.text for p in Document(doc.file_path).paragraphs)
+    assert "Keep emails for two years." in text and "three years" not in text
+    assert os.path.exists(str(pdf)) and db.query(m.GovernanceDocumentVersion).filter_by(document_id=21, version_number="1.0").one().file_path == str(pdf)
 
 
 # ── the catalog ──────────────────────────────────────────────────────────────
