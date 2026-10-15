@@ -289,7 +289,6 @@ export default function StudioWorkspacePage() {
       if (issue.block != null) h.goToBlock(issue.block);
     }, 60);
   };
-  const goToBlock = (block: number) => { setCompare(null); setPane('document'); setTimeout(() => editor.current?.goToBlock(block), 60); };
 
   const rename = async (title: string) => {
     if (!session || !title.trim() || title === session.title) return;
@@ -442,7 +441,7 @@ export default function StudioWorkspacePage() {
             {tab === 'references' && <ReferencesPanel session={session} onChanged={onSessionChanged} focusKey={focusRef} />}
             {tab === 'instructions' && <InstructionsPanel session={session} onChanged={onSessionChanged} />}
             <div className={`h-full ${tab === 'checks' ? 'block' : 'hidden'}`}>
-              <ChecksPanel session={session} aiConfigured={aiConfigured} flush={flush} onContent={(c, r) => applyServerContent(c, r)} onGoTo={goTo} onGoToBlock={goToBlock} onIssues={onIssues} onNextPlaceholder={() => editor.current?.nextPlaceholder()} />
+              <ChecksPanel session={session} aiConfigured={aiConfigured} flush={flush} onContent={(c, r) => applyServerContent(c, r)} onGoTo={goTo} onIssues={onIssues} onNextPlaceholder={() => editor.current?.nextPlaceholder()} />
             </div>
             {tab === 'history' && <HistoryPanel session={session} flush={flush} onCompare={(c) => { setCompare(c); setPane('document'); }} onContent={(c, r) => { applyServerContent(c, r); setCompare(null); }} onSessionChanged={onSessionChanged} />}
           </div>

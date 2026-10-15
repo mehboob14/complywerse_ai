@@ -368,9 +368,9 @@ def _fallback_areas(session, scaffold: Any, core: Optional[Section]) -> List[Dic
     return [{"title": t[:80], "focus": f"Set out what the institution requires for {t.lower()}.", "must_cover": [], "refs": [], "words": 450} for t in items[:8]]
 
 
-def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sections: Sequence[Section], core: Optional[Section], requirements: Sequence[str], parent: bool,
+def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sections: Sequence[Section], core: Optional[Section], parent: bool,
           total: Dict[str, int], on_progress: Optional[Callable[[claude_client.Progress], None]] = None) -> Dict[str, Any]:
-    task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, requirements=requirements, parent=parent)
+    task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, parent=parent)
     result = _call(shared, task, system, P.PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS, on_progress=on_progress)
     _usage(total, result)
     plan = dict(result.data or {})
@@ -531,7 +531,6 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         entity = str(ins.get("entity_name") or "").strip()
         org = P.organisation_block(ctx, entity, _active_frameworks(db, session.tenant_id))
         system = P.system_for(doc_type, ctx.industry, ctx.regulatory_scope)
-        requirements = [str(r).strip() for r in ins.get("requirements") or [] if str(r).strip()]
         core = next((s for s in sections if s.kind == "core"), None)
         parent = any(r.kind == "parent_document" and r.include for r in references)
         total = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "calls": 0}
@@ -543,7 +542,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
 
         _stage(db, msg, "Planning the document")
         try:
-            plan = _plan(shared, system, label=label, session=session, sections=sections, core=core, requirements=requirements, parent=parent, total=total,
+            plan = _plan(shared, system, label=label, session=session, sections=sections, core=core, parent=parent, total=total,
                          on_progress=_plan_progress(db, msg))
         except Exception as exc:        # noqa: BLE001
             if _fatal(exc):
@@ -569,7 +568,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         for s in sections:
             if s.kind in ("narrative",):
                 todo.append(("section", s, None, lambda s=s, track=track_for(s.full_heading): _write_part(
-                    shared_plus, system, lambda fix, s=s: P.section_task(label=label, section=s, area=None, core=core, doc_type=doc_type, requirements=requirements,
+                    shared_plus, system, lambda fix, s=s: P.section_task(label=label, section=s, area=None, core=core, doc_type=doc_type,
                                                                       sibling_areas=titles, target_words=s.target_words, minimum_words=s.min_words, minimum_clauses=s.min_clauses, fix=fix),
                     section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="", track=track)))
             elif s.kind == "core":
@@ -580,7 +579,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
                     num = f"{s.number}.{a['index']}"
                     todo.append(("area", s, a, lambda s=s, a=a, target=target, minimum=minimum, clauses=clauses, num=num, track=track_for(f"{num} {a['title']}"): _write_part(
                         shared_plus, system, lambda fix, s=s, a=a, target=target, minimum=minimum, clauses=clauses: P.section_task(
-                            label=label, section=s, area=a, core=s, doc_type=doc_type, requirements=requirements, sibling_areas=titles, target_words=target,
+                            label=label, section=s, area=a, core=s, doc_type=doc_type, sibling_areas=titles, target_words=target,
                             minimum_words=minimum, minimum_clauses=clauses, fix=fix),
                         section=s, area_heading=a["title"], minimum_words=minimum, minimum_clauses=clauses, number=num, track=track)))
         dependents = [s for s in sections if s.kind == "dependent"]

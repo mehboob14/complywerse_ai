@@ -826,18 +826,20 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     return doc
 
 
-def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary: str, reason: Optional[str], done: str):
-    """Make ``data`` (a Word file) the next version of a document that is its file, and its file. The file it replaces stays as the
-    earlier version, and the original is kept first when the document has no versions yet. An approved or published document goes
-    back to review. ``done`` is what happened, as the history says it ("Edited in the AI Studio"). Does not commit.
-    Returns ``(version row, version number, status before)``."""
+def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary: str, reason: Optional[str], done: str, ext: str = "docx",
+                       audit_action: str = "content_edited"):
+    """Make ``data`` (a Word file, or a file of type ``ext``) the next version of a document that is its file, and its file. The file it
+    replaces stays as the earlier version, and the original is kept first when the document has no versions yet. An approved or
+    published document goes back to review. ``done`` is what happened, as the history says it ("Edited in the AI Studio"). Does not
+    commit. Returns ``(version row, version number, status before)``."""
     from ....models import GovernanceDocumentVersion
     from ..routers.documents import GOVERNANCE_UPLOAD_DIR
     from ..routers.versions import create_audit_log, increment_version
     from .. import doc_lifecycle
 
     old_path, old_name, old_type, old_size = doc.file_path, doc.file_name, (doc.file_type or "").lower(), doc.file_size
-    new_name = f"{os.path.splitext(old_name or doc.title or 'document')[0]}.docx"
+    ext = (ext or "docx").lower().lstrip(".")
+    new_name = f"{os.path.splitext(old_name or doc.title or 'document')[0]}.{ext}"
     new_path = os.path.join(GOVERNANCE_UPLOAD_DIR, f"{uuid.uuid4()}_{new_name}")
     with open(new_path, "wb") as f:
         f.write(data)
@@ -851,17 +853,17 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
         versions.filter(GovernanceDocumentVersion.status == "current").update({"status": "superseded"})
     new_version = increment_version(old_version, "minor")
     row = GovernanceDocumentVersion(document_id=doc.id, version_number=new_version, change_type=change_type, title=doc.title, file_name=new_name, file_path=new_path,
-                                    file_size=len(data), file_type="docx", change_summary=summary, change_reason=reason, status="current", created_by=user.id)
+                                    file_size=len(data), file_type=ext, change_summary=summary, change_reason=reason, status="current", created_by=user.id)
     db.add(row)
     db.flush()
-    doc.file_name, doc.file_path, doc.file_size, doc.file_type = new_name, new_path, len(data), "docx"
+    doc.file_name, doc.file_path, doc.file_size, doc.file_type = new_name, new_path, len(data), ext
     doc.current_version, doc.updated_at = new_version, _now()
     if old_status in ("approved", "published", "exception_applied"):
         doc.status = "pending_review"
         create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="status_changed", field_changed="status",
                          old_value=old_status, new_value="pending_review", action_details=f"{done} (version {new_version}), so it needs approving again")
         doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", user.id)
-    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="content_edited",
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action=audit_action,
                      action_details=f"{done}; the file was replaced by version {new_version}" + (f". {reason}" if reason else "")
                      + ("; sent back to review" if doc.status != old_status else ""),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
@@ -949,7 +951,7 @@ def export_file(db, s, fmt: str, settings: Dict[str, Any], *, highlight: bool = 
             data, warnings = docx_io.export_in_place(s.source_path, s.content)
             notes.append({"level": "info", "rule": "word_in_place", "text": "Your original Word file is kept: only the changes were written into it, so its fonts, styles, header and footer are as they were."})
             notes += [{"level": "warning", "rule": "word_note", "text": w} for w in warnings]
-            return data, notes
+            return exporters.watermark_docx(data, settings.get("watermark") or ""), notes
         except docx_io.PatchProblem as exc:
             logger.warning("studio session %s: the changes could not be written into the Word file: %s", s.id, exc)
             notes.append({"level": "warning", "rule": "word_rebuilt", "text": "The changes could not be written into your original Word file safely, so this is a clean Word document built from the text. "
@@ -968,7 +970,15 @@ def export_settings(db, s, overrides: Optional[Dict[str, Any]] = None) -> Dict[s
     logo = db.get(StudioAsset, ins["logo_asset_id"]) if ins.get("logo_asset_id") and not ins.get("no_logo") else None
     return {"title": s.title, "entity_name": str(ins.get("entity_name") or ""), "logo_path": assets.path_of(logo) if logo else None,
             "logo_position": ins.get("logo_position") or "header-left", "doc_code": (doc.document_code if doc else "") or "",
-            "version": (doc.current_version if doc else "") or "", "classification": ((doc.classification if doc else ins.get("classification")) or "")}
+            "version": (doc.current_version if doc else "") or "", "classification": ((doc.classification if doc else ins.get("classification")) or ""),
+            "watermark": watermark_text(ins)}
+
+
+def watermark_text(ins: Dict[str, Any]) -> str:
+    """The words written faintly across every page of an export, or "" when the person did not ask for a watermark."""
+    if not ins.get("watermark"):
+        return ""
+    return str(ins.get("watermark_text") or "").strip()[:40] or "DRAFT"
 
 
 def export_name(s, fmt: str, version: str = "") -> str:
@@ -988,6 +998,8 @@ def export_notes(db, s, fmt: str, settings: Dict[str, Any], pending_changes: int
     if pending_changes:
         notes.append({"level": "info", "rule": "pending", "count": pending_changes,
                       "text": f"{pending_changes} change{'s' if pending_changes != 1 else ''} proposed by the AI {'is' if pending_changes == 1 else 'are'} not accepted yet, so not in the file."})
+    if settings.get("watermark") and fmt in ("docx", "pdf", "html"):
+        notes.append({"level": "info", "rule": "watermark", "text": f"Every page carries the watermark “{settings['watermark']}”. Turn it off in Instructions."})
     ins = s.instructions or {}
     if not (fmt == "docx" and is_word_in_place(s)):          # a Word file that came from Word keeps its own header; the studio's is not added
         if not settings["entity_name"]:

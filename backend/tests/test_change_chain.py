@@ -372,6 +372,34 @@ def test_an_uploaded_word_original_keeps_its_history_and_a_change_is_taken_back_
     assert stale.status_code == 409                                            # the file changed since that redline was read
 
 
+def test_restoring_the_original_file_of_an_uploaded_document_makes_it_the_documents_file_again_as_a_new_version(library, lib, monkeypatch):
+    from grc.modules.governance.routers import versions as version_routes
+
+    world, db = library, library.db
+    original = make_library_doc(world, lib)                                    # the uploaded file, 1.0
+    _edit_in_studio(world, 20, "Review it every year.", "Review it every six months.", reason="Review cycle")       # 1.1, a new file
+    doc = db.get(m.GovernanceDocument, 20)
+    doc.status = "published"
+    db.commit()
+    edited_file = doc.file_path
+    monkeypatch.setattr(version_routes, "get_user_tenants", lambda user, db: [1])
+    listed = version_routes.list_versions(document_id=20, db=db, current_user=db.get(m.GRCUser, 1))
+    rows = listed["items"] if isinstance(listed, dict) else listed
+    first = next(v for v in rows if v["version_number"] == "1.0")
+    assert (first["has_file"], first["file_name"], first["file_type"]) == (True, "orig.docx", "docx")
+
+    out = version_routes.rollback_to_version(document_id=20, version_id=first["id"], rollback_data=version_routes.VersionRollback(rollback_reason="Back to what was approved"),
+                                             db=db, current_user=db.get(m.GRCUser, 1))
+    assert out["new_version"]["version_number"] == "1.2" and out["new_version"]["has_file"] is True and out["status"] == "pending_review"
+    db.refresh(doc)
+    assert open(doc.file_path, "rb").read() == open(original, "rb").read() and doc.file_path not in (original, edited_file)    # a copy of the original
+    assert doc.current_version == "1.2" and not (doc.content or "").strip() and os.path.exists(edited_file)                       # the edited file stays as 1.1
+    assert db.query(m.DocumentAuditLog).filter_by(document_id=20, action="version_rollback").count() == 1
+    chain = world.chain(20)
+    assert chain["versions"][-1]["origin"] == "restore" and world.lib.get(
+        f"/governance/documents/20/change-chain/redline?from={first['id']}").json()["hunks"] == []                           # the text is the original's again
+
+
 def test_a_change_to_a_word_original_that_cannot_be_written_into_it_is_taken_back_into_a_clean_copy_and_the_person_is_told(library, lib, monkeypatch):
     world, db = library, library.db
     make_library_doc(world, lib, status="draft")

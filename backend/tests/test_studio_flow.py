@@ -366,6 +366,13 @@ def test_the_checks_need_no_ai_and_a_simple_fix_is_one_revision(world):
     assert many["fixed"] >= 1 and "rule applies" in many["content"]
 
 
+def test_required_items_a_session_still_holds_are_not_given_to_the_ai():
+    from grc.modules.governance.studio import prompts
+
+    text = prompts.instructions_text({"entity_name": "Capital Financial Services Bank", "requirements": ["Name the CISO"], "tone": "Plain English", "logo_required": True})
+    assert "Name the CISO" not in text and "Required items" not in text and "Tone: Plain English" in text and "header or footer" in text
+
+
 def test_the_ai_check_keeps_only_findings_that_are_really_in_the_document(world):
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
     world.http.patch(world.api(f"/sessions/{s['id']}"), json={"instructions": {"requirements": ["Mention contractors", "Name the CISO"]}})
@@ -384,8 +391,9 @@ def test_the_ai_check_keeps_only_findings_that_are_really_in_the_document(world)
     assert msg["stale"] is False and msg["message"]["content"] == "Mostly clean."
     issues = msg["message"]["proposal"]["issues"]
     assert [(i["block"], i["quote"], bool(i["fix"])) for i in issues] == [(4, "All employees and contractors", True), (2, "organisation", False)]
-    assert [(r["requirement"], r["status"]) for r in msg["message"]["proposal"]["requirements"]] == [("Mention contractors", "met"), ("Name the CISO", "not_met")]
-    assert "<required_items>" in user_turn(world) and "- Name the CISO" in user_turn(world)
+    # required items were removed from the studio (2026-10-16): items an older session still holds are neither given to the AI nor reported
+    assert msg["message"]["proposal"]["requirements"] == []
+    assert "<required_items>" not in user_turn(world) and "Name the CISO" not in user_turn(world)
     fix = world.http.post(world.api(f"/sessions/{s['id']}/checks/fix"), json={"fix": issues[0]["fix"]}).json()
     assert "All employees, and all contractors." in fix["content"]
     assert world.http.get(world.api(f"/sessions/{s['id']}/checks/ai")).json()["stale"] is True            # the document moved on

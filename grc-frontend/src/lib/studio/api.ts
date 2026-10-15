@@ -17,17 +17,21 @@ export interface StudioStatus {
   is_admin?: boolean;
 }
 
+export type LogoPosition = 'header-left' | 'header-center' | 'header-right' | 'footer-left' | 'footer-center' | 'footer-right';
+
 export interface Instructions {
   entity_name?: string;
   logo_asset_id?: number | null;
-  logo_position?: 'header-left' | 'header-center' | 'header-right';
+  logo_position?: LogoPosition;
   logo_required?: boolean;
+  /** a faint word across every page of an exported Word, PDF or web page ("DRAFT" when no text is given) */
+  watermark?: boolean;
+  watermark_text?: string;
   focus_areas?: string;
   tone?: string;
   language?: string;
   audience?: string;
   citation_style?: string;
-  requirements?: string[];
   [key: string]: unknown;
 }
 

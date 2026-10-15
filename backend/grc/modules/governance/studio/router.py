@@ -144,12 +144,12 @@ class ExportIn(BaseModel):
     logo_asset_id: Optional[int] = None            # for this export only; the session's own logo is used otherwise
     no_logo: bool = False
     entity_name: Optional[str] = None
-    logo_position: Optional[str] = None            # header-left | header-center | header-right
+    logo_position: Optional[str] = None            # header-left | header-center | header-right | footer-left | footer-center | footer-right
     highlight_placeholders: bool = True
 
     def overrides(self) -> Dict[str, Any]:
         return {"logo_asset_id": self.logo_asset_id, "no_logo": True if self.no_logo else None, "entity_name": self.entity_name,
-                "logo_position": self.logo_position if self.logo_position in ("header-left", "header-center", "header-right") else None}
+                "logo_position": self.logo_position if self.logo_position in exporters.LOGO_POSITIONS else None}
 
 
 # ── status and pickers ───────────────────────────────────────────────────────

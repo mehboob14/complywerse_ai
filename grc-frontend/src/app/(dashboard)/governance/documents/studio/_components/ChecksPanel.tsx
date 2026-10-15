@@ -3,13 +3,12 @@
 /**
  * Checks on the document. The ones that need no AI (headings and numbering, spacing, repeated words, lists, tables, the
  * sections the document type requires, placeholders still to fill in, the entity name and logo) run on every saved change.
- * The AI check proofreads spelling, grammar and wording, and judges each required item. A simple fix is one click; every
- * issue can be shown in the document.
+ * The AI check proofreads spelling, grammar and wording. A simple fix is one click; every issue can be shown in the document.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, Check, CheckCircle2, CircleAlert, CircleDashed, Info, Loader2, MapPin, Sparkles, Wand2, XCircle } from 'lucide-react';
-import { isConflict, problemOf, studioApi, type Issue, type Message, type Session, type Verdict } from '@/lib/studio/api';
+import { AlertTriangle, Check, CircleAlert, Info, Loader2, MapPin, Sparkles, Wand2 } from 'lucide-react';
+import { isConflict, problemOf, studioApi, type Issue, type Message, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { plural } from '@/lib/studio/text';
 
@@ -26,7 +25,6 @@ const SIMPLE = ['replace', 'set_level', 'normalize_space', 'strip_trailing_punct
 
 // stable empties: a new [] on every render would re-run the effects that depend on them
 const NO_ISSUES: Issue[] = [];
-const NO_VERDICTS: Verdict[] = [];
 
 function Severity({ level }: { level: Issue['severity'] }) {
   if (level === 'error') return <CircleAlert className="h-4 w-4 shrink-0 text-[#c53030]" aria-label="Error" />;
@@ -57,20 +55,6 @@ function IssueRow({ issue, onGoTo, onFix, fixing }: { issue: Issue; onGoTo: (i: 
   );
 }
 
-function VerdictRow({ v, onGoTo }: { v: Verdict; onGoTo: (block: number) => void }) {
-  const icon = v.status === 'met' ? <CheckCircle2 className="h-4 w-4 text-[#16794a]" aria-label="Met" /> : v.status === 'partly' ? <CircleDashed className="h-4 w-4 text-[#c27803]" aria-label="Partly met" /> : <XCircle className="h-4 w-4 text-[#c53030]" aria-label="Not met" />;
-  return (
-    <li className="flex items-start gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-2 text-[13px]">
-      <span className="mt-0.5 shrink-0">{icon}</span>
-      <div className="min-w-0 flex-1">
-        <p className="font-medium text-[#1f2933]">{v.requirement}</p>
-        {v.evidence && <p className="mt-0.5 text-xs text-[#586472]">{v.evidence}</p>}
-      </div>
-      {v.block != null && v.block >= 0 && <button type="button" onClick={() => onGoTo(v.block as number)} aria-label="Show it in the document" className="rounded p-1.5 text-[#3f4b58] hover:bg-[#eef1f4]"><MapPin className="h-4 w-4" /></button>}
-    </li>
-  );
-}
-
 export interface ChecksPanelProps {
   session: Session;
   aiConfigured: boolean;
@@ -79,12 +63,11 @@ export interface ChecksPanelProps {
   /** a fix changed the document */
   onContent: (content: string, revision: number) => void;
   onGoTo: (issue: Issue) => void;
-  onGoToBlock: (block: number) => void;
   onIssues: (issues: Issue[]) => void;
   onNextPlaceholder: () => void;
 }
 
-export default function ChecksPanel({ session, aiConfigured, flush, onContent, onGoTo, onGoToBlock, onIssues, onNextPlaceholder }: ChecksPanelProps) {
+export default function ChecksPanel({ session, aiConfigured, flush, onContent, onGoTo, onIssues, onNextPlaceholder }: ChecksPanelProps) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [aiMessage, setAiMessage] = useState<Message | null>(null);
@@ -134,7 +117,6 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
 
   const aiResult = (aiMessage?.status === 'done' ? aiMessage : lastAi.data?.message) ?? null;
   const aiIssues = aiResult?.proposal?.issues ?? NO_ISSUES;
-  const verdicts = aiResult?.proposal?.requirements ?? NO_VERDICTS;
   const stale = aiMessage?.status === 'done' ? (aiMessage.proposal?.revision ?? 0) !== session.revision : !!lastAi.data?.stale;
   const issues = useMemo(() => [...(local.data?.issues ?? NO_ISSUES), ...(stale ? NO_ISSUES : aiIssues)], [local.data, aiIssues, stale]);
   useEffect(() => { onIssues(issues); }, [issues, onIssues]);
@@ -166,7 +148,7 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
       <div className="mt-3 rounded-xl border border-[#d5dbe1] bg-[#f8fafb] p-2.5">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-[#0f766e]" />
-          <p className="flex-1 text-xs text-[#3f4b58]">AI check: spelling, grammar, wording, and whether each required item is met.</p>
+          <p className="flex-1 text-xs text-[#3f4b58]">AI check: spelling, grammar and wording.</p>
           <button type="button" disabled={!aiConfigured || working || runAi.isPending} onClick={() => runAi.mutate()} title={aiConfigured ? undefined : 'The AI is not connected yet'}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
             {working || runAi.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {working ? aiMessage?.stage ?? 'Checking' : 'Run the AI check'}
@@ -176,13 +158,6 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
         {stale && aiResult && !working && <p className="mt-1 text-[11px] text-[#8a6100]">The document changed since this check, so its findings are hidden. Run it again.</p>}
         {aiResult?.notes?.map((n, i) => <p key={i} className="mt-1 text-[11px] text-[#8a6100]">{n}</p>)}
       </div>
-
-      {verdicts.length > 0 && (
-        <section className="mt-4" aria-label="Required items">
-          <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[#586472]">Required items</h4>
-          <ul className="space-y-1.5">{verdicts.map((v, i) => <VerdictRow key={i} v={v} onGoTo={onGoToBlock} />)}</ul>
-        </section>
-      )}
 
       {grouped.map((g) => (
         <section key={g.key} className="mt-4" aria-label={g.label}>

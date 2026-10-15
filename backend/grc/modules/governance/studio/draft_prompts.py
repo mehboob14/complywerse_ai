@@ -149,17 +149,15 @@ def decisions_block(decisions: Sequence[Dict[str, Any]]) -> str:
         f"- {d['name']}: {d['value']}" for d in decisions if str(d.get("name") or "").strip()) + "\n</decisions>"
 
 
-def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional[Any], doc_type: str, requirements: Sequence[str],
-              parent: bool) -> str:
+def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional[Any], doc_type: str, parent: bool) -> str:
     outline = "\n".join(f"- {s.full_heading}: {s.focus_line}" for s in sections)
     core_note = (f"The core of the document is section {core.full_heading}. Decide its areas: the subject areas that section must cover, in the order "
                  f"they should appear. Between {core.areas_min} and {core.areas_max} areas as the subject warrants: fewer for a narrow subject, never padded. "
                  f"The person's focus areas come first, then what a regulator and an internal-audit tester would expect for \"{title}\". "
                  f"Each area is written as {AREA_FORM.get(doc_type, AREA_FORM['policy']).format(n='N')}.") if core else \
         "This kind of document has no fan-out core section: leave `areas` empty and `core_intro` empty."
-    req = ("\nThe person's required items, each of which the document must meet and which you place in the plan: " + "; ".join(requirements) + ".") if requirements else ""
     par = "\nA parent document is attached: stay consistent with it and plan to operationalise or reflect each of its statements that falls in scope." if parent else ""
-    return (f"<task kind=\"plan\">\nPlan the complete {label.lower()} \"{title}\" before it is written. Its sections are:\n{outline}\n\n{core_note}{req}{par}\n\n"
+    return (f"<task kind=\"plan\">\nPlan the complete {label.lower()} \"{title}\" before it is written. Its sections are:\n{outline}\n\n{core_note}{par}\n\n"
             "Answer with:\n"
             "- approach: three to five sentences: what the document governs, who relies on it, the regulatory drivers, and how it is organised.\n"
             "- decisions: 12 to 30 values and rules that recur across the document and must be identical everywhere (frequencies, deadlines, thresholds, limits, "
@@ -175,7 +173,7 @@ def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional
             "- questions: at most three questions whose answers would most improve this document; empty if none.\n</task>")
 
 
-def section_task(*, label: str, section: Any, area: Optional[Dict[str, Any]], core: Optional[Any], doc_type: str, requirements: Sequence[str],
+def section_task(*, label: str, section: Any, area: Optional[Dict[str, Any]], core: Optional[Any], doc_type: str,
                  sibling_areas: Sequence[str], target_words: int, minimum_words: int, minimum_clauses: Optional[int], fix: str = "") -> str:
     """The task for one part of the document."""
     if area is not None and core is not None:
@@ -194,8 +192,7 @@ def section_task(*, label: str, section: Any, area: Optional[Dict[str, Any]], co
                 f"What this section must achieve: {section.focus}\n"
                 f"About {target_words} words, at least {minimum_words}.")
         attrs = f'kind="section" number="{section.number}" heading="{section.heading}"'
-    req = ("\nThe required items for the whole document are: " + "; ".join(requirements) + ". Meet those that belong in this part.") if requirements else ""
-    return (f"<task {attrs}>\n{body}{req}\n"
+    return (f"<task {attrs}>\n{body}\n"
             "Return the Markdown in `markdown`, the references you relied on in `references_used`, and in `assumptions` every value you chose that was not given "
             "to you (one line each).\n" + (f"\nYour previous attempt had these problems; correct all of them:\n{fix}\n" if fix else "") + "</task>")
 

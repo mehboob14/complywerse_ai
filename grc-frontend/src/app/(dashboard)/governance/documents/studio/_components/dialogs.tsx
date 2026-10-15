@@ -50,6 +50,9 @@ export function ExportDialog({ session, onClose, flush }: { session: Session; on
     onError: async (e) => toast({ title: 'Could not export', message: await problemOfBlob(e), type: 'error' }),
   });
   const logoId = session.instructions.logo_asset_id;
+  const atFoot = String(session.instructions.logo_position ?? '').startsWith('footer');
+  const watermark = session.instructions.watermark ? (String(session.instructions.watermark_text ?? '').trim() || 'DRAFT') : '';
+  const logo = logoId && !noLogo ? <AssetImage id={logoId} alt="Logo" className="h-8 max-w-[7rem] object-contain" /> : null;
   return (
     <AnimatedModal isOpen onClose={onClose} title="Export" subtitle={session.title} size="lg"
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
@@ -69,18 +72,30 @@ export function ExportDialog({ session, onClose, flush }: { session: Session; on
         </fieldset>
         {format === 'docx' && session.source.in_place && (
           <p className="rounded-lg border border-[#d5dbe1] bg-[#f8fafb] p-3 text-sm text-[#3f4b58]">
-            This is your original Word file with your changes written into it. Its own header, footer and styles stay as they are, so the logo and entity name from Instructions are not added.
+            This is your original Word file with your changes written into it. Its own header, footer and styles stay as they are, so the logo and entity name from Instructions are not added
+            {watermark ? <>; the watermark <strong>“{watermark}”</strong> is added across its pages.</> : '.'}
           </p>
         )}
         {(format === 'pdf' || format === 'html' || (format === 'docx' && !session.source.in_place)) && (
           <div className="rounded-lg border border-[#d5dbe1] bg-[#f8fafb] p-3 text-sm">
-            <p className="text-xs font-semibold text-[#26323d]">Header</p>
-            <div className="mt-1.5 flex items-center gap-3">
-              {logoId && !noLogo ? <AssetImage id={logoId} alt="Logo" className="h-10 max-w-[8rem] object-contain" /> : <span className="text-xs text-[#586472]">No logo</span>}
-              <span className="font-semibold text-[#0f4c5c]">{session.instructions.entity_name || ''}</span>
-            </div>
-            <label className="mt-2 flex items-center gap-2 text-xs text-[#26323d]"><input type="checkbox" checked={noLogo} onChange={(e) => setNoLogo(e.target.checked)} className="accent-[#0f766e]" /> Leave the logo out of this export</label>
-            <p className="mt-1 text-[11px] text-[#586472]">Change the logo or the entity name in Instructions.</p>
+            <p className="text-xs font-semibold text-[#26323d]">On every page</p>
+            <dl className="mt-1.5 space-y-1.5 text-xs">
+              <div className="flex items-center gap-3">
+                <dt className="w-20 shrink-0 text-[#586472]">Top</dt>
+                <dd className="flex min-w-0 items-center gap-3">{!atFoot && logo}<span className="truncate font-semibold text-[#0f4c5c]">{session.instructions.entity_name || <span className="font-normal text-[#586472]">No entity name</span>}</span></dd>
+              </div>
+              <div className="flex items-center gap-3">
+                <dt className="w-20 shrink-0 text-[#586472]">Foot</dt>
+                <dd className="flex min-w-0 items-center gap-3"><span className="text-[#3f4b58]">Document code, version, page numbers</span>{atFoot && logo}</dd>
+              </div>
+              <div className="flex items-center gap-3">
+                <dt className="w-20 shrink-0 text-[#586472]">Watermark</dt>
+                <dd className="text-[#3f4b58]">{watermark ? <strong className="text-[#0f4c5c]">“{watermark}”</strong> : 'None'}</dd>
+              </div>
+            </dl>
+            {!logoId && <p className="mt-1.5 text-xs text-[#586472]">No logo is chosen.</p>}
+            {logoId && <label className="mt-2 flex items-center gap-2 text-xs text-[#26323d]"><input type="checkbox" checked={noLogo} onChange={(e) => setNoLogo(e.target.checked)} className="accent-[#0f766e]" /> Leave the logo out of this export</label>}
+            <p className="mt-1 text-[11px] text-[#586472]">Change the logo, where it sits, the entity name or the watermark in Instructions.</p>
           </div>
         )}
         {(format === 'pdf' || (format === 'docx' && !session.source.in_place)) && (
@@ -113,7 +128,10 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   });
   const parentTitle = useMemo(() => docs.data?.items.find((d) => d.id === parent)?.title, [docs.data, parent]);
   return (
-    <AnimatedModal isOpen onClose={onClose} title="Move to the document library" subtitle="It becomes a draft, version 1.0. Statements are extracted from it as for any new document." size="lg"
+    <AnimatedModal isOpen onClose={onClose} title="Move to the document library" size="lg"
+      subtitle={session.kind === 'upload' && session.source.name
+        ? `It becomes a draft. Your uploaded file ${session.source.name} is kept as version 1.0, the original${session.revision > 1 ? '; what you changed here becomes version 1.1' : ''}. Statements are extracted from it as for any new document.`
+        : 'It becomes a draft, version 1.0. Statements are extracted from it as for any new document.'}
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
         <button type="button" className={primary} disabled={!title.trim() || move.isPending} onClick={() => move.mutate()}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
       <div className="space-y-4 p-5">

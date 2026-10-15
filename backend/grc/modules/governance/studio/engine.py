@@ -88,7 +88,7 @@ def _op_view(op: B.Op, blocks: Sequence[B.Block]) -> Dict[str, Any]:
 
 def interpret(data: Dict[str, Any], blocks: Sequence[B.Block], references: Sequence[Any], protected: Sequence[int]) -> Dict[str, Any]:
     """The model's answer as the studio keeps it: reply, the edits that can be placed (pending), the references with each quote
-    checked, the placeholders now in the document, the requirement verdicts and what the person should know."""
+    checked, the placeholders now in the document and what the person should know."""
     notes: List[str] = []
     keys = {r.ref_key: r for r in references}
     valid: List[B.Op] = []
@@ -137,7 +137,7 @@ def interpret(data: Dict[str, Any], blocks: Sequence[B.Block], references: Seque
     return {
         "reply": str(data.get("reply") or "").strip(), "ops": ops, "references_used": used,
         "questions": [str(q).strip() for q in data.get("questions") or [] if str(q).strip()][:3],
-        "placeholders": checks.placeholders(proposed_blocks), "requirements": list(data.get("requirements") or []),
+        "placeholders": checks.placeholders(proposed_blocks), "requirements": [],
         "notes": notes, "stats": B.stats(blocks, proposed_blocks) if ops else None,
     }
 
@@ -313,14 +313,10 @@ def run_ai_checks(db, session_id: int, message_id: int) -> None:
         if not blocks:
             raise TurnProblem("The document is empty: there is nothing to check.")
         protected = protected_blocks(blocks)
-        reqs = [r for r in (session.instructions or {}).get("requirements") or [] if str(r).strip()]
         whole = sum(len(b.source) for b in blocks) <= CHECK_WHOLE_CHARS
         spans = [(0, len(blocks) - 1)] if whole else _chunks(blocks, protected)
         notes: List[str] = []
-        if reqs and not whole:
-            notes.append("The document is too large to judge the required items in one go: they were not checked.")
         issues: List[Dict[str, Any]] = []
-        verdicts: List[Dict[str, Any]] = []
         summary = ""
         usage = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0}
         for n, (a, z) in enumerate(spans, start=1):
@@ -330,15 +326,12 @@ def run_ai_checks(db, session_id: int, message_id: int) -> None:
             for i in protected:
                 part = re.sub(rf"^\[B{i + 1}\] ", f"[B{i + 1} read-only] ", part, count=1, flags=re.M)
             user = f"<document blocks=\"B{a + 1}..B{z + 1}\">\n{part}\n</document>"
-            if reqs and whole:
-                user += "\n\n<required_items>\n" + "\n".join(f"- {r}" for r in reqs) + "\n</required_items>"
             result = claude_client.complete(use_case="governance.studio_checks", system=prompts.CHECKS_SYSTEM,
                                             messages=[{"role": "user", "content": user}], schema=prompts.CHECKS_SCHEMA,
                                             max_tokens=24000, effort="medium",
                                             on_progress=counting(db, msg, f"Checking ({n} of {len(spans)})" if len(spans) > 1 else "Checking", "issues", "problems"))
             data = result.data
             summary = summary or str(data.get("summary") or "")
-            verdicts += list(data.get("requirements") or [])
             for k in usage:
                 usage[k] += result.usage.get({"input_tokens": "input_tokens", "output_tokens": "output_tokens", "cached_tokens": "cache_read_input_tokens"}[k], 0)
             for it in data.get("issues") or []:
@@ -353,10 +346,8 @@ def run_ai_checks(db, session_id: int, message_id: int) -> None:
                                "severity": it.get("severity") or "warning", "block": idx, "quote": quote, "message": str(it.get("message") or "").strip(),
                                "suggestion": suggestion or None,
                                "fix": {"type": "replace", "block": idx, "find": quote, "replace": suggestion, "occurrence": 0} if suggestion else None})
-        for v in verdicts:
-            v["block"] = B.index_of(str(v.get("block") or ""), len(blocks))
         msg.content = summary or "The document was checked."
-        msg.proposal = {"issues": issues, "requirements": verdicts, "summary": summary, "revision": session.revision_no}
+        msg.proposal = {"issues": issues, "requirements": [], "summary": summary, "revision": session.revision_no}
         msg.notes, msg.usage = notes, usage
         msg.status, msg.stage, msg.error, msg.updated_at = "done", None, None, datetime.utcnow()
         db.commit()

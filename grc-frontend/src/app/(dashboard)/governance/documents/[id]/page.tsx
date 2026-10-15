@@ -4,7 +4,8 @@ import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
-import { studioApi, problemOf as studioProblem } from '@/lib/studio/api';
+import { studioApi, problemOf as studioProblem, saveBlob } from '@/lib/studio/api';
+import { documentChainApi } from '@/lib/documentChain';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -2096,8 +2097,25 @@ function ReviewHistoryTab({ documentId, document: doc }: { documentId: number; d
 // Document CONTENT version history — timeline + diff + restore, mirroring the
 // statement version modal but for the whole document body (item #3a).
 function DocumentVersionHistoryPanel({
-  documentId, isOpen, onClose, onRestored,
-}: { documentId: number; isOpen: boolean; onClose: () => void; onRestored: () => void }) {
+  documentId, isOpen, onClose, onRestored, onCompare,
+}: {
+  documentId: number; isOpen: boolean; onClose: () => void; onRestored: () => void;
+  /** organisations with the change chain: compare a version with the document as it is now in the tracked-changes view (files too) */
+  onCompare?: (versionId: number) => void;
+}) {
+  const { toast } = useToast();
+  const [fetching, setFetching] = useState<number | null>(null);
+  const downloadFile = async (v: any) => {
+    setFetching(v.id);
+    try {
+      const { blob, filename } = await documentChainApi.versionFile(documentId, v.id, v.file_name || 'document', v.version_number);
+      saveBlob(blob, filename);
+    } catch (e) {
+      toast({ type: 'error', title: `Could not download the file of version ${v.version_number}`, message: studioProblem(e) });
+    } finally {
+      setFetching(null);
+    }
+  };
   const [compareId, setCompareId] = useState<number | null>(null);
   const { data, isLoading, refetch } = useQuery({
     queryKey: ['document-versions', documentId],
@@ -2150,7 +2168,17 @@ function DocumentVersionHistoryPanel({
                     {isCurrent && <span className="rounded-full bg-primary-100 px-2 py-0.5 text-[10px] font-medium text-primary-700">current</span>}
                   </div>
                   <div className="flex items-center gap-1.5">
-                    {!isCurrent && currentRow && (
+                    {v.has_file && (
+                      <button onClick={() => downloadFile(v)} disabled={fetching === v.id} title={`Download ${v.file_name || 'the file'} of this version`} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50 disabled:opacity-60">
+                        {fetching === v.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />} File
+                      </button>
+                    )}
+                    {!isCurrent && currentRow && onCompare && (
+                      <button onClick={() => onCompare(v.id)} title="See the document as it is now, with what changed since this version marked" className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50">
+                        <GitCompare className="h-3 w-3" /> Compare
+                      </button>
+                    )}
+                    {!isCurrent && currentRow && !onCompare && (
                       <button onClick={() => setCompareId(compareId === v.id ? null : v.id)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50">
                         <GitCompare className="h-3 w-3" /> {compareId === v.id ? 'Hide diff' : 'Diff'}
                       </button>
@@ -2166,6 +2194,7 @@ function DocumentVersionHistoryPanel({
                   <User className="h-3 w-3" />{v.creator_name || 'Unknown'}
                   <Clock className="h-3 w-3 ml-1" />{v.created_at ? new Date(v.created_at).toLocaleString() : ''}
                 </div>
+                {v.has_file && v.file_name && <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-slate-500"><FileText className="h-3 w-3" /> {v.file_name}</p>}
                 {v.change_reason && <p className="mt-1 text-xs text-slate-600 italic">“{v.change_reason}”</p>}
                 {compareId === v.id && (
                   <div className="mt-2 rounded-md bg-slate-50 border border-slate-200 p-2">
@@ -2588,9 +2617,10 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, c
           isOpen={showHistory}
           onClose={() => setShowHistory(false)}
           onRestored={() => {
-            queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] });
-            toast({ type: 'success', title: 'Restored', message: 'Document content restored to the selected version.' });
+            for (const key of ['governance-document', 'document-chain', 'document-chain-redline', 'document-lifecycle']) queryClient.invalidateQueries({ queryKey: [key] });
+            toast({ type: 'success', title: 'Restored', message: 'The selected version is the document again, as a new version; the versions after it are kept.' });
           }}
+          onCompare={chainOn ? (versionId) => { setShowHistory(false); setSinceRange({ from: versionId, to: null }); setTracking(true); } : undefined}
         />
       )}
       {doc?.id && (
@@ -2615,7 +2645,7 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, c
             </button>
             {chainOn && (
               <button onClick={() => setTracking((v) => !v)} aria-pressed={tracking} title="Show the document with its changes marked, who made each, and take one back"
-                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-50 font-semibold text-[#0b6b58]' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
                 <GitCompare className="h-3.5 w-3.5" /> Tracked changes
               </button>
             )}

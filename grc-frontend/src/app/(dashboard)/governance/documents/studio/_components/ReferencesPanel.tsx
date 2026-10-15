@@ -38,6 +38,58 @@ function useDebounced<T>(value: T, ms = 300): T {
   return v;
 }
 
+const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
+
+/** Whether every word of the search is somewhere in the fields ("iso 27001", "nca ecc" …). An empty search matches everything. */
+export function matches(q: string, ...fields: Array<string | number | null | undefined>): boolean {
+  const words = fold(q.trim()).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = fold(fields.filter((f) => f != null && f !== '').join(' '));
+  return words.every((w) => hay.includes(w));
+}
+
+export function SearchBox({ value, onChange, placeholder, label }: { value: string; onChange: (v: string) => void; placeholder: string; label: string }) {
+  return (
+    <label className="relative block">
+      <span className="sr-only">{label}</span>
+      <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[#7b8794]" aria-hidden />
+      <input type="search" value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
+        className="w-full rounded-lg border border-[#b8c4c8] bg-white py-2 pl-8 pr-3 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]" />
+    </label>
+  );
+}
+
+/** The platform's frameworks with a search over name, version and publisher. Shared by the references panel and the start screen. */
+export function FrameworkList({ frameworks, loading, exclude = [], onPick, maxHeight = 'max-h-64' }: {
+  frameworks?: FrameworkItem[]; loading: boolean; exclude?: number[]; onPick: (fw: FrameworkItem) => void; maxHeight?: string;
+}) {
+  const [q, setQ] = useState('');
+  const all = (frameworks ?? []).filter((f) => !exclude.includes(f.id));
+  const shown = all.filter((f) => matches(q, f.name, f.version, f.organisation));
+  return (
+    <div>
+      <SearchBox value={q} onChange={setQ} placeholder="Search frameworks: name, version or publisher" label="Search the frameworks" />
+      {!loading && all.length > 0 && <p className="mt-1 text-[11px] text-[#586472]" role="status">{q.trim() ? `${shown.length} of ${plural(all.length, 'framework')}` : plural(all.length, 'framework')}</p>}
+      <ul className={`mt-1.5 space-y-1 overflow-y-auto ${maxHeight}`}>
+        {loading && <li className="p-2 text-xs text-[#586472]"><Loader2 className="inline h-3.5 w-3.5 animate-spin" /> Loading…</li>}
+        {!loading && shown.length === 0 && <li className="rounded-lg border border-dashed border-[#c5ccd3] p-3 text-center text-xs text-[#586472]">{q.trim() ? `No framework matches “${q.trim()}”.` : 'No framework with parsed controls is available.'}</li>}
+        {shown.map((f) => (
+          <li key={f.id}>
+            <button type="button" onClick={() => onPick(f)} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
+              <BookMarked className="h-4 w-4 shrink-0 text-[#586472]" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm text-[#1f2933]">{f.name}{f.version ? ` ${f.version}` : ''}</span>
+                <span className="block text-[11px] text-[#586472]">{[f.organisation, `${f.controls} controls`].filter(Boolean).join(' · ')}</span>
+              </span>
+              <Plus className="h-4 w-4 shrink-0 text-[#0f766e]" aria-hidden />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function Attached({ session, reference, onChanged, open, onToggleOpen }: { session: Session; reference: Reference; onChanged: () => void; open: boolean; onToggleOpen: () => void }) {
   const { toast } = useToast();
   const Icon = KIND_ICON[reference.kind];
@@ -82,11 +134,7 @@ function DocumentPicker({ onPick, busy, empty, exclude }: { onPick: (doc: Librar
   const docs = useQuery({ queryKey: ['studio', 'documents', dq], queryFn: () => studioApi.documents(dq, 30), staleTime: 30_000, select: (r) => ({ items: r.items.filter((d) => d.id !== exclude) }) });
   return (
     <div>
-      <label className="relative block">
-        <span className="sr-only">Search the library</span>
-        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[#7b8794]" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the document library" className="w-full rounded-lg border border-[#b8c4c8] bg-white py-2 pl-8 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]" />
-      </label>
+      <SearchBox value={q} onChange={setQ} placeholder="Search the document library: title, code or type" label="Search the library" />
       <ul className="mt-2 max-h-56 space-y-1 overflow-y-auto">
         {docs.isLoading && <li className="p-2 text-xs text-[#586472]"><Loader2 className="inline h-3.5 w-3.5 animate-spin" /> Loading…</li>}
         {docs.data?.items.length === 0 && <li className="p-2 text-xs text-[#586472]">{empty}</li>}
@@ -114,25 +162,11 @@ function FrameworkPicker({ onPick, busy }: { onPick: (fw: FrameworkItem, scope: 
   const [domains, setDomains] = useState<string[]>([]);
   const [controls, setControls] = useState('');
   const [query, setQuery] = useState('');
+  const [domainQ, setDomainQ] = useState('');
   if (!selected) {
-    return (
-      <ul className="max-h-64 space-y-1 overflow-y-auto">
-        {fws.isLoading && <li className="p-2 text-xs text-[#586472]"><Loader2 className="inline h-3.5 w-3.5 animate-spin" /> Loading…</li>}
-        {fws.data?.items.length === 0 && <li className="p-2 text-xs text-[#586472]">No framework with parsed controls is available.</li>}
-        {fws.data?.items.map((f) => (
-          <li key={f.id}>
-            <button type="button" onClick={() => { setSelected(f); setMode('all'); setDomains([]); }} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
-              <BookMarked className="h-4 w-4 shrink-0 text-[#586472]" />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-sm text-[#1f2933]">{f.name}{f.version ? ` ${f.version}` : ''}</span>
-                <span className="block text-[11px] text-[#586472]">{[f.organisation, `${f.controls} controls`].filter(Boolean).join(' · ')}</span>
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-    );
+    return <FrameworkList frameworks={fws.data?.items} loading={fws.isLoading} onPick={(f) => { setSelected(f); setMode('all'); setDomains([]); setDomainQ(''); }} />;
   }
+  const shownDomains = selected.domains.filter((d) => matches(domainQ, d));
   const scope: ReferenceScope = mode === 'domains' ? { mode, domains } : mode === 'controls' ? { mode, control_refs: controls.split(/[\n,;]+/).map((s) => s.trim()).filter(Boolean) } : mode === 'query' ? { mode, query } : { mode: 'all' };
   const ready = mode === 'all' || (mode === 'domains' && domains.length > 0) || (mode === 'controls' && (scope.control_refs?.length ?? 0) > 0) || (mode === 'query' && query.trim().length > 3);
   return (
@@ -155,12 +189,17 @@ function FrameworkPicker({ onPick, busy }: { onPick: (fw: FrameworkItem, scope: 
         ))}
       </fieldset>
       {mode === 'domains' && (
-        <div className="max-h-40 space-y-0.5 overflow-y-auto rounded border border-[#e1e5e9] p-2">
-          {selected.domains.map((d) => (
-            <label key={d} className="flex items-start gap-2 text-sm text-[#26323d]">
-              <input type="checkbox" checked={domains.includes(d)} onChange={(e) => setDomains(e.target.checked ? [...domains, d] : domains.filter((x) => x !== d))} className="mt-1 accent-[#0f766e]" /> {d}
-            </label>
-          ))}
+        <div className="space-y-1.5">
+          {selected.domains.length > 6 && <SearchBox value={domainQ} onChange={setDomainQ} placeholder="Search the domains" label="Search the domains of this framework" />}
+          <div className="max-h-48 space-y-0.5 overflow-y-auto rounded border border-[#e1e5e9] p-2">
+            {shownDomains.length === 0 && <p className="text-xs text-[#586472]">No domain matches “{domainQ.trim()}”.</p>}
+            {shownDomains.map((d) => (
+              <label key={d} className="flex items-start gap-2 text-sm text-[#26323d]">
+                <input type="checkbox" checked={domains.includes(d)} onChange={(e) => setDomains(e.target.checked ? [...domains, d] : domains.filter((x) => x !== d))} className="mt-1 accent-[#0f766e]" /> {d}
+              </label>
+            ))}
+          </div>
+          {domains.length > 0 && <p className="text-[11px] text-[#586472]">{plural(domains.length, 'domain')} chosen</p>}
         </div>
       )}
       {mode === 'controls' && <textarea value={controls} onChange={(e) => setControls(e.target.value)} rows={3} placeholder="Control numbers, separated by commas or lines (A.5.1, A.8.2)" aria-label="Control numbers" className="w-full rounded border border-[#b8c4c8] p-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]" />}
@@ -182,6 +221,7 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
   const { toast } = useToast();
   const [tab, setTab] = useState<AddTab>('document');
   const [opened, setOpened] = useState<string | null>(null);
+  const [templateQ, setTemplateQ] = useState('');
   const file = useRef<HTMLInputElement>(null);
   const templates = useQuery({ queryKey: ['studio', 'templates'], queryFn: studioApi.templates, staleTime: 60_000, enabled: tab === 'template' });
 
@@ -259,9 +299,14 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
           </div>
         )}
         {tab === 'template' && (
+          <div className="space-y-2">
+          <SearchBox value={templateQ} onChange={setTemplateQ} placeholder="Search the templates" label="Search the templates" />
           <ul className="max-h-56 space-y-1 overflow-y-auto">
             {templates.isLoading && <li className="p-2 text-xs text-[#586472]"><Loader2 className="inline h-3.5 w-3.5 animate-spin" /> Loading…</li>}
-            {templates.data?.items.filter((t) => t.id !== 'builtin:blank').map((t) => (
+            {templates.data && templateQ.trim() && !templates.data.items.some((t) => t.id !== 'builtin:blank' && matches(templateQ, t.name, t.doc_type)) && (
+              <li className="rounded-lg border border-dashed border-[#c5ccd3] p-3 text-center text-xs text-[#586472]">No template matches “{templateQ.trim()}”.</li>
+            )}
+            {templates.data?.items.filter((t) => t.id !== 'builtin:blank' && matches(templateQ, t.name, t.doc_type)).map((t) => (
               <li key={t.id}>
                 <button type="button" disabled={add.isPending} onClick={() => add.mutate({ kind: 'template', template_id: t.id })} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
                   <FileText className="h-4 w-4 shrink-0 text-[#586472]" />
@@ -271,6 +316,7 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
               </li>
             ))}
           </ul>
+          </div>
         )}
       </div>
     </div>

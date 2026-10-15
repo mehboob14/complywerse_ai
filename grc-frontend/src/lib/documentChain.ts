@@ -75,6 +75,8 @@ export interface ChainVersion {
   /** false: the version is a file whose text could not be read, so it is not compared with the one before */
   comparable: boolean;
   has_file: boolean;
+  /** the name of the version's file, when the version is a file (an uploaded Word or PDF) */
+  file_name?: string;
   title: string;
   items: ChainItem[];
   sources: ChainSource[];
@@ -154,7 +156,7 @@ export function byLine(origin: string, by: string, coverage = 1): string {
     case 'revert': return `Taken back by ${who}`;
     case 'restore': return `Earlier version restored by ${who}`;
     case 'signoff': return `Sign-off stamp · ${who}`;
-    case 'initial': return 'First version';
+    case 'initial': return 'The original';
     default: return who ? `Changed by ${who}` : 'Changed';
   }
 }
@@ -186,5 +188,11 @@ export const documentChainApi = {
   exportFile: async (id: number, format: ExportFormat): Promise<{ blob: Blob; filename: string }> => {
     const res = await apiClient.get(`/governance/documents/${id}/change-chain/export`, { params: { format }, responseType: 'blob' });
     return { blob: res.data as Blob, filename: filenameOf(res.headers?.['content-disposition'], `change-chain.${format}`) };
+  },
+  /** the file of one version (the original upload, or a later file), named with its version: "policy v1.0.docx" */
+  versionFile: async (id: number, versionId: number, name: string, number: string): Promise<{ blob: Blob; filename: string }> => {
+    const res = await apiClient.get(`/governance/documents/${id}/download-file`, { params: { version_id: versionId }, responseType: 'blob' });
+    const dot = name.lastIndexOf('.');
+    return { blob: res.data as Blob, filename: dot > 0 ? `${name.slice(0, dot)} v${number}${name.slice(dot)}` : `${name || 'document'} v${number}` };
   },
 };

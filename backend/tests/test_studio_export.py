@@ -93,6 +93,30 @@ def test_word_has_the_headings_lists_tables_header_footer_and_highlighted_placeh
     assert [r.target_ref for r in link] == ["https://example.com/ecc"]                       # the javascript: link is text, not a link
 
 
+def test_the_logo_can_sit_at_the_foot_of_the_page_and_a_watermark_can_go_across_every_page(logo):
+    import fitz
+
+    word = zipfile.ZipFile(io.BytesIO(X.to_docx(MD, entity_name="Capital Financial Services Bank", logo_path=logo, logo_position="footer-right", watermark="DRAFT")))
+    header, footer = word.read("word/header1.xml").decode(), word.read("word/footer1.xml").decode()
+    assert "Capital Financial Services Bank" in header and "<w:drawing>" not in header                 # the name stays at the top, the logo moved down
+    assert "<w:drawing>" in footer and footer.index("NUMPAGES") < footer.index("<w:drawing>") and '<w:jc w:val="right"/>' in footer
+    assert 'string="DRAFT"' in header and "rotation:315" in header                                       # Word's own watermark shape, in the header
+    plain = zipfile.ZipFile(io.BytesIO(X.to_docx(MD, logo_path=logo))).read("word/header1.xml").decode()
+    assert "<w:drawing>" in plain and "textpath" not in plain                                            # by default: the logo at the top, no watermark
+
+    pdf = X.to_pdf(MD, entity_name="Capital Financial Services Bank", logo_path=logo, logo_position="footer-center", watermark="Draft – not approved")
+    page = fitz.open(stream=pdf, filetype="pdf")[0]
+    spot = page.get_image_rects(page.get_images()[0][0])[0]
+    assert spot.y0 > page.rect.height * 0.9 and abs((spot.x0 + spot.x1) / 2 - page.rect.width / 2) < 2        # at the foot, centred
+    text = page.get_text()
+    assert "Draft – not approved" in text and "Capital Financial Services Bank" in text and "Page 1 of 1" in text
+
+    html = X.export(MD, "html", entity_name="Capital Bank", logo_path=logo, logo_position="footer-left", watermark='Draft "1"').decode()
+    assert '<footer style="text-align:left"><img src="data:image/png;base64,' in html and 'data-watermark="Draft &quot;1&quot;"' in html
+    assert '<header style="justify-content:flex-start"><span>Capital Bank</span></header>' in html
+    assert "data-watermark" not in X.export(MD, "html").decode()
+
+
 def test_a_numbered_list_keeps_the_number_it_starts_at():
     from docx import Document
 

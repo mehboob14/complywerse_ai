@@ -1,9 +1,10 @@
 """The studio's document as a file: Word, PDF, Markdown or HTML.
 
-Word and PDF carry the organisation's logo and name in the header, the document code, version and classification and
-"Page X of Y" in the footer, tables with a repeating header row, numbered lists that restart where each list starts, and
-every placeholder still to be filled highlighted (so an unfinished document is visibly unfinished). Styles (fonts, heading
-colours, page layout) belong to the export, not to the Markdown: that is how the studio keeps formatting structured.
+Word and PDF carry the organisation's name in the header and its logo in the header or at the foot of the page (left, centre
+or right), the document code, version and classification and "Page X of Y" in the footer, an optional watermark across every
+page ("DRAFT"), tables with a repeating header row, numbered lists that restart where each list starts, and every placeholder
+still to be filled highlighted (so an unfinished document is visibly unfinished). Styles (fonts, heading colours, page
+layout) belong to the export, not to the Markdown: that is how the studio keeps formatting structured.
 
 A Word file made from an uploaded Word document is not built here: it is the original with the edits written into it
 (``docx_io``).
@@ -14,7 +15,7 @@ import html as _html
 import io
 import os
 import re
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import blocks as B
 from .checks import _PLACEHOLDERS
@@ -24,10 +25,18 @@ HEADER_FILL = "E3F1F1"
 PLACEHOLDER_FILL = "FFF2A8"
 _MUST = [rx for _kind, required, rx in _PLACEHOLDERS if required]
 _RTL = re.compile(r"[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]")
+LOGO_POSITIONS = ("header-left", "header-center", "header-right", "footer-left", "footer-center", "footer-right")
+WATERMARK_MAX = 40
 
 
 class ExportProblem(ValueError):
     """The document cannot be exported in that format; the message is for the person."""
+
+
+def logo_spot(position: Optional[str]) -> Tuple[str, str]:
+    """Where a logo goes: ("header" | "footer", "left" | "center" | "right"). An unknown position is the header's left."""
+    where, side = (position if position in LOGO_POSITIONS else "header-left").split("-")
+    return where, side
 
 
 def _split_placeholders(text: str) -> List[tuple]:
@@ -74,7 +83,8 @@ def _seg_html(segs: Sequence[B.Seg]) -> str:
     return "".join(out)
 
 
-def to_html(markdown: str, *, title: str = "", entity_name: str = "", logo: Optional[tuple] = None) -> bytes:
+def to_html(markdown: str, *, title: str = "", entity_name: str = "", logo: Optional[tuple] = None, logo_position: str = "header-left",
+            watermark: str = "") -> bytes:
     """A self-contained HTML page (the logo is embedded). Everything is escaped: only the tags written here appear."""
     import base64
 
@@ -113,16 +123,26 @@ def to_html(markdown: str, *, title: str = "", entity_name: str = "", logo: Opti
         else:
             body.append(f"<p>{_html.escape(b.text)}</p>")
     close_to(0)
-    letterhead = ""
-    if logo or entity_name:
-        img = f'<img src="data:{logo[1]};base64,{base64.b64encode(logo[0]).decode()}" alt="">' if logo else ""
-        letterhead = f"<header>{img}<span>{_html.escape(entity_name)}</span></header>"
+    where, side = logo_spot(logo_position)
+    img = f'<img src="data:{logo[1]};base64,{base64.b64encode(logo[0]).decode()}" alt="">' if logo else ""
+    letterhead = footer = ""
+    justify = {"center": "center", "right": "flex-end"}.get(side, "flex-start") if where == "header" else "flex-start"
+    if (img and where == "header") or entity_name:
+        letterhead = f'<header style="justify-content:{justify}">{img if where == "header" else ""}<span>{_html.escape(entity_name)}</span></header>'
+    if img and where == "footer":
+        footer = f'<footer style="text-align:{side}">{img}</footer>'
     css = ("body{font:15px/1.55 Calibri,Arial,sans-serif;max-width:820px;margin:32px auto;padding:0 20px;color:#1f2933}header{display:flex;align-items:center;gap:14px;"
-           "border-bottom:2px solid #0f4c5c;padding-bottom:10px;margin-bottom:24px}header img{height:48px}h1,h2,h3,h4{color:#0f4c5c}table{border-collapse:collapse;width:100%;margin:12px 0}"
+           "border-bottom:2px solid #0f4c5c;padding-bottom:10px;margin-bottom:24px}header img{height:48px}footer{border-top:1px solid #b8c4c8;margin-top:32px;padding-top:12px}"
+           "footer img{height:40px}h1,h2,h3,h4{color:#0f4c5c}table{border-collapse:collapse;width:100%;margin:12px 0}"
            "td,th{border:1px solid #b8c4c8;padding:6px 8px;vertical-align:top}th{background:#e3f1f1;text-align:left}blockquote{border-left:4px solid #0f4c5c;margin:12px 0;padding:2px 14px;color:#52606d}"
            "pre{background:#f3f5f6;padding:10px;overflow:auto}code{background:#f3f5f6;padding:1px 4px}mark{background:#fff2a8}")
+    mark = ""
+    if watermark.strip():
+        mark = f' data-watermark="{_html.escape(watermark.strip()[:WATERMARK_MAX], quote=True)}"'
+        css += ("body[data-watermark]::before{content:attr(data-watermark);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);"
+                "font:700 110px Calibri,Arial,sans-serif;color:rgba(15,76,92,.07);white-space:nowrap;pointer-events:none;z-index:0}body>*{position:relative;z-index:1}")
     page = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{_html.escape(title or _title_of(blocks, "Document"))}</title>'
-            f"<style>{css}</style></head><body>{letterhead}{''.join(body)}</body></html>")
+            f"<style>{css}</style></head><body{mark}>{letterhead}{''.join(body)}{footer}</body></html>")
     return page.encode("utf-8")
 
 
@@ -273,9 +293,11 @@ def _header_footer(doc, *, entity_name: str, logo_path: Optional[str], logo_posi
 
     sec = doc.sections[0]
     head = sec.header.paragraphs[0]
-    align = {"header-center": WD_ALIGN_PARAGRAPH.CENTER, "header-right": WD_ALIGN_PARAGRAPH.RIGHT}.get(logo_position, WD_ALIGN_PARAGRAPH.LEFT)
-    head.alignment = align
-    if logo_path and os.path.exists(logo_path):
+    where, side = logo_spot(logo_position)
+    align = {"center": WD_ALIGN_PARAGRAPH.CENTER, "right": WD_ALIGN_PARAGRAPH.RIGHT}.get(side, WD_ALIGN_PARAGRAPH.LEFT)
+    has_logo = bool(logo_path and os.path.exists(logo_path))
+    head.alignment = align if where == "header" else WD_ALIGN_PARAGRAPH.LEFT
+    if has_logo and where == "header":
         head.add_run().add_picture(logo_path, height=Cm(1.3))
         if entity_name:
             head.add_run("   ")
@@ -293,10 +315,76 @@ def _header_footer(doc, *, entity_name: str, logo_path: Optional[str], logo_posi
     foot.add_run(" of ").font.size = Pt(8.5)
     _field(foot, "NUMPAGES")
     _border(foot, "top", 6, "B8C4C8", 6)
+    if has_logo and where == "footer":                  # at the foot of every page, under the document code and the page numbers
+        mark = sec.footer.add_paragraph()
+        mark.alignment = align
+        mark.paragraph_format.space_before = Pt(4)
+        mark.add_run().add_picture(logo_path, height=Cm(0.9))
+
+
+_VML = 'xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office"'
+# Word's own text watermark: a WordArt shape (type 136) in the header, centred on the page, rotated, faint, behind the text
+_WATERMARK_SHAPETYPE = (
+    '<v:shapetype id="_x0000_t136" coordsize="21600,21600" o:spt="136" adj="10800" path="m@7,l@8,m@5,21600l@6,21600e">'
+    '<v:formulas><v:f eqn="sum #0 0 10800"/><v:f eqn="prod #0 2 1"/><v:f eqn="sum 21600 0 @1"/><v:f eqn="sum 0 0 @2"/><v:f eqn="sum 21600 0 @3"/>'
+    '<v:f eqn="if @0 @3 0"/><v:f eqn="if @0 21600 @1"/><v:f eqn="if @0 0 @2"/><v:f eqn="if @0 @4 21600"/><v:f eqn="mid @5 @6"/><v:f eqn="mid @8 @5"/>'
+    '<v:f eqn="mid @7 @8"/><v:f eqn="mid @6 @7"/><v:f eqn="sum @6 0 @5"/></v:formulas>'
+    '<v:path textpathok="t" o:connecttype="custom" o:connectlocs="@9,0;@10,10800;@11,21600;@12,10800" o:connectangles="270,180,90,0"/>'
+    '<v:textpath on="t" fitshape="t"/><v:handles><v:h position="#0,bottomRight" xrange="6629,14971"/></v:handles><o:lock v:ext="edit" text="t" shapetype="t"/>'
+    '</v:shapetype>')
+
+
+def _watermark_run(text: str, n: int):
+    from docx.oxml import parse_xml
+    from docx.oxml.ns import nsdecls
+
+    width = min(470, 90 * len(text) + 40)                # points; A4 between the margins is ~470pt
+    height = min(150, width / max(1, len(text)) * 1.5)
+    return parse_xml(
+        f'<w:r {nsdecls("w")} {_VML}><w:rPr><w:noProof/></w:rPr><w:pict>{_WATERMARK_SHAPETYPE}'
+        f'<v:shape id="CompliverseWatermark{n}" o:spid="_x0000_s{2049 + n}" type="#_x0000_t136" o:allowincell="f" fillcolor="#c5ced3" stroked="f" '
+        f'style="position:absolute;margin-left:0;margin-top:0;width:{width:.0f}pt;height:{height:.0f}pt;rotation:315;z-index:-251654144;'
+        'mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin">'
+        f'<v:fill opacity=".5"/><v:textpath style="font-family:&quot;Calibri&quot;;font-size:1pt" string="{_html.escape(text, quote=True)}"/>'
+        '</v:shape></w:pict></w:r>')
+
+
+def add_watermark(doc, text: str) -> None:
+    """Put ``text`` across every page of a python-docx document, the way Word does: in each header of the document (the first
+    page's and the even pages' too when it has them). A header that only repeats the section before it is left alone."""
+    text = (text or "").strip()[:WATERMARK_MAX]
+    if not text:
+        return
+    n = 0
+    for i, sec in enumerate(doc.sections):
+        heads = [sec.header]
+        if sec.different_first_page_header_footer:
+            heads.append(sec.first_page_header)
+        if doc.settings.odd_and_even_pages_header_footer:
+            heads.append(sec.even_page_header)
+        for head in heads:
+            if i > 0 and head.is_linked_to_previous:         # it shows the previous section's header, which has the watermark
+                continue
+            p = head.paragraphs[0] if head.paragraphs else head.add_paragraph()
+            p._p.append(_watermark_run(text, n))
+            n += 1
+
+
+def watermark_docx(data: bytes, text: str) -> bytes:
+    """A Word file's bytes with a watermark added (a file edited in place keeps everything else of its own)."""
+    from docx import Document
+
+    if not (text or "").strip():
+        return data
+    doc = Document(io.BytesIO(data))
+    add_watermark(doc, text)
+    out = io.BytesIO()
+    doc.save(out)
+    return out.getvalue()
 
 
 def to_docx(markdown: str, *, title: str = "", entity_name: str = "", logo_path: Optional[str] = None, logo_position: str = "header-left",
-            doc_code: str = "", version: str = "", classification: str = "", highlight_placeholders: bool = True) -> bytes:
+            doc_code: str = "", version: str = "", classification: str = "", highlight_placeholders: bool = True, watermark: str = "") -> bytes:
     """A Word document built from the Markdown."""
     from docx import Document
     from docx.shared import Cm, Pt, RGBColor
@@ -306,6 +394,7 @@ def to_docx(markdown: str, *, title: str = "", entity_name: str = "", logo_path:
     _style_doc(doc)
     _header_footer(doc, entity_name=entity_name, logo_path=logo_path, logo_position=logo_position,
                    footer_text=" · ".join(x for x in (doc_code, f"v{version}" if version else "", classification.title() if classification else "") if x) or (title or ""))
+    add_watermark(doc, watermark)
     heads = [b for b in blocks if b.kind == "heading"]
     one_title = bool(heads) and heads[0].level == 1 and sum(1 for h in heads if h.level == 1) == 1
     cp = doc.core_properties
@@ -442,7 +531,7 @@ def _pdf_inline(segs: Sequence[B.Seg], highlight: bool, mono: str = "Courier") -
 
 
 def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: Optional[str] = None, logo_position: str = "header-left",
-           doc_code: str = "", version: str = "", classification: str = "", highlight_placeholders: bool = True) -> bytes:
+           doc_code: str = "", version: str = "", classification: str = "", highlight_placeholders: bool = True, watermark: str = "") -> bytes:
     """A PDF built from the Markdown (A4). Right-to-left scripts are not supported here: use Word for those."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -553,27 +642,56 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
             self.setStrokeColor(colors.Color(.72, .77, .78))
             self.setLineWidth(0.5)
             x = 2.2 * cm
-            if logo is not None:
+            if logo is not None and where == "header":
                 iw, ih = logo.getSize()
                 lh = 1.3 * cm
                 lw = lh * iw / ih
-                x = {"header-center": (w - lw) / 2, "header-right": w - 2.2 * cm - lw}.get(logo_position, 2.2 * cm)
+                x = {"center": (w - lw) / 2, "right": w - 2.2 * cm - lw}.get(side, 2.2 * cm)
                 self.drawImage(logo, x, h - 1.2 * cm - lh, width=lw, height=lh, mask="auto")
-                x = x + lw + 8 if logo_position == "header-left" else x
+                x = x + lw + 8 if side == "left" else 2.2 * cm
             if entity_name:
                 self.setFont(bold, 9.5)
                 self.setFillColor(teal)
-                self.drawString(x if logo is None or logo_position == "header-left" else 2.2 * cm, h - 1.2 * cm - 0.9 * cm, entity_name)
+                self.drawString(x, h - 1.2 * cm - 0.9 * cm, entity_name)
             self.line(2.2 * cm, h - 2.55 * cm, w - 2.2 * cm, h - 2.55 * cm)
-            self.line(2.2 * cm, 1.7 * cm, w - 2.2 * cm, 1.7 * cm)
+            low = logo is not None and where == "footer"         # the logo at the foot of the page: the footer line and text move up over it
+            line_y, text_y = (1.95 * cm, 1.5 * cm) if low else (1.7 * cm, 1.2 * cm)
+            self.line(2.2 * cm, line_y, w - 2.2 * cm, line_y)
             self.setFont(regular, 8.5)
             self.setFillColor(colors.Color(.32, .38, .43))
-            self.drawString(2.2 * cm, 1.2 * cm, footer)
-            self.drawRightString(w - 2.2 * cm, 1.2 * cm, f"Page {self._pageNumber} of {total}")
+            self.drawString(2.2 * cm, text_y, footer)
+            self.drawRightString(w - 2.2 * cm, text_y, f"Page {self._pageNumber} of {total}")
+            if low:
+                iw, ih = logo.getSize()
+                lh = 0.8 * cm
+                lw = lh * iw / ih
+                lx = {"center": (w - lw) / 2, "right": w - 2.2 * cm - lw}.get(side, 2.2 * cm)
+                self.drawImage(logo, lx, 0.35 * cm, width=lw, height=lh, mask="auto")
 
+    mark = (watermark or "").strip()[:WATERMARK_MAX]
+
+    def under(canvas, _doc) -> None:
+        """The watermark, drawn first on every page so the text lies over it."""
+        if not mark:
+            return
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+
+        w, h = A4
+        size = max(28.0, min(120.0, 100 * 700 / max(1.0, stringWidth(mark, bold, 100))))
+        canvas.saveState()
+        canvas.setFillColor(colors.Color(.06, .30, .36))
+        canvas.setFillAlpha(0.08)
+        canvas.setFont(bold, size)
+        canvas.translate(w / 2, h / 2)
+        canvas.rotate(45)
+        canvas.drawCentredString(0, -size / 3, mark)
+        canvas.restoreState()
+
+    where, side = logo_spot(logo_position)
     out = io.BytesIO()
     SimpleDocTemplate(out, pagesize=A4, leftMargin=2.2 * cm, rightMargin=2.2 * cm, topMargin=3 * cm, bottomMargin=2.3 * cm,
-                      title=title or _title_of(blocks, ""), author=entity_name or "").build(story or [Spacer(1, 1)], canvasmaker=Canvas)
+                      title=title or _title_of(blocks, ""), author=entity_name or "").build(story or [Spacer(1, 1)], onFirstPage=under, onLaterPages=under,
+                                                                                           canvasmaker=Canvas)
     return out.getvalue()
 
 
@@ -586,7 +704,7 @@ FORMATS = {
 
 
 def export(markdown: str, fmt: str, *, title: str = "", entity_name: str = "", logo_path: Optional[str] = None, logo_position: str = "header-left",
-           doc_code: str = "", version: str = "", classification: str = "", highlight_placeholders: bool = True) -> bytes:
+           doc_code: str = "", version: str = "", classification: str = "", highlight_placeholders: bool = True, watermark: str = "") -> bytes:
     if fmt == "md":
         return to_markdown(markdown)
     if fmt == "html":
@@ -595,9 +713,9 @@ def export(markdown: str, fmt: str, *, title: str = "", entity_name: str = "", l
             ext = os.path.splitext(logo_path)[1].lower().lstrip(".")
             with open(logo_path, "rb") as f:
                 logo = (f.read(), "image/" + ("jpeg" if ext in ("jpg", "jpeg") else ext or "png"))
-        return to_html(markdown, title=title, entity_name=entity_name, logo=logo)
+        return to_html(markdown, title=title, entity_name=entity_name, logo=logo, logo_position=logo_position, watermark=watermark)
     kwargs = dict(title=title, entity_name=entity_name, logo_path=logo_path, logo_position=logo_position, doc_code=doc_code, version=version,
-                  classification=classification, highlight_placeholders=highlight_placeholders)
+                  classification=classification, highlight_placeholders=highlight_placeholders, watermark=watermark)
     if fmt == "docx":
         return to_docx(markdown, **kwargs)
     if fmt == "pdf":

@@ -1,16 +1,21 @@
 'use client';
 
-// The document with its changes marked: what changed since an earlier version (the one before this one by default), who made each
-// change and on whose request, and a way to take a change back (a new version; an approved document goes back to review).
+// The document with its changes marked: what changed since an earlier version (the one before this one by default, or the
+// original), who made each change and on whose request, and a way to take a change back (a new version; an approved document
+// goes back to review). Works on a document that is its file (an uploaded Word or PDF) as on a text document.
 // Backend: governance/change_chain.py. Shown in the Document Viewer when the organisation has the document life cycle.
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { GitCompare, Loader2 } from 'lucide-react';
+import { GitCompare, Loader2, Undo2 } from 'lucide-react';
 import { documentChainApi, type ChainHunk } from '@/lib/documentChain';
 import { problemOf } from '@/lib/studio/api';
+import { plural } from '@/lib/studio/text';
 import { useToast } from '@/components/ui/ToastProvider';
-import RedlineView, { StatsLine } from '../studio/_components/RedlineView';
+import RedlineView from '../studio/_components/RedlineView';
 import { dateTime } from '@/lib/documentLifecycle';
+import { InitialsAvatar } from '../_workspace/lib';
+
+const MUTED = 'text-[#586472]';
 
 export default function TrackedChanges({ documentId, status, initial, onChanged }: {
   documentId: number;
@@ -59,56 +64,85 @@ export default function TrackedChanges({ documentId, status, initial, onChanged 
     },
   });
 
-  if (chain.isLoading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>;
-  if (versions.length === 0) return <p className="rounded-lg border border-dashed border-slate-300 p-6 text-center text-sm text-slate-600">This document has no earlier version to compare with yet. Once it is edited, its changes are shown here.</p>;
+  if (chain.isLoading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>;
+  if (versions.length === 0) {
+    return <p className={`rounded-xl border border-dashed border-[#cbd5e1] bg-white p-8 text-center text-sm ${MUTED}`}>This document has no earlier version to compare with yet. Once it is edited, its changes are shown here.</p>;
+  }
   const data = redline.data;
   const resets = status === 'approved' || status === 'published' || status === 'exception_applied';
+  const stats = data?.stats;
+  const newestFirst = [...versions].reverse();
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-        <label className="flex items-center gap-2 text-slate-700">
-          <span className="font-medium">Compared with</span>
-          <select value={baseline ?? ''} onChange={(e) => { setFrom(Number(e.target.value)); setTo(null); }} aria-label="Version to compare with"
-            className="max-w-[22rem] rounded-md border border-slate-300 bg-white px-2 py-1 text-sm text-slate-900">
-            {[...versions].reverse().map((v, i) => (
-              <option key={v.id} value={v.id} disabled={i === 0 && to == null}>
-                v{v.number} · {v.by} · {dateTime(v.at)} · {v.stage_label}{i === 0 ? ' (the current one)' : i === versions.length - 1 ? ' (the original)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
-        {to != null && data?.to && (
-          <span className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-2.5 py-0.5 text-xs text-primary-800">
-            What v{data.to.number} changed
-            <button type="button" onClick={() => setTo(null)} className="font-semibold underline">Show everything since v{data.from.number}</button>
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-card">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <label className="flex min-w-0 items-center gap-2 text-sm">
+            <GitCompare className="h-4 w-4 shrink-0 text-[#0b6b58]" aria-hidden />
+            <span className="shrink-0 font-semibold text-slate-900">Compared with</span>
+            <select value={baseline ?? ''} onChange={(e) => { setFrom(Number(e.target.value)); setTo(null); }} aria-label="Version to compare with"
+              className="min-w-0 max-w-[24rem] rounded-lg border border-[#cbd5e1] bg-white px-2.5 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-primary-500/30">
+              {newestFirst.map((v, i) => (
+                <option key={v.id} value={v.id} disabled={i === 0 && to == null}>
+                  v{v.number} · {v.by} · {dateTime(v.at)} · {v.stage_label}{i === 0 ? ' (the current one)' : i === newestFirst.length - 1 ? ' (the original)' : ''}
+                </option>
+              ))}
+            </select>
+          </label>
+          {versions.length > 2 && baseline !== versions[0].id && (
+            <button type="button" onClick={() => { setFrom(versions[0].id); setTo(null); }} className="text-xs font-semibold text-[#0b6b58] hover:underline">Compare with the original</button>
+          )}
+          {to != null && data?.to && (
+            <span className="inline-flex items-center gap-2 rounded-full bg-primary-50 px-2.5 py-1 text-xs text-[#0b6b58] ring-1 ring-inset ring-primary-100">
+              Only what v{data.to.number} changed
+              <button type="button" onClick={() => setTo(null)} className="font-semibold underline">Show everything since v{data.from.number}</button>
+            </span>
+          )}
+          <span className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px]">
+            {stats && (stats.inserted + stats.deleted + stats.modified > 0) ? (
+              <>
+                {stats.inserted > 0 && <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-800 ring-1 ring-inset ring-emerald-200">{plural(stats.inserted, 'block')} added</span>}
+                {stats.deleted > 0 && <span className="rounded-full bg-rose-50 px-2 py-0.5 font-semibold text-rose-800 ring-1 ring-inset ring-rose-200">{plural(stats.deleted, 'block')} removed</span>}
+                {stats.modified > 0 && <span className="rounded-full bg-amber-50 px-2 py-0.5 font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">{plural(stats.modified, 'block')} changed</span>}
+                <span className="font-mono font-semibold text-emerald-700">+{stats.words_added}</span><span className="font-mono font-semibold text-rose-700">−{stats.words_removed}</span><span className={MUTED}>words</span>
+              </>
+            ) : stats ? <span className={MUTED}>No changes</span> : null}
           </span>
-        )}
-        <span className="text-xs text-slate-600">{data ? <StatsLine stats={data.stats} /> : null}</span>
-        <span className="text-xs text-slate-500">Green was added, red was removed. Each change says who made it and why.</span>
+        </div>
+        <p className={`mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] ${MUTED}`}>
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-200" aria-hidden /> added</span>
+          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm bg-rose-200" aria-hidden /> removed</span>
+          <span>Each change says who made it, on whose request and from which sources.</span>
+          {data && !data.can_revert && data.why_not && <span className="text-amber-800">{data.why_not}</span>}
+        </p>
       </div>
 
       {asking && (
-        <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" role="alertdialog" aria-label="Take back this change">
-          <p className="font-semibold">Take back the change in “{asking.section || 'the top of the document'}”?</p>
-          <p className="mt-0.5 text-xs">
-            It becomes a new version made by you; the text goes back to what version {redline.data?.from.number} had. Nothing else changes.
-            {resets ? ' This document is approved, so it goes back to review.' : ''}
-          </p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (recorded in the document's history)"
-              className="min-w-[14rem] flex-1 rounded-md border border-amber-300 bg-white px-2 py-1.5 text-sm text-slate-900" />
-            <button type="button" disabled={takeBack.isPending} onClick={() => takeBack.mutate()}
-              className="inline-flex items-center gap-1.5 rounded-md bg-amber-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-amber-800 disabled:opacity-60">
-              {takeBack.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Take it back
-            </button>
-            <button type="button" onClick={() => setAsking(null)} className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">Cancel</button>
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 shadow-card" role="alertdialog" aria-label="Take back this change">
+          <div className="flex items-start gap-3">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 ring-1 ring-inset ring-amber-200"><Undo2 className="h-4 w-4" aria-hidden /></span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold">Take back the change in “{asking.section || 'the top of the document'}”?</p>
+              <p className="mt-0.5 text-xs text-amber-900">
+                It becomes a new version made by you; the text goes back to what version {redline.data?.from.number} had. Nothing else changes.
+                {resets ? ' This document is approved, so it goes back to review.' : ''}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (recorded in the document's history)"
+                  className="min-w-[14rem] flex-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
+                <button type="button" disabled={takeBack.isPending} onClick={() => takeBack.mutate()}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
+                  {takeBack.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Take it back
+                </button>
+                <button type="button" onClick={() => setAsking(null)} className="rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-sm font-semibold text-[#334155] hover:bg-[#f8fafc]">Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      <div className="rounded-lg border border-slate-200 bg-white p-3">
-        {redline.isLoading && <p className="text-sm text-slate-600"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Comparing…</p>}
+      <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-card sm:p-4">
+        {redline.isLoading && <p className={`text-sm ${MUTED}`}><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Comparing…</p>}
         {redline.isError && <p className="text-sm text-rose-700" role="alert">{problemOf(redline.error, 'These versions could not be compared.')}</p>}
         {data && (
           <RedlineView rows={data.rows} empty="Nothing changed since that version."
@@ -119,7 +153,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged 
   );
 }
 
-/** One line above the document: what changed since the version that was last approved (or since the first one), so the next person to
+/** One line above the document: what changed since the version that was last approved (or since the original), so the next person to
  *  review knows where to look. Nothing is shown when nothing changed. */
 export function SinceApproved({ documentId, onShow }: { documentId: number; onShow: (fromVersionId: number) => void }) {
   const chain = useQuery({ queryKey: ['document-chain', documentId], queryFn: () => documentChainApi.chain(documentId), staleTime: 15_000 });
@@ -137,13 +171,17 @@ export function SinceApproved({ documentId, onShow }: { documentId: number; onSh
   }, [chain.data]);
   if (!info) return null;
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-primary-200 bg-primary-50/60 px-3 py-2 text-xs text-slate-800" role="note">
-      <GitCompare className="h-4 w-4 shrink-0 text-primary-700" aria-hidden />
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary-100 bg-primary-50/60 px-3 py-2.5 text-xs text-[#1f2933]" role="note">
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0b6b58] ring-1 ring-inset ring-primary-100"><GitCompare className="h-4 w-4" aria-hidden /></span>
       <span className="min-w-0 flex-1">
-        Since {info.approved ? 'the last approved version' : 'the original'} (v{info.base.number}): <strong>{info.changes} change{info.changes === 1 ? '' : 's'}</strong> in {info.versions} version{info.versions === 1 ? '' : 's'}
-        {' '}by {info.people.join(', ')}{info.ai ? ` · ${info.ai} AI-assisted` : ''}.
+        <span className="font-semibold">Since {info.approved ? 'the last approved version' : 'the original'} (v{info.base.number}):</span>{' '}
+        {plural(info.changes, 'change')} in {plural(info.versions, 'version')}{info.ai ? `, ${info.ai} AI-assisted` : ''}
+        <span className="ml-2 inline-flex translate-y-0.5 items-center align-middle">{info.people.slice(0, 4).map((p, i) => <span key={p} className={i ? '-ml-1.5' : ''}><InitialsAvatar name={p} size="sm" /></span>)}</span>
       </span>
-      <button type="button" onClick={() => onShow(info.base.id)} className="font-semibold text-primary-800 underline">See them marked in the document</button>
+      <button type="button" onClick={() => onShow(info.base.id)}
+        className="inline-flex items-center gap-1 rounded-lg border border-primary-600 bg-white px-2.5 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-primary-50">
+        See them marked in the document
+      </button>
     </div>
   );
 }

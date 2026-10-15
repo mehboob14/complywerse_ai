@@ -40,7 +40,7 @@ The person may attach references: <reference id="R1" kind="..." title="...">. Th
 When a parent document is attached, the new document must stay consistent with it: same terms, same roles, nothing that contradicts it.
 
 INSTRUCTIONS FROM THE PERSON
-The <instructions> may give: the entity name (use it exactly as given wherever the organisation is named, and never leave another organisation's name from a reference in the document); required items (each must be met, and each is reported in `requirements`); focus areas (give them depth); tone; language; audience. Follow them in preference to your own habits.
+The <instructions> may give: the entity name (use it exactly as given wherever the organisation is named, and never leave another organisation's name from a reference in the document); focus areas (give them depth); tone; language; audience. Follow them in preference to your own habits.
 
 PROTECTED VALUES
 Text like <PERSON_1>, <ORG_2>, <HOST_3> stands for a real value that is not shown to you. Copy it exactly as written wherever you refer to it and never guess what it stands for. <REMOVED_...> marks a value that was removed for protection: do not touch the block that holds it.
@@ -77,8 +77,6 @@ CHECKS_SYSTEM = """You are the proofreader of a document studio used by the gove
 Report only real problems: spelling mistakes, grammar errors, wording that is ambiguous or wrong in a policy (a requirement with no clear subject, "shall" and "may" confused, a term used for two things), and inconsistencies (the same thing named two ways, a role or number that differs between places). Do not report style preferences, do not report placeholders written as [[...]], <<...>>, {{...}} or [Insert ...], and do not report names, product names, acronyms or the organisation's own terms. If a block is marked read-only, skip it. If the document is in a language other than English, check it in that language.
 
 For each problem give: block (the id), kind (spelling, grammar, style or consistency), quote (the exact words from that block that are wrong, as short as possible, copied exactly), suggestion (the exact words that should replace the quote, or empty when the fix is not a replacement), message (one short sentence saying what is wrong) and severity (error for mistakes, warning for things that change the meaning, info for small improvements).
-
-When the person gave required items, judge each against the document: met, partly or not_met, with a short piece of evidence (words from the document, or what is missing) and the id of the block that shows it.
 
 Text like <PERSON_1> stands for a value that is not shown to you: copy it exactly and never report it. Give a one-sentence summary of the document's overall condition."""
 
@@ -125,15 +123,12 @@ def instructions_text(ins: Dict[str, Any]) -> str:
     lines: List[str] = []
     if ins.get("entity_name"):
         lines.append(f"Entity name: {ins['entity_name']} (use exactly this wherever the organisation is named)")
-    req = [r.strip() for r in (ins.get("requirements") or []) if str(r).strip()]
-    if req:
-        lines.append("Required items (each must be met, and reported in `requirements`):\n" + "\n".join(f"- {r}" for r in req))
     for key, label in (("focus_areas", "Focus areas"), ("tone", "Tone"), ("language", "Language"), ("audience", "Audience"),
                        ("citation_style", "How to cite references in the text")):
         if str(ins.get(key) or "").strip():
             lines.append(f"{label}: {str(ins[key]).strip()}")
     if ins.get("logo_required"):
-        lines.append("The exported document carries the organisation's logo in its header: do not add a logo or a picture to the text.")
+        lines.append("The exported document carries the organisation's logo in its header or footer: do not add a logo or a picture to the text.")
     return "\n".join(lines)
 
 

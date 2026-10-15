@@ -62,6 +62,21 @@ def test_an_uploaded_word_file_is_edited_by_chat_and_leaves_as_the_same_file(wor
     assert len([n for n in z.namelist() if n.startswith("word/media/")]) == 1                    # the picture is still there
 
 
+def test_a_word_file_edited_in_place_gets_the_watermark_in_its_own_header_when_asked(world, tmp_path):
+    path = F.corporate_policy(str(tmp_path / "policy.docx"))
+    s = upload(world, path)
+    world.http.patch(world.api(f"/sessions/{s['id']}"), json={"instructions": {"watermark": True, "watermark_text": "CONFIDENTIAL"}})
+    check = world.http.post(world.api(f"/sessions/{s['id']}/export/check"), json={"format": "docx"}).json()
+    assert any(n["rule"] == "watermark" and "CONFIDENTIAL" in n["text"] for n in check["notes"])
+    _doc, z = docx_of(export(world, s["id"]))
+    header = z.read("word/header1.xml").decode()
+    assert "ACME BANK - CONFIDENTIAL" in header and 'string="CONFIDENTIAL"' in header               # its own header, with the watermark added
+    assert z.read("word/footer1.xml") == zipfile.ZipFile(path).read("word/footer1.xml")
+    world.http.patch(world.api(f"/sessions/{s['id']}"), json={"instructions": {"watermark": False}})
+    _doc, z = docx_of(export(world, s["id"]))
+    assert z.read("word/header1.xml") == zipfile.ZipFile(path).read("word/header1.xml")              # off again: the header is the file's own
+
+
 def test_when_the_changes_cannot_be_written_into_the_word_file_a_clean_copy_is_made_and_the_person_is_told(world, tmp_path, monkeypatch):
     path = F.corporate_policy(str(tmp_path / "policy.docx"))
     s = upload(world, path)

@@ -16,6 +16,7 @@ import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Session, type TemplateItem } from '@/lib/studio/api';
 import { ago, plural } from '@/lib/studio/text';
+import { FrameworkList } from './_components/ReferencesPanel';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const primary = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -144,13 +145,10 @@ function NewDocument({ onOpen, prefill }: { onOpen: (s: Session) => void; prefil
           {picking === 'parent' && <div className="mt-2"><DocList onPick={(d) => { setParent(d); setPicking(null); }} /></div>}
           {picking === 'document' && <div className="mt-2"><DocList exclude={refDocs.map((d) => d.id)} onPick={(d) => { setRefDocs([...refDocs, d]); setPicking(null); }} /></div>}
           {picking === 'framework' && (
-            <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-              {frameworks.isLoading && <li className="p-2 text-xs text-[#586472]"><Loader2 className="inline h-3.5 w-3.5 animate-spin" /> Loading…</li>}
-              {frameworks.data?.items.filter((f) => !fws.some((x) => x.id === f.id)).map((f) => (
-                <li key={f.id}><button type="button" onClick={() => { setFws([...fws, f]); setPicking(null); }} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
-                  <BookMarked className="h-4 w-4 shrink-0 text-[#586472]" /><span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#1f2933]">{f.name}{f.version ? ` ${f.version}` : ''}</span><span className="block text-[11px] text-[#586472]">{[f.organisation, `${f.controls} controls`].filter(Boolean).join(' · ')}</span></span></button></li>
-              ))}
-            </ul>
+            <div className="mt-2">
+              <FrameworkList frameworks={frameworks.data?.items} loading={frameworks.isLoading} exclude={fws.map((f) => f.id)} maxHeight="max-h-56"
+                onPick={(f) => { setFws([...fws, f]); setPicking(null); }} />
+            </div>
           )}
         </div>
         <button type="button" disabled={!title.trim() || start.isPending} onClick={() => start.mutate()} className={primary}>

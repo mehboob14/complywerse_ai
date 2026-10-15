@@ -1,3 +1,4 @@
+import os
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -100,6 +101,9 @@ def serialize_version(version: GovernanceDocumentVersion) -> dict:
         "creator_name": version.creator.display_name if version.creator else None,
         "approved_by": version.approved_by,
         "approved_at": version.approved_at.isoformat() if version.approved_at else None,
+        "file_name": version.file_name,
+        "file_type": version.file_type,
+        "has_file": bool(version.file_path and os.path.exists(version.file_path)),
     }
 
 
@@ -353,17 +357,42 @@ def rollback_to_version(
             detail="Target version not found for this document"
         )
     
+    rollback_reason = rollback_data.rollback_reason if rollback_data else None
+    change_summary = f"Rollback to version {target_version.version_number}"
+    if rollback_reason:
+        change_summary += f": {rollback_reason}"
+
+    if not (target_version.content or "").strip() and target_version.file_path and os.path.exists(target_version.file_path):
+        # a version that is a file (an uploaded Word or PDF, the original or a later one): that file becomes the document's file
+        # again, as a new version; the files after it stay as the versions they were
+        from ..studio import service as studio
+
+        with open(target_version.file_path, "rb") as f:
+            data = f.read()
+        ext = (target_version.file_type or os.path.splitext(target_version.file_path)[1]).lower().lstrip(".") or "docx"
+        old_version = document.current_version
+        row, new_version_number, _ = studio.write_file_version(
+            db, document, current_user, data, change_type="minor", summary=change_summary, reason=rollback_reason, ext=ext,
+            done=f"Version {target_version.version_number} restored", audit_action="version_rollback")
+        row.change_reason = f"Rollback from version {old_version} to version {target_version.version_number}"
+        document.content = None
+        db.commit()
+        studio.reanchor(db, document, current_user.id)
+        db.refresh(row)
+        return {
+            "message": f"Successfully rolled back to version {target_version.version_number}",
+            "new_version": serialize_version(row),
+            "rollback_from": old_version,
+            "rollback_to_content_from": target_version.version_number,
+            "status": document.status,
+        }
+
     db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.document_id == document_id,
         GovernanceDocumentVersion.status == "current"
     ).update({"status": "superseded"})
     
     new_version_number = increment_version(document.current_version, "minor")
-    
-    rollback_reason = rollback_data.rollback_reason if rollback_data else None
-    change_summary = f"Rollback to version {target_version.version_number}"
-    if rollback_reason:
-        change_summary += f": {rollback_reason}"
     
     new_version = GovernanceDocumentVersion(
         document_id=document_id,
