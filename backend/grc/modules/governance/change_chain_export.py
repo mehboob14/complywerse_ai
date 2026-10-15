@@ -16,7 +16,7 @@ XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PDF = "application/pdf"
 CSV = "text/csv; charset=utf-8"
 _SHEETS = (("Versions", "versions"), ("Changes", "changes"), ("Sources", "sources"), ("Approvals", "approvals"))
-_WIDTHS = {"versions": [9, 17, 22, 14, 24, 9, 9, 9, 48, 12, 22, 17],
+_WIDTHS = {"versions": [9, 17, 22, 14, 24, 9, 9, 9, 48, 12, 22, 17, 30],
            "changes": [8, 9, 17, 22, 14, 36, 10, 50, 50, 9, 9, 22, 36, 36, 40, 8],
            "sources": [38, 16, 22, 60, 12, 14], "approvals": [17, 22, 22, 80]}
 PDF_CELL_CAP = 600

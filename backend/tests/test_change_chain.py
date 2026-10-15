@@ -243,6 +243,27 @@ def test_the_redline_against_an_earlier_version_says_who_made_each_change(librar
     assert library.lib.get("/governance/documents/10/change-chain/redline?from=9999").status_code == 404
 
 
+def test_the_changes_of_one_version_are_taken_back_from_the_document_as_it_is_now_unless_a_later_version_changed_them_again(library):
+    db = library.db
+    versions = _three_versions(db)                              # 1.0 baseline, 1.1 quarterly (Olivia), 1.2 scope (Sam)
+    one = library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[0].id}&to={versions[1].id}").json()
+    assert one["to"]["number"] == "1.1" and [h["section"] for h in one["hunks"]] == ["3. Access Control"]
+    hunk = one["hunks"][0]
+    assert hunk["can_revert"] is True and hunk["current_id"] is not None and one["current_hash"] != one["hash"]       # the document is not version 1.1 any more
+    back = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [hunk["current_id"]],
+                                                                                   "hash": one["current_hash"]})
+    assert back.status_code == 200
+    content = db.get(m.GovernanceDocument, 10).content
+    assert "every year" in content and "third parties" in content                   # Olivia's change is out, Sam's stays
+
+    # the same paragraph is then changed again by someone else: Sam's own change can no longer be taken back alone
+    _edit(db, 10, content.replace("All staff, contractors and third parties.", "Everyone with access."), user_id=1, reason="Simpler")
+    latest = db.query(m.GovernanceDocumentVersion).filter_by(document_id=10).order_by(m.GovernanceDocumentVersion.id).all()
+    sam = library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[1].id}&to={versions[2].id}").json()
+    assert sam["hunks"][0]["section"] == "2. Scope" and sam["hunks"][0]["can_revert"] is False and sam["hunks"][0]["current_id"] is None
+    assert "changed again" in sam["why_not"] and len(latest) == 5
+
+
 def test_one_change_is_taken_back_as_a_new_version_and_a_published_document_goes_back_to_review(library):
     db = library.db
     versions = _three_versions(db)
@@ -274,6 +295,9 @@ def test_a_sign_off_record_is_not_taken_back_and_a_document_that_is_its_file_is_
     versions = db.query(m.GovernanceDocumentVersion).filter_by(document_id=10).order_by(m.GovernanceDocumentVersion.id).all()
     red = library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[0].id}").json()
     assert red["hunks"][0]["locked"] is True and red["hunks"][0]["section"] == "4. Approval Signoff"
+    assert "Reviewed by | Rana |  | 2026-10-01 · E-signed ab12cd34" in red["hunks"][0]["after_text"]         # a table reads as its rows
+    assert red["hunks"][0]["after_text"].count("\n") == 1 and red["hunks"][0]["before_text"].startswith("Role | Name | Designation | Signature / Date")
+    assert red["hunks"][0]["can_revert"] is False
     refused = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [red["hunks"][0]["id"]]})
     assert refused.status_code == 400 and "sign-off" in refused.json()["detail"]
     doc.content, doc.file_path = "", "/files/policy.docx"
@@ -399,6 +423,8 @@ def test_the_tracked_changes_of_a_session_are_cut_into_changes_and_one_is_taken_
     assert bad.status_code == 409
     ok = world.http.post(world.api(f"/sessions/{s['id']}/changes/revert"), json={"frm": 0, "hunks": [by["2. Scope"]["id"]], "hash": diff["hash"]}).json()
     assert "Contractors are in scope" not in ok["content"] and "every quarter" in ok["content"]
+    ops = {o["id"]: o["status"] for o in world.http.get(world.api(f"/sessions/{s['id']}/messages/{msg['id']}")).json()["proposal"]["ops"]}
+    assert ops == {"c1": "accepted", "c2": "reverted"}                                    # the card of the change that was taken back says so
     revisions = world.http.get(world.api(f"/sessions/{s['id']}/revisions")).json()["items"]
     assert revisions[0]["author_type"] == "revert" and "Took back 1 change" in revisions[0]["summary"]
 

@@ -506,16 +506,45 @@ def revert_changes(db, s, frm: int, hunk_ids: Sequence[int], user, *, content_ha
     if content_hash and content_hash != C.content_hash(s.content):
         raise Conflict("The document changed while you were looking at it. Open the changes again.")
     label = "the start" if frm == 0 else f"version {frm}"
+    earlier = revision_content(db, s, frm)
     try:
-        new_md = C.revert(revision_content(db, s, frm), s.content, hunk_ids)
+        new_md = C.revert(earlier, s.content, hunk_ids)
     except ValueError as exc:
         raise StudioError(str(exc)) from exc
     if _norm_doc(new_md) == _norm_doc(s.content):
         raise StudioError("Nothing would change.")
+    taken = [h for h in C.hunks_of(earlier, s.content) if h["id"] in set(hunk_ids)]
     rev = add_revision(db, s, new_md, author_type="revert", user_id=user.id,
                        summary=f"Took back {len(set(hunk_ids))} change{'' if len(set(hunk_ids)) == 1 else 's'} made since {label}")
+    _mark_reverted(db, s, taken, user.id)
     db.commit()
     return {"content": new_md, "revision": rev.number}
+
+
+def _mark_reverted(db, s, taken: Sequence[Dict[str, Any]], user_id: Optional[int]) -> None:
+    """An accepted change whose text was taken back through the tracked changes reads as taken back on its card too."""
+    from ....models import StudioMessage
+
+    gone = {d for h in taken for d in h["after_digests"]}
+    back = {d for h in taken for d in h["before_digests"]}
+    for m in db.query(StudioMessage).filter(StudioMessage.session_id == s.id, StudioMessage.role == "assistant", StudioMessage.kind == "chat").all():
+        ops = [dict(o) for o in (m.proposal or {}).get("ops") or []]
+        changed = False
+        for o in ops:
+            if o.get("status") != "accepted":
+                continue
+            if o["kind"] == "delete":
+                removed = {b.digest for b in B.parse(o.get("before_markdown") or "")}
+                hit = bool(removed) and removed <= back
+            else:
+                written = {b.digest for b in B.parse(o.get("markdown") or "")}
+                hit = bool(written) and written <= gone
+            if hit:
+                o["status"], o["reverted_by"], o["reverted_at"] = "reverted", user_id, _now().isoformat()
+                changed = True
+        if changed:
+            m.proposal = {**(m.proposal or {}), "ops": ops}
+            m.updated_at = _now()
 
 
 def reject_ops(db, msg, op_ids: Sequence[str]) -> int:

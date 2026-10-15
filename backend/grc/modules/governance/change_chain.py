@@ -39,7 +39,7 @@ STAGE_LABEL = {"draft": "Draft", "pending_review": "In review", "pending_approva
                "published": "Published", "expired": "Expired", "archived": "Archived", "exception_applied": "Exception applied"}
 ORIGIN_LABEL = {"ai": "AI-assisted", "manual": "Edited by hand", "mixed": "AI-assisted and edited by hand", "revert": "Reverted",
                 "restore": "Earlier version restored", "signoff": "Sign-off stamp", "initial": "First version", "file": "File replaced",
-                "import": "Imported", "unknown": "Changed"}
+                "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
 # audit entries that matter to the chain (the rest - views, downloads, field edits - do not)
 _EVENT_ACTIONS = {"created", "sent_for_review", "sent_for_approval", "signed", "rejected", "published", "archived", "status_changed",
                   "review_completed", "version_rollback"}
@@ -108,6 +108,13 @@ def _words_of(text: str) -> int:
     return len(re.findall(r"\w+", text or ""))
 
 
+def _plain(block: B.Block) -> str:
+    """A block as words a reader can compare: a table is its rows, one per line, cells separated by " | "."""
+    if block.kind == "table" and block.rows:
+        return "\n".join(" | ".join(c.text for c in row) for row in block.rows)
+    return block.text
+
+
 def _hunk(base: Sequence[B.Block], cur: Sequence[B.Block], run: _Run, paths_base: Sequence[str], paths_cur: Sequence[str]) -> Dict[str, Any]:
     added = removed = 0
     for p in run.pairs:
@@ -133,7 +140,7 @@ def _hunk(base: Sequence[B.Block], cur: Sequence[B.Block], run: _Run, paths_base
     return {"id": run.id, "status": status, "section": section, "locked": bool(LOCKED.search(section)),
             "blocks": len(run.pairs), "words_added": added, "words_removed": removed,
             "format_only": all(p.format_only for p in run.pairs),
-            "before_text": "\n".join(b.text for b in bs), "after_text": "\n".join(b.text for b in cs),
+            "before_text": "\n".join(_plain(b) for b in bs), "after_text": "\n".join(_plain(b) for b in cs),
             "before_digests": [b.digest for b in bs], "after_digests": [b.digest for b in cs]}
 
 
@@ -376,14 +383,14 @@ def chain(db, doc) -> Dict[str, Any]:
                 items = [public_item(h, None, default_kind=kind, by=by, by_id=v.created_by, at=at) for h in hunks_of(old, new)]
                 for n, it in enumerate(items, start=1):
                     it["n"] = n
-                origin, sources = (kind if items or kind != "manual" else "unknown"), []
+                origin, sources = (kind if items or kind != "manual" else "nochange"), []
         for it in items:
             it.setdefault("origin", "unknown")
         out_versions.append({
             "id": v.id, "number": v.version_number, "kind": v.change_type, "status": v.status, "at": at, "by": by, "by_id": v.created_by,
             "stage": _stage_at(history, v.created_at), "origin": origin, "origin_label": ORIGIN_LABEL.get(origin, ORIGIN_LABEL["unknown"]),
             "summary": v.change_summary or "", "reason": v.change_reason or "", "comparable": comparable,
-            "has_file": bool(v.file_path), "title": v.title, "items": items, "sources": sources,
+            "has_file": bool(v.file_path), "file_name": v.file_name or "", "title": v.title, "items": items, "sources": sources,
             "words_added": sum(i["words_added"] for i in items), "words_removed": sum(i["words_removed"] for i in items),
             "changes": len(items), "approved_by": names.get(v.approved_by), "approved_at": _iso(v.approved_at),
             "session_id": (stored or {}).get("session_id"),
@@ -473,10 +480,30 @@ def redline(db, doc, from_version_id: int, to_version_id: Optional[int] = None) 
             break
     for h in result["hunks"]:
         h["by"] = attribute(h, origins)
-    editable = to_v is None and bool((doc.content or "").strip())
+    editable = bool((doc.content or "").strip())
+    current_hash = result["hash"]
+    if to_v is not None and editable:
+        # the changes of one version are taken back from the document as it is now: each is found there again by its words
+        # (a change edited by a later version is no longer the same change and cannot be taken back on its own)
+        now = compare(base_text, doc.content)
+        current_hash = now["hash"]
+        found = {(tuple(h["before_digests"]), tuple(h["after_digests"])): h["id"] for h in now["hunks"]}
+        for h in result["hunks"]:
+            h["current_id"] = found.get((tuple(h["before_digests"]), tuple(h["after_digests"])))
+            h["can_revert"] = h["current_id"] is not None and not h["locked"]
+    else:
+        for h in result["hunks"]:
+            h["current_id"] = h["id"]
+            h["can_revert"] = editable and not h["locked"]
+    if not editable:
+        why = "This is the document's file: open it in the AI Studio to take a change back."
+    elif to_v is not None:
+        why = "This change was changed again by a later version, so it cannot be taken back on its own. Compare with the current document instead."
+    else:
+        why = None
     return {"enabled": True, "from": {"id": base_v.id, "number": base_v.version_number}, "to": {"id": to_v.id, "number": to_v.version_number} if to_v else None,
-            "rows": result["rows"], "hunks": result["hunks"], "stats": result["stats"], "hash": result["hash"], "can_revert": editable,
-            "why_not": None if editable else ("This is the document's file: open it in the AI Studio to take a change back." if to_v is None else "Changes between two earlier versions cannot be taken back here.")}
+            "rows": result["rows"], "hunks": result["hunks"], "stats": result["stats"], "hash": result["hash"], "current_hash": current_hash,
+            "can_revert": editable, "why_not": why}
 
 
 # ── tables for the export ────────────────────────────────────────────────────
@@ -487,7 +514,7 @@ def _clock(iso: Optional[str]) -> str:
 def catalog(c: Dict[str, Any]) -> Dict[str, List[List[Any]]]:
     """The chain as flat rows: versions, changes, sources and approvals."""
     versions = [[v["number"], _clock(v["at"]), v["by"], v["stage_label"], v["origin_label"], v["changes"], v["words_added"], v["words_removed"],
-                 v["summary"] or v["reason"], v["status"] or "", v["approved_by"] or "", _clock(v["approved_at"])] for v in c["versions"]]
+                 v["summary"] or v["reason"], v["status"] or "", v["approved_by"] or "", _clock(v["approved_at"]), v.get("file_name") or ""] for v in c["versions"]]
     changes: List[List[Any]] = []
     for v in c["versions"]:
         for it in v["items"]:
@@ -508,7 +535,7 @@ def catalog(c: Dict[str, Any]) -> Dict[str, List[List[Any]]]:
 
 
 CATALOG_HEADERS = {
-    "versions": ["Version", "Date", "Changed by", "Stage", "How", "Changes", "Words added", "Words removed", "Summary", "Status", "Approved by", "Approved on"],
+    "versions": ["Version", "Date", "Changed by", "Stage", "How", "Changes", "Words added", "Words removed", "Summary", "Status", "Approved by", "Approved on", "File"],
     "changes": ["Ref", "Version", "Date", "Changed by", "Stage", "Section", "Change", "From", "To", "Words added", "Words removed", "How",
                 "Request", "Reason", "Sources", "Quote found"],
     "sources": ["Source", "Kind", "Where in it", "Quoted words", "Check", "Versions"],
