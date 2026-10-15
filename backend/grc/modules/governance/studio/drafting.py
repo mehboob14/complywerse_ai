@@ -19,7 +19,7 @@ import os
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ....services.ai_gateway import claude_client
@@ -40,6 +40,8 @@ PARALLEL = max(1, int(os.environ.get("DOCUMENT_STUDIO_DRAFT_PARALLEL", "5") or 5
 SECTION_MAX_TOKENS = 16000
 PLAN_MAX_TOKENS = 12000
 RETRY_WAITS = (6, 20, 45)                 # seconds before another try of a call the provider said may work later
+SETTLE_GRACE = 1.0                        # seconds after the person opens a new document before it is written (late references)
+SETTLE_MAX = 40.0                         # the longest a new document waits to be opened before it is written anyway
 USE_CASE = "governance.studio_draft"
 
 _FRONT_KEYS = {"document description", "approval signoff", "revision history"}
@@ -400,13 +402,50 @@ def _known_ids(references: Sequence[Any]) -> set:
     return ids
 
 
-def run_draft(db, session_id: int, message_id: int) -> None:
-    """Write the whole document into the assistant message ``message_id`` and apply it. Never raises: a failure is written on the message."""
+def auto_draft_enabled() -> bool:
+    """Whether a new document is written as soon as it is created (``DOCUMENT_STUDIO_AUTO_DRAFT``, on unless the operator says off)."""
+    return os.environ.get("DOCUMENT_STUDIO_AUTO_DRAFT", "on").strip().lower() not in ("off", "0", "false", "no")
+
+
+def wants_auto_draft(session, requested: Optional[bool]) -> bool:
+    """Whether a document just created should be written now: a new policy, standard, procedure, guideline or charter that was not
+    started from the blank template, when the AI is set up, unless the caller said not to (``requested`` False) or the operator turned it off."""
+    return (requested is not False and auto_draft_enabled() and session.kind == "new" and session.doc_type in templates.DOC_TYPES
+            and session.template_id != "builtin:blank" and claude_client.configured())
+
+
+def wait_until_opened(db, session_id: int, since: datetime) -> None:
+    """A document is created first and its references are attached after, by separate calls; the person opens it when that is done
+    (opening it is what moves ``last_opened_at``). So the writing waits for that, plus a moment, and at most ``SETTLE_MAX`` seconds."""
+    from ....models import StudioSession
+
+    deadline = time.monotonic() + SETTLE_MAX
+    while time.monotonic() < deadline:
+        db.expire_all()
+        s = db.get(StudioSession, session_id)
+        if s is None:
+            return
+        if s.last_opened_at and s.last_opened_at > since + timedelta(milliseconds=200):
+            time.sleep(SETTLE_GRACE)
+            return
+        time.sleep(0.5)
+
+
+def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetime] = None) -> None:
+    """Write the whole document into the assistant message ``message_id`` and apply it. Never raises: a failure is written on the message.
+    ``wait_since`` (the moment the document was created) makes it wait until the person has opened the document, so that the
+    references attached right after creation are part of the draft."""
     from ....models import StudioMessage, StudioReference, StudioSession
     from . import service
 
     session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
     try:
+        if wait_since is not None:
+            _stage(db, msg, "Getting ready")
+            wait_until_opened(db, session_id, wait_since)
+            session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
+            if session is None or msg is None or msg.status != "working":          # the document was deleted meanwhile
+                return
         if session.doc_type not in templates.DOC_TYPES or session.kind != "new":
             raise TurnProblem("Only a new policy, standard, procedure, guideline or charter can be written from scratch.")
         request = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user", StudioMessage.id < message_id)

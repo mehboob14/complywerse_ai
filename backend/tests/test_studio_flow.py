@@ -54,6 +54,7 @@ def change(kind, start="", end="", markdown="", reason="because", refs=()):
 def world(monkeypatch, tmp_path):
     monkeypatch.setenv("SESSION_SECRET", "a-test-secret")
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "off")        # a new document is not written on creation here; test_studio_draft.py turns it on
     for name in ("AI_GATEWAY_MODE", "DOCUMENT_STUDIO_MODEL", "ANTHROPIC_REFUSAL_FALLBACK"):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setattr(claude_client, "_fallbacks_rejected", False)

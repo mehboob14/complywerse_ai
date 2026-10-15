@@ -14,7 +14,7 @@ from ....models import (GRCUser, GovernanceDocument, StudioAsset, StudioMessage,
 from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
 from . import blocks as B
-from . import assets, checks, exporters, gate, jobs, service, templates
+from . import assets, checks, drafting, exporters, gate, jobs, service, templates
 from . import references as refs
 
 router = APIRouter(prefix="/studio", tags=["Governance - AI Studio"])
@@ -58,6 +58,7 @@ class SessionIn(BaseModel):
     template_id: Optional[str] = None
     document_id: Optional[int] = None
     instructions: Optional[Dict[str, Any]] = None
+    draft: Optional[bool] = None                   # a new document is written as soon as it is created; false starts it empty (the blank template always does)
 
 
 class SessionPatch(BaseModel):
@@ -291,6 +292,14 @@ def create_session(body: SessionIn, db: Session = Depends(get_db), user: GRCUser
                                    document_id=body.document_id, instructions=body.instructions)
     except service.StudioError as exc:
         raise _problem(exc)
+    if body.kind == "new" and drafting.wants_auto_draft(s, body.draft):
+        # "Write a new document" writes it: the draft waits until the person has opened the document, so the references attached right after are in it
+        try:
+            msg = service.start_turn(db, s, user, "Write the complete document.")
+        except service.StudioError:
+            msg = None
+        if msg is not None:
+            jobs.launch(_slug(db), "draft", s.id, msg.id, user, {"since": s.last_opened_at.isoformat() if s.last_opened_at else service._now().isoformat()})
     return service.session_view(db, s)
 
 

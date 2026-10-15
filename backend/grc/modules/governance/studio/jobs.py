@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import threading
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
@@ -26,7 +27,8 @@ def run(tenant_slug: str, kind: str, session_id: int, message_id: int, user_id: 
             if kind == "chat":
                 engine.run_chat_turn(db, session_id, message_id)
             elif kind == "draft":
-                drafting.run_draft(db, session_id, message_id)
+                since = (extra or {}).get("since")
+                drafting.run_draft(db, session_id, message_id, wait_since=datetime.fromisoformat(since) if since else None)
             elif kind == "checks":
                 engine.run_ai_checks(db, session_id, message_id)
             elif kind == "compare":

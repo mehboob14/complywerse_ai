@@ -224,6 +224,71 @@ def test_a_plan_that_cannot_be_made_does_not_stop_the_document(drafts):
 
 
 # ── asking for it ────────────────────────────────────────────────────────────
+def test_a_new_document_is_written_as_soon_as_it_is_created_and_waits_for_the_person_to_open_it(drafts, monkeypatch):
+    """The start page creates the document, attaches the references one by one, then opens it: the draft starts when it is opened."""
+    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "on")
+    monkeypatch.setattr(drafting, "SETTLE_GRACE", 0)
+    seen = []
+
+    def opened(db, session_id, since):                 # the person opens the document: the references are attached by now
+        seen.append(session_id)
+        row = db.get(m.StudioSession, session_id)
+        assert db.query(m.StudioReference).filter_by(session_id=session_id).count() == 0            # nothing attached yet: it waited for the open
+        row.last_opened_at = since + __import__("datetime").timedelta(seconds=3)
+        db.commit()
+        return real(db, session_id, since)
+    real = drafting.wait_until_opened
+    monkeypatch.setattr(drafting, "wait_until_opened", opened)
+    calls = []
+    drafts.respond(script(calls))
+    s = drafts.http.post(drafts.api("/sessions"), json={"kind": "new", "title": "Access Control Policy", "doc_type": "policy"}).json()
+    items = drafts.http.get(drafts.api(f"/sessions/{s['id']}/messages")).json()["items"]
+    assert seen == [s["id"]] and [(x["role"], x["content"]) for x in items][0] == ("user", "Write the complete document.")
+    assert items[1]["status"] == "done" and drafts.http.get(drafts.api(f"/sessions/{s['id']}")).json()["revision"] == 2 and len(calls) == 15
+
+
+def test_a_new_document_is_not_written_on_creation_when_it_is_blank_or_other_or_declined_or_switched_off(drafts, monkeypatch):
+    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "on")
+    monkeypatch.setattr(drafting, "SETTLE_GRACE", 0)
+    monkeypatch.setattr(drafting, "SETTLE_MAX", 0.2)
+    calls = []
+    drafts.respond(script(calls))
+
+    def created(**body):
+        s = drafts.http.post(drafts.api("/sessions"), json={"kind": "new", "title": "T", **body}).json()
+        return drafts.http.get(drafts.api(f"/sessions/{s['id']}/messages")).json()["items"]
+    assert created(doc_type="policy", template_id="builtin:blank") == []                      # the blank template is a deliberate empty start
+    assert created(doc_type="other", template_id="builtin:blank") == []
+    assert created(doc_type="policy", draft=False) == []                                      # the caller said not to
+    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "off")
+    assert created(doc_type="policy") == []                                                   # the operator switched it off
+    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "on")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    assert created(doc_type="policy") == []                                                   # the AI is not set up: nothing is started
+    assert calls == []
+    library = drafts.http.post(drafts.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    assert drafts.http.get(drafts.api(f"/sessions/{library['id']}/messages")).json()["items"] == []
+
+
+def test_the_draft_waits_for_the_document_to_be_opened_and_no_longer_than_the_limit(drafts, monkeypatch):
+    from datetime import timedelta
+
+    monkeypatch.setattr(drafting, "SETTLE_GRACE", 0)
+    s = drafts.http.post(drafts.api("/sessions"), json={"kind": "new", "title": "T", "doc_type": "policy"}).json()
+    since = drafts.db.get(m.StudioSession, s["id"]).last_opened_at
+    monkeypatch.setattr(drafting, "SETTLE_MAX", 0.6)
+    started = drafting.time.monotonic()
+    drafting.wait_until_opened(drafts.db, s["id"], since)                                        # never opened: gives up at the limit
+    assert 0.5 <= drafting.time.monotonic() - started < 3
+    monkeypatch.setattr(drafting, "SETTLE_MAX", 30)
+    drafts.db.get(m.StudioSession, s["id"]).last_opened_at = since + timedelta(seconds=2)
+    drafts.db.commit()
+    started = drafting.time.monotonic()
+    drafting.wait_until_opened(drafts.db, s["id"], since)                                        # opened: returns at once
+    assert drafting.time.monotonic() - started < 2
+    drafting.wait_until_opened(drafts.db, 99999, since)                                          # deleted meanwhile: returns
+
+
 def test_the_chat_writes_the_whole_document_when_asked_for_it_on_a_document_not_yet_started(drafts):
     calls = []
     drafts.respond(script(calls))
