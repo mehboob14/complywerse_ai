@@ -484,6 +484,19 @@ def preview_changes(session_id: int, message_id: int, db: Session = Depends(get_
     return service.pending_redline(db, s, _message(db, s, message_id))
 
 
+@router.post("/sessions/{session_id}/messages/{message_id}/ops/{op_id}/revert", dependencies=[Depends(require_studio)])
+def revert_accepted_change(session_id: int, message_id: int, op_id: str, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Take a change that was accepted back out of the document (a new revision; refused with 409 when its text was edited since)."""
+    s = _session(db, session_id, user)
+    m = _message(db, s, message_id)
+    try:
+        result = service.revert_op(db, s, m, op_id, user.id)
+    except service.StudioError as exc:
+        db.rollback()
+        raise _problem(exc)
+    return {**result, "message": service.message_view(m)}
+
+
 # ── checks ───────────────────────────────────────────────────────────────────
 def _check_context(db: Session, s: StudioSession) -> Dict[str, Any]:
     from ....models import StudioAsset
@@ -573,6 +586,23 @@ def get_diff(session_id: int, frm: int = Query(0, alias="from"), to: Optional[in
     try:
         return service.diff(db, s, frm, to if to is not None else s.revision_no)
     except service.StudioError as exc:
+        raise _problem(exc)
+
+
+class RevertChangesIn(BaseModel):
+    frm: int = 0                                   # the revision the changes are counted from (0 = where the session started)
+    hunks: List[int]                               # the changes to take back, by the ids the diff gave them
+    hash: Optional[str] = None                     # the diff's fingerprint of the document: a change made meanwhile is refused
+
+
+@router.post("/sessions/{session_id}/changes/revert", dependencies=[Depends(require_studio)])
+def revert_changes(session_id: int, body: RevertChangesIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Take chosen changes since a revision back out of the document as it is now (a new revision)."""
+    s = _session(db, session_id, user)
+    try:
+        return service.revert_changes(db, s, body.frm, body.hunks, user, content_hash=body.hash)
+    except service.StudioError as exc:
+        db.rollback()
         raise _problem(exc)
 
 

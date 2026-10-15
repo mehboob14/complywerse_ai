@@ -256,9 +256,18 @@ def revision_content(db, s, number: int) -> str:
 
 
 def diff(db, s, frm: int, to: int) -> Dict[str, Any]:
-    """The redline between two revisions (0 = the baseline the session started from; any other number a revision)."""
-    a, b = B.parse(revision_content(db, s, frm)), B.parse(revision_content(db, s, to))
-    return {"from": frm, "to": to, "rows": B.redline(a, b), "stats": B.stats(a, b)}
+    """The redline between two revisions (0 = the baseline the session started from; any other number a revision), cut into
+    changes. Each change says where it came from (a request to the AI and its sources, or the person's own edit) and, when ``to``
+    is the document as it is now, can be taken back (``revert_changes``)."""
+    from .. import change_chain as C
+
+    a_md, b_md = revision_content(db, s, frm), revision_content(db, s, to)
+    out = C.compare(a_md, b_md)
+    origins = session_origins(db, s, since_revision=frm)
+    for h in out["hunks"]:
+        h["by"] = C.attribute(h, origins)
+    return {"from": frm, "to": to, "rows": out["rows"], "stats": out["stats"], "hunks": out["hunks"], "hash": out["hash"],
+            "can_revert": to == s.revision_no and frm != to}
 
 
 def restore(db, s, number: int, user):
@@ -288,6 +297,7 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
     where = B.locate(base, now)
     chosen = [o for o in ops if o["id"] in set(op_ids) and o["status"] == "pending"]
     translated: List[B.Op] = []
+    replaced: Dict[str, str] = {}               # op id -> the Markdown it takes out of the document (kept, so the change can be taken back)
     conflicts = 0
     for o in chosen:
         markdown = (overrides or {}).get(o["id"], o["markdown"])
@@ -319,6 +329,7 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
             conflicts += 1
             continue
         translated.append(B.Op(o["id"], o["kind"], start=f"B{where[first] + 1}", end=f"B{where[last] + 1}", markdown=markdown))
+        replaced[o["id"]] = B.render(now[where[first]:where[last] + 1])
     new_blocks, status = B.apply_ops(now, translated)
     applied = [o for o in chosen if status.get(o["id"]) == "applied"]
     for o in chosen:
@@ -329,13 +340,182 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
                 o["status"], o["why"] = "conflict", status.get(o["id"], "It could not be placed.")
                 conflicts += 1
     if applied:
-        add_revision(db, s, B.render(new_blocks), author_type="ai", user_id=user_id,
-                     summary=(summary or ("The AI wrote the first draft" if auto and B.is_blank(now) else f"Accepted {len(applied)} AI change(s)")), message_id=msg.id)
+        rev = add_revision(db, s, B.render(new_blocks), author_type="ai", user_id=user_id,
+                           summary=(summary or ("The AI wrote the first draft" if auto and B.is_blank(now) else f"Accepted {len(applied)} AI change(s)")), message_id=msg.id)
+        for o in applied:                       # who accepted it, when, and what it replaced: the change chain reads this
+            o["accepted_by"], o["accepted_at"], o["revision"] = user_id, _now().isoformat(), rev.number
+            if o["id"] in replaced:
+                o["before_markdown"] = replaced[o["id"]]
     proposal["ops"] = ops
     msg.proposal = proposal
     msg.updated_at = _now()
     db.commit()
     return {"accepted": len(applied), "conflicts": conflicts}
+
+
+def _run_starts(blocks: Sequence[B.Block], signatures: Sequence[str]) -> List[int]:
+    """Where in ``blocks`` the run of blocks with these signatures begins (more than one place when the same words repeat)."""
+    n = len(signatures)
+    if not n:
+        return []
+    keys = [b.signature for b in blocks]
+    return [i for i in range(len(keys) - n + 1) if keys[i:i + n] == list(signatures)]
+
+
+def _nearest(places: Sequence[int], guess: int) -> int:
+    return min(places, key=lambda i: (abs(i - guess), i))
+
+
+def revert_op(db, s, msg, op_id: str, user_id: Optional[int]) -> Dict[str, Any]:
+    """Take an accepted AI change back out of the document as it is now: the blocks it wrote are replaced by the ones it replaced
+    (or removed, or put back). It is a new revision, so nothing is lost. A change whose text was edited since cannot be found
+    again: it is reported as a conflict and the document is left alone."""
+    from ....models import StudioRevision
+
+    proposal = dict(msg.proposal or {})
+    ops = [dict(o) for o in proposal.get("ops") or []]
+    op = next((o for o in ops if o["id"] == op_id), None)
+    if op is None or op.get("status") != "accepted":
+        raise StudioError("Only a change that was accepted can be taken back.")
+    kind = op["kind"]
+    base_rev = db.query(StudioRevision).filter(StudioRevision.session_id == s.id, StudioRevision.number == (msg.base_revision or 0)).first()
+    base = B.parse(base_rev.content if base_rev else "")
+    now = B.parse(s.content)
+    if kind == "replace_all":
+        prior = db.query(StudioRevision).filter(StudioRevision.session_id == s.id, StudioRevision.number == int(op.get("revision") or 0) - 1).first()
+        before_md = prior.content if prior is not None else (base_rev.content if base_rev else "")
+        if _norm_doc(op["markdown"]) != _norm_doc(s.content):
+            raise Conflict("The document has been edited since the AI wrote it, so it cannot be taken back in one step. Restore a version instead.")
+        new_md = before_md
+    else:
+        before_md = op.get("before_markdown")
+        if before_md is None:                   # accepted before the text it replaced was kept: it is still in the revision the AI read
+            first = B.index_of(op.get("start") or "", len(base))
+            last = B.index_of(op.get("end") or op.get("start") or "", len(base))
+            if kind == "insert":
+                before_md = ""
+            elif first is None or last is None or first < 0:
+                raise StudioError("This change cannot be taken back: the text it replaced is no longer known.")
+            else:
+                before_md = B.render(base[first:last + 1])
+        before = B.parse(before_md) if before_md else []
+        after = B.parse(op["markdown"]) if kind != "delete" else []
+        anchor = B.index_of(op.get("start") or "", len(base))
+        guess = anchor if anchor is not None and anchor >= 0 else 0
+        if after:
+            starts = _run_starts(now, [b.signature for b in after])
+            if not starts:
+                raise Conflict("The text this change wrote has been edited since, so it cannot be taken back automatically. Edit it by hand, or restore a version.")
+            i = _nearest(starts, guess)
+            new_blocks = list(now[:i]) + before + list(now[i + len(after):])
+        else:                                   # a removal: put the blocks back after the block that stood before them
+            first = B.index_of(op.get("start") or "", len(base))
+            if first is None or first < 0 or not before:
+                raise StudioError("This change cannot be taken back: the text it removed is no longer known.")
+            if first == 0:
+                pos = 0
+            else:
+                places = [i for i, b in enumerate(now) if b.signature == base[first - 1].signature]
+                if not places:
+                    raise Conflict("The text before the removed part has been edited since, so it cannot be put back automatically.")
+                pos = _nearest(places, first - 1) + 1
+            new_blocks = list(now[:pos]) + before + list(now[pos:])
+        new_md = B.render(new_blocks)
+    if _norm_doc(new_md) == _norm_doc(s.content):
+        raise StudioError("The document already reads as it did before this change.")
+    what = (op.get("reason") or "").strip() or {"replace": "a reworded passage", "insert": "an addition", "delete": "a removal", "replace_all": "the first draft"}.get(kind, "a change")
+    add_revision(db, s, new_md, author_type="revert", user_id=user_id, summary=f"Took back an AI change: {what}"[:480], message_id=msg.id)
+    op["status"], op["reverted_by"], op["reverted_at"] = "reverted", user_id, _now().isoformat()
+    proposal["ops"] = ops
+    msg.proposal, msg.updated_at = proposal, _now()
+    db.commit()
+    return {"content": new_md, "revision": s.revision_no}
+
+
+def _op_sources(op: Dict[str, Any], msg, refs_by_key: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """What an accepted change rests on: the references the AI said it used for it (all of its answer's when it did not say), each
+    with where in it and the words it quoted, and whether those words were found in it."""
+    wanted = set(op.get("refs") or [])
+    out: List[Dict[str, Any]] = []
+    for u in msg.references_used or []:
+        key = str(u.get("ref") or "")
+        if wanted and key and key not in wanted and u.get("basis") == "reference":
+            continue
+        ref = refs_by_key.get(key)
+        out.append({"ref": key, "kind": (ref.kind if ref is not None else u.get("kind")) or "", "title": (ref.title if ref is not None else u.get("title")) or "",
+                    "source_id": ref.source_id if ref is not None else None, "locator": str(u.get("locator") or ""),
+                    "quote": str(u.get("quote") or "")[:400], "how": str(u.get("how") or ""), "basis": u.get("basis") or "reference",
+                    "verified": u.get("verified")})
+    return out
+
+
+def session_origins(db, s, since_revision: int = 0) -> List[Dict[str, Any]]:
+    """The AI changes accepted in this session after ``since_revision``, oldest first, as the change chain reads them: who accepted
+    each, on which request, from which sources, and the blocks it wrote and replaced."""
+    from ....models import GRCUser, StudioMessage, StudioReference, StudioRevision
+    from .. import change_chain as C
+
+    refs = {r.ref_key: r for r in db.query(StudioReference).filter(StudioReference.session_id == s.id).all()}
+    revisions = {r.number: r for r in db.query(StudioRevision).filter(StudioRevision.session_id == s.id).all()}
+    by_message = {}
+    for r in revisions.values():
+        if r.message_id and r.author_type == "ai":
+            by_message[r.message_id] = r
+    messages = (db.query(StudioMessage).filter(StudioMessage.session_id == s.id, StudioMessage.role == "assistant", StudioMessage.kind == "chat")
+                .order_by(StudioMessage.id).all())
+    users = {u.id: user_name(u) for u in db.query(GRCUser).filter(GRCUser.id.in_({m.created_by for m in messages if m.created_by} | {r.author_user_id for r in revisions.values() if r.author_user_id} or {0}))}
+    out: List[Dict[str, Any]] = []
+    for m in messages:
+        accepted = [o for o in (m.proposal or {}).get("ops") or [] if o.get("status") == "accepted"]
+        if not accepted:
+            continue
+        ask = (db.query(StudioMessage).filter(StudioMessage.session_id == s.id, StudioMessage.role == "user", StudioMessage.id < m.id)
+               .order_by(StudioMessage.id.desc()).first())
+        base_rev = revisions.get(m.base_revision or 0)
+        base = B.parse(base_rev.content) if base_rev else []
+        for o in accepted:
+            number = o.get("revision") or (by_message[m.id].number if m.id in by_message else None)
+            if number is not None and number <= since_revision:
+                continue
+            rev = revisions.get(number) if number is not None else None
+            by_id = o.get("accepted_by") or (rev.author_user_id if rev is not None else None) or m.created_by
+            at = o.get("accepted_at") or (rev.created_at.isoformat() if rev is not None and rev.created_at else None)
+            after = [b.digest for b in B.parse(o.get("markdown") or "")] if o["kind"] != "delete" else []
+            before_md = o.get("before_markdown")
+            if before_md is not None:
+                before = [b.digest for b in B.parse(before_md)] if before_md else []
+            elif o["kind"] == "replace_all":
+                before = [b.digest for b in base]
+            elif o["kind"] in ("replace", "delete"):
+                first, last = B.index_of(o.get("start") or "", len(base)), B.index_of(o.get("end") or o.get("start") or "", len(base))
+                before = [b.digest for b in base[first:last + 1]] if first is not None and last is not None and first >= 0 else []
+            else:
+                before = []
+            out.append(C.make_origin("ai", by=users.get(by_id, ""), by_id=by_id, at=at, request=(ask.content if ask is not None else "")[:600],
+                                     reason=str(o.get("reason") or ""), sources=_op_sources(o, m, refs), after=after, before=before,
+                                     ref={"session_id": s.id, "message_id": m.id, "op_id": o["id"], "kind": o["kind"]}))
+    return out
+
+
+def revert_changes(db, s, frm: int, hunk_ids: Sequence[int], user, *, content_hash: Optional[str] = None) -> Dict[str, Any]:
+    """Take chosen changes since revision ``frm`` back out of the document as it is now (a new revision)."""
+    from .. import change_chain as C
+
+    if frm == s.revision_no:
+        raise StudioError("That is the document as it is now: there is nothing to take back.")
+    if content_hash and content_hash != C.content_hash(s.content):
+        raise Conflict("The document changed while you were looking at it. Open the changes again.")
+    label = "the start" if frm == 0 else f"version {frm}"
+    try:
+        new_md = C.revert(revision_content(db, s, frm), s.content, hunk_ids)
+    except ValueError as exc:
+        raise StudioError(str(exc)) from exc
+    if _norm_doc(new_md) == _norm_doc(s.content):
+        raise StudioError("Nothing would change.")
+    rev = add_revision(db, s, new_md, author_type="revert", user_id=user.id,
+                       summary=f"Took back {len(set(hunk_ids))} change{'' if len(set(hunk_ids)) == 1 else 's'} made since {label}")
+    db.commit()
+    return {"content": new_md, "revision": rev.number}
 
 
 def reject_ops(db, msg, op_ids: Sequence[str]) -> int:
@@ -480,12 +660,15 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
                              status="draft", current_version="1.0", **file_fields)
     db.add(doc)
     db.flush()
+    first = GovernanceDocumentVersion(document_id=doc.id, version_number="1.0", change_type="major", title=doc.title, change_summary="Initial version (from the AI Studio)",
+                                      status="current", created_by=user.id, content=None if word else s.content, **file_fields)
+    db.add(first)
+    _record_change_set(db, s, first, "", s.content, user, stage_before=None, stage_after="draft")       # the first version: every section, and what each rests on
     if word:
-        db.add(GovernanceDocumentVersion(document_id=doc.id, version_number="1.0", change_type="major", title=doc.title, change_summary="Initial version (from the AI Studio)",
-                                         status="current", created_by=user.id, **file_fields))
         s.settings = {**(s.settings or {}), "file_master": True, "library_file": file_fields["file_path"]}
     else:       # text in the library now: a session whose library file was deleted must not keep pointing at it
         s.settings = {k: v for k, v in (s.settings or {}).items() if k not in ("file_master", "library_file")}
+    s.settings = {**(s.settings or {}), "saved_revision": s.revision_no}
     create_audit_log(db=db, document_id=doc.id, tenant_id=tenant.id, user_id=user.id, action="created",
                      action_details=f"Document '{doc.title}' created in the AI Studio")
     db.commit()
@@ -504,6 +687,28 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
     except Exception:       # noqa: BLE001 - never fails the move
         logger.warning("auto-parse hook failed for studio document %s", doc.id, exc_info=True)
     return doc
+
+
+def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str]) -> None:
+    """Keep on a version what it changed and where each change came from (see ``change_chain``). The save never fails over it."""
+    from .. import change_chain as C
+
+    try:
+        origins = session_origins(db, s, since_revision=int((s.settings or {}).get("saved_revision") or 0))
+        for o in origins:
+            o["version"] = version_row.version_number
+        version_row.change_set = C.build_change_set(old_text or "", new_text or "", origins, default_kind="manual", by=user_name(user), by_id=user.id,
+                                                    at=_now().isoformat(), extra={"session_id": s.id, "stage_before": stage_before, "stage_after": stage_after})
+    except Exception:       # noqa: BLE001 - the chain is derived from the two texts when this is missing
+        logger.warning("could not record the change set of version %s of studio session %s", getattr(version_row, "version_number", "?"), s.id, exc_info=True)
+    s.settings = {**(s.settings or {}), "saved_revision": s.revision_no}
+
+
+def _version_row(db, doc, number: str):
+    from ....models import GovernanceDocumentVersion
+
+    return (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id, GovernanceDocumentVersion.version_number == number)
+            .order_by(GovernanceDocumentVersion.id.desc()).first())
 
 
 def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force: bool = False):
@@ -526,13 +731,19 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     doc.content, doc.updated_at = s.content, _now()
     new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
                                             change_type="studio", change_reason=change_reason, user_id=user.id)
+    db.flush()
     if old_status in ("approved", "published", "exception_applied"):       # edited text needs approving again
         doc.status = "pending_review"
+        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="status_changed", field_changed="status",
+                         old_value=old_status, new_value="pending_review", action_details=f"Edited in the AI Studio (version {new_version}), so it needs approving again")
         doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", user.id)
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="content_edited",
                      action_details=f"Edited in the AI Studio; version {new_version}" + (f". {change_reason}" if change_reason else "")
                      + ("; sent back to review" if doc.status != old_status else ""),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
+    row = _version_row(db, doc, new_version)
+    if row is not None:
+        _record_change_set(db, s, row, old_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
     db.commit()
     return doc
@@ -575,11 +786,14 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
     doc.current_version, doc.updated_at = new_version, _now()
     if old_status in ("approved", "published", "exception_applied"):
         doc.status = "pending_review"
+        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="status_changed", field_changed="status",
+                         old_value=old_status, new_value="pending_review", action_details=f"Edited in the AI Studio (version {new_version}), so it needs approving again")
         doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", user.id)
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="content_edited",
                      action_details=f"Edited in the AI Studio; the file was replaced by version {new_version}" + (f". {change_reason}" if change_reason else "")
                      + ("; sent back to review" if doc.status != old_status else ""),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
+    _record_change_set(db, s, row, s.base_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
     s.settings = {**(s.settings or {}), "library_file": new_path}
     db.commit()

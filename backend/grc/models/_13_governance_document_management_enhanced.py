@@ -109,6 +109,10 @@ class GovernanceDocumentVersion(Base):
     
     change_summary = Column(Text, nullable=True)
     change_reason = Column(Text, nullable=True)
+    # What this version changed against the one before it, from -> to, with who/what each change came from (the AI's
+    # request and the sources it relied on, a person's edit, a revert). Written by the AI Studio and by a revert; a
+    # version without it is compared with its predecessor when the change chain is read (modules/governance/change_chain.py).
+    change_set = Column(JSON, nullable=True)
     
     status = Column(String(50), default="current")  # current, superseded, archived
     
