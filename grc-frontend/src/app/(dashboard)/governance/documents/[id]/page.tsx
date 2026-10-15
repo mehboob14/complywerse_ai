@@ -892,6 +892,14 @@ export default function PolicyDetailPage() {
   const totalPages = Math.ceil(totalFindings / gapFilters.limit);
   const currentPage = Math.floor(gapFilters.skip / gapFilters.limit);
 
+  // Asked before the early returns below: a hook reached only once the document has loaded changes the number of hooks between renders.
+  const { data: lifecycleProbe } = useQuery({
+    queryKey: ['document-lifecycle-enabled', id],
+    queryFn: async () => (await apiClient.get(`/governance/documents/${id}/lifecycle`)).data,
+    enabled: !!id,
+    staleTime: 5 * 60 * 1000,
+  });
+
   if (docLoading) {
     return (
       <PageLoader className="h-64" />
@@ -913,12 +921,6 @@ export default function PolicyDetailPage() {
   const TypeIcon = docType.icon;
 
   // Organisations with document lifecycle (cfsb) get one tab for approvals, acknowledgements, life cycle and discussion.
-  const { data: lifecycleProbe } = useQuery({
-    queryKey: ['document-lifecycle-enabled', id],
-    queryFn: async () => (await apiClient.get(`/governance/documents/${id}/lifecycle`)).data,
-    enabled: !!id,
-    staleTime: 5 * 60 * 1000,
-  });
   const lifecycleOn = !!lifecycleProbe?.enabled;
   const tabs: { key: TabKey; label: string; icon: any }[] = lifecycleOn ? [
     { key: 'viewer', label: 'Document Viewer', icon: Eye },
