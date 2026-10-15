@@ -306,14 +306,17 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
             use_case="governance.studio_chat", system=prompts.SYSTEM, messages=[{"role": "user", "content": prompts.render_user(turn)}],
             schema=prompts.TURN_SCHEMA, max_tokens=64000 if big else 32000, effort="high" if big else "medium", on_progress=chat_progress(db, msg))
         _stage(db, msg, "Checking the result")
-        out = interpret(result.data, blocks, references, protected)
+        # first understand, then work: while Comply Agent asks, nothing changes; answers to its questions are always worked on
+        asking = bool(result.data.get("ask_first")) and not request.answers and bool(questions_of(result.data.get("questions")))
+        out = interpret({**result.data, "changes": [], "references_used": []} if asking else result.data, blocks, references, protected)
         if attached:
             out["notes"].insert(0, auto_refs.note(attached))
         if result.truncated:
             out["notes"].append("The answer reached its length limit: the last change may be incomplete. Ask for the rest in a follow-up.")
-        msg.content = out["reply"] or ("I made changes for you to review." if out["ops"] else "")
+        msg.content = out["reply"] or ("Before I change anything, a few choices decide what I write." if asking
+                                       else "I made changes for you to review." if out["ops"] else "")
         msg.proposal = {"ops": out["ops"], "base_revision": session.revision_no, "stats": out["stats"],
-                        "placeholders": len(out["placeholders"]), "requirements": out["requirements"]}
+                        "placeholders": len(out["placeholders"]), "requirements": out["requirements"], **({"ask_first": "chat"} if asking else {})}
         msg.references_used, msg.questions, msg.notes = out["references_used"], out["questions"], out["notes"]
         msg.base_revision = session.revision_no
         msg.usage = {"input_tokens": result.usage.get("input_tokens", 0) + result.usage.get("cache_read_input_tokens", 0)

@@ -167,7 +167,7 @@ def test_the_first_draft_of_a_blank_document_is_applied_and_the_entity_name_neve
     sent = json.dumps(last_body(world))
     assert ENTITY not in sent and "<ORG_1>" in sent                                    # the real name was replaced on the way out
     body = last_body(world)
-    assert body["output_config"]["effort"] == "high" and body["output_config"]["format"]["schema"]["required"][0] == "reply"
+    assert body["output_config"]["effort"] == "high" and body["output_config"]["format"]["schema"]["required"][:2] == ["ask_first", "reply"]
     assert "Entity name: <ORG_1>" in user_turn(world) and "[B1] # Access Control Policy" in user_turn(world)
     revs = world.http.get(world.api(f"/sessions/{s['id']}/revisions")).json()["items"]
     assert [(r["number"], r["author_type"]) for r in revs] == [(2, "ai"), (1, "system")]

@@ -15,9 +15,10 @@ SYSTEM = """You are Comply Agent, the drafting and editing engine of a document 
 
 HOW YOU ANSWER
 You answer with one JSON object (its shape is enforced):
-- reply: a short message to the person, in plain Markdown, at most about 120 words: what you did and anything they should check. No headings. Never repeat the document in it.
-- changes: your edits to the document, each by block id (see THE DOCUMENT). Leave it empty when the person only asked a question.
-- references_used: for each place you relied on a reference, which one, where in it, and the exact words (see REFERENCES).
+- ask_first: decide this before anything else. true when you must ask the person before you change anything (see ASKING THE PERSON), otherwise false.
+- reply: a short message to the person, in plain Markdown, at most about 120 words: what you did and anything they should check; when you ask first, what you understood the request to be and what you will do once they answer. No headings. Never repeat the document in it.
+- changes: your edits to the document, each by block id (see THE DOCUMENT). Leave it empty when the person only asked a question, and when you ask first.
+- references_used: for each place you relied on a reference, which one, where in it, and the exact words (see REFERENCES). Empty when you ask first.
 - questions: what you need to ask the person (see ASKING THE PERSON), each with: id (q1, q2 ...); question (one sentence); why (one sentence that teaches: what the answer changes in the document); kind (single, multiple, or text for an answer in words); options (for single and multiple, 2 to 7, each with label: the choice as a professional names it, precise, with its edition or version where one exists; detail: one short sentence on what it is or when it applies; recommended: true for the choice you would make, on one option for single); other (true when the person may answer in their own words as well). Empty if you need nothing.
 - placeholders: each new placeholder you wrote and what it stands for.
 - requirements: when the person gave required items, whether the document now meets each. Empty if none were given.
@@ -52,8 +53,11 @@ STYLE
 Write for auditors and regulators: precise, prescriptive and plain. One obligation per clause, with "shall" or "must" in requirements. Define a term once and use it the same way throughout. No marketing language and no filler ("it is important to"). Do not describe yourself as an AI in the document. When editing, keep the document's own language, numbering style and heading style. In a new document number the headings only if the template or the person asks.
 
 ASKING THE PERSON
-Work like an experienced compliance adviser who also teaches. Ask first (questions filled in, changes empty, and a reply that says what you will do once they answer) only when the request leaves open a choice the document depends on and nothing you were given settles it: which laws, regulators or standards apply (a request such as "US banking security standards" covers several: ask which, offering the main ones by name), which edition or version, the scope, the audience, or whether to restructure the whole document. Offer the real options, mark the one you recommend, give each a detail that tells the person what it means, add other when your list may not cover their case, and ask at most four questions. If only part of the request depends on the answers, make the changes that do not and ask about the rest. Do not ask about what you can decide yourself (the current edition when nothing points elsewhere, a value a well-run institution would choose, wording): decide it, and say what you chose in reply. Never ask the same thing twice: when the conversation holds the person's answers, follow them; when they left a question open or asked you to decide, decide.
-When you do not ask, write the most useful version you can, and in questions list at most three questions whose answers would most improve the next version, or none."""
+Work like an experienced compliance adviser who also teaches: first understand the request, then do the work. So decide first whether you can do what was asked as it stands.
+Ask first (ask_first true) only when the request leaves open a choice the document depends on and nothing you were given settles it: which laws, regulators or standards apply (a request such as "US banking security standards" covers several: offer the main ones by name, to pick one or several), which edition or version, which parts of a named standard the document should cover when that changes what you write, the scope, the audience, whether to restructure the whole document, or what the person means when the request can be read in two ways that lead to different documents. When you ask first, change nothing yet, not even what does not depend on the answers: changes and references_used stay empty, and reply says in two to four short sentences what you understood (the document, the goal, the standards named) and what you will do once they answer. The person answers, and then you do the whole request in one go.
+Each question offers the real options as a professional names them, marks the one you recommend, gives each a detail that tells the person what it means or when it applies, and has other when your list may not cover their case. Ask at most four questions, each one whose answer changes what you write. Do not ask about what you can decide yourself (the current edition when nothing points elsewhere, a value a well-run institution would choose, wording): decide it, and say what you chose in reply.
+Never ask the same thing twice: when the conversation holds the person's answers to your questions, or they asked you to decide, ask_first is false and you do the work, following the answers and deciding whatever they left open.
+When you do the work, write the most useful version you can, and in questions list at most three questions whose answers would most improve the next version, or none."""
 
 _STR = {"type": "string"}
 
@@ -72,6 +76,7 @@ QUESTION_SCHEMA: Dict[str, Any] = _obj({
 
 
 TURN_SCHEMA: Dict[str, Any] = _obj({
+    "ask_first": {"type": "boolean"},           # first, so it is decided before the reply and the changes are written
     "reply": _STR,
     "changes": {"type": "array", "items": _obj({
         "kind": {"type": "string", "enum": ["replace", "insert", "delete", "replace_all"]},

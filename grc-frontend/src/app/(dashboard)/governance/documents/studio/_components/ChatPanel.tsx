@@ -258,11 +258,21 @@ function Questions({ message, props, answerable }: { message: Message; props: Ch
     }
   };
   const locked = busy || props.busy || !props.aiConfigured;
+  // asked before anything was changed (step 1 of 2: understand, then work), or questions after the work to improve the next version
+  const first = Boolean(message.proposal?.ask_first);
+  const count = questions.length === 1 ? 'one question' : `${questions.length} questions`;
   return (
     <section className="mt-2 rounded-xl border border-[#9fd9bd] bg-[#f3fbf8] p-3" aria-label="Comply Agent's questions">
-      <p className="flex items-center gap-1.5 text-xs font-semibold text-[#0b6b58]">
-        <MessageCircleQuestion className="h-4 w-4" aria-hidden /> {questions.length === 1 ? 'One choice before I go on' : `${questions.length} choices before I go on`}
+      <p className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-[#0b6b58]">
+        <MessageCircleQuestion className="h-4 w-4" aria-hidden />
+        {first && <span className="rounded-full bg-[#0f766e] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">Step 1 of 2</span>}
+        {first ? `Before I change anything: ${count}` : `To improve the next version: ${count}`}
       </p>
+      {first && (
+        <p className="mt-1 text-[11px] text-[#3f4b58]">
+          Nothing in the document has changed yet. Once you answer, Comply Agent does the work with your answers (step 2).
+        </p>
+      )}
       <ol className="mt-2 space-y-3">
         {questions.map((q, n) => (
           <li key={q.id}>

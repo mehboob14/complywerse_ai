@@ -133,6 +133,27 @@ def test_an_open_request_is_answered_with_questions_and_the_answers_continue_it(
     assert "Update this policy following US banking security standards." in prompt and "You asked:" in prompt and "My answers:" in prompt and GLBA in prompt
 
 
+def asks(*args, **kw):
+    return json.dumps(dict(json.loads(answer(*args, **kw)), ask_first=True))
+
+
+def test_first_understand_then_work_nothing_changes_while_comply_agent_asks_and_answers_are_always_worked_on(world):
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    edit = change("replace", "B7", markdown="Access to systems shall be reviewed every quarter.")
+    used = [{"ref": "", "locator": "16 CFR 314.4", "quote": "", "how": "access reviews", "basis": "general_knowledge"}]
+    world.respond(lambda body: reply(asks([edit], "You want the policy aligned with US banking rules. Once you pick them, I will add them.", used=used, questions=ASK[:2])))
+    first = world.http.post(world.api(f"/sessions/{s['id']}/messages"), json={"text": "Update this policy following US banking security standards."}).json()
+    asked = world.http.get(world.api(f"/sessions/{s['id']}/messages/{first['id']}")).json()
+    assert asked["proposal"]["ask_first"] == "chat" and asked["proposal"]["ops"] == [] and asked["references_used"] == []     # step 1: it only asks
+    assert asked["content"].startswith("You want the policy aligned") and [q["id"] for q in asked["questions"]] == ["q1", "q2"]
+    assert world.http.get(world.api(f"/sessions/{s['id']}")).json()["revision"] == 1
+
+    world.respond(lambda body: reply(asks([edit], "Done, following GLBA.", used=used, questions=ASK[:1])))      # it wants to ask again: no
+    second = world.http.post(world.api(f"/sessions/{s['id']}/messages"), json={"reply_to": first["id"], "answers": [{"id": "q1", "chosen": [GLBA]}]}).json()
+    done = world.http.get(world.api(f"/sessions/{s['id']}/messages/{second['id']}")).json()
+    assert [o["kind"] for o in done["proposal"]["ops"]] == ["replace"] and "ask_first" not in done["proposal"] and len(done["references_used"]) == 1
+
+
 def test_answers_must_answer_questions_that_were_asked(world):
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
     world.respond(lambda body: reply(answer([], "Which rules?", questions=ASK[:2])))
@@ -152,6 +173,8 @@ def test_the_prompts_let_comply_agent_apply_any_standard_and_ask_before_writing(
     assert "ASKING THE PERSON" in prompts.SYSTEM and "Never ask the same thing twice" in prompts.SYSTEM
     assert "of any country or body" in draft_prompts.SYSTEM and "never a placeholder for a law, standard, edition or version you can name" in draft_prompts.SYSTEM
     assert prompts.TURN_SCHEMA["properties"]["questions"]["items"] is prompts.QUESTION_SCHEMA
+    assert list(prompts.TURN_SCHEMA["properties"])[0] == "ask_first" and "ask_first" in prompts.TURN_SCHEMA["required"]   # decided before it writes
+    assert "first understand the request, then do the work" in prompts.SYSTEM and "change nothing yet" in prompts.SYSTEM
     assert draft_prompts.PLAN_SCHEMA["properties"]["questions"]["items"] is prompts.QUESTION_SCHEMA and "ask_first" in draft_prompts.PLAN_SCHEMA["required"]
 
 
