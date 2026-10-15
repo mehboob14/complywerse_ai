@@ -412,6 +412,13 @@ def list_messages(session_id: int, db: Session = Depends(get_db), user: GRCUser 
     return {"items": service.messages(db, s)}
 
 
+@router.get("/sessions/{session_id}/progress", dependencies=[Depends(require_studio)])
+def turn_progress(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The state of the latest turns, small enough to ask for several times a second while the AI works (the live view of what it is doing)."""
+    s = _session(db, session_id, user)
+    return {"items": service.progress(db, s)}
+
+
 @router.post("/sessions/{session_id}/messages", dependencies=[Depends(require_studio)])
 def send_message(session_id: int, body: MessageIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     s = _session(db, session_id, user)

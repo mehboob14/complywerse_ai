@@ -3,6 +3,7 @@ library or beside a library document being edited; plus the templates and logos 
 from datetime import datetime
 
 from sqlalchemy import JSON, Boolean, Column, DateTime, ForeignKey, Index, Integer, String, Text
+from sqlalchemy.orm import validates
 
 from ._00_base import Base
 
@@ -64,6 +65,7 @@ class StudioMessage(Base):
     content = Column(Text, nullable=False, default="")
     status = Column(String(20), nullable=False, default="done")          # working | done | error
     stage = Column(String(120), nullable=True)                           # what a working turn is doing
+    live = Column(JSON, nullable=True)                                   # what the screen shows while it works (steps, text so far, parts); gone once it is done
     error = Column(Text, nullable=True)
     proposal = Column(JSON, nullable=True)                               # the AI's changes, each pending | accepted | rejected | conflict
     references_used = Column(JSON, nullable=True)
@@ -74,6 +76,13 @@ class StudioMessage(Base):
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    @validates("status")
+    def _forget_live(self, _key, value):
+        """A turn that is no longer working keeps no live view: whoever finishes a message (the engine, the reaper) clears it with the status."""
+        if value != "working":
+            self.live = None
+        return value
 
 
 class StudioReference(Base):

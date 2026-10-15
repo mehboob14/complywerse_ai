@@ -263,6 +263,8 @@ def _ensure_index(engine: Engine, table: str, column: str, index_name: str) -> N
 # Postgres types. ddl_type may include defaults (e.g. "TIMESTAMP DEFAULT NOW()")
 # for columns we want backfilled on existing rows.
 _COLUMN_ADDS = [
+    # AI Studio: what the screen shows while an AI turn works (the steps, the text so far, the parts of a document)
+    ("grc_studio_messages", "live", "JSON", None),
     ("grc_document_obligations", "emailed_at", "TIMESTAMP", None),
     # Statement <-> original document sync (cfsb): the wording as the file has it and where
     ("grc_policy_statements", "source_text", "TEXT", None),

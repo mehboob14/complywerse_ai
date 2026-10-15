@@ -5,8 +5,11 @@
 refused, a fault in the guard refuses the call), the call itself, then puts the original values back into the answer and
 records the call in the tenant's usage ledger (Administration > AI Governance) with the same report as any other call.
 
-The answer is read in full before anything is shown (the guard cannot check a stream, so there is no token streaming):
-the SDK streams from the provider to this process, which is what keeps a long document from hitting a request timeout.
+The answer is read in full before it is kept: the SDK streams from the provider to this process, which is what keeps a
+long document from hitting a request timeout, and the guard checks and restores the finished answer. While it is being
+written a caller may ask to see it (``on_progress``): each report carries the answer so far, and ``Progress.show`` puts the
+original values back into a piece of it for the screen (a half-written placeholder is held back). That is a view for the
+person who asked, never what is kept or acted on.
 
 A structured answer (``schema``) is parsed *before* the original values are restored and restored string by string, so
 a restored name can never break the JSON. Nothing here names the provider to a user: the errors say "AI".
@@ -22,12 +25,13 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, List, Optional, Union
 
 from .errors import AIBlocked
 
 logger = logging.getLogger(__name__)
 
+PROGRESS_EVERY = 0.4                      # seconds between two reports of an answer that is being written
 DEFAULT_MODEL = "claude-opus-5-5"
 FALLBACK_BETA = "server-side-fallback-2026-07-01"
 _fallbacks_rejected = False               # set when the account turns out not to accept the fallback parameter
@@ -65,6 +69,70 @@ class Result:
     truncated: bool = False                     # the answer hit the output ceiling
     usage: Dict[str, int] = field(default_factory=dict)
     report: Dict[str, Any] = field(default_factory=dict)      # the guard's report: counts and decisions, never a value
+
+
+@dataclass
+class Progress:
+    """An answer that is being written, as ``on_progress`` receives it."""
+    phase: str                                   # reading (the AI has the request) | thinking | writing
+    chars: int = 0                               # how much of the answer exists so far
+    data: Any = None                             # a structured answer so far, as written: placeholders not yet replaced (see ``show``)
+    text: str = ""                               # the answer so far when it is not structured, original values back in it
+    protected: int = 0                           # values replaced or removed in the request before it was sent
+    show: Callable[[str], str] = str             # a piece of ``data`` with the original values back in it: for what goes on the screen
+
+
+def _partial_json(text: str) -> Any:
+    """A structured answer that is half written, as far as it goes (a string still being written is included), or None."""
+    if not text.strip():
+        return None
+    try:
+        from jiter import from_json         # the SDK's own dependency: it reads the half-written JSON of a streamed tool call the same way
+
+        return from_json(text.encode("utf-8"), partial_mode="trailing-strings")
+    except Exception:       # noqa: BLE001 - nothing to show yet
+        return None
+
+
+class _Watcher:
+    """Reads the provider's stream as it arrives and reports the answer so far to ``callback``: when the phase changes, and while the
+    answer is being written at most every ``PROGRESS_EVERY`` seconds. A callback that fails is dropped: the screen is not worth a call."""
+
+    def __init__(self, callback: Callable[[Progress], None], gw, structured: bool, protected: int):
+        self.callback, self.gw, self.structured, self.protected = callback, gw, structured, protected
+        self.phase, self.last = "", 0.0
+
+    def show(self, text: str) -> str:
+        return self.gw.restore_partial(text) if self.gw is not None else text
+
+    def report(self, phase: str, stream=None) -> None:
+        self.phase, self.last = phase, time.monotonic()
+        text = ""
+        if stream is not None:
+            try:
+                text = "".join(b.text for b in stream.current_message_snapshot.content if getattr(b, "type", "") == "text")
+            except AssertionError:      # the message has not started
+                pass
+        progress = Progress(phase=phase, chars=len(text), protected=self.protected, show=self.show)
+        if self.structured:
+            progress.data = _partial_json(text)
+        else:
+            progress.text = self.show(text)
+        try:
+            self.callback(progress)
+        except Exception:       # noqa: BLE001
+            logger.warning("showing the progress of an AI call failed; it is not shown any more for this call", exc_info=True)
+            self.callback = lambda _p: None
+
+    def __call__(self, event, stream) -> None:
+        kind = getattr(event, "type", "")
+        if kind == "content_block_start":
+            block = getattr(getattr(event, "content_block", None), "type", "")
+            phase = "thinking" if block in ("thinking", "redacted_thinking") else "writing"
+            if phase != self.phase:
+                self.report(phase, stream)
+        elif kind == "content_block_delta" and time.monotonic() - self.last >= PROGRESS_EVERY:
+            self.report(self.phase or "writing", stream)
 
 
 def configured() -> bool:
@@ -137,7 +205,15 @@ def _guard(kwargs: Dict[str, Any], use_case: str, model: str, started_at: float)
 
 
 # ── the call ─────────────────────────────────────────────────────────────────
-def _stream_final(params: Dict[str, Any]):
+def _read(stream, watch: Optional[Callable[[Any, Any], None]]):
+    """The finished message of a stream, letting ``watch`` see each event as it arrives."""
+    if watch is not None:
+        for event in stream:
+            watch(event, stream)
+    return stream.get_final_message()
+
+
+def _stream_final(params: Dict[str, Any], watch: Optional[Callable[[Any, Any], None]] = None):
     """The finished message, read through the SDK's stream so a long answer never trips a request timeout. A decline is
     retried once on the model the provider recommends for it (a fallback), unless the account does not accept that."""
     global _fallbacks_rejected
@@ -149,14 +225,14 @@ def _stream_final(params: Dict[str, Any]):
         extra = {"extra_headers": {"anthropic-beta": FALLBACK_BETA}, "extra_body": {"fallbacks": "default"}}
     try:
         with client.messages.stream(**params, **extra) as stream:
-            return stream.get_final_message()
+            return _read(stream, watch)
     except anthropic.BadRequestError as exc:
         text = str(exc).lower()
         if extra and ("fallback" in text or "beta" in text):
             _fallbacks_rejected = True
             logger.warning("the AI provider does not accept the fallback parameter for this account; continuing without it")
             with client.messages.stream(**params) as stream:
-                return stream.get_final_message()
+                return _read(stream, watch)
         raise
 
 
@@ -184,9 +260,10 @@ def _failure(exc: BaseException) -> ClaudeFailed:
 
 def complete(*, use_case: str, system: Union[str, List[dict], None], messages: List[dict],
              schema: Optional[Dict[str, Any]] = None, max_tokens: int = 32000, effort: str = "medium",
-             model: Optional[str] = None) -> Result:
+             model: Optional[str] = None, on_progress: Optional[Callable[[Progress], None]] = None) -> Result:
     """One guarded call. ``system`` is text or text blocks, ``messages`` are Messages-API turns whose content is text.
     ``schema`` (a JSON schema) makes the answer structured and is returned parsed in ``Result.data``.
+    ``on_progress`` is called on this thread while the answer arrives (see ``Progress``): to show it, never to act on it.
 
     Raises ``ClaudeNotConfigured`` (no credentials), ``AIBlocked`` (the guard refused), ``LicenceRestrictedContent``,
     ``ClaudeRefused`` (declined, no fallback) or ``ClaudeFailed`` (anything else; ``message`` is safe to show)."""
@@ -203,8 +280,12 @@ def complete(*, use_case: str, system: Union[str, List[dict], None], messages: L
     started = time.perf_counter()
     _screen(system, kwargs["messages"])
     gw = _guard(kwargs, use_case, model, started)
+    watcher = None
+    if on_progress is not None:
+        watcher = _Watcher(on_progress, gw, bool(schema), int(gw.report.get("tokens", 0) + gw.report.get("dropped", 0)) if gw is not None else 0)
+        watcher.report("reading")
     try:
-        message = _stream_final(kwargs)
+        message = _stream_final(kwargs, watcher)
     except Exception as exc:        # noqa: BLE001
         _record(error=exc, model=model, started_at=started, gw=gw, payload=_payload(gw, kwargs))
         raise _failure(exc) from exc

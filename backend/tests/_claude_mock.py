@@ -12,8 +12,8 @@ def _event(name: str, data: dict) -> str:
 
 
 def reply(text: str, *, stop: str = "end_turn", input_tokens: int = 120, output_tokens: int = 30, cache_read: int = 0,
-          cache_write: int = 0, model: str = "claude-opus-5-5", details: Optional[dict] = None) -> httpx2.Response:
-    """One answer, as the stream of events a real call returns."""
+          cache_write: int = 0, model: str = "claude-opus-5-5", details: Optional[dict] = None, chunk: int = 400) -> httpx2.Response:
+    """One answer, as the stream of events a real call returns (``chunk`` characters in each delta)."""
     usage = {"input_tokens": input_tokens, "output_tokens": 1, "cache_read_input_tokens": cache_read,
              "cache_creation_input_tokens": cache_write}
     start = {"id": "msg_test", "type": "message", "role": "assistant", "model": model, "content": [],
@@ -24,9 +24,9 @@ def reply(text: str, *, stop: str = "end_turn", input_tokens: int = 120, output_
     body = _event("message_start", {"type": "message_start", "message": start})
     if text:
         body += _event("content_block_start", {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}})
-        for i in range(0, len(text), 400):
+        for i in range(0, len(text), chunk):
             body += _event("content_block_delta", {"type": "content_block_delta", "index": 0,
-                                                   "delta": {"type": "text_delta", "text": text[i:i + 400]}})
+                                                   "delta": {"type": "text_delta", "text": text[i:i + chunk]}})
         body += _event("content_block_stop", {"type": "content_block_stop", "index": 0})
     body += _event("message_delta", {"type": "message_delta", "delta": delta, "usage": {"output_tokens": output_tokens}})
     body += _event("message_stop", {"type": "message_stop"})

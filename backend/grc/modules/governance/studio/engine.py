@@ -16,7 +16,7 @@ from ....services.ai_gateway import claude_client, patterns
 from ....services.ai_gateway.errors import AIBlocked
 from ....services.licence_guard import LicenceRestrictedContent
 from . import blocks as B
-from . import checks, prompts
+from . import checks, live, prompts
 from . import references as refs
 
 logger = logging.getLogger(__name__)
@@ -151,9 +151,66 @@ def _history(db, session, before_id: int) -> List[tuple]:
     return [(r.role, r.content) for r in reversed(rows) if r.content.strip()]
 
 
-def _stage(db, msg, text: str) -> None:
-    msg.stage, msg.updated_at = text, datetime.utcnow()
-    db.commit()
+def _stage(db, msg, label: str, **kw: Any) -> None:
+    """The line the person sees while the turn works, and the list of steps behind it (see ``live``)."""
+    live.stage(db, msg, label, **kw)
+
+
+_VERB = {"replace": "Rewording", "insert": "Adding", "delete": "Removing", "replace_all": "Writing the whole document"}
+
+
+def describe_change(c: Dict[str, Any]) -> str:
+    """One line for a change the AI is preparing, from as much of it as is written ("Rewording block 12 (140 words so far)"). Empty until its
+    kind and where it goes are known."""
+    kind = str(c.get("kind") or "")
+    if kind not in _VERB or (kind != "replace_all" and not re.fullmatch(r"(?i)B\d+|START", str(c.get("start") or "").strip())):
+        return ""
+    start, end = re.sub(r"^B", "", str(c.get("start") or "").strip(), flags=re.I), re.sub(r"^B", "", str(c.get("end") or "").strip(), flags=re.I)
+    if kind == "replace_all":
+        where = ""
+    elif kind == "insert":
+        where = " at the top" if start.upper() == "START" else f" after block {start}" if start else ""
+    else:
+        where = f" blocks {start}–{end}" if end and end != start else f" block {start}" if start else ""
+    n = live.words(str(c.get("markdown") or ""))
+    return f"{_VERB[kind]}{where}" + (f" ({n:,} words so far)" if n and kind != "delete" else "")
+
+
+def chat_progress(db, msg):
+    """The function that shows a chat answer on its message as the AI writes it: the steps, the reply so far, and each change as it is prepared."""
+    state = {"step": None}
+
+    def step(name: str, label: str, **fields: Any) -> None:
+        live.stage(db, msg, label, step=state["step"] != name, **fields)
+        state["step"] = name
+
+    def show(p: claude_client.Progress) -> None:
+        if p.phase != "writing":
+            step(p.phase, "The AI is reading your request" if p.phase == "reading" else "The AI is thinking it through",
+                 detail=f"Protected {p.protected} value{'' if p.protected == 1 else 's'} (names, numbers, secrets) before sending" if p.protected and state["step"] is None else None)
+            return
+        data = p.data if isinstance(p.data, dict) else {}
+        described = [(c, describe_change(c)) for c in data.get("changes") or [] if isinstance(c, dict)]
+        changes, lines = [c for c, line in described if line], [line for _, line in described if line]
+        reply = p.show(str(data.get("reply") or ""))
+        if not changes:
+            step("reply", "Writing the reply", text=reply)
+            return
+        whole = len(changes) == 1 and changes[0].get("kind") == "replace_all"
+        label = f"Writing the whole document: {live.words(str(changes[0].get('markdown') or '')):,} words so far" if whole else f"Preparing the changes: {len(changes)} so far"
+        step("changes", label, text=reply, groups=[{"label": "Changes being prepared", "items": lines}],
+             tail=live.tail(str(changes[-1].get("markdown") or ""), p.show), tail_label=lines[-1].split(" (")[0])
+
+    return show
+
+
+def counting(db, msg, base: str, field: str, noun: str):
+    """The function that shows, as the AI writes a report, how many ``field`` items it has found so far ("Checking: 4 problems so far")."""
+    def show(p: claude_client.Progress) -> None:
+        n = len((p.data or {}).get(field) or []) if p.phase == "writing" and isinstance(p.data, dict) else 0
+        live.stage(db, msg, f"{base}: {n} {noun} so far" if n else base, step=False)
+
+    return show
 
 
 def run_chat_turn(db, session_id: int, message_id: int) -> None:
@@ -175,6 +232,8 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
             drafting.run_draft(db, session_id, message_id)
             return
         references = (db.query(StudioReference).filter(StudioReference.session_id == session_id).order_by(StudioReference.id).all())
+        live.note(db, msg, ("a blank document" if B.is_blank(blocks) else f"{len(blocks)} blocks") + " · "
+                  + (f"{len(references)} reference{'' if len(references) == 1 else 's'}" if references else "no references"))
         if sum(len(b.source) for b in blocks) > MAX_DOC_CHARS:
             raise TurnProblem("This document is too large to work on in one go. Open the part you want to change as its own document, or work on one section at a time.")
         if refs.total_chars(references) > refs.MAX_TOTAL_CHARS:
@@ -191,10 +250,9 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
                                  blocks=blocks, request=request.content, references=references, structure=structure,
                                  protected=protected, revision=session.revision_no, history=_history(db, session, request.id), format_notes=file_notes)
         big = B.is_blank(blocks) or bool(_GENERATE.search(request.content))
-        _stage(db, msg, "Writing")
         result = claude_client.complete(
             use_case="governance.studio_chat", system=prompts.SYSTEM, messages=[{"role": "user", "content": prompts.render_user(turn)}],
-            schema=prompts.TURN_SCHEMA, max_tokens=64000 if big else 32000, effort="high" if big else "medium")
+            schema=prompts.TURN_SCHEMA, max_tokens=64000 if big else 32000, effort="high" if big else "medium", on_progress=chat_progress(db, msg))
         _stage(db, msg, "Checking the result")
         out = interpret(result.data, blocks, references, protected)
         if result.truncated:
@@ -276,7 +334,8 @@ def run_ai_checks(db, session_id: int, message_id: int) -> None:
                 user += "\n\n<required_items>\n" + "\n".join(f"- {r}" for r in reqs) + "\n</required_items>"
             result = claude_client.complete(use_case="governance.studio_checks", system=prompts.CHECKS_SYSTEM,
                                             messages=[{"role": "user", "content": user}], schema=prompts.CHECKS_SCHEMA,
-                                            max_tokens=24000, effort="medium")
+                                            max_tokens=24000, effort="medium",
+                                            on_progress=counting(db, msg, f"Checking ({n} of {len(spans)})" if len(spans) > 1 else "Checking", "issues", "problems"))
             data = result.data
             summary = summary or str(data.get("summary") or "")
             verdicts += list(data.get("requirements") or [])
@@ -325,7 +384,8 @@ def run_ai_compare(db, session_id: int, message_id: int, other_title: str, other
                 f"<document_b title=\"{other_title.replace(chr(34), chr(39))}\">\n{B.listing(b)}\n</document_b>")
         _stage(db, msg, "Comparing")
         result = claude_client.complete(use_case="governance.studio_compare", system=prompts.COMPARE_SYSTEM,
-                                        messages=[{"role": "user", "content": user}], schema=prompts.COMPARE_SCHEMA, max_tokens=24000, effort="high")
+                                        messages=[{"role": "user", "content": user}], schema=prompts.COMPARE_SCHEMA, max_tokens=24000, effort="high",
+                                        on_progress=counting(db, msg, "Comparing", "differences", "differences"))
         data = result.data
         msg.content = str(data.get("summary") or "")
         msg.proposal = {"summary": data.get("summary"), "differences": data.get("differences") or [], "recommendation": data.get("recommendation"),

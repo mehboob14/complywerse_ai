@@ -28,7 +28,7 @@ from ....services.licence_guard import LicenceRestrictedContent
 from ..ai_drafting import scaffolds
 from ..ai_drafting.tenant_context import build_tenant_context
 from . import blocks as B
-from . import checks, prompts
+from . import checks, live, prompts
 from . import draft_prompts as P
 from . import references as refs
 from . import templates
@@ -199,12 +199,14 @@ def _fatal(exc: BaseException) -> bool:
     return isinstance(exc, claude_client.ClaudeFailed) and not exc.retryable and any(w in str(exc) for w in ("credentials", "not set up", "not available"))
 
 
-def _call(blocks: List[Dict[str, Any]], task: str, system: str, schema: Dict[str, Any], *, max_tokens: int, effort: str = "high") -> claude_client.Result:
+def _call(blocks: List[Dict[str, Any]], task: str, system: str, schema: Dict[str, Any], *, max_tokens: int, effort: str = "high",
+          on_progress: Optional[Callable[[claude_client.Progress], None]] = None) -> claude_client.Result:
     """One guarded call, tried again a few times when the provider says it may work later."""
     messages = [{"role": "user", "content": blocks + [{"type": "text", "text": task}]}]
     for attempt in range(len(RETRY_WAITS) + 1):
         try:
-            return claude_client.complete(use_case=USE_CASE, system=system, messages=messages, schema=schema, max_tokens=max_tokens, effort=effort)
+            return claude_client.complete(use_case=USE_CASE, system=system, messages=messages, schema=schema, max_tokens=max_tokens, effort=effort,
+                                          on_progress=on_progress)
         except claude_client.ClaudeFailed as exc:
             if not exc.retryable or attempt == len(RETRY_WAITS) or _fatal(exc):
                 raise
@@ -218,6 +220,61 @@ def _usage(total: Dict[str, int], result: claude_client.Result) -> None:
     total["output_tokens"] += u.get("output_tokens", 0)
     total["cached_tokens"] += u.get("cache_read_input_tokens", 0)
     total["calls"] += 1
+
+
+# ── what the screen shows while it is written (see ``live``) ─────────────────
+_BASIS = {"tenant_config": "from the organisation's settings", "instruction": "from your instruction", "reference": "from a reference", "industry_default": "usual practice"}
+
+
+def _plan_progress(db, msg):
+    """Shows the plan as the AI makes it: how it will approach the document, the choices it makes and the areas it will cover."""
+    def show(p: claude_client.Progress) -> None:
+        if p.phase != "writing":                    # the plan call is quiet for half a minute while the AI thinks: say so
+            live.note(db, msg, "The AI is reading the brief" if p.phase == "reading" else "The AI is thinking the structure through")
+            return
+        data = p.data if isinstance(p.data, dict) else {}
+        choices = [f"{p.show(str(d['name'])).strip()}: {p.show(str(d.get('value') or '')).strip()}" + (f" ({_BASIS[d['basis']]})" if d.get("basis") in _BASIS else "")
+                   for d in data.get("decisions") or [] if isinstance(d, dict) and d.get("name")]
+        areas = [p.show(str(a["title"])).strip() for a in data.get("areas") or [] if isinstance(a, dict) and a.get("title")]
+        groups = [{"label": label, "items": [i[:180] for i in items[:14]]} for label, items in (("Choices made", choices), ("Areas to cover", areas)) if items]
+        live.stage(db, msg, "Planning the document", step=False, detail="Writing the plan", text=p.show(str(data.get("approach") or "")),
+                   text_label="How it will approach the document", groups=groups or None)
+
+    return show
+
+
+class Track:
+    """One part's line on the board of a draft. A part with no board (the default) reports nothing."""
+
+    def __init__(self, board: Optional[live.Board] = None, key: str = ""):
+        self.board, self.key = board, key
+
+    def _set(self, **fields: Any) -> None:
+        if self.board is not None:
+            self.board.set(self.key, **fields)
+
+    def note(self, text: str) -> None:
+        self._set(note=text)
+
+    def begin(self, attempt: int, why: str = "") -> None:
+        self._set(state="rewriting" if why else "writing", words=0, phase=None, note=f"Rewriting: {why}" if why else "Trying again" if attempt else None)
+
+    def progress(self, p: claude_client.Progress) -> None:
+        if self.board is None:
+            return
+        md = p.data.get("markdown") if isinstance(p.data, dict) else None
+        if isinstance(md, str):                     # the words speak for themselves once there are some
+            self.board.set(self.key, words=live.words(md), phase=None)
+            self.board.tail(self.key, live.tail(md, p.show))
+        else:                                       # before the first words: the AI is reading the brief, or thinking it through
+            self.board.set(self.key, phase=p.phase)
+
+    def settle(self, piece: "Piece") -> "Piece":
+        if piece.failed:
+            self._set(state="failed", note=piece.failed)
+        else:
+            self._set(state="done", words=_words(piece.body), note="Rewritten once" if piece.rewritten else None)
+        return piece
 
 
 # ── checking what came back ──────────────────────────────────────────────────
@@ -312,9 +369,9 @@ def _fallback_areas(session, scaffold: Any, core: Optional[Section]) -> List[Dic
 
 
 def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sections: Sequence[Section], core: Optional[Section], requirements: Sequence[str], parent: bool,
-          total: Dict[str, int]) -> Dict[str, Any]:
+          total: Dict[str, int], on_progress: Optional[Callable[[claude_client.Progress], None]] = None) -> Dict[str, Any]:
     task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, requirements=requirements, parent=parent)
-    result = _call(shared, task, system, P.PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS)
+    result = _call(shared, task, system, P.PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS, on_progress=on_progress)
     _usage(total, result)
     plan = dict(result.data or {})
     areas = [a for a in plan.get("areas") or [] if str(a.get("title") or "").strip()]
@@ -327,13 +384,14 @@ def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sec
 
 
 def _write_part(shared: List[Dict[str, Any]], system: str, make_task: Callable[[str], str], *, section: Section, area_heading: str, minimum_words: int,
-                minimum_clauses: Optional[int], number: str) -> Piece:
+                minimum_clauses: Optional[int], number: str, track: Optional[Track] = None) -> Piece:
     """Write one part, check it, and write it again once with the problems named if it falls short."""
-    piece = Piece()
-    fix = ""
+    piece, track = Piece(), track or Track()
+    fix = why = ""
     for attempt in (0, 1):
+        track.begin(attempt, why)
         try:
-            result = _call(shared, make_task(fix), system, P.SECTION_SCHEMA, max_tokens=SECTION_MAX_TOKENS)
+            result = _call(shared, make_task(fix), system, P.SECTION_SCHEMA, max_tokens=SECTION_MAX_TOKENS, on_progress=track.progress)
         except Exception as exc:        # noqa: BLE001
             if _fatal(exc):
                 raise Fatal(friendly(exc)) from exc
@@ -343,7 +401,7 @@ def _write_part(shared: List[Dict[str, Any]], system: str, make_task: Callable[[
                 continue
             if not piece.body:
                 piece.failed = friendly(exc)
-            return piece
+            return track.settle(piece)
         _usage(piece.usage, result)
         data = result.data or {}
         body = _clean(str(data.get("markdown") or ""), section, area_heading)
@@ -355,12 +413,14 @@ def _write_part(shared: List[Dict[str, Any]], system: str, make_task: Callable[[
         if not found or attempt == 1:
             break
         fix = "\n".join(f"- {p}" for p in found)
+        why = found[0].split(". ")[0][:100]
         piece.rewritten = True
-    return piece
+    return track.settle(piece)
 
 
-def _run_pool(jobs: List[Callable[[], Piece]], progress: Callable[[int], None]) -> List[Piece]:
-    """The parts in the order they were given, written ``PARALLEL`` at a time. A fatal problem in one ends them all."""
+def _run_pool(jobs: List[Callable[[], Piece]], progress: Callable[[int], None], tick: Optional[Callable[[], None]] = None) -> List[Piece]:
+    """The parts in the order they were given, written ``PARALLEL`` at a time. A fatal problem in one ends them all. ``tick`` is called
+    on this thread about twice a second while the parts are written (the parts themselves never touch the database)."""
     results: List[Optional[Piece]] = [None] * len(jobs)
     done = 0
     if PARALLEL <= 1 or len(jobs) <= 1:
@@ -370,11 +430,16 @@ def _run_pool(jobs: List[Callable[[], Piece]], progress: Callable[[int], None]) 
         return [r for r in results if r is not None]
     with concurrent.futures.ThreadPoolExecutor(max_workers=PARALLEL, thread_name_prefix="studio-draft") as pool:
         futures = {pool.submit(contextvars.copy_context().run, job): i for i, job in enumerate(jobs)}
+        pending = set(futures)
         try:
-            for future in concurrent.futures.as_completed(futures):
-                results[futures[future]] = future.result()
-                done += 1
-                progress(done)
+            while pending:
+                finished, pending = concurrent.futures.wait(pending, timeout=0.5, return_when=concurrent.futures.FIRST_COMPLETED)
+                for future in finished:
+                    results[futures[future]] = future.result()
+                    done += 1
+                    progress(done)
+                if tick is not None:
+                    tick()
         except BaseException:
             for f in futures:
                 f.cancel()
@@ -441,7 +506,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
     session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
     try:
         if wait_since is not None:
-            _stage(db, msg, "Getting ready")
+            _stage(db, msg, "Getting ready", detail="Waiting for the references to be attached")
             wait_until_opened(db, session_id, wait_since)
             session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
             if session is None or msg is None or msg.status != "working":          # the document was deleted meanwhile
@@ -458,6 +523,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         sections, scaffold, custom = sections_for(db, session)
         if not sections:
             raise TurnProblem("This template has no sections to write.")
+        live.note(db, msg, f"{len(references)} reference{'' if len(references) == 1 else 's'} · {len(sections)} sections" + (" from your template" if custom else ""))
         label = scaffold.label
         doc_type = session.doc_type                 # plain values from here on: the parts are written on other threads, which must never read the session
         ins = dict(session.instructions or {})
@@ -477,7 +543,8 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
 
         _stage(db, msg, "Planning the document")
         try:
-            plan = _plan(shared, system, label=label, session=session, sections=sections, core=core, requirements=requirements, parent=parent, total=total)
+            plan = _plan(shared, system, label=label, session=session, sections=sections, core=core, requirements=requirements, parent=parent, total=total,
+                         on_progress=_plan_progress(db, msg))
         except Exception as exc:        # noqa: BLE001
             if _fatal(exc):
                 raise Fatal(friendly(exc)) from exc
@@ -487,32 +554,44 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         if core is not None and not plan["areas"]:
             plan["areas"] = [dict(a, index=i) for i, a in enumerate(_fallback_areas(session, scaffold, core), start=1)]
         areas = plan["areas"]
+        live.note(db, msg, f"{len(areas)} areas to cover · {len(plan.get('decisions') or [])} choices made" if areas else "the sections of the template")
         plan_blocks = _blocks(P.decisions_block(plan.get("decisions") or []), P.outline_block(sections, areas, core.number if core else None))
         shared_plus = shared + plan_blocks
 
-        # parts that are written from the plan alone
+        # parts that are written from the plan alone; the board is what the screen shows of them while they are written
+        board = live.Board()
         titles = [a["title"] for a in areas]
         todo: List[Tuple[str, Section, Optional[Dict[str, Any]], Callable[[], Piece]]] = []
+
+        def track_for(label_: str) -> Track:
+            return Track(board, board.add(label_))
+
         for s in sections:
             if s.kind in ("narrative",):
-                todo.append(("section", s, None, lambda s=s: _write_part(
+                todo.append(("section", s, None, lambda s=s, track=track_for(s.full_heading): _write_part(
                     shared_plus, system, lambda fix, s=s: P.section_task(label=label, section=s, area=None, core=core, doc_type=doc_type, requirements=requirements,
                                                                       sibling_areas=titles, target_words=s.target_words, minimum_words=s.min_words, minimum_clauses=s.min_clauses, fix=fix),
-                    section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="")))
+                    section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="", track=track)))
             elif s.kind == "core":
                 for a in areas:
                     target = a["words"]
                     minimum = int(target * 0.7)
                     clauses = 4 if doc_type in ("policy", "standard") else 3
                     num = f"{s.number}.{a['index']}"
-                    todo.append(("area", s, a, lambda s=s, a=a, target=target, minimum=minimum, clauses=clauses, num=num: _write_part(
+                    todo.append(("area", s, a, lambda s=s, a=a, target=target, minimum=minimum, clauses=clauses, num=num, track=track_for(f"{num} {a['title']}"): _write_part(
                         shared_plus, system, lambda fix, s=s, a=a, target=target, minimum=minimum, clauses=clauses: P.section_task(
                             label=label, section=s, area=a, core=s, doc_type=doc_type, requirements=requirements, sibling_areas=titles, target_words=target,
                             minimum_words=minimum, minimum_clauses=clauses, fix=fix),
-                        section=s, area_heading=a["title"], minimum_words=minimum, minimum_clauses=clauses, number=num)))
-        count = len(todo)
-        _stage(db, msg, f"Writing the document: 0 of {count} parts")
-        pieces = _run_pool([t[3] for t in todo], lambda n: _stage(db, msg, f"Writing the document: {n} of {count} parts"))
+                        section=s, area_heading=a["title"], minimum_words=minimum, minimum_clauses=clauses, number=num, track=track)))
+        dependents = [s for s in sections if s.kind == "dependent"]
+        dep_tracks = {s.number: track_for(s.full_heading) for s in dependents}
+        for t in dep_tracks.values():
+            t.note("Written last, from the rest of the document")
+        count = len(todo) + len(dependents)                      # what the screen counts: the parts written now and the ones written last
+        board.saver = lambda: board.save(db, msg)               # from here the parts may be written on this thread, and then they save as they report
+        _stage(db, msg, f"Writing the document: 0 of {count} parts", text=None, text_label=None, groups=None, **board.view())
+        pieces = _run_pool([t[3] for t in todo], lambda n: _stage(db, msg, f"Writing the document: {n} of {count} parts", step=False, **board.view()),
+                           lambda: board.save(db, msg))
         written: Dict[Tuple[str, str], Piece] = {}
         for (kind, s, a, _), piece in zip(todo, pieces):
             written[(s.number, str(a["index"]) if a else "")] = piece
@@ -531,16 +610,16 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
             so_far.append(f"## {s.full_heading}\n\n{body}")
         dep_pieces: Dict[str, Piece] = {}
         if deps:
-            _stage(db, msg, "Writing the glossary, the related documents and the responsibility matrix")
+            _stage(db, msg, "Writing the glossary, the related documents and the responsibility matrix", **board.view())
             document = "<document_so_far>\n" + "\n\n".join(so_far)[:240_000] + "\n</document_so_far>"
             dep_shared = shared + plan_blocks + _blocks(document)
             jobs = [(lambda s=s: _write_part(dep_shared, system, lambda fix, s=s: P.dependent_task(label=label, section=s, target_words=s.target_words,
                                                                                                     minimum_words=s.min_words, plan=plan, fix=fix),
-                                             section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="")) for s in deps]
-            for s, piece in zip(deps, _run_pool(jobs, lambda n: None)):
+                                             section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="", track=dep_tracks.get(s.number))) for s in deps]
+            for s, piece in zip(deps, _run_pool(jobs, lambda n: None, lambda: board.save(db, msg))):
                 dep_pieces[s.number] = piece
 
-        _stage(db, msg, "Putting the document together")
+        _stage(db, msg, "Putting the document together", **board.view())
         out: List[str] = [f"# {session.title}"]
         failures: List[str] = []
         for s in sections:

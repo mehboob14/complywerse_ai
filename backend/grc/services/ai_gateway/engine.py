@@ -42,6 +42,7 @@ _VISION_PARTS = frozenset({"image_url", "input_image", "image", "input_file", "f
 _TEXT_PARTS = frozenset({"text", "input_text", "output_text"})
 _DATA_URL = re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=]{1000,}")
 _RULE = {"SECRET": "B1", "MAC": "B1", "PAN": "B2", "IBAN": "B2", "NATIONAL_ID": "B3"}
+_OPEN_TOKEN = re.compile(r"<\s*[A-Za-z_]*\s*_?\s*\d*\s*$")      # the start of a placeholder at the very end of a text: "<", "<ORG", "<ORG_1"
 
 
 @dataclass
@@ -82,6 +83,15 @@ class Gateway:
         out = self._clean(text, counts)
         self.report.update({k: self.report.get(k, 0) + counts[k] for k in ("restored", "unknown_tokens", "invented") if counts[k]})
         return out
+
+    def restore_partial(self, text: str) -> str:
+        """``restore_text`` for a text the model is still writing, for the screen only. It adds nothing to the call's report (the
+        finished answer is counted once, by ``restore_json``/``finish``, and that is what is kept), and the end of the text, which
+        may be the start of a placeholder (``<ORG_``), is held back so that half a placeholder is never shown."""
+        if self.mode != "protect" or not isinstance(text, str):
+            return text
+        held = _OPEN_TOKEN.search(text)
+        return self._clean(text[:held.start()] if held else text, Counter())
 
     def restore_json(self, value: Any) -> Any:
         """The same for parsed JSON: every string in it, so a restored value can never break the JSON itself."""

@@ -91,8 +91,24 @@ def session_view(db, s, *, content: bool = True) -> Dict[str, Any]:
 
 def message_view(m) -> Dict[str, Any]:
     return {"id": m.id, "role": m.role, "kind": m.kind, "content": m.content, "status": m.status, "stage": m.stage, "error": m.error,
+            "live": m.live if m.status == "working" else None,
             "proposal": m.proposal, "references_used": m.references_used or [], "questions": m.questions or [], "notes": m.notes or [],
             "base_revision": m.base_revision, "usage": m.usage, "created_at": m.created_at.isoformat() if m.created_at else None}
+
+
+def progress(db, s) -> List[Dict[str, Any]]:
+    """What the page needs to follow the latest turns: status, the line and the live view, nothing of the (large) answers. Polled several
+    times a second while a turn works, so it stays small and writes nothing unless a turn is found dead."""
+    from ....models import StudioMessage
+
+    def latest():
+        return db.query(StudioMessage).filter(StudioMessage.session_id == s.id).order_by(StudioMessage.id.desc()).limit(4).all()
+
+    rows = latest()
+    if any(m.status == "working" and (m.updated_at or m.created_at) < _now() - STALE_AFTER for m in rows):
+        reap(db, s)
+        rows = latest()
+    return [{"id": m.id, "status": m.status, "stage": m.stage, "live": m.live if m.status == "working" else None} for m in reversed(rows)]
 
 
 # ── creating a session ───────────────────────────────────────────────────────
