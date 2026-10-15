@@ -6,38 +6,15 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import apiClient from '@/lib/api';
-import { parseUtc } from '@/lib/serverTime';
+import {
+  dateTime, day, eventLabel, LIFECYCLE_KIND_LABEL as KIND, type DocumentLifecycle as Lifecycle, type LifecycleRow as Row,
+} from '@/lib/documentLifecycle';
 import { useToast } from '@/components/ui/ToastProvider';
 import SignaturePad from '@/components/governance/SignaturePad';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import { SignOffControlTab } from '../_SignoffControl';
 
-interface Row {
-  id: number; kind: 'review' | 'approval' | 'acknowledgement'; user_id: number; user: string | null;
-  status: 'pending' | 'done' | 'rejected' | 'cancelled'; version: string | null; requested_at: string | null;
-  due_date: string | null; done_at: string | null; comment: string | null; overdue: boolean; escalation_level: number;
-}
 interface LifecycleSettings { approval_days: number; ack_days: number; remind_days: number; admin_after_days: number; email: boolean }
-interface TimelineEvent { at: string | null; kind: string; actor: string | null; detail: string | null }
-interface Lifecycle {
-  enabled: boolean;
-  document: { id: number; title: string; status: string; version: string; owner: string | null; author: string | null };
-  approvals: Row[];
-  acknowledgements: { total: number; done: number; pending: number; overdue: number; percent: number; people: Row[] };
-  mine: Row[];
-  timeline: TimelineEvent[];
-}
-
-const KIND = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement' } as const;
-const EVENT_LABEL: Record<string, string> = {
-  sent_for_review: 'Sent for review', sent_for_approval: 'Sent for approval', signed: 'Signed', rejected: 'Rejected', published: 'Published',
-  acknowledged: 'Acknowledged', escalated: 'Escalated', status_changed: 'Status changed', version_created: 'New version',
-  statements_written_to_document: 'Statements written to the document', review_requested: 'Review requested',
-  approval_requested: 'Approval requested', acknowledgement_requested: 'Acknowledgement requested', file_uploaded: 'File uploaded',
-};
-
-const day = (v: string | null) => parseUtc(v)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) ?? '-';
-const dateTime = (v: string | null) => parseUtc(v)?.toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) ?? '-';
 
 function StatusPill({ row }: { row: Row }) {
   const tone = row.status === 'done' ? 'border-emerald-300 text-emerald-800'
@@ -225,7 +202,7 @@ export default function LifecycleTab({ documentId, doc }: { documentId: number; 
           {data.timeline.map((e, i) => (
             <li key={i} className="flex gap-3 text-xs">
               <span className="w-32 shrink-0 text-slate-500">{dateTime(e.at)}</span>
-              <span className="w-44 shrink-0 font-medium text-slate-800">{EVENT_LABEL[e.kind] || e.kind.replace(/_/g, ' ')}</span>
+              <span className="w-44 shrink-0 font-medium text-slate-800">{eventLabel(e.kind)}</span>
               <span className="text-slate-700">{e.actor ? `${e.actor}: ` : ''}{e.detail || ''}</span>
             </li>
           ))}

@@ -21,6 +21,7 @@ import {
   AttestCell,
   useFrameworkNames,
 } from './lib';
+import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
 
 export interface RegisterTableProps {
@@ -84,7 +85,7 @@ export function RegisterTable({
       header: 'Lifecycle',
       accessor: 'status',
       minWidth: '190px',
-      render: (d) => <LifecycleDots status={d.status} />,
+      render: (d) => <LifecycleHover doc={d} focusable><LifecycleDots status={d.status} /></LifecycleHover>,
     },
     {
       id: 'owner',

@@ -25,6 +25,7 @@ import {
   verLabel,
 } from './lib';
 import { PageLoader } from '@/components/ui';
+import { LifecycleHover } from './LifecycleHover';
 
 export interface WorkspaceListProps {
   docs: GovDoc[]; // rows to show (already filtered by shell to the selected node+descendants and toolbar filters)
@@ -98,7 +99,7 @@ export function WorkspaceList({
           <>
             <div className="flex flex-wrap items-center gap-3">
               <h2 className="text-lg font-semibold text-slate-900">{headerDoc.title}</h2>
-              <StatusDot status={headerDoc.status} />
+              <LifecycleHover doc={headerDoc} focusable><StatusDot status={headerDoc.status} /></LifecycleHover>
             </div>
             <p className="mt-1 text-sm text-slate-500">
               {[
@@ -180,7 +181,7 @@ export function WorkspaceList({
                 </span>
 
                 <span className="hidden w-32 shrink-0 sm:flex">
-                  <StatusDot status={doc.status} />
+                  <LifecycleHover doc={doc}><StatusDot status={doc.status} /></LifecycleHover>
                 </span>
 
                 <span className="hidden w-40 shrink-0 md:flex">
