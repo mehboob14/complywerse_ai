@@ -108,11 +108,11 @@ function Attached({ session, reference, onChanged, open, onToggleOpen }: { sessi
             <span>· {size(reference.chars)}</span>
             {reference.scope?.mode && reference.scope.mode !== 'all' ? <span>· {reference.scope.mode === 'domains' ? plural(reference.scope.domains?.length ?? 0, 'domain') : reference.scope.mode}</span> : null}
           </p>
-          {reference.truncated && <p className="mt-0.5 text-[11px] text-[#8a6100]">Too long: only the start was given to the AI. Narrow it to the parts that matter.</p>}
+          {reference.truncated && <p className="mt-0.5 text-[11px] text-[#8a6100]">Too long: only the start was given to Comply Agent. Narrow it to the parts that matter.</p>}
           {reference.notes.map((n, i) => <p key={i} className="mt-0.5 text-[11px] text-[#8a6100]">{n}</p>)}
         </div>
         <div className="flex shrink-0 items-center gap-0.5">
-          <button type="button" onClick={onToggleOpen} title="Read the text the AI is given" className="rounded p-1.5 text-[#3f4b58] hover:bg-[#eef1f4]" aria-label={`Read ${reference.key}`} aria-expanded={open}><Eye className="h-4 w-4" /></button>
+          <button type="button" onClick={onToggleOpen} title="Read the text Comply Agent is given" className="rounded p-1.5 text-[#3f4b58] hover:bg-[#eef1f4]" aria-label={`Read ${reference.key}`} aria-expanded={open}><Eye className="h-4 w-4" /></button>
           <button type="button" onClick={() => toggle.mutate()} disabled={toggle.isPending} title={reference.include ? 'Do not use for now' : 'Use again'} className="rounded p-1.5 text-[#3f4b58] hover:bg-[#eef1f4]" aria-label={reference.include ? `Pause ${reference.key}` : `Use ${reference.key}`}>
             {reference.include ? <EyeOff className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
           </button>
@@ -176,7 +176,7 @@ function FrameworkPicker({ onPick, busy }: { onPick: (fw: FrameworkItem, scope: 
         <button type="button" onClick={() => setSelected(null)} className="text-xs font-medium text-[#0b6b58] hover:underline">Choose another</button>
       </div>
       <fieldset>
-        <legend className="mb-1 text-xs font-semibold text-[#3f4b58]">Which part should the AI use?</legend>
+        <legend className="mb-1 text-xs font-semibold text-[#3f4b58]">Which part should Comply Agent use?</legend>
         {([
           ['all', `All ${selected.controls} controls`],
           ['domains', 'Some domains (sections)'],
@@ -253,10 +253,10 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
   return (
     <div className="h-full overflow-y-auto p-3">
       <h3 className="text-sm font-semibold text-[#1f2933]">References</h3>
-      <p className="mt-0.5 text-xs text-[#586472]">The AI uses these, cites them by number, and its quotes are checked against them. {total > 0 && <span>{size(total)} in use.</span>}</p>
+      <p className="mt-0.5 text-xs text-[#586472]">Comply Agent uses these, cites them by number, and its quotes are checked against them. {total > 0 && <span>{size(total)} in use.</span>}</p>
 
       <ul className="mt-3 space-y-2" aria-label="Attached references">
-        {session.references.length === 0 && <li className="rounded-lg border border-dashed border-[#c5ccd3] p-3 text-center text-xs text-[#586472]">Nothing attached yet. The AI will write from general knowledge and your instructions.</li>}
+        {session.references.length === 0 && <li className="rounded-lg border border-dashed border-[#c5ccd3] p-3 text-center text-xs text-[#586472]">Nothing attached yet. Comply Agent will write from general knowledge and your instructions.</li>}
         {session.references.map((r) => <Attached key={r.id} session={session} reference={r} onChanged={onChanged} open={opened === r.key} onToggleOpen={() => setOpened(opened === r.key ? null : r.key)} />)}
       </ul>
 
@@ -270,7 +270,7 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
         </div>
         {tab === 'parent' && (
           <div className="space-y-2">
-            <p className="text-xs text-[#586472]">The document this one sits under (a standard under a policy, a procedure under a standard). The AI keeps it consistent with its parent.</p>
+            <p className="text-xs text-[#586472]">The document this one sits under (a standard under a policy, a procedure under a standard). Comply Agent keeps it consistent with its parent.</p>
             {session.document_id && (
               <button type="button" disabled={add.isPending} onClick={() => add.mutate({ kind: 'parent_document' })} className="rounded-lg border border-[#0f766e] bg-white px-3 py-1.5 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f4f1] disabled:opacity-50">Use this document’s parent</button>
             )}
@@ -285,7 +285,7 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
         )}
         {tab === 'framework' && (
           <div className="space-y-2">
-            <p className="text-xs text-[#586472]">A framework from the platform. The AI cites its clause numbers; quotes are checked against the clause text.</p>
+            <p className="text-xs text-[#586472]">A framework from the platform. Comply Agent cites its clause numbers; quotes are checked against the clause text.</p>
             <FrameworkPicker busy={add.isPending} onPick={(fw, scope) => add.mutate({ kind: 'framework', source_id: fw.id, scope })} />
           </div>
         )}

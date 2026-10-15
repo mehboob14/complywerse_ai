@@ -171,7 +171,7 @@ def test_the_first_draft_of_a_blank_document_is_applied_and_the_entity_name_neve
     assert "Entity name: <ORG_1>" in user_turn(world) and "[B1] # Access Control Policy" in user_turn(world)
     revs = world.http.get(world.api(f"/sessions/{s['id']}/revisions")).json()["items"]
     assert [(r["number"], r["author_type"]) for r in revs] == [(2, "ai"), (1, "system")]
-    assert revs[0]["summary"] == "The AI wrote the first draft"
+    assert revs[0]["summary"] == "Comply Agent wrote the first draft"
 
 
 def test_a_change_to_an_existing_document_waits_for_the_person_and_only_touches_its_blocks(world):
@@ -259,7 +259,7 @@ def test_without_credentials_a_request_is_refused_up_front(world, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     s = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "T", "template_id": "builtin:blank", "doc_type": "other"}).json()
     out = world.http.post(world.api(f"/sessions/{s['id']}/messages"), json={"text": "Write it"})
-    assert out.status_code == 503 and "AI is not set up" in out.json()["detail"]
+    assert out.status_code == 503 and "Comply Agent is not set up" in out.json()["detail"]
     assert world.http.get(world.api("/status")).json()["ai_configured"] is False
 
 
@@ -364,6 +364,28 @@ def test_the_checks_need_no_ai_and_a_simple_fix_is_one_revision(world):
     assert stale_fix.status_code == 409
     many = world.http.post(world.api(f"/sessions/{s['id']}/checks/fix-all"), json={}).json()
     assert many["fixed"] >= 1 and "rule applies" in many["content"]
+
+
+def test_apply_all_applies_every_fix_offered_comply_agents_suggestions_too_in_one_revision(world):
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    messy = world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"] + "\nThe the rule  applies.\n", "base_revision": s["revision"]}).json()
+    world.respond(lambda body: reply(json.dumps({
+        "issues": [{"block": "B5", "kind": "grammar", "quote": "All employees and contractors", "suggestion": "All employees, and all contractors", "message": "comma", "severity": "info"}],
+        "requirements": [], "summary": "One thing."})))
+    world.http.post(world.api(f"/sessions/{s['id']}/checks?ai=true"))
+    assert world.http.get(world.api(f"/sessions/{s['id']}/checks/ai")).json()["stale"] is False
+    offered = [i for i in world.http.post(world.api(f"/sessions/{s['id']}/checks")).json()["issues"] if i.get("fix")]
+    assert {"repeated_word", "extra_spaces"} <= {i["rule"] for i in offered}
+
+    out = world.http.post(world.api(f"/sessions/{s['id']}/checks/fix-all"), json={"all": True}).json()
+    assert out["revision"] == messy["revision"] + 1 and out["fixed"] >= 3                     # one revision for all of them
+    assert "All employees, and all contractors" in out["content"] and "The rule applies." in out["content"]
+    left = [i for i in world.http.post(world.api(f"/sessions/{s['id']}/checks")).json()["issues"] if i.get("fix")]
+    assert not {"repeated_word", "extra_spaces"} & {i["rule"] for i in left}
+    revs = world.http.get(world.api(f"/sessions/{s['id']}/revisions")).json()["items"]
+    assert revs[0]["summary"].startswith("Applied") and revs[0]["author_type"] == "user"
+    again = world.http.post(world.api(f"/sessions/{s['id']}/checks/fix-all"), json={"all": True}).json()
+    assert "All employees, and all contractors" in again["content"]                           # the check is stale now: its suggestion is not applied twice
 
 
 def test_required_items_a_session_still_holds_are_not_given_to_the_ai():

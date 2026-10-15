@@ -44,7 +44,7 @@ def test_nothing_is_sent_without_credentials(tenant, monkeypatch):
     monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
     with pytest.raises(claude_client.ClaudeNotConfigured) as exc:
         call()
-    assert "AI is not set up" in str(exc.value) and not claude_client.configured()
+    assert "Comply Agent is not set up" in str(exc.value) and not claude_client.configured()
 
 
 def test_the_prompt_leaves_without_the_values_and_the_answer_comes_back_with_them(wire, tenant):

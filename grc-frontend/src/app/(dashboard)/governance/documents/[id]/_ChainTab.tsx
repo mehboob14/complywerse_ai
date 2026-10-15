@@ -369,7 +369,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument 
   const s = data.summary;
   const latest = currentVersion ?? data.document?.version;
   const found = data.sources.filter((x) => x.verified === true).length;
-  const chips: Array<[Filter, string, number | null]> = [['all', 'Everything', null], ['ai', 'AI-assisted', counts.ai], ['manual', 'Edited by hand', counts.manual], ['approvals', 'Approvals', counts.approvals]];
+  const chips: Array<[Filter, string, number | null]> = [['all', 'Everything', null], ['ai', 'Comply Agent', counts.ai], ['manual', 'Edited by hand', counts.manual], ['approvals', 'Approvals', counts.approvals]];
 
   return (
     <div className="space-y-4">
@@ -403,7 +403,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument 
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
           <Tile icon={History} label="Versions" value={s.versions} sub={oldestFirst[0]?.at ? `since ${dateTime(oldestFirst[0].at)}` : undefined} />
           <Tile icon={GitCompare} label="Changes" value={s.changes} sub={<Words added={s.words_added} removed={s.words_removed} />} />
-          <Tile icon={Sparkles} label="AI-assisted" value={s.ai_assisted} sub={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}% of the changes` : 'none yet'} />
+          <Tile icon={Sparkles} label="Comply Agent" value={s.ai_assisted} sub={s.changes ? `${Math.round((100 * s.ai_assisted) / s.changes)}% of the changes` : 'none yet'} />
           <Tile icon={Users} label="People" value={s.people} sub={<People names={people} />} />
           <Tile icon={BookOpenCheck} label="Sources" value={s.sources} sub={s.sources ? `${found} of ${s.sources} quotes found in the source` : 'none cited'} />
         </div>

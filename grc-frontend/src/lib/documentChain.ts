@@ -143,15 +143,15 @@ export interface BaselineVersion {
 export type ExportFormat = 'xlsx' | 'pdf' | 'csv';
 
 export const ORIGIN_LABEL: Record<string, string> = {
-  ai: 'AI-assisted', manual: 'Edited by hand', mixed: 'AI-assisted and edited by hand', revert: 'Taken back', restore: 'Earlier version restored',
+  ai: 'Comply Agent', manual: 'Edited by hand', mixed: 'Comply Agent and edited by hand', revert: 'Taken back', restore: 'Earlier version restored',
   signoff: 'Sign-off stamp', initial: 'The original', file: 'File replaced', import: 'Imported', unknown: 'Changed', nochange: 'No change to the text',
 };
 
-/** "AI · accepted by Olivia", "Edited by Sara", "Taken back by Khalid": who and how, in a few words. */
+/** "Comply Agent · accepted by Olivia", "Edited by Sara", "Taken back by Khalid": who and how, in a few words. */
 export function byLine(origin: string, by: string, coverage = 1): string {
   const who = by || 'someone';
   switch (origin) {
-    case 'ai': return coverage < 1 ? `AI draft, edited since · accepted by ${who}` : `AI · accepted by ${who}`;
+    case 'ai': return coverage < 1 ? `Comply Agent draft, edited since · accepted by ${who}` : `Comply Agent · accepted by ${who}`;
     case 'manual': return `Edited by ${who}`;
     case 'revert': return `Taken back by ${who}`;
     case 'restore': return `Earlier version restored by ${who}`;

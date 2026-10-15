@@ -37,7 +37,7 @@ _FILE_TEXT_CACHE: Dict[Tuple[int, Optional[int], str], Optional[str]] = {}
 
 STAGE_LABEL = {"draft": "Draft", "pending_review": "In review", "pending_approval": "In approval", "approved": "Approved",
                "published": "Published", "expired": "Expired", "archived": "Archived", "exception_applied": "Exception applied"}
-ORIGIN_LABEL = {"ai": "AI-assisted", "manual": "Edited by hand", "mixed": "AI-assisted and edited by hand", "revert": "Reverted",
+ORIGIN_LABEL = {"ai": "Comply Agent", "manual": "Edited by hand", "mixed": "Comply Agent and edited by hand", "revert": "Reverted",
                 "restore": "Earlier version restored", "signoff": "Sign-off stamp", "initial": "The original", "file": "File replaced",
                 "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
 # audit entries that matter to the chain (the rest - views, downloads, field edits - do not)

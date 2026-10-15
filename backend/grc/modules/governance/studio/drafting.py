@@ -230,7 +230,7 @@ def _plan_progress(db, msg):
     """Shows the plan as the AI makes it: how it will approach the document, the choices it makes and the areas it will cover."""
     def show(p: claude_client.Progress) -> None:
         if p.phase != "writing":                    # the plan call is quiet for half a minute while the AI thinks: say so
-            live.note(db, msg, "The AI is reading the brief" if p.phase == "reading" else "The AI is thinking the structure through")
+            live.note(db, msg, "Comply Agent is reading the brief" if p.phase == "reading" else "Comply Agent is thinking the structure through")
             return
         data = p.data if isinstance(p.data, dict) else {}
         choices = [f"{p.show(str(d['name'])).strip()}: {p.show(str(d.get('value') or '')).strip()}" + (f" ({_BASIS[d['basis']]})" if d.get("basis") in _BASIS else "")
@@ -645,7 +645,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         words = sum(b.words for b in blocks_after)
         unknown = _unknown_citations(markdown, references)
         if failures:
-            notes.append("These parts could not be written and are marked in the document: " + ", ".join(failures) + ". Ask the AI to write them.")
+            notes.append("These parts could not be written and are marked in the document: " + ", ".join(failures) + ". Ask Comply Agent to write them.")
         if unknown:
             notes.append(f"{unknown} control identifier(s) in square brackets are not in the attached framework: check them.")
         dangling = dangling_references(markdown)
@@ -678,7 +678,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         if current.revision_no != base_revision:
             notes.append("You changed the document while it was being written. The draft replaced it; your version is in the document's history.")
             msg.notes = notes
-        service.accept_ops(db, current, msg, ["c1"], request.created_by if request is not None else msg.created_by, auto=True, summary="The AI wrote the first draft")
+        service.accept_ops(db, current, msg, ["c1"], request.created_by if request is not None else msg.created_by, auto=True, summary="Comply Agent wrote the first draft")
         logger.info("studio draft %s: %s words, %s calls, %s rewritten, %s failed", message_id, words, total["calls"], rewritten, len(failures))
     except Exception as exc:        # noqa: BLE001 - the person sees a sentence, the log sees the cause
         db.rollback()
@@ -689,7 +689,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
 
 # ── putting the parts together ───────────────────────────────────────────────
 def _missing(section: Section, reason: Optional[str]) -> str:
-    return f"[[This part could not be written: {(reason or 'the AI did not answer').rstrip('. ')}. Ask the AI to write the {section.heading.lower()} section.]]"
+    return f"[[This part could not be written: {(reason or 'Comply Agent did not answer').rstrip('. ')}. Ask Comply Agent to write the {section.heading.lower()} section.]]"
 
 
 def _assemble_part(section: Section, areas: Sequence[Dict[str, Any]], written: Dict[Tuple[str, str], Piece], plan: Dict[str, Any], failures: Optional[List[str]] = None) -> str:

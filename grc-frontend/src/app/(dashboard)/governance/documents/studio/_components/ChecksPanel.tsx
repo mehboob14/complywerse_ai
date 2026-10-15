@@ -3,7 +3,9 @@
 /**
  * Checks on the document. The ones that need no AI (headings and numbering, spacing, repeated words, lists, tables, the
  * sections the document type requires, placeholders still to fill in, the entity name and logo) run on every saved change.
- * The AI check proofreads spelling, grammar and wording. A simple fix is one click; every issue can be shown in the document.
+ * Comply Agent's check proofreads spelling, grammar and wording. Clicking an item shows and highlights its place in the
+ * document; a fix is one click, and "Apply all fixes" applies every fix offered (Comply Agent's suggestions and added sections
+ * too) as one revision that History can undo.
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,8 +23,6 @@ const GROUPS: { key: string; label: string; test: (i: Issue) => boolean }[] = [
   { key: 'sign', label: 'Signature lines (filled in when it is signed)', test: (i) => i.rule === 'placeholder_signature' },
 ];
 
-const SIMPLE = ['replace', 'set_level', 'normalize_space', 'strip_trailing_punct'];
-
 // stable empties: a new [] on every render would re-run the effects that depend on them
 const NO_ISSUES: Issue[] = [];
 
@@ -32,25 +32,25 @@ function Severity({ level }: { level: Issue['severity'] }) {
   return <Info className="h-4 w-4 shrink-0 text-[#2563eb]" aria-label="Note" />;
 }
 
-function IssueRow({ issue, onGoTo, onFix, fixing }: { issue: Issue; onGoTo: (i: Issue) => void; onFix: (i: Issue) => void; fixing: boolean }) {
+function IssueRow({ issue, active, onGoTo, onFix, fixing }: { issue: Issue; active: boolean; onGoTo: (i: Issue) => void; onFix: (i: Issue) => void; fixing: boolean }) {
+  const located = issue.block != null || !!issue.quote;
   return (
-    <li className="flex items-start gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-2">
-      <span className="mt-0.5"><Severity level={issue.severity} /></span>
-      <div className="min-w-0 flex-1 text-[13px]">
-        <p className="text-[#1f2933]">{issue.message}</p>
-        {issue.quote && <p className="mt-0.5 truncate text-xs italic text-[#586472]" title={issue.quote}>“{issue.quote}”</p>}
-        {issue.suggestion && <p className="mt-0.5 text-xs text-[#0a5a38]">Suggestion: {issue.suggestion}</p>}
-      </div>
-      <div className="flex shrink-0 items-center gap-0.5">
-        {(issue.block != null || issue.quote) && (
-          <button type="button" onClick={() => onGoTo(issue)} title="Show it in the document" aria-label="Show it in the document" className="rounded p-1.5 text-[#3f4b58] hover:bg-[#eef1f4]"><MapPin className="h-4 w-4" /></button>
-        )}
-        {issue.fix && (
-          <button type="button" disabled={fixing} onClick={() => onFix(issue)} title="Fix it" className="inline-flex items-center gap-1 rounded-md bg-[#e6f4f1] px-2 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#cfe9e4] disabled:opacity-50">
-            {fixing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Fix
-          </button>
-        )}
-      </div>
+    <li className={`flex items-start gap-2 rounded-lg border px-2.5 py-2 ${active ? 'border-[#f59e0b] bg-[#fffbeb] ring-1 ring-[#fcd34d]' : 'border-[#e1e5e9] bg-white hover:border-[#0f766e]'}`}>
+      <button type="button" disabled={!located} onClick={() => onGoTo(issue)} aria-pressed={active} title={located ? 'Show and highlight it in the document' : undefined}
+        className="flex min-w-0 flex-1 items-start gap-2 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0] disabled:cursor-default">
+        <span className="mt-0.5"><Severity level={issue.severity} /></span>
+        <span className="min-w-0 flex-1 text-[13px]">
+          <span className="block text-[#1f2933]">{issue.message}</span>
+          {issue.quote && <span className="mt-0.5 block truncate text-xs italic text-[#586472]" title={issue.quote}>“{issue.quote}”</span>}
+          {issue.suggestion && <span className="mt-0.5 block text-xs text-[#0a5a38]">Suggestion: {issue.suggestion}</span>}
+        </span>
+        {located && <MapPin className={`mt-0.5 h-4 w-4 shrink-0 ${active ? 'text-[#b45309]' : 'text-[#94a3b8]'}`} aria-hidden />}
+      </button>
+      {issue.fix && (
+        <button type="button" disabled={fixing} onClick={() => onFix(issue)} title="Fix it" className="inline-flex shrink-0 items-center gap-1 rounded-md bg-[#e6f4f1] px-2 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#cfe9e4] disabled:opacity-50">
+          {fixing ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Fix
+        </button>
+      )}
     </li>
   );
 }
@@ -71,6 +71,7 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
   const { toast } = useToast();
   const qc = useQueryClient();
   const [aiMessage, setAiMessage] = useState<Message | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
 
   const local = useQuery({
     queryKey: ['studio', 'checks', session.id, session.revision, session.instructions.entity_name ?? '', session.instructions.logo_asset_id ?? 0, session.instructions.logo_required ?? false],
@@ -91,7 +92,7 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
         if (m.status !== 'working') {
           clearInterval(t);
           qc.invalidateQueries({ queryKey: ['studio', 'ai-check', session.id] });
-          if (m.status === 'error') toast({ title: 'The AI check did not finish', message: m.error ?? undefined, type: 'error' });
+          if (m.status === 'error') toast({ title: 'Comply Agent’s check did not finish', message: m.error ?? undefined, type: 'error' });
         }
       } catch { /* try again on the next tick */ }
     }, 1500);
@@ -101,7 +102,7 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
   const runAi = useMutation({
     mutationFn: async () => { await flush(); return studioApi.checks(session.id, true); },
     onSuccess: (r) => { if (r.ai_message) setAiMessage(r.ai_message); },
-    onError: (e) => toast({ title: 'The AI check could not start', message: problemOf(e), type: 'error' }),
+    onError: (e) => toast({ title: 'Comply Agent’s check could not start', message: problemOf(e), type: 'error' }),
   });
 
   const fixOne = useMutation({
@@ -109,9 +110,18 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
     onSuccess: (r) => { onContent(r.content, r.revision); },
     onError: (e) => toast({ title: isConflict(e) ? 'The text has changed' : 'Could not apply the fix', message: problemOf(e), type: 'error' }),
   });
-  const fixAll = useMutation({
-    mutationFn: async () => { await flush(); return studioApi.fixAll(session.id); },
-    onSuccess: (r) => { if (r.fixed) onContent(r.content, r.revision); toast({ title: r.fixed ? `${plural(r.fixed, 'fix', 'fixes')} applied` : 'Nothing simple left to fix', type: r.fixed ? 'success' : 'info' }); },
+  const applyAll = useMutation({
+    mutationFn: async () => { await flush(); return studioApi.applyAll(session.id); },
+    onSuccess: (r) => {
+      if (r.fixed) onContent(r.content, r.revision);
+      setActiveId(null);
+      toast({
+        title: r.fixed ? `${plural(r.fixed, 'fix', 'fixes')} applied` : 'Nothing left to fix',
+        message: r.skipped ? `${plural(r.skipped, 'fix', 'fixes')} no longer fitted the text and ${r.skipped === 1 ? 'was' : 'were'} left out. Run the checks again.`
+          : r.fixed ? 'As one revision: History can take it back.' : undefined,
+        type: r.fixed ? 'success' : 'info',
+      });
+    },
     onError: (e) => toast({ title: 'Could not apply the fixes', message: problemOf(e), type: 'error' }),
   });
 
@@ -121,7 +131,8 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
   const issues = useMemo(() => [...(local.data?.issues ?? NO_ISSUES), ...(stale ? NO_ISSUES : aiIssues)], [local.data, aiIssues, stale]);
   useEffect(() => { onIssues(issues); }, [issues, onIssues]);
 
-  const simple = issues.filter((i) => i.fix && SIMPLE.includes(String(i.fix.type)) && !i.id.startsWith('ai:')).length;
+  const fixable = issues.filter((i) => i.fix).length;
+  const goTo = (i: Issue) => { setActiveId(i.id); onGoTo(i); };
   const grouped = GROUPS.map((g) => ({ ...g, items: issues.filter((i) => g.test(i)) })).filter((g) => g.items.length);
   const must = issues.filter((i) => i.rule === 'placeholder').length;
   const errors = issues.filter((i) => i.severity === 'error').length;
@@ -139,8 +150,9 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
         </div>
         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
           {must > 0 && <button type="button" onClick={onNextPlaceholder} className="rounded-md border border-[#e0c33a] bg-[#fff7c9] px-2 py-1 text-xs font-semibold text-[#6b5400] hover:bg-[#fff2a8]">Next placeholder</button>}
-          <button type="button" disabled={!simple || fixAll.isPending} onClick={() => fixAll.mutate()} className="inline-flex items-center gap-1 rounded-md bg-[#e6f4f1] px-2 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#cfe9e4] disabled:opacity-50">
-            {fixAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Fix all simple ({simple})
+          <button type="button" disabled={!fixable || applyAll.isPending} onClick={() => applyAll.mutate()} title="Apply every fix listed here in one go, as one revision"
+            className="inline-flex items-center gap-1 rounded-md bg-[#0f766e] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
+            {applyAll.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Wand2 className="h-3.5 w-3.5" />} Apply all fixes ({fixable})
           </button>
         </div>
       </div>
@@ -148,10 +160,10 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
       <div className="mt-3 rounded-xl border border-[#d5dbe1] bg-[#f8fafb] p-2.5">
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-[#0f766e]" />
-          <p className="flex-1 text-xs text-[#3f4b58]">AI check: spelling, grammar and wording.</p>
-          <button type="button" disabled={!aiConfigured || working || runAi.isPending} onClick={() => runAi.mutate()} title={aiConfigured ? undefined : 'The AI is not connected yet'}
+          <p className="flex-1 text-xs text-[#3f4b58]">Comply Agent checks spelling, grammar and wording.</p>
+          <button type="button" disabled={!aiConfigured || working || runAi.isPending} onClick={() => runAi.mutate()} title={aiConfigured ? undefined : 'Comply Agent is not connected yet'}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
-            {working || runAi.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {working ? aiMessage?.stage ?? 'Checking' : 'Run the AI check'}
+            {working || runAi.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {working ? aiMessage?.stage ?? 'Checking' : 'Ask Comply Agent to check'}
           </button>
         </div>
         {aiResult?.content && !working && <p className="mt-2 text-xs text-[#3f4b58]">{aiResult.content}</p>}
@@ -163,7 +175,7 @@ export default function ChecksPanel({ session, aiConfigured, flush, onContent, o
         <section key={g.key} className="mt-4" aria-label={g.label}>
           <h4 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-[#586472]">{g.label} ({g.items.length})</h4>
           <ul className="space-y-1.5">
-            {g.items.map((i) => <IssueRow key={i.id} issue={i} onGoTo={onGoTo} onFix={(x) => fixOne.mutate(x)} fixing={fixOne.isPending && fixOne.variables?.id === i.id} />)}
+            {g.items.map((i) => <IssueRow key={i.id} issue={i} active={activeId === i.id} onGoTo={goTo} onFix={(x) => fixOne.mutate(x)} fixing={fixOne.isPending && fixOne.variables?.id === i.id} />)}
           </ul>
         </section>
       ))}

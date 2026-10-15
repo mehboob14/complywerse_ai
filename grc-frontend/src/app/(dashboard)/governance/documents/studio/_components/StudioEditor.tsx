@@ -347,6 +347,10 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
         .studio-prose .studio-issue-info { text-decoration: underline dotted #2563eb; text-underline-offset: 3px; }
         .studio-prose .studio-pending { background: #e6f4f1; box-shadow: -4px 0 0 #1ed4b0; }
         .studio-prose .studio-focus { background: #fff7d6; }
+        .studio-prose .studio-focus-block { background: #fffbeb; box-shadow: -5px 0 0 #f59e0b, 0 0 0 1px #fcd34d; border-radius: 4px; animation: studio-focus-in 1.6s ease-out 1; }
+        .studio-prose .studio-focus-text { background: #fde68a; box-shadow: 0 0 0 2px #fde68a; border-radius: 2px; }
+        @keyframes studio-focus-in { 0% { background: #fde68a; } 100% { background: #fffbeb; } }
+        @media (prefers-reduced-motion: reduce) { .studio-prose .studio-focus-block { animation: none; } }
         .studio-prose p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9aa5b1; pointer-events: none; float: left; height: 0; }
       `}</style>
     </div>

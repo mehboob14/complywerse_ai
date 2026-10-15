@@ -105,8 +105,8 @@ def test_a_chat_turn_shows_its_steps_the_reply_and_each_change_as_the_ai_writes_
     assert any(l[:1] == ["Reading the document and the references"] for l in labels)
     reading = next(v for v in views if v["steps"][0].get("detail"))
     assert reading["steps"][0]["detail"].endswith("no references") and "blocks" in reading["steps"][0]["detail"]
-    ai = next(v for v in views if any(st["label"] == "The AI is reading your request" for st in v["steps"]))
-    assert re.fullmatch(r"Protected \d+ values? \(names, numbers, secrets\) before sending", next(st for st in ai["steps"] if st["label"] == "The AI is reading your request")["detail"])
+    ai = next(v for v in views if any(st["label"] == "Comply Agent is reading your request" for st in v["steps"]))
+    assert re.fullmatch(r"Protected \d+ values? \(names, numbers, secrets\) before sending", next(st for st in ai["steps"] if st["label"] == "Comply Agent is reading your request")["detail"])
 
     replies = [v["text"] for v in views if v.get("text")]
     assert len(replies) > 2 and all("<" not in t for t in replies) and ENTITY in replies[-1] and replies[-1].startswith("I made the review quarterly")
@@ -183,7 +183,7 @@ def test_a_draft_shows_the_plan_then_every_part_with_its_words_and_leaves_nothin
     assert areas == {"label": "Areas to cover", "items": ["Privileged access", "Joiners, movers and leavers", "Access reviews"]}
 
     details = [st["detail"] for v in views for st in v["steps"] if st["label"] == "Planning the document" and st.get("detail")]          # what the plan call is doing, from the first moment
-    assert details[0] == "The AI is reading the brief" and "Writing the plan" in details and details[-1].endswith("choices made")
+    assert details[0] == "Comply Agent is reading the brief" and "Writing the plan" in details and details[-1].endswith("choices made")
 
     with_parts = [v for v in views if v.get("parts")]
     labels = [p["label"] for p in with_parts[0]["parts"]]

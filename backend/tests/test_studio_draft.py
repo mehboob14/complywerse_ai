@@ -101,7 +101,7 @@ def test_a_new_policy_is_written_whole_planned_first_and_applied_as_the_first_dr
     assert headings[:4] == ["1. Document Description", "2. Approval Signoff", "3. Purpose", "4. Scope and Applicability"] and "7. Policy Statements" in headings
     assert [b.text for b in B.parse(content) if b.kind == "heading" and b.level == 3][:3] == ["7.1 Privileged access", "7.2 Joiners, movers and leavers", "7.3 Access reviews"]
     assert content.startswith("# Access Control Policy") and "The policy statements are grouped by how access is requested" in content
-    assert doc["revision"] == 2 and drafts.http.get(drafts.api(f"/sessions/{s['id']}/revisions")).json()["items"][0]["summary"] == "The AI wrote the first draft"
+    assert doc["revision"] == 2 and drafts.http.get(drafts.api(f"/sessions/{s['id']}/revisions")).json()["items"][0]["summary"] == "Comply Agent wrote the first draft"
     assert [o["status"] for o in done["proposal"]["ops"]] == ["accepted"]
 
     # the parts that are not written by the AI are real, and the organisation's own names are used where they exist

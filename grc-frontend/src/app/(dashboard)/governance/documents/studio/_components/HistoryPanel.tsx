@@ -15,7 +15,7 @@ import type { CompareSpec } from './ChangesView';
 
 const AUTHOR: Record<Revision['author_type'], { label: string; icon: typeof Bot }> = {
   user: { label: 'You', icon: Pencil },
-  ai: { label: 'AI', icon: Bot },
+  ai: { label: 'Comply Agent', icon: Bot },
   import: { label: 'Opened', icon: FileUp },
   system: { label: 'Started', icon: History },
   restore: { label: 'Restored', icon: Undo2 },

@@ -72,7 +72,7 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
         const m = await studioApi.message(session.id, ai.id);
         setAi(m);
         if (m.status !== 'working') clearInterval(t);
-        if (m.status === 'error') toast({ title: 'The AI could not compare the documents', message: m.error ?? undefined, type: 'error' });
+        if (m.status === 'error') toast({ title: 'Comply Agent could not compare the documents', message: m.error ?? undefined, type: 'error' });
       } catch { /* next tick */ }
     }, 1500);
     return () => clearInterval(t);
@@ -86,14 +86,14 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
       if (r.ai_message) setAi(r.ai_message);
       qc.invalidateQueries({ queryKey: key });
     } catch (e) {
-      toast({ title: 'The AI could not start', message: problemOf(e), type: 'error' });
+      toast({ title: 'Comply Agent could not start', message: problemOf(e), type: 'error' });
     } finally {
       setAsking(false);
     }
   };
 
   const other = spec.type === 'document' || spec.type === 'reference';
-  const title = spec.type === 'preview' ? 'What accepting the AI’s changes would do' : other ? `This document compared with “${spec.title}”` : spec.label;
+  const title = spec.type === 'preview' ? 'What accepting Comply Agent’s changes would do' : other ? `This document compared with “${spec.title}”` : spec.label;
   const hint = other ? 'Green is in this document and not in the other; red is in the other and not here.' : spec.type === 'preview' ? 'Nothing is changed until you accept.' : 'Green was added, red was removed.';
   const diffs = ai?.status === 'done' ? ai.proposal?.differences ?? [] : [];
 
@@ -106,16 +106,16 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
           <p className="text-[11px] text-[#586472]">{redline.data ? <><StatsLine stats={redline.data.stats} /> · </> : null}{hint}</p>
         </div>
         {other && (
-          <button type="button" onClick={explain} disabled={!aiConfigured || asking || ai?.status === 'working'} title={aiConfigured ? undefined : 'The AI is not connected yet'}
+          <button type="button" onClick={explain} disabled={!aiConfigured || asking || ai?.status === 'working'} title={aiConfigured ? undefined : 'Comply Agent is not connected yet'}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
-            {asking || ai?.status === 'working' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {ai?.status === 'working' ? ai.stage ?? 'Comparing' : 'Explain the differences'}
+            {asking || ai?.status === 'working' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {ai?.status === 'working' ? ai.stage ?? 'Comparing' : 'Ask Comply Agent to explain'}
           </button>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6">
         <div className="mx-auto max-w-[900px] space-y-4">
           {ai?.status === 'done' && (
-            <section className="rounded-xl border border-[#9fd9bd] bg-white p-4" aria-label="AI comparison">
+            <section className="rounded-xl border border-[#9fd9bd] bg-white p-4" aria-label="Comply Agent’s comparison">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold text-[#1f2933]"><Sparkles className="h-4 w-4 text-[#0f766e]" /> What differs in substance</h3>
               {ai.content && <p className="mt-1.5 text-sm text-[#26323d]">{ai.content}</p>}
               {diffs.length > 0 && (

@@ -12,7 +12,8 @@ original values back into a piece of it for the screen (a half-written placehold
 person who asked, never what is kept or acted on.
 
 A structured answer (``schema``) is parsed *before* the original values are restored and restored string by string, so
-a restored name can never break the JSON. Nothing here names the provider to a user: the errors say "AI".
+a restored name can never break the JSON. Nothing here names the provider to a user: the errors say "Comply Agent" (the
+assistant's name on the platform).
 
 Environment (operator): ``ANTHROPIC_API_KEY`` (the SDK reads it), ``ANTHROPIC_WORKSPACE_ID`` (only when the key is not tied to
 one workspace), ``DOCUMENT_STUDIO_MODEL`` (default ``claude-opus-5-5``), ``ANTHROPIC_REFUSAL_FALLBACK=off`` to stop asking the
@@ -41,7 +42,7 @@ class ClaudeNotConfigured(RuntimeError):
     """No credentials: the screen says AI is not set up yet."""
 
     def __init__(self) -> None:
-        super().__init__("AI is not set up for this organisation yet. An administrator needs to add the AI credentials.")
+        super().__init__("Comply Agent is not set up for this organisation yet. An administrator needs to add its credentials.")
 
 
 class ClaudeRefused(RuntimeError):
@@ -49,7 +50,7 @@ class ClaudeRefused(RuntimeError):
 
     def __init__(self, category: Optional[str] = None) -> None:
         self.category = category
-        super().__init__("The AI declined this request. Rephrase it, or reduce the part of the document it points at, and try again.")
+        super().__init__("Comply Agent declined this request. Rephrase it, or reduce the part of the document it points at, and try again.")
 
 
 class ClaudeFailed(RuntimeError):
@@ -198,7 +199,7 @@ def _guard(kwargs: Dict[str, Any], use_case: str, model: str, started_at: float)
         _record(error=exc, model=model, started_at=started_at, report=exc.report)
         raise
     except Exception as exc:        # noqa: BLE001
-        blocked = AIBlocked("gateway_error", "AI was not used because the data-protection check could not run.", rule="B13")
+        blocked = AIBlocked("gateway_error", "Comply Agent was not used because the data-protection check could not run.", rule="B13")
         logger.exception("the data-protection guard failed; the prompt was not sent")
         _record(error=blocked, model=model, started_at=started_at)
         raise blocked from exc
@@ -241,21 +242,21 @@ def _failure(exc: BaseException) -> ClaudeFailed:
     try:
         import anthropic
     except Exception:       # noqa: BLE001
-        return ClaudeFailed("AI could not be used.", detail=repr(exc))
+        return ClaudeFailed("Comply Agent could not be used.", detail=repr(exc))
     detail = f"{type(exc).__name__}: {exc}"[:500]
     if isinstance(exc, anthropic.AuthenticationError) or isinstance(exc, anthropic.PermissionDeniedError):
-        return ClaudeFailed("AI is not available: its credentials were not accepted. An administrator should check the AI setup.", detail=detail)
+        return ClaudeFailed("Comply Agent is not available: its credentials were not accepted. An administrator should check its setup.", detail=detail)
     if isinstance(exc, anthropic.RateLimitError):
-        return ClaudeFailed("AI is busy right now. Wait a minute and try again.", retryable=True, detail=detail)
+        return ClaudeFailed("Comply Agent is busy right now. Wait a minute and try again.", retryable=True, detail=detail)
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError)):
-        return ClaudeFailed("AI could not be reached. Check the connection and try again.", retryable=True, detail=detail)
+        return ClaudeFailed("Comply Agent could not be reached. Check the connection and try again.", retryable=True, detail=detail)
     if isinstance(exc, anthropic.BadRequestError):
         if "workspace" in str(exc).lower():
-            return ClaudeFailed("AI is not set up completely: its credentials need a workspace. An administrator should check the AI setup.", detail=detail)
-        return ClaudeFailed("AI could not process this request. If the document is very large, work on one section at a time.", detail=detail)
+            return ClaudeFailed("Comply Agent is not set up completely: its credentials need a workspace. An administrator should check its setup.", detail=detail)
+        return ClaudeFailed("Comply Agent could not process this request. If the document is very large, work on one section at a time.", detail=detail)
     if isinstance(exc, anthropic.APIStatusError) and getattr(exc, "status_code", 0) >= 500:
-        return ClaudeFailed("AI is temporarily unavailable. Try again shortly.", retryable=True, detail=detail)
-    return ClaudeFailed("AI could not be used for this request.", detail=detail)
+        return ClaudeFailed("Comply Agent is temporarily unavailable. Try again shortly.", retryable=True, detail=detail)
+    return ClaudeFailed("Comply Agent could not be used for this request.", detail=detail)
 
 
 def complete(*, use_case: str, system: Union[str, List[dict], None], messages: List[dict],

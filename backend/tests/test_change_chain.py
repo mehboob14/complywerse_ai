@@ -532,7 +532,7 @@ def test_taking_an_accepted_change_back_restores_what_it_replaced_and_is_refused
     reverted = world.http.post(world.api(f"/sessions/{s['id']}/messages/{first['id']}/ops/c1/revert")).json()
     assert "every year" in reverted["content"] and "every quarter" not in reverted["content"] and reverted["message"]["proposal"]["ops"][0]["status"] == "reverted"
     revisions = world.http.get(world.api(f"/sessions/{s['id']}/revisions")).json()["items"]
-    assert revisions[0]["author_type"] == "revert" and revisions[0]["summary"].startswith("Took back an AI change")
+    assert revisions[0]["author_type"] == "revert" and revisions[0]["summary"].startswith("Took back a Comply Agent change")
     again = world.http.post(world.api(f"/sessions/{s['id']}/messages/{first['id']}/ops/c1/revert"))
     assert again.status_code == 400 and "accepted" in again.json()["detail"]
 

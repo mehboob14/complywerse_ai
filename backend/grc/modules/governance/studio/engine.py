@@ -38,7 +38,7 @@ def friendly(exc: BaseException) -> str:
                         claude_client.ClaudeFailed, refs.ReferenceProblem, TurnProblem)):
         return str(exc)
     logger.exception("a studio turn failed")
-    return "Something went wrong while the AI was working. Try again; if it keeps happening, tell an administrator."
+    return "Something went wrong while Comply Agent was working. Try again; if it keeps happening, tell an administrator."
 
 
 # ── what comes back from the model ───────────────────────────────────────────
@@ -186,7 +186,7 @@ def chat_progress(db, msg):
 
     def show(p: claude_client.Progress) -> None:
         if p.phase != "writing":
-            step(p.phase, "The AI is reading your request" if p.phase == "reading" else "The AI is thinking it through",
+            step(p.phase, "Comply Agent is reading your request" if p.phase == "reading" else "Comply Agent is thinking it through",
                  detail=f"Protected {p.protected} value{'' if p.protected == 1 else 's'} (names, numbers, secrets) before sending" if p.protected and state["step"] is None else None)
             return
         data = p.data if isinstance(p.data, dict) else {}

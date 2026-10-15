@@ -306,7 +306,7 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
             if same or B.is_blank(now):
                 translated.append(B.Op(o["id"], "replace_all", markdown=markdown))
             else:
-                o["status"], o["why"] = "conflict", "The document was changed after the AI read it."
+                o["status"], o["why"] = "conflict", "The document was changed after Comply Agent read it."
                 conflicts += 1
             continue
         first = B.index_of(o["start"], len(base))
@@ -325,7 +325,7 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
             continue
         span = range(first, last + 1)
         if not all(i in where for i in span) or any(where[i + 1] != where[i] + 1 for i in span if i + 1 in span):
-            o["status"], o["why"] = "conflict", "The text it changes was edited after the AI read it."
+            o["status"], o["why"] = "conflict", "The text it changes was edited after Comply Agent read it."
             conflicts += 1
             continue
         translated.append(B.Op(o["id"], o["kind"], start=f"B{where[first] + 1}", end=f"B{where[last] + 1}", markdown=markdown))
@@ -341,7 +341,7 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
                 conflicts += 1
     if applied:
         rev = add_revision(db, s, B.render(new_blocks), author_type="ai", user_id=user_id,
-                           summary=(summary or ("The AI wrote the first draft" if auto and B.is_blank(now) else f"Accepted {len(applied)} AI change(s)")), message_id=msg.id)
+                           summary=(summary or ("Comply Agent wrote the first draft" if auto and B.is_blank(now) else f"Accepted {len(applied)} Comply Agent change(s)")), message_id=msg.id)
         for o in applied:                       # who accepted it, when, and what it replaced: the change chain reads this
             o["accepted_by"], o["accepted_at"], o["revision"] = user_id, _now().isoformat(), rev.number
             if o["id"] in replaced:
@@ -385,7 +385,7 @@ def revert_op(db, s, msg, op_id: str, user_id: Optional[int]) -> Dict[str, Any]:
         prior = db.query(StudioRevision).filter(StudioRevision.session_id == s.id, StudioRevision.number == int(op.get("revision") or 0) - 1).first()
         before_md = prior.content if prior is not None else (base_rev.content if base_rev else "")
         if _norm_doc(op["markdown"]) != _norm_doc(s.content):
-            raise Conflict("The document has been edited since the AI wrote it, so it cannot be taken back in one step. Restore a version instead.")
+            raise Conflict("The document has been edited since Comply Agent wrote it, so it cannot be taken back in one step. Restore a version instead.")
         new_md = before_md
     else:
         before_md = op.get("before_markdown")
@@ -424,7 +424,7 @@ def revert_op(db, s, msg, op_id: str, user_id: Optional[int]) -> Dict[str, Any]:
     if _norm_doc(new_md) == _norm_doc(s.content):
         raise StudioError("The document already reads as it did before this change.")
     what = (op.get("reason") or "").strip() or {"replace": "a reworded passage", "insert": "an addition", "delete": "a removal", "replace_all": "the first draft"}.get(kind, "a change")
-    add_revision(db, s, new_md, author_type="revert", user_id=user_id, summary=f"Took back an AI change: {what}"[:480], message_id=msg.id)
+    add_revision(db, s, new_md, author_type="revert", user_id=user_id, summary=f"Took back a Comply Agent change: {what}"[:480], message_id=msg.id)
     op["status"], op["reverted_by"], op["reverted_at"] = "reverted", user_id, _now().isoformat()
     proposal["ops"] = ops
     msg.proposal, msg.updated_at = proposal, _now()
@@ -580,7 +580,7 @@ def reap(db, s) -> None:
 
     for m in db.query(StudioMessage).filter(StudioMessage.session_id == s.id, StudioMessage.status == "working").all():
         if (m.updated_at or m.created_at) < _now() - STALE_AFTER:
-            m.status, m.stage, m.error = "error", None, "The AI was interrupted before it finished. Send your request again."
+            m.status, m.stage, m.error = "error", None, "Comply Agent was interrupted before it finished. Send your request again."
     db.commit()
 
 
@@ -599,7 +599,7 @@ def start_turn(db, s, user, text: str):
     if not text:
         raise StudioError("Write what you want done.")
     if _working(db, s):
-        raise StudioError("The AI is still working on the previous request.")
+        raise StudioError("Comply Agent is still working on the previous request.")
     db.add(StudioMessage(session_id=s.id, role="user", kind="chat", content=text, status="done", created_by=user.id))
     db.flush()
     msg = StudioMessage(session_id=s.id, role="assistant", kind="chat", status="working", stage="Starting", created_by=user.id, base_revision=s.revision_no)
@@ -614,7 +614,7 @@ def start_task(db, s, user, kind: str):
     from ....models import StudioMessage
 
     if _working(db, s):
-        raise StudioError("The AI is still working on the previous request.")
+        raise StudioError("Comply Agent is still working on the previous request.")
     msg = StudioMessage(session_id=s.id, role="assistant", kind=kind, status="working", stage="Starting", created_by=user.id, base_revision=s.revision_no)
     db.add(msg)
     db.commit()
@@ -997,7 +997,7 @@ def export_notes(db, s, fmt: str, settings: Dict[str, Any], pending_changes: int
                       "text": f"{left} placeholder{'s' if left != 1 else ''} still to be filled in. " + ("They stay as written in the text." if fmt == "md" else "They are highlighted in the file.")})
     if pending_changes:
         notes.append({"level": "info", "rule": "pending", "count": pending_changes,
-                      "text": f"{pending_changes} change{'s' if pending_changes != 1 else ''} proposed by the AI {'is' if pending_changes == 1 else 'are'} not accepted yet, so not in the file."})
+                      "text": f"{pending_changes} change{'s' if pending_changes != 1 else ''} proposed by Comply Agent {'is' if pending_changes == 1 else 'are'} not accepted yet, so not in the file."})
     if settings.get("watermark") and fmt in ("docx", "pdf", "html"):
         notes.append({"level": "info", "rule": "watermark", "text": f"Every page carries the watermark “{settings['watermark']}”. Turn it off in Instructions."})
     ins = s.instructions or {}

@@ -62,6 +62,7 @@ export default function StudioWorkspacePage() {
 
   // ── the document and its saving ────────────────────────────────────────────
   const editor = useRef<StudioEditorHandle>(null);
+  const issueMarks = useRef<DocMark[]>([]);                        // the checks' underlines, kept so a highlight can be added to them
   const latest = useRef('');
   const saved = useRef('');
   const revision = useRef(0);
@@ -204,7 +205,7 @@ export default function StudioWorkspacePage() {
       applyServerContent(r.content, r.revision);
       setMessage(r.message);
       setCompare((c) => (c?.type === 'preview' ? null : c));
-      if (r.conflicts) toast({ title: `${plural(r.conflicts, 'change')} could not be placed`, message: 'The text they change was edited after the AI read it. Ask again, or make the change yourself.', type: 'warning' });
+      if (r.conflicts) toast({ title: `${plural(r.conflicts, 'change')} could not be placed`, message: 'The text they change was edited after Comply Agent read it. Ask again, or make the change yourself.', type: 'warning' });
       if (r.accepted) { toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success' }); setJustAccepted(r.accepted); }
     } catch (e) { toast({ title: 'Could not accept', message: problemOf(e), type: 'error' }); }
   };
@@ -275,6 +276,7 @@ export default function StudioWorkspacePage() {
       const r = handle.rangeOf(i.quote, i.block);
       if (r) marks.push({ from: r.from, to: r.to, className: `studio-issue-${i.severity}`, title: i.message });
     }
+    issueMarks.current = marks;
     handle.setMarks(marks);
   }, []);
 
@@ -285,6 +287,14 @@ export default function StudioWorkspacePage() {
     setTimeout(() => {
       const h = editor.current;
       if (!h) return;
+      // highlight the item's block and its words (visible in View too, where a selection is not), on top of the checks' underlines
+      const text = issue.quote ? h.rangeOf(issue.quote, issue.block) : null;
+      const blocks = h.blockRanges();
+      const block = issue.block != null ? blocks[issue.block] : text ? blocks.find((b) => b.from <= text.from && text.to <= b.to) : undefined;
+      const focus: DocMark[] = [];
+      if (block) focus.push({ from: block.from, to: block.to, className: 'studio-focus-block', block: true });
+      if (text) focus.push({ from: text.from, to: text.to, className: 'studio-focus-text', title: issue.message });
+      h.setMarks([...issueMarks.current, ...focus]);
       if (issue.quote && h.findAndSelect(issue.quote, issue.block)) return;
       if (issue.block != null) h.goToBlock(issue.block);
     }, 60);
@@ -382,7 +392,7 @@ export default function StudioWorkspacePage() {
       {(saveState === 'conflict' || saveState === 'error') && (
         <div className="flex flex-wrap items-center gap-3 border-b border-[#f1b5b5] bg-[#fdf3f3] px-4 py-2 text-sm text-[#8a1c1c]" role="alert">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          <span className="min-w-0 flex-1">{saveState === 'conflict' ? 'This document changed in another window, or an AI change was accepted there. Your latest typing is not saved yet.' : 'Your latest typing could not be saved.'}</span>
+          <span className="min-w-0 flex-1">{saveState === 'conflict' ? 'This document changed in another window, or a Comply Agent change was accepted there. Your latest typing is not saved yet.' : 'Your latest typing could not be saved.'}</span>
           {saveState === 'conflict' && <button type="button" onClick={() => reload()} className="rounded-md bg-white px-2.5 py-1 text-xs font-semibold text-[#8a1c1c] ring-1 ring-[#f1b5b5] hover:bg-[#fdf3f3]">Load the latest (lose my typing)</button>}
           {saveState === 'conflict' && <button type="button" onClick={keepMine} className="rounded-md bg-[#9b1c1c] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#7f1616]">Keep mine</button>}
           {saveState === 'error' && <button type="button" onClick={() => flush()} className="rounded-md bg-[#9b1c1c] px-2.5 py-1 text-xs font-semibold text-white hover:bg-[#7f1616]">Try again</button>}

@@ -390,6 +390,8 @@ export const studioApi = {
   lastAiCheck: (id: number) => get<{ message: Message | null; stale?: boolean }>(`/sessions/${id}/checks/ai`),
   fix: (id: number, fix: Record<string, unknown>, message?: string) => post<{ revision: number; content: string }>(`/sessions/${id}/checks/fix`, { fix, message }),
   fixAll: (id: number, kinds?: string[]) => post<{ fixed: number; revision: number; content: string }>(`/sessions/${id}/checks/fix-all`, { kinds }),
+  /** every fix the checks offer, Comply Agent's suggestions and added sections too, in one revision; `skipped`: fixes that no longer fit */
+  applyAll: (id: number) => post<{ fixed: number; skipped: number; revision: number; content: string }>(`/sessions/${id}/checks/fix-all`, { all: true }),
 
   revisions: (id: number) => get<{ items: Revision[]; base_label: string | null }>(`/sessions/${id}/revisions`),
   diff: (id: number, from: number, to?: number) => get<Redline>(`/sessions/${id}/diff`, { from, to }),

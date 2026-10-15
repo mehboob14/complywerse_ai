@@ -102,6 +102,7 @@ class FixIn(BaseModel):
 
 class FixAllIn(BaseModel):
     kinds: Optional[List[str]] = None
+    all: bool = False                               # every fix offered, Comply Agent's suggestions and added sections too
 
 
 class CompareIn(BaseModel):
@@ -530,11 +531,15 @@ def run_checks(session_id: int, ai: bool = False, db: Session = Depends(get_db),
 def last_ai_check(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """The latest finished AI check, and whether the document has changed since."""
     s = _session(db, session_id, user)
-    m = (db.query(StudioMessage).filter(StudioMessage.session_id == s.id, StudioMessage.kind == "checks", StudioMessage.status == "done")
-         .order_by(StudioMessage.id.desc()).first())
+    m = _last_ai_check(db, s)
     if m is None:
         return {"message": None}
     return {"message": service.message_view(m), "stale": (m.proposal or {}).get("revision") != s.revision_no}
+
+
+def _last_ai_check(db: Session, s: StudioSession) -> Optional[StudioMessage]:
+    return (db.query(StudioMessage).filter(StudioMessage.session_id == s.id, StudioMessage.kind == "checks", StudioMessage.status == "done")
+            .order_by(StudioMessage.id.desc()).first())
 
 
 @router.post("/sessions/{session_id}/checks/fix", dependencies=[Depends(require_studio)])
@@ -554,10 +559,23 @@ _SIMPLE_FIXES = ("replace", "set_level", "normalize_space", "strip_trailing_punc
 @router.post("/sessions/{session_id}/checks/fix-all", dependencies=[Depends(require_studio)])
 def apply_all_fixes(session_id: int, body: FixAllIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """Every simple fix (spacing, repeated words, heading levels ...) the checks offer, in one revision. Fixes that add or move
-    sections are left for the person."""
+    sections are left for the person, unless ``all``: then every fix offered is applied in one revision ("Apply all"), the
+    suggestions of Comply Agent's last check too when it read this very text, and ``skipped`` counts those that no longer fit."""
     s = _session(db, session_id, user)
     ctx = _check_context(db, s)
     issues = checks.run_deterministic(s.content, structure=ctx["structure"], instructions=ctx["instructions"], title=ctx["title"], logo_ok=ctx["logo_ok"])
+    if body.all:
+        wanted = lambda i: bool(i.get("fix")) and (not body.kinds or i.get("kind") in body.kinds)       # noqa: E731
+        fixes: List[Dict[str, Any]] = []
+        ai = _last_ai_check(db, s)
+        if ai is not None and (ai.proposal or {}).get("revision") == s.revision_no:
+            fixes += [i["fix"] for i in (ai.proposal or {}).get("issues") or [] if wanted(i)]
+        fixes += [i["fix"] for i in issues if wanted(i)]
+        content, done, skipped = checks.apply_fixes(s.content, fixes)
+        if done:
+            service.add_revision(db, s, content, author_type="user", user_id=user.id, summary=f"Applied {done} suggested fix{'' if done == 1 else 'es'}")
+            db.commit()
+        return {"fixed": done, "skipped": skipped, "revision": s.revision_no, "content": s.content}
     content, done = s.content, 0
     for issue in issues:
         fix = issue.get("fix")

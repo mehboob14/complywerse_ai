@@ -130,6 +130,21 @@ def test_the_entity_name_and_the_logo_are_enforced():
     assert "logo_missing" not in rules(run(md, instructions={"logo_required": True}, logo_ok=True))
 
 
+def test_every_fix_at_once_is_applied_from_the_end_so_no_fix_moves_a_block_another_fix_points_at():
+    md = "# Title\n\n## 1. Purpose\n\nThe the purpose.\n\n## 3. Scope\n\nAll  staff.\n"
+    fixes = [
+        {"type": "insert_after", "after_block": 2, "markdown": "## Roles\n\nA."},
+        {"type": "insert_after", "after_block": 2, "markdown": "## Duties\n\nB."},
+        {"type": "replace", "block": 2, "find": "The the", "replace": "The", "occurrence": 0},
+        {"type": "normalize_space", "block": 4},
+        {"type": "replace", "block": 2, "find": "nowhere", "replace": "x", "occurrence": 0},       # does not fit the text: skipped
+    ]
+    out, applied, skipped = C.apply_fixes(md, fixes)
+    assert (applied, skipped) == (4, 1)
+    assert out.index("## Roles") < out.index("## Duties") < out.index("## 3. Scope")            # two additions in the order they were offered
+    assert "The purpose." in out and "All staff." in out                                       # the later blocks were fixed where they were
+
+
 def test_issue_ids_are_unique_and_the_worst_come_first():
     issues = run("# T\n\n[[a]] [[b]] [[c]]\n\nthe the\n\nthe the\n")
     ids = [i["id"] for i in issues]

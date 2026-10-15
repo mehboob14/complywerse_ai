@@ -404,6 +404,31 @@ def summary(issues: Sequence[Dict[str, Any]]) -> Dict[str, Any]:
 
 
 # ── fixes ────────────────────────────────────────────────────────────────────
+def _fix_place(fix: Dict[str, Any]) -> float:
+    """Where a fix acts, for ordering: its block, between two blocks for an insertion, before everything for a renumbering."""
+    if fix.get("type") == "renumber":
+        return float("-inf")
+    if fix.get("type") == "insert_after":
+        return float(fix.get("after_block", -1)) + 0.5
+    return float(fix.get("block", -1))
+
+
+def apply_fixes(markdown: str, fixes: Sequence[Dict[str, Any]]) -> tuple:
+    """Every fix at once, all found on the same text: from the end of the document to its start, so a fix never moves a block
+    another fix points at (an insertion only moves the blocks after it, which are done by then; two insertions at the same place
+    keep the order they were listed in); renumbering last. A fix that no longer fits (the same words were already changed by
+    another fix) is skipped. Returns ``(markdown, applied, skipped)``."""
+    order = sorted(range(len(fixes)), key=lambda k: (_fix_place(fixes[k]), k), reverse=True)
+    applied = skipped = 0
+    for k in order:
+        new = apply_fix(markdown, fixes[k])
+        if new is None or new == markdown:
+            skipped += 1
+            continue
+        markdown, applied = new, applied + 1
+    return markdown, applied, skipped
+
+
 def apply_fix(markdown: str, fix: Dict[str, Any]) -> Optional[str]:
     """The Markdown after a fix, or None when the fix does not fit (the text moved or changed). Fixes touch one block."""
     blocks = B.parse(markdown)

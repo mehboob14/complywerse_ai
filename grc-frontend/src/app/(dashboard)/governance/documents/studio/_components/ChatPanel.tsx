@@ -123,7 +123,7 @@ function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
           </button>
           {op.status === 'pending' && op.kind !== 'delete' && (
             <button type="button" onClick={() => setEditing((v) => !v)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#0b6b58] hover:bg-[#e6f4f1]">
-              <Pencil className="h-3.5 w-3.5" /> {editing ? 'Use the AI’s wording' : 'Edit first'}
+              <Pencil className="h-3.5 w-3.5" /> {editing ? 'Use Comply Agent’s wording' : 'Edit first'}
             </button>
           )}
         </div>
@@ -140,7 +140,7 @@ function Sources({ used, onShow }: { used: ReferenceUsed[]; onShow: (key: string
     <div className="mt-2 rounded-lg border border-[#d5dbe1] bg-[#f8fafb]">
       <button type="button" onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-1.5 px-2.5 py-1.5 text-left text-xs font-semibold text-[#3f4b58]" aria-expanded={open}>
         {open ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-        <BookOpen className="h-3.5 w-3.5" /> What the AI relied on ({used.length})
+        <BookOpen className="h-3.5 w-3.5" /> What Comply Agent relied on ({used.length})
         {bad > 0 && <span className="ml-auto inline-flex items-center gap-1 text-[#8a6100]"><AlertTriangle className="h-3.5 w-3.5" /> {plural(bad, 'quote')} not found</span>}
       </button>
       {open && (
@@ -221,10 +221,11 @@ function Bubble({ message, props, lastUser }: { message: Message; props: ChatPan
     <div className="flex gap-2">
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#d6f3ec] text-[#0b6b58]" aria-hidden><Sparkles className="h-3.5 w-3.5" /></span>
       <div className="min-w-0 flex-1">
+        <p className="mb-0.5 text-[11px] font-semibold text-[#0b6b58]">Comply Agent</p>
         {message.status === 'working' && <LiveTurn message={message} />}
         {message.status === 'error' && (
           <div className="rounded-2xl rounded-tl-sm border border-[#f1b5b5] bg-[#fdf3f3] px-3.5 py-2 text-sm text-[#8a1c1c]" role="alert">
-            {message.error || 'The AI could not answer.'}
+            {message.error || 'Comply Agent could not answer.'}
             {lastUser && <button type="button" onClick={() => props.onSend(lastUser)} className="ml-2 font-semibold underline">Try again</button>}
           </div>
         )}
@@ -241,7 +242,7 @@ function Bubble({ message, props, lastUser }: { message: Message; props: ChatPan
             <Proposal message={message} props={props} />
             {message.questions.length > 0 && (
               <div className="mt-2 text-xs text-[#586472]">
-                <p className="font-semibold text-[#26323d]">The AI is asking:</p>
+                <p className="font-semibold text-[#26323d]">Comply Agent is asking:</p>
                 <div className="mt-1 flex flex-wrap gap-1.5">
                   {message.questions.map((q, i) => <span key={i} className="rounded-full bg-[#eef1f4] px-2.5 py-1 text-[#26323d]">{q}</span>)}
                 </div>
@@ -300,8 +301,8 @@ export default function ChatPanel(props: ChatPanelProps) {
     <div className="flex h-full min-h-0 flex-col">
       {!aiConfigured && (
         <div className="m-3 rounded-lg border border-[#f0cf7a] bg-[#fffbed] p-3 text-xs text-[#6b4e00]" role="status">
-          <p className="font-semibold">The AI is not connected yet.</p>
-          <p className="mt-0.5">Ask your administrator to add the AI key. The editor, checks, comparison of versions and export all work without it.</p>
+          <p className="font-semibold">Comply Agent is not connected yet.</p>
+          <p className="mt-0.5">Ask your administrator to connect Comply Agent. The editor, checks, comparison of versions and export all work without it.</p>
         </div>
       )}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3" aria-live="polite"
@@ -309,7 +310,7 @@ export default function ChatPanel(props: ChatPanelProps) {
         {chat.length === 0 && (
           <div className="rounded-lg border border-dashed border-[#c5ccd3] p-4 text-center text-sm text-[#586472]">
             <Sparkles className="mx-auto mb-1 h-5 w-5 text-[#0f766e]" />
-            <p className="font-medium text-[#26323d]">Tell the AI what you want.</p>
+            <p className="font-medium text-[#26323d]">Tell Comply Agent what you want.</p>
             <p className="mt-1 text-xs">It proposes changes; nothing is written into your document until you accept it.</p>
             <p className="mt-2 text-xs">
               Add what it should lean on in{' '}
@@ -339,8 +340,8 @@ export default function ChatPanel(props: ChatPanelProps) {
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); } }}
             rows={2}
             disabled={!aiConfigured}
-            aria-label="Message to the AI"
-            placeholder={aiConfigured ? 'Ask for a draft, a rewrite, a new section, a table …' : 'The AI is not connected yet'}
+            aria-label="Message to Comply Agent"
+            placeholder={aiConfigured ? 'Ask for a draft, a rewrite, a new section, a table …' : 'Comply Agent is not connected yet'}
             className="min-h-[2.75rem] flex-1 resize-y rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0] disabled:bg-[#f1f3f5]"
           />
           <button type="button" onClick={() => void submit()} disabled={!text.trim() || working || !aiConfigured}

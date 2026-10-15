@@ -146,7 +146,7 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-sm font-semibold text-[#1f2933]">Instructions</h3>
-          <p className="mt-0.5 text-xs text-[#586472]">The AI follows these in every answer, and the checks verify them.</p>
+          <p className="mt-0.5 text-xs text-[#586472]">Comply Agent follows these in every answer, and the checks verify them.</p>
         </div>
         <span className="text-[11px] text-[#586472]" role="status">{saved === 'saving' ? 'Saving…' : saved === 'saved' ? <span className="inline-flex items-center gap-1 text-[#0a5a38]"><Check className="h-3 w-3" /> Saved</span> : ''}</span>
       </div>
@@ -216,7 +216,7 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
         )}
       </section>
 
-      <Field label="Focus areas" hint="Anything the AI should give particular attention to, in your own words.">
+      <Field label="Focus areas" hint="Anything Comply Agent should give particular attention to, in your own words.">
         <textarea value={draft.focus_areas ?? ''} onChange={(e) => change({ focus_areas: e.target.value })} rows={3} placeholder="e.g. Remote working, third-party access, evidence the auditors will ask for" className={inputClass} />
       </Field>
 

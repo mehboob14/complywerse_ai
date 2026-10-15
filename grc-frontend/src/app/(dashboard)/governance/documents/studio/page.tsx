@@ -218,7 +218,7 @@ function CompareDocuments({ onOpen }: { onOpen: (s: Session, compareWith: Librar
     onError: (e) => toast({ title: 'Could not compare them', message: problemOf(e), type: 'error' }),
   });
   return (
-    <Card icon={GitCompare} title="Compare two documents" hint="See every difference as a redline, and ask the AI which differences matter.">
+    <Card icon={GitCompare} title="Compare two documents" hint="See every difference as a redline, and ask Comply Agent which differences matter.">
       <div className="space-y-2">
         {[{ label: 'First document', value: a, set: setA, other: b }, { label: 'Compare it with', value: b, set: setB, other: a }].map((slot) => (
           <div key={slot.label}>
@@ -314,9 +314,9 @@ export default function StudioHomePage() {
     <div className="mx-auto max-w-6xl space-y-6">
       <header>
         <h1 className="flex items-center gap-2 text-xl font-semibold text-[#1f2933]"><Sparkles className="h-5 w-5 text-[#0f766e]" /> AI Studio</h1>
-        <p className="mt-1 max-w-3xl text-sm text-[#586472]">Draft, edit, check and compare documents with an AI assistant. You choose what it leans on, it cites what it used, and nothing it proposes is written into your document until you accept it.</p>
+        <p className="mt-1 max-w-3xl text-sm text-[#586472]">Draft, edit, check and compare documents with Comply Agent. You choose what it leans on, it cites what it used, and nothing it proposes is written into your document until you accept it.</p>
         {status.data.ai_configured === false && (
-          <p className="mt-3 rounded-lg border border-[#f0cf7a] bg-[#fffbed] p-3 text-sm text-[#6b4e00]" role="status">The AI is not connected yet, so chat and the AI check are switched off. The editor, the other checks, comparing versions and export work now.</p>
+          <p className="mt-3 rounded-lg border border-[#f0cf7a] bg-[#fffbed] p-3 text-sm text-[#6b4e00]" role="status">Comply Agent is not connected yet, so chat and Comply Agent’s check are switched off. The editor, the other checks, comparing versions and export work now.</p>
         )}
       </header>
 

@@ -175,7 +175,7 @@ export function SinceApproved({ documentId, onShow }: { documentId: number; onSh
       <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white text-[#0b6b58] ring-1 ring-inset ring-primary-100"><GitCompare className="h-4 w-4" aria-hidden /></span>
       <span className="min-w-0 flex-1">
         <span className="font-semibold">Since {info.approved ? 'the last approved version' : 'the original'} (v{info.base.number}):</span>{' '}
-        {plural(info.changes, 'change')} in {plural(info.versions, 'version')}{info.ai ? `, ${info.ai} AI-assisted` : ''}
+        {plural(info.changes, 'change')} in {plural(info.versions, 'version')}{info.ai ? `, ${info.ai} by Comply Agent` : ''}
         <span className="ml-2 inline-flex translate-y-0.5 items-center align-middle">{info.people.slice(0, 4).map((p, i) => <span key={p} className={i ? '-ml-1.5' : ''}><InitialsAvatar name={p} size="sm" /></span>)}</span>
       </span>
       <button type="button" onClick={() => onShow(info.base.id)}
