@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
-import { DOC_TYPE_LABEL, isConflict, problemOf, studioApi, type AnswerItem, type Issue, type Message, type Session } from '@/lib/studio/api';
+import { DOC_TYPE_LABEL, isConflict, problemOf, studioApi, type AnswerItem, type Attachment, type Issue, type Message, type Session } from '@/lib/studio/api';
 import { countPlaceholders, countWords, plural } from '@/lib/studio/text';
 import StudioEditor, { type EditorMode, type StudioEditorHandle } from '../_components/StudioEditor';
 import ChatPanel from '../_components/ChatPanel';
@@ -187,13 +187,13 @@ export default function StudioWorkspacePage() {
 
   const setMessage = (m: Message) => qc.setQueryData<{ items: Message[] }>(['studio', 'messages', id], (old) => ({ items: (old?.items ?? []).map((x) => (x.id === m.id ? m : x)) }));
 
-  const send = async (t: string, answers?: { reply_to: number; answers: AnswerItem[]; decide?: boolean }) => {
+  const send = async (t: string, answers?: { reply_to: number; answers: AnswerItem[]; decide?: boolean }, files?: Attachment[]) => {
     await flush();
     try {
-      const m = await studioApi.send(id, t, answers);
-      const mine: Message = { id: -Date.now(), role: 'user', kind: 'chat', content: t || 'My answers', status: 'done', stage: null, error: null, proposal: null, references_used: [], questions: [],
+      const m = await studioApi.send(id, t, { ...(answers ?? {}), ...(files?.length ? { attachments: files.map((f) => f.id) } : {}) });
+      const mine: Message = { id: -Date.now(), role: 'user', kind: 'chat', content: t || (answers ? 'My answers' : ''), status: 'done', stage: null, error: null, proposal: null, references_used: [], questions: [],
                               answers: answers ? { reply_to: answers.reply_to, items: answers.answers, decide: answers.decide ? ['all'] : [] } : null, notes: [], base_revision: null, usage: null,
-                              created_at: new Date().toISOString() };
+                              attachments: files ?? [], created_at: new Date().toISOString() };
       qc.setQueryData<{ items: Message[] }>(['studio', 'messages', id], (old) => ({ items: [...(old?.items ?? []), mine, m] }));
       qc.invalidateQueries({ queryKey: ['studio', 'messages', id] });
     } catch (e) {
@@ -447,7 +447,8 @@ export default function StudioWorkspacePage() {
             <div className={`h-full ${tab === 'chat' ? 'block' : 'hidden'}`}>
               <ChatPanel
                 session={session} messages={items} aiConfigured={aiConfigured} busy={working}
-                onSend={send} onAnswer={answer} onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges}
+                onSend={(t, files) => send(t, undefined, files)} onAnswer={answer} onReferencesChanged={onSessionChanged}
+                onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges}
                 onPreview={(mid) => setCompare(mid == null ? null : { type: 'preview', messageId: mid })} previewing={previewing}
                 onOpenTab={(t) => setTab(t)} onShowReference={(k) => { setFocusRef(k); setTab('references'); }}
               />

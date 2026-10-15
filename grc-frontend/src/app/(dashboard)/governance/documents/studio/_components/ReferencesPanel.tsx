@@ -291,8 +291,8 @@ export default function ReferencesPanel({ session, onChanged, focusKey }: Refere
         )}
         {tab === 'upload' && (
           <div className="space-y-2">
-            <p className="text-xs text-[#586472]">A Word, PDF, text, Markdown or HTML file to use as a reference. It is kept with this session only.</p>
-            <input ref={file} type="file" hidden accept=".docx,.pdf,.txt,.md,.markdown,.html,.htm" onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
+            <p className="text-xs text-[#586472]">Any file to use as a reference: Word, PDF, Excel, PowerPoint, text or data, or a picture of text (read on the server). It is kept with this session only. You can also attach files in the chat.</p>
+            <input ref={file} type="file" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) upload.mutate(f); e.target.value = ''; }} />
             <button type="button" disabled={upload.isPending} onClick={() => file.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#7b8794] bg-white px-3 py-3 text-sm font-medium text-[#26323d] hover:border-[#0f766e] hover:bg-[#f3fbf9] disabled:opacity-50">
               {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Choose a file
             </button>

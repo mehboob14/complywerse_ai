@@ -185,3 +185,126 @@ def import_file(path: str, filename: str, *, twin: bool = False) -> Imported:
     if ext in (".html", ".htm"):
         return Imported(html_to_markdown(raw), "html", ["Formatting that Markdown cannot hold (colours, fonts, layout) was dropped."])
     return Imported(text_to_markdown(raw), "text")
+
+
+# ── any file attached to the conversation ───────────────────────────────────
+_DATA = (".csv", ".tsv", ".json", ".xml", ".yaml", ".yml", ".log", ".ini", ".cfg", ".conf", ".toml", ".sql", ".py", ".js", ".ts", ".ps1", ".sh")
+_PICTURES = (".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp")
+_RESAVE = {".doc": "Word (.docx)", ".rtf": "Word (.docx)", ".odt": "Word (.docx)", ".pages": "Word (.docx)", ".xls": "Excel (.xlsx)",
+           ".ods": "Excel (.xlsx)", ".numbers": "Excel (.xlsx)", ".ppt": "PowerPoint (.pptx)", ".odp": "PowerPoint (.pptx)", ".key": "PowerPoint (.pptx)"}
+_ROWS = 2000                         # rows read from each sheet of a workbook
+
+
+def read_attachment(path: str, filename: str) -> Imported:
+    """The text of any file attached to the conversation, for Comply Agent to read: what ``import_file`` opens (a scanned PDF is
+    read there by OCR), and also workbooks, slides, data and code files and pictures of text. Pictures are read on this server
+    (OCR): no image is ever sent to the AI."""
+    ext = os.path.splitext(filename or path)[1].lower()
+    if ext in _RESAVE:
+        raise ImportProblem(f"This older file format cannot be read here. Save it as {_RESAVE[ext]} or PDF and attach it again.")
+    if ext in ALLOWED_EXTENSIONS:
+        return import_file(path, filename)
+    with open(path, "rb") as f:
+        data = f.read()
+    if ext in (".xlsx", ".xlsm"):
+        return Imported(_workbook(data), "xlsx")
+    if ext == ".pptx":
+        return Imported(_slides(data), "pptx")
+    if ext in _PICTURES:
+        return Imported(text_to_markdown(_ocr_picture(data)), "image", ["The text of this picture was read on this server by OCR, so check names and numbers."])
+    if ext in _DATA or (b"\x00" not in data[:4096] and _texty(data)):
+        return Imported(decode(data), "text")
+    raise ImportProblem("Comply Agent cannot read this kind of file. Attach a document, a workbook, slides, a PDF, a text file or a picture of text.")
+
+
+def _texty(data: bytes) -> bool:
+    """Whether a file of unknown type is text (almost every character printable)."""
+    sample = decode(data[:4096])
+    return bool(sample.strip()) and sum(ch.isprintable() or ch in "\r\n\t" for ch in sample) >= 0.97 * len(sample)
+
+
+def _workbook(data: bytes) -> str:
+    """Each sheet of a workbook as a heading and a table (values, not formulas)."""
+    import io
+
+    import openpyxl
+
+    try:
+        book = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+    except Exception as exc:          # noqa: BLE001 - not a workbook openpyxl can open
+        raise ImportProblem("This workbook could not be opened. Save it again as .xlsx and attach it again.") from exc
+    out: List[str] = []
+    for sheet in book.worksheets:
+        rows: List[List[str]] = []
+        for row in sheet.iter_rows(values_only=True):
+            cells = ["" if c is None else re.sub(r"\s+", " ", str(c)).strip()[:500] for c in row]
+            if any(cells):
+                rows.append(cells)
+            if len(rows) > _ROWS:
+                break
+        if not rows:
+            continue
+        width = max(max((i + 1 for i, c in enumerate(r) if c), default=0) for r in rows)
+        rows = [(r + [""] * width)[:width] for r in rows]
+        out.append(f"## {escape_inline(sheet.title)}")
+        out.append(table_markdown(rows[:_ROWS]))
+        if len(rows) > _ROWS:
+            out.append(f"(Only the first {_ROWS} rows of this sheet were read.)")
+    book.close()
+    if not out:
+        raise ImportProblem("There is no text in this workbook to use.")
+    return "\n\n".join(out) + "\n"
+
+
+def _slides(data: bytes) -> str:
+    """The text of each slide of a PowerPoint file, in order (read from its XML; speaker notes are left out)."""
+    import io
+    import zipfile
+    import xml.etree.ElementTree as ET
+
+    ns = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+    try:
+        z = zipfile.ZipFile(io.BytesIO(data))
+    except zipfile.BadZipFile as exc:
+        raise ImportProblem("This presentation could not be opened. Save it again as .pptx and attach it again.") from exc
+    names = sorted((n for n in z.namelist() if re.fullmatch(r"ppt/slides/slide\d+\.xml", n)), key=lambda n: int(re.search(r"\d+", n).group()))
+    out: List[str] = []
+    for n, name in enumerate(names, start=1):
+        paras = ["".join(t.text or "" for t in p.iter(f"{ns}t")).strip() for p in ET.fromstring(z.read(name)).iter(f"{ns}p")]
+        paras = [escape_inline(p) for p in paras if p]
+        if paras:
+            out.append(f"## Slide {n}\n\n" + "\n\n".join(paras))
+    if not out:
+        raise ImportProblem("There is no text in this presentation to use.")
+    return "\n\n".join(out) + "\n"
+
+
+def _tesseract():
+    from ...compliance_plugins.pdf_ingest.extract_pages import _resolve_tesseract_cmd
+
+    cmd = _resolve_tesseract_cmd()
+    if not cmd:
+        raise ImportProblem("Pictures and scans cannot be read on this server yet (no OCR is installed). Attach the file with its text instead.")
+    import pytesseract
+
+    pytesseract.pytesseract.tesseract_cmd = cmd
+    return pytesseract
+
+
+def _ocr_picture(data: bytes) -> str:
+    import io
+
+    from PIL import Image
+
+    from ...compliance_plugins.pdf_ingest.extract_pages import _preprocess_for_ocr
+
+    pytesseract = _tesseract()
+    try:
+        image = Image.open(io.BytesIO(data))
+        image.load()
+    except Exception as exc:          # noqa: BLE001 - not a picture PIL can open
+        raise ImportProblem("This picture could not be opened.") from exc
+    text = pytesseract.image_to_string(_preprocess_for_ocr(image.convert("RGB")), config="--oem 3 --psm 6") or ""
+    if len(text.split()) < 3:
+        raise ImportProblem("No text could be read in this picture.")
+    return text

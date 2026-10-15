@@ -6,17 +6,25 @@
  * AI relied on is listed with each quoted passage checked against the reference it names.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Eye, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Pencil, Send, Sparkles, Undo2, Wand2, X, XCircle } from 'lucide-react';
-import type { AnswerItem, Message, Op, Question, ReferenceUsed, Session } from '@/lib/studio/api';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Eye, FileText, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Paperclip, Pencil, Send, Sparkles, Undo2, Wand2, X, XCircle } from 'lucide-react';
+import { problemOf, studioApi, type AnswerItem, type Attachment, type Message, type Op, type Question, type ReferenceUsed, type Session } from '@/lib/studio/api';
 import { plural, wordDiff } from '@/lib/studio/text';
 import LiveTurn from './LiveTurn';
+
+/** how the server ends a request sent with files (service.ATTACHED): the bubble shows the files as chips instead */
+const ATTACHED = '\n\nAttached with this message: ';
 
 export interface ChatPanelProps {
   session: Session;
   messages: Message[];
   aiConfigured: boolean;
   busy: boolean;
-  onSend: (text: string) => Promise<void> | void;
+  /** send a request, with the files attached to it in the chat (references uploaded from the paperclip) */
+  onSend: (text: string, attachments?: Attachment[]) => Promise<void> | void;
+  /** the session's references changed (a file was attached or removed in the chat) */
+  onReferencesChanged: () => void | Promise<void>;
   onAccept: (messageId: number, opIds: string[], overrides?: Record<string, string>) => Promise<void>;
   onReject: (messageId: number, opIds: string[]) => Promise<void>;
   /** take a change that was accepted back out of the document */
@@ -327,14 +335,73 @@ function Questions({ message, props, answerable }: { message: Message; props: Ch
   );
 }
 
+// a status cell of a gap analysis ("Missing", "Partly (conflicts)"), coloured so the gaps stand out: a short cell that starts with a status
+const STATUS_TONE: [RegExp, string][] = [
+  [/^(not covered|not met|missing|gap|absent|non-compliant)\b/i, 'bg-[#fde2e2] text-[#9b1c1c]'],
+  [/^(partly|partial|partially|in progress)\b/i, 'bg-[#fff1cc] text-[#7a5200]'],
+  [/^(covered|met|compliant|in place|aligned|fully covered)\b/i, 'bg-[#dcf5e8] text-[#0a5a38]'],
+];
+const toneOf = (cell: unknown) =>
+  typeof cell === 'string' && cell.trim().split(/\s+/).length <= 4 ? STATUS_TONE.find(([re]) => re.test(cell.trim()))?.[1] : undefined;
+
+/** Comply Agent's answer: Markdown (lists, tables of a gap analysis, short headings). No HTML is rendered from it. */
+function Markdown({ text }: { text: string }) {
+  return (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+      p: ({ children }) => <p className="my-1.5 first:mt-0 last:mb-0">{children}</p>,
+      ul: ({ children }) => <ul className="my-1.5 list-disc space-y-0.5 pl-5">{children}</ul>,
+      ol: ({ children }) => <ol className="my-1.5 list-decimal space-y-0.5 pl-5">{children}</ol>,
+      h1: ({ children }) => <h4 className="mb-1 mt-3 text-[13px] font-semibold text-[#1f2933] first:mt-0">{children}</h4>,
+      h2: ({ children }) => <h4 className="mb-1 mt-3 text-[13px] font-semibold text-[#1f2933] first:mt-0">{children}</h4>,
+      h3: ({ children }) => <h5 className="mb-1 mt-2.5 text-[12.5px] font-semibold text-[#1f2933] first:mt-0">{children}</h5>,
+      h4: ({ children }) => <h5 className="mb-1 mt-2.5 text-[12.5px] font-semibold text-[#1f2933] first:mt-0">{children}</h5>,
+      strong: ({ children }) => <strong className="font-semibold text-[#1f2933]">{children}</strong>,
+      a: ({ children, href }) => <a href={href} target="_blank" rel="noreferrer" className="font-medium text-[#0b6b58] underline">{children}</a>,
+      blockquote: ({ children }) => <blockquote className="my-1.5 border-l-2 border-[#9fd9bd] pl-2.5 text-[#3f4b58]">{children}</blockquote>,
+      code: ({ children }) => <code className="rounded bg-[#eef1f4] px-1 py-px text-[12px] text-[#26323d]">{children}</code>,
+      table: ({ children }) => <div className="my-2 overflow-x-auto rounded-lg border border-[#d5dbe1]"><table className="min-w-full border-collapse text-[12px]">{children}</table></div>,
+      thead: ({ children }) => <thead className="bg-[#eef6f4]">{children}</thead>,
+      th: ({ children }) => <th className="border-b border-[#d5dbe1] px-2.5 py-1.5 text-left font-semibold text-[#26323d]">{children}</th>,
+      td: ({ children }) => {
+        const tone = toneOf(children);
+        return (
+          <td className="border-t border-[#e6eaee] px-2.5 py-1.5 align-top text-[#26323d]">
+            {tone ? <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{children}</span> : children}
+          </td>
+        );
+      },
+    }}>
+      {text}
+    </ReactMarkdown>
+  );
+}
+
+/** The files sent with a request, on the person's bubble; each opens its reference. */
+function FileChips({ files, onShow }: { files: Attachment[]; onShow: (key: string) => void }) {
+  return (
+    <ul className="mb-1 flex flex-wrap gap-1" aria-label="Attached files">
+      {files.map((f) => (
+        <li key={f.id}>
+          <button type="button" onClick={() => onShow(f.key)} title={`Open ${f.key} in References`}
+            className="inline-flex max-w-[16rem] items-center gap-1 rounded-md bg-white/15 px-1.5 py-0.5 text-[11px] text-white hover:bg-white/25">
+            <FileText className="h-3 w-3 shrink-0" aria-hidden /> <span className="truncate">{f.title}</span> <span className="shrink-0 text-[#cde9e3]">{f.key}</span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function Bubble({ message, props, lastUser, answerable }: { message: Message; props: ChatPanelProps; lastUser: string | null; answerable: boolean }) {
   if (message.role === 'user') {
     const given = message.answers;
+    const files = message.attachments ?? [];
     if (given && (given.items.length > 0 || (given.decide?.length ?? 0) > 0)) {
-      const own = message.content.split('Please continue with my request.')[1]?.trim();
+      const own = message.content.split('Please continue with my request.')[1]?.split(ATTACHED)[0].trim();
       return (
         <div className="flex justify-end">
           <div className="max-w-[88%] rounded-2xl rounded-br-sm bg-[#0f4c5c] px-3.5 py-2 text-sm text-white">
+            {files.length > 0 && <FileChips files={files} onShow={props.onShowReference} />}
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[#cde9e3]">My answers</p>
             <ul className="mt-1 space-y-1">
               {given.items.map((a) => (
@@ -347,9 +414,13 @@ function Bubble({ message, props, lastUser, answerable }: { message: Message; pr
         </div>
       );
     }
+    const typed = message.content.split(ATTACHED)[0];
     return (
       <div className="flex justify-end">
-        <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[#0f4c5c] px-3.5 py-2 text-sm text-white">{message.content}</div>
+        <div className="max-w-[88%] rounded-2xl rounded-br-sm bg-[#0f4c5c] px-3.5 py-2 text-sm text-white">
+          {files.length > 0 && <FileChips files={files} onShow={props.onShowReference} />}
+          {typed && <p className="whitespace-pre-wrap">{typed}</p>}
+        </div>
       </div>
     );
   }
@@ -367,7 +438,7 @@ function Bubble({ message, props, lastUser, answerable }: { message: Message; pr
         )}
         {message.status === 'done' && (
           <>
-            {message.content && <div className="whitespace-pre-wrap rounded-2xl rounded-tl-sm bg-white px-3.5 py-2 text-sm leading-relaxed text-[#1f2933] ring-1 ring-[#d5dbe1]">{message.content}</div>}
+            {message.content && <div className="rounded-2xl rounded-tl-sm bg-white px-3.5 py-2 text-sm leading-relaxed text-[#1f2933] ring-1 ring-[#d5dbe1]"><Markdown text={message.content} /></div>}
             {message.notes.length > 0 && (
               <ul className="mt-1.5 space-y-1">
                 {message.notes.map((n, i) => (
@@ -387,15 +458,18 @@ function Bubble({ message, props, lastUser, answerable }: { message: Message; pr
 
 function ideas(session: Session): string[] {
   const hasFramework = session.references.some((r) => r.kind === 'framework' && r.include);
+  const hasFile = session.references.some((r) => r.kind === 'upload' && r.include);
   const blank = session.words < 15;
   if (blank) {
     return [
       'Draft the full document with every required section.',
       ...(hasFramework ? ['Draft it so every relevant clause of the attached framework is covered, and cite the clause numbers.'] : []),
+      ...(hasFile ? ['Draft the document from what the attached file requires.'] : []),
       'Draft a short version first, about one page.',
     ];
   }
   return [
+    ...(hasFile ? ['Run a gap analysis of this document against the attached file.'] : []),
     'Review the document for gaps and fix them.',
     'Make the language clearer and more concise without changing the meaning.',
     'Add a roles and responsibilities table.',
@@ -417,12 +491,38 @@ export default function ChatPanel(props: ChatPanelProps) {
     if (atBottom.current) end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [chat.length, chat[chat.length - 1]?.status, chat[chat.length - 1]?.stage, chat[chat.length - 1]?.live?.seq]);
 
+  // files attached to the next request (the paperclip, a drop or a paste): each is uploaded at once as a reference of the session
+  const [files, setFiles] = useState<{ tmp: string; name: string; state: 'reading' | 'ready' | 'failed'; ref?: Attachment; error?: string }[]>([]);
+  const [dragging, setDragging] = useState(false);
+  const picker = useRef<HTMLInputElement>(null);
+  const dropped = useRef(new Set<string>());                    // removed while still uploading: its reference is removed once it exists
+  const attach = (list: FileList | File[]) => {
+    for (const f of Array.from(list)) {
+      const tmp = `${Date.now()}-${Math.random()}`;
+      setFiles((cur) => [...cur, { tmp, name: f.name, state: 'reading' }]);
+      studioApi.uploadReference(session.id, f).then((r) => {
+        if (dropped.current.has(tmp)) { void studioApi.removeReference(session.id, r.id).then(props.onReferencesChanged); return; }
+        setFiles((cur) => cur.map((x) => (x.tmp === tmp ? { ...x, state: 'ready', ref: { id: r.id, key: r.key, title: r.title } } : x)));
+        void props.onReferencesChanged();
+      }).catch((e) => setFiles((cur) => cur.map((x) => (x.tmp === tmp ? { ...x, state: 'failed', error: problemOf(e) } : x))));
+    }
+  };
+  const detach = (tmp: string) => {
+    const f = files.find((x) => x.tmp === tmp);
+    dropped.current.add(tmp);
+    setFiles((cur) => cur.filter((x) => x.tmp !== tmp));
+    if (f?.ref) void studioApi.removeReference(session.id, f.ref.id).then(props.onReferencesChanged).catch(() => undefined);
+  };
+  const ready = files.flatMap((f) => (f.state === 'ready' && f.ref ? [f.ref] : []));
+  const reading = files.some((f) => f.state === 'reading');
+
   const submit = async () => {
     const t = text.trim();
-    if (!t || working || !aiConfigured) return;
+    if ((!t && !ready.length) || working || !aiConfigured || reading) return;
     setText('');
+    setFiles([]);
     atBottom.current = true;
-    await onSend(t);
+    await onSend(t, ready);
   };
   const lastUserBefore = (i: number): string | null => { for (let k = i - 1; k >= 0; k--) if (chat[k].role === 'user') return chat[k].content; return null; };
 
@@ -441,6 +541,7 @@ export default function ChatPanel(props: ChatPanelProps) {
             <Sparkles className="mx-auto mb-1 h-5 w-5 text-[#0f766e]" />
             <p className="font-medium text-[#26323d]">Tell Comply Agent what you want.</p>
             <p className="mt-1 text-xs">It proposes changes; nothing is written into your document until you accept it.</p>
+            <p className="mt-1 text-xs">Attach any file with the paperclip (a regulation, a contract, an audit report, a spreadsheet) and ask anything about it: a gap analysis, a summary, the obligations it sets.</p>
             <p className="mt-2 text-xs">
               Add what it should lean on in{' '}
               <button type="button" onClick={() => props.onOpenTab('references')} className="font-semibold text-[#0b6b58] underline">References</button>
@@ -453,7 +554,11 @@ export default function ChatPanel(props: ChatPanelProps) {
           answerable={m.role === 'assistant' && !chat.slice(i + 1).some((x) => x.role === 'user')} />)}
         <div ref={end} />
       </div>
-      <div className="border-t border-[#d5dbe1] bg-white p-2.5">
+      <div className={`border-t border-[#d5dbe1] p-2.5 ${dragging ? 'bg-[#f3fbf8] ring-2 ring-inset ring-[#1ed4b0]' : 'bg-white'}`}
+        onDragOver={(e) => { if (aiConfigured && e.dataTransfer.types.includes('Files')) { e.preventDefault(); setDragging(true); } }}
+        onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+        onDrop={(e) => { setDragging(false); if (aiConfigured && e.dataTransfer.files.length) { e.preventDefault(); attach(e.dataTransfer.files); } }}>
+        {dragging && <p className="mb-2 text-center text-xs font-semibold text-[#0b6b58]">Drop the files to attach them</p>}
         {(chat.length === 0 || ideasOpen) && !working && aiConfigured && (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {ideas(session).map((idea) => (
@@ -462,19 +567,42 @@ export default function ChatPanel(props: ChatPanelProps) {
             ))}
           </div>
         )}
+        {files.length > 0 && (
+          <ul className="mb-2 flex flex-wrap gap-1.5" aria-label="Files attached to this message">
+            {files.map((f) => (
+              <li key={f.tmp} title={f.error || f.name}
+                className={`inline-flex max-w-full items-start gap-1.5 rounded-lg border px-2 py-1 text-[11px] ${f.state === 'failed' ? 'border-[#f1b5b5] bg-[#fdf3f3] text-[#8a1c1c]' : 'border-[#c5ccd3] bg-[#f8fafb] text-[#26323d]'}`}>
+                {f.state === 'reading' ? <Loader2 className="mt-px h-3.5 w-3.5 shrink-0 animate-spin text-[#0f766e]" aria-hidden />
+                  : f.state === 'failed' ? <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden /> : <FileText className="mt-px h-3.5 w-3.5 shrink-0 text-[#0f766e]" aria-hidden />}
+                <span className="min-w-0">
+                  <span className="block max-w-[14rem] truncate font-semibold">{f.name}</span>
+                  <span className={f.state === 'failed' ? 'block' : 'block text-[#586472]'}>{f.state === 'reading' ? 'Reading…' : f.state === 'failed' ? f.error : `Attached as ${f.ref?.key}`}</span>
+                </span>
+                <button type="button" onClick={() => detach(f.tmp)} aria-label={`Remove ${f.name}`} className="rounded p-0.5 hover:bg-[#e6eaee]"><X className="h-3 w-3" /></button>
+              </li>
+            ))}
+          </ul>
+        )}
         <div className="flex items-end gap-2">
+          <button type="button" onClick={() => picker.current?.click()} disabled={!aiConfigured} aria-label="Attach files"
+            title="Attach any file: Word, PDF, Excel, PowerPoint, text or data, or a picture of text"
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#b8c4c8] bg-white text-[#3f4b58] hover:border-[#0f766e] hover:text-[#0b6b58] disabled:opacity-50">
+            <Paperclip className="h-4 w-4" />
+          </button>
+          <input ref={picker} type="file" multiple hidden onChange={(e) => { if (e.target.files?.length) attach(e.target.files); e.target.value = ''; }} />
           <textarea
             ref={area}
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void submit(); } }}
+            onPaste={(e) => { if (aiConfigured && e.clipboardData.files.length) { e.preventDefault(); attach(e.clipboardData.files); } }}
             rows={2}
             disabled={!aiConfigured}
             aria-label="Message to Comply Agent"
-            placeholder={aiConfigured ? 'Ask for a draft, a rewrite, a new section, a table …' : 'Comply Agent is not connected yet'}
+            placeholder={aiConfigured ? 'Ask anything: a draft, a rewrite, a gap analysis against a file you attach …' : 'Comply Agent is not connected yet'}
             className="min-h-[2.75rem] flex-1 resize-y rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0] disabled:bg-[#f1f3f5]"
           />
-          <button type="button" onClick={() => void submit()} disabled={!text.trim() || working || !aiConfigured}
+          <button type="button" onClick={() => void submit()} disabled={(!text.trim() && !ready.length) || reading || working || !aiConfigured}
             className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50" aria-label="Send">
             {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
           </button>
@@ -483,7 +611,7 @@ export default function ChatPanel(props: ChatPanelProps) {
           <button type="button" onClick={() => props.onOpenTab('references')} className="hover:underline">{plural(session.references.filter((r) => r.include).length, 'reference')} attached</button>
           {session.instructions.entity_name ? <button type="button" onClick={() => props.onOpenTab('instructions')} className="hover:underline">Entity: {session.instructions.entity_name}</button> : null}
           {chat.length > 0 && aiConfigured && <button type="button" onClick={() => setIdeasOpen((v) => !v)} aria-expanded={ideasOpen} className="hover:underline">{ideasOpen ? 'Hide ideas' : 'Ideas'}</button>}
-          <span className="ml-auto">Enter to send · Shift+Enter for a new line</span>
+          <span className="ml-auto">Attach or drop any file · Enter to send · Shift+Enter for a new line</span>
         </p>
       </div>
     </div>

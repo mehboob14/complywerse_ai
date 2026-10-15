@@ -71,6 +71,7 @@ class StudioMessage(Base):
     references_used = Column(JSON, nullable=True)
     questions = Column(JSON, nullable=True)                              # what Comply Agent asks: [{id, question, why, kind, options, other, answer?}] (older: plain strings)
     answers = Column(JSON, nullable=True)                                # on a person's message: {reply_to, items: [{id, question, chosen, other}]}
+    attachments = Column(JSON, nullable=True)                            # on a person's message: the files attached with it [{id, key, title}] (references)
     notes = Column(JSON, nullable=True)                                  # things the person should know (a change that could not be placed ...)
     base_revision = Column(Integer, nullable=True)                       # the revision the AI read
     usage = Column(JSON, nullable=True)

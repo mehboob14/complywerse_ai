@@ -86,6 +86,7 @@ class MessageIn(BaseModel):
     reply_to: Optional[int] = None                 # the message whose questions this answers
     answers: Optional[List[Dict[str, Any]]] = None  # [{id: "q1", chosen: [option labels], other: "words"}]
     decide: bool = False                           # leave the questions not answered to Comply Agent
+    attachments: Optional[List[int]] = None        # the files attached in the chat with this request (references uploaded with it)
 
 
 class DraftIn(BaseModel):
@@ -417,7 +418,7 @@ def send_message(session_id: int, body: MessageIn, db: Session = Depends(get_db)
     if not claude_client.configured():
         raise HTTPException(status_code=503, detail=str(claude_client.ClaudeNotConfigured()))
     try:
-        msg = service.start_turn(db, s, user, body.text, reply_to=body.reply_to, answers=body.answers, decide=body.decide)
+        msg = service.start_turn(db, s, user, body.text, reply_to=body.reply_to, answers=body.answers, decide=body.decide, attachments=body.attachments)
     except service.StudioError as exc:
         raise _problem(exc)
     jobs.launch(_slug(db), "chat", s.id, msg.id, user)

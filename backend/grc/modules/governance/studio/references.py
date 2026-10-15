@@ -153,14 +153,14 @@ def attach(db, session, kind: str, *, source_id: Optional[int] = None, scope: Op
     elif kind == "upload":
         if not upload:
             raise ReferenceProblem("No file was provided.")
-        from .importers import ImportProblem, import_file
+        from .importers import ImportProblem, read_attachment
 
         name, data = upload
         suffix = os.path.splitext(name)[1].lower()
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             tmp.write(data)
         try:
-            imported = import_file(tmp.name, name)
+            imported = read_attachment(tmp.name, name)          # any file: documents, workbooks, slides, data, scans and pictures (read here)
         except ImportProblem as exc:
             raise ReferenceProblem(str(exc)) from exc
         finally:

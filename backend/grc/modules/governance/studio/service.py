@@ -93,7 +93,8 @@ def message_view(m) -> Dict[str, Any]:
     return {"id": m.id, "role": m.role, "kind": m.kind, "content": m.content, "status": m.status, "stage": m.stage, "error": m.error,
             "live": m.live if m.status == "working" else None,
             "proposal": m.proposal, "references_used": m.references_used or [], "questions": m.questions or [], "notes": m.notes or [],
-            "answers": m.answers, "base_revision": m.base_revision, "usage": m.usage, "created_at": m.created_at.isoformat() if m.created_at else None}
+            "answers": m.answers, "attachments": m.attachments or [], "base_revision": m.base_revision, "usage": m.usage,
+            "created_at": m.created_at.isoformat() if m.created_at else None}
 
 
 def progress(db, s) -> List[Dict[str, Any]]:
@@ -624,10 +625,30 @@ def _answers(db, s, reply_to: int, items: Sequence[Dict[str, Any]], decide: bool
     return {"reply_to": asked.id, "items": clean, "decide": [q["id"] for q in open_left]}, text
 
 
-def start_turn(db, s, user, text: str, *, reply_to: Optional[int] = None, answers: Optional[Sequence[Dict[str, Any]]] = None, decide: bool = False):
+# the line that ends a request sent with files: Comply Agent reads which references came with it ("this file")
+ATTACHED = "\n\nAttached with this message: "
+
+
+def _attached(db, s, ids: Sequence[int]) -> List[Dict[str, Any]]:
+    """The files attached with a request: references of this session (each uploaded from the chat), all of them included."""
+    from ....models import StudioReference
+
+    out: List[Dict[str, Any]] = []
+    for rid in list(dict.fromkeys(ids))[:10]:
+        ref = db.get(StudioReference, rid)
+        if ref is None or ref.session_id != s.id:
+            raise StudioError("An attached file was not found. Attach it again.")
+        ref.include = True
+        out.append({"id": ref.id, "key": ref.ref_key, "title": ref.title})
+    return out
+
+
+def start_turn(db, s, user, text: str, *, reply_to: Optional[int] = None, answers: Optional[Sequence[Dict[str, Any]]] = None, decide: bool = False,
+               attachments: Optional[Sequence[int]] = None):
     """Record a request and the assistant's (working) answer to it. The caller runs ``engine.run_chat_turn`` on the returned message.
     With ``reply_to`` the request answers the questions of that message (``answers``: [{id, chosen: [labels], other}], ``decide``: the
-    rest is Comply Agent's choice); the words of the request are made from the answers, followed by anything the person typed."""
+    rest is Comply Agent's choice); the words of the request are made from the answers, followed by anything the person typed.
+    ``attachments`` are the references uploaded with the request (any file): the request ends by naming them."""
     from ....models import StudioMessage
 
     text = (text or "").strip()
@@ -637,9 +658,14 @@ def start_turn(db, s, user, text: str, *, reply_to: Optional[int] = None, answer
     if reply_to is not None:
         kept, said = _answers(db, s, reply_to, answers or [], decide)
         text = said + (f"\n{text}" if text else "")
+    files = _attached(db, s, attachments or [])
+    if files:
+        text = (text or "Read what I attached and tell me what it is and how it relates to this document.") \
+            + ATTACHED + ", ".join(f'{f["key"]} "{f["title"]}"' for f in files)
     if not text:
         raise StudioError("Write what you want done.")
-    db.add(StudioMessage(session_id=s.id, role="user", kind="chat", content=text, status="done", created_by=user.id, answers=kept))
+    db.add(StudioMessage(session_id=s.id, role="user", kind="chat", content=text, status="done", created_by=user.id, answers=kept,
+                         attachments=files or None))
     db.flush()
     msg = StudioMessage(session_id=s.id, role="assistant", kind="chat", status="working", stage="Starting", created_by=user.id, base_revision=s.revision_no)
     db.add(msg)

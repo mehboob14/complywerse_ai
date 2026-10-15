@@ -193,6 +193,13 @@ export interface AnswerItem {
   question?: string;
 }
 
+/** A file attached in the chat: it is a reference of the session (R3 ...) */
+export interface Attachment {
+  id: number;
+  key: string;
+  title: string;
+}
+
 export interface Message {
   id: number;
   role: 'user' | 'assistant';
@@ -220,6 +227,8 @@ export interface Message {
   questions: Array<Question | string>;
   /** on a person's message: their answers to the questions of the message it replies to */
   answers?: { reply_to: number; items: AnswerItem[]; decide?: string[] } | null;
+  /** on a person's message: the files attached with it in the chat (references of the session) */
+  attachments?: Attachment[];
   notes: string[];
   base_revision: number | null;
   usage: { input_tokens?: number; output_tokens?: number; cached_tokens?: number } | null;
@@ -407,8 +416,8 @@ export const studioApi = {
   messages: (id: number) => get<{ items: Message[] }>(`/sessions/${id}/messages`),
   /** the state of the latest turns, small enough to ask for several times a second while the AI works */
   progress: (id: number) => get<{ items: Progress[] }>(`/sessions/${id}/progress`),
-  send: (id: number, text: string, answers?: { reply_to: number; answers: AnswerItem[]; decide?: boolean }) =>
-    post<Message>(`/sessions/${id}/messages`, { text, ...(answers ?? {}) }),
+  send: (id: number, text: string, extra?: { reply_to?: number; answers?: AnswerItem[]; decide?: boolean; attachments?: number[] }) =>
+    post<Message>(`/sessions/${id}/messages`, { text, ...(extra ?? {}) }),
   message: (id: number, messageId: number) => get<Message>(`/sessions/${id}/messages/${messageId}`),
   accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
     post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message }>(`/sessions/${id}/messages/${messageId}/accept`, body),

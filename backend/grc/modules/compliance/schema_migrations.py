@@ -269,6 +269,8 @@ _COLUMN_ADDS = [
     ("grc_studio_messages", "live", "JSON", None),
     # AI Studio: a person's answers to the questions Comply Agent asked (on the person's message)
     ("grc_studio_messages", "answers", "JSON", None),
+    # AI Studio: the files a person attached to a message in the chat (references of the session)
+    ("grc_studio_messages", "attachments", "JSON", None),
     ("grc_document_obligations", "emailed_at", "TIMESTAMP", None),
     # Statement <-> original document sync (cfsb): the wording as the file has it and where
     ("grc_policy_statements", "source_text", "TEXT", None),

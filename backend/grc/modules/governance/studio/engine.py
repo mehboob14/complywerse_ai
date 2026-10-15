@@ -275,7 +275,8 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         blocks = B.parse(session.content)
         from . import auto_refs, drafting
 
-        attached = auto_refs.attach_named(db, session, request.content)          # the platform frameworks and library documents the request names
+        # the platform frameworks and library documents the request names (in its own words: not the names of the files sent with it)
+        attached = auto_refs.attach_named(db, session, request.content.split(service.ATTACHED)[0])
         if attached:
             _stage(db, msg, "Attaching what you named from the platform", detail=auto_refs.summary(attached))
         if drafting.answers_a_draft(db, request) or drafting.wants_whole_document(session, blocks, request.content):
