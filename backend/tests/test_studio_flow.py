@@ -82,6 +82,7 @@ def world(monkeypatch, tmp_path):
         d = dictionaries.build(s)
     monkeypatch.setattr(dictionaries, "get", lambda slug, d=d: d)
     monkeypatch.setattr("grc.db.open_tenant_session", lambda slug: factory())
+    monkeypatch.setattr("grc.modules.governance.routers.documents._resolve_tenant_slug_for_autoparse", lambda tenant_id: None)   # never reach for the real master database
 
     app = FastAPI()
     app.include_router(router, prefix="/governance")

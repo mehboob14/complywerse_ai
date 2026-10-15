@@ -183,6 +183,30 @@ def test_a_document_can_be_compared_with_a_file_the_person_uploads(world):
     assert world.http.post(world.api(f"/sessions/{s['id']}/compare"), json={}).status_code == 400
 
 
+def test_a_draft_whose_library_pdf_was_deleted_can_be_moved_back_as_text_and_saves_as_text(world, lib, tmp_path):
+    from grc.modules.governance.routers.documents import delete_document
+
+    pdf = tmp_path / "retention.pdf"
+    pdf.write_bytes(exporters.to_pdf("# Retention Policy\n\n## 1. Purpose\n\n" + "Records shall be kept as long as the law requires and no longer. " * 6 + "\n", title="Retention"))
+    world.db.add(m.GovernanceDocument(id=21, tenant_id=1, title="Retention Policy", doc_type="policy", status="draft", current_version="1.0", file_name="retention.pdf",
+                                      file_path=str(pdf), file_size=pdf.stat().st_size, file_type="pdf", owner_id=1, content=None))
+    world.db.commit()
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 21}).json()
+    assert s["settings"]["file_master"] is True and s["document_id"] == 21
+
+    delete_document(document_id=21, db=world.db, current_user=world.db.get(m.GRCUser, 1))
+    detached = world.http.get(world.api(f"/sessions/{s['id']}")).json()
+    assert detached["document_id"] is None and "# Retention Policy" in detached["content"]           # the draft is kept
+
+    moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"title": "Retention Policy"}).json()
+    assert world.http.get(world.api(f"/sessions/{s['id']}")).json()["settings"].get("file_master") is None
+    world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": detached["content"] + "\nMore.\n", "base_revision": detached["revision"]})
+    saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={})
+    doc = world.db.get(m.GovernanceDocument, moved["document_id"])
+    world.db.refresh(doc)
+    assert saved.status_code == 200 and saved.json()["version"] == "1.1" and "More." in doc.content and not doc.file_path
+
+
 def test_a_text_document_in_the_library_still_saves_as_text(world, lib):
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 11}).json()
     assert s["source"]["in_place"] is False

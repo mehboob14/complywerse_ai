@@ -467,6 +467,8 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
         db.add(GovernanceDocumentVersion(document_id=doc.id, version_number="1.0", change_type="major", title=doc.title, change_summary="Initial version (from the AI Studio)",
                                          status="current", created_by=user.id, **file_fields))
         s.settings = {**(s.settings or {}), "file_master": True, "library_file": file_fields["file_path"]}
+    else:       # text in the library now: a session whose library file was deleted must not keep pointing at it
+        s.settings = {k: v for k, v in (s.settings or {}).items() if k not in ("file_master", "library_file")}
     create_audit_log(db=db, document_id=doc.id, tenant_id=tenant.id, user_id=user.id, action="created",
                      action_details=f"Document '{doc.title}' created in the AI Studio")
     db.commit()
