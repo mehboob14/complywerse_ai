@@ -84,6 +84,11 @@ class MessageIn(BaseModel):
     text: str
 
 
+class DraftIn(BaseModel):
+    brief: Optional[str] = None                    # what the person wants, in their words (optional)
+    rewrite: bool = False                          # write it again even though the document has been started
+
+
 class OpsIn(BaseModel):
     op_ids: Optional[List[str]] = None             # default: every pending change
     overrides: Optional[Dict[str, str]] = None     # the person's own wording for a change, by id
@@ -408,6 +413,25 @@ def send_message(session_id: int, body: MessageIn, db: Session = Depends(get_db)
     except service.StudioError as exc:
         raise _problem(exc)
     jobs.launch(_slug(db), "chat", s.id, msg.id, user)
+    return service.message_view(db.get(StudioMessage, msg.id))
+
+
+@router.post("/sessions/{session_id}/draft", dependencies=[Depends(require_studio)])
+def write_document(session_id: int, body: DraftIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Write the whole of a new policy, standard, procedure, guideline or charter: planned, then written section by section, then
+    applied as the first draft. A message to poll, like a chat turn."""
+    s = _session(db, session_id, user)
+    if s.kind != "new" or s.doc_type not in templates.DOC_TYPES:
+        raise HTTPException(status_code=400, detail="Only a new policy, standard, procedure, guideline or charter can be written from scratch.")
+    if s.revision_no > 1 and not B.is_blank(B.parse(s.content)) and not body.rewrite:
+        raise HTTPException(status_code=400, detail="This document has already been started. Ask in the chat for the changes you want, or choose to write it again.")
+    if not claude_client.configured():
+        raise HTTPException(status_code=503, detail=str(claude_client.ClaudeNotConfigured()))
+    try:
+        msg = service.start_turn(db, s, user, (body.brief or "").strip() or "Write the complete document.")
+    except service.StudioError as exc:
+        raise _problem(exc)
+    jobs.launch(_slug(db), "draft", s.id, msg.id, user)
     return service.message_view(db.get(StudioMessage, msg.id))
 
 

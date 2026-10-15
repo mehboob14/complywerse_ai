@@ -18,13 +18,15 @@ INLINE = False          # tests run a turn on the calling thread
 def run(tenant_slug: str, kind: str, session_id: int, message_id: int, user_id: int, username: str, extra: Optional[Dict[str, Any]] = None) -> None:
     from ....db import open_tenant_session
     from ....services.ai_usage import usage_scope
-    from . import engine
+    from . import drafting, engine
 
     db = open_tenant_session(tenant_slug)
     try:
         with usage_scope(tenant_slug=tenant_slug, actor_user_id=user_id, actor_username=username, module_key="governance", feature_key=f"studio_{kind}"):
             if kind == "chat":
                 engine.run_chat_turn(db, session_id, message_id)
+            elif kind == "draft":
+                drafting.run_draft(db, session_id, message_id)
             elif kind == "checks":
                 engine.run_ai_checks(db, session_id, message_id)
             elif kind == "compare":

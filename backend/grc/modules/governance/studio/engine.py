@@ -169,6 +169,11 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
             raise TurnProblem("There is nothing to answer.")
         _stage(db, msg, "Reading the document and the references")
         blocks = B.parse(session.content)
+        from . import drafting
+
+        if drafting.wants_whole_document(session, blocks, request.content):       # a document not yet started, asked for whole: write it, do not sketch it
+            drafting.run_draft(db, session_id, message_id)
+            return
         references = (db.query(StudioReference).filter(StudioReference.session_id == session_id).order_by(StudioReference.id).all())
         if sum(len(b.source) for b in blocks) > MAX_DOC_CHARS:
             raise TurnProblem("This document is too large to work on in one go. Open the part you want to change as its own document, or work on one section at a time.")

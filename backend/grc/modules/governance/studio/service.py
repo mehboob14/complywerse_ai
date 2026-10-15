@@ -257,7 +257,8 @@ def _norm_doc(md: str) -> str:
     return B.render(B.parse(md)).strip()
 
 
-def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, overrides: Optional[Dict[str, str]] = None, auto: bool = False) -> Dict[str, Any]:
+def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, overrides: Optional[Dict[str, str]] = None, auto: bool = False,
+               summary: Optional[str] = None) -> Dict[str, Any]:
     """Apply the chosen pending changes of an AI message to the document as it is now. A change whose blocks the person has
     edited since the AI read them is marked ``conflict`` and left alone. Returns ``{"accepted": n, "conflicts": n}``."""
     from ....models import StudioRevision
@@ -313,7 +314,7 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
                 conflicts += 1
     if applied:
         add_revision(db, s, B.render(new_blocks), author_type="ai", user_id=user_id,
-                     summary=("The AI wrote the first draft" if auto and B.is_blank(now) else f"Accepted {len(applied)} AI change(s)"), message_id=msg.id)
+                     summary=(summary or ("The AI wrote the first draft" if auto and B.is_blank(now) else f"Accepted {len(applied)} AI change(s)")), message_id=msg.id)
     proposal["ops"] = ops
     msg.proposal = proposal
     msg.updated_at = _now()
