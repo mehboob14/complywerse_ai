@@ -401,6 +401,11 @@ USE_CASES: Tuple[UseCase, ...] = (
         "Governance › Documents › AI Studio", "click", "DOC", "L3", ("document",),
         "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/studio/engine.py:run_ai_compare",),
         apis=("anthropic",)),
+    _uc("governance.version_change", "Decide whether a new version is major or minor",
+        "Reads what changed in a document and says whether its new version is a major or a minor change, and why.",
+        "Governance › Documents", "auto", "DOC", "L3", ("document",),
+        "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/doc_version.py:decide",),
+        apis=("anthropic",)),
 
     # ── Regulatory Changes ───────────────────────────────────────────────────
     _uc("regulatory.read_circular", "Read a regulatory circular",

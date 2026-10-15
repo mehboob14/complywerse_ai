@@ -63,6 +63,19 @@ def protected_blocks(blocks: Sequence[B.Block]) -> List[int]:
     return [i for i, b in enumerate(blocks) if patterns.detect_dropped(b.source)]
 
 
+def _word_numbers(session, blocks: Sequence[B.Block]) -> List[Optional[str]]:
+    """The number Word shows in front of each block of a Word file edited in place, so a clause can be asked for by its number;
+    nothing for any other document. Never stops a turn: without them the AI still has the text."""
+    from . import service
+
+    try:
+        looks = service.word_looks(session)
+    except Exception:       # noqa: BLE001 - a file python-docx cannot lay out: the turn goes on without the numbers
+        logger.warning("studio session %s: the Word numbering could not be read", session.id, exc_info=True)
+        return []
+    return [look.get("label") for look in looks] if len(looks) == len(blocks) else []
+
+
 def _op_view(op: B.Op, blocks: Sequence[B.Block]) -> Dict[str, Any]:
     after = B.parse(op.markdown) if op.kind != "delete" else []
     first = 0
@@ -297,11 +310,16 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         file_notes = []
         if (session.native_map or {}).get("auto_numbered"):
             file_notes.append("The headings of this Word file are numbered by Word itself: write a heading without its number (\"Scope\", not \"2. Scope\").")
+        numbers = _word_numbers(session, blocks)
+        if any(numbers):
+            file_notes.append("A number after a block id ([B12 · 4.2.1.]) is the number Word shows in front of that block. Use it to find what the "
+                              "person refers to (\"clause 4.2.1\"), but never write it into the text: Word numbers the paragraphs itself, new ones too.")
         if session.source_kind == "pdf":
             file_notes.append("This text was read from a PDF, so a heading, list or table may have been read wrongly; keep what is clearly right and fix what is clearly broken.")
         turn = prompts.TurnInput(kind=session.kind, doc_type=session.doc_type, title=session.title, instructions=session.instructions or {},
                                  blocks=blocks, request=request.content, references=references, structure=structure,
-                                 protected=protected, revision=session.revision_no, history=_history(db, session, request.id), format_notes=file_notes)
+                                 protected=protected, revision=session.revision_no, history=_history(db, session, request.id), format_notes=file_notes,
+                                 numbers=numbers)
         big = B.is_blank(blocks) or bool(_GENERATE.search(request.content))
         result = claude_client.complete(
             use_case="governance.studio_chat", system=prompts.SYSTEM, messages=[{"role": "user", "content": prompts.render_user(turn)}],

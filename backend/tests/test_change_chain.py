@@ -598,10 +598,13 @@ def test_saving_to_the_library_records_the_changes_with_their_sources_and_the_ch
     world.http.post(world.api(f"/sessions/{s['id']}/messages/{msg['id']}/accept"), json={})
     cur = world.http.get(world.api(f"/sessions/{s['id']}")).json()
     world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": cur["content"].replace("approved by the CISO", "approved by the CISO and the CRO"), "base_revision": cur["revision"]})
+    # Comply Agent says whether the new version is a major or a minor change
+    world.respond(lambda body: reply(json.dumps({"change": "major", "reason": "Access reviews become quarterly and third parties come into scope."})))
     saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={"change_reason": "Quarterly reviews"}).json()
-    assert saved["version"] == "1.1" and saved["status"] == "pending_review"
+    assert saved["version"] == "2.0" and saved["status"] == "pending_review"
 
-    row = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=10, version_number="1.1").one()
+    row = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=10, version_number="2.0").one()
+    assert row.change_type == "major" and row.change_summary.endswith("Major change: Access reviews become quarterly and third parties come into scope.")
     assert sorted(i["section"] for i in row.change_set["items"]) == ["2. Scope", "3. Access Control", "3. Access Control"]
     quarterly = next(i for i in row.change_set["items"] if "quarter" in i["after_text"])
     assert (quarterly["origin"], quarterly["by"], quarterly["request"]) == ("ai", "Olivia Owner", "Make access reviews quarterly and mention third parties.")
@@ -613,7 +616,7 @@ def test_saving_to_the_library_records_the_changes_with_their_sources_and_the_ch
 
     c = world.chain()
     top = c["versions"][-1]
-    assert (top["number"], top["origin"], top["stage"], top["changes"]) == ("1.1", "mixed", "published", len(row.change_set["items"]))
+    assert (top["number"], top["origin"], top["stage"], top["changes"]) == ("2.0", "mixed", "published", len(row.change_set["items"]))
     assert c["sources"][0]["quote"].startswith("The allocation and use of privileged access rights")
     assert c["events"][-1]["kind"] == "status_changed" and c["events"][-1]["to"] == "pending_review"
 

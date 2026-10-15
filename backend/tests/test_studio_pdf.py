@@ -63,3 +63,48 @@ def test_a_pdf_that_is_a_picture_or_broken_or_locked_is_refused_with_a_sentence(
     locked.save(str(locked_path), encryption=fitz.PDF_ENCRYPT_AES_256, user_pw="pw", owner_pw="pw")
     with pytest.raises(ImportProblem, match="password"):
         pdf_io.import_pdf(str(locked_path))
+
+
+def test_a_scanned_cover_memo_a_contents_page_and_indented_lists_keep_the_documents_own_hierarchy(tmp_path):
+    doc = fitz.open()
+    cover = doc.new_page()                                  # a signed memo scanned in: a picture with the scanner's invisible text on it
+    pix = fitz.Pixmap(fitz.csRGB, fitz.IRect(0, 0, 50, 50), False)
+    pix.set_rect(pix.irect, (250, 250, 250))
+    cover.insert_image(cover.rect, pixmap=pix)
+    cover.insert_text((72, 140), "ffi", fontsize=40, render_mode=3)
+    cover.insert_text((72, 220), "Extracts of the Board meeting held in December", fontsize=11, render_mode=3)
+    page = doc.new_page()
+    y = 90
+
+    def line(text, size=10, x=72, bold=False, gap=1.6):
+        nonlocal y
+        page.insert_text((x, y), text, fontsize=size, fontname="hebo" if bold else "helv")
+        y += size * gap
+
+    line("Information Security Policy", 20, bold=True, gap=2)
+    line("Table of Contents", 16, bold=True)
+    line("Purpose ........................................ 2", 11, bold=True)
+    line("Scope .......................................... 3", 11, bold=True)
+    line("Purpose", 16, bold=True)
+    for _ in range(3):
+        line("The bank protects the information it holds and reports any breach to the regulator without delay.", gap=1.25)
+    line("The policy covers:", gap=1.4)
+    line("• Hardware the bank owns", x=90, gap=1.4)
+    line("• Software the bank licenses", x=90, gap=1.6)
+    line("Scope", 16, bold=True)
+    line("Roles", 12, bold=True)
+    line("Every member of staff follows this policy and the procedures under it, and reports a breach at once.", gap=1.4)
+    line("Duties", 12, bold=True)
+    line("Line managers make sure their teams have read the policy and know where to find the procedures.", gap=1.4)
+    path = tmp_path / "policy.pdf"
+    doc.save(str(path))
+    imp = pdf_io.import_pdf(str(path))
+    blocks = B.parse(imp.markdown)
+    assert [(b.text, b.level) for b in blocks if b.kind == "heading"] == [
+        ("Information Security Policy", 1), ("Table of Contents", 2), ("Purpose", 2), ("Scope", 2), ("Roles", 3), ("Duties", 3)]
+    assert any(b.kind == "paragraph" and b.text.startswith("Extracts of the Board") for b in blocks)      # the scan's text is kept, as text
+    assert [b.kind for b in blocks if b.text.startswith(("Purpose ...", "Scope ..."))] == ["paragraph", "paragraph"]
+    assert [(b.kind, b.level, b.text) for b in blocks if "the bank" in b.text and b.text.startswith(("Hardware", "Software"))] == [
+        ("list_item", 0, "Hardware the bank owns"), ("list_item", 0, "Software the bank licenses")]
+    assert not any(b.kind == "code" for b in blocks)
+    assert any("Page 1 is scanned" in n for n in imp.notes)

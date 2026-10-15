@@ -301,7 +301,7 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     """Write every pending statement edit into a new copy of the document's file and record the next version."""
     from ...models import GovernanceDocumentVersion, PolicyStatement
     from .routers.documents import GOVERNANCE_UPLOAD_DIR
-    from .routers.versions import create_audit_log, increment_version
+    from .routers.versions import create_audit_log
 
     info = state(db, document)
     if info["reason"]:
@@ -339,6 +339,7 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
         raise LookupError("The edited wording could not be found in the file any more: " + ", ".join(conflicts))
     if len({e[0] for e in edits}) != len(edits):
         raise ValueError("Two statements point at the same place in the file.")
+    before = "\n\n".join(p.text for p in paragraphs)
     rewrite(paragraphs, spans, edits)
     doc.save(new_path)
 
@@ -353,7 +354,11 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
             status="superseded", created_by=user.id, created_at=datetime.utcnow()))
     else:
         versions.filter(GovernanceDocumentVersion.status == "current").update({"status": "superseded"})
-    new_version = increment_version(old_version, "minor")
+    # major or minor, as Comply Agent reads what changed in the document's text (doc_version)
+    from .doc_version import decide, next_version, verdict
+
+    decision = decide(before, "\n\n".join(p.text for p in paragraphs), title=document.title)
+    new_version = next_version(old_version, decision["change"])
     codes = [p["code"] for p in info["pending"] if p["code"] not in conflicts]
     content = document.content
     if content:
@@ -361,9 +366,9 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
             if item["code"] not in conflicts and content.count(item["was"]) == 1:
                 content = content.replace(item["was"], item["now"].strip(), 1)
     row = GovernanceDocumentVersion(
-        document_id=document.id, version_number=new_version, change_type="minor", title=document.title, content=content,
+        document_id=document.id, version_number=new_version, change_type=decision["change"], title=document.title, content=content,
         file_name=new_name, file_path=new_path, file_size=os.path.getsize(new_path), file_type="docx",
-        change_summary=f"{len(edits)} policy statement(s) updated in the document: " + ", ".join(codes),
+        change_summary=f"{len(edits)} policy statement(s) updated in the document: " + ", ".join(codes) + ". " + verdict(decision),
         change_reason=change_reason, status="current", created_by=user.id, created_at=datetime.utcnow())
     db.add(row)
     db.flush()

@@ -138,6 +138,7 @@ class TurnInput:
     revision: int = 0
     history: Sequence[Tuple[str, str]] = field(default_factory=list)       # (role, text), oldest first
     format_notes: Sequence[str] = field(default_factory=list)              # facts about the file the text comes from
+    numbers: Sequence[Optional[str]] = field(default_factory=list)         # the number Word shows in front of each block, if any
 
 
 def instructions_text(ins: Dict[str, Any]) -> str:
@@ -153,11 +154,18 @@ def instructions_text(ins: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def listing(blocks: Sequence[B.Block], protected: Sequence[int] = ()) -> str:
+def listing(blocks: Sequence[B.Block], protected: Sequence[int] = (), numbers: Sequence[Optional[str]] = ()) -> str:
+    """The blocks after their ids: ``[B7 read-only]`` for a block the model may not change, and ``[B7 · 4.2.1.]`` where Word
+    writes a number in front of the block (it is not in the text; bullets are left out, the Markdown shows them)."""
     text = B.listing(blocks)
-    for i in protected:
-        text = re.sub(rf"^\[B{i + 1}\] ", f"[B{i + 1} read-only] ", text, count=1, flags=re.M)
-    return text
+    tags = {i: "read-only" for i in protected}
+    for i, number in enumerate(numbers):
+        if number and any(ch.isalnum() for ch in number):
+            tags[i] = f"· {number}" + (" read-only" if i in tags else "")
+    if not tags:
+        return text
+    return re.sub(r"^\[B(\d+)\] ", lambda m: f"[B{m.group(1)} {tags[int(m.group(1)) - 1]}] " if int(m.group(1)) - 1 in tags else m.group(0),
+                  text, flags=re.M)
 
 
 def render_user(t: TurnInput) -> str:
@@ -178,7 +186,7 @@ def render_user(t: TurnInput) -> str:
         for r in t.references if r.include)
     if refs:
         parts.append(f"<references>\n{refs}\n</references>")
-    body = listing(t.blocks, t.protected) if t.blocks else "(the document is empty)"
+    body = listing(t.blocks, t.protected, t.numbers) if t.blocks else "(the document is empty)"
     parts.append(f'<document revision="{t.revision}" blocks="{len(t.blocks)}">\n{body}\n</document>')
     if t.history:
         convo = "\n".join(f"{'Person' if role == 'user' else 'You'}: {text.strip()[:4000]}" for role, text in t.history)   # room for an analysis

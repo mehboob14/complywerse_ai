@@ -27,6 +27,7 @@ import InstructionsPanel from '../_components/InstructionsPanel';
 import ChecksPanel from '../_components/ChecksPanel';
 import HistoryPanel from '../_components/HistoryPanel';
 import ChangesView, { type CompareSpec } from '../_components/ChangesView';
+import FileView from '../_components/FileView';
 import { ExportDialog, MoveToLibraryDialog, SaveTemplateDialog, SaveToDocumentDialog } from '../_components/dialogs';
 import type { DocMark } from '../_components/editorExtensions';
 
@@ -236,6 +237,7 @@ export default function StudioWorkspacePage() {
   const [tab, setTab] = useState<SideTab>('chat');
   const [pane, setPane] = useState<'document' | 'assistant'>('document');          // on a narrow screen
   const [compare, setCompare] = useState<CompareSpec | null>(null);
+  const [asFile, setAsFile] = useState(false);                       // the document as its file shows it (Word, or the PDF)
   const [justAccepted, setJustAccepted] = useState(0);                          // how many changes were just accepted: offered to be seen marked in the document
   const [dialog, setDialog] = useState<Dialog>(null);
   const [focusRef, setFocusRef] = useState<string | null>(null);
@@ -286,6 +288,7 @@ export default function StudioWorkspacePage() {
 
   const goTo = (issue: Issue) => {
     setCompare(null);
+    setAsFile(false);
     setMode((m) => (m === 'source' ? 'edit' : m));
     setPane('document');
     setTimeout(() => {
@@ -303,6 +306,19 @@ export default function StudioWorkspacePage() {
       if (issue.block != null) h.goToBlock(issue.block);
     }, 60);
   };
+
+  // a Word file edited in place: its own numbers, indents and body-text clauses in the editor, from the file as it would be
+  // saved now (fetched for each saved revision; the editor keeps them on the blocks while the person types)
+  const inPlace = !!session?.source?.in_place;
+  const savedRevision = session?.revision;
+  useEffect(() => {
+    if (!inPlace || savedRevision == null) return;
+    let cancelled = false;
+    studioApi.layout(id)
+      .then((r) => { if (!cancelled && r.revision === revision.current) editor.current?.setLayout(r.blocks); })
+      .catch(() => undefined);                                      // without it the editor still works, only without Word's numbers
+    return () => { cancelled = true; };
+  }, [id, inPlace, savedRevision]);
 
   const rename = async (title: string) => {
     if (!session || !title.trim() || title === session.title) return;
@@ -358,21 +374,28 @@ export default function StudioWorkspacePage() {
           <span className={`inline-flex items-center gap-1 font-medium ${saveState === 'saved' ? 'text-[#0a5a38]' : saveState === 'conflict' || saveState === 'error' ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>
             {saveState === 'saving' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saveState === 'saved' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />} {saveLabel}
           </span>
-          <span>v{session.revision}</span>
+          <span title="The studio's revision of this text (each save and each accepted change is one)">rev {session.revision}</span>
           <span>{plural(words, 'word')}</span>
           {placeholders > 0 && <button type="button" onClick={() => editor.current?.nextPlaceholder()} className="rounded bg-[#fff2a8] px-1.5 py-0.5 font-semibold text-[#6b5400] hover:bg-[#ffe97a]">{plural(placeholders, 'placeholder')} to fill in</button>}
-          {inLibrary ? <span className="inline-flex items-center gap-1 text-[#0b6b58]"><Library className="h-3.5 w-3.5" /> In the library</span> : <span>Not in the library yet</span>}
+          {inLibrary ? <span className="inline-flex items-center gap-1 text-[#0b6b58]"><Library className="h-3.5 w-3.5" /> In the library{session.document_version ? `, version ${session.document_version}` : ''}</span> : <span>Not in the library yet</span>}
           {session.source?.in_place && <span title="Your Word file is edited in place: only your changes are written into it, so its fonts, styles, header and footer stay" className="inline-flex items-center gap-1 rounded-full bg-[#e3f1f1] px-2 py-0.5 font-medium text-[#0f4c5c]"><FileText className="h-3.5 w-3.5" /> Word file kept</span>}
           {session.source?.kind === 'pdf' && <span title="A PDF cannot be edited: what you save is a Word copy built from its text" className="inline-flex items-center gap-1 rounded-full bg-[#eef1f4] px-2 py-0.5 font-medium text-[#3f4b58]"><FileText className="h-3.5 w-3.5" /> Read from a PDF</span>}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <div className="inline-flex rounded-lg border border-[#c5ccd3] bg-white p-0.5" role="group" aria-label="View">
             {MODES.map((m) => (
-              <button key={m.key} type="button" aria-pressed={mode === m.key && !compare} onClick={() => { setCompare(null); setMode(m.key); }}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${mode === m.key && !compare ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
+              <button key={m.key} type="button" aria-pressed={mode === m.key && !compare && !asFile} onClick={() => { setCompare(null); setAsFile(false); setMode(m.key); }}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${mode === m.key && !compare && !asFile ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
                 <m.icon className="h-3.5 w-3.5" /> {m.label}
               </button>
             ))}
+            {(session.source?.in_place || session.source?.kind === 'pdf') && (
+              <button type="button" aria-pressed={asFile && !compare} onClick={async () => { setCompare(null); if (!asFile) await flush(); setAsFile(true); }}
+                title={session.source?.in_place ? 'Your Word file with your changes written in, as Word lays it out' : 'The PDF as it was uploaded'}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${asFile && !compare ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
+                <FileText className="h-3.5 w-3.5" /> {session.source?.in_place ? 'As in the file' : 'Original PDF'}
+              </button>
+            )}
           </div>
           <button type="button" aria-pressed={tracking} onClick={() => (tracking ? setCompare(null) : showChanges())} title="See every change since the start, marked in the document, and who made it"
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${tracking ? 'border-[#0f4c5c] bg-[#0f4c5c] text-white' : 'border-[#b8c4c8] bg-white text-[#26323d] hover:bg-[#f1f3f5]'}`}>
@@ -425,7 +448,13 @@ export default function StudioWorkspacePage() {
               <ChangesView session={session} spec={compare} aiConfigured={aiConfigured} onClose={() => setCompare(null)} flush={flush}
                 onContent={(c, r) => applyServerContent(c, r)} onShowSource={(k) => { setFocusRef(k); setTab('references'); }} />
             ) : (
-              <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
+              <>
+                {/* kept mounted under the file view: it holds the person's typing and undo history */}
+                <div className={asFile ? 'hidden' : 'h-full'}>
+                  <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
+                </div>
+                {asFile && <FileView session={session} />}
+              </>
             )}
           </div>
         </section>

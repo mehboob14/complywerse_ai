@@ -56,6 +56,8 @@ export interface Session {
   doc_type: string;
   status: string;
   document_id: number | null;
+  /** the library document's own version (the one its file states, then major or minor by each change) */
+  document_version?: string | null;
   revision: number;
   base_label: string | null;
   instructions: Instructions;
@@ -464,7 +466,15 @@ export const studioApi = {
     const plain = /filename="?([^";]+)"?/i.exec(header);
     return { blob: res.data as Blob, filename: star ? decodeURIComponent(star[1]) : plain ? plain[1] : `document.${options.format}` };
   },
+  /** a Word file edited in place: what Word shows for each block that its text does not hold (numbers, indents) */
+  layout: (id: number) => get<{ revision: number; blocks: BlockLook[] }>(`/sessions/${id}/layout`),
+  /** the PDF the text was read from, as it is */
+  sourceFile: async (id: number): Promise<Blob> => (await apiClient.get(`${base}/sessions/${id}/source-file`, { responseType: 'blob' })).data,
 };
+
+/** What Word shows for a block: the number in front of it, its indent in points (`hang`: the part the number sits in), and
+ *  `body` for a clause numbered through a heading style that looks like body text. */
+export interface BlockLook { label?: string; left?: number; hang?: number; body?: boolean }
 
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);

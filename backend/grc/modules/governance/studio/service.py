@@ -7,6 +7,7 @@ a change whose blocks they edited is reported as a conflict instead of overwriti
 """
 from __future__ import annotations
 
+import functools
 import logging
 import os
 import re
@@ -74,11 +75,13 @@ def ref_view(r) -> Dict[str, Any]:
 
 
 def session_view(db, s, *, content: bool = True) -> Dict[str, Any]:
-    from ....models import StudioReference
+    from ....models import GovernanceDocument, StudioReference
 
     rows = db.query(StudioReference).filter(StudioReference.session_id == s.id).order_by(StudioReference.id).all()
     blocks = B.parse(s.content)
+    doc = db.get(GovernanceDocument, s.document_id) if s.document_id else None
     out = {"id": s.id, "title": s.title, "kind": s.kind, "doc_type": s.doc_type, "status": s.status, "document_id": s.document_id,
+           "document_version": doc.current_version if doc is not None else None,          # the library document's own version
            "revision": s.revision_no, "base_label": s.base_label, "instructions": s.instructions or {}, "settings": s.settings or {},
            "template_id": s.template_id, "source": {"kind": s.source_kind, "name": s.source_name, "in_place": bool(s.source_kind == "docx" and s.native_map)},
            "references": [ref_view(r) for r in rows], "reference_chars": refs.total_chars(rows),
@@ -148,6 +151,7 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
     s = StudioSession(tenant_id=(_tenant(db).id if _tenant(db) else 1), created_by=user.id, title=(title or "Untitled document").strip()[:500],
                       kind=kind, doc_type=doc_type or "policy", instructions={}, settings={}, status="active", last_opened_at=_now())
     summary, content, base, base_label = "", "", "", None
+    registered = None
     if kind == "new":
         template = templates.resolve(db, template_id or "default", s.doc_type)
         content = (template["content"] if template else "")
@@ -208,8 +212,10 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
         if imported.native:
             s.native_map = imported.native.get("map")
             s.source_path = imported.native.get("path") or path
-        base_label = f"{name} as uploaded" if imported.base_markdown is None else f"{name} before its tracked changes"
-        summary = "Opened from " + name + ("".join(f" ({n})" for n in imported.notes[:1]))
+        registered = _register_upload(db, s, user, path, name, content)
+        base_label = f"{s.title} v{registered.current_version}" + ("" if imported.base_markdown is None else " before its tracked changes")
+        summary = (f"Opened from {name}, and put in the library as a draft, version {registered.current_version}"
+                   + ("".join(f" ({n})" for n in imported.notes[:1])))
     else:
         raise StudioError("Unknown way to start a session.")
     s.instructions = _default_instructions(db, instructions)
@@ -218,7 +224,55 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
     db.flush()
     add_revision(db, s, content, author_type="import" if kind != "new" else "system", user_id=user.id, summary=summary)
     db.commit()
+    if registered is not None:
+        _announce_registered(db, registered, user)
     return s
+
+
+def _register_upload(db, s, user, path: str, name: str, content: str):
+    """A file uploaded into the studio goes into the library at once, as a draft whose first version is the file itself, numbered
+    as the file states (``doc_version.detect``: its revision table, its document control, else its name, else 1.0). The session
+    then edits that library document, as one opened from the library. Does not commit."""
+    from ....models import GovernanceDocument, GovernanceDocumentVersion
+    from .. import doc_version
+    from ..routers.documents import GOVERNANCE_UPLOAD_DIR
+    from ..routers.versions import create_audit_log
+
+    tenant = _tenant(db)
+    version, found_in = doc_version.detect(path, name)
+    is_file = s.source_kind in ("docx", "pdf")
+    files = _keep_original((path, name), GOVERNANCE_UPLOAD_DIR) if is_file else {}
+    doc = GovernanceDocument(tenant_id=tenant.id, title=s.title, doc_type=s.doc_type or "policy", classification="internal", owner_id=user.id,
+                             author_id=user.id, framework_ids=[], applicable_framework_ids=[], status="draft", current_version=version,
+                             content=None if is_file else content, **files)
+    db.add(doc)
+    db.flush()
+    db.add(GovernanceDocumentVersion(document_id=doc.id, version_number=version, change_type="major", title=doc.title, content=None if is_file else content,
+                                     change_summary=doc_version.first_summary(version, found_in), status="current", created_by=user.id, **files))
+    create_audit_log(db=db, document_id=doc.id, tenant_id=tenant.id, user_id=user.id, action="created",
+                     action_details=f"Document '{doc.title}' created from {name}, uploaded into the AI Studio (version {version})")
+    s.document_id, s.kind = doc.id, "library"
+    if is_file:
+        s.settings = {**(s.settings or {}), "file_master": True, "library_file": files["file_path"]}
+    return doc
+
+
+def _announce_registered(db, doc, user) -> None:
+    """The review log entry and the statements' extraction for a document the studio put in the library. Never fails the upload."""
+    from ..action_logger import log_governance_action
+
+    try:
+        log_governance_action(db=db, tenant_id=doc.tenant_id, action_type="document_draft_created",
+                              action_description=f"Governance document draft created from a file uploaded into the AI Studio: '{doc.title}' ({doc.doc_type})",
+                              entity_type="governance_document", action_user_id=user.id, entity_id=doc.id,
+                              action_metadata={"doc_type": doc.doc_type, "version": doc.current_version, "source": "ai_studio_upload"})
+        db.commit()
+        from ..routers.documents import _resolve_tenant_slug_for_autoparse
+        from ..routers.policy_parser import maybe_autoparse_document
+
+        maybe_autoparse_document(db, _resolve_tenant_slug_for_autoparse(doc.tenant_id), doc.id, user.id)
+    except Exception:       # noqa: BLE001 - the document is in the library; its statements can be extracted from its page
+        logger.warning("could not log or parse studio upload document %s", doc.id, exc_info=True)
 
 
 # ── saving and history ───────────────────────────────────────────────────────
@@ -789,7 +843,11 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
                 f.write(data)
             file_fields = {"file_name": f"{base}.docx", "file_path": path, "file_size": len(data), "file_type": "docx"}
     two = kept is not None and changed          # the uploaded file, then what the studio made of it
-    number = "1.1" if two else "1.0"
+    from .. import doc_version
+
+    start, found_in = doc_version.detect(*upload) if upload else ("1.0", "default")
+    decision = doc_version.decide(first_text or "", s.content, title=name) if two else None
+    number = doc_version.next_version(start, decision["change"]) if decision else start
     doc = GovernanceDocument(tenant_id=tenant.id, title=name, description=description, content=None if word else s.content,
                              doc_type=doc_type or s.doc_type or "policy", classification=classification, parent_document_id=parent_document_id,
                              owner_id=user.id, author_id=user.id, framework_ids=framework_ids or [], applicable_framework_ids=framework_ids or [],
@@ -797,11 +855,12 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
     db.add(doc)
     db.flush()
     if two:
-        db.add(GovernanceDocumentVersion(document_id=doc.id, version_number="1.0", change_type="major", title=doc.title, content=None if word else first_text,
-                                         change_summary=f"The uploaded file, as it was ({kept['file_name']})", status="superseded", created_by=user.id, **kept))
+        db.add(GovernanceDocumentVersion(document_id=doc.id, version_number=start, change_type="major", title=doc.title, content=None if word else first_text,
+                                         change_summary=doc_version.first_summary(start, found_in), status="superseded", created_by=user.id, **kept))
     row_files = file_fields if word or two or kept is None else kept         # an unchanged PDF: its text, with the uploaded file kept on the version
-    first = GovernanceDocumentVersion(document_id=doc.id, version_number=number, change_type="studio" if two else "major", title=doc.title,
-                                      change_summary="Changed in the AI Studio" if two else ("Initial version (the uploaded file)" if upload else "Initial version (from the AI Studio)"),
+    first = GovernanceDocumentVersion(document_id=doc.id, version_number=number, change_type=decision["change"] if decision else "major", title=doc.title,
+                                      change_summary=(doc_version.summary_of("Changed in the AI Studio", decision) if decision
+                                                      else doc_version.first_summary(start, found_in) if upload else "Initial version (from the AI Studio)"),
                                       status="current", created_by=user.id, content=None if word else s.content, **row_files)
     db.add(first)
     # the changes after the uploaded file, or for a first version every section and what each rests on
@@ -869,10 +928,14 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
         raise StudioError("Nothing has changed since the library version.")
     if not force and (doc.content or "").strip() and _norm_doc(doc.content) != _norm_doc(s.base_content):
         raise Conflict("The document was changed in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
+    from ..doc_version import decide, summary_of
+
     old_content, old_title, old_version, old_status = doc.content, doc.title, doc.current_version or "1.0", doc.status
+    decision = decide(old_content or "", s.content, title=doc.title)
     doc.content, doc.updated_at = s.content, _now()
     new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
-                                            change_type="studio", change_reason=change_reason, user_id=user.id)
+                                            change_type=decision["change"], change_reason=change_reason, user_id=user.id,
+                                            summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
     db.flush()
     if old_status in ("approved", "published", "exception_applied"):       # edited text needs approving again
         doc.status = "pending_review"
@@ -916,7 +979,7 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
                                          status="superseded", created_by=user.id))
     else:
         versions.filter(GovernanceDocumentVersion.status == "current").update({"status": "superseded"})
-    new_version = increment_version(old_version, "minor")
+    new_version = increment_version(old_version, "major" if change_type == "major" else "minor")
     row = GovernanceDocumentVersion(document_id=doc.id, version_number=new_version, change_type=change_type, title=doc.title, file_name=new_name, file_path=new_path,
                                     file_size=len(data), file_type=ext, change_summary=summary, change_reason=reason, status="current", created_by=user.id)
     db.add(row)
@@ -985,9 +1048,12 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
         raise StudioError("Nothing has changed since the library version.")
     if not force and doc.file_path != (s.settings or {}).get("library_file"):
         raise Conflict("The file of this document was replaced in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
+    from ..doc_version import decide, summary_of
+
+    decision = decide(s.base_content or "", s.content, title=doc.title)
     data, _notes = export_file(db, s, "docx", export_settings(db, s))
-    row, new_version, old_status = write_file_version(db, doc, user, data, change_type="studio", reason=change_reason, done="Edited in the AI Studio",
-                                                      summary="Edited in the AI Studio" + (": " + change_reason if change_reason else ""))
+    row, new_version, old_status = write_file_version(db, doc, user, data, change_type=decision["change"], reason=change_reason, done="Edited in the AI Studio",
+                                                      summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
     _record_change_set(db, s, row, s.base_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
     s.settings = {**(s.settings or {}), "library_file": doc.file_path}
@@ -1000,6 +1066,31 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
 def is_word_in_place(s) -> bool:
     """Whether the session's document came from a Word file whose formatting can be kept (its edits are written into the file)."""
     return bool(s.source_kind == "docx" and s.native_map and s.source_path and os.path.exists(s.source_path))
+
+
+def word_looks(s) -> List[Dict[str, Any]]:
+    """For a Word file edited in place, each block's number, indent and look in the file as it would be saved now (see
+    ``word_layout.layout``); nothing for any other document, or when the changes cannot be written into the file."""
+    if not is_word_in_place(s):
+        return []
+    return _word_looks(s.source_path, os.path.getmtime(s.source_path), s.content or "")
+
+
+def source_pdf(s) -> Optional[str]:
+    """The PDF the session's text was read from (to look at beside it), if it is still in the studio's folder."""
+    path = os.path.abspath(s.source_original_path or "")
+    return path if s.source_kind == "pdf" and path.startswith(os.path.abspath(UPLOAD_DIR) + os.sep) and os.path.isfile(path) else None
+
+
+@functools.lru_cache(maxsize=8)     # ponytail: per process, the last 8 texts; a shared cache if several workers serve the studio
+def _word_looks(path: str, mtime: float, content: str) -> List[Dict[str, Any]]:
+    from . import docx_io, word_layout
+
+    try:
+        data, _ = docx_io.export_in_place(path, content)
+    except docx_io.PatchProblem:
+        return []
+    return word_layout.for_blocks(data, content)
 
 
 def export_file(db, s, fmt: str, settings: Dict[str, Any], *, highlight: bool = True, pending: int = 0, build: bool = True) -> Tuple[bytes, List[Dict[str, Any]]]:

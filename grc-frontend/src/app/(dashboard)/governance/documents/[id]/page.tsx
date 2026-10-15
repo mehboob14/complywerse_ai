@@ -18,6 +18,7 @@ import DocumentSyncPanel from './_DocumentSyncPanel';
 import LifecycleTab from './_LifecycleTab';
 import ChainTab from './_ChainTab';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
+import WordView from '@/components/governance/WordView';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -2425,7 +2426,25 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, c
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [isPdfFile, doc?.id]);
+  }, [isPdfFile, doc?.id, doc?.current_version]);
+
+  // A Word file is drawn as Word draws it (docx-preview): its own numbering (1.3.1.1, I., a.), headings, tables where they are,
+  // headers and footers. The old text conversion below stays as the fallback when it cannot be drawn.
+  const isWordFile = !!doc?.has_file && !isPdfFile && (
+    String(doc?.file_type || '').toLowerCase() === 'docx' || /\.docx$/i.test(String(doc?.file_name || ''))
+  );
+  const [wordFile, setWordFile] = useState<Blob | null>(null);
+  const [wordError, setWordError] = useState(false);
+  useEffect(() => {
+    if (!isWordFile || !doc?.id) { setWordFile(null); return; }
+    let cancelled = false;
+    setWordError(false);
+    setWordFile(null);
+    governanceApi.downloadDocumentFile(doc.id)
+      .then((res) => { if (!cancelled) setWordFile(res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart])); })
+      .catch(() => { if (!cancelled) setWordError(true); });
+    return () => { cancelled = true; };
+  }, [isWordFile, doc?.id, doc?.current_version]);
 
   const openEditor = () => { startEdit(); setShowFullViewer(true); };
   const closeFullViewer = () => { setShowFullViewer(false); if (editing) setEditing(false); };
@@ -2526,6 +2545,8 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, c
       ) : (
         <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
       )
+    ) : isWordFile && !wordError ? (
+      <WordView file={wordFile} height={full ? undefined : 340} label={doc?.file_name || doc?.title || 'Document'} />
     ) : htmlLoading ? (
       <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
     ) : isMarkdown ? (

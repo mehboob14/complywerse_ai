@@ -781,12 +781,13 @@ def get_document(
 
 def _snapshot_content_version(
     db: Session, document: GovernanceDocument, *, old_content, old_title, old_version,
-    change_type: str, change_reason, user_id: int,
+    change_type: str, change_reason, user_id: int, summary: Optional[str] = None,
 ) -> str:
     """Snapshot document content into version history. Assumes document.content
     already holds the NEW content. Preserves the original as a baseline on the
     first edit, supersedes the prior current, inserts a new current, and bumps
-    document.current_version. Returns the new version number."""
+    document.current_version: the major number for a "major" change, else the
+    minor one. Returns the new version number."""
     from .versions import increment_version
     existing = db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.document_id == document.id
@@ -802,10 +803,10 @@ def _snapshot_content_version(
             GovernanceDocumentVersion.document_id == document.id,
             GovernanceDocumentVersion.status == "current",
         ).update({"status": "superseded"})
-    new_version_number = increment_version(old_version, "minor")
+    new_version_number = increment_version(old_version, "major" if change_type == "major" else "minor")
     db.add(GovernanceDocumentVersion(
         document_id=document.id, version_number=new_version_number, change_type=change_type,
-        title=document.title, content=document.content, change_summary=f"{change_type} update".strip(),
+        title=document.title, content=document.content, change_summary=summary or f"{change_type} update".strip(),
         change_reason=change_reason, status="current", created_by=user_id, created_at=datetime.utcnow(),
     ))
     document.current_version = new_version_number
@@ -927,10 +928,12 @@ def update_document(
     # Content edit → version snapshot (mirrors the statement edit→snapshot→history
     # pattern) so document body is fully versioned + restorable with who/when/why.
     if content_changing:
+        from ..doc_version import decide, summary_of
+        decision = decide(old_content or "", document.content or "", title=document.title)
         _snapshot_content_version(
             db, document, old_content=old_content, old_title=old_title,
-            old_version=old_version, change_type="minor", change_reason=change_reason,
-            user_id=current_user.id,
+            old_version=old_version, change_type=decision["change"], change_reason=change_reason,
+            user_id=current_user.id, summary=summary_of("Content edited", decision),
         )
 
     def _preview(v):
@@ -1806,13 +1809,10 @@ async def upload_document_file(
     
     current_ver = document.current_version or "1.0"
     if create_new_version and document.file_name:
-        try:
-            version_parts = current_ver.split('.')
-            major = int(version_parts[0]) if version_parts else 1
-            minor = int(version_parts[1]) if len(version_parts) > 1 else 0
-            new_version = f"{major}.{minor + 1}"
-        except (ValueError, IndexError):
-            new_version = "1.1"
+        from .. import doc_version
+        new_version, change_type, decided = doc_version.for_new_file(
+            current_ver, document.file_path, document.file_name, file_path, file.filename,
+            old_content=document.content, title=document.title)
         
         existing_versions = db.query(GovernanceDocumentVersion).filter(
             GovernanceDocumentVersion.document_id == document_id,
@@ -1824,14 +1824,14 @@ async def upload_document_file(
         version = GovernanceDocumentVersion(
             document_id=document_id,
             version_number=new_version,
-            change_type="minor",
+            change_type=change_type,
             title=document.title,
             content=document.content,
             file_name=file.filename,
             file_path=file_path,
             file_size=file_size,
             file_type=file_ext,
-            change_summary=change_summary or f"File updated: {file.filename}",
+            change_summary=change_summary or f"File updated: {file.filename}. {decided}",
             change_reason=change_reason,
             status="current",
             created_by=current_user.id
@@ -2072,6 +2072,8 @@ async def create_document_with_file(
 
     parsed_framework_ids = _ids(framework_ids)
     parsed_applicable_ids = _ids(applicable_framework_ids) or parsed_framework_ids
+    from ..doc_version import detect, first_summary
+    start_version, found_in = detect(file_path, file.filename)
 
     document = GovernanceDocument(
         tenant_id=tenant_id,
@@ -2087,7 +2089,7 @@ async def create_document_with_file(
         file_size=file_size,
         file_type=file_ext,
         status="draft",
-        current_version="1.0",
+        current_version=start_version,
         framework_ids=parsed_framework_ids,
         applicable_framework_ids=parsed_applicable_ids,
     )
@@ -2096,14 +2098,14 @@ async def create_document_with_file(
 
     version = GovernanceDocumentVersion(
         document_id=document.id,
-        version_number="1.0",
+        version_number=start_version,
         change_type="major",
         title=title,
         file_name=file.filename,
         file_path=file_path,
         file_size=file_size,
         file_type=file_ext,
-        change_summary="Initial version",
+        change_summary=first_summary(start_version, found_in),
         status="current",
         created_by=current_user.id
     )

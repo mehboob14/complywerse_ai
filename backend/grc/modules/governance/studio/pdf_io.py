@@ -25,6 +25,8 @@ _NUMBER = re.compile(r"^\s*(\(?\d{1,3})[.)]\s+(\S.*)$")
 _LETTER = re.compile(r"^\s*(\(?[a-zA-Z])[.)]\s+(\S.*)$")
 _SECTION = re.compile(r"^\s*(\d{1,2}(?:\.\d{1,2}){0,3})[.)]?\s+\S")
 _PAGE_NO = re.compile(r"^\s*(?:page\s*)?\d{1,4}(?:\s*(?:of|/)\s*\d{1,4})?\s*$", re.I)
+_TOC_LINE = re.compile(r"^\S.*?(?:[.…]\s?){4,}\s*\d{1,4}$")          # "Preamble ........ 4": a line of a table of contents
+_WORDY = re.compile(r"[^\W\d_]{2}")                                  # two letters together: a heading is words, not a stray mark
 MAX_PAGES = 400
 
 
@@ -38,10 +40,23 @@ class Line:
     y1: float
     block: int
     page: int
+    scan: bool = False                  # on a scanned page: the scanner's own recognised text, whose sizes and places are guesses
 
 
 def _esc(text: str) -> str:
     return _ESC.sub(r"\\\1", text)
+
+
+def _is_scan(page) -> bool:
+    """A scanned page: its text is the scanner's recognition, laid invisibly over the picture of the page."""
+    kinds: Counter = Counter()
+    try:
+        for span in page.get_texttrace():
+            kinds[span.get("type")] += len(span.get("chars") or ())
+    except Exception:       # noqa: BLE001 - a reader that cannot trace text: the page counts as text
+        return False
+    total = sum(kinds.values())
+    return bool(total) and kinds[3] * 2 >= total
 
 
 def _lines(page, number: int, skip: List[Tuple[float, float, float, float]]) -> List[Line]:
@@ -140,8 +155,30 @@ def _drop_edges(lines: List[Line], heights: Dict[int, float], body: float) -> Li
 
 
 def _heading_levels(lines: List[Line], body: float) -> Dict[float, int]:
-    sizes = sorted({ln.size for ln in lines if ln.size >= body * 1.15 and len(ln.text) <= 140}, reverse=True)
-    return {s: min(i + 1, 4) for i, s in enumerate(sizes)}
+    """The heading level of each type size above the body text. A size is a level of its own when two or more headings use it
+    (sizes half a point apart are one level: the same heading typed twice); the largest size, used once, is the title (1);
+    a size used once elsewhere - a cover page's slogan, one heading typed larger - takes the level of the next size down."""
+    count = Counter(ln.size for ln in lines if ln.size >= body * 1.15 and len(ln.text) <= 140 and _WORDY.search(ln.text))
+    if not count:
+        return {}
+    tiers: List[List[float]] = []
+    for s in sorted((s for s, n in count.items() if n >= 2), reverse=True):
+        if tiers and tiers[-1][-1] - s <= 0.5:
+            tiers[-1].append(s)
+        else:
+            tiers.append([s])
+    top = max(count)
+    title = count[top] == 1
+    levels = {top: 1} if title else {}
+    for i, tier in enumerate(tiers):
+        for s in tier:
+            levels[s] = min(i + 1 + title, 4)
+    deepest = max(levels.values())
+    for s in count:
+        if s not in levels:
+            below = [t for t in levels if t < s and not (title and t == top)]
+            levels[s] = levels[max(below)] if below else min(deepest + 1, 4)
+    return levels
 
 
 def import_pdf(path: str) -> Imported:
@@ -161,27 +198,36 @@ def import_pdf(path: str) -> Imported:
         all_lines: List[Line] = []
         tables_by_page: Dict[int, List[Tuple[Tuple[float, float, float, float], List[List[str]]]]] = {}
         heights: Dict[int, float] = {}
+        scans = set()
         for n in range(pages):
             page = doc.load_page(n)
             heights[n] = page.rect.height
             tabs = _tables(page)
             tables_by_page[n] = tabs
+            if _is_scan(page):
+                scans.add(n)
             all_lines += _lines(page, n, [t[0] for t in tabs])
         if sum(len(ln.text) for ln in all_lines) < 40:
             return _scanned(path, doc.page_count, notes)
+        if scans and len(scans) < pages:            # beside real text, a scanned page (a signed cover memo, say) is read as plain paragraphs
+            for ln in all_lines:
+                ln.scan = ln.page in scans
         repeated = _running(all_lines, pages, heights)
         lines = [ln for ln in all_lines if not _is_margin_noise(ln, repeated, heights.get(ln.page, 842))]
+        text_lines = [ln for ln in lines if not ln.scan]
         weights: Counter = Counter()
-        for ln in lines:
+        for ln in text_lines:
             weights[ln.size] += len(ln.text)
         body = weights.most_common(1)[0][0] if weights else 10.0
         lines = _drop_edges(lines, heights, body)
-        levels = _heading_levels(lines, body)
-        base_x = min((ln.x0 for ln in lines), default=0.0)
+        text_lines = [ln for ln in lines if not ln.scan]
+        levels = _heading_levels(text_lines, body)
+        base_x = min((ln.x0 for ln in text_lines), default=0.0)
         title_seen = False
         out: List[Tuple[str, str]] = []                                  # (kind, markdown)
         para: List[str] = []
         last: Optional[Line] = None
+        list_x: List[float] = []                                         # the left edge of each level of the list being read
 
         def flush() -> None:
             if para:
@@ -200,9 +246,15 @@ def import_pdf(path: str) -> Imported:
                 last = None
                 continue
             ln: Line = item
-            heading = levels.get(ln.size)
-            numbered_bold = ln.bold and len(ln.text) <= 110 and bool(_SECTION.match(ln.text)) and not _BULLET.match(ln.text)
-            standalone_bold = ln.bold and len(ln.text) <= 90 and ln.size >= body and not _BULLET.match(ln.text) and not ln.text.endswith(".")
+            if _TOC_LINE.match(ln.text):                                     # a contents line stays a line of its own, not a heading
+                flush()
+                out.append(("p", _protect(_esc(ln.text))))
+                last = ln
+                continue
+            heading = None if ln.scan or not _WORDY.search(ln.text) else levels.get(ln.size)
+            numbered_bold = not ln.scan and ln.bold and len(ln.text) <= 110 and bool(_SECTION.match(ln.text)) and not _BULLET.match(ln.text)
+            standalone_bold = not ln.scan and ln.bold and len(ln.text) <= 90 and ln.size >= body and not _BULLET.match(ln.text) and not ln.text.endswith(".") \
+                and bool(_WORDY.search(ln.text))
             if heading or numbered_bold or standalone_bold:
                 flush()
                 if heading:
@@ -221,9 +273,18 @@ def import_pdf(path: str) -> Imported:
                 last = ln
                 continue
             bullet, number, letter = _BULLET.match(ln.text), _NUMBER.match(ln.text), _LETTER.match(ln.text)
-            if bullet or number or (letter and len(ln.text) > 6 and last is not None):
+            if not ln.scan and (bullet or number or (letter and len(ln.text) > 6 and last is not None)):
                 flush()
-                depth = max(0, min(3, round((ln.x0 - base_x) / 22)))
+                # nesting is read against the list's own first item: an item indented under a paragraph is still the first level
+                # (as Markdown, an indented first item would be read as code)
+                if not out or out[-1][0] != "li":
+                    list_x = [ln.x0]
+                else:
+                    while len(list_x) > 1 and ln.x0 < list_x[-1] - 6:
+                        list_x.pop()
+                    if ln.x0 > list_x[-1] + 10 and len(list_x) < 4:
+                        list_x.append(ln.x0)
+                depth = len(list_x) - 1
                 if number:
                     marker, body_text = number.group(1).strip("()") + ".", number.group(2)
                 else:
@@ -260,6 +321,10 @@ def import_pdf(path: str) -> Imported:
             parts.append(md)
             prev = kind
         notes.append("Read from a PDF: headings, lists and tables were worked out from the layout, so check them. A PDF cannot be edited, so saving makes a Word copy of this text.")
+        if scans:
+            listed = ", ".join(str(n + 1) for n in sorted(scans))
+            notes.append(f"Page{'s' if len(scans) != 1 else ''} {listed} {'are' if len(scans) != 1 else 'is'} scanned: the text there is the scanner's own recognition, "
+                         "which can be wrong, so check it against the PDF.")
         return Imported("".join(parts) + "\n", "pdf", notes)
     finally:
         doc.close()

@@ -98,6 +98,9 @@ def world(monkeypatch, tmp_path):
         monkeypatch.setattr(claude_client, "_client", state.wire.client)
         return state.wire
     state.respond = respond_with
+    # a call no test answered fails here instead of going out (saving asks whether a change is major or minor: the rule decides)
+    respond_with(lambda body: error(400, "No answer is set for this call in this test."))
+    state.wire = None
     state.api = lambda path: f"/governance/studio{path}"
     yield state
     db.close()
@@ -142,7 +145,10 @@ def test_a_library_document_and_an_uploaded_text_file_open_as_sessions(world):
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
     assert s["document_id"] == 10 and s["title"] == "Information Security Policy" and "## 2. Scope" in s["content"] and s["base_label"] == "Information Security Policy v1.0"
     up = world.http.post(world.api("/sessions/upload"), files={"file": ("notes.md", b"# Notes\n\nA paragraph.\n", "text/markdown")}, data={"doc_type": "guideline"}).json()
-    assert up["kind"] == "upload" and up["source"]["kind"] == "md" and up["content"] == "# Notes\n\nA paragraph.\n" and up["title"] == "notes"
+    assert up["source"]["kind"] == "md" and up["content"] == "# Notes\n\nA paragraph.\n" and up["title"] == "notes"
+    # an uploaded file is in the library at once, as a draft (a text file as a text document), and the session edits it there
+    notes = world.db.get(m.GovernanceDocument, up["document_id"])
+    assert up["kind"] == "library" and (notes.status, notes.current_version, notes.content, notes.doc_type) == ("draft", "1.0", "# Notes\n\nA paragraph.\n", "guideline")
     assert world.http.post(world.api("/sessions/upload"), files={"file": ("x.exe", b"MZ", "application/octet-stream")}).status_code == 400
     assert [i["id"] for i in world.http.get(world.api("/sessions")).json()["items"]][:2] == [up["id"], s["id"]]
 
@@ -456,11 +462,12 @@ def test_a_session_moves_into_the_library_and_then_saves_as_new_versions(world, 
     assert nothing.status_code == 400 and "Nothing has changed" in nothing.json()["detail"]
     world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": session["content"] + "\n## Scope\n\nAll staff.\n", "base_revision": session["revision"]})
     saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={"change_reason": "Added scope"}).json()
-    assert saved["version"] == "1.1" and saved["status"] == "draft"
+    assert saved["version"] == "2.0" and saved["status"] == "draft"                    # a section added: a major change
     world.db.refresh(doc)
     assert "All staff." in doc.content
     versions = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).order_by(m.GovernanceDocumentVersion.id).all()
-    assert [(v.version_number, v.status) for v in versions] == [("1.0", "superseded"), ("1.1", "current")] and versions[1].change_reason == "Added scope"
+    assert [(v.version_number, v.status) for v in versions] == [("1.0", "superseded"), ("2.0", "current")] and versions[1].change_reason == "Added scope"
+    assert versions[1].change_type == "major" and "A section was added" in versions[1].change_summary     # (no AI answer here: the rule)
 
 
 def test_saving_over_a_library_document_that_changed_is_a_conflict_and_approved_documents_go_back_to_review(world):

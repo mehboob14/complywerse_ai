@@ -15,6 +15,7 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { placeholderSpans } from '@/lib/studio/text';
+import type { BlockLook } from '@/lib/studio/api';
 
 const NO_SPANS = {
   colspan: { default: 1, parseHTML: () => 1, renderHTML: () => ({}) },
@@ -151,6 +152,50 @@ export const Marks = Extension.create({
           decorations(state) {
             return marksKey.getState(state) ?? DecorationSet.empty;
           },
+        },
+      }),
+    ];
+  },
+});
+
+// ── a Word file's own numbers and indents ────────────────────────────────────
+export const wordLayoutKey = new PluginKey<{ set: DecorationSet; on: boolean }>('studioWordLayout');
+
+/**
+ * What Word shows for each block of a Word file edited in place and its text does not hold: the number in front of it
+ * ("1.3.1.1.", "II.", a bullet), its indent, and clauses numbered through a heading style that look like body text. Node
+ * decorations, so the numbers are not text and cannot be typed over; they move with the blocks as the person types, and the
+ * page sends a new layout after each save. A layout for another number of blocks than the editor holds is not used.
+ */
+export const WordLayout = Extension.create({
+  name: 'studioWordLayout',
+  addProseMirrorPlugins() {
+    return [
+      new Plugin<{ set: DecorationSet; on: boolean }>({
+        key: wordLayoutKey,
+        state: {
+          init: () => ({ set: DecorationSet.empty, on: false }),
+          apply(tr, old) {
+            const looks = tr.getMeta(wordLayoutKey) as BlockLook[] | undefined;
+            if (!looks) return { set: old.set.map(tr.mapping, tr.doc), on: old.on };
+            const ranges = blockRanges(tr.doc);
+            if (!looks.length || ranges.length !== looks.length) return { set: DecorationSet.empty, on: false };
+            const decorations: Decoration[] = [];
+            ranges.forEach((r, i) => {
+              const l = looks[i];
+              if (!l || !(l.label || l.left || l.hang || l.body)) return;
+              const attrs: Record<string, string> = { class: l.body ? 'studio-wl studio-wl-body' : 'studio-wl' };
+              if (l.label) attrs['data-num'] = l.label;
+              if (l.left || l.hang) attrs.style = `padding-left:${l.left ?? 0}pt;text-indent:${-(l.hang ?? 0)}pt;--hang:${Math.max(0, l.hang ?? 0)}pt`;
+              decorations.push(Decoration.node(r.from, r.to, attrs));
+            });
+            return { set: DecorationSet.create(tr.doc, decorations), on: true };
+          },
+        },
+        props: {
+          decorations: (state) => wordLayoutKey.getState(state)?.set ?? DecorationSet.empty,
+          // lists take Word's own numbers and indents instead of the editor's
+          attributes: (state): Record<string, string> => (wordLayoutKey.getState(state)?.on ? { class: 'studio-word' } : {}),
         },
       }),
     ];

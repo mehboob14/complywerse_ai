@@ -27,7 +27,8 @@ import {
   Underline as UnderlineIcon,
   Undo2,
 } from 'lucide-react';
-import { Marks, Placeholders, StudioCell, StudioHeaderCell, StudioRow, StudioTable, blockRanges, findTextRange, marksKey, placeholderRanges, type DocMark } from './editorExtensions';
+import { Marks, Placeholders, StudioCell, StudioHeaderCell, StudioRow, StudioTable, WordLayout, blockRanges, findTextRange, marksKey, placeholderRanges, wordLayoutKey, type DocMark } from './editorExtensions';
+import type { BlockLook } from '@/lib/studio/api';
 
 export type EditorMode = 'edit' | 'view' | 'source';
 
@@ -35,6 +36,8 @@ export interface StudioEditorHandle {
   getMarkdown: () => string;
   setMarkdown: (markdown: string) => void;
   setMarks: (marks: DocMark[]) => void;
+  /** a Word file's own numbers, indents and body-text clauses, one look per block (see `WordLayout`) */
+  setLayout: (looks: BlockLook[]) => void;
   blockRanges: () => { from: number; to: number }[];
   /** where `quote` is (inside the given block when there is one); null when it is not found */
   rangeOf: (quote: string, block?: number | null) => { from: number; to: number } | null;
@@ -202,6 +205,7 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
       StudioCell,
       Placeholders,
       Marks,
+      WordLayout,
       Markdown.configure({ html: true, tightLists: true, bulletListMarker: '-', linkify: false, breaks: false, transformPastedText: true, transformCopiedText: false }),
     ],
     content: value || '',
@@ -232,11 +236,26 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
     editor?.setEditable(mode === 'edit', false);                  // (false: switching to View must not count as an edit)
   }, [editor, mode]);
 
+  // a layout that came before the editor was ready is put on when it is; the last one is put on again when the text is reloaded
+  // from the Markdown view (the plugin drops it when the blocks no longer match)
+  const pendingLayout = useRef<BlockLook[] | null>(null);
+  const lastLayout = useRef<BlockLook[] | null>(null);
+  const putLayout = useCallback((looks: BlockLook[]) => {
+    lastLayout.current = looks;
+    if (!editor) { pendingLayout.current = looks; return; }
+    pendingLayout.current = null;
+    editor.view.dispatch(editor.state.tr.setMeta(wordLayoutKey, looks).setMeta('addToHistory', false));
+  }, [editor]);
+  useEffect(() => { if (editor && pendingLayout.current) putLayout(pendingLayout.current); }, [editor, putLayout]);
+
   // Source <-> editor: leaving the source view puts what was typed there into the editor
   const previousMode = useRef<EditorMode>(mode);
   useEffect(() => {
     if (!editor) return;
-    if (previousMode.current === 'source' && mode !== 'source') baseline.current = load(editor, source, quiet);
+    if (previousMode.current === 'source' && mode !== 'source') {
+      baseline.current = load(editor, source, quiet);
+      if (lastLayout.current) putLayout(lastLayout.current);
+    }
     if (previousMode.current !== 'source' && mode === 'source') setSource(read(editor));
     previousMode.current = mode;
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -263,6 +282,7 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
     setMarks: (marks) => {
       if (editor) editor.view.dispatch(editor.state.tr.setMeta(marksKey, marks).setMeta('addToHistory', false));
     },
+    setLayout: putLayout,
     blockRanges: () => (editor ? blockRanges(editor.state.doc) : []),
     rangeOf: (quote, block) => {
       if (!editor) return null;
@@ -299,7 +319,7 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
       return true;
     },
     focus: () => editor?.commands.focus(),
-  }), [editor, mode, source, value, scrollTo]);
+  }), [editor, mode, source, value, scrollTo, putLayout]);
 
   return (
     <div className="studio-editor flex h-full min-h-0 flex-col bg-[#eef1f4]">
@@ -351,6 +371,10 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
         .studio-prose .studio-focus-text { background: #fde68a; box-shadow: 0 0 0 2px #fde68a; border-radius: 2px; }
         @keyframes studio-focus-in { 0% { background: #fde68a; } 100% { background: #fffbeb; } }
         @media (prefers-reduced-motion: reduce) { .studio-prose .studio-focus-block { animation: none; } }
+        .studio-prose.studio-word ul, .studio-prose.studio-word ol { list-style: none; padding-left: 0; }
+        .studio-prose .studio-wl[data-num]::before { content: attr(data-num); display: inline-block; min-width: var(--hang, 0); padding-right: 0.5em; box-sizing: border-box; text-indent: 0; }
+        .studio-prose .studio-wl-body { font-size: 0.9375rem; font-weight: 400; color: #1f2933; line-height: 1.65; margin: 0.55em 0; }
+        .cw-dashboard .studio-prose .studio-wl-body, .governance-light .studio-prose .studio-wl-body { font-size: 11.5px; color: var(--color-text); }  /* as a paragraph there (globals.css) */
         .studio-prose p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9aa5b1; pointer-events: none; float: left; height: 0; }
       `}</style>
     </div>

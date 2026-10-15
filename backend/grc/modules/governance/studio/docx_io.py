@@ -575,6 +575,7 @@ class Node:
     para: Optional[Para] = None
     table: Optional[TableInfo] = None
     num_id: Optional[str] = None
+    ilvl: int = 0                             # a list item's level in Word (``level`` is its nesting in the Markdown, counted from its list)
     tpl_ppr: Any = None                       # copies taken before any edit, to give new paragraphs the look of this one
     tpl_rpr: Any = None
 
@@ -703,6 +704,7 @@ def walk(doc, ctx: Optional[Ctx] = None) -> Tuple[List[Node], Dict[str, Any]]:
     ctx.has_title = has_title
     nodes: List[Node] = []
     counters: Dict[Tuple[str, int], int] = {}
+    run: List[int] = []                       # the Word levels of the list being read, one per Markdown nesting level
     auto_numbered = False
     for el, para, info in raw:
         if info is not None:
@@ -729,8 +731,20 @@ def walk(doc, ctx: Optional[Ctx] = None) -> Tuple[List[Node], Dict[str, Any]]:
                 for k in [k for k in counters if k[0] == num_id and k[1] > ilvl]:
                     del counters[k]
                 number = counters[key]
-            node = Node("list_item", el, "    " * min(ilvl, 5) + (f"{number}. " if ordered else "- ") + segs_markdown(segs), para.text.strip(),
-                        level=min(ilvl, 5), ordered=ordered, number=number, para=para, num_id=num_id)
+            # Markdown nests a list from its first item, one level at a time: a list that starts at Word's third level, under a
+            # heading, is the first level here (indented, it would read back as code)
+            if not nodes or nodes[-1].kind != "list_item":
+                run = [ilvl]
+            else:
+                while len(run) > 1 and ilvl < run[-1]:
+                    run.pop()
+                if ilvl > run[-1] and len(run) < 6:
+                    run.append(ilvl)
+                elif ilvl < run[-1]:
+                    run[-1] = ilvl
+            depth = len(run) - 1
+            node = Node("list_item", el, "    " * depth + (f"{number}. " if ordered else "- ") + segs_markdown(segs), para.text.strip(),
+                        level=depth, ordered=ordered, number=number, para=para, num_id=num_id, ilvl=ilvl)
         else:
             node = Node("paragraph", el, segs_markdown(segs), para.text.strip(), para=para)
         node.tpl_ppr = copy.deepcopy(ppr) if ppr is not None else None
@@ -1260,7 +1274,9 @@ def build_paragraph(ctx: Ctx, tpls: Templates, block: B.Block, prev: Optional[Pl
             num_id = ctx.new_num(ctx.numbering.abstract_of(tpl.num_id), block.number or 1)
         else:
             num_id = ctx.ensure_list(block.ordered)
-        _set_numpr(ppr, num_id, min(block.level, 8))
+        # Word's level: the item it copies, moved by the difference in nesting (a list may start deeper than Word's first level)
+        ilvl = tpl.ilvl + block.level - tpl.level if tpl is not None and tpl.kind == "list_item" else block.level
+        _set_numpr(ppr, num_id, max(0, min(ilvl, 8)))
     elif kind == "paragraph":
         for e in ppr.findall(qn("w:numPr")):
             ppr.remove(e)

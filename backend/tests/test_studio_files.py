@@ -1,6 +1,7 @@
 """The studio with real files: a Word file uploaded or opened from the library is edited in place and comes back as the file;
 a PDF is read from its layout and leaves as a Word copy; moving a Word file into the library keeps it a Word file."""
 import io
+import json
 import os
 import zipfile
 
@@ -42,7 +43,7 @@ def docx_of(response):
 def test_an_uploaded_word_file_is_edited_by_chat_and_leaves_as_the_same_file(world, tmp_path):
     path = F.corporate_policy(str(tmp_path / "policy.docx"))
     s = upload(world, path)
-    assert s["source"] == {"kind": "docx", "name": "policy.docx", "in_place": True} and s["kind"] == "upload"
+    assert s["source"] == {"kind": "docx", "name": "policy.docx", "in_place": True} and s["kind"] == "library" and s["document_id"]
     assert s["content"].startswith("# Information Security Policy") and "**all employees**" in s["content"]
 
     paragraph = s["content"].split("\n\n")[1]
@@ -165,55 +166,79 @@ def test_a_library_word_file_with_tracked_changes_shows_them_as_the_redline(worl
     assert diff["stats"]["modified"] == 3 and any(("delete", "five") in [tuple(x) for x in (r.get("segments") or [])] for r in diff["rows"])
 
 
-def test_an_uploaded_word_file_moved_to_the_library_stays_a_word_file(world, lib, tmp_path):
+def test_an_uploaded_word_file_is_in_the_library_at_once_as_the_file_itself_numbered_as_it_states(world, lib, tmp_path):
+    path = F.corporate_policy(str(tmp_path / "policy.docx"))
+    s = upload(world, path, name="Information Security Policy v3.2.docx")
+    doc = world.db.get(m.GovernanceDocument, s["document_id"])
+    only = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).one()
+    # its footer says "POL-001 v1.0": what the document states comes before what its file name says
+    assert (s["kind"], doc.status, doc.current_version, only.version_number, only.status) == ("library", "draft", "1.0", "1.0", "current")
+    assert only.change_summary == "Initial version: the uploaded file, version 1.0 as the document states it" and s["base_label"].endswith(" v1.0")
+    assert open(doc.file_path, "rb").read() == open(path, "rb").read() and only.file_path == doc.file_path        # the file itself, not a re-saved copy
+    assert doc.file_path.startswith(str(lib)) and doc.file_type == "docx" and not (doc.content or "").strip()
+    assert "uploaded into the AI Studio" in world.db.query(m.DocumentAuditLog).filter_by(document_id=doc.id, action="created").one().action_details
+    assert world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={}).status_code == 400            # it is there already
+
+
+def test_edits_to_an_uploaded_word_file_save_as_its_next_version_major_or_minor_as_comply_agent_decides(world, lib, tmp_path):
     path = F.corporate_policy(str(tmp_path / "policy.docx"))
     s = upload(world, path)
     paragraph = s["content"].split("\n\n")[1]
     world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"].replace(paragraph, paragraph.replace("every year", "every quarter")), "base_revision": s["revision"]})
-    moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"title": "Information Security Policy", "classification": "internal"}).json()
-    doc = world.db.get(m.GovernanceDocument, moved["document_id"])
-    assert doc.file_type == "docx" and doc.file_path.startswith(str(lib)) and not (doc.content or "").strip() and doc.status == "draft"
-    saved = Document(doc.file_path)
-    assert "every quarter" in "\n".join(p.text for p in saved.paragraphs)                          # the edit is in the file, in the original's formatting
+    saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={}).json()
+    doc = world.db.get(m.GovernanceDocument, s["document_id"])
+    assert saved["version"] == "1.1" and doc.file_type == "docx" and doc.file_path.startswith(str(lib))      # two words: minor (no AI answer here: the rule)
+    assert "every quarter" in "\n".join(p.text for p in Document(doc.file_path).paragraphs)                    # the edit is in the file, in the original's formatting
     assert zipfile.ZipFile(doc.file_path).read("word/header1.xml") == zipfile.ZipFile(path).read("word/header1.xml")
-    # the uploaded file is the original: kept as it was, as version 1.0; what was changed after it is version 1.1 (the file above)
+    # the uploaded file stays as the first version, as it was
     first, second = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).order_by(m.GovernanceDocumentVersion.id).all()
-    assert (first.version_number, first.status, first.file_name) == ("1.0", "superseded", "policy.docx")
-    assert open(first.file_path, "rb").read() == open(path, "rb").read() and first.file_path.startswith(str(lib)) and first.file_path != doc.file_path
-    assert (second.version_number, second.status, second.file_path, doc.current_version) == ("1.1", "current", doc.file_path, "1.1")
+    assert (first.version_number, first.status, first.file_name) == ("1.0", "superseded", "policy.docx") and open(first.file_path, "rb").read() == open(path, "rb").read()
+    assert (second.version_number, second.status, second.file_path, second.change_type) == ("1.1", "current", doc.file_path, "minor")
     assert second.change_set["items"] and "every year" in second.change_set["items"][0]["before_text"] and "every quarter" in second.change_set["items"][0]["after_text"]
-    # and the session carries on from there: the next edit becomes version 1.2 of the same file
+    # the next one adds an obligation: Comply Agent calls it a major change, so it is version 2.0 of the same file
+    world.respond(lambda body: reply(json.dumps({"change": "major", "reason": "Staff must now report incidents within one day."})))
     again = world.http.get(world.api(f"/sessions/{s['id']}")).json()
-    world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": again["content"] + "\nPostscript.\n", "base_revision": again["revision"]})
-    saved2 = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={}).json()
-    assert saved2["version"] == "1.2" and "Postscript." in "\n".join(p.text for p in Document(world.db.get(m.GovernanceDocument, doc.id).file_path).paragraphs)
+    world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": again["content"] + "\nStaff shall report incidents within one day.\n", "base_revision": again["revision"]})
+    saved2 = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={"change_reason": "Incident reporting"}).json()
+    assert saved2["version"] == "2.0" and "Staff shall report incidents within one day." in "\n".join(p.text for p in Document(world.db.get(m.GovernanceDocument, doc.id).file_path).paragraphs)
+    third = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id, version_number="2.0").one()
+    assert third.change_type == "major" and third.change_summary == "Edited in the AI Studio: Incident reporting. Major change: Staff must now report incidents within one day."
+    sent = world.wire.requests[-1].body
+    assert sent["output_config"]["effort"] == "low" and "Staff shall report incidents within one day." in sent["messages"][0]["content"]
+    assert "Review it every quarter" not in sent["messages"][0]["content"]                       # only what changed is read, not the whole document
 
 
-def test_an_uploaded_word_file_moved_to_the_library_without_changes_is_the_uploaded_file_itself(world, lib, tmp_path):
-    path = F.corporate_policy(str(tmp_path / "policy.docx"))
-    s = upload(world, path)
-    moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"title": "Information Security Policy"}).json()
-    doc = world.db.get(m.GovernanceDocument, moved["document_id"])
-    only = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).one()
-    assert (only.version_number, only.status, doc.current_version) == ("1.0", "current", "1.0")
-    assert open(doc.file_path, "rb").read() == open(path, "rb").read() and only.file_path == doc.file_path        # not a copy that was re-saved
-    assert doc.file_path.startswith(str(lib)) and not (doc.content or "").strip()
-
-
-def test_an_uploaded_pdf_moved_to_the_library_becomes_text_and_the_pdf_is_kept_as_the_first_version(world, lib, tmp_path):
+def test_an_uploaded_pdf_is_in_the_library_at_once_as_the_pdf_and_its_edits_save_as_a_word_copy(world, lib, tmp_path):
     md = "# Retention Policy\n\n## 1. Purpose\n\n" + "Records shall be kept as long as the law requires and no longer. " * 6 + "\n\n## 2. Rules\n\n1. Keep invoices for ten years.\n2. Keep emails for two years.\n"
     pdf = tmp_path / "retention.pdf"
-    pdf.write_bytes(exporters.to_pdf(md, title="Retention", entity_name="Capital Financial Services Bank", doc_code="POL-9", version="1.0"))
+    pdf.write_bytes(exporters.to_pdf(md, title="Retention", entity_name="Capital Financial Services Bank", doc_code="POL-9", version="2.3"))
     s = upload(world, str(pdf), "retention.pdf", "application/pdf")
+    doc = world.db.get(m.GovernanceDocument, s["document_id"])
+    assert (doc.file_type, doc.current_version, doc.status) == ("pdf", "2.3", "draft") and open(doc.file_path, "rb").read() == pdf.read_bytes()   # its footer says v2.3
     world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"].replace("two years", "three years"), "base_revision": s["revision"]})
-    moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"title": "Retention Policy"}).json()
-    doc = world.db.get(m.GovernanceDocument, moved["document_id"])
-    assert "three years" in doc.content and not doc.file_path and doc.current_version == "1.1"           # a text document: its page and editor are as for any other
+    saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={}).json()
+    world.db.refresh(doc)
+    assert saved["version"] == "2.4" and doc.file_type == "docx" and "three years" in "\n".join(p.text for p in Document(doc.file_path).paragraphs)
     first, second = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).order_by(m.GovernanceDocumentVersion.id).all()
-    assert (first.version_number, first.file_name, first.file_type, first.status) == ("1.0", "retention.pdf", "pdf", "superseded")
-    assert open(first.file_path, "rb").read() == pdf.read_bytes() and "two years" in first.content and "three years" not in first.content
-    assert (second.version_number, second.status, second.change_type) == ("1.1", "current", "studio") and not second.file_path
+    assert (first.version_number, first.file_name, first.file_type, first.status) == ("2.3", "retention.pdf", "pdf", "superseded")    # the PDF is kept as it was
+    assert (second.version_number, second.status, second.change_type, second.file_type) == ("2.4", "current", "minor", "docx")
     assert "three years" in second.change_set["items"][0]["after_text"]
+
+
+def test_an_upload_session_from_before_moves_to_the_library_numbered_as_its_file_states(world, lib, tmp_path):
+    path = F.corporate_policy(str(tmp_path / "policy.docx"))
+    s = upload(world, path, name="Information Security Policy v2.0.docx")
+    row = world.db.get(m.StudioSession, s["id"])                 # a session uploaded before an upload went into the library at once
+    row.kind, row.document_id, row.settings = "upload", None, {}
+    world.db.commit()
+    paragraph = s["content"].split("\n\n")[1]
+    world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"].replace(paragraph, paragraph.replace("every year", "every quarter")), "base_revision": s["revision"]})
+    moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"title": "Information Security Policy"}).json()
+    doc = world.db.get(m.GovernanceDocument, moved["document_id"])
+    first, second = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id).order_by(m.GovernanceDocumentVersion.id).all()
+    assert (first.version_number, first.status, first.change_summary) == ("1.0", "superseded", "Initial version: the uploaded file, version 1.0 as the document states it")
+    assert (second.version_number, second.change_type, doc.current_version, doc.file_type) == ("1.1", "minor", "1.1", "docx")
+    assert open(first.file_path, "rb").read() == open(path, "rb").read() and "every quarter" in "\n".join(p.text for p in Document(doc.file_path).paragraphs)
 
 
 def test_a_document_can_be_compared_with_a_file_the_person_uploads(world):

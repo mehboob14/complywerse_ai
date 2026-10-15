@@ -784,6 +784,23 @@ def export_document(session_id: int, body: ExportIn, db: Session = Depends(get_d
         "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(name)}", "Cache-Control": "no-store"})
 
 
+@router.get("/sessions/{session_id}/layout", dependencies=[Depends(require_studio)])
+def session_layout(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """How Word sets out each block of a Word file edited in place - the number in front of it, its indent, a heading that looks
+    like body text - so the editor shows the document's own hierarchy. No blocks for any other document."""
+    s = _session(db, session_id, user)
+    return {"revision": s.revision_no, "blocks": service.word_looks(s)}
+
+
+@router.get("/sessions/{session_id}/source-file", dependencies=[Depends(require_studio)])
+def session_source_file(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """The PDF the document was read from, as it is (a PDF cannot be edited, so it does not hold the changes)."""
+    path = service.source_pdf(_session(db, session_id, user))
+    if not path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="This document was not read from a PDF.")
+    return FileResponse(path, media_type="application/pdf", headers={"Cache-Control": "no-store"})
+
+
 def _export_format(value: str) -> str:
     fmt = (value or "docx").lower().lstrip(".")
     if fmt not in exporters.FORMATS:
