@@ -181,7 +181,10 @@ export function SaveTemplateDialog({ session, onClose, getContent }: { session: 
   const [name, setName] = useState(own ? session.title : `${session.title} template`);
   const [docType, setDocType] = useState(session.doc_type);
   const [description, setDescription] = useState('');
-  const [makeDefault, setMakeDefault] = useState(true);
+  const status = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 60_000 });
+  const admin = !!status.data?.is_admin;
+  const [wantDefault, setMakeDefault] = useState(true);
+  const makeDefault = admin && wantDefault;                                           // only an administrator sets the organisation's default
   const [mode, setMode] = useState<'new' | 'update'>(own ? 'update' : 'new');
   const save = useMutation({
     mutationFn: () => (mode === 'update' && own
@@ -205,7 +208,10 @@ export function SaveTemplateDialog({ session, onClose, getContent }: { session: 
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">Document type</span>
           <select value={docType} onChange={(e) => setDocType(e.target.value)} className={`${input} mt-1`}>{Object.entries(DOC_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">Description (optional)</span><input value={description} onChange={(e) => setDescription(e.target.value)} className={`${input} mt-1`} /></label>
-        <label className="flex items-start gap-2 text-sm text-[#26323d]"><input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} className="mt-1 accent-[#0f766e]" /> Use it for every new {DOC_TYPE_LABEL[docType]?.toLowerCase() ?? 'document'} instead of the standard structure</label>
+        <label className={`flex items-start gap-2 text-sm ${admin ? 'text-[#26323d]' : 'text-[#7b8794]'}`}>
+          <input type="checkbox" checked={makeDefault} disabled={!admin} onChange={(e) => setMakeDefault(e.target.checked)} className="mt-1 accent-[#0f766e]" />
+          <span>Use it for every new {DOC_TYPE_LABEL[docType]?.toLowerCase() ?? 'document'} instead of the standard structure{!admin && <span className="block text-[11px]">Only an administrator can make a template the organisation’s default.</span>}</span>
+        </label>
       </div>
     </AnimatedModal>
   );

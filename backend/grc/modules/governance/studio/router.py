@@ -101,6 +101,7 @@ class FixAllIn(BaseModel):
 class CompareIn(BaseModel):
     document_id: Optional[int] = None
     revision: Optional[int] = None
+    reference_id: Optional[int] = None             # an attached reference, e.g. a file the person uploaded to compare with
     ai: bool = False
 
 
@@ -151,7 +152,7 @@ def get_status(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
     if not gate.enabled(db):
         return {"enabled": False}
     return {"enabled": True, "ai_configured": claude_client.configured(), "doc_types": list(templates.DOC_TYPES) + ["other"],
-            "max_upload_mb": service.MAX_UPLOAD_BYTES // (1024 * 1024)}
+            "max_upload_mb": service.MAX_UPLOAD_BYTES // (1024 * 1024), "is_admin": _is_admin(db, user)}
 
 
 @router.get("/documents", dependencies=[Depends(require_studio)])
@@ -197,9 +198,22 @@ def list_templates(db: Session = Depends(get_db), user: GRCUser = Depends(requir
     return {"items": templates.listing(db)}
 
 
+def _is_admin(db: Session, user: GRCUser) -> bool:
+    from ...access_review.sampling import privileged_user_ids
+
+    tenant = db.query(Tenant).first()
+    return bool(tenant) and user.id in privileged_user_ids(db, tenant.id)
+
+
+_DEFAULT_ADMIN_ONLY = "Only an administrator can make a template the organisation's default."
+
+
 @router.post("/templates", dependencies=[Depends(require_studio)])
 def save_template(body: TemplateIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    """Save a session's document (or the given text) as the organisation's own template."""
+    """Save a session's document (or the given text) as the organisation's own template. Making it the default for its type
+    (every new document of that type starts from it) is for administrators."""
+    if body.make_default and not _is_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_DEFAULT_ADMIN_ONLY)
     content, doc_type = body.content, body.doc_type
     if body.session_id:
         s = _session(db, body.session_id, user)
@@ -222,6 +236,10 @@ def update_template(template_id: int, body: TemplateIn, db: Session = Depends(ge
     row = db.get(StudioTemplate, template_id)
     if row is None or row.archived:
         raise HTTPException(status_code=404, detail="Template not found")
+    if row.created_by != user.id and not _is_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the person who made this template or an administrator can change it.")
+    if (body.make_default or row.is_default) and not _is_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_DEFAULT_ADMIN_ONLY)
     row.name = body.name.strip()[:200] or row.name
     if body.description is not None:
         row.description = body.description
@@ -242,6 +260,10 @@ def delete_template(template_id: int, db: Session = Depends(get_db), user: GRCUs
     row = db.get(StudioTemplate, template_id)
     if row is None:
         raise HTTPException(status_code=404, detail="Template not found")
+    if row.created_by != user.id and not _is_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the person who made this template or an administrator can remove it.")
+    if row.is_default and not _is_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an administrator can remove the organisation's default template.")
     row.archived, row.is_default = True, False
     db.commit()
     return {"deleted": True}
@@ -526,10 +548,15 @@ def restore_revision(session_id: int, number: int, db: Session = Depends(get_db)
 
 @router.post("/sessions/{session_id}/compare", dependencies=[Depends(require_studio)])
 def compare(session_id: int, body: CompareIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    """Compare the working document with a library document or an earlier revision: the redline now, and with ``ai`` an
-    explanation of what matters in the differences (a message to poll)."""
+    """Compare the working document with a library document, an earlier revision or an attached reference (an uploaded file): the
+    redline now, and with ``ai`` an explanation of what matters in the differences (a message to poll)."""
     s = _session(db, session_id, user)
-    if body.document_id:
+    if body.reference_id:
+        ref = db.get(StudioReference, body.reference_id)
+        if ref is None or ref.session_id != s.id:
+            raise HTTPException(status_code=404, detail="Reference not found")
+        other, title = ref.text, ref.title
+    elif body.document_id:
         doc = db.get(GovernanceDocument, body.document_id)
         if doc is None:
             raise HTTPException(status_code=404, detail="Document not found")
@@ -544,7 +571,7 @@ def compare(session_id: int, body: CompareIn, db: Session = Depends(get_db), use
         except service.StudioError as exc:
             raise _problem(exc)
     else:
-        raise HTTPException(status_code=400, detail="Choose a document or a revision to compare with.")
+        raise HTTPException(status_code=400, detail="Choose a document, a file or a revision to compare with.")
     other_blocks, mine = B.parse(other), B.parse(s.content)
     out: Dict[str, Any] = {"other_title": title, "rows": B.redline(other_blocks, mine), "stats": B.stats(other_blocks, mine)}
     if body.ai:

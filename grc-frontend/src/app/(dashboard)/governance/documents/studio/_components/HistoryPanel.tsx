@@ -5,9 +5,9 @@
  * as a redline against the next, against the current text, or restored; the document can also be compared with any other
  * document of the library.
  */
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Bot, FileUp, GitCompare, History, Loader2, Pencil, RotateCcw, Search, Undo2, User } from 'lucide-react';
+import { Bot, FileUp, GitCompare, History, Loader2, Pencil, RotateCcw, Search, Undo2, Upload, User } from 'lucide-react';
 import { problemOf, studioApi, type Revision, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { ago, plural } from '@/lib/studio/text';
@@ -26,11 +26,19 @@ export interface HistoryPanelProps {
   flush: () => Promise<void>;
   onCompare: (spec: CompareSpec) => void;
   onContent: (content: string, revision: number) => void;
+  /** a file was kept with the session as a reference */
+  onSessionChanged: () => void;
 }
 
-export default function HistoryPanel({ session, flush, onCompare, onContent }: HistoryPanelProps) {
+export default function HistoryPanel({ session, flush, onCompare, onContent, onSessionChanged }: HistoryPanelProps) {
   const { toast } = useToast();
   const [q, setQ] = useState('');
+  const file = useRef<HTMLInputElement>(null);
+  const uploadToCompare = useMutation({
+    mutationFn: (f: File) => studioApi.uploadReference(session.id, f),
+    onSuccess: (r) => { onSessionChanged(); onCompare({ type: 'reference', id: r.id, title: r.title }); },
+    onError: (e) => toast({ title: 'That file could not be read', message: problemOf(e), type: 'error' }),
+  });
   const revisions = useQuery({ queryKey: ['studio', 'revisions', session.id, session.revision], queryFn: () => studioApi.revisions(session.id), staleTime: 10_000 });
   const docs = useQuery({ queryKey: ['studio', 'documents', q], queryFn: () => studioApi.documents(q, 12), staleTime: 30_000 });
   const restore = useMutation({
@@ -49,6 +57,23 @@ export default function HistoryPanel({ session, flush, onCompare, onContent }: H
           <GitCompare className="h-4 w-4 shrink-0 text-[#0f766e]" />
           <span className="min-w-0"><span className="block font-medium text-[#1f2933]">See what changed since the start</span>{base && <span className="block truncate text-[11px] text-[#586472]">Starting point: {base}</span>}</span>
         </button>
+      </div>
+
+      <div className="mt-4 rounded-xl border border-[#d5dbe1] bg-[#f8fafb] p-2.5">
+        <p className="text-xs font-semibold text-[#26323d]">Compare with a file</p>
+        <p className="mt-0.5 text-[11px] text-[#586472]">Any Word, PDF, text, Markdown or HTML file. It is also kept with this session as a reference.</p>
+        <input ref={file} type="file" hidden accept=".docx,.pdf,.txt,.md,.markdown,.html,.htm" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadToCompare.mutate(f); e.target.value = ''; }} />
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          <button type="button" disabled={uploadToCompare.isPending} onClick={() => file.current?.click()} className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-[#7b8794] bg-white px-3 py-2 text-xs font-semibold text-[#26323d] hover:border-[#0f766e] hover:bg-[#f3fbf9] disabled:opacity-50">
+            {uploadToCompare.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Choose a file to compare with
+          </button>
+          {session.references.filter((r) => r.kind !== 'framework').map((r) => (
+            <button key={r.id} type="button" onClick={() => onCompare({ type: 'reference', id: r.id, title: r.title })} title={`Compare with ${r.key}`}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-lg border border-[#c5ccd3] bg-white px-2.5 py-2 text-xs font-medium text-[#3f4b58] hover:border-[#0f766e] hover:bg-[#f3fbf9]">
+              <GitCompare className="h-3.5 w-3.5 shrink-0 text-[#0f766e]" /> <span className="truncate">{r.key} · {r.title}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mt-4 rounded-xl border border-[#d5dbe1] bg-[#f8fafb] p-2.5">

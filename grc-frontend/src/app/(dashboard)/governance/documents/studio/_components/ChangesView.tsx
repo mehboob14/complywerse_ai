@@ -15,6 +15,7 @@ import RedlineView, { StatsLine } from './RedlineView';
 export type CompareSpec =
   | { type: 'revision'; from: number; to?: number; label: string }
   | { type: 'document'; id: number; title: string }
+  | { type: 'reference'; id: number; title: string }              // a file the person uploaded (kept with the session as a reference)
   | { type: 'preview'; messageId: number };
 
 const IMPORTANCE: Record<string, string> = { high: 'bg-[#fbdcdc] text-[#9b1c1c]', medium: 'bg-[#fff2a8] text-[#6b5400]', low: 'bg-[#e3f1f1] text-[#0f4c5c]' };
@@ -31,6 +32,7 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
     queryFn: async () => {
       if (spec.type === 'preview') return studioApi.preview(session.id, spec.messageId);
       if (spec.type === 'document') return studioApi.compare(session.id, { document_id: spec.id });
+      if (spec.type === 'reference') return studioApi.compare(session.id, { reference_id: spec.id });
       return studioApi.diff(session.id, spec.from, spec.to ?? session.revision);
     },
     staleTime: 10_000,
@@ -51,10 +53,10 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
   }, [ai, session.id, toast]);
 
   const explain = async () => {
-    if (spec.type !== 'document') return;
+    if (spec.type !== 'document' && spec.type !== 'reference') return;
     setAsking(true);
     try {
-      const r = await studioApi.compare(session.id, { document_id: spec.id, ai: true });
+      const r = await studioApi.compare(session.id, spec.type === 'document' ? { document_id: spec.id, ai: true } : { reference_id: spec.id, ai: true });
       if (r.ai_message) setAi(r.ai_message);
       qc.invalidateQueries({ queryKey: key });
     } catch (e) {
@@ -64,8 +66,9 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
     }
   };
 
-  const title = spec.type === 'preview' ? 'What accepting the AI’s changes would do' : spec.type === 'document' ? `This document compared with “${spec.title}”` : spec.label;
-  const hint = spec.type === 'document' ? 'Green is in this document and not in the other; red is in the other and not here.' : spec.type === 'preview' ? 'Nothing is changed until you accept.' : 'Green was added, red was removed.';
+  const other = spec.type === 'document' || spec.type === 'reference';
+  const title = spec.type === 'preview' ? 'What accepting the AI’s changes would do' : other ? `This document compared with “${spec.title}”` : spec.label;
+  const hint = other ? 'Green is in this document and not in the other; red is in the other and not here.' : spec.type === 'preview' ? 'Nothing is changed until you accept.' : 'Green was added, red was removed.';
   const diffs = ai?.status === 'done' ? ai.proposal?.differences ?? [] : [];
 
   return (
@@ -76,7 +79,7 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
           <p className="truncate text-sm font-semibold text-[#1f2933]" title={title}>{title}</p>
           <p className="text-[11px] text-[#586472]">{redline.data ? <><StatsLine stats={redline.data.stats} /> · </> : null}{hint}</p>
         </div>
-        {spec.type === 'document' && (
+        {other && (
           <button type="button" onClick={explain} disabled={!aiConfigured || asking || ai?.status === 'working'} title={aiConfigured ? undefined : 'The AI is not connected yet'}
             className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
             {asking || ai?.status === 'working' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />} {ai?.status === 'working' ? ai.stage ?? 'Comparing' : 'Explain the differences'}
@@ -96,7 +99,7 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
                       <div className="flex items-center gap-2"><span className="font-semibold text-[#1f2933]">{d.topic}</span><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${IMPORTANCE[d.importance] ?? ''}`}>{d.importance}</span></div>
                       <dl className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
                         <div><dt className="text-[11px] font-semibold uppercase text-[#586472]">This document</dt><dd className="text-[#26323d]">{d.in_a || '—'}</dd></div>
-                        <div><dt className="text-[11px] font-semibold uppercase text-[#586472]">{spec.type === 'document' ? spec.title : 'Other'}</dt><dd className="text-[#26323d]">{d.in_b || '—'}</dd></div>
+                        <div><dt className="text-[11px] font-semibold uppercase text-[#586472]">{spec.type === 'document' || spec.type === 'reference' ? spec.title : 'Other'}</dt><dd className="text-[#26323d]">{d.in_b || '—'}</dd></div>
                       </dl>
                       {d.recommendation && <p className="mt-1.5 text-xs text-[#0b6b58]">Suggestion: {d.recommendation}</p>}
                     </li>
@@ -110,7 +113,7 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
           <section className="rounded-xl border border-[#d5dbe1] bg-white p-3 sm:p-5" aria-label="Changes">
             {redline.isLoading && <p className="text-sm text-[#586472]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Comparing…</p>}
             {redline.isError && <p className="text-sm text-[#8a1c1c]" role="alert">{problemOf(redline.error)}</p>}
-            {redline.data && <RedlineView rows={redline.data.rows} empty={spec.type === 'document' ? 'The two documents have the same blocks.' : 'Nothing changed.'} />}
+            {redline.data && <RedlineView rows={redline.data.rows} empty={other ? 'The two documents have the same blocks.' : 'Nothing changed.'} />}
           </section>
         </div>
       </div>

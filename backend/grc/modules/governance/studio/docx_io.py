@@ -1343,8 +1343,10 @@ def _build_table(ctx: Ctx, block: B.Block) -> Any:
     table = ctx.doc.add_table(rows=len(rows), cols=width)
     tbl = table._tbl
     tbl.getparent().remove(tbl)
-    tbl.tblPr.append(parse_xml(f'<w:tblBorders {nsdecls("w")}>' + "".join(
-        f'<w:{side} w:val="single" w:sz="4" w:space="0" w:color="808080"/>' for side in ("top", "left", "bottom", "right", "insideH", "insideV")) + "</w:tblBorders>"))
+    borders = parse_xml(f'<w:tblBorders {nsdecls("w")}>' + "".join(
+        f'<w:{side} w:val="single" w:sz="4" w:space="0" w:color="808080"/>' for side in ("top", "left", "bottom", "right", "insideH", "insideV")) + "</w:tblBorders>")
+    after = [c for c in tbl.tblPr if c.tag in {qn(f"w:{n}") for n in ("tblStyle", "tblpPr", "tblOverlap", "bidiVisual", "tblStyleRowBandSize", "tblStyleColBandSize", "tblW", "jc", "tblCellSpacing", "tblInd")}]
+    (after[-1].addnext(borders) if after else tbl.tblPr.insert(0, borders))        # before tblLayout / tblLook, as Word's schema has it
     for r, row in enumerate(rows):
         for c in range(width):
             tc = table.cell(r, c)._tc

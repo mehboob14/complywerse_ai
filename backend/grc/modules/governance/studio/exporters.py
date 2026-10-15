@@ -193,7 +193,8 @@ def _border(paragraph, side: str, size: int = 8, color: str = "0F4C5C", space: i
     bdr = p_pr.find(qn("w:pBdr"))
     if bdr is None:
         bdr = OxmlElement("w:pBdr")
-        p_pr.append(bdr)
+        before = [c for c in p_pr if c.tag in {qn(f"w:{n}") for n in ("pStyle", "keepNext", "keepLines", "pageBreakBefore", "framePr", "widowControl", "numPr", "suppressLineNumbers")}]
+        (before[-1].addnext(bdr) if before else p_pr.insert(0, bdr))              # where Word's schema puts it, not at the end
     el = OxmlElement(f"w:{side}")
     for k, v in (("val", "single"), ("sz", str(size)), ("space", str(space)), ("color", color)):
         el.set(qn(f"w:{k}"), v)

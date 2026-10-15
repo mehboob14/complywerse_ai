@@ -68,6 +68,12 @@ def test_deleting_a_parsed_document_removes_its_rows_and_unlinks_controls():
         db.add(m.PolicyGapFinding(tenant_id=1, analysis_run_id=3, document_id=5, applied_statement_id=87))
         db.add(m.InternalControl(id=9, tenant_id=1, control_id="IC-9", name="Admin MFA",
                                  source_document_id=5, source_statement_id=87))
+        db.add(m.GRCUser(id=1, username="olivia", email="o@acme.test", display_name="Olivia Owner"))
+        db.flush()
+        db.add(m.StudioSession(id=2, tenant_id=1, created_by=1, title="Access policy", kind="library", document_id=5, content="# Access policy\n"))
+        db.flush()
+        db.add(m.StudioMessage(session_id=2, role="user", content="Tighten the MFA wording"))
+        db.add(m.StudioRevision(session_id=2, number=1, content="# Access policy\n"))
         db.commit()
 
         delete_document(document_id=5, db=db, current_user=SimpleNamespace())
@@ -77,3 +83,6 @@ def test_deleting_a_parsed_document_removes_its_rows_and_unlinks_controls():
             assert db.query(model).count() == 0, model.__name__
         control = db.get(m.InternalControl, 9)
         assert (control.source_document_id, control.source_statement_id) == (None, None)
+        draft = db.get(m.StudioSession, 2)      # the AI Studio draft is the person's work: kept, no longer in the library
+        assert draft.document_id is None and draft.content == "# Access policy\n"
+        assert db.query(m.StudioMessage).count() == 1 and db.query(m.StudioRevision).count() == 1

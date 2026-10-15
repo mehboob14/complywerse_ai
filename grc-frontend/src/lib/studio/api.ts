@@ -12,6 +12,8 @@ export interface StudioStatus {
   ai_configured?: boolean;
   doc_types?: string[];
   max_upload_mb?: number;
+  /** an administrator may make a template the organisation's default */
+  is_admin?: boolean;
 }
 
 export interface Instructions {
@@ -345,7 +347,7 @@ export const studioApi = {
   revisions: (id: number) => get<{ items: Revision[]; base_label: string | null }>(`/sessions/${id}/revisions`),
   diff: (id: number, from: number, to?: number) => get<Redline>(`/sessions/${id}/diff`, { from, to }),
   restore: (id: number, number: number) => post<{ revision: number; content: string }>(`/sessions/${id}/restore/${number}`),
-  compare: (id: number, body: { document_id?: number; revision?: number; ai?: boolean }) =>
+  compare: (id: number, body: { document_id?: number; revision?: number; reference_id?: number; ai?: boolean }) =>
     post<Redline>(`/sessions/${id}/compare`, body),
 
   moveToLibrary: (id: number, body: MoveToLibrary) => post<{ document_id: number; title: string; version: string }>(`/sessions/${id}/move-to-library`, body),

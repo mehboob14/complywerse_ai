@@ -170,6 +170,19 @@ def test_an_uploaded_word_file_moved_to_the_library_stays_a_word_file(world, lib
     assert saved2["version"] == "1.1" and "Postscript." in "\n".join(p.text for p in Document(world.db.get(m.GovernanceDocument, doc.id).file_path).paragraphs)
 
 
+def test_a_document_can_be_compared_with_a_file_the_person_uploads(world):
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    other = b"# Information Security Policy\n\n## 1. Purpose\n\nA quite different purpose statement.\n\n## 2. Scope\n\nAll employees and contractors.\n"
+    ref = world.http.post(world.api(f"/sessions/{s['id']}/references/upload"), files={"file": ("other.md", other, "text/markdown")}).json()
+    out = world.http.post(world.api(f"/sessions/{s['id']}/compare"), json={"reference_id": ref["id"]}).json()
+    assert out["other_title"] == "other.md" and out["stats"]["inserted"] + out["stats"]["deleted"] + out["stats"]["modified"] >= 1
+    assert any(r["status"] != "equal" for r in out["rows"]) and any(r["status"] == "equal" for r in out["rows"])
+    assert world.http.post(world.api(f"/sessions/{s['id']}/compare"), json={"reference_id": 9999}).status_code == 404
+    mine = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "Other", "template_id": "builtin:blank", "doc_type": "other"}).json()
+    assert world.http.post(world.api(f"/sessions/{mine['id']}/compare"), json={"reference_id": ref["id"]}).status_code == 404          # not another session's file
+    assert world.http.post(world.api(f"/sessions/{s['id']}/compare"), json={}).status_code == 400
+
+
 def test_a_text_document_in_the_library_still_saves_as_text(world, lib):
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 11}).json()
     assert s["source"]["in_place"] is False

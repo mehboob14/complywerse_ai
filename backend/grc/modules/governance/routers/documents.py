@@ -29,7 +29,7 @@ from ....models import (
     DocumentAttestationAcknowledgment, DocumentAttestationCampaign, DocumentAttestationRecipient,
     DocumentSignature, DocumentSignoffAssignment, DocumentObligation, DocumentWorkflowAction, DocumentWorkflowInstance,
     ElectronicSignature, IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
-    PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping,
+    PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping, StudioSession,
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ..action_logger import log_governance_action
@@ -1095,6 +1095,7 @@ _UNLINK_FROM_DOCUMENT = (
     OversightAction.linked_policy_id,
     BcmPlan.document_ref_id,
     BcmRecoveryStrategy.activation_procedure_ref,
+    StudioSession.document_id,  # the AI Studio draft, its chat and versions stay; it can be moved to the library again
 )
 
 

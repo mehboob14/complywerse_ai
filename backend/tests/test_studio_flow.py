@@ -66,6 +66,8 @@ def world(monkeypatch, tmp_path):
         s.add(m.Tenant(id=1, name="CFSB", slug="cfsb", legal_entity=ENTITY))
         s.add(m.GRCUser(id=1, username="olivia", email="o@cfsb.test", display_name="Olivia Owner"))
         s.add(m.GRCUser(id=2, username="sam", email="s@cfsb.test", display_name="Sam Other"))
+        s.add(m.Role(id=11, tenant_id=1, name="Tenant Admin"))
+        s.add(m.UserRole(user_id=1, role_id=11, tenant_id=1))                               # Olivia administers; Sam does not
         s.add(m.GovernanceDocument(id=10, tenant_id=1, title="Information Security Policy", doc_type="policy", status="published",
                                    current_version="1.0", content=POLICY.replace("password=hunter-ZX81-canary!", "password rotation"), owner_id=1))
         s.add(m.GovernanceDocument(id=11, tenant_id=1, title="Access Control Standard", doc_type="standard", status="draft", current_version="1.0",
@@ -114,7 +116,10 @@ def token_of(world, kind="ORG"):
 # ── enabling ─────────────────────────────────────────────────────────────────
 def test_only_the_configured_tenants_have_the_studio(world):
     assert world.http.get(world.api("/status")).json() == {"enabled": True, "ai_configured": True, "doc_types": [
-        "policy", "standard", "procedure", "guideline", "charter", "other"], "max_upload_mb": 30}
+        "policy", "standard", "procedure", "guideline", "charter", "other"], "max_upload_mb": 30, "is_admin": True}
+    world.me["id"] = 2
+    assert world.http.get(world.api("/status")).json()["is_admin"] is False
+    world.me["id"] = 1
     world.db.query(m.Tenant).one().slug = "acme"
     world.db.commit()
     assert world.http.get(world.api("/status")).json() == {"enabled": False}
@@ -450,3 +455,25 @@ def test_a_document_is_saved_as_a_template_and_becomes_the_default_for_new_docum
     assert next(t for t in listing if t["id"] == "builtin:policy")["replaced_by_default"] is True
     assert world.http.delete(world.api(f"/templates/{saved['id'].split(':')[1]}")).json() == {"deleted": True}
     assert world.http.post(world.api("/sessions"), json={"kind": "new", "title": "X", "doc_type": "policy"}).json()["template_id"] == "builtin:policy"
+
+
+def test_only_an_administrator_makes_a_template_the_default_and_only_its_maker_or_an_administrator_changes_it(world):
+    world.me["id"] = 2                                                                    # Sam is not an administrator
+    mine = world.http.post(world.api("/templates"), json={"name": "Sam's checklist", "doc_type": "procedure", "content": "# Checklist\n\n## Steps\n\nDo it.\n"})
+    assert mine.status_code == 200 and mine.json()["is_default"] is False
+    mine_id = mine.json()["id"].split(":")[1]
+    assert world.http.post(world.api("/templates"), json={"name": "Sam's default", "doc_type": "procedure", "content": "# X\n", "make_default": True}).status_code == 403
+    assert world.http.put(world.api(f"/templates/{mine_id}"), json={"name": "Sam's checklist v2", "content": "# Checklist\n\n## Steps\n\nDo it well.\n"}).status_code == 200
+    assert world.http.put(world.api(f"/templates/{mine_id}"), json={"name": "Sam's checklist", "make_default": True}).status_code == 403
+
+    world.me["id"] = 1                                                                    # Olivia administers
+    theirs = world.http.post(world.api("/templates"), json={"name": "Org default", "doc_type": "standard", "content": "# S\n\n## Rules\n\nAll.\n", "make_default": True}).json()
+    org_id = theirs["id"].split(":")[1]
+    assert theirs["is_default"] is True
+    world.me["id"] = 2
+    assert world.http.put(world.api(f"/templates/{org_id}"), json={"name": "Hijacked"}).status_code == 403
+    assert world.http.delete(world.api(f"/templates/{org_id}")).status_code == 403
+    world.me["id"] = 1
+    assert world.http.put(world.api(f"/templates/{mine_id}"), json={"name": "Renamed by the administrator", "make_default": False}).status_code == 200      # an administrator may change anyone's
+    world.me["id"] = 2
+    assert world.http.delete(world.api(f"/templates/{mine_id}")).json() == {"deleted": True}                                                              # and its maker may remove it

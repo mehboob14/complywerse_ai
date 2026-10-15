@@ -405,7 +405,7 @@ export default function StudioWorkspacePage() {
             <div className={`h-full ${tab === 'checks' ? 'block' : 'hidden'}`}>
               <ChecksPanel session={session} aiConfigured={aiConfigured} flush={flush} onContent={(c, r) => applyServerContent(c, r)} onGoTo={goTo} onGoToBlock={goToBlock} onIssues={onIssues} onNextPlaceholder={() => editor.current?.nextPlaceholder()} />
             </div>
-            {tab === 'history' && <HistoryPanel session={session} flush={flush} onCompare={(c) => { setCompare(c); setPane('document'); }} onContent={(c, r) => { applyServerContent(c, r); setCompare(null); }} />}
+            {tab === 'history' && <HistoryPanel session={session} flush={flush} onCompare={(c) => { setCompare(c); setPane('document'); }} onContent={(c, r) => { applyServerContent(c, r); setCompare(null); }} onSessionChanged={onSessionChanged} />}
           </div>
         </aside>
       </div>
