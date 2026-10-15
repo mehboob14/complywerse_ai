@@ -297,14 +297,18 @@ def _extract_usage(response: Any, api_family: str) -> dict[str, Any]:
     usage = getattr(response, "usage", None)
     prompt = _usage_value(usage, "prompt_tokens") or _usage_value(usage, "input_tokens")
     completion = _usage_value(usage, "completion_tokens") or _usage_value(usage, "output_tokens")
-    total = _usage_value(usage, "total_tokens") or prompt + completion
     prompt_details = getattr(usage, "prompt_tokens_details", None)
     completion_details = getattr(usage, "completion_tokens_details", None)
+    cached = _usage_value(prompt_details, "cached_tokens")
+    if api_family == "messages":      # Anthropic: input_tokens excludes what was read from or written to the prompt cache
+        cached = _usage_value(usage, "cache_read_input_tokens")
+        prompt += cached + _usage_value(usage, "cache_creation_input_tokens")
+    total = _usage_value(usage, "total_tokens") or prompt + completion
     return {
         "prompt_tokens": prompt,
         "completion_tokens": completion,
         "total_tokens": total,
-        "cached_tokens": _usage_value(prompt_details, "cached_tokens"),
+        "cached_tokens": cached,
         "reasoning_tokens": _usage_value(completion_details, "reasoning_tokens"),
         "response_model": getattr(response, "model", None),
         "provider_request_id": getattr(response, "_request_id", None)

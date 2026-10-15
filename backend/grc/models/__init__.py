@@ -51,5 +51,6 @@ from ._pentest_event_log import PentestEventLog  # noqa: F401 - AVA/GRC pentest 
 from ._75_tpra_leaks_logos import *  # noqa: F401,F403 - own-domain code leaks and supplier logos
 from ._76_electronic_signatures import *  # noqa: F401,F403 - signatures drawn on screen, sealed and kept with the record
 from ._77_ai_call_payloads import *  # noqa: F401,F403 - the prompts and answers of AI calls, encrypted, kept for a while
+from ._80_document_studio import *  # noqa: F401,F403 - AI Studio: sessions, revisions, chat, references, templates, logos
 from ._79_document_obligations import *  # noqa: F401,F403 - who a document is waiting for: reviews, approvals, acknowledgements
 from ._78_ai_result_cache import *  # noqa: F401,F403 - answers to AI requests that repeat exactly, encrypted, expiring

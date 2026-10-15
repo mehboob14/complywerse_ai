@@ -46,6 +46,12 @@ DOCUMENT_LIFECYCLE_TENANTS = frozenset(
     slug.strip().lower() for slug in os.getenv("DOCUMENT_LIFECYCLE_TENANTS", "cfsb").split(",") if slug.strip())
 
 
+# The AI Studio (chat drafting, rich editor, checks, compare and export of documents; modules/governance/studio):
+# only for the tenants named here (comma-separated slugs); "*" switches it on for every tenant.
+DOCUMENT_STUDIO_TENANTS = frozenset(
+    slug.strip().lower() for slug in os.getenv("DOCUMENT_STUDIO_TENANTS", "cfsb").split(",") if slug.strip())
+
+
 # ----- OpenAI ---------------------------------------------------------------
 # Default chat-completions model. Centralized so the model can be swapped in a
 # single place; mirrors the literal ``"gpt-4o"`` that was inlined across the

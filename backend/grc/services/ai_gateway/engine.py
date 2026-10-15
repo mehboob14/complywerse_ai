@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 
 NOTE = ("Values written like <PERSON_1> or <HOST_2> stand for real values that are not shown to you. Treat each as an "
         "opaque name: copy it exactly as written wherever you refer to it, and never guess what it stands for.")
-_VISION_PARTS = frozenset({"image_url", "input_image", "image", "input_file", "file", "input_audio", "audio"})
+_VISION_PARTS = frozenset({"image_url", "input_image", "image", "input_file", "file", "input_audio", "audio", "document"})
 _TEXT_PARTS = frozenset({"text", "input_text", "output_text"})
 _DATA_URL = re.compile(r"data:[\w/+.-]+;base64,[A-Za-z0-9+/=]{1000,}")
 _RULE = {"SECRET": "B1", "MAC": "B1", "PAN": "B2", "IBAN": "B2", "NATIONAL_ID": "B3"}
@@ -74,12 +74,34 @@ class Gateway:
             if new != value:
                 setattr(obj, name, new)
 
+    def restore_text(self, text: str) -> str:
+        """The original values put back into a text the model wrote (for callers that read the answer themselves)."""
+        if self.mode != "protect" or not isinstance(text, str):
+            return text
+        counts: Counter = Counter()
+        out = self._clean(text, counts)
+        self.report.update({k: self.report.get(k, 0) + counts[k] for k in ("restored", "unknown_tokens", "invented") if counts[k]})
+        return out
+
+    def restore_json(self, value: Any) -> Any:
+        """The same for parsed JSON: every string in it, so a restored value can never break the JSON itself."""
+        if isinstance(value, str):
+            return self.restore_text(value)
+        if isinstance(value, list):
+            return [self.restore_json(v) for v in value]
+        if isinstance(value, dict):
+            return {k: self.restore_json(v) for k, v in value.items()}
+        return value
+
     def finish(self, response: Any) -> Any:
         """Restore the original values in every text the answer carries. Never raises."""
         if self.mode != "protect":
             return response
         counts: Counter = Counter()
         try:
+            for block in getattr(response, "content", None) or []:               # Messages API: a list of content blocks
+                if getattr(block, "type", None) == "text":
+                    self._set(block, "text", counts)
             for choice in getattr(response, "choices", None) or []:              # chat completions
                 message = getattr(choice, "message", None)
                 if message is None:
@@ -165,6 +187,26 @@ def _rewrite(messages: List[Any], fn: Callable[[str], str]) -> List[Any]:
 def _prompt(kwargs: Dict[str, Any], api: str):
     """The prompt as chat-style messages whatever the API calls it, and how to write the protected one back:
     ``(messages, write)``, or ``(None, None)`` when there is nothing in a shape the guard understands."""
+    if api == "anthropic":                     # Messages API: ``system`` (text or text blocks) and ``messages``
+        messages = kwargs.get("messages")
+        system = kwargs.get("system")
+        if not isinstance(messages, list) or not (system is None or isinstance(system, (str, list))):
+            return None, None
+        chat: List[Any] = ([{"role": "system", "content": system}] if system else []) + list(messages)
+
+        def write_messages(new: List[Any]) -> None:
+            rest, blocks = list(new), []
+            while rest and rest[0].get("role") == "system":           # the system message, and the note if one was added
+                content = rest.pop(0)["content"]
+                blocks.extend([{"type": "text", "text": content}] if isinstance(content, str) else content)
+            if not blocks:
+                kwargs.pop("system", None)
+            elif isinstance(system, str) and all(set(b) == {"type", "text"} for b in blocks):
+                kwargs["system"] = "\n\n".join(b["text"] for b in blocks)
+            else:
+                kwargs["system"] = blocks
+            kwargs["messages"] = rest
+        return chat, write_messages
     if api == "chat":
         messages = kwargs.get("messages")
         if not isinstance(messages, list):
@@ -230,7 +272,7 @@ def _use_case(site) -> Optional[registry.UseCase]:
     return max(found, key=lambda u: registry.LEVELS.index(u.level)) if found else None
 
 
-def begin(kwargs: Dict[str, Any], mode: str = "protect", api: str = "chat") -> Optional[Gateway]:
+def begin(kwargs: Dict[str, Any], mode: str = "protect", api: str = "chat", use_case: Optional[str] = None) -> Optional[Gateway]:
     """Protect the prompt in ``kwargs`` (the dict, not the caller's own objects) and return the handle that restores
     the answer. ``api`` is ``chat`` (``messages``) or ``responses`` (``instructions`` and ``input``). ``None`` when
     there is nothing to protect. Raises ``AIBlocked`` when the prompt must not be sent."""
@@ -244,7 +286,7 @@ def begin(kwargs: Dict[str, Any], mode: str = "protect", api: str = "chat") -> O
     report: Dict[str, Any] = {"mode": "protect" if protect else "monitor", "decision": "allowed"}
     if api != "chat":
         report["api"] = api
-    uc = _use_case(callsite())
+    uc = registry.get(use_case) if use_case else _use_case(callsite())      # a helper shared by several features is told which one
     report.update(use_case=uc.id if uc else None, level=uc.level if uc else None, registered=uc is not None)
     context = resolve_context()
     report["tenant"] = bool(context.tenant_slug)
@@ -334,7 +376,8 @@ def begin(kwargs: Dict[str, Any], mode: str = "protect", api: str = "chat") -> O
         # appearance), and the size says whether the call was big because of the question or the data around it
         report["hash"] = hashlib.sha256(json.dumps(new_messages, sort_keys=True, ensure_ascii=False, default=str).encode("utf-8")).hexdigest()[:16]
         report["chars"] = sum(len(t) for t in _texts(new_messages))
-    report["effort"] = kwargs.get("reasoning_effort") or (kwargs.get("reasoning") or {}).get("effort")
+    report["effort"] = (kwargs.get("reasoning_effort") or (kwargs.get("reasoning") or {}).get("effort")
+                        or (kwargs.get("output_config") or {}).get("effort"))
     report["ms"] = round((time.perf_counter() - started) * 1000, 1)
     return gateway
 

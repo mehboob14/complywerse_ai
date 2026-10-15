@@ -19,7 +19,8 @@ HOSTS_ALLOWED_IN = {
     "modules/governance/routers/gap_analysis.py",
     "modules/governance/routers/policy_parser.py",
 }
-SDKS_ALLOWED_IN = {("routers/ai_risk_assessment_router.py", "anthropic")}
+SDKS_ALLOWED_IN = {("routers/ai_risk_assessment_router.py", "anthropic"),
+                   ("services/ai_gateway/claude_client.py", "anthropic")}     # the guarded client: the one place that calls Claude
 VENDOR_WORDS = re.compile(r"openai|gpt|chatgpt|anthropic|claude|gemini|llama|langsmith|qdrant", re.I)
 
 

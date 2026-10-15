@@ -35,6 +35,7 @@ BY_PREFIX: Dict[str, Place] = {
     # Governance
     "/governance": ("Governance", "Overview"),
     "/governance/documents": ("Governance", "Documents"),
+    "/governance/studio": ("Governance", "Documents"),
     "/governance/mappings": ("Governance", "Documents"),
     "/governance/versions": ("Governance", "Documents"),
     "/governance/reviews": ("Governance", "Documents"),

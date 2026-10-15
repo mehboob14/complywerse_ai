@@ -27,6 +27,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
+GUARDED_CLAUDE_CLIENT = "services/ai_gateway/claude_client.py"        # the one place that calls Claude, behind the guard
 TRIGGERS = ("click", "view", "auto", "background", "offline")
 PROFILES = ("LIB", "STRUCT", "TEXT", "DOC", "VISION", "PEOPLE", "CHAT", "RAW")
 LEVELS = ("L0", "L1", "L2", "L3", "L4")
@@ -91,8 +92,15 @@ class UseCase:
 
     @property
     def outside_shim(self) -> bool:
-        """Reaches a provider through something the central choke point (chat and Responses) does not cover yet."""
-        return any(api not in ("chat", "responses") for api in self.apis)
+        """Reaches a provider through something the central choke point does not cover yet: chat, Responses and the
+        guarded Claude client (``services/ai_gateway/claude_client.py``) are covered."""
+        for api in self.apis:
+            if api in ("chat", "responses"):
+                continue
+            if api == "anthropic" and all(cs.startswith(GUARDED_CLAUDE_CLIENT + ":") for cs in self.callsites):
+                continue
+            return True
+        return False
 
 
 def _uc(id: str, label: str, value: str, surface: str, trigger: str, profile: str, level: str,
@@ -371,6 +379,23 @@ USE_CASES: Tuple[UseCase, ...] = (
     _uc("governance.template_compare", "Compare a document with a template",
         "Shows how your document differs from a template.", "Governance › Documents",
         "click", "DOC", "L3", ("template", "document"), "routers/nca_templates_router.py:compare_with_document"),
+
+    # the AI Studio: all three reach the model through the guarded client, which a shared helper names by use case
+    _uc("governance.studio_chat", "Draft or edit a document in the studio",
+        "Writes or revises a document from your instructions and references, as changes you review.",
+        "Governance › Documents › AI Studio", "click", "DOC", "L3", ("document", "framework", "upload", "template"),
+        "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/studio/engine.py:run_chat_turn",),
+        apis=("anthropic",)),
+    _uc("governance.studio_checks", "Check a document's language and requirements",
+        "Finds spelling, grammar and wording problems and checks your requirements against the document.",
+        "Governance › Documents › AI Studio", "click", "DOC", "L3", ("document",),
+        "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/studio/engine.py:run_ai_checks",),
+        apis=("anthropic",)),
+    _uc("governance.studio_compare", "Compare two documents in the studio",
+        "Explains how two documents differ and which differences matter.",
+        "Governance › Documents › AI Studio", "click", "DOC", "L3", ("document",),
+        "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/studio/engine.py:run_ai_compare",),
+        apis=("anthropic",)),
 
     # ── Regulatory Changes ───────────────────────────────────────────────────
     _uc("regulatory.read_circular", "Read a regulatory circular",

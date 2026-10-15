@@ -25,7 +25,9 @@ router.include_router(regulatory_links_router, tags=["Regulatory Change Manageme
 from .routers.esignatures import router as esignatures_router  # noqa: E402
 router.include_router(esignatures_router, tags=["Governance Sign-off"])
 from .routers.document_lifecycle import router as document_lifecycle_router  # noqa: E402
+from .studio.router import router as studio_router  # noqa: E402
 router.include_router(document_lifecycle_router, tags=["Governance Lifecycle"])
+router.include_router(studio_router, tags=["Governance AI Studio"])
 router.include_router(committees_router, tags=["Board & Committee Management"])
 router.include_router(regulatory_feeds_router, tags=["Regulatory Feed Management"])
 router.include_router(gap_analysis_router, tags=["Policy Gap Analysis"])

@@ -34,7 +34,7 @@ def retention_days() -> int:
 def request_snapshot(kwargs: Dict[str, Any], api: str) -> Dict[str, Any]:
     """The prompt part of a call (after the guard rewrote it): which model, the messages or the instructions and input.
     No credentials are ever in these arguments; image parts are refused before a call is made."""
-    keep = ("model", "messages") if api == "chat" else ("model", "instructions", "input")
+    keep = {"chat": ("model", "messages"), "anthropic": ("model", "system", "messages")}.get(api, ("model", "instructions", "input"))
     snapshot = {k: kwargs[k] for k in keep if k in kwargs}
     snapshot["api"] = api
     return snapshot
@@ -43,6 +43,9 @@ def request_snapshot(kwargs: Dict[str, Any], api: str) -> Dict[str, Any]:
 def answer_text(response: Any) -> str:
     """The text of an answer as the model wrote it (call before the guard puts the original values back)."""
     parts = []
+    for block in getattr(response, "content", None) or []:                      # Messages API
+        if getattr(block, "type", None) == "text" and isinstance(getattr(block, "text", None), str):
+            parts.append(block.text)
     for choice in getattr(response, "choices", None) or []:
         message = getattr(choice, "message", None)
         if message is None:
