@@ -11,8 +11,9 @@ the SDK streams from the provider to this process, which is what keeps a long do
 A structured answer (``schema``) is parsed *before* the original values are restored and restored string by string, so
 a restored name can never break the JSON. Nothing here names the provider to a user: the errors say "AI".
 
-Environment (operator): ``ANTHROPIC_API_KEY`` (the SDK reads it), ``DOCUMENT_STUDIO_MODEL`` (default ``claude-opus-5-5``),
-``ANTHROPIC_REFUSAL_FALLBACK=off`` to stop asking the provider to retry a declined request on its recommended model.
+Environment (operator): ``ANTHROPIC_API_KEY`` (the SDK reads it), ``ANTHROPIC_WORKSPACE_ID`` (only when the key is not tied to
+one workspace), ``DOCUMENT_STUDIO_MODEL`` (default ``claude-opus-5-5``), ``ANTHROPIC_REFUSAL_FALLBACK=off`` to stop asking the
+provider to retry a declined request on its recommended model.
 """
 from __future__ import annotations
 
@@ -81,7 +82,10 @@ def fallbacks_enabled() -> bool:
 def _client():
     import anthropic
 
-    return anthropic.Anthropic(max_retries=2, timeout=anthropic.Timeout(900.0, connect=15.0))
+    # a key that is not tied to one workspace needs to be told which one to use (an id, not a secret)
+    workspace = os.environ.get("ANTHROPIC_WORKSPACE_ID", "").strip()
+    return anthropic.Anthropic(max_retries=2, timeout=anthropic.Timeout(900.0, connect=15.0),
+                               default_headers={"anthropic-workspace-id": workspace} if workspace else None)
 
 
 # ── before the call ──────────────────────────────────────────────────────────
@@ -170,6 +174,8 @@ def _failure(exc: BaseException) -> ClaudeFailed:
     if isinstance(exc, (anthropic.APIConnectionError, anthropic.APITimeoutError)):
         return ClaudeFailed("AI could not be reached. Check the connection and try again.", retryable=True, detail=detail)
     if isinstance(exc, anthropic.BadRequestError):
+        if "workspace" in str(exc).lower():
+            return ClaudeFailed("AI is not set up completely: its credentials need a workspace. An administrator should check the AI setup.", detail=detail)
         return ClaudeFailed("AI could not process this request. If the document is very large, work on one section at a time.", detail=detail)
     if isinstance(exc, anthropic.APIStatusError) and getattr(exc, "status_code", 0) >= 500:
         return ClaudeFailed("AI is temporarily unavailable. Try again shortly.", retryable=True, detail=detail)

@@ -112,6 +112,22 @@ def test_errors_name_no_vendor_and_say_whether_to_try_again(wire, tenant):
     assert [e.status for e in events(tenant)] == ["failed"] * 4
 
 
+def test_a_key_that_is_not_tied_to_a_workspace_sends_the_workspace_the_operator_names(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    monkeypatch.delenv("ANTHROPIC_WORKSPACE_ID", raising=False)
+    assert "anthropic-workspace-id" not in claude_client._client().default_headers
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "  wrkspc_test_123 ")
+    assert claude_client._client().default_headers["anthropic-workspace-id"] == "wrkspc_test_123"
+
+
+def test_a_key_that_needs_a_workspace_is_reported_as_a_setup_problem_not_a_problem_with_the_document(wire, tenant):
+    wire(lambda body: error(400, "This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header."))
+    with pytest.raises(claude_client.ClaudeFailed) as exc:
+        call()
+    assert "need a workspace" in str(exc.value) and "workspace-id" in exc.value.detail and exc.value.retryable is False
+    assert not any(w in str(exc.value).lower() for w in ("claude", "anthropic", "opus", "document is very large"))
+
+
 def test_an_account_that_does_not_accept_the_fallback_is_retried_without_it_and_remembered(wire, tenant):
     def respond(body):
         return error(400, "unknown beta: server-side-fallback") if "fallbacks" in body else reply("fine")
