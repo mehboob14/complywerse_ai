@@ -6,8 +6,9 @@
  * with an AI explanation of the differences that matter when asked.
  */
 import { useEffect, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
+import type { ChainHunk } from '@/lib/documentChain';
 import { problemOf, studioApi, type Message, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import RedlineView, { StatsLine } from './RedlineView';
@@ -20,7 +21,14 @@ export type CompareSpec =
 
 const IMPORTANCE: Record<string, string> = { high: 'bg-[#fbdcdc] text-[#9b1c1c]', medium: 'bg-[#fff2a8] text-[#6b5400]', low: 'bg-[#e3f1f1] text-[#0f4c5c]' };
 
-export default function ChangesView({ session, spec, aiConfigured, onClose }: { session: Session; spec: CompareSpec; aiConfigured: boolean; onClose: () => void }) {
+export default function ChangesView({ session, spec, aiConfigured, onClose, flush, onContent, onShowSource }: {
+  session: Session; spec: CompareSpec; aiConfigured: boolean; onClose: () => void;
+  /** save what the person has typed before something is taken back */
+  flush?: () => Promise<void>;
+  /** the document's new text after a change was taken back */
+  onContent?: (content: string, revision: number) => void;
+  onShowSource?: (ref: string) => void;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [ai, setAi] = useState<Message | null>(null);
@@ -36,6 +44,24 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
       return studioApi.diff(session.id, spec.from, spec.to ?? session.revision);
     },
     staleTime: 10_000,
+  });
+
+  const takeBack = useMutation({
+    mutationFn: async (h: ChainHunk) => {
+      await flush?.();
+      return studioApi.revertChanges(session.id, { frm: spec.type === 'revision' ? spec.from : 0, hunks: [h.id], hash: redline.data?.hash });
+    },
+    onSuccess: (r) => {
+      onContent?.(r.content, r.revision);
+      qc.invalidateQueries({ queryKey: ['studio', 'changes', session.id] });
+      qc.invalidateQueries({ queryKey: ['studio', 'revisions', session.id] });
+      qc.invalidateQueries({ queryKey: ['studio', 'messages', session.id] });          // the cards of the changes that were taken back
+      toast({ title: 'Change taken back', message: 'It is a new version, so nothing is lost.', type: 'success' });
+    },
+    onError: (e) => {
+      qc.invalidateQueries({ queryKey: ['studio', 'changes', session.id] });
+      toast({ title: 'That change could not be taken back', message: problemOf(e), type: 'error' });
+    },
   });
 
   useEffect(() => { setAi(null); }, [spec]);
@@ -113,7 +139,13 @@ export default function ChangesView({ session, spec, aiConfigured, onClose }: { 
           <section className="rounded-xl border border-[#d5dbe1] bg-white p-3 sm:p-5" aria-label="Changes">
             {redline.isLoading && <p className="text-sm text-[#586472]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Comparing…</p>}
             {redline.isError && <p className="text-sm text-[#8a1c1c]" role="alert">{problemOf(redline.error)}</p>}
-            {redline.data && <RedlineView rows={redline.data.rows} empty={other ? 'The two documents have the same blocks.' : 'Nothing changed.'} />}
+            {redline.data && (
+              <RedlineView rows={redline.data.rows} empty={other ? 'The two documents have the same blocks.' : 'Nothing changed.'}
+                changes={redline.data.hunks && spec.type === 'revision' ? {
+                  hunks: redline.data.hunks, canRevert: !!redline.data.can_revert && !!onContent, whyNot: redline.data.can_revert ? null : 'Only changes since an earlier version of the document as it is now can be taken back.',
+                  busyId: takeBack.isPending ? takeBack.variables?.id ?? null : null, onRevert: (h) => takeBack.mutate(h), onShowSource,
+                } : undefined} />
+            )}
           </section>
         </div>
       </div>

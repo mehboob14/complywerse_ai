@@ -6,9 +6,10 @@
  * AI relied on is listed with each quoted passage checked against the reference it names.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Eye, Loader2, Pencil, Send, Sparkles, X, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Eye, GitCompare, Loader2, Pencil, Send, Sparkles, Undo2, X, XCircle } from 'lucide-react';
 import type { Message, Op, ReferenceUsed, Session } from '@/lib/studio/api';
 import { plural, wordDiff } from '@/lib/studio/text';
+import LiveTurn from './LiveTurn';
 
 export interface ChatPanelProps {
   session: Session;
@@ -18,6 +19,10 @@ export interface ChatPanelProps {
   onSend: (text: string) => Promise<void> | void;
   onAccept: (messageId: number, opIds: string[], overrides?: Record<string, string>) => Promise<void>;
   onReject: (messageId: number, opIds: string[]) => Promise<void>;
+  /** take a change that was accepted back out of the document */
+  onRevertOp: (messageId: number, opId: string) => Promise<void>;
+  /** show the document with the changes marked (since the start) */
+  onShowChanges: () => void;
   onPreview: (messageId: number | null) => void;
   previewing: number | null;
   onOpenTab: (tab: 'references' | 'instructions') => void;
@@ -49,27 +54,30 @@ function DiffText({ before, after }: { before: string; after: string }) {
   );
 }
 
-function OpCard({ op, onAccept, onReject, disabled }: { op: Op; onAccept: (overrides?: string) => Promise<void>; onReject: () => Promise<void>; disabled: boolean }) {
+function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
+  op: Op; onAccept: (overrides?: string) => Promise<void>; onReject: () => Promise<void>; onRevert: () => Promise<void>; onShow: () => void; disabled: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(op.markdown);
-  const [working, setWorking] = useState<'accept' | 'reject' | null>(null);
+  const [working, setWorking] = useState<'accept' | 'reject' | 'revert' | null>(null);
   const before = op.before.map((b) => b.text).join('\n\n');
   const after = op.after.map((a) => a.text).join('\n\n');
   const where = op.kind === 'replace_all' ? '' : op.kind === 'insert' ? (op.start === 'START' ? 'at the top' : `after block ${op.start.replace(/^B/i, '')}`)
     : op.end && op.end !== op.start ? `blocks ${op.start.replace(/^B/i, '')}–${op.end.replace(/^B/i, '')}` : `block ${op.start.replace(/^B/i, '')}`;
   const pending = op.status === 'pending' || op.status === 'conflict';
-  const run = async (kind: 'accept' | 'reject', fn: () => Promise<void>) => {
+  const run = async (kind: 'accept' | 'reject' | 'revert', fn: () => Promise<void>) => {
     setWorking(kind);
     try { await fn(); } finally { setWorking(null); }
   };
   return (
-    <li className={`rounded-lg border p-3 ${op.status === 'accepted' ? 'border-[#9fd9bd] bg-[#f3fbf6]' : op.status === 'rejected' ? 'border-[#d5dbe1] bg-[#f6f7f9] opacity-70' : op.status === 'conflict' ? 'border-[#f0cf7a] bg-[#fffbed]' : 'border-[#c5ccd3] bg-white'}`}>
+    <li className={`rounded-lg border p-3 ${op.status === 'accepted' ? 'border-[#9fd9bd] bg-[#f3fbf6]' : op.status === 'rejected' || op.status === 'reverted' ? 'border-[#d5dbe1] bg-[#f6f7f9] opacity-70' : op.status === 'conflict' ? 'border-[#f0cf7a] bg-[#fffbed]' : 'border-[#c5ccd3] bg-white'}`}>
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded bg-[#e3f1f1] px-1.5 py-0.5 font-semibold text-[#0f4c5c]">{KIND_LABEL[op.kind]}</span>
         {where && <span className="text-[#586472]">{where}</span>}
         <span className="text-[#586472]">{op.words_added || op.words_removed ? `+${op.words_added} / −${op.words_removed} words` : ''}</span>
         {op.status === 'accepted' && <span className="ml-auto inline-flex items-center gap-1 font-medium text-[#0a5a38]"><CheckCircle2 className="h-3.5 w-3.5" /> Accepted</span>}
         {op.status === 'rejected' && <span className="ml-auto inline-flex items-center gap-1 font-medium text-[#586472]"><XCircle className="h-3.5 w-3.5" /> Rejected</span>}
+        {op.status === 'reverted' && <span className="ml-auto inline-flex items-center gap-1 font-medium text-[#586472]"><Undo2 className="h-3.5 w-3.5" /> Taken back</span>}
         {op.status === 'conflict' && <span className="ml-auto inline-flex items-center gap-1 font-medium text-[#8a6100]"><AlertTriangle className="h-3.5 w-3.5" /> Could not be placed</span>}
       </div>
       {op.reason && <p className="mt-1.5 text-[13px] text-[#3f4b58]">{op.reason}</p>}
@@ -91,6 +99,17 @@ function OpCard({ op, onAccept, onReject, disabled }: { op: Op; onAccept: (overr
       )}
       {op.refs.length > 0 && (
         <p className="mt-2 text-[11px] text-[#586472]">Based on: {op.refs.join(', ')}</p>
+      )}
+      {op.status === 'accepted' && (
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          <button type="button" onClick={onShow} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#0b6b58] hover:bg-[#e6f4f1]">
+            <GitCompare className="h-3.5 w-3.5" /> Show it in the document
+          </button>
+          <button type="button" disabled={disabled || working !== null} onClick={() => run('revert', onRevert)} title="Put back what this change replaced. It is a new version, so nothing is lost."
+            className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2.5 py-1 text-xs font-semibold text-[#3f4b58] hover:bg-[#f1f3f5] disabled:opacity-50">
+            {working === 'revert' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />} Take back
+          </button>
+        </div>
       )}
       {pending && (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
@@ -182,7 +201,8 @@ function Proposal({ message, props }: { message: Message; props: ChatPanelProps 
         {ops.map((op) => (
           <OpCard key={op.id} op={op} disabled={props.busy}
             onAccept={(override) => props.onAccept(message.id, [op.id], override !== undefined ? { [op.id]: override } : undefined)}
-            onReject={() => props.onReject(message.id, [op.id])} />
+            onReject={() => props.onReject(message.id, [op.id])}
+            onRevert={() => props.onRevertOp(message.id, op.id)} onShow={props.onShowChanges} />
         ))}
       </ul>
     </div>
@@ -201,11 +221,7 @@ function Bubble({ message, props, lastUser }: { message: Message; props: ChatPan
     <div className="flex gap-2">
       <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#d6f3ec] text-[#0b6b58]" aria-hidden><Sparkles className="h-3.5 w-3.5" /></span>
       <div className="min-w-0 flex-1">
-        {message.status === 'working' && (
-          <div className="inline-flex items-center gap-2 rounded-2xl rounded-tl-sm bg-white px-3.5 py-2 text-sm text-[#3f4b58] ring-1 ring-[#d5dbe1]" role="status">
-            <Loader2 className="h-4 w-4 animate-spin text-[#0f766e]" /> {message.stage || 'Working'}…
-          </div>
-        )}
+        {message.status === 'working' && <LiveTurn message={message} />}
         {message.status === 'error' && (
           <div className="rounded-2xl rounded-tl-sm border border-[#f1b5b5] bg-[#fdf3f3] px-3.5 py-2 text-sm text-[#8a1c1c]" role="alert">
             {message.error || 'The AI could not answer.'}
@@ -266,12 +282,16 @@ export default function ChatPanel(props: ChatPanelProps) {
   const [ideasOpen, setIdeasOpen] = useState(false);              // suggestions: shown while the conversation is empty, on request after
   const end = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [chat.length, chat[chat.length - 1]?.status, chat[chat.length - 1]?.stage]);
+  const atBottom = useRef(true);                                // follow the answer as it is written, unless the person scrolled up to read
+  useEffect(() => {
+    if (atBottom.current) end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  }, [chat.length, chat[chat.length - 1]?.status, chat[chat.length - 1]?.stage, chat[chat.length - 1]?.live?.seq]);
 
   const submit = async () => {
     const t = text.trim();
     if (!t || working || !aiConfigured) return;
     setText('');
+    atBottom.current = true;
     await onSend(t);
   };
   const lastUserBefore = (i: number): string | null => { for (let k = i - 1; k >= 0; k--) if (chat[k].role === 'user') return chat[k].content; return null; };
@@ -284,7 +304,8 @@ export default function ChatPanel(props: ChatPanelProps) {
           <p className="mt-0.5">Ask your administrator to add the AI key. The editor, checks, comparison of versions and export all work without it.</p>
         </div>
       )}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3" aria-live="polite">
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3" aria-live="polite"
+        onScroll={(e) => { const el = e.currentTarget; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96; }}>
         {chat.length === 0 && (
           <div className="rounded-lg border border-dashed border-[#c5ccd3] p-4 text-center text-sm text-[#586472]">
             <Sparkles className="mx-auto mb-1 h-5 w-5 text-[#0f766e]" />

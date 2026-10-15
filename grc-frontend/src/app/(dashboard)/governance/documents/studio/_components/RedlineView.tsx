@@ -6,8 +6,11 @@
  * accepting the AI's changes would do.
  */
 import { useMemo, useState } from 'react';
+import { Loader2, Undo2 } from 'lucide-react';
+import type { ChainHunk } from '@/lib/documentChain';
 import type { RedlineRow, Segment, Stats } from '@/lib/studio/api';
 import { plural } from '@/lib/studio/text';
+import Attribution from './ChangeAttribution';
 
 function Segments({ segs }: { segs: Segment[] }) {
   return (
@@ -97,7 +100,37 @@ export function StatsLine({ stats }: { stats: Stats | null | undefined }) {
   return <span>{parts.length ? parts.join(' · ') : 'No changes'}</span>;
 }
 
-export default function RedlineView({ rows, empty = 'Nothing changed.' }: { rows: RedlineRow[]; empty?: string }) {
+/** What a redline needs to show who made each change and to take one back. */
+export interface RedlineChanges {
+  hunks: ChainHunk[];
+  /** false: the changes are only shown (an old version, a file, a document someone else changed meanwhile) */
+  canRevert: boolean;
+  whyNot?: string | null;
+  busyId?: number | null;
+  onRevert: (hunk: ChainHunk) => void;
+  onShowSource?: (ref: string) => void;
+}
+
+function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChanges }) {
+  const busy = changes.busyId === hunk.id;
+  const blocked = !(hunk.can_revert ?? changes.canRevert) || hunk.locked;
+  const why = hunk.locked ? 'A sign-off record is stamped by the sign-off and cannot be taken back.' : blocked ? changes.whyNot || undefined : undefined;
+  return (
+    <div className="mt-3 rounded-t border border-b-0 border-[#d5dbe1] bg-[#f3f6f8] px-2.5 py-1.5" data-change={hunk.id}>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]">
+        <span className="min-w-0 truncate font-semibold text-[#26323d]" title={hunk.section}>{hunk.section || 'Top of the document'}</span>
+        <span className="text-[#586472]">+{hunk.words_added} / −{hunk.words_removed} words</span>
+        <button type="button" disabled={blocked || busy} title={why} onClick={() => changes.onRevert(hunk)}
+          className="ml-auto inline-flex items-center gap-1 rounded-md border border-[#c5ccd3] bg-white px-2 py-0.5 font-semibold text-[#3f4b58] hover:border-[#0f766e] hover:bg-[#f3fbf9] disabled:cursor-not-allowed disabled:opacity-50">
+          {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Undo2 className="h-3 w-3" aria-hidden />} Take back
+        </button>
+      </div>
+      {hunk.by ? <div className="mt-1"><Attribution by={hunk.by} onShowSource={changes.onShowSource} /></div> : <p className="mt-0.5 text-[11px] text-[#586472]">Changed since that version.</p>}
+    </div>
+  );
+}
+
+export default function RedlineView({ rows, empty = 'Nothing changed.', changes }: { rows: RedlineRow[]; empty?: string; changes?: RedlineChanges }) {
   const [all, setAll] = useState(false);
   const changed = useMemo(() => rows.some((r) => r.status !== 'equal'), [rows]);
   // number the ordered items of a list: 1, 2, 3 … restarting after anything else
@@ -120,12 +153,15 @@ export default function RedlineView({ rows, empty = 'Nothing changed.' }: { rows
   }
   const out: React.ReactNode[] = [];
   let folded = 0;
+  const byId = new Map((changes?.hunks ?? []).map((h) => [h.id, h]));
   rows.forEach((row, i) => {
     if (shown[i]) {
       if (folded) {
         out.push(<div key={`f${i}`} className="px-3 py-1 text-center text-xs text-[#586472]">… {plural(folded, 'unchanged block')} …</div>);
         folded = 0;
       }
+      const hunk = changes && row.hunk != null ? byId.get(row.hunk) : undefined;
+      if (hunk && (i === 0 || rows[i - 1].hunk !== row.hunk || !shown[i - 1])) out.push(<ChangeHeader key={`h${i}`} hunk={hunk} changes={changes!} />);
       out.push(<Row key={i} row={row} number={numbered[i]} />);
     } else {
       folded += 1;

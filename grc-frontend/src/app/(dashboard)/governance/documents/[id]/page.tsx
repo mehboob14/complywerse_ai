@@ -15,6 +15,8 @@ import GovernanceMappingsPage from '../../mappings/page';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import DocumentSyncPanel from './_DocumentSyncPanel';
 import LifecycleTab from './_LifecycleTab';
+import ChainTab from './_ChainTab';
+import TrackedChanges, { SinceApproved } from './_TrackedChanges';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -60,6 +62,7 @@ import {
   History,
   RotateCcw,
   GitCompare,
+  GitBranch,
   Sparkles,
   Search,
   Info,
@@ -299,7 +302,7 @@ const childrenToText = (node: React.ReactNode): string => {
   return '';
 };
 
-type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'sign-off' | 'discussion' | 'review-history' | 'lifecycle';
+type TabKey = 'viewer' | 'statements' | 'controls' | 'gap-analysis' | 'sign-off' | 'discussion' | 'review-history' | 'lifecycle' | 'chain';
 
 export default function PolicyDetailPage() {
   const params = useParams();
@@ -341,11 +344,13 @@ export default function PolicyDetailPage() {
   }, [id]);
 
   const searchParams = useSearchParams();
-  const _VALID_TABS = ['viewer', 'statements', 'controls', 'gap-analysis', 'sign-off', 'discussion', 'review-history', 'lifecycle'];
+  const _VALID_TABS = ['viewer', 'statements', 'controls', 'gap-analysis', 'sign-off', 'discussion', 'review-history', 'lifecycle', 'chain'];
   const _paramTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<TabKey>(
     (_paramTab && _VALID_TABS.includes(_paramTab) ? _paramTab : 'viewer') as TabKey,
   );
+  // the change chain asks the viewer to show the changes of one version (from the version before it, to it)
+  const [trackedRange, setTrackedRange] = useState<{ from: number; to: number } | null>(null);
   const [showGapModal, setShowGapModal] = useState(false);
   const [showNcaCompareModal, setShowNcaCompareModal] = useState(false);
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
@@ -928,6 +933,7 @@ export default function PolicyDetailPage() {
     { key: 'controls', label: 'Mappings', icon: Link2 },
     { key: 'gap-analysis', label: 'Gap Analysis', icon: BarChart3 },
     { key: 'lifecycle', label: 'Approvals & Acknowledgements', icon: ShieldCheck },
+    { key: 'chain', label: 'Change chain', icon: GitBranch },
   ] : [
     { key: 'viewer', label: 'Document Viewer', icon: Eye },
     { key: 'statements', label: 'Statements', icon: ClipboardList },
@@ -1123,6 +1129,8 @@ export default function PolicyDetailPage() {
           htmlContent={htmlContent}
           htmlLoading={htmlLoading}
           docType={docType}
+          chainOn={lifecycleOn}
+          trackedRange={trackedRange}
         />
       )}
 
@@ -1442,6 +1450,10 @@ export default function PolicyDetailPage() {
       )}
 
       {shownTab === 'lifecycle' && <LifecycleTab documentId={id} doc={document} />}
+      {shownTab === 'chain' && lifecycleOn && (
+        <ChainTab documentId={id} currentVersion={document.current_version}
+          onShowInDocument={(range) => { setTrackedRange(range); setActiveTab('viewer'); }} />
+      )}
 
       {activeTab === 'sign-off' && !lifecycleOn && (
         <SignOffControlTab documentId={id} doc={document} />
@@ -2328,7 +2340,7 @@ function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
   );
 }
 
-function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }: any) {
+function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange }: any) {
   // Detect if doc.content is markdown (AI-generated docs always are).
   // Markdown rendering + normalization is delegated to
   // GovernanceDocumentMarkdown — see _src/components/governance/_ for the
@@ -2352,6 +2364,10 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
   const [showDetails, setShowDetails] = useState(false);
   const [showFullViewer, setShowFullViewer] = useState(false);
   const canEdit = isMarkdown && !doc?.has_file;
+  // organisations with the document life cycle can see the document with its changes marked, and take one back
+  const [tracking, setTracking] = useState(!!trackedRange);
+  const [sinceRange, setSinceRange] = useState<{ from: number; to: number | null } | null>(null);
+  useEffect(() => { if (trackedRange) { setTracking(true); setSinceRange(null); } }, [trackedRange]);
 
   // If the document is a file-backed PDF, render the *exact* original file in
   // an iframe rather than the markdown/HTML re-parse (which distorts tables,
@@ -2462,7 +2478,10 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
   // The read-only document body (markdown / sanitized HTML / empty), rendered
   // both as the collapsed inline preview and inside the full-view popup.
   const renderReadBody = (full = false) => (
-    isPdfFile ? (
+    tracking && chainOn ? (
+      <TrackedChanges documentId={doc.id} status={doc.status} initial={sinceRange ?? trackedRange}
+        onChanged={() => { queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] }); }} />
+    ) : isPdfFile ? (
       pdfError ? (
         <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
           <FileText className="h-12 w-12" />
@@ -2586,6 +2605,7 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
         />
       )}
       <DocumentDetailsPanel doc={doc} docType={docType} isOpen={showDetails} onClose={() => setShowDetails(false)} />
+      {chainOn && !tracking && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setTracking(true); }} />}
       <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
         <div className="border-b border-slate-300 bg-white/50 px-6 py-3 flex items-center justify-between gap-2">
           <h3 className="font-medium text-slate-900">Document Content</h3>
@@ -2593,6 +2613,12 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
             <button onClick={() => setShowDetails(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
               <Info className="h-3.5 w-3.5" /> Details
             </button>
+            {chainOn && (
+              <button onClick={() => setTracking((v) => !v)} aria-pressed={tracking} title="Show the document with its changes marked, who made each, and take one back"
+                className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
+                <GitCompare className="h-3.5 w-3.5" /> Tracked changes
+              </button>
+            )}
             <button onClick={() => setShowHistory(true)} className="inline-flex items-center gap-1 rounded-md border border-slate-300 px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">
               <History className="h-3.5 w-3.5" /> History
             </button>
@@ -2613,9 +2639,9 @@ function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType }:
         </div>
         {/* Collapsed, non-scrollable preview — click "Open full" for the whole doc. */}
         <div className="p-6">
-          <div className="relative max-h-[360px] overflow-hidden">
+          <div className={tracking && chainOn ? 'relative' : 'relative max-h-[360px] overflow-hidden'}>
             {renderReadBody()}
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent" />
+            {!(tracking && chainOn) && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-white to-transparent" />}
           </div>
           <div className="mt-2 flex justify-center border-t border-slate-100 pt-3">
             <button

@@ -3,6 +3,7 @@
  * changes to blocks, the person accepts them. Every call goes through the shared axios client (token + tenant header).
  */
 import apiClient from '@/lib/api';
+import type { ChainHunk } from '@/lib/documentChain';
 
 const base = '/governance/studio';
 
@@ -66,7 +67,7 @@ export interface Session {
   content?: string;
 }
 
-export type OpStatus = 'pending' | 'accepted' | 'rejected' | 'conflict';
+export type OpStatus = 'pending' | 'accepted' | 'rejected' | 'conflict' | 'reverted';
 
 export interface Op {
   id: string;
@@ -84,6 +85,12 @@ export interface Op {
   before_count: number;
   after: { kind: string; level?: number; text: string }[];
   after_count: number;
+  /** who accepted it and in which revision (accepted changes), and who took it back */
+  accepted_by?: number | null;
+  accepted_at?: string | null;
+  revision?: number;
+  reverted_by?: number | null;
+  reverted_at?: string | null;
 }
 
 export interface ReferenceUsed {
@@ -133,6 +140,28 @@ export interface CompareDifference {
   recommendation: string;
 }
 
+/** What the screen shows while a turn works, beyond one line: the steps taken, the text written so far, and for a whole document each part. */
+export interface LiveView {
+  seq: number;
+  steps?: { label: string; state: 'done' | 'active'; detail?: string }[];
+  /** the reply as far as it is written; with `text_label` it is not a reply but what the label says (the approach of a document being planned) */
+  text?: string;
+  text_label?: string;
+  /** what has been produced so far: the changes being prepared, the choices made, the areas to cover */
+  groups?: { label: string; items: string[] }[];
+  parts?: { id: string; label: string; state: 'todo' | 'writing' | 'rewriting' | 'done' | 'failed'; words: number; phase?: 'reading' | 'thinking' | 'writing'; note?: string }[];
+  /** the last lines of the text being written, and what it is */
+  tail?: string;
+  tail_label?: string;
+}
+
+export interface Progress {
+  id: number;
+  status: 'working' | 'done' | 'error';
+  stage: string | null;
+  live: LiveView | null;
+}
+
 export interface Message {
   id: number;
   role: 'user' | 'assistant';
@@ -140,6 +169,8 @@ export interface Message {
   content: string;
   status: 'working' | 'done' | 'error';
   stage: string | null;
+  /** present while the turn works (an older server sends none) */
+  live?: LiveView | null;
   error: string | null;
   proposal:
     | null
@@ -161,7 +192,7 @@ export interface Message {
 
 export interface Revision {
   number: number;
-  author_type: 'user' | 'ai' | 'import' | 'system' | 'restore';
+  author_type: 'user' | 'ai' | 'import' | 'system' | 'restore' | 'revert';
   author: string | null;
   summary: string;
   stats: Stats | null;
@@ -182,6 +213,8 @@ export interface RedlineRow {
   segments?: Segment[];
   table?: { status: string; cells: Segment[][] }[];
   was?: { kind: string; level: number };
+  /** the change this block belongs to (see `Redline.hunks`); null when unchanged */
+  hunk?: number | null;
 }
 
 export interface Redline {
@@ -192,6 +225,10 @@ export interface Redline {
   other_title?: string;
   ai_message?: Message;
   applied?: string[];
+  /** the changes (for a redline of the session's own revisions), who made each, and whether they can be taken back */
+  hunks?: ChainHunk[];
+  hash?: string;
+  can_revert?: boolean;
 }
 
 export interface TemplateItem {
@@ -332,11 +369,17 @@ export const studioApi = {
   readReference: (id: number, refId: number) => get<Reference & { text: string }>(`/sessions/${id}/references/${refId}`),
 
   messages: (id: number) => get<{ items: Message[] }>(`/sessions/${id}/messages`),
+  /** the state of the latest turns, small enough to ask for several times a second while the AI works */
+  progress: (id: number) => get<{ items: Progress[] }>(`/sessions/${id}/progress`),
   send: (id: number, text: string) => post<Message>(`/sessions/${id}/messages`, { text }),
   message: (id: number, messageId: number) => get<Message>(`/sessions/${id}/messages/${messageId}`),
   accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
     post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message }>(`/sessions/${id}/messages/${messageId}/accept`, body),
   reject: (id: number, messageId: number, body: { op_ids?: string[] } = {}) => post<{ message: Message }>(`/sessions/${id}/messages/${messageId}/reject`, body),
+  /** take a change that was accepted back out of the document (a new revision) */
+  revertOp: (id: number, messageId: number, opId: string) => post<{ content: string; revision: number; message: Message }>(`/sessions/${id}/messages/${messageId}/ops/${opId}/revert`),
+  /** take chosen changes since a revision back out of the document as it is now */
+  revertChanges: (id: number, body: { frm: number; hunks: number[]; hash?: string }) => post<{ content: string; revision: number }>(`/sessions/${id}/changes/revert`, body),
   preview: (id: number, messageId: number) => get<Redline>(`/sessions/${id}/messages/${messageId}/redline`),
 
   checks: (id: number, ai = false) => post<{ revision: number; issues: Issue[]; summary: { total: number; by_kind: Record<string, number>; by_severity: Record<string, number>; must_fill: number }; ai_message?: Message }>(`/sessions/${id}/checks`, {}, { ai }),

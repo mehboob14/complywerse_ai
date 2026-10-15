@@ -19,6 +19,7 @@ const AUTHOR: Record<Revision['author_type'], { label: string; icon: typeof Bot 
   import: { label: 'Opened', icon: FileUp },
   system: { label: 'Started', icon: History },
   restore: { label: 'Restored', icon: Undo2 },
+  revert: { label: 'Taken back', icon: Undo2 },
 };
 
 export interface HistoryPanelProps {

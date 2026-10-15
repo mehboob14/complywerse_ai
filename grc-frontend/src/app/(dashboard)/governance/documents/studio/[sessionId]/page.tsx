@@ -12,8 +12,8 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, BookMarked, CheckCircle2, ChevronDown, Code2, Download, Eye, FilePlus2, FileText, History, Library, ListChecks, Loader2,
-  MessageSquare, Pencil, Save, Settings2,
+  AlertTriangle, ArrowLeft, BookMarked, CheckCircle2, ChevronDown, Code2, Download, Eye, FilePlus2, FileText, GitCompare, History, Library, ListChecks, Loader2,
+  MessageSquare, Pencil, Save, Settings2, X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -21,6 +21,7 @@ import { DOC_TYPE_LABEL, isConflict, problemOf, studioApi, type Issue, type Mess
 import { countPlaceholders, countWords, plural } from '@/lib/studio/text';
 import StudioEditor, { type EditorMode, type StudioEditorHandle } from '../_components/StudioEditor';
 import ChatPanel from '../_components/ChatPanel';
+import { useLiveProgress } from '../_components/useLiveProgress';
 import ReferencesPanel from '../_components/ReferencesPanel';
 import InstructionsPanel from '../_components/InstructionsPanel';
 import ChecksPanel from '../_components/ChecksPanel';
@@ -157,13 +158,15 @@ export default function StudioWorkspacePage() {
   };
 
   // ── the assistant ──────────────────────────────────────────────────────────
+  const liveOk = useRef(false);                       // the server sends the live view: the whole conversation is then asked for less often
   const messages = useQuery({
     queryKey: ['studio', 'messages', id],
     queryFn: () => studioApi.messages(id),
     enabled: !!session,
-    refetchInterval: (q) => (q.state.data?.items.some((m) => m.status === 'working') ? 1500 : false),
+    refetchInterval: (q) => (q.state.data?.items.some((m) => m.status === 'working') ? (liveOk.current ? 5000 : 1500) : false),
   });
   const items = messages.data?.items ?? [];
+  liveOk.current = useLiveProgress(id, items);
   const working = items.some((m) => m.status === 'working' && m.kind === 'chat');
 
   // an answer finished: the AI may have written the first draft straight into a blank document
@@ -202,8 +205,18 @@ export default function StudioWorkspacePage() {
       setMessage(r.message);
       setCompare((c) => (c?.type === 'preview' ? null : c));
       if (r.conflicts) toast({ title: `${plural(r.conflicts, 'change')} could not be placed`, message: 'The text they change was edited after the AI read it. Ask again, or make the change yourself.', type: 'warning' });
-      if (r.accepted) toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success' });
+      if (r.accepted) { toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success' }); setJustAccepted(r.accepted); }
     } catch (e) { toast({ title: 'Could not accept', message: problemOf(e), type: 'error' }); }
+  };
+  const revertOp = async (messageId: number, opId: string) => {
+    await flush();
+    try {
+      const r = await studioApi.revertOp(id, messageId, opId);
+      applyServerContent(r.content, r.revision);
+      setMessage(r.message);
+      qc.invalidateQueries({ queryKey: ['studio', 'changes', id] });
+      toast({ title: 'Change taken back', message: 'It is saved as a new version, so nothing is lost.', type: 'success' });
+    } catch (e) { toast({ title: 'Could not take it back', message: problemOf(e), type: 'error' }); }
   };
   const reject = async (messageId: number, opIds: string[]) => {
     try {
@@ -218,10 +231,21 @@ export default function StudioWorkspacePage() {
   const [tab, setTab] = useState<SideTab>('chat');
   const [pane, setPane] = useState<'document' | 'assistant'>('document');          // on a narrow screen
   const [compare, setCompare] = useState<CompareSpec | null>(null);
+  const [justAccepted, setJustAccepted] = useState(0);                          // how many changes were just accepted: offered to be seen marked in the document
   const [dialog, setDialog] = useState<Dialog>(null);
   const [focusRef, setFocusRef] = useState<string | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const previewing = compare?.type === 'preview' ? compare.messageId : null;
+  const showChanges = () => {
+    setCompare({ type: 'revision', from: 0, label: session?.base_label ? `Changes since “${session.base_label}”` : 'Changes since the start' });
+    setPane('document');
+  };
+  useEffect(() => {
+    if (!justAccepted) return;
+    const t = setTimeout(() => setJustAccepted(0), 20000);
+    return () => clearTimeout(t);
+  }, [justAccepted]);
+  const tracking = compare?.type === 'revision' && compare.from === 0;
 
   useEffect(() => {                                                       // opened from the start page to compare with a document
     const other = Number(search?.get('compare'));
@@ -337,6 +361,10 @@ export default function StudioWorkspacePage() {
               </button>
             ))}
           </div>
+          <button type="button" aria-pressed={tracking} onClick={() => (tracking ? setCompare(null) : showChanges())} title="See every change since the start, marked in the document, and who made it"
+            className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${tracking ? 'border-[#0f4c5c] bg-[#0f4c5c] text-white' : 'border-[#b8c4c8] bg-white text-[#26323d] hover:bg-[#f1f3f5]'}`}>
+            <GitCompare className="h-3.5 w-3.5" /> Tracked changes
+          </button>
           <button type="button" onClick={() => setDialog('export')} className="inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]"><Download className="h-3.5 w-3.5" /> Export</button>
           {inLibrary ? (
             <button type="button" onClick={() => setDialog('save')} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Save className="h-3.5 w-3.5" /> Save to the library</button>
@@ -370,12 +398,23 @@ export default function StudioWorkspacePage() {
       </div>
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_26rem] xl:grid-cols-[minmax(0,1fr)_29rem]">
-        <section className={`min-h-0 min-w-0 ${pane === 'document' ? 'block' : 'hidden'} lg:block`} aria-label="Document">
-          {compare ? (
-            <ChangesView session={session} spec={compare} aiConfigured={aiConfigured} onClose={() => setCompare(null)} />
-          ) : (
-            <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
+        <section className={`min-h-0 min-w-0 ${pane === 'document' ? 'flex' : 'hidden'} flex-col lg:flex`} aria-label="Document">
+          {justAccepted > 0 && !compare && (
+            <div className="flex shrink-0 items-center gap-2 border-b border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs text-[#0a5a38]" role="status">
+              <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+              <span className="min-w-0 flex-1">{plural(justAccepted, 'change')} accepted and written into the document.</span>
+              <button type="button" onClick={() => { setJustAccepted(0); showChanges(); }} className="font-semibold underline">Show {justAccepted === 1 ? 'it' : 'them'} marked in the document</button>
+              <button type="button" onClick={() => setJustAccepted(0)} aria-label="Dismiss" className="rounded p-0.5 hover:bg-[#d4f2e0]"><X className="h-3.5 w-3.5" /></button>
+            </div>
           )}
+          <div className="min-h-0 flex-1">
+            {compare ? (
+              <ChangesView session={session} spec={compare} aiConfigured={aiConfigured} onClose={() => setCompare(null)} flush={flush}
+                onContent={(c, r) => applyServerContent(c, r)} onShowSource={(k) => { setFocusRef(k); setTab('references'); }} />
+            ) : (
+              <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
+            )}
+          </div>
         </section>
         <aside className={`flex min-h-0 min-w-0 flex-col border-l border-[#d5dbe1] bg-[#f8fafb] ${pane === 'assistant' ? 'flex' : 'hidden'} lg:flex`} aria-label="Assistant">
           <div className="flex border-b border-[#d5dbe1] bg-white" role="tablist" aria-label="Assistant sections">
@@ -395,7 +434,7 @@ export default function StudioWorkspacePage() {
             <div className={`h-full ${tab === 'chat' ? 'block' : 'hidden'}`}>
               <ChatPanel
                 session={session} messages={items} aiConfigured={aiConfigured} busy={working}
-                onSend={send} onAccept={accept} onReject={reject}
+                onSend={send} onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges}
                 onPreview={(mid) => setCompare(mid == null ? null : { type: 'preview', messageId: mid })} previewing={previewing}
                 onOpenTab={(t) => setTab(t)} onShowReference={(k) => { setFocusRef(k); setTab('references'); }}
               />
