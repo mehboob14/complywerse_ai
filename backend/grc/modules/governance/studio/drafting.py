@@ -524,7 +524,7 @@ def run_draft(db, session_id: int, message_id: int) -> None:
         used = _verified(all_pieces, references)
         assumptions = _assumptions(plan, all_pieces)
         blocks_after = B.parse(markdown)
-        holes = checks.placeholders(blocks_after)
+        holes = [h for h in checks.placeholders(blocks_after) if h.get("required")]        # signature lines and blank form fields are meant to stay blank
         words = sum(b.words for b in blocks_after)
         unknown = _unknown_citations(markdown, references)
         if failures:
