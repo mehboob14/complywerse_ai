@@ -86,6 +86,46 @@ def _op_view(op: B.Op, blocks: Sequence[B.Block]) -> Dict[str, Any]:
             "before_count": len(before), "after": [{"kind": b.kind, "level": b.level, "text": b.text[:600]} for b in after[:40]], "after_count": len(after)}
 
 
+def questions_of(raw: Any, limit: int = 4) -> List[Dict[str, Any]]:
+    """The questions the model asked, as the studio keeps them: each with an id (q1, q2 ...), the question, why it matters, how it is
+    answered (one option, several, or in words), its options (label, detail, recommended) and whether words are welcome as well. A
+    choice with fewer than two options is a question answered in words. Older answers held plain strings: those become questions too."""
+    out: List[Dict[str, Any]] = []
+    for q in raw or []:
+        if isinstance(q, str):
+            q = {"question": q, "kind": "text"}
+        if not isinstance(q, dict) or not str(q.get("question") or "").strip():
+            continue
+        kind = q.get("kind") if q.get("kind") in ("single", "multiple", "text") else "text"
+        options: List[Dict[str, Any]] = []
+        for o in q.get("options") or []:
+            o = o if isinstance(o, dict) else {"label": str(o)}
+            label = str(o.get("label") or "").strip()[:200]
+            if label and all(label.lower() != x["label"].lower() for x in options):
+                options.append({"label": label, "detail": str(o.get("detail") or "").strip()[:300], "recommended": bool(o.get("recommended"))})
+        if kind == "text" or len(options) < 2:
+            kind, options = "text", []
+        if kind == "single":                                   # one recommendation for a single choice
+            first = next((i for i, o in enumerate(options) if o["recommended"]), None)
+            for i, o in enumerate(options):
+                o["recommended"] = i == first
+        out.append({"id": f"q{len(out) + 1}", "question": str(q["question"]).strip()[:500], "why": str(q.get("why") or "").strip()[:400],
+                    "kind": kind, "options": options[:8], "other": kind == "text" or bool(q.get("other")),
+                    **({"answer": q["answer"]} if isinstance(q.get("answer"), dict) else {})})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def asked_text(questions: Any) -> str:
+    """What was asked, for the conversation the model reads: the questions and their options."""
+    lines = []
+    for q in questions_of(questions, limit=8):
+        options = "; ".join(o["label"] for o in q["options"])
+        lines.append(f"- {q['question']}" + (f" (options: {options})" if options else ""))
+    return ("You asked:\n" + "\n".join(lines)) if lines else ""
+
+
 def interpret(data: Dict[str, Any], blocks: Sequence[B.Block], references: Sequence[Any], protected: Sequence[int]) -> Dict[str, Any]:
     """The model's answer as the studio keeps it: reply, the edits that can be placed (pending), the references with each quote
     checked, the placeholders now in the document and what the person should know."""
@@ -136,7 +176,7 @@ def interpret(data: Dict[str, Any], blocks: Sequence[B.Block], references: Seque
         notes.append(f"{leftover} protected placeholder(s) in the new text could not be matched to a real value: check the highlighted text.")
     return {
         "reply": str(data.get("reply") or "").strip(), "ops": ops, "references_used": used,
-        "questions": [str(q).strip() for q in data.get("questions") or [] if str(q).strip()][:3],
+        "questions": questions_of(data.get("questions")),
         "placeholders": checks.placeholders(proposed_blocks), "requirements": [],
         "notes": notes, "stats": B.stats(blocks, proposed_blocks) if ops else None,
     }
@@ -148,7 +188,14 @@ def _history(db, session, before_id: int) -> List[tuple]:
 
     rows = (db.query(StudioMessage).filter(StudioMessage.session_id == session.id, StudioMessage.id < before_id, StudioMessage.kind == "chat",
                                            StudioMessage.status == "done").order_by(StudioMessage.id.desc()).limit(10).all())
-    return [(r.role, r.content) for r in reversed(rows) if r.content.strip()]
+    out: List[tuple] = []
+    for r in reversed(rows):
+        text = r.content.strip()
+        if r.role == "assistant" and r.questions:            # what was asked, so that the answers that follow make sense
+            text = "\n".join(t for t in (text, asked_text(r.questions)) if t)
+        if text:
+            out.append((r.role, text))
+    return out
 
 
 def _stage(db, msg, label: str, **kw: Any) -> None:
@@ -226,10 +273,15 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
             raise TurnProblem("There is nothing to answer.")
         _stage(db, msg, "Reading the document and the references")
         blocks = B.parse(session.content)
-        from . import drafting
+        from . import auto_refs, drafting
 
-        if drafting.wants_whole_document(session, blocks, request.content):       # a document not yet started, asked for whole: write it, do not sketch it
-            drafting.run_draft(db, session_id, message_id)
+        attached = auto_refs.attach_named(db, session, request.content)          # the platform frameworks and library documents the request names
+        if attached:
+            _stage(db, msg, "Attaching what you named from the platform", detail=auto_refs.summary(attached))
+        if drafting.answers_a_draft(db, request) or drafting.wants_whole_document(session, blocks, request.content):
+            drafting.run_draft(db, session_id, message_id)       # a document not yet started, asked for whole (or answers to its questions): write it
+            if attached:
+                auto_refs.add_note(db, message_id, attached)
             return
         references = (db.query(StudioReference).filter(StudioReference.session_id == session_id).order_by(StudioReference.id).all())
         live.note(db, msg, ("a blank document" if B.is_blank(blocks) else f"{len(blocks)} blocks") + " · "
@@ -255,6 +307,8 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
             schema=prompts.TURN_SCHEMA, max_tokens=64000 if big else 32000, effort="high" if big else "medium", on_progress=chat_progress(db, msg))
         _stage(db, msg, "Checking the result")
         out = interpret(result.data, blocks, references, protected)
+        if attached:
+            out["notes"].insert(0, auto_refs.note(attached))
         if result.truncated:
             out["notes"].append("The answer reached its length limit: the last change may be incomplete. Ask for the rest in a follow-up.")
         msg.content = out["reply"] or ("I made changes for you to review." if out["ops"] else "")

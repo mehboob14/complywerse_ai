@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
-import { DOC_TYPE_LABEL, isConflict, problemOf, studioApi, type Issue, type Message, type Session } from '@/lib/studio/api';
+import { DOC_TYPE_LABEL, isConflict, problemOf, studioApi, type AnswerItem, type Issue, type Message, type Session } from '@/lib/studio/api';
 import { countPlaceholders, countWords, plural } from '@/lib/studio/text';
 import StudioEditor, { type EditorMode, type StudioEditorHandle } from '../_components/StudioEditor';
 import ChatPanel from '../_components/ChatPanel';
@@ -187,16 +187,20 @@ export default function StudioWorkspacePage() {
 
   const setMessage = (m: Message) => qc.setQueryData<{ items: Message[] }>(['studio', 'messages', id], (old) => ({ items: (old?.items ?? []).map((x) => (x.id === m.id ? m : x)) }));
 
-  const send = async (t: string) => {
+  const send = async (t: string, answers?: { reply_to: number; answers: AnswerItem[]; decide?: boolean }) => {
     await flush();
     try {
-      const m = await studioApi.send(id, t);
-      qc.setQueryData<{ items: Message[] }>(['studio', 'messages', id], (old) => ({ items: [...(old?.items ?? []), { id: -Date.now(), role: 'user', kind: 'chat', content: t, status: 'done', stage: null, error: null, proposal: null, references_used: [], questions: [], notes: [], base_revision: null, usage: null, created_at: new Date().toISOString() }, m] }));
+      const m = await studioApi.send(id, t, answers);
+      const mine: Message = { id: -Date.now(), role: 'user', kind: 'chat', content: t || 'My answers', status: 'done', stage: null, error: null, proposal: null, references_used: [], questions: [],
+                              answers: answers ? { reply_to: answers.reply_to, items: answers.answers, decide: answers.decide ? ['all'] : [] } : null, notes: [], base_revision: null, usage: null,
+                              created_at: new Date().toISOString() };
+      qc.setQueryData<{ items: Message[] }>(['studio', 'messages', id], (old) => ({ items: [...(old?.items ?? []), mine, m] }));
       qc.invalidateQueries({ queryKey: ['studio', 'messages', id] });
     } catch (e) {
-      toast({ title: 'The request was not sent', message: problemOf(e), type: 'error' });
+      toast({ title: answers ? 'Your answers were not sent' : 'The request was not sent', message: problemOf(e), type: 'error' });
     }
   };
+  const answer = (messageId: number, items: AnswerItem[], decide: boolean) => send('', { reply_to: messageId, answers: items, decide });
 
   const accept = async (messageId: number, opIds: string[], overrides?: Record<string, string>) => {
     await flush();
@@ -443,7 +447,7 @@ export default function StudioWorkspacePage() {
             <div className={`h-full ${tab === 'chat' ? 'block' : 'hidden'}`}>
               <ChatPanel
                 session={session} messages={items} aiConfigured={aiConfigured} busy={working}
-                onSend={send} onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges}
+                onSend={send} onAnswer={answer} onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges}
                 onPreview={(mid) => setCompare(mid == null ? null : { type: 'preview', messageId: mid })} previewing={previewing}
                 onOpenTab={(t) => setTab(t)} onShowReference={(k) => { setFocusRef(k); setTab('references'); }}
               />

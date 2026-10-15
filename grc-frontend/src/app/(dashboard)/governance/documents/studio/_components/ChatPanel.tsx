@@ -6,8 +6,8 @@
  * AI relied on is listed with each quoted passage checked against the reference it names.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Eye, GitCompare, Loader2, Pencil, Send, Sparkles, Undo2, X, XCircle } from 'lucide-react';
-import type { Message, Op, ReferenceUsed, Session } from '@/lib/studio/api';
+import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Eye, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Pencil, Send, Sparkles, Undo2, Wand2, X, XCircle } from 'lucide-react';
+import type { AnswerItem, Message, Op, Question, ReferenceUsed, Session } from '@/lib/studio/api';
 import { plural, wordDiff } from '@/lib/studio/text';
 import LiveTurn from './LiveTurn';
 
@@ -27,6 +27,8 @@ export interface ChatPanelProps {
   previewing: number | null;
   onOpenTab: (tab: 'references' | 'instructions') => void;
   onShowReference: (key: string) => void;
+  /** answer Comply Agent's questions on a message: the options chosen and own words per question; ``decide`` leaves them all to it */
+  onAnswer: (messageId: number, answers: AnswerItem[], decide: boolean) => Promise<void>;
 }
 
 const KIND_LABEL: Record<Op['kind'], string> = {
@@ -209,8 +211,132 @@ function Proposal({ message, props }: { message: Message; props: ChatPanelProps 
   );
 }
 
-function Bubble({ message, props, lastUser }: { message: Message; props: ChatPanelProps; lastUser: string | null }) {
+const asQuestion = (q: Question | string, i: number): Question =>
+  typeof q === 'string' ? { id: `q${i + 1}`, question: q, why: '', kind: 'text', options: [], other: true } : q;
+
+/** Comply Agent's questions on a message: one option, several, or words; "Recommended" marks its own choice and each option says
+ *  what it means, so the person learns while they choose. Answered questions fold into what was chosen. */
+function Questions({ message, props, answerable }: { message: Message; props: ChatPanelProps; answerable: boolean }) {
+  const questions = useMemo(() => message.questions.map(asQuestion), [message.questions]);
+  const [picked, setPicked] = useState<Record<string, string[]>>({});
+  const [words, setWords] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  if (!questions.length) return null;
+  const answered = questions.every((q) => q.answer);
+  if (answered || !answerable) {
+    return (
+      <div className="mt-2 rounded-xl border border-[#d5dbe1] bg-[#f8fafb] px-3 py-2 text-xs">
+        <p className="font-semibold text-[#26323d]">{answered ? 'You answered' : 'Comply Agent asked'}</p>
+        <ul className="mt-1 space-y-1">
+          {questions.map((q) => (
+            <li key={q.id} className="text-[#3f4b58]">
+              {q.question}{' '}
+              {q.answer ? (
+                <span className="font-semibold text-[#0b6b58]">{q.answer.decide ? 'Comply Agent decides' : [...(q.answer.chosen ?? []), q.answer.other ?? ''].filter(Boolean).join('; ')}</span>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+  const ready = questions.filter((q) => (picked[q.id]?.length ?? 0) > 0 || (words[q.id] ?? '').trim());
+  const recommended = questions.filter((q) => q.options.some((o) => o.recommended));
+  const toggle = (q: Question, label: string) => setPicked((cur) => {
+    const now = cur[q.id] ?? [];
+    if (q.kind === 'single') return { ...cur, [q.id]: now[0] === label ? [] : [label] };
+    return { ...cur, [q.id]: now.includes(label) ? now.filter((x) => x !== label) : [...now, label] };
+  });
+  const send = async (decide: boolean) => {
+    setBusy(true);
+    try {
+      const items: AnswerItem[] = decide ? [] : questions.map((q) => ({ id: q.id, chosen: picked[q.id] ?? [], other: (words[q.id] ?? '').trim() || undefined }))
+        .filter((a) => a.chosen.length || a.other);
+      await props.onAnswer(message.id, items, decide);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const locked = busy || props.busy || !props.aiConfigured;
+  return (
+    <section className="mt-2 rounded-xl border border-[#9fd9bd] bg-[#f3fbf8] p-3" aria-label="Comply Agent's questions">
+      <p className="flex items-center gap-1.5 text-xs font-semibold text-[#0b6b58]">
+        <MessageCircleQuestion className="h-4 w-4" aria-hidden /> {questions.length === 1 ? 'One choice before I go on' : `${questions.length} choices before I go on`}
+      </p>
+      <ol className="mt-2 space-y-3">
+        {questions.map((q, n) => (
+          <li key={q.id}>
+            <p className="text-[13px] font-semibold text-[#1f2933]">{n + 1}. {q.question}</p>
+            {q.why && <p className="mt-0.5 flex gap-1 text-[11px] text-[#586472]"><Lightbulb className="mt-px h-3.5 w-3.5 shrink-0 text-[#8a6100]" aria-hidden /> {q.why}</p>}
+            {q.kind !== 'text' && (
+              <div role={q.kind === 'single' ? 'radiogroup' : 'group'} aria-label={q.question} className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+                {q.options.map((o) => {
+                  const on = (picked[q.id] ?? []).includes(o.label);
+                  return (
+                    <button key={o.label} type="button" role={q.kind === 'single' ? 'radio' : 'checkbox'} aria-checked={on} disabled={locked} onClick={() => toggle(q, o.label)}
+                      className={`flex items-start gap-2 rounded-lg border bg-white px-2.5 py-2 text-left text-xs transition-colors disabled:opacity-60 ${on ? 'border-[#0f766e] ring-1 ring-[#0f766e]' : 'border-[#c5ccd3] hover:border-[#0f766e]'}`}>
+                      <span className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center border ${q.kind === 'single' ? 'rounded-full' : 'rounded'} ${on ? 'border-[#0f766e] bg-[#0f766e] text-white' : 'border-[#7b8794] bg-white'}`} aria-hidden>
+                        {on && <Check className="h-3 w-3" />}
+                      </span>
+                      <span className="min-w-0">
+                        <span className="font-semibold text-[#1f2933]">{o.label}</span>
+                        {o.recommended && <span className="ml-1.5 whitespace-nowrap rounded-full bg-[#d6f3ec] px-1.5 py-0.5 text-[10px] font-semibold text-[#0b6b58]">Recommended</span>}
+                        {o.detail && <span className="mt-0.5 block text-[11px] leading-snug text-[#586472]">{o.detail}</span>}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {(q.other || q.kind === 'text') && (
+              <input value={words[q.id] ?? ''} onChange={(e) => setWords((cur) => ({ ...cur, [q.id]: e.target.value }))} disabled={locked}
+                aria-label={`${q.question} In your own words`} placeholder={q.kind === 'text' ? 'Your answer' : 'Or in your own words'}
+                className="mt-1.5 w-full rounded-lg border border-[#b8c4c8] bg-white px-2.5 py-1.5 text-xs text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0] disabled:opacity-60" />
+            )}
+          </li>
+        ))}
+      </ol>
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button type="button" onClick={() => void send(false)} disabled={locked || ready.length === 0}
+          className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50">
+          {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Send className="h-3.5 w-3.5" />} {ready.length === questions.length || ready.length === 0 ? 'Send my answers' : `Send ${ready.length} of ${questions.length} answers`}
+        </button>
+        {recommended.length > 0 && (
+          <button type="button" disabled={locked} onClick={() => setPicked((cur) => {
+            const next = { ...cur };
+            for (const q of recommended) next[q.id] = q.options.filter((o) => o.recommended).map((o) => o.label).slice(0, q.kind === 'single' ? 1 : undefined);
+            return next;
+          })} className="inline-flex items-center gap-1.5 rounded-lg border border-[#0f766e] bg-white px-3 py-1.5 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f4f1] disabled:opacity-50">
+            <Wand2 className="h-3.5 w-3.5" /> Pick the recommended
+          </button>
+        )}
+        <button type="button" onClick={() => void send(true)} disabled={locked} className="rounded-lg px-2 py-1.5 text-xs font-semibold text-[#3f4b58] hover:bg-[#eef1f4] disabled:opacity-50">Decide for me</button>
+        {ready.length > 0 && ready.length < questions.length && <span className="text-[11px] text-[#586472]">Comply Agent decides the ones you leave open.</span>}
+      </div>
+    </section>
+  );
+}
+
+function Bubble({ message, props, lastUser, answerable }: { message: Message; props: ChatPanelProps; lastUser: string | null; answerable: boolean }) {
   if (message.role === 'user') {
+    const given = message.answers;
+    if (given && (given.items.length > 0 || (given.decide?.length ?? 0) > 0)) {
+      const own = message.content.split('Please continue with my request.')[1]?.trim();
+      return (
+        <div className="flex justify-end">
+          <div className="max-w-[88%] rounded-2xl rounded-br-sm bg-[#0f4c5c] px-3.5 py-2 text-sm text-white">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#cde9e3]">My answers</p>
+            <ul className="mt-1 space-y-1">
+              {given.items.map((a) => (
+                <li key={a.id}><span className="text-[#cde9e3]">{a.question}</span> <span className="font-semibold">{[...a.chosen, a.other ?? ''].filter(Boolean).join('; ')}</span></li>
+              ))}
+            </ul>
+            {(given.decide?.length ?? 0) > 0 && <p className="mt-1 text-[11px] text-[#cde9e3]">{given.items.length ? 'The rest: Comply Agent decides.' : 'Comply Agent decides, as it recommends.'}</p>}
+            {own && <p className="mt-1.5 whitespace-pre-wrap border-t border-white/20 pt-1.5">{own}</p>}
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="flex justify-end">
         <div className="max-w-[88%] whitespace-pre-wrap rounded-2xl rounded-br-sm bg-[#0f4c5c] px-3.5 py-2 text-sm text-white">{message.content}</div>
@@ -240,14 +366,7 @@ function Bubble({ message, props, lastUser }: { message: Message; props: ChatPan
               </ul>
             )}
             <Proposal message={message} props={props} />
-            {message.questions.length > 0 && (
-              <div className="mt-2 text-xs text-[#586472]">
-                <p className="font-semibold text-[#26323d]">Comply Agent is asking:</p>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  {message.questions.map((q, i) => <span key={i} className="rounded-full bg-[#eef1f4] px-2.5 py-1 text-[#26323d]">{q}</span>)}
-                </div>
-              </div>
-            )}
+            <Questions message={message} props={props} answerable={answerable} />
             <Sources used={message.references_used} onShow={props.onShowReference} />
           </>
         )}
@@ -320,7 +439,8 @@ export default function ChatPanel(props: ChatPanelProps) {
             </p>
           </div>
         )}
-        {chat.map((m, i) => <Bubble key={m.id} message={m} props={props} lastUser={lastUserBefore(i)} />)}
+        {chat.map((m, i) => <Bubble key={m.id} message={m} props={props} lastUser={lastUserBefore(i)}
+          answerable={m.role === 'assistant' && !chat.slice(i + 1).some((x) => x.role === 'user')} />)}
         <div ref={end} />
       </div>
       <div className="border-t border-[#d5dbe1] bg-white p-2.5">

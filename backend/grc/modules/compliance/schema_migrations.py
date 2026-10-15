@@ -267,6 +267,8 @@ _COLUMN_ADDS = [
     ("grc_governance_document_versions", "change_set", "JSON", None),
     # AI Studio: what the screen shows while an AI turn works (the steps, the text so far, the parts of a document)
     ("grc_studio_messages", "live", "JSON", None),
+    # AI Studio: a person's answers to the questions Comply Agent asked (on the person's message)
+    ("grc_studio_messages", "answers", "JSON", None),
     ("grc_document_obligations", "emailed_at", "TIMESTAMP", None),
     # Statement <-> original document sync (cfsb): the wording as the file has it and where
     ("grc_policy_statements", "source_text", "TEXT", None),

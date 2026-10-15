@@ -166,6 +166,33 @@ export interface Progress {
   live: LiveView | null;
 }
 
+export interface QuestionOption {
+  label: string;
+  /** what the choice means, or when it applies: Comply Agent teaches as it asks */
+  detail: string;
+  recommended: boolean;
+}
+
+/** A question Comply Agent asks before (or after) it writes, answered by clicking one option, several, or in words. */
+export interface Question {
+  id: string;
+  question: string;
+  why: string;
+  kind: 'single' | 'multiple' | 'text';
+  options: QuestionOption[];
+  /** the person may answer in their own words as well */
+  other: boolean;
+  /** once answered: what was chosen, or that Comply Agent was left to decide */
+  answer?: { id: string; chosen?: string[]; other?: string; decide?: boolean };
+}
+
+export interface AnswerItem {
+  id: string;
+  chosen: string[];
+  other?: string;
+  question?: string;
+}
+
 export interface Message {
   id: number;
   role: 'user' | 'assistant';
@@ -185,9 +212,14 @@ export interface Message {
         differences?: CompareDifference[];
         recommendation?: string;
         other_title?: string;
+        /** "draft": a whole new document asked these questions before it was written */
+        ask_first?: string;
       });
   references_used: ReferenceUsed[];
-  questions: string[];
+  /** what Comply Agent asks; an older message holds plain strings */
+  questions: Array<Question | string>;
+  /** on a person's message: their answers to the questions of the message it replies to */
+  answers?: { reply_to: number; items: AnswerItem[]; decide?: string[] } | null;
   notes: string[];
   base_revision: number | null;
   usage: { input_tokens?: number; output_tokens?: number; cached_tokens?: number } | null;
@@ -375,7 +407,8 @@ export const studioApi = {
   messages: (id: number) => get<{ items: Message[] }>(`/sessions/${id}/messages`),
   /** the state of the latest turns, small enough to ask for several times a second while the AI works */
   progress: (id: number) => get<{ items: Progress[] }>(`/sessions/${id}/progress`),
-  send: (id: number, text: string) => post<Message>(`/sessions/${id}/messages`, { text }),
+  send: (id: number, text: string, answers?: { reply_to: number; answers: AnswerItem[]; decide?: boolean }) =>
+    post<Message>(`/sessions/${id}/messages`, { text, ...(answers ?? {}) }),
   message: (id: number, messageId: number) => get<Message>(`/sessions/${id}/messages/${messageId}`),
   accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
     post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message }>(`/sessions/${id}/messages/${messageId}/accept`, body),

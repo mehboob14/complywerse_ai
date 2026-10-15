@@ -84,6 +84,24 @@ def framework_text(db, framework, scope: Dict[str, Any]) -> Tuple[str, Dict[str,
                               "refs": [ref for ref, _ in picked][:2000]}
 
 
+def available_frameworks(db) -> List[Tuple[Any, int]]:
+    """The platform frameworks that can be a reference, with how many controls each has: parsed, active, this organisation's or
+    shared, and with controls. Ordered by name."""
+    from sqlalchemy import func
+
+    from ....models import ParsedFrameworkControl, Tenant, UploadedFramework
+
+    tenant = db.query(Tenant).first()
+    rows = (db.query(UploadedFramework).filter(UploadedFramework.is_active.is_(True),
+                                               UploadedFramework.upload_status.in_(("parsed", "completed", "published", "classified")))
+            .order_by(UploadedFramework.name).all())
+    rows = [f for f in rows if f.tenant_id in (None, tenant.id if tenant else None) or f.is_shared]
+    counts = dict(db.query(ParsedFrameworkControl.uploaded_framework_id, func.count(ParsedFrameworkControl.id))
+                  .filter(ParsedFrameworkControl.uploaded_framework_id.in_([f.id for f in rows] or [0]))
+                  .group_by(ParsedFrameworkControl.uploaded_framework_id).all())
+    return [(f, counts[f.id]) for f in rows if counts.get(f.id)]
+
+
 def _framework_for(db, framework_id: int):
     from ....models import Tenant, UploadedFramework
 

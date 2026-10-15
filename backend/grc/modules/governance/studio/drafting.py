@@ -32,7 +32,7 @@ from . import checks, live, prompts
 from . import draft_prompts as P
 from . import references as refs
 from . import templates
-from .engine import TurnProblem, _op_view, _stage, friendly, sanitize_markdown
+from .engine import TurnProblem, _op_view, _stage, friendly, questions_of, sanitize_markdown
 
 logger = logging.getLogger(__name__)
 
@@ -369,8 +369,8 @@ def _fallback_areas(session, scaffold: Any, core: Optional[Section]) -> List[Dic
 
 
 def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sections: Sequence[Section], core: Optional[Section], parent: bool,
-          total: Dict[str, int], on_progress: Optional[Callable[[claude_client.Progress], None]] = None) -> Dict[str, Any]:
-    task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, parent=parent)
+          total: Dict[str, int], on_progress: Optional[Callable[[claude_client.Progress], None]] = None, may_ask: bool = True) -> Dict[str, Any]:
+    task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, parent=parent, may_ask=may_ask)
     result = _call(shared, task, system, P.PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS, on_progress=on_progress)
     _usage(total, result)
     plan = dict(result.data or {})
@@ -496,6 +496,35 @@ def wait_until_opened(db, session_id: int, since: datetime) -> None:
         time.sleep(0.5)
 
 
+def _asked_message(db, request) -> Any:
+    """The assistant message whose questions ``request`` (a person's message) answers, or None."""
+    from ....models import StudioMessage
+
+    reply_to = (getattr(request, "answers", None) or {}).get("reply_to") if request is not None else None
+    return db.get(StudioMessage, reply_to) if reply_to else None
+
+
+def answers_a_draft(db, request) -> bool:
+    """Whether a person's message answers the questions a whole-document draft asked before it was written."""
+    asked = _asked_message(db, request)
+    return bool(asked is not None and (asked.proposal or {}).get("ask_first") == "draft")
+
+
+def _brief_of(db, session_id: int, request) -> str:
+    """What the person asked for: their message, and when it answers the draft's questions, the request those questions were about
+    first, then the answers."""
+    from ....models import StudioMessage
+
+    if request is None:
+        return ""
+    asked = _asked_message(db, request) if answers_a_draft(db, request) else None
+    if asked is None:
+        return request.content
+    original = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user", StudioMessage.id < asked.id)
+                .order_by(StudioMessage.id.desc()).first())
+    return "\n\n".join(t for t in ((original.content if original is not None else ""), request.content) if t.strip())
+
+
 def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetime] = None) -> None:
     """Write the whole document into the assistant message ``message_id`` and apply it. Never raises: a failure is written on the message.
     ``wait_since`` (the moment the document was created) makes it wait until the person has opened the document, so that the
@@ -515,7 +544,10 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
             raise TurnProblem("Only a new policy, standard, procedure, guideline or charter can be written from scratch.")
         request = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user", StudioMessage.id < message_id)
                    .order_by(StudioMessage.id.desc()).first())
-        brief = request.content if request is not None else ""
+        brief = _brief_of(db, session_id, request)
+        # the draft asks before it is written at most once in a document's life: after that it follows the answers and decides the rest
+        may_ask = not any((m.proposal or {}).get("ask_first") == "draft" for m in db.query(StudioMessage).filter(
+            StudioMessage.session_id == session_id, StudioMessage.role == "assistant", StudioMessage.id < message_id).all())
         _stage(db, msg, "Reading the references and the organisation")
         references = db.query(StudioReference).filter(StudioReference.session_id == session_id).order_by(StudioReference.id).all()
         if refs.total_chars(references) > refs.MAX_TOTAL_CHARS:
@@ -543,13 +575,24 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         _stage(db, msg, "Planning the document")
         try:
             plan = _plan(shared, system, label=label, session=session, sections=sections, core=core, parent=parent, total=total,
-                         on_progress=_plan_progress(db, msg))
+                         on_progress=_plan_progress(db, msg), may_ask=may_ask)
         except Exception as exc:        # noqa: BLE001
             if _fatal(exc):
                 raise Fatal(friendly(exc)) from exc
             logger.warning("the plan of a draft failed: %s", exc)
             plan = {"approach": "", "decisions": [], "core_intro": "", "areas": [], "terms": [], "related_documents": [], "external_sources": [], "questions": []}
             notes.append("The plan could not be made, so the document was written without it: check that its parts agree with each other.")
+        asking = questions_of(plan.get("questions")) if may_ask and plan.get("ask_first") else []
+        if asking:                              # choices the whole document depends on: the person answers before it is written
+            msg.content = (f"Before I write the {label.lower()}, a few choices decide what it covers and which rules it follows. Pick an answer "
+                           "below, or write your own; I write the document as soon as you send them. If you would rather I decide, say so.")
+            msg.questions = asking
+            msg.proposal = {"ops": [], "ask_first": "draft", "base_revision": base_revision, "stats": None, "placeholders": 0, "requirements": []}
+            msg.references_used, msg.notes = [], notes
+            msg.usage = {k: total[k] for k in ("input_tokens", "output_tokens", "cached_tokens")}
+            msg.status, msg.stage, msg.error, msg.updated_at = "done", None, None, datetime.utcnow()
+            db.commit()
+            return
         if core is not None and not plan["areas"]:
             plan["areas"] = [dict(a, index=i) for i, a in enumerate(_fallback_areas(session, scaffold, core), start=1)]
         areas = plan["areas"]
@@ -663,7 +706,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
                 + (f", with {len(areas)} areas in {core.heading.lower()}" if core and areas else "")
                 + f". {len(holes)} placeholder(s) remain" + (", all of them facts I could not know (names, dates, signatures)." if holes else ".")
                 + (" The values I chose where nothing was specified are listed below for you to confirm." if assumptions else ""))
-        questions = [str(q).strip() for q in plan.get("questions") or [] if str(q).strip()][:3]
+        questions = questions_of(plan.get("questions"), limit=3)
 
         # apply it as the first draft (what the person typed meanwhile stays in the document's history)
         current = db.get(StudioSession, session_id)

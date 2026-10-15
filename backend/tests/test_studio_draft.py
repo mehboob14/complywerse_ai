@@ -124,7 +124,7 @@ def test_a_new_policy_is_written_whole_planned_first_and_applied_as_the_first_dr
     assert done["content"].startswith("Written for Capital Financial Services Bank") or "<ORG_" not in done["content"]
     assert "I wrote the complete policy" in done["content"] and "3 areas in policy statements" in done["content"]
     assert any("Where nothing was specified" in n and "Access review frequency" in n for n in done["notes"])
-    assert done["questions"] == ["Which systems hold customer card data?"]
+    assert [(q["id"], q["question"], q["kind"]) for q in done["questions"]] == [("q1", "Which systems hold customer card data?", "text")]
     assert [(u["ref"], u["locator"], u["verified"]) for u in done["references_used"]] == [("R1", "AC-6", True)]
     assert done["usage"]["output_tokens"] > 0 and not drafts.http.get(drafts.api(f"/sessions/{s['id']}/messages")).json()["items"][0]["status"] == "working"
 

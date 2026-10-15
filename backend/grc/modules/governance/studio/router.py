@@ -82,7 +82,10 @@ class ReferenceIn(BaseModel):
 
 
 class MessageIn(BaseModel):
-    text: str
+    text: str = ""
+    reply_to: Optional[int] = None                 # the message whose questions this answers
+    answers: Optional[List[Dict[str, Any]]] = None  # [{id: "q1", chosen: [option labels], other: "words"}]
+    decide: bool = False                           # leave the questions not answered to Comply Agent
 
 
 class DraftIn(BaseModel):
@@ -176,26 +179,14 @@ def pick_documents(q: str = "", limit: int = Query(30, le=100), db: Session = De
 @router.get("/frameworks", dependencies=[Depends(require_studio)])
 def pick_frameworks(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """Platform frameworks that can be used as a reference (parsed, active, this organisation's or shared)."""
-    from sqlalchemy import func
-
     from ....models import ParsedFrameworkControl
 
-    tenant = db.query(Tenant).first()
-    rows = (db.query(UploadedFramework).filter(UploadedFramework.is_active.is_(True),
-                                               UploadedFramework.upload_status.in_(("parsed", "completed", "published", "classified")))
-            .order_by(UploadedFramework.name).all())
-    rows = [f for f in rows if f.tenant_id in (None, tenant.id if tenant else None) or f.is_shared]
-    counts = dict(db.query(ParsedFrameworkControl.uploaded_framework_id, func.count(ParsedFrameworkControl.id))
-                  .filter(ParsedFrameworkControl.uploaded_framework_id.in_([f.id for f in rows] or [0]))
-                  .group_by(ParsedFrameworkControl.uploaded_framework_id).all())
     items = []
-    for f in rows:
-        if not counts.get(f.id):
-            continue
+    for f, count in refs.available_frameworks(db):
         domains = [d for (d,) in db.query(ParsedFrameworkControl.domain).filter(ParsedFrameworkControl.uploaded_framework_id == f.id)
                    .distinct().order_by(ParsedFrameworkControl.domain).limit(60) if d]
         items.append({"id": f.id, "name": f.name, "version": f.version, "organisation": f.source_organization or f.regulatory_authority,
-                      "controls": counts[f.id], "domains": domains})
+                      "controls": count, "domains": domains})
     return {"items": items}
 
 
@@ -426,7 +417,7 @@ def send_message(session_id: int, body: MessageIn, db: Session = Depends(get_db)
     if not claude_client.configured():
         raise HTTPException(status_code=503, detail=str(claude_client.ClaudeNotConfigured()))
     try:
-        msg = service.start_turn(db, s, user, body.text)
+        msg = service.start_turn(db, s, user, body.text, reply_to=body.reply_to, answers=body.answers, decide=body.decide)
     except service.StudioError as exc:
         raise _problem(exc)
     jobs.launch(_slug(db), "chat", s.id, msg.id, user)

@@ -93,7 +93,7 @@ def message_view(m) -> Dict[str, Any]:
     return {"id": m.id, "role": m.role, "kind": m.kind, "content": m.content, "status": m.status, "stage": m.stage, "error": m.error,
             "live": m.live if m.status == "working" else None,
             "proposal": m.proposal, "references_used": m.references_used or [], "questions": m.questions or [], "notes": m.notes or [],
-            "base_revision": m.base_revision, "usage": m.usage, "created_at": m.created_at.isoformat() if m.created_at else None}
+            "answers": m.answers, "base_revision": m.base_revision, "usage": m.usage, "created_at": m.created_at.isoformat() if m.created_at else None}
 
 
 def progress(db, s) -> List[Dict[str, Any]]:
@@ -591,16 +591,55 @@ def _working(db, s):
     return db.query(StudioMessage).filter(StudioMessage.session_id == s.id, StudioMessage.status == "working").first()
 
 
-def start_turn(db, s, user, text: str):
-    """Record a request and the assistant's (working) answer to it. The caller runs ``engine.run_chat_turn`` on the returned message."""
+def _answers(db, s, reply_to: int, items: Sequence[Dict[str, Any]], decide: bool) -> Tuple[Dict[str, Any], str]:
+    """The person's answers to the questions of message ``reply_to``: what is kept with their message ({reply_to, items}) and the
+    words the conversation shows. An option that is not one of the question's is dropped; ``decide`` (or a question left open)
+    leaves the choice to Comply Agent. The questions are marked answered on their message."""
+    from ....models import StudioMessage
+    from . import engine
+
+    asked = db.get(StudioMessage, reply_to)
+    if asked is None or asked.session_id != s.id or asked.role != "assistant" or not asked.questions:
+        raise StudioError("Those questions were not found.")
+    questions = engine.questions_of(asked.questions, limit=8)
+    by_id = {q["id"]: q for q in questions}
+    clean: List[Dict[str, Any]] = []
+    for it in items or []:
+        q = by_id.get(str((it or {}).get("id") or ""))
+        if q is None:
+            continue
+        labels = {o["label"] for o in q["options"]}
+        chosen = [c for c in (str(x).strip()[:200] for x in (it.get("chosen") or [])) if c in labels][: 1 if q["kind"] == "single" else 8]
+        other = str(it.get("other") or "").strip()[:1000]
+        if chosen or other:
+            clean.append({"id": q["id"], "question": q["question"], "chosen": chosen, "other": other})
+    if not clean and not decide:
+        raise StudioError("Choose or write an answer first, or let Comply Agent decide.")
+    said = {a["id"]: a for a in clean}
+    lines = [f"- {a['question']} {'; '.join(a['chosen'] + ([a['other']] if a['other'] else []))}" for a in clean]
+    open_left = [q for q in questions if q["id"] not in said]
+    text = ("My answers:\n" + "\n".join(lines) + ("\nFor the other questions, you decide." if open_left else "") if lines
+            else "Decide for me, as you recommend.") + "\nPlease continue with my request."
+    asked.questions = [{**q, "answer": said.get(q["id"]) or {"id": q["id"], "decide": True}} for q in questions]
+    return {"reply_to": asked.id, "items": clean, "decide": [q["id"] for q in open_left]}, text
+
+
+def start_turn(db, s, user, text: str, *, reply_to: Optional[int] = None, answers: Optional[Sequence[Dict[str, Any]]] = None, decide: bool = False):
+    """Record a request and the assistant's (working) answer to it. The caller runs ``engine.run_chat_turn`` on the returned message.
+    With ``reply_to`` the request answers the questions of that message (``answers``: [{id, chosen: [labels], other}], ``decide``: the
+    rest is Comply Agent's choice); the words of the request are made from the answers, followed by anything the person typed."""
     from ....models import StudioMessage
 
     text = (text or "").strip()
-    if not text:
-        raise StudioError("Write what you want done.")
     if _working(db, s):
         raise StudioError("Comply Agent is still working on the previous request.")
-    db.add(StudioMessage(session_id=s.id, role="user", kind="chat", content=text, status="done", created_by=user.id))
+    kept = None
+    if reply_to is not None:
+        kept, said = _answers(db, s, reply_to, answers or [], decide)
+        text = said + (f"\n{text}" if text else "")
+    if not text:
+        raise StudioError("Write what you want done.")
+    db.add(StudioMessage(session_id=s.id, role="user", kind="chat", content=text, status="done", created_by=user.id, answers=kept))
     db.flush()
     msg = StudioMessage(session_id=s.id, role="assistant", kind="chat", status="working", stage="Starting", created_by=user.id, base_revision=s.revision_no)
     db.add(msg)
