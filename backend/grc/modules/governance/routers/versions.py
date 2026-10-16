@@ -11,6 +11,7 @@ from ....models import (
     GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..permissions import require_doc_editor
 
 router = APIRouter(prefix="/versions", tags=["Governance - Document Versions"])
 
@@ -149,7 +150,7 @@ def list_versions(
     }
 
 
-@router.post("/document/{document_id}", status_code=status.HTTP_201_CREATED)
+@router.post("/document/{document_id}", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_doc_editor)])
 def create_version(
     document_id: int,
     version_data: VersionCreate,
@@ -325,7 +326,7 @@ def compare_versions(
     }
 
 
-@router.post("/document/{document_id}/rollback/{version_id}", status_code=status.HTTP_201_CREATED)
+@router.post("/document/{document_id}/rollback/{version_id}", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_doc_editor)])
 def rollback_to_version(
     document_id: int,
     version_id: int,

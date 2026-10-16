@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from ....models import DocumentObligation, GRCUser, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import doc_lifecycle
+from ..permissions import is_admin, require_doc_editor
 from .document_signoff import _doc_or_404, check_version
 
 router = APIRouter(prefix="/documents", tags=["Governance - Lifecycle"])
@@ -49,7 +50,7 @@ def acknowledge(document_id: int, body: AcknowledgeIn, request: Request, db: Ses
     return doc_lifecycle.state(db, doc, current_user)
 
 
-@router.post("/{document_id}/lifecycle/remind")
+@router.post("/{document_id}/lifecycle/remind", dependencies=[Depends(require_doc_editor)])
 def remind(document_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     """Alert everyone who still has something to do on this document."""
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
@@ -91,11 +92,8 @@ def my_requests(db: Session = Depends(get_db), current_user: GRCUser = Depends(r
 def get_lifecycle_settings(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     if not doc_lifecycle.enabled(db):
         return {"enabled": False}
-    from ...access_review.sampling import privileged_user_ids
-
     tenant_id = _tenant_id(db, current_user)
-    return {"enabled": True, "settings": doc_lifecycle.settings(db, tenant_id),
-            "can_edit": current_user.id in privileged_user_ids(db, tenant_id)}
+    return {"enabled": True, "settings": doc_lifecycle.settings(db, tenant_id), "can_edit": is_admin(db, current_user)}
 
 
 @router.put("/lifecycle/settings")
@@ -103,10 +101,8 @@ def put_lifecycle_settings(body: SettingsIn, db: Session = Depends(get_db), curr
     """How long approvals and acknowledgements are given, when to remind and when to escalate. Administrators only."""
     if not doc_lifecycle.enabled(db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not enabled for this organisation")
-    from ...access_review.sampling import privileged_user_ids
-
     tenant_id = _tenant_id(db, current_user)
-    if current_user.id not in privileged_user_ids(db, tenant_id):
+    if not is_admin(db, current_user):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an administrator can change these settings.")
     try:
         saved = doc_lifecycle.save_settings(db, tenant_id, body.model_dump(exclude_none=True), current_user.id)

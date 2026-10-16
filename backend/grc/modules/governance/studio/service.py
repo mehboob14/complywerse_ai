@@ -37,6 +37,17 @@ class Conflict(StudioError):
     """The document changed under the person: reload before saving."""
 
 
+class Forbidden(StudioError):
+    """The person may not change that library document (``governance/permissions.py``)."""
+
+
+def _may_change(db, user, doc) -> None:
+    from ..permissions import EDIT_REFUSED, can_edit
+
+    if not can_edit(db, user, doc):
+        raise Forbidden(EDIT_REFUSED)
+
+
 def _now() -> datetime:
     return datetime.utcnow()
 
@@ -168,6 +179,7 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
         doc = db.get(GovernanceDocument, document_id) if document_id else None
         if doc is None:
             raise StudioError("That document was not found.")
+        _may_change(db, user, doc)                    # a session on a library document saves back to it
         s.title, s.doc_type, s.document_id = doc.title, doc.doc_type or "policy", doc.id
         file_type = (doc.file_type or "").lower().lstrip(".")
         if not (doc.content or "").strip() and doc.file_path and os.path.exists(doc.file_path) and file_type in ("docx", "pdf"):
@@ -997,6 +1009,7 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     doc = db.get(GovernanceDocument, s.document_id) if s.document_id else None
     if doc is None:
         raise StudioError("This session is not linked to a library document.")
+    _may_change(db, user, doc)                        # checked again here: the right may have been taken away since the draft was opened
     if (s.settings or {}).get("file_master"):
         return _save_file_version(db, s, user, doc, change_reason=change_reason, force=force)
     if _norm_doc(s.content) == _norm_doc(doc.content or ""):

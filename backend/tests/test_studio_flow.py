@@ -66,7 +66,7 @@ def world(monkeypatch, tmp_path):
         s.add(m.Tenant(id=1, name="CFSB", slug="cfsb", legal_entity=ENTITY))
         s.add(m.GRCUser(id=1, username="olivia", email="o@cfsb.test", display_name="Olivia Owner"))
         s.add(m.GRCUser(id=2, username="sam", email="s@cfsb.test", display_name="Sam Other"))
-        s.add(m.Role(id=11, tenant_id=1, name="Tenant Admin"))
+        s.add(m.Role(id=11, tenant_id=1, name="Administrator"))
         s.add(m.UserRole(user_id=1, role_id=11, tenant_id=1))                               # Olivia administers; Sam does not
         s.add(m.GovernanceDocument(id=10, tenant_id=1, title="Information Security Policy", doc_type="policy", status="published",
                                    current_version="1.0", content=POLICY.replace("password=hunter-ZX81-canary!", "password rotation"), owner_id=1))

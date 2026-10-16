@@ -210,15 +210,11 @@ function CompareDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (sess
   const [a, setA] = useState<LibraryDoc | null>(null);
   const [b, setB] = useState<LibraryDoc | null>(null);
   const go = useMutation({
-    // in the person's own draft of the first document when they may change it; otherwise a session to read and compare in
-    mutationFn: async () => {
-      try { return (await documentApi.draft(a!.id)).session_id; } catch (e: any) {
-        if (e?.response?.status !== 403) throw e;
-        return (await studioApi.createSession({ kind: 'library', document_id: a!.id })).id;
-      }
-    },
+    // in the person's own draft of the first document: a library session is only for someone who may change it (the server checks)
+    mutationFn: async () => (await documentApi.draft(a!.id)).session_id,
     onSuccess: (sid) => onOpen(sid, b!),
-    onError: (e) => toast({ title: 'Could not compare them', message: problemOf(e), type: 'error' }),
+    onError: (e: any) => toast({ title: 'Could not compare them', type: 'error', message: e?.response?.status === 403
+      ? 'Comparing opens your own draft of the first document, so choose one you may change first.' : problemOf(e) }),
   });
   return (
     <AnimatedModal isOpen onClose={onClose} title="Compare two documents" size="xl"

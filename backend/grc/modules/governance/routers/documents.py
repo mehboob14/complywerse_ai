@@ -43,6 +43,7 @@ AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
 
 from .. import doc_lifecycle  # noqa: E402
+from .. import permissions  # noqa: E402
 
 GOVERNANCE_UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))), "uploads", "governance")
 os.makedirs(GOVERNANCE_UPLOAD_DIR, exist_ok=True)
@@ -882,7 +883,7 @@ def _patch_signoff_content(content: Optional[str], signoffs: list, control_field
     return "\n".join(out)
 
 
-@router.put("/{document_id}")
+@router.put("/{document_id}", dependencies=[Depends(permissions.require_doc_editor)])
 def update_document(
     document_id: int,
     document_update: GovernanceDocumentUpdate,
@@ -903,6 +904,8 @@ def update_document(
         )
     
     update_data = document_update.model_dump(exclude_unset=True)
+    if update_data.get("status") in ("approved", "published") and update_data["status"] != document.status:
+        permissions.ensure_publisher(db, current_user)
     # change_reason is edit metadata, not a document column — pull it out so the
     # field loop doesn't try to setattr/getattr a non-existent attribute.
     change_reason = update_data.pop("change_reason", None)
@@ -981,7 +984,7 @@ class DocumentSignoffRequest(BaseModel):
     mark_approved: bool = False
 
 
-@router.post("/{document_id}/signoff")
+@router.post("/{document_id}/signoff", dependencies=[Depends(permissions.require_doc_editor)])
 def signoff_document(
     document_id: int,
     body: DocumentSignoffRequest,
@@ -1134,7 +1137,7 @@ def _clear_document_references(db: Session, document_id: int) -> None:
         rows(column).delete(synchronize_session=False)
 
 
-@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(permissions.require_doc_deleter)])
 def delete_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1223,7 +1226,7 @@ class CompleteReviewRequest(BaseModel):
     outcome: str = "no_changes"
 
 
-@router.post("/{document_id}/start-review")
+@router.post("/{document_id}/start-review", dependencies=[Depends(permissions.require_doc_editor)])
 def start_review(
     document_id: int,
     request_body: Optional[StartReviewRequest] = None,
@@ -1265,7 +1268,7 @@ def start_review(
     }
 
 
-@router.post("/{document_id}/complete-review")
+@router.post("/{document_id}/complete-review", dependencies=[Depends(permissions.require_doc_editor)])
 def complete_review(
     document_id: int,
     request_body: CompleteReviewRequest,
@@ -1364,6 +1367,9 @@ def bulk_update_status(
             detail="No documents found"
         )
     
+    permissions.ensure_all_editable(db, current_user, documents)
+    if bulk_update.status in ("approved", "published"):
+        permissions.ensure_publisher(db, current_user)
     updated_count = 0
     for doc in documents:
         old_status = doc.status
@@ -1412,6 +1418,7 @@ def bulk_archive(
             detail="No documents found"
         )
     
+    permissions.ensure_all_editable(db, current_user, documents)
     archived_count = 0
     for doc in documents:
         old_status = doc.status
@@ -1459,6 +1466,7 @@ def bulk_assign_owner(
             detail="No documents found"
         )
 
+    permissions.ensure_all_editable(db, current_user, documents)
     updated_count = 0
     for doc in documents:
         old_owner = doc.owner_id
@@ -1505,6 +1513,7 @@ def bulk_set_review_date(
             detail="No documents found"
         )
 
+    permissions.ensure_all_editable(db, current_user, documents)
     updated_count = 0
     for doc in documents:
         old_review_date = doc.next_review_date
@@ -1553,6 +1562,7 @@ def bulk_publish(
             detail="No documents found"
         )
 
+    permissions.ensure_publisher(db, current_user)
     published_count = 0
     skipped_count = 0
     for doc in documents:
@@ -1590,7 +1600,7 @@ def bulk_publish(
     }
 
 
-@router.put("/{document_id}/status")
+@router.put("/{document_id}/status", dependencies=[Depends(permissions.require_doc_editor)])
 def update_document_status(
     document_id: int,
     body: dict,
@@ -1605,6 +1615,8 @@ def update_document_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
         )
+    if new_status in ("approved", "published"):               # approving or publishing by hand skips the sign-off
+        permissions.ensure_publisher(db, current_user)
 
     document = db.query(GovernanceDocument).filter(
         GovernanceDocument.id == document_id,
@@ -1662,7 +1674,7 @@ def update_document_status(
     return serialize_document(document, db)
 
 
-@router.post("/{document_id}/publish")
+@router.post("/{document_id}/publish", dependencies=[Depends(permissions.require_doc_publisher)])
 def publish_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1757,7 +1769,7 @@ def get_document_audit_logs(
     ]
 
 
-@router.post("/{document_id}/upload-file")
+@router.post("/{document_id}/upload-file", dependencies=[Depends(permissions.require_doc_editor)])
 async def upload_document_file(
     document_id: int,
     file: UploadFile = File(...),

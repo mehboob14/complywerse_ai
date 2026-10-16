@@ -35,15 +35,16 @@ AUDIT_REGISTER_TENANTS = frozenset(
 
 
 # Policy statements <-> the original document file: statements are checked against the file's wording and edits are
-# written back into it (a new document version) only for the tenants named here (comma-separated slugs).
+# written back into it (a new document version) only for the tenants named here (comma-separated slugs; "*" = every tenant).
 DOCUMENT_SYNC_TENANTS = frozenset(
     slug.strip().lower() for slug in os.getenv("DOCUMENT_SYNC_TENANTS", "cfsb").split(",") if slug.strip())
 
 
 # Document approvals and acknowledgements as per-person obligations (tasks, alerts, escalation, one lifecycle tab):
-# only for the tenants named here (comma-separated slugs); "*" switches it on for every tenant.
+# every tenant by default (the user's decision, 2026-10-16); set comma-separated slugs to limit it. Switching it on asks
+# nobody about documents already published (modules/governance/doc_lifecycle.py).
 DOCUMENT_LIFECYCLE_TENANTS = frozenset(
-    slug.strip().lower() for slug in os.getenv("DOCUMENT_LIFECYCLE_TENANTS", "cfsb").split(",") if slug.strip())
+    slug.strip().lower() for slug in os.getenv("DOCUMENT_LIFECYCLE_TENANTS", "*").split(",") if slug.strip())
 
 
 # The AI Studio (chat drafting, rich editor, checks, compare and export of documents; modules/governance/studio, and the

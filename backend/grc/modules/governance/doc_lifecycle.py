@@ -1,12 +1,16 @@
-"""A governance document's life as per-person obligations (tenants in ``config.DOCUMENT_LIFECYCLE_TENANTS``; "*" = all).
+"""A governance document's life as per-person obligations (tenants in ``config.DOCUMENT_LIFECYCLE_TENANTS``; "*" = all, the default).
 
 The sign-off flow (routers/document_signoff.py) decides *whether* a document is approved. This module records *who is
 being asked, by when, and what they did*:
 
 * ``review`` / ``approval`` - one row per person for the stage the document is in (a role or team is expanded to its
   members; the first member to sign satisfies it and the others' rows are cancelled);
-* ``acknowledgement`` - one row per active user of the tenant, once per document, when it is published (users who join
-  later are added by the daily sweep).
+* ``acknowledgement`` - one row per person of the tenant, once per document, when it is published (people who join later
+  are added by the daily sweep, on documents whose acknowledgements were asked for: switching the life cycle on asks nobody
+  about documents published before).
+
+Only people are asked (``_people``): active users who signed up here or through the organisation's SSO, or who signed in at
+least once. An identity an access-review connector imported (a cloud account, a directory entry) that never signed in is not.
 
 Every pending row has a twin in Task Management (``grc_critical_tasks``, source_module ``document_lifecycle``) and an
 in-app alert, so it shows up with the person's other work. The twin cannot be completed from Task Management - signing
@@ -93,6 +97,28 @@ def _safe(fn):
 
 
 # ── people, alerts, tasks ────────────────────────────────────────────────────
+def _people(db, ids: Optional[Iterable[int]] = None) -> List[int]:
+    """The active users who are people (of ``ids``, or all): local or SSO accounts, or anyone who has signed in."""
+    from sqlalchemy import or_
+
+    from ...models import GRCUser
+    from ...routers.sso_router import PROVIDER_ENTRA
+
+    q = db.query(GRCUser.id).filter(GRCUser.is_active.is_(True), or_(
+        GRCUser.external_provider.is_(None), GRCUser.external_provider == PROVIDER_ENTRA, GRCUser.last_login.isnot(None)))
+    if ids is not None:
+        q = q.filter(GRCUser.id.in_({int(i) for i in ids if i}))
+    return [uid for (uid,) in q.order_by(GRCUser.id)]
+
+
+def _members(db, doc, a) -> List[int]:
+    """Who a sign-off participant asks: the chosen user, or the people among a role's or a team's members."""
+    from .routers.document_signoff import _resolve_target_users
+
+    ids = _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id)
+    return sorted(ids) if a.target_type == "user" else _people(db, ids)
+
+
 def _names(db, ids: Iterable[int]) -> Dict[int, str]:
     from ...models import GRCUser
 
@@ -188,13 +214,12 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
 
 # ── hooks called by the sign-off, publish and participant flows ──────────────
 def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
-    from .routers.document_signoff import _assignments, _resolve_target_users
+    from .routers.document_signoff import _assignments
 
     kind = _STAGE_KIND[stage]
     asked: List[int] = []
     for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
-        asked += _request(db, doc, kind, _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id), by,
-                          settings(db, doc.tenant_id)["approval_days"], a.id)
+        asked += _request(db, doc, kind, _members(db, doc, a), by, settings(db, doc.tenant_id)["approval_days"], a.id)
     _notify(db, doc, asked, f"{_VERB[kind]} requested: {doc.title}",
             f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
             f"It is in your tasks and under Governance > Documents > Approvals & Acknowledgements.", "warning", email=True)
@@ -255,7 +280,7 @@ def on_rejected(db, doc, user_id: int, role_type: str, comment: str) -> None:
 
 @_safe
 def on_participants_changed(db, doc, by: Optional[int]) -> None:
-    from .routers.document_signoff import _assignments, _resolve_target_users
+    from .routers.document_signoff import _assignments
 
     if doc.status not in _PENDING_STAGE:
         return
@@ -263,7 +288,7 @@ def on_participants_changed(db, doc, by: Optional[int]) -> None:
     # the assignment rows are replaced whenever participants are saved, so match on the person, not the row id
     wanted: Dict[int, int] = {}
     for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
-        for uid in _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id):
+        for uid in _members(db, doc, a):
             wanted.setdefault(uid, a.id)
     for ob in _pending(db, doc.id, [_STAGE_KIND[stage]]).all():
         if ob.user_id in wanted:
@@ -348,22 +373,30 @@ def _status_hooks(db, doc, old: Optional[str], new: Optional[str], by: Optional[
 
 
 def _ensure_acknowledgements(db, doc, by: Optional[int] = None) -> int:
-    from ...models import DocumentObligation, GRCUser  # noqa: F401
-
     if doc.status != "published":
         return 0
     return request_acknowledgements(db, doc, None, by or doc.published_by)
 
 
+def _add_joiners(db, doc) -> int:
+    """People who joined since are asked too, but only on a document whose acknowledgements were asked for: one published before
+    the life cycle was switched on asks nobody until it is published again (or someone asks for acknowledgements)."""
+    from ...models import DocumentObligation
+
+    asked = db.query(DocumentObligation.id).filter(DocumentObligation.document_id == doc.id,
+                                                   DocumentObligation.kind == "acknowledgement").first()
+    return _ensure_acknowledgements(db, doc) if asked else 0
+
+
 def request_acknowledgements(db, doc, user_ids: Optional[Iterable[int]] = None, by: Optional[int] = None, days: Optional[int] = None) -> int:
-    """Ask people (everyone active when ``user_ids`` is None) to acknowledge the document, those not already asked or done."""
-    from ...models import DocumentObligation, GRCUser
+    """Ask people (everyone when ``user_ids`` is None) to acknowledge the document, those not already asked or done."""
+    from ...models import DocumentObligation
 
     have = {uid for (uid,) in db.query(DocumentObligation.user_id).filter(
         DocumentObligation.document_id == doc.id, DocumentObligation.kind == "acknowledgement",
         DocumentObligation.status.in_(("pending", "done")))}
-    active = [uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.is_active.is_(True)).order_by(GRCUser.id)]
-    pool = active if user_ids is None else [u for u in dict.fromkeys(int(i) for i in user_ids) if u in set(active)]
+    people = _people(db)
+    pool = people if user_ids is None else [u for u in dict.fromkeys(int(i) for i in user_ids) if u in set(people)]
     asked = _request(db, doc, "acknowledgement", [u for u in pool if u not in have], by,
                      days or settings(db, doc.tenant_id)["ack_days"])
     _notify(db, doc, asked, f"Please acknowledge: {doc.title}",
@@ -400,7 +433,7 @@ def acknowledge(db, doc, user, comment: Optional[str] = None, signature_image: O
 
     if doc.status != "published":
         raise ValueError("Only a published document can be acknowledged.")
-    _ensure_acknowledgements(db, doc)
+    _add_joiners(db, doc)
     ob = (db.query(DocumentObligation).filter(DocumentObligation.document_id == doc.id, DocumentObligation.kind == "acknowledgement",
                                               DocumentObligation.user_id == user.id, DocumentObligation.status.in_(("pending", "done")))
           .order_by(DocumentObligation.id.desc()).first())
@@ -517,15 +550,15 @@ def state(db, doc, user) -> Dict[str, Any]:
 
 # ── the daily sweep ──────────────────────────────────────────────────────────
 def sweep(db) -> Dict[str, int]:
-    """Add acknowledgements for users who joined since, remind, and escalate. Called per tenant by the scheduler."""
+    """Add acknowledgements for people who joined since, remind, and escalate. Called per tenant by the scheduler."""
     from ...models import CriticalTask, DocumentObligation, GovernanceDocument
-    from ..access_review.sampling import privileged_user_ids
+    from .permissions import admin_user_ids
 
     out = {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0}
     if not enabled(db):
         return out
-    for doc in db.query(GovernanceDocument).filter(GovernanceDocument.status == "published").all():
-        out["asked"] += _ensure_acknowledgements(db, doc) or 0
+    for doc in db.query(GovernanceDocument).filter(GovernanceDocument.status == "published").order_by(GovernanceDocument.id).all():
+        out["asked"] += _add_joiners(db, doc)
     now = datetime.utcnow()
     pending = (db.query(DocumentObligation).filter(DocumentObligation.status == "pending", DocumentObligation.due_date.isnot(None))
                .order_by(DocumentObligation.document_id).all())
@@ -559,7 +592,7 @@ def sweep(db) -> Dict[str, int]:
             continue
         if ct is not None:
             ct.escalation_level = ob.escalation_level
-    admins = sorted(privileged_user_ids(db, next(iter(docs.values())).tenant_id)) if admin_notes else []
+    admins = sorted(admin_user_ids(db)) if admin_notes else []
     for doc_id, lines in owner_notes.items():
         doc = docs[doc_id]
         _notify(db, doc, [doc.owner_id, doc.author_id], f"Overdue on \"{doc.title}\"", "Overdue: " + "; ".join(lines[:20])

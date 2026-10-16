@@ -13,6 +13,7 @@ from ....models import (GRCUser, GovernanceDocument, StudioAsset, StudioMessage,
                         UploadedFramework, get_db)
 from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
+from ..permissions import is_admin as _is_admin
 from . import blocks as B
 from . import assets, checks, exporters, gate, jobs, service, templates
 from . import references as refs
@@ -41,7 +42,8 @@ def _message(db: Session, s: StudioSession, message_id: int) -> StudioMessage:
 
 
 def _problem(exc: Exception) -> HTTPException:
-    code = status.HTTP_409_CONFLICT if isinstance(exc, service.Conflict) else status.HTTP_400_BAD_REQUEST
+    code = (status.HTTP_409_CONFLICT if isinstance(exc, service.Conflict) else status.HTTP_403_FORBIDDEN if isinstance(exc, service.Forbidden)
+            else status.HTTP_400_BAD_REQUEST)
     return HTTPException(status_code=code, detail=str(exc))
 
 
@@ -195,12 +197,6 @@ def pick_frameworks(db: Session = Depends(get_db), user: GRCUser = Depends(requi
 def list_templates(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     return {"items": templates.listing(db)}
 
-
-def _is_admin(db: Session, user: GRCUser) -> bool:
-    from ...access_review.sampling import privileged_user_ids
-
-    tenant = db.query(Tenant).first()
-    return bool(tenant) and user.id in privileged_user_ids(db, tenant.id)
 
 
 _DEFAULT_ADMIN_ONLY = "Only an administrator can make a template the organisation's default."
@@ -718,11 +714,7 @@ def _asset(db: Session, asset_id: int):
 
 def _may_manage(db: Session, a, user: GRCUser) -> bool:
     """The person who uploaded a logo, and the organisation's administrators, may change or remove it."""
-    if a.created_by == user.id:
-        return True
-    from ...access_review.sampling import privileged_user_ids
-
-    return user.id in privileged_user_ids(db, a.tenant_id)
+    return a.created_by == user.id or _is_admin(db, user)
 
 
 @router.get("/assets", dependencies=[Depends(require_studio)])

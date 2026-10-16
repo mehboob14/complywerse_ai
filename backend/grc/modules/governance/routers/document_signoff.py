@@ -27,6 +27,7 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from ....services import esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
 from .. import doc_lifecycle
+from ..permissions import require_doc_editor
 
 router = APIRouter(prefix="/documents", tags=["Governance - Sign-off"])
 
@@ -248,7 +249,7 @@ def get_signoff(
     }
 
 
-@router.put("/{document_id}/signoff/participants")
+@router.put("/{document_id}/signoff/participants", dependencies=[Depends(require_doc_editor)])
 def set_participants(
     document_id: int,
     body: ParticipantsUpdate,
@@ -290,7 +291,7 @@ def set_participants(
     return get_signoff(document_id, db, current_user)
 
 
-@router.post("/{document_id}/signoff/send-for-review")
+@router.post("/{document_id}/signoff/send-for-review", dependencies=[Depends(require_doc_editor)])
 def send_for_review(
     document_id: int,
     db: Session = Depends(get_db),

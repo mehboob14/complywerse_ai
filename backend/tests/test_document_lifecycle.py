@@ -39,7 +39,7 @@ def world():
             db.add(m.GRCUser(id=uid, username=name.split()[0].lower(), email=f"{name.split()[0].lower()}@cfsb.test", display_name=name))
         db.add(m.GRCUser(id=8, username="gone", email="gone@cfsb.test", display_name="Gone Away", is_active=False))
         db.add(m.Role(id=10, tenant_id=1, name="Approvers"))
-        db.add(m.Role(id=11, tenant_id=1, name="Tenant Admin"))
+        db.add(m.Role(id=11, tenant_id=1, name="Administrator"))                  # Adam administers (governance/permissions.is_admin)
         for uid in (4, 5):
             db.add(m.UserRole(user_id=uid, role_id=10, tenant_id=1))
         db.add(m.UserRole(user_id=7, role_id=11, tenant_id=1))
@@ -234,6 +234,7 @@ def test_someone_who_joins_after_publishing_is_asked_by_the_daily_sweep(world):
 
 
 def test_other_organisations_are_untouched_until_switched_on(world, monkeypatch):
+    monkeypatch.setattr("grc.config.DOCUMENT_LIFECYCLE_TENANTS", frozenset({"cfsb"}))          # every one by default; limited to named ones
     with world.factory() as db:
         db.query(m.Tenant).one().slug = "acme"
         db.commit()
@@ -245,7 +246,7 @@ def test_other_organisations_are_untouched_until_switched_on(world, monkeypatch)
         assert life.enabled(db)
 
 
-def test_the_routes(world):
+def test_the_routes(world, monkeypatch):
     from grc.models import get_db
     from grc.modules.governance.routers.document_lifecycle import router
 
@@ -269,6 +270,7 @@ def test_the_routes(world):
     assert client.post("/documents/5/lifecycle/acknowledge", json={}).status_code == 403
     me["u"] = user(db, 1)
     assert client.post("/documents/5/lifecycle/remind").json()["reminded"] == 6
+    monkeypatch.setattr("grc.config.DOCUMENT_LIFECYCLE_TENANTS", frozenset({"cfsb"}))          # limited to named organisations
     db.query(m.Tenant).one().slug = "acme"
     db.commit()
     assert client.get("/documents/5/lifecycle").json() == {"enabled": False}
@@ -388,7 +390,7 @@ def test_sign_off_and_acknowledgement_raise_events_workflows_can_use():
     assert any(e[0] == "document_obligation_overdue" and e[3] == "DocumentObligation" for e in DUE_DATE_EVENTS)
 
 
-def test_my_requests_across_documents_and_the_settings_routes(world):
+def test_my_requests_across_documents_and_the_settings_routes(world, monkeypatch):
     from grc.models import get_db
     from grc.modules.governance.routers.document_lifecycle import router
 
@@ -415,6 +417,7 @@ def test_my_requests_across_documents_and_the_settings_routes(world):
     got = client.put("/documents/lifecycle/settings", json={"ack_days": 21, "email": False}).json()
     assert got["settings"]["ack_days"] == 21 and got["settings"]["email"] is False and got["can_edit"]
     assert client.put("/documents/lifecycle/settings", json={"ack_days": 0}).status_code == 400
+    monkeypatch.setattr("grc.config.DOCUMENT_LIFECYCLE_TENANTS", frozenset({"cfsb"}))          # limited to named organisations
     db.query(m.Tenant).one().slug = "acme"
     db.commit()
     assert client.get("/documents/lifecycle/mine").json() == {"enabled": False, "items": []}

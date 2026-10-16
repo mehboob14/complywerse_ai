@@ -21,6 +21,7 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from ....schemas import ConvertStatementsRequest, InternalControlFromStatementResponse
 from ....services.ai_gateway.errors import AIBlocked
 from ..action_logger import log_governance_action
+from ..permissions import require_doc_editor
 
 router = APIRouter(prefix="/documents", tags=["Governance - Policy Parser"])
 
@@ -1996,7 +1997,7 @@ def check_document_sync(document_id: int, again: bool = False, db: Session = Dep
     return doc_sync.state(db, document)
 
 
-@router.post("/{document_id}/document-sync/apply")
+@router.post("/{document_id}/document-sync/apply", dependencies=[Depends(require_doc_editor)])
 def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session = Depends(get_db),
                         current_user: GRCUser = Depends(require_auth)):
     """Write the edited statements into the document's file as a new version."""

@@ -3,7 +3,7 @@ the studio can open its file, and the person's own draft of it.
 
 * Who may change it (the user's decision of 2026-10-16): its owner, its author, and whoever holds governance:policies:edit;
   publishing needs governance:policies:publish. Administrators and the organisation's primary contact always may
-  (``admin_router.check_permission``). The screens hide what a person may not do; the server enforces it later (plan P5).
+  (``admin_router.check_permission``). The rules are in ``governance/permissions.py``, and the server enforces them.
 * One draft per person per document: Edit reuses the person's newest active session of the document. A draft with nothing unsaved
   whose library document moved on since is replaced by a fresh one (its instructions and references come along); one with unsaved
   work is offered as it is, marked stale, and ``fresh`` starts again. Replaced drafts are archived, never deleted.
@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 from ....models import GovernanceDocument, GRCUser, StudioReference, StudioSession, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import doc_lifecycle
+from ..permissions import can_edit, can_publish, require_doc_editor  # noqa: F401  (can_edit/can_publish are imported from here too)
 from ..studio import references as refs
 from ..studio import service, setup
 from ..studio.importers import ALLOWED_EXTENSIONS, ImportProblem
@@ -24,18 +25,6 @@ from ..studio.router import require_studio
 from .document_signoff import _doc_or_404
 
 router = APIRouter(prefix="/studio", tags=["Governance - AI Studio"])
-
-
-def can_edit(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
-    from ....routers.admin_router import check_permission
-
-    return user.id in (doc.owner_id, doc.author_id) or check_permission(user, db, "governance:policies:edit")
-
-
-def can_publish(db: Session, user: GRCUser) -> bool:
-    from ....routers.admin_router import check_permission
-
-    return check_permission(user, db, "governance:policies:publish")
 
 
 def _openable(doc: GovernanceDocument) -> Tuple[bool, Optional[str]]:
@@ -109,10 +98,7 @@ def _carry(db: Session, old: StudioSession, new: StudioSession) -> None:
 def open_draft(document_id: int, body: Optional[DraftIn] = None, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """The person's one draft of the document: reused, replaced when it is clean and the library moved on, or started."""
     fresh = bool(body and body.fresh)
-    doc = _doc_or_404(document_id, get_user_tenants(user, db), db)
-    if not can_edit(db, user, doc):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Only the document's owner, its author or someone allowed to edit documents can change it.")
+    doc = require_doc_editor(document_id, db, user)
     # two tabs asking at once still give one draft
     db.query(GovernanceDocument.id).filter(GovernanceDocument.id == doc.id).with_for_update().first()
     s, stale, old = _draft(db, doc, user), False, None

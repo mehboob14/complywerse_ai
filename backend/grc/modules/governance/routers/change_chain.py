@@ -16,6 +16,7 @@ from ....models import GovernanceDocumentVersion, GRCUser, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import change_chain as C
 from .. import change_chain_export, doc_lifecycle
+from ..permissions import require_doc_editor
 from .document_signoff import _doc_or_404
 from .documents import _snapshot_content_version, create_audit_log
 
@@ -60,7 +61,7 @@ class RevertIn(BaseModel):
     reason: Optional[str] = None
 
 
-@router.post("/{document_id}/change-chain/revert")
+@router.post("/{document_id}/change-chain/revert", dependencies=[Depends(require_doc_editor)])
 def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     """Take chosen changes back to what an earlier version had, leaving every other change as it is. A new version."""
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)

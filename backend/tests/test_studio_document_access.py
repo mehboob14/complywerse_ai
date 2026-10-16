@@ -111,7 +111,9 @@ def test_who_may_change_and_publish(world):
     db.commit()
     _grant(db, 2, "governance:policies:edit", "governance:policies:publish")
     assert (_access(world)["can_edit"], _access(world)["can_publish"]) == (True, True)
-    world.me["id"] = 1                                                          # Olivia owns it
+    db.query(m.UserRole).filter_by(user_id=1, role_id=11).delete()             # Olivia owns it, without administering
+    db.commit()
+    world.me["id"] = 1
     assert _access(world)["can_edit"] is True and _access(world)["can_publish"] is False
     db.get(m.Tenant, 1).primary_contact_email = "o@cfsb.test"                  # the primary contact may do everything
     db.commit()

@@ -42,7 +42,7 @@ def enabled(db) -> bool:
     from ...models import Tenant
 
     tenant = db.query(Tenant).first()
-    return bool(tenant and (tenant.slug or "").lower() in DOCUMENT_SYNC_TENANTS)
+    return bool(tenant and ("*" in DOCUMENT_SYNC_TENANTS or (tenant.slug or "").lower() in DOCUMENT_SYNC_TENANTS))
 
 
 # ── text of a file ───────────────────────────────────────────────────────────

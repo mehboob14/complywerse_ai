@@ -11,6 +11,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..action_logger import update_action_review_status
+from ..permissions import require_doc_editor
 
 router = APIRouter(prefix="/reviews", tags=["Governance - Reviews"])
 
@@ -197,7 +198,7 @@ def get_overdue_reviews(
     }
 
 
-@router.post("/{document_id}/start", status_code=status.HTTP_201_CREATED)
+@router.post("/{document_id}/start", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_doc_editor)])
 def start_document_review(
     document_id: int,
     db: Session = Depends(get_db),
@@ -234,7 +235,7 @@ def start_document_review(
     }
 
 
-@router.post("/{document_id}/complete")
+@router.post("/{document_id}/complete", dependencies=[Depends(require_doc_editor)])
 def complete_review(
     document_id: int,
     review_data: CompleteReviewRequest,
@@ -441,7 +442,7 @@ def get_review_calendar(
     }
 
 
-@router.put("/{document_id}/review-cycle")
+@router.put("/{document_id}/review-cycle", dependencies=[Depends(require_doc_editor)])
 def update_review_cycle(
     document_id: int,
     cycle_data: UpdateReviewCycleRequest,
@@ -501,7 +502,7 @@ def update_review_cycle(
     }
 
 
-@router.post("/{document_id}/skip")
+@router.post("/{document_id}/skip", dependencies=[Depends(require_doc_editor)])
 def skip_review(
     document_id: int,
     skip_data: SkipReviewRequest,

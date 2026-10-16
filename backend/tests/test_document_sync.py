@@ -186,6 +186,7 @@ def test_the_routes_report_check_and_apply(world):
     app = FastAPI()
     app.include_router(router)
     db = world.factory()
+    db.get(m.GovernanceDocument, 5).owner_id = 1                              # writing into the file is for whoever may change it
     db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="reviewer", target_type="user", target_id=1, added_by=1))
     db.commit()                                                                # it has a reviewer, so a change sends it back to review
     app.dependency_overrides[get_db] = lambda: db

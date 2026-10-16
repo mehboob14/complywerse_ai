@@ -27,6 +27,7 @@ from ....routers.auth_router import require_auth, get_user_tenants, get_user_pri
 from ....services.ai_gateway.errors import AIBlocked
 from .policy_parser import extract_text_from_file, _create_version_snapshot
 from ..action_logger import log_governance_action
+from ..permissions import ensure_editor
 
 router = APIRouter(prefix="/gap-analysis", tags=["Policy Gap Analysis"])
 
@@ -1257,6 +1258,7 @@ def apply_finding_fix(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source document not found"
         )
+    ensure_editor(db, current_user, document)
 
     original_content = document.content or ""
     original_version_label = document.current_version or "1.0"
