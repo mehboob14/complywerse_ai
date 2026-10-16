@@ -4,7 +4,7 @@ aiosignal==1.4.0
 alembic==1.14.0
 annotated-doc==0.0.4
 annotated-types==0.7.0
-anyio==3.7.1
+anyio==4.15.1
 APScheduler==3.10.4
 asgiref==3.11.0
 attrs==25.4.0
@@ -50,7 +50,7 @@ httpcore==1.0.9
 httptools==0.7.1
 httpx==0.28.1
 httpx-sse==0.4.3
-idna==3.11
+idna==3.20
 iniconfig==2.3.0
 Jinja2==3.1.6
 jiter==0.12.0
@@ -149,7 +149,7 @@ typer==0.24.1
 typer-slim==0.24.0
 typing-inspect==0.9.0
 typing-inspection==0.4.2
-typing_extensions==4.15.0
+typing_extensions==4.16.0
 tzdata==2025.2
 tzlocal==5.3.1
 urllib3==2.5.0
@@ -174,3 +174,6 @@ vine==5.1.0
 ldap3==2.9.1
 reportlab
 anthropic==1.14.0
+docstring-parser==0.18.0
+httpx2==2.13.1
+opentelemetry-api==1.45.1
