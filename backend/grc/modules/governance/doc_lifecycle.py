@@ -446,6 +446,7 @@ def state(db, doc, user) -> Dict[str, Any]:
                              "overdue": sum(1 for r in acks if r["overdue"]),
                              "percent": round(100 * done / len(acks)) if acks else 0, "people": acks},
         "mine": [r for r in rows if r["user_id"] == user.id and r["status"] == "pending"],
+        "me": {"id": user.id},                        # so the screen can say "you"
         "timeline": timeline(db, doc, names, obs),
     }
 

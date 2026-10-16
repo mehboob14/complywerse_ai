@@ -20,7 +20,16 @@ import {
   User,
   ChevronRight,
   ShieldCheck,
+  UserCheck,
+  FileCheck2,
 } from 'lucide-react';
+
+// What the person is asked to do on a document (the document life cycle), most pressing first.
+const ASKS = [
+  { kind: 'approval', title: 'To approve', verb: 'Approve', icon: ShieldCheck },
+  { kind: 'review', title: 'To review', verb: 'Review', icon: UserCheck },
+  { kind: 'acknowledgement', title: 'To acknowledge', verb: 'Acknowledge', icon: FileCheck2 },
+] as const;
 
 type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
 
@@ -326,6 +335,9 @@ export default function ApprovalsPage() {
     },
   });
   const lifecycleOn = !!docRequests?.enabled;
+  // overdue first, then the soonest due
+  const byUrgency = (a: { overdue: boolean; due_date: string | null }, b: { overdue: boolean; due_date: string | null }) =>
+    Number(b.overdue) - Number(a.overdue) || (a.due_date || '9999').localeCompare(b.due_date || '9999');
 
   const approveMutation = useMutation({
     mutationFn: async ({ reviewId, comments }: { reviewId: number; comments: string }) => {
@@ -426,7 +438,7 @@ export default function ApprovalsPage() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
             <Clock size={14} />
-            {items.length} Pending
+            {items.length + (lifecycleOn ? docRequests?.total ?? 0 : signoffPending?.total ?? 0)} waiting for you
           </span>
         </div>
       </div>
@@ -439,23 +451,38 @@ export default function ApprovalsPage() {
             <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{docRequests?.total ?? 0}</span>
           </div>
           {(docRequests?.items.length ?? 0) === 0 && <p className="text-xs text-gray-500">Nothing to review, approve or acknowledge.</p>}
-          <div className="space-y-1.5">
-            {docRequests?.items.map((it) => (
-              <a
-                key={it.id}
-                href={`/governance/documents/${it.document_id}?tab=lifecycle`}
-                className="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 hover:border-primary-300 hover:bg-primary-50/30 transition-colors"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-black truncate">{it.title}</p>
-                  <p className="text-[11px] text-gray-500 capitalize">
-                    {it.kind === 'acknowledgement' ? 'Acknowledge' : it.kind === 'review' ? 'Review' : 'Approve'} · due {parseUtc(it.due_date)?.toLocaleDateString() ?? '-'}
-                    {it.overdue ? ' · overdue' : ''}{it.escalation_level > 0 ? ' · escalated' : ''}
+          <div className="space-y-3">
+            {ASKS.map(({ kind, title, verb, icon: Icon }) => {
+              const list = (docRequests?.items || []).filter((it) => it.kind === kind).sort(byUrgency);
+              if (!list.length) return null;
+              return (
+                <div key={kind}>
+                  <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-gray-600">
+                    <Icon size={13} /> {title} · {list.length}
                   </p>
+                  <div className="space-y-1.5">
+                    {list.map((it) => (
+                      <a
+                        key={it.id}
+                        href={`/governance/documents/${it.document_id}?tab=lifecycle`}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 transition-colors hover:border-primary-300 hover:bg-primary-50/30"
+                      >
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium text-black">{it.title}</p>
+                          <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+                            <span className="capitalize">{it.doc_type}</span>
+                            <span>· due {parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) ?? '-'}</span>
+                            {it.overdue && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">overdue</span>}
+                            {it.escalation_level > 0 && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">escalated</span>}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-lg bg-primary-600 px-3 py-1 text-xs font-medium text-white">{verb}</span>
+                      </a>
+                    ))}
+                  </div>
                 </div>
-                <span className="text-xs font-medium text-primary-600 shrink-0">Open →</span>
-              </a>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -485,6 +512,9 @@ export default function ApprovalsPage() {
         </div>
       )}
 
+      {(lifecycleOn || (signoffPending?.total ?? 0) > 0) && (
+        <h3 className="pt-1 text-sm font-semibold text-black">Other approval requests</h3>
+      )}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="flex-1">
           <SearchInput
@@ -517,11 +547,11 @@ export default function ApprovalsPage() {
       ) : filteredItems.length === 0 ? (
         <div className="rounded-lg border border-gray-300 bg-white/50 py-10 text-center">
           <FileText className="mx-auto h-7 w-7 text-gray-400" />
-          <h3 className="mt-2 text-xs font-medium text-black">No pending approvals</h3>
+          <h3 className="mt-2 text-xs font-medium text-black">{lifecycleOn ? 'No other requests' : 'No pending approvals'}</h3>
           <p className="mt-2 text-sm text-gray-600">
             {searchQuery
               ? 'No documents match your search criteria'
-              : 'You have no documents waiting for your approval'}
+              : lifecycleOn ? 'Requests from approval workflows appear here.' : 'You have no documents waiting for your approval'}
           </p>
         </div>
       ) : (

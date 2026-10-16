@@ -14,6 +14,8 @@ export interface DocumentLifecycle {
   approvals: LifecycleRow[];
   acknowledgements: { total: number; done: number; pending: number; overdue: number; percent: number; people: LifecycleRow[] };
   mine: LifecycleRow[];
+  /** who is asking (a server from before it was added does not send it) */
+  me?: { id: number };
   timeline: LifecycleEvent[];
 }
 /** An organisation without the life cycle feature is answered `{ enabled: false }` and nothing else. */
