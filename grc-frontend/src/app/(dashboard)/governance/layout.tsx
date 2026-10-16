@@ -15,7 +15,8 @@ export default function GovernanceLayout({
   // A document open in the AI Studio fills the whole page itself (it cancels the page padding), so it gets no padding here
   if (/^\/governance\/documents\/studio\/[^/]+/.test(pathname ?? '')) return <div className="text-slate-900">{children}</div>;
   return (
-    <div className="-m-4 lg:-m-5 text-slate-900">
+    // cancels main's padding exactly (14px, 16px from lg in compact density); -m-4/-m-5 overhung it by 2-4px and gave a scrollbar
+    <div className="-m-[14px] lg:-m-4 text-slate-900">
       <div className="px-4 sm:px-6 py-4 sm:py-5 space-y-4 sm:space-y-6">{children}</div>
     </div>
   );
