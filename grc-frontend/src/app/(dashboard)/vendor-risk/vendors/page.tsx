@@ -19,8 +19,9 @@ import { TPRM_QUERY_OPTS } from '../_lib/tprmQuery';
 import ImportVendors from './_ImportVendors';
 import VendorLogo from '../_lib/VendorLogo';
 import {
-  CustomFieldsTab, CustomFieldsTabBar, errorText, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, statusChoices, tabOf, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 
 interface Vendor {
   id: number;
@@ -112,6 +113,7 @@ export default function VendorListPage() {
     hasPermission('vendor_risk:vendors:delete') ||
     hasPermission('vendor_risk:vendors:edit');
   const [showModal, setShowModal] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [importing, setImporting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [tierFilter, setTierFilter] = useState('all');
@@ -269,13 +271,22 @@ export default function VendorListPage() {
   };
 
   const tierItems = TIER_OPTIONS.map((t) => ({ value: t, label: titleCase(t) }));
-  const statusItems = STATUS_OPTIONS.map((s) => ({ value: s, label: titleCase(s) }));
+  const statusItems = statusChoices(fieldSettings, STATUS_OPTIONS.map((s) => ({ value: s, label: titleCase(s) })));
   const dataAccessItems = DATA_ACCESS_OPTIONS.map((d) => ({ value: d, label: titleCase(d) }));
   const userItems = (users ?? []).map((u) => ({
     value: String(u.id),
     label: u.display_name || u.username,
     subLabel: u.email,
   }));
+
+  if (showSettings) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-4">
+        <button type="button" onClick={() => setShowSettings(false)} className="text-sm font-medium text-slate-600 hover:text-slate-900">← Vendors</button>
+        <ModuleSettingsPanel moduleKey="vendors" />
+      </div>
+    );
+  }
 
   if (isLoading && !vendors) {
     return (
@@ -302,8 +313,16 @@ export default function VendorListPage() {
           <h1 className="text-lg sm:text-xl font-semibold text-slate-900">Vendors</h1>
           <p className="text-sm text-slate-500 mt-1">Manage your third-party vendor inventory</p>
         </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Settings
+          </button>
         {canCreate && (
-          <div className="flex items-center gap-2">
+          <>
             <button
               onClick={() => setImporting(true)}
               className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
@@ -318,8 +337,9 @@ export default function VendorListPage() {
               <Plus className="h-4 w-4" />
               Add Vendor
             </button>
-          </div>
+          </>
         )}
+        </div>
       </div>
       {importing && (
         <ImportVendors onClose={() => setImporting(false)} onDone={() => queryClient.invalidateQueries({ queryKey: ['vendors'] })} />
@@ -501,7 +521,7 @@ export default function VendorListPage() {
           {/* Business context */}
           <FormSection title="Business context">
             <div className="md:col-span-2">
-              <label className={LABEL_CLS}>Vendor Name *</label>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'name', 'Vendor Name')} *</label>
               <input
                 type="text"
                 required
@@ -510,17 +530,17 @@ export default function VendorListPage() {
                 className={INPUT_CLS}
               />
             </div>
-            <div className="md:col-span-2">
-              <label className={LABEL_CLS}>Description</label>
+            {showBuiltin(fieldSettings, 'description') && <div className="md:col-span-2">
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'description', 'Description')}</label>
               <textarea
                 value={formData.description}
                 onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 className={INPUT_CLS}
                 rows={2}
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Vendor Type</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'vendor_type') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'vendor_type', 'Vendor Type')}</label>
               <input
                 type="text"
                 list="vendor-type-options"
@@ -532,9 +552,9 @@ export default function VendorListPage() {
               <datalist id="vendor-type-options">
                 {listOptions(fieldSettings, 'vendor_type').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </datalist>
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Industry</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'industry') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'industry', 'Industry')}</label>
               <input
                 type="text"
                 list="vendor-industry-options"
@@ -546,9 +566,9 @@ export default function VendorListPage() {
               <datalist id="vendor-industry-options">
                 {listOptions(fieldSettings, 'industry').map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
               </datalist>
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Website</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'website') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'website', 'Website')}</label>
               <input
                 type="text"
                 placeholder="https://..."
@@ -556,9 +576,9 @@ export default function VendorListPage() {
                 onChange={(e) => setFormData({ ...formData, website: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Business Owner</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'business_owner') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'business_owner', 'Business Owner')}</label>
               <MultiSelectDropdown
                 title="Business Owner"
                 items={userItems}
@@ -571,13 +591,13 @@ export default function VendorListPage() {
                 forceSearch
               />
               <p className="mt-1 text-[11px] text-slate-500">Needed to pass the Intake gate.</p>
-            </div>
+            </div>}
           </FormSection>
 
           {/* Data & scope */}
           <FormSection title="Data & scope">
-            <div>
-              <label className={LABEL_CLS}>Tier</label>
+            {showBuiltin(fieldSettings, 'tier') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'tier', 'Tier')}</label>
               <MultiSelectDropdown
                 title="Tier"
                 items={tierItems}
@@ -588,9 +608,9 @@ export default function VendorListPage() {
                 placeholder="Select tier"
                 size="md"
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Draft data classification</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'data_classification') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'data_classification', 'Draft data classification')}</label>
               <MultiSelectDropdown
                 title="Draft data classification"
                 items={dataAccessItems}
@@ -601,9 +621,9 @@ export default function VendorListPage() {
                 placeholder="Select classification"
                 size="md"
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Data types in scope</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'data_types') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'data_types', 'Data types in scope')}</label>
               <input
                 type="text"
                 placeholder="Comma-separated, e.g., PII, PHI, Financial"
@@ -611,9 +631,9 @@ export default function VendorListPage() {
                 onChange={(e) => setFormData({ ...formData, data_types_accessed: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Systems &amp; services in scope</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'services') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'services', 'Systems & services in scope')}</label>
               <input
                 type="text"
                 placeholder="Comma-separated, e.g., Cloud Hosting, CRM"
@@ -621,62 +641,62 @@ export default function VendorListPage() {
                 onChange={(e) => setFormData({ ...formData, services_provided: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
+            </div>}
           </FormSection>
 
           {/* Contacts */}
           <FormSection title="Contacts">
-            <div>
-              <label className={LABEL_CLS}>Contact Name</label>
+            {showBuiltin(fieldSettings, 'contact_name') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contact_name', 'Contact Name')}</label>
               <input
                 type="text"
                 value={formData.primary_contact_name}
                 onChange={(e) => setFormData({ ...formData, primary_contact_name: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Contact Email</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'contact_email') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contact_email', 'Contact Email')}</label>
               <input
                 type="email"
                 value={formData.primary_contact_email}
                 onChange={(e) => setFormData({ ...formData, primary_contact_email: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Contact Phone</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'contact_phone') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contact_phone', 'Contact Phone')}</label>
               <input
                 type="text"
                 value={formData.primary_contact_phone}
                 onChange={(e) => setFormData({ ...formData, primary_contact_phone: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
+            </div>}
           </FormSection>
 
           {/* Commercials */}
           <FormSection title="Commercials">
-            <div>
-              <label className={LABEL_CLS}>Contract Start</label>
+            {showBuiltin(fieldSettings, 'contract_start') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contract_start', 'Contract Start')}</label>
               <input
                 type="date"
                 value={formData.contract_start_date}
                 onChange={(e) => setFormData({ ...formData, contract_start_date: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Contract End</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'contract_end') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'contract_end', 'Contract End')}</label>
               <input
                 type="date"
                 value={formData.contract_end_date}
                 onChange={(e) => setFormData({ ...formData, contract_end_date: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
-            <div>
-              <label className={LABEL_CLS}>Annual spend / contract value</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'annual_spend') && <div>
+              <label className={LABEL_CLS}>{builtinLabel(fieldSettings, 'annual_spend', 'Annual spend / contract value')}</label>
               <input
                 type="number"
                 min="0"
@@ -686,7 +706,7 @@ export default function VendorListPage() {
                 onChange={(e) => setFormData({ ...formData, contract_value: e.target.value })}
                 className={INPUT_CLS}
               />
-            </div>
+            </div>}
           </FormSection>
           <label className="flex items-start gap-2 rounded-lg border border-slate-200 bg-slate-50 p-3 cursor-pointer">
             <input

@@ -100,7 +100,7 @@ export default function PortfolioDashboardPage() {
   const formatDate = (d: string) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   return (
-    <div className="space-y-4 sm:space-y-6 text-[var(--color-text)]">
+    <div className="dash space-y-4 sm:space-y-6">
       <div className="min-w-0">
         <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Overview</h1>
         <p className="mt-1 text-sm text-slate-600">Executive overview of all information security projects</p>

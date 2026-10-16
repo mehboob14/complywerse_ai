@@ -108,7 +108,7 @@ export default function PerformancePage() {
   const refresh = () => { ALL_KEYS.forEach((queryKey) => qc.invalidateQueries({ queryKey, refetchType: 'all' })); };
 
   return (
-    <div data-exec-dash className="mx-auto flex w-full max-w-[1950px] flex-col gap-3 pb-5 text-[#0F172A]" style={{ fontFamily: FONT, zoom: 0.8 /* one knob: page at 80% so a window shows more; max-w = 1560/0.8 */ }}>
+    <div data-exec-dash className="dash mx-auto flex w-full max-w-[1950px] flex-col gap-3 pb-5 text-[#0F172A]" style={{ fontFamily: FONT, zoom: 0.8 /* one knob: page at 80% so a window shows more; max-w = 1560/0.8 */ }}>
       {/* Slightly greyer canvas on this page only, so the white cards lift off it. */}
       <style>{'main:has([data-exec-dash]){background:#EDF0F5}'}</style>
       <h1 className="sr-only">Performance — executive cyber posture</h1>

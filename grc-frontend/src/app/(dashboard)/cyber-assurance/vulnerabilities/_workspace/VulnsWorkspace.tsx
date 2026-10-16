@@ -182,6 +182,7 @@ export function VulnsWorkspace(props: VulnsWorkspaceProps) {
           <select value={registerType} onChange={(e) => setRegisterType(e.target.value as 'standard' | 'nca')} style={{ ...btn, cursor: 'pointer' }} title="Switch register">
             <option value="standard">Standard</option><option value="nca">NCA Template</option>
           </select>
+          <Link href="/cyber-assurance/vulnerabilities/sla" style={{ ...btn, textDecoration: 'none' }}>Settings</Link>
           <Link href="/cyber-assurance/vulnerabilities/choke-points" style={{ ...btn, textDecoration: 'none' }}><Crosshair size={15} />Choke points</Link>
           {canCreate && <button style={btn} onClick={onTemplate}><Download size={15} />Template</button>}
           {canCreate && <button style={btn} onClick={onBulkUpload} disabled={bulkUploadState === 'uploading'}>{bulkUploadState === 'uploading' ? <Loader2 size={15} className="animate-spin" /> : <Upload size={15} />}Bulk Upload</button>}

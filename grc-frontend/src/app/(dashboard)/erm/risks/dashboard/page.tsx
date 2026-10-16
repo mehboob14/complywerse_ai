@@ -187,7 +187,7 @@ export default function RiskRegisterDashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="dash space-y-6">
       {/* ============== Header ============== */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-start gap-3">

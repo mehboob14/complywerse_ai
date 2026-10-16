@@ -36,6 +36,24 @@ export type SlaState = {
   implied_due_date: boolean; escalated: boolean;
 };
 
+/** Records | Settings, the same switch statutory audit already uses. */
+export function ModuleSettingsSwitch({ view, onView, label }: {
+  view: 'records' | 'settings';
+  onView: (view: 'records' | 'settings') => void;
+  label: string;
+}) {
+  return (
+    <div className="flex w-fit items-center gap-1 rounded-lg border border-slate-200 bg-white p-0.5">
+      {([['records', label], ['settings', 'Settings']] as const).map(([key, text]) => (
+        <button key={key} type="button" onClick={() => onView(key)}
+          className={`rounded-md px-3 py-1 text-sm font-medium ${view === key ? 'bg-primary-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}>
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function SlaBadge({ sla }: { sla?: SlaState | null }) {
   if (!sla || sla.state === 'closed') return <span className="text-xs text-slate-400">—</span>;
   const [cls, text] = {

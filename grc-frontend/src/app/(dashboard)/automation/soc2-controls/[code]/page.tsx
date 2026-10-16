@@ -27,6 +27,7 @@ import {
   type BindingSource, type LinkedCheck,
 } from '@/components/soc2/ui';
 import { CustomControlForm, toWriteBody, type CustomControlFormValues } from '@/components/soc2/CustomControlForm';
+import { EntityFieldsPanel } from '@/components/settings/CustomFields';
 import { RecordLinker, RecordTypeIcon, groupByType, type LinkedRecord } from '@/components/soc2/RecordLinker';
 import { AnimatedModal, MultiSelectDropdown, useToast } from '@/components/ui';
 import InlineLinkPicker from '@/components/ui/InlineLinkPicker';
@@ -40,8 +41,8 @@ import type { Objective } from './_assurance/types';
 import type { ITAsset, Risk } from '@/types';
 import RegulatoryObligationsCard, { useRegulatoryLinks } from '@/components/regulatory/RegulatoryObligationsCard';
 
-type Tab = 'overview' | 'assurance' | 'evidence' | 'tests' | 'artifacts' | 'risks' | 'assets' | 'links' | 'regulatory' | 'requirements' | 'history';
-const TAB_IDS: Tab[] = ['overview', 'assurance', 'evidence', 'tests', 'artifacts', 'risks', 'assets', 'links', 'regulatory', 'requirements', 'history'];
+type Tab = 'overview' | 'fields' | 'assurance' | 'evidence' | 'tests' | 'artifacts' | 'risks' | 'assets' | 'links' | 'regulatory' | 'requirements' | 'history';
+const TAB_IDS: Tab[] = ['overview', 'fields', 'assurance', 'evidence', 'tests', 'artifacts', 'risks', 'assets', 'links', 'regulatory', 'requirements', 'history'];
 
 const EMPTY_CHECK_IDS: string[] = [];
 
@@ -1697,6 +1698,27 @@ const METHOD_DOT: Record<string, string> = { automated: 'bg-indigo-500', hybrid:
 
 type OverviewPanel = 'statement' | 'evidence' | 'implement' | 'related';
 
+function ControlFieldsTab({ code }: { code: string }) {
+  const qc = useQueryClient();
+  const q = useQuery({
+    queryKey: ['control-fields', code],
+    queryFn: async () => (await scfApi.controlFields(code)).data.custom_values || {},
+  });
+  if (q.isLoading) {
+    return <p className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading fields…</p>;
+  }
+  return (
+    <EntityFieldsPanel
+      moduleKey="controls"
+      initial={q.data || {}}
+      onSave={async (values) => {
+        await scfApi.saveControlFields(code, values);
+        await qc.invalidateQueries({ queryKey: ['control-fields', code] });
+      }}
+    />
+  );
+}
+
 export default function ControlDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -1908,6 +1930,7 @@ export default function ControlDetailPage() {
   const linkedRecords: LinkedRecord[] = linksQ.data ?? [];
   const tabs: { id: Tab; label: string; count?: number }[] = [
     { id: 'overview', label: 'Overview' },
+    { id: 'fields', label: 'Fields' },
     { id: 'assurance', label: 'Assurance' },
     { id: 'evidence', label: 'Evidence', count: evidence.length + (attachedQ.data?.items.length ?? 0) },
     { id: 'tests', label: 'Tests', count: plan?.summary.total ?? d?.test_groups?.length ?? control.checks.length },
@@ -2099,6 +2122,8 @@ export default function ControlDetailPage() {
       </nav>
 
       <div className="min-w-0 space-y-4">
+        {tab === 'fields' && <ControlFieldsTab code={code} />}
+
         {tab === 'overview' && (
           <>
             {(d?.inheritance_type || d?.exception_id != null) && (

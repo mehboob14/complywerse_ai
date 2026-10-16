@@ -5865,6 +5865,13 @@ export const scfApi = {
   getCustomControlOptions: () =>
     apiClient.get<CustomControlOptions>('/scf/custom-controls/options'),
   /** SCF controls by id or name (q), or resolve specific ids. Names shown as published. */
+  controlFields: (code: string) =>
+    apiClient.get<{ custom_values: Record<string, unknown> }>(`/scf/controls/${encodeURIComponent(code)}/fields`),
+  saveControlFields: (code: string, custom_values?: Record<string, unknown>) =>
+    apiClient.put<{ custom_values: Record<string, unknown> }>(
+      `/scf/controls/${encodeURIComponent(code)}/fields`,
+      { custom_values: custom_values || {} },
+    ),
   searchControls: (params: { q?: string; ids?: string[]; limit?: number }) =>
     apiClient.get<{ items: ScfControlHit[] }>('/scf/controls/search', {
       params: { q: params.q || undefined, ids: params.ids?.length ? params.ids.join(',') : undefined, limit: params.limit },

@@ -43,11 +43,11 @@ import AiRecommendationSaver from '@/components/ai/AiRecommendationSaver';
 import { MultiSelectDropdown } from '@/components/ui/MultiSelectDropdown';
 import { RightSlidePanel } from '@/components/ui/RightSlidePanel';
 import {
-  CustomFieldsTab, CustomFieldsTabBar, errorText, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, statusChoices, tabOf, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
-import { PageLoader } from '@/components/ui';
-import { SlaBadge } from '@/components/settings/ModuleSettingsPanel';
+import ModuleSettingsPanel, { ModuleSettingsSwitch, SlaBadge } from '@/components/settings/ModuleSettingsPanel';
 import { PRIORITIES, PriorityPill } from '@/components/settings/PrioritySla';
+import { PageLoader } from '@/components/ui';
 import NcaRiskRegisterTab from '@/components/risks/NcaRiskRegisterTab';
 import NcaRiskQuickAddModal from '@/components/risks/NcaRiskQuickAddModal';
 import RiskViewSwitcher from '@/components/risks/RiskViewSwitcher';
@@ -701,7 +701,9 @@ const getCategoryStyle = (category: string | null | undefined) => {
 };
 
 const getStatusStyle = (status: RiskStatus) => {
-  return RISK_STATUSES.find(s => s.value === status) || RISK_STATUSES[0];
+  return RISK_STATUSES.find(s => s.value === status) || {
+    value: status, label: String(status || '').replace(/_/g, ' '), color: 'text-slate-700', bgColor: 'bg-slate-100',
+  };
 };
 
 const getScoreColor = (score: number | undefined) => {
@@ -744,6 +746,7 @@ export default function ERMRisksPage() {
   const canDelete = hasPermission('erm:risks:delete');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<RiskStatus | 'all'>('all');
+  const [pageView, setPageView] = useState<'records' | 'settings'>('records');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [registerTypeFilter, setRegisterTypeFilter] = useState<string>('all');
   const [scoreFilter, setScoreFilter] = useState<ScoreFilter>('all');
@@ -1324,6 +1327,20 @@ export default function ERMRisksPage() {
     }));
   };
 
+  if (pageView === 'settings') {
+    return (
+      <div className="space-y-4 px-3 sm:px-6">
+        <ModuleSettingsSwitch view={pageView} onView={setPageView} label="Risk register" />
+        <p className="rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-xs text-slate-600">
+          Each risk&apos;s SLA follows its <span className="font-medium text-slate-800">Priority</span>: the one set on the
+          risk or, left on Auto, the band its residual score falls in (critical 20+, high 12+, medium 6+, low below).
+          Set the days for each priority under <span className="font-medium text-slate-800">SLA and escalation</span> below.
+        </p>
+        <ModuleSettingsPanel moduleKey="risks" />
+      </div>
+    );
+  }
+
   if (isLoading) {
     return (
       <PageLoader className="h-64" />
@@ -1346,12 +1363,11 @@ export default function ERMRisksPage() {
 
   return (
     <div className="space-y-4 sm:space-y-6 px-3 sm:px-6">
-      {/* View switcher — replaces the inline Dashboard button that used to
-          live in the filters row. Lets the user flip between the flat
-          register and the dashboard from a single dropdown that always
-          reflects the current view. */}
       <div className="flex items-center justify-between gap-3">
-        <RiskViewSwitcher active="list" />
+        <div className="flex flex-wrap items-center gap-3">
+          <ModuleSettingsSwitch view={pageView} onView={setPageView} label="Risk register" />
+          <RiskViewSwitcher active="list" />
+        </div>
       </div>
 
       {uploadResult && (
@@ -2479,7 +2495,12 @@ function RiskModal({
     return UBL_SUB_CATEGORY_SUGGESTIONS[key] || [];
   }, [formData.risk_category]);
 
-  const subCategories = SUB_CATEGORIES_BY_CATEGORY[formData.risk_category] || [];
+  const subsFor = (category: string) => {
+    const opt = fieldSettings?.lists?.category?.options?.find((o) => o.value === category);
+    if (opt?.children?.length) return opt.children;
+    return SUB_CATEGORIES_BY_CATEGORY[category as RiskCategory] || [];
+  };
+  const subCategories = subsFor(formData.risk_category);
 
   const handleCategoryChange = (newCategory: RiskCategory) => {
     setFormData({ 
@@ -2497,7 +2518,7 @@ function RiskModal({
     }
     const nextSubCategory = isUBL
       ? formData.risk_sub_category
-      : (SUB_CATEGORIES_BY_CATEGORY[nextCategory]?.includes(formData.risk_sub_category) ? formData.risk_sub_category : '');
+      : (subsFor(nextCategory).includes(formData.risk_sub_category) ? formData.risk_sub_category : '');
     setFormData({
       ...formData,
       register_type: newRegisterType,
@@ -2762,7 +2783,7 @@ function RiskModal({
         <CustomFieldsTabBar tab={tab} onTab={setTab} settings={fieldSettings} />
         <div data-tab="details" className={tab === 'details' ? 'space-y-3' : 'hidden'}>
           <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Title *</label>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'title', 'Title')} *</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -3033,8 +3054,8 @@ function RiskModal({
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Description</label>
+          {showBuiltin(fieldSettings, 'description') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'description', 'Description')}</label>
             <textarea
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
@@ -3042,10 +3063,10 @@ function RiskModal({
               rows={3}
               placeholder="Describe the risk..."
             />
-          </div>
+          </div>}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Register Type</label>
+          {showBuiltin(fieldSettings, 'register_type') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'register_type', 'Register Type')}</label>
             <MultiSelectDropdown
               title="Register Type"
               items={registerTypeItems}
@@ -3056,7 +3077,7 @@ function RiskModal({
               placeholder="Select Register Type"
               size="md"
             />
-          </div>
+          </div>}
 
           {isUBLTemplateSelected && (
             <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
@@ -3117,9 +3138,9 @@ function RiskModal({
           )}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
+            {showBuiltin(fieldSettings, 'category') && <div>
               <label className="block text-sm font-medium text-slate-800 mb-1">
-                {isUBLTemplateSelected ? 'Category (Risk Category)' : 'Category'}
+                {isUBLTemplateSelected ? 'Category (Risk Category)' : builtinLabel(fieldSettings, 'category', 'Category')}
               </label>
               <MultiSelectDropdown
                 title="Category"
@@ -3131,10 +3152,10 @@ function RiskModal({
                 placeholder="Select Category"
                 size="md"
               />
-            </div>
-            <div>
+            </div>}
+            {showBuiltin(fieldSettings, 'sub_category') && <div>
               <label className="block text-sm font-medium text-slate-800 mb-1">
-                {isUBLTemplateSelected ? 'Sub-Category (Sub-Source / Activity)' : 'Sub-Category'}
+                {isUBLTemplateSelected ? 'Sub-Category (Sub-Source / Activity)' : builtinLabel(fieldSettings, 'sub_category', 'Sub-Category')}
               </label>
               {isUBLTemplateSelected ? (
                 <>
@@ -3164,7 +3185,7 @@ function RiskModal({
                   size="md"
                 />
               )}
-            </div>
+            </div>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -3191,21 +3212,21 @@ function RiskModal({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Status</label>
+            {showBuiltin(fieldSettings, 'status') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'status', 'Status')}</label>
               <MultiSelectDropdown
                 title="Status"
-                items={RISK_STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+                items={statusChoices(fieldSettings, RISK_STATUSES)}
                 selectedValues={formData.status ? [formData.status] : []}
-                onApply={(vals) => setFormData({ ...formData, status: (vals[0] || RISK_STATUSES[0].value) as RiskStatus })}
+                onApply={(vals) => setFormData({ ...formData, status: (vals[0] || 'open') as RiskStatus })}
                 multiSelect={false}
                 triggerVariant="input"
                 placeholder="Select Status"
                 size="md"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Business Owner</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'owner') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'owner', 'Business Owner')}</label>
               <MultiSelectDropdown
                 title="Business Owner"
                 items={(users || []).map((user) => ({
@@ -3221,7 +3242,7 @@ function RiskModal({
                 size="md"
                 forceSearch
               />
-            </div>
+            </div>}
           </div>
 
           {/* Assigned team / department picker — backed by admin/teams.
@@ -3231,9 +3252,9 @@ function RiskModal({
               That same business_unit_id is what RCSA assessments and the
               dashboard's BU-progress panel are keyed on, so a risk
               assigned here lands in the right team's scope automatically. */}
-          <div>
+          {showBuiltin(fieldSettings, 'team') && <div>
             <label className="block text-sm font-medium text-slate-800 mb-1">
-              Assigned Team / Department
+              {builtinLabel(fieldSettings, 'team', 'Assigned Team / Department')}
               <span className="ml-1 text-xs font-normal text-slate-500">(defines who owns and reviews this risk)</span>
             </label>
             <MultiSelectDropdown
@@ -3251,10 +3272,10 @@ function RiskModal({
               size="md"
               forceSearch
             />
-          </div>
+          </div>}
 
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Linked Assets (Optional)</label>
+          {showBuiltin(fieldSettings, 'linked_assets') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'linked_assets', 'Linked Assets (Optional)')}</label>
             <div className="rounded-lg border border-slate-300 bg-white p-2">
               <SearchInput
                 value={assetSearch}
@@ -3291,11 +3312,11 @@ function RiskModal({
                 </p>
               )}
             </div>
-          </div>
+          </div>}
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Inherent Likelihood (1-5)</label>
+            {showBuiltin(fieldSettings, 'inherent_likelihood') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'inherent_likelihood', 'Inherent Likelihood (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3304,9 +3325,9 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, inherent_likelihood: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Inherent Impact (1-5)</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'inherent_impact') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'inherent_impact', 'Inherent Impact (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3315,12 +3336,12 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, inherent_impact: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
+            </div>}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Residual Likelihood (1-5)</label>
+            {showBuiltin(fieldSettings, 'residual_likelihood') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'residual_likelihood', 'Residual Likelihood (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3329,9 +3350,9 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, residual_likelihood: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-800 mb-1">Residual Impact (1-5)</label>
+            </div>}
+            {showBuiltin(fieldSettings, 'residual_impact') && <div>
+              <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'residual_impact', 'Residual Impact (1-5)')}</label>
               <input
                 type="number"
                 min="1"
@@ -3340,12 +3361,12 @@ function RiskModal({
                 onChange={(e) => setFormData({ ...formData, residual_impact: Number(e.target.value) })}
                 className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
               />
-            </div>
+            </div>}
           </div>
 
           {/* Field sequence: Root Cause → Consequences → Recommendations → Treatment Plan */}
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Root Cause</label>
+          {showBuiltin(fieldSettings, 'root_cause') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'root_cause', 'Root Cause')}</label>
             <textarea
               value={formData.root_cause}
               onChange={(e) => setFormData({ ...formData, root_cause: e.target.value })}
@@ -3353,9 +3374,9 @@ function RiskModal({
               rows={formData.root_cause.length > 200 ? 6 : 2}
               placeholder="Why this risk exists (use AI Assist → Root Causes → Save to field, or write your own)…"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Consequences</label>
+          </div>}
+          {showBuiltin(fieldSettings, 'consequences') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'consequences', 'Consequences')}</label>
             <textarea
               value={formData.consequences}
               onChange={(e) => setFormData({ ...formData, consequences: e.target.value })}
@@ -3363,9 +3384,9 @@ function RiskModal({
               rows={formData.consequences.length > 200 ? 6 : 2}
               placeholder="Potential impact/consequences if this risk materializes (AI Assist → Consequences → Save to field, or write your own)…"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Recommendations</label>
+          </div>}
+          {showBuiltin(fieldSettings, 'recommendations') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'recommendations', 'Recommendations')}</label>
             <textarea
               value={formData.recommendations}
               onChange={(e) => setFormData({ ...formData, recommendations: e.target.value })}
@@ -3373,9 +3394,9 @@ function RiskModal({
               rows={formData.recommendations.length > 200 ? 6 : 2}
               placeholder="Recommended actions to reduce this risk (AI Assist → Recommendations → Save to field, or write your own)…"
             />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-800 mb-1">Treatment Plan</label>
+          </div>}
+          {showBuiltin(fieldSettings, 'treatment_plan') && <div>
+            <label className="block text-sm font-medium text-slate-800 mb-1">{builtinLabel(fieldSettings, 'treatment_plan', 'Treatment Plan')}</label>
             <textarea
               value={formData.treatment_plan}
               onChange={(e) => setFormData({ ...formData, treatment_plan: e.target.value })}
@@ -3383,7 +3404,7 @@ function RiskModal({
               rows={formData.treatment_plan.length > 200 ? 8 : 2}
               placeholder="Treatment approach (use AI Assist → Treatment Options → Save to field, or write your own)…"
             />
-          </div>
+          </div>}
         </div>
         <div data-tab="custom" className={tab === 'custom' ? '' : 'hidden'}>
           <CustomFieldsTab moduleKey="risks" values={customValues} onChange={setCustomValues} />

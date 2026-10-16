@@ -1,0 +1,14 @@
+---
+description: Dashboard revamps follow the Enterprise SaaS and Fintech design specs
+globs: grc-frontend/src/**/dashboard/**/*.{tsx,ts},grc-frontend/src/components/dashboard/**/*.{tsx,ts}
+alwaysApply: false
+---
+
+# Dashboard design
+
+Before changing a dashboard, read `docs/design/enterprise-saas.md` and `docs/design/fintech-dashboard.md`. The pointer is `docs/design/README.md`.
+
+- Layout, type, cards, tables, and status follow Enterprise SaaS.
+- Scores, counts, SLA days, and money follow Fintech: `tabular-nums`, right-aligned, sign plus color, never truncated.
+- Use the `.dash` tokens in `grc-frontend/styles/dashboard.css`. Do not invent a second palette.
+- Cards use a border, not a resting shadow. One primary action per section.

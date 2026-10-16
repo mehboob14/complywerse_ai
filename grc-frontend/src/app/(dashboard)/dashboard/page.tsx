@@ -2483,7 +2483,7 @@ export default function MainDashboard() {
   const SHOW_LEGACY_TABS = false;
 
   return (
-    <div className="-m-4 flex flex-col bg-[var(--color-surface)] lg:-m-5">
+    <div className="dash -m-4 flex flex-col lg:-m-5">
       {/* Aggregated module scorecards — each ring-card links to its module overview. */}
       <div className="px-3 pt-4 sm:px-6">
         {canSeeMyWork && (

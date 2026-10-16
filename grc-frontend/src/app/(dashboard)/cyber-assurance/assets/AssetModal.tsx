@@ -8,7 +8,7 @@ import HipaaAttributesFields from '@/cyber-assurance/components/assets/HipaaAttr
 import { ITAsset, AssetType } from '@/cyber-assurance/types';
 import { ComboBoxInput, type ComboBoxOption } from '@/cyber-assurance/components/ui';
 import {
-  CustomFieldsTab, CustomFieldsTabBar, listOptions, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, listOptions, showBuiltin, statusChoices, tabOf, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
 import {
   Loader2,
@@ -545,7 +545,7 @@ export function AssetModal({
             {/* Row 1: Name + Description */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Name *</label>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'name', 'Name')} *</label>
                 <input
                   type="text"
                   value={formData.name}
@@ -554,8 +554,8 @@ export function AssetModal({
                   required
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Description</label>
+              {showBuiltin(fieldSettings, 'description') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'description', 'Description')}</label>
                 <input
                   type="text"
                   value={formData.description}
@@ -563,12 +563,12 @@ export function AssetModal({
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                   placeholder="Brief description..."
                 />
-              </div>
+              </div>}
             </div>
 
             {/* Asset Type */}
-            <div className="mb-3">
-              <label className="block text-xs font-medium text-slate-600 mb-1">Asset Type *</label>
+            {showBuiltin(fieldSettings, 'asset_type') && <div className="mb-3">
+              <label className="block text-xs font-medium text-slate-600 mb-1">{builtinLabel(fieldSettings, 'asset_type', 'Asset Type')} *</label>
               <div className="grid grid-cols-3 gap-1.5">
                 {ASSET_TYPES.map((type) => {
                   const Icon = type.icon;
@@ -602,7 +602,7 @@ export function AssetModal({
                   );
                 })}
               </div>
-            </div>
+            </div>}
 
             {/* Row: Primary Component + IP Address */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
@@ -766,9 +766,9 @@ export function AssetModal({
                   location for on-prem infrastructure/data. */}
               {(show.vendor || show.location) && (
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
-                {show.vendor && (
+                {show.vendor && showBuiltin(fieldSettings, 'vendor') && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Vendor</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'vendor', 'Vendor')}</label>
                   <ComboBoxInput
                     value={formData.vendor}
                     onChange={(v) => setFormData({ ...formData, vendor: v })}
@@ -778,9 +778,9 @@ export function AssetModal({
                   />
                 </div>
                 )}
-                {show.location && (
+                {show.location && showBuiltin(fieldSettings, 'location') && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Location</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'location', 'Location')}</label>
                   <ComboBoxInput
                     value={formData.location}
                     onChange={(v) => setFormData({ ...formData, location: v })}
@@ -809,9 +809,9 @@ export function AssetModal({
                     />
                   </div>
                 </div>
-                {show.network && (
+                {show.network && showBuiltin(fieldSettings, 'network_segment') && (
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Network Segment</label>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'network_segment', 'Network Segment')}</label>
                   <ComboBoxInput
                     value={formData.network_segment}
                     onChange={(v) => setFormData({ ...formData, network_segment: v })}
@@ -844,13 +844,13 @@ export function AssetModal({
                     <span className="text-xs text-slate-700">CDE Environment</span>
                   </label>
                 </div>
-                {isEditMode && (
+                {isEditMode && showBuiltin(fieldSettings, 'status') && (
                   <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-0.5">Status</label>
+                    <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'status', 'Status')}</label>
                     <ComboBoxInput
                       value={formData.status}
                       onChange={(v) => setFormData({ ...formData, status: (v || 'active') as typeof formData.status })}
-                      options={STATUS_OPTIONS}
+                      options={statusChoices(fieldSettings, STATUS_OPTIONS)}
                       allowCustom={false}
                       displayLabelInsteadOfValue
                       placeholder="Select status…"
@@ -936,8 +936,8 @@ export function AssetModal({
 
               {/* Data classification + Internet-facing — secondary inputs */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mt-3 mb-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Data Classification</label>
+                {showBuiltin(fieldSettings, 'data_classification') && <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'data_classification', 'Data Classification')}</label>
                   <ComboBoxInput
                     value={formData.data_classification}
                     onChange={(v) => setFormData({ ...formData, data_classification: (v || '') as typeof formData.data_classification })}
@@ -947,7 +947,7 @@ export function AssetModal({
                     placeholder="None — search to pick…"
                     ariaLabel="Data classification"
                   />
-                </div>
+                </div>}
                 {show.internet && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1">Internet-Facing</label>
@@ -996,13 +996,13 @@ export function AssetModal({
 
               {/* Ownership chain — people & team responsible (all asset types). */}
               <div className="grid grid-cols-2 gap-x-4 gap-y-3 mb-3">
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Owner</label>
+                {showBuiltin(fieldSettings, 'owner') && <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'owner', 'Owner')}</label>
                   <select value={formData.owner_id ?? ''} onChange={(e) => setFormData({ ...formData, owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
                     <option value="">— Unassigned —</option>
                     {userOptions.map((u) => (<option key={u.id} value={u.id}>{u.display_name}</option>))}
                   </select>
-                </div>
+                </div>}
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Secondary Owner</label>
                   <select value={formData.secondary_owner_id ?? ''} onChange={(e) => setFormData({ ...formData, secondary_owner_id: e.target.value ? Number(e.target.value) : null })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
@@ -1040,15 +1040,15 @@ export function AssetModal({
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Assigned User</label>
                   <input type="text" value={formData.assigned_user} onChange={(e) => setFormData({ ...formData, assigned_user: e.target.value })} placeholder="Primary day-to-day user" className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none" />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-0.5">Environment</label>
+                {showBuiltin(fieldSettings, 'environment') && <div>
+                  <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(fieldSettings, 'environment', 'Environment')}</label>
                   <select value={formData.environment} onChange={(e) => setFormData({ ...formData, environment: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">
                     <option value="">— Not set —</option>
                     {choices('environment', formData.environment, ENVIRONMENT_OPTIONS).map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
                     ))}
                   </select>
-                </div>
+                </div>}
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-0.5">Lifecycle</label>
                   <select value={formData.lifecycle_state} onChange={(e) => setFormData({ ...formData, lifecycle_state: e.target.value })} className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none">

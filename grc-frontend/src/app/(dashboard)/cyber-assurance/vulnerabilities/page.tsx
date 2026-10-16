@@ -45,7 +45,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import {
-  CustomFieldsTab, CustomFieldsTabBar, errorText, tabOf, useModuleSettings, valuesToSave, type CustomValues,
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, showBuiltin, tabOf, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
 // The register-header severity/status/SLA charts were moved out (they duplicate
 // the Overview tab), so recharts is no longer imported here. The Overview tab's
@@ -1198,7 +1198,7 @@ export default function VulnerabilitiesPage() {
             {/* Row 1: Title + Description */}
             <div className="grid grid-cols-2 gap-x-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Title <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'title', 'Title')} <span className="text-red-500">*</span></label>
                 <input
                   type="text"
                   name="title"
@@ -1208,21 +1208,21 @@ export default function VulnerabilitiesPage() {
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Description</label>
+              {showBuiltin(vulnFieldSettings, 'description') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'description', 'Description')}</label>
                 <input
                   type="text"
                   name="description"
                   placeholder="Brief description of the vulnerability..."
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-              </div>
+              </div>}
             </div>
 
             {/* Row 2: Severity + CVSS Score */}
             <div className="grid grid-cols-2 gap-x-4">
               <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Severity <span className="text-red-500">*</span></label>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'severity', 'Severity')} <span className="text-red-500">*</span></label>
                 <select
                   name="severity"
                   required
@@ -1236,8 +1236,8 @@ export default function VulnerabilitiesPage() {
                   <option value="info">Info</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">CVSS Score</label>
+              {showBuiltin(vulnFieldSettings, 'cvss') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'cvss', 'CVSS Score')}</label>
                 <input
                   type="number"
                   name="cvss_score"
@@ -1247,63 +1247,63 @@ export default function VulnerabilitiesPage() {
                   placeholder="0-10"
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-              </div>
+              </div>}
             </div>
 
             {/* Row 3: CVE + CWE IDs */}
             <div className="grid grid-cols-2 gap-x-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">CVE ID</label>
+              {showBuiltin(vulnFieldSettings, 'cve') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'cve', 'CVE ID')}</label>
                 <input
                   type="text"
                   name="cve_id"
                   placeholder="CVE-2024-XXXXX"
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">CWE ID</label>
+              </div>}
+              {showBuiltin(vulnFieldSettings, 'cwe') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'cwe', 'CWE ID')}</label>
                 <input
                   type="text"
                   name="cwe_id"
                   placeholder="CWE-XXXX"
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-              </div>
+              </div>}
             </div>
 
             {/* Row 4: Affected Component + Host */}
             <div className="grid grid-cols-2 gap-x-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Affected Component</label>
+              {showBuiltin(vulnFieldSettings, 'affected_component') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'affected_component', 'Affected Component')}</label>
                 <input
                   type="text"
                   name="affected_component"
                   placeholder="e.g., API Gateway"
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Affected Host</label>
+              </div>}
+              {showBuiltin(vulnFieldSettings, 'affected_host') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'affected_host', 'Affected Host')}</label>
                 <input
                   type="text"
                   name="affected_host"
                   placeholder="e.g., 192.168.1.10"
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-              </div>
+              </div>}
             </div>
 
             {/* Row 5: Due Date (half row) */}
             <div className="grid grid-cols-2 gap-x-4">
-              <div>
-                <label className="block text-xs font-medium text-slate-600 mb-0.5">Due Date</label>
+              {showBuiltin(vulnFieldSettings, 'due_date') && <div>
+                <label className="block text-xs font-medium text-slate-600 mb-0.5">{builtinLabel(vulnFieldSettings, 'due_date', 'Due Date')}</label>
                 <input
                   type="date"
                   name="due_date"
                   className="w-full rounded border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-900 focus:border-blue-500 focus:outline-none"
                 />
-              </div>
+              </div>}
             </div>
             </div>
             <div data-tab="custom" className={addTab === 'custom' ? '' : 'hidden'}>

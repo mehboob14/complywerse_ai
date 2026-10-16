@@ -6,6 +6,9 @@ import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/rea
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker, PageLoader, AnimatedModal, RightSlidePanel, useToast } from '@/components/ui';
+import {
+  CustomFieldsTab, CustomFieldsTabBar, builtinLabel, listOptions, showBuiltin, useModuleSettings, valuesToSave, type CustomValues,
+} from '@/components/settings/CustomFields';
 import EvidenceViewer from '@/components/evidence/EvidenceViewer';
 import {
   ArrowLeft, Loader2, AlertCircle, FileCheck, Calendar, Clock,
@@ -122,6 +125,7 @@ interface EvidenceDetail {
   asset_links: AssetLink[];
   incident_links: IncidentLink[];
   policy_links: PolicyLink[];
+  custom_values?: CustomValues | null;
 }
 
 interface OCRContent {
@@ -264,6 +268,9 @@ export default function EvidenceDetailPage() {
   const { review, working: reviewWorking, again: reviewAgain, matchAgain } = useEvidenceReview(evidenceId, { start: true });
   const reviewRunning = reviewActive(review?.status);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editTab, setEditTab] = useState<'details' | 'custom'>('details');
+  const [editCustom, setEditCustom] = useState<CustomValues>({});
+  const { data: fieldSettings } = useModuleSettings('evidence');
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
@@ -493,6 +500,7 @@ export default function EvidenceDetailPage() {
       collection_date: editForm.collection_date ? `${editForm.collection_date}T00:00:00` : null,
       validity_period_days: editForm.validity_period_days ? Number(editForm.validity_period_days) : null,
       source_system: editForm.source_system || null,
+      custom_values: valuesToSave(fieldSettings, editCustom, evidence?.custom_values || {}),
     }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['evidence-detail', evidenceId] });
@@ -875,6 +883,8 @@ export default function EvidenceDetailPage() {
                   validity_period_days: evidence.validity_period_days ? String(evidence.validity_period_days) : '',
                   source_system: evidence.source_system || '',
                 });
+                setEditCustom(evidence.custom_values || {});
+                setEditTab('details');
                 setIsEditModalOpen(true);
               }}
               className="flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50"
@@ -952,7 +962,7 @@ export default function EvidenceDetailPage() {
 
       {isEditModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-3 sm:p-4">
-          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
               <h2 className="text-sm font-semibold text-slate-800">Edit Evidence</h2>
               <button onClick={() => setIsEditModalOpen(false)} className="text-slate-500 hover:text-slate-800">
@@ -960,36 +970,44 @@ export default function EvidenceDetailPage() {
               </button>
             </div>
             <div className="space-y-3 p-4">
+              <CustomFieldsTabBar tab={editTab} onTab={setEditTab} settings={fieldSettings} />
+              <div data-tab="details" className={editTab === 'details' ? 'space-y-3' : 'hidden'}>
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Name</label>
+                <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'name', 'Name')}</label>
                 <input value={editForm.name} onChange={(e) => setEditForm((prev) => ({ ...prev, name: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
               </div>
-              <div>
-                <label className="mb-1 block text-xs font-medium text-slate-700">Description</label>
+              {showBuiltin(fieldSettings, 'description') && <div>
+                <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'description', 'Description')}</label>
                 <textarea value={editForm.description} onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))} rows={3} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-              </div>
+              </div>}
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Evidence Type</label>
+                {showBuiltin(fieldSettings, 'evidence_type') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'evidence_type', 'Evidence Type')}</label>
                   <select value={editForm.evidence_type} onChange={(e) => setEditForm((prev) => ({ ...prev, evidence_type: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none">
                     <option value="">Select type...</option>
-                    {['screenshot','document','certificate','audit_report','log','policy','procedure','configuration','attestation','training_record','access_review','vulnerability_scan','penetration_test','backup_log','change_record','incident_report','other'].map((type) => (
-                      <option key={type} value={type}>{type.replace(/_/g, ' ')}</option>
+                    {listOptions(fieldSettings, 'evidence_type', editForm.evidence_type, [
+                      'screenshot','document','certificate','audit_report','log','policy','procedure','configuration','attestation','training_record','access_review','vulnerability_scan','penetration_test','backup_log','change_record','incident_report','validation_material','other',
+                    ].map((type) => ({ value: type, label: type.replace(/_/g, ' ') }))).map((type) => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
                     ))}
                   </select>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Collection Date</label>
+                </div>}
+                {showBuiltin(fieldSettings, 'collection_date') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'collection_date', 'Collection Date')}</label>
                   <input type="date" value={editForm.collection_date} onChange={(e) => setEditForm((prev) => ({ ...prev, collection_date: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Validity Days</label>
+                </div>}
+                {showBuiltin(fieldSettings, 'validity') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'validity', 'Validity Days')}</label>
                   <input type="number" min="1" value={editForm.validity_period_days} onChange={(e) => setEditForm((prev) => ({ ...prev, validity_period_days: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-slate-700">Source System</label>
+                </div>}
+                {showBuiltin(fieldSettings, 'source') && <div>
+                  <label className="mb-1 block text-xs font-medium text-slate-700">{builtinLabel(fieldSettings, 'source', 'Source System')}</label>
                   <input value={editForm.source_system} onChange={(e) => setEditForm((prev) => ({ ...prev, source_system: e.target.value }))} className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none" />
-                </div>
+                </div>}
+              </div>
+              </div>
+              <div data-tab="custom" className={editTab === 'custom' ? '' : 'hidden'}>
+                <CustomFieldsTab moduleKey="evidence" values={editCustom} onChange={setEditCustom} />
               </div>
               <div className="flex justify-end gap-2 border-t border-slate-200 pt-3">
                 <button onClick={() => setIsEditModalOpen(false)} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-800 hover:bg-slate-50">Cancel</button>
@@ -1098,6 +1116,8 @@ export default function EvidenceDetailPage() {
                 validity_period_days: evidence.validity_period_days ? String(evidence.validity_period_days) : '',
                 source_system: evidence.source_system || '',
               });
+              setEditCustom(evidence.custom_values || {});
+              setEditTab('details');
               setIsEditModalOpen(true);
             } : undefined}
             className={`group flex w-full flex-col rounded-xl border border-slate-200 bg-white p-4 text-left ${canEdit ? 'transition-colors hover:border-primary-300 hover:bg-slate-50/60' : 'cursor-default'}`}

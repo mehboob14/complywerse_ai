@@ -54,7 +54,7 @@ const r0 = (v: number) => Math.round(v);
 const hex = (s?: number | null) => scoreBand(s).hex;
 const short = (s: string, n = 11) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
 
-const SEG_COLORS = ['#0d9488', '#2563eb', '#7c3aed', '#db2777', '#ea580c', '#ca8a04', '#64748b'];
+const SEG_COLORS = ['#2563eb', '#7c3aed', '#059669', '#d97706', '#dc2626', '#64748b'];
 
 const dictSegs = (obj?: Record<string, number> | null, max = 5): Seg[] => {
   if (!obj) return [];
@@ -313,13 +313,13 @@ function DonutViz({ segs, total, centerLabel }: { segs: Seg[]; total: number; ce
 
 function Kpi({ label, value, tone, sub, Icon }: { label: string; value: string; tone: string; sub: string; Icon: typeof Gauge }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="dash-card p-6">
       <div className="flex items-center justify-between">
-        <span className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-400">{label}</span>
+        <span className="dash-label">{label}</span>
         <Icon className="h-4 w-4" style={{ color: tone }} />
       </div>
-      <div className="mt-1 text-[27px] font-bold leading-none" style={{ color: tone }}>{value}</div>
-      <div className="mt-1.5 text-[11px] text-slate-400">{sub}</div>
+      <div className="dash-value mt-2">{value}</div>
+      <div className="mt-1.5 text-[12px] text-[var(--dash-muted)]">{sub}</div>
     </div>
   );
 }
@@ -329,7 +329,7 @@ function ModuleCard({ c }: { c: Card & { key: string; label: string; href: strin
   const Icon = c.Icon;
   return (
     <Link href={c.href}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+      className="dash-card group flex flex-col overflow-hidden transition-colors">
       <div className="h-[3px] w-full" style={{ backgroundColor: band.hex }} />
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-2 flex items-center gap-3.5">
@@ -368,7 +368,7 @@ function FallbackModuleCard({ c }: { c: Card & { key: string; label: string; hre
 
   return (
     <Link href={c.href}
-      className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md">
+      className="dash-card group flex flex-col overflow-hidden transition-colors">
       <div className="h-[3px] w-full bg-slate-300" />
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-2 flex items-center gap-3.5">
@@ -425,7 +425,7 @@ function PrioritiesCard({ cards }: { cards: Array<Card & { key: string; label: s
   if (!top.length) return null;
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <div className="dash-card flex flex-col overflow-hidden">
       <div className="h-[3px] w-full bg-rose-500" />
       <div className="flex flex-1 flex-col p-4">
         <div className="mb-3 flex items-center gap-2">

@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { usePermissions } from '@/cyber-assurance/hooks/usePermissions';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 
 interface SLAConfig {
   id: number;
@@ -130,9 +131,11 @@ export default function SLAConfigPage() {
 
   return (
     <div className="space-y-3 px-6 py-3 bg-[var(--color-subtle)]">
+      <Link href="/cyber-assurance/vulnerabilities" className="text-sm font-medium text-slate-600 hover:text-slate-900">← Vulnerability register</Link>
+      <ModuleSettingsPanel moduleKey="vulnerabilities" />
       <div>
-        <h1 className="text-xl font-bold cw-text-default">SLA Configuration</h1>
-        <p className="text-xs cw-text-muted">Configure remediation SLA timeframes by severity</p>
+        <h1 className="text-xl font-bold cw-text-default">Remediation days</h1>
+        <p className="text-xs cw-text-muted">Days by severity. Reports and due dates use this table.</p>
       </div>
 
       <div className="cw-card overflow-hidden">

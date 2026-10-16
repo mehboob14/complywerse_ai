@@ -10,6 +10,7 @@ import { CriticalityCoverageWidget } from '@/cyber-assurance/components/assets/C
 import { ITAsset } from '@/cyber-assurance/types';
 import { PageLoader } from '@/cyber-assurance/components/ui';
 import { AssetModal } from './AssetModal';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import { AssetsWorkspace } from './_workspace/AssetsWorkspace';
 import InventoryScorecard from '@/cyber-assurance/components/dashboard/InventoryScorecard';
 import InventoryRedesign from './_workspace/InventoryRedesign';
@@ -43,12 +44,12 @@ export default function AssetsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Inventory ↔ CIS Benchmark tab (CIS merged in from /compliance-overview).
-  const [activeView, setActiveView] = useState<'inventory' | 'cis'>(
-    searchParams.get('tab') === 'cis' ? 'cis' : 'inventory'
+  const [activeView, setActiveView] = useState<'inventory' | 'cis' | 'settings'>(
+    searchParams.get('tab') === 'cis' ? 'cis' : searchParams.get('tab') === 'settings' ? 'settings' : 'inventory'
   );
-  const switchView = (v: 'inventory' | 'cis') => {
+  const switchView = (v: 'inventory' | 'cis' | 'settings') => {
     setActiveView(v);
-    router.replace(v === 'cis' ? '/cyber-assurance/assets?tab=cis' : '/cyber-assurance/assets', { scroll: false });
+    router.replace(v === 'inventory' ? '/cyber-assurance/assets' : `/cyber-assurance/assets?tab=${v}`, { scroll: false });
   };
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('assets:asset_inventory:create');
@@ -347,10 +348,13 @@ export default function AssetsPage() {
         <div className="segwrap" style={{ marginTop: 9 }}>
           <button type="button" className={activeView === 'inventory' ? 'seg on' : 'seg'} onClick={() => switchView('inventory')}>Inventory</button>
           <button type="button" className={activeView === 'cis' ? 'seg on' : 'seg'} onClick={() => switchView('cis')}>CIS Benchmark</button>
+          <button type="button" className={activeView === 'settings' ? 'seg on' : 'seg'} onClick={() => switchView('settings')}>Settings</button>
         </div>
       </div>
 
-      {activeView === 'cis' ? (
+      {activeView === 'settings' ? (
+        <ModuleSettingsPanel moduleKey="assets" />
+      ) : activeView === 'cis' ? (
         <CisBenchmarkView />
       ) : (
       <InventoryRedesign

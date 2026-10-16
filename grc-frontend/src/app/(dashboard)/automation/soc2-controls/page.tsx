@@ -16,6 +16,7 @@ import {
 } from '@/components/soc2/ui';
 import { MultiSelectDropdown, useToast } from '@/components/ui';
 import { ScopeDialog } from '@/components/soc2/ScopeDialog';
+import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 
 const SUB_TYPES = ['Automated', 'Hybrid', 'Manual'];
 const STATUS_ORDER = ['failed', 'partial', 'expired', 'collection_failed', 'not_run', 'connect_one', 'unbound', 'passed', 'manual'];
@@ -118,6 +119,7 @@ export default function CommonControlsLibraryPage() {
   const searchParams = useSearchParams();
   const pathname = usePathname();
   const [scopeOpen, setScopeOpen] = useState(false);
+  const [libraryView, setLibraryView] = useState<'records' | 'settings'>('records');
   useEffect(() => {
     // ?source=custom lands here from the Overview's "n authored here".
     const source = searchParams.get('source');
@@ -355,6 +357,15 @@ export default function CommonControlsLibraryPage() {
     </div>
   );
 
+  if (libraryView === 'settings') {
+    return (
+      <div className="mx-auto max-w-[1400px] space-y-3 px-1 py-1">
+        <button type="button" onClick={() => setLibraryView('records')} className="text-sm font-medium text-slate-600 hover:text-slate-900">← Common controls</button>
+        <ModuleSettingsPanel moduleKey="controls" />
+      </div>
+    );
+  }
+
   const segCls = (on: boolean) =>
     `inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 transition-colors ${on ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`;
   const ghostBtn = 'inline-flex h-8 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-600 hover:bg-slate-50';
@@ -394,6 +405,7 @@ export default function CommonControlsLibraryPage() {
               {data?.scope?.total_count != null && <span className="tabular-nums font-normal text-slate-400">{data.scope.total_count.toLocaleString()}</span>}
             </button>
           </div>
+          <button type="button" onClick={() => setLibraryView('settings')} className={ghostBtn}>Settings</button>
           <button type="button" onClick={() => setScopeOpen(true)} className={ghostBtn}><Crosshair className="h-3.5 w-3.5" />Configure scope</button>
           <Link href="/automation/soc2-controls/coverage" className={ghostBtn}><ListChecks className="h-3.5 w-3.5" />Coverage</Link>
           <Link href="/automation/soc2-controls/review" className={ghostBtn}><ShieldCheck className="h-3.5 w-3.5" />Review</Link>

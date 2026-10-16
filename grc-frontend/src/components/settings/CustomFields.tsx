@@ -21,9 +21,14 @@ import ImportFieldsFromTemplate from './ImportFieldsFromTemplate';
 export type FieldDef = {
   key: string; label: string; type: string; required: boolean;
   options: string[]; help: string; order: number; archived?: boolean;
+  /** Another dropdown this one follows. `groups` maps each of that field's options to this field's options. */
+  depends_on?: string | null;
+  groups?: Record<string, string[]>;
 };
-export type ListOption = { value: string; label: string; archived?: boolean };
-export type ListDef = { label: string; free_text: boolean; note?: string | null; options: ListOption[] };
+export type ListOption = { value: string; label: string; archived?: boolean; children?: string[] };
+export type ListDef = {
+  label: string; free_text: boolean; note?: string | null; child_label?: string | null; options: ListOption[];
+};
 export type SlaTarget = { days: number | null; notify_before: number | null; escalate_after: number | null };
 export type Sla = {
   by_priority: Record<string, number>; driver: string; targets: Record<string, SlaTarget>;
@@ -34,8 +39,13 @@ export type StatusLevel = {
   key: string; label: string; order: number; terminal: boolean;
   tone: string; escalate_after_days: number | null; clock?: 'runs' | 'paused';
 };
+export type BuiltinField = {
+  key: string; label: string; type: string; required: boolean;
+  locked?: boolean; hidden?: boolean; list?: string | null;
+};
 export type ModuleSettings = {
   statuses?: StatusLevel[]; sla?: Sla; fields: FieldDef[]; lists?: Record<string, ListDef>;
+  builtins?: BuiltinField[];
   module: {
     key: string; label: string; record: string; priorities: string[]; sections: string[];
     permissions?: { view?: string; edit?: string };
@@ -88,6 +98,13 @@ export const errorText = (e: unknown, fallback = 'Could not save.') => {
 
 /** A built-in dropdown's options as the tenant set them. The record's own value
  *  stays selectable when it has since been removed, or was typed in. */
+/** Status levels the tenant configured, or the list the form shipped with. */
+export function statusChoices(settings: ModuleSettings | undefined,
+                              fallback: { value: string; label: string }[]) {
+  const rows = (settings?.statuses || []).filter((s) => s.key);
+  return rows.length ? rows.map((s) => ({ value: s.key, label: s.label || s.key })) : fallback;
+}
+
 export function listOptions(settings: ModuleSettings | undefined, key: string, current?: string | null,
                             fallback: ListOption[] = []): ListOption[] {
   const shown = (settings?.lists?.[key]?.options ?? fallback).filter((o) => !o.archived || o.value === current);
@@ -96,6 +113,16 @@ export function listOptions(settings: ModuleSettings | undefined, key: string, c
 }
 
 /** The fields a record's form shows: the live ones, in the tenant's order. */
+export const builtinOf = (settings: ModuleSettings | undefined, key: string) =>
+  settings?.builtins?.find((b) => b.key === key);
+
+/** False once an admin has removed this existing field from the form. */
+export const showBuiltin = (settings: ModuleSettings | undefined, key: string) =>
+  !builtinOf(settings, key)?.hidden;
+
+export const builtinLabel = (settings: ModuleSettings | undefined, key: string, fallback: string) =>
+  builtinOf(settings, key)?.label || fallback;
+
 export const liveFields = (settings?: ModuleSettings) =>
   (settings?.fields || []).filter((f) => !f.archived).sort((a, b) => a.order - b.order);
 
@@ -132,7 +159,20 @@ export function CustomFieldInputs({ moduleKey, fields, values, onChange }: {
   moduleKey: string; fields: FieldDef[]; values: CustomValues; onChange: (next: CustomValues) => void;
 }) {
   const people = usePeople(moduleKey, fields.some((f) => f.type === 'user'));
-  const set = (key: string, value: unknown) => onChange({ ...values, [key]: value });
+  const set = (key: string, value: unknown) => {
+    const next: CustomValues = { ...values, [key]: value };
+    // A child dropdown only makes sense for the parent that was just picked.
+    for (const child of fields) {
+      if (child.depends_on === key) next[child.key] = child.type === 'multiselect' ? [] : '';
+    }
+    onChange(next);
+  };
+  const choicesFor = (f: FieldDef): string[] => {
+    if (!f.depends_on) return f.options || [];
+    const parent = values[f.depends_on];
+    const key = typeof parent === 'string' ? parent : '';
+    return (key && f.groups?.[key]) || [];
+  };
 
   return (
     <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
@@ -151,13 +191,23 @@ export function CustomFieldInputs({ moduleKey, fields, values, onChange }: {
               <textarea rows={3} className={input} value={text} required={f.required}
                 onChange={(e) => set(f.key, e.target.value)} />
             ) : f.type === 'select' ? (
-              <select className={input} value={text} required={f.required} onChange={(e) => set(f.key, e.target.value)}>
-                <option value="">— Select —</option>
-                {[...f.options, ...(text && !f.options.includes(text) ? [text] : [])].map((o) => <option key={o} value={o}>{o}</option>)}
+              <select className={input} value={text} required={f.required && (!f.depends_on || !!values[f.depends_on])} onChange={(e) => set(f.key, e.target.value)}
+                disabled={!!f.depends_on && !values[f.depends_on]}>
+                <option value="">{f.depends_on && !values[f.depends_on]
+                  ? `Select ${fields.find((p) => p.key === f.depends_on)?.label || 'the parent'} first`
+                  : '— Select —'}</option>
+                {(() => {
+                  const opts = choicesFor(f);
+                  return [...opts, ...(text && !opts.includes(text) ? [text] : [])];
+                })().map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             ) : f.type === 'multiselect' ? (
               <div className="flex flex-wrap gap-1.5">
-                {f.options.map((o) => {
+                {(() => {
+                  const opts = choicesFor(f);
+                  const picked = Array.isArray(value) ? (value as string[]) : [];
+                  return [...opts, ...picked.filter((p) => !opts.includes(p))];
+                })().map((o) => {
                   const picked = Array.isArray(value) ? (value as string[]) : [];
                   const on = picked.includes(o);
                   return (
@@ -168,6 +218,13 @@ export function CustomFieldInputs({ moduleKey, fields, values, onChange }: {
                     </button>
                   );
                 })}
+                {f.depends_on && choicesFor(f).length === 0 && (
+                  <p className="text-[11px] text-slate-400">
+                    {values[f.depends_on]
+                      ? 'No options for this choice.'
+                      : `Select ${fields.find((p) => p.key === f.depends_on)?.label || 'the parent'} first.`}
+                  </p>
+                )}
               </div>
             ) : f.type === 'checkbox' ? (
               <label className="mt-5 flex items-center gap-2 text-sm text-slate-700">
@@ -210,6 +267,48 @@ function KeptValues({ settings, values }: { settings: ModuleSettings; values: Cu
 
 // ── changing the form ────────────────────────────────────────────────────────
 
+/** Add one option at a time. A textarea of "one per line" was too easy to miss. */
+function OptionRows({ options, onChange, placeholder }: {
+  options: string[]; onChange: (next: string[]) => void; placeholder: string;
+}) {
+  const [adding, setAdding] = useState('');
+  const add = () => {
+    const text = adding.trim();
+    if (!text || options.some((o) => o.trim() === text)) return;
+    onChange([...options, text]);
+    setAdding('');
+  };
+  return (
+    <div className="space-y-1.5">
+      {options.map((o, i) => (
+        <div key={i} className="flex items-center gap-2">
+          <input className={input} value={o} aria-label="Option"
+            onChange={(e) => onChange(options.map((x, j) => (j === i ? e.target.value : x)))} />
+          <button type="button" title="Remove option" onClick={() => onChange(options.filter((_, j) => j !== i))}
+            className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <input className={input} value={adding} placeholder={placeholder} aria-label={placeholder}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+        <button type="button" onClick={add}
+          className="inline-flex shrink-0 items-center gap-1 rounded border border-slate-200 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+          <Plus className="h-3 w-3" /> Add
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const nextFieldKey = (draft: FieldDef[]) => {
+  const taken = new Set(draft.map((f) => f.key));
+  let n = draft.length + 1;
+  let key = `field_${n}`;
+  while (taken.has(key)) { n += 1; key = `field_${n}`; }
+  return key;
+};
+
 export function FieldsEditor({ moduleKey, settings }: { moduleKey: string; settings: ModuleSettings }) {
   const save = useSaveModuleSettings(moduleKey);
   const [draft, setDraft] = useState<FieldDef[]>(() => liveFields(settings));
@@ -238,24 +337,55 @@ export function FieldsEditor({ moduleKey, settings }: { moduleKey: string; setti
         for (let n = 2; taken.has(key); n += 1) key = `${stem.slice(0, 36)}_${n}`;
         taken.add(key);
       }
-      return { ...f, key, order: i + 1, archived: false,
-               options: (f.options || []).map((o) => o.trim()).filter(Boolean) };
+      const depends = (f.type === 'select' || f.type === 'multiselect') ? (f.depends_on || null) : null;
+      const parent = depends ? draft.find((p) => p.key === depends) : undefined;
+      const parentOptions = (parent?.options || []).map((o) => o.trim()).filter(Boolean);
+      const groups = depends
+        ? Object.fromEntries(parentOptions.map((name) => [name, (f.groups?.[name] || []).map((o) => o.trim()).filter(Boolean)]))
+        : {};
+      return { ...f, key, order: i + 1, archived: false, depends_on: depends, groups,
+               options: depends ? [] : (f.options || []).map((o) => o.trim()).filter(Boolean) };
     });
     save.mutate({ fields }, { onSuccess: () => { setDone(true); setTimeout(() => setDone(false), 2000); } });
   };
 
   return (
     <div className="space-y-2">
-      {draft.map((f, i) => (
+      {draft.map((f, i) => {
+        const dropdown = f.type === 'select' || f.type === 'multiselect';
+        const parents = draft.filter((p, j) => j !== i && p.type === 'select' && !p.depends_on && p.key);
+        const parent = parents.find((p) => p.key === f.depends_on);
+        const parentOptions = (parent?.options || []).map((o) => o.trim()).filter(Boolean);
+        const setType = (type: string) => setDraft(draft.map((row, j) => {
+          if (j === i) return { ...row, type, depends_on: type === 'select' || type === 'multiselect' ? row.depends_on : null };
+          if (row.depends_on === f.key && type !== 'select') return { ...row, depends_on: null, groups: {} };
+          return row;
+        }));
+        const setOptions = (options: string[]) => {
+          const prev = f.options || [];
+          setDraft(draft.map((row, j) => {
+            if (j === i) return { ...row, options };
+            if (row.depends_on !== f.key || !row.groups) return row;
+            const groups = { ...row.groups };
+            prev.forEach((old, idx) => {
+              const next = options[idx];
+              if (old && next && old !== next && groups[old] && groups[next] === undefined) {
+                groups[next] = groups[old];
+                delete groups[old];
+              }
+            });
+            return { ...row, groups };
+          }));
+        };
+        return (
         <div key={f.key || `new-${i}`} className="rounded-md border border-slate-200 p-2">
-          <div className="grid grid-cols-[1fr_auto] gap-2 sm:grid-cols-[1.4fr_1fr_auto_auto]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_1fr_auto_auto]">
             <input className={input} value={f.label} placeholder="Field name" aria-label="Field name"
               onChange={(e) => patch(i, { label: e.target.value })} />
-            <select className={`${input} hidden sm:block`} value={f.type} aria-label="Field type"
-              onChange={(e) => patch(i, { type: e.target.value })}>
+            <select className={input} value={f.type} aria-label="Field type" onChange={(e) => setType(e.target.value)}>
               {FIELD_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
             </select>
-            <label className="hidden items-center gap-1 whitespace-nowrap text-xs text-slate-600 sm:flex">
+            <label className="flex items-center gap-1 whitespace-nowrap text-xs text-slate-600">
               <input type="checkbox" checked={f.required} onChange={(e) => patch(i, { required: e.target.checked })} /> Required
             </label>
             <div className="flex items-center justify-end">
@@ -263,34 +393,54 @@ export function FieldsEditor({ moduleKey, settings }: { moduleKey: string; setti
                 className="rounded p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ArrowUp className="h-3.5 w-3.5" /></button>
               <button type="button" title="Move down" disabled={i === draft.length - 1} onClick={() => move(i, 1)}
                 className="rounded p-1 text-slate-400 hover:bg-slate-100 disabled:opacity-30"><ArrowDown className="h-3.5 w-3.5" /></button>
-              <button type="button" title="Remove field" onClick={() => setDraft(draft.filter((_, j) => j !== i))}
+              <button type="button" title="Remove field"
+                onClick={() => setDraft(draft.filter((_, j) => j !== i).map((row) => (
+                  row.depends_on === f.key ? { ...row, depends_on: null, groups: {} } : row
+                )))}
                 className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
             </div>
           </div>
-          {/* Narrow screens: type and required under the name. */}
-          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2 sm:hidden">
-            <select className={input} value={f.type} aria-label="Field type" onChange={(e) => patch(i, { type: e.target.value })}>
-              {FIELD_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-            <label className="flex items-center gap-1 text-xs text-slate-600">
-              <input type="checkbox" checked={f.required} onChange={(e) => patch(i, { required: e.target.checked })} /> Required
-            </label>
-          </div>
-          <div className="mt-2 grid gap-2 sm:grid-cols-2">
-            {(f.type === 'select' || f.type === 'multiselect') && (
-              <textarea rows={3} className={input} placeholder="Options, one per line" aria-label="Options"
-                value={(f.options || []).join('\n')} onChange={(e) => patch(i, { options: e.target.value.split('\n') })} />
-            )}
-            <input className={`${input} self-start`} placeholder="Help text (optional)" aria-label="Help text"
-              value={f.help || ''} onChange={(e) => patch(i, { help: e.target.value })} />
-          </div>
+          <input className={`${input} mt-2`} placeholder="Help text (optional)" aria-label="Help text"
+            value={f.help || ''} onChange={(e) => patch(i, { help: e.target.value })} />
+          {dropdown && (
+            <div className="mt-2 rounded-md bg-slate-50 p-2">
+              <p className="mb-1.5 text-xs font-medium text-slate-700">Dropdown options</p>
+              <label className="mb-2 block text-[11px] text-slate-500">
+                Depends on
+                <select className={`${input} mt-0.5`} aria-label="Depends on" value={f.depends_on || ''}
+                  onChange={(e) => patch(i, { depends_on: e.target.value || null, options: e.target.value ? [] : f.options })}>
+                  <option value="">Nothing — one list of options</option>
+                  {parents.map((p) => <option key={p.key} value={p.key}>{p.label || p.key}</option>)}
+                </select>
+              </label>
+              {f.depends_on && !parent && (
+                <p className="text-[11px] text-amber-700">That dropdown is no longer on the form. Pick another, or use one list.</p>
+              )}
+              {f.depends_on && parent && parentOptions.length === 0 && (
+                <p className="text-[11px] text-slate-500">Add options on {parent.label || 'that dropdown'} first. Each one gets its own list here.</p>
+              )}
+              {f.depends_on && parent && parentOptions.map((name) => (
+                <div key={name} className="mb-2 border-l-2 border-slate-200 pl-2">
+                  <p className="mb-1 text-[11px] font-medium text-slate-600">When {parent.label || 'it'} is {name}</p>
+                  <OptionRows options={f.groups?.[name] || []} placeholder={`Add option for ${name}`}
+                    onChange={(kids) => patch(i, { groups: { ...(f.groups || {}), [name]: kids } })} />
+                </div>
+              ))}
+              {!f.depends_on && (
+                <OptionRows options={f.options || []} placeholder="Add an option" onChange={setOptions} />
+              )}
+            </div>
+          )}
         </div>
-      ))}
-      {draft.length === 0 && <p className="text-xs text-slate-400">No fields yet.</p>}
+        );
+      })}
+      {draft.length === 0 && <p className="text-xs text-slate-400">No added fields yet.</p>}
 
       <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
         <button type="button"
-          onClick={() => setDraft([...draft, { key: '', label: '', type: 'text', required: false, options: [], help: '', order: draft.length + 1 }])}
+          onClick={() => setDraft([...draft, {
+            key: nextFieldKey(draft), label: '', type: 'text', required: false, options: [], help: '', order: draft.length + 1,
+          }])}
           className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:underline">
           <Plus className="h-3 w-3" /> Add field
         </button>
@@ -336,7 +486,12 @@ export function ListsEditor({ moduleKey, settings }: { moduleKey: string; settin
     setAdding('');
   };
   const submit = () => save.mutate(
-    { lists: { [active]: draft.map((o) => (o.value ? o : { label: o.label })) } },
+    { lists: { [active]: draft.map((o) => {
+      const row: ListOption = o.value ? { ...o } : { label: o.label, archived: !!o.archived };
+      if (o.children?.length) row.children = o.children.filter((c) => c.trim());
+      else delete row.children;
+      return row;
+    }) } },
     { onSuccess: () => { setDone(true); setTimeout(() => setDone(false), 2000); } },
   );
 
@@ -353,11 +508,20 @@ export function ListsEditor({ moduleKey, settings }: { moduleKey: string; settin
       {list?.note && <p className="text-[11px] text-amber-700">{list.note}</p>}
       <div className="space-y-1.5">
         {draft.map((o, i) => !o.archived && (
-          <div key={o.value || `new-${i}`} className="flex items-center gap-2">
-            <input className={input} value={o.label} aria-label="Option name" onChange={(e) => patch(i, { label: e.target.value })} />
-            <button type="button" title="Remove option"
-              onClick={() => (saved.has(o.value) ? patch(i, { archived: true }) : setDraft(draft.filter((_, j) => j !== i)))}
-              className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+          <div key={o.value || `new-${i}`} className="space-y-1.5">
+            <div className="flex items-center gap-2">
+              <input className={input} value={o.label} aria-label="Option name" onChange={(e) => patch(i, { label: e.target.value })} />
+              <button type="button" title="Remove option"
+                onClick={() => (saved.has(o.value) ? patch(i, { archived: true }) : setDraft(draft.filter((_, j) => j !== i)))}
+                className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+            </div>
+            {list?.child_label && (
+              <div className="ml-3 border-l-2 border-slate-200 pl-2">
+                <p className="mb-1 text-[11px] text-slate-500">{list.child_label} when {o.label || 'this'} is selected</p>
+                <OptionRows options={o.children || []} placeholder={`Add ${list.child_label.toLowerCase()}`}
+                  onChange={(children) => patch(i, { children })} />
+              </div>
+            )}
           </div>
         ))}
       </div>
@@ -393,6 +557,70 @@ function SaveButton({ label, pending, done, onClick }: { label: string; pending:
       {pending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : done ? <Check className="h-3.5 w-3.5" /> : null}
       {done ? 'Saved' : label}
     </button>
+  );
+}
+
+const TYPE_NAME = Object.fromEntries(FIELD_TYPES);
+
+/** The fields the form already has: rename them, or take them off the form. */
+export function BuiltinEditor({ moduleKey, settings, onEditOptions }: {
+  moduleKey: string; settings: ModuleSettings; onEditOptions?: () => void;
+}) {
+  const save = useSaveModuleSettings(moduleKey);
+  const [rows, setRows] = useState<BuiltinField[]>(() => settings.builtins || []);
+  const [done, setDone] = useState(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setRows(settings.builtins || []), [settings.updated_at]);
+  if (!rows.length) return null;
+  const patch = (key: string, change: Partial<BuiltinField>) =>
+    setRows(rows.map((r) => (r.key === key ? { ...r, ...change } : r)));
+  const submit = () => save.mutate(
+    { layout: Object.fromEntries(rows.map((r) => [r.key, { label: r.label, hidden: !!r.hidden }])) },
+    { onSuccess: () => { setDone(true); setTimeout(() => setDone(false), 2000); } },
+  );
+  const live = rows.filter((r) => !r.hidden);
+  const removed = rows.filter((r) => r.hidden);
+
+  return (
+    <div className="mb-4 space-y-2 border-b border-slate-200 pb-4">
+      <p className="text-xs font-medium text-slate-700">Existing fields</p>
+      {live.map((f) => (
+        <div key={f.key} className="rounded-md border border-slate-200 bg-white p-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1.4fr_1fr_auto]">
+            <input className={input} value={f.label} aria-label={`Name of ${f.label}`}
+              onChange={(e) => patch(f.key, { label: e.target.value })} />
+            <select className={input} value={f.type} aria-label="Field type" disabled title="This field is stored as this type">
+              <option value={f.type}>{TYPE_NAME[f.type] || f.type}</option>
+            </select>
+            <div className="flex items-center justify-end gap-1">
+              {f.list && onEditOptions && (
+                <button type="button" onClick={onEditOptions} className="px-1 text-xs text-blue-700 hover:underline">Options</button>
+              )}
+              {f.locked ? (
+                <span className="px-1 text-[11px] text-slate-400" title="The record needs this field">Kept</span>
+              ) : (
+                <button type="button" title="Remove field" onClick={() => patch(f.key, { hidden: true })}
+                  className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600"><Trash2 className="h-3.5 w-3.5" /></button>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
+      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+        <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-slate-400">
+          {removed.length > 0 && 'Removed from the form:'}
+          {removed.map((f) => (
+            <button key={f.key} type="button" title="Bring this field back" onClick={() => patch(f.key, { hidden: false })}
+              className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-0.5 hover:bg-slate-50">
+              {f.label} <RotateCcw className="h-3 w-3" />
+            </button>
+          ))}
+        </p>
+        <SaveButton label="Save existing fields" pending={save.isPending} done={done} onClick={submit} />
+      </div>
+      {save.isError && <ErrorLine text={errorText(save.error, 'Could not save the fields.')} />}
+      <p className="pt-2 text-xs font-medium text-slate-700">Added fields</p>
+    </div>
   );
 }
 
@@ -463,7 +691,13 @@ export function CustomFieldsTab({ moduleKey, values, onChange }: {
           )}
           {part === 'lists' && hasLists
             ? <ListsEditor moduleKey={moduleKey} settings={settings} />
-            : <FieldsEditor moduleKey={moduleKey} settings={settings} />}
+            : (
+              <>
+                <BuiltinEditor moduleKey={moduleKey} settings={settings}
+                  onEditOptions={hasLists ? () => setPart('lists') : undefined} />
+                <FieldsEditor moduleKey={moduleKey} settings={settings} />
+              </>
+            )}
           <p className="mt-3 text-[11px] text-slate-400">
             Changes apply to every {record} in your organisation. Removing a field or option keeps what records already hold.
           </p>
@@ -552,5 +786,43 @@ export function CustomValuesList({ moduleKey, values }: { moduleKey: string; val
         </div>
       ))}
     </dl>
+  );
+}
+
+/** Fill and customise fields on a record that is not part of a larger form. */
+export function EntityFieldsPanel({ moduleKey, initial, onSave }: {
+  moduleKey: string;
+  initial?: CustomValues | null;
+  onSave: (values: CustomValues | undefined) => Promise<unknown>;
+}) {
+  const { data: settings } = useModuleSettings(moduleKey);
+  const [values, setValues] = useState<CustomValues>(initial || {});
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  useEffect(() => setValues(initial || {}), [initial]);
+
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await onSave(valuesToSave(settings, values, initial || {}));
+      setDone(true);
+      setTimeout(() => setDone(false), 2000);
+    } catch (e) {
+      setError(errorText(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <CustomFieldsTab moduleKey={moduleKey} values={values} onChange={setValues} />
+      <div className="flex items-center justify-end gap-3">
+        {error && <ErrorLine text={error} />}
+        <SaveButton label="Save fields" pending={busy} done={done} onClick={save} />
+      </div>
+    </div>
   );
 }
