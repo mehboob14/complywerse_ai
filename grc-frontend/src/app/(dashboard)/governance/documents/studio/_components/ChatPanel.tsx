@@ -12,6 +12,7 @@ import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight
 import { problemOf, studioApi, type AnswerItem, type Attachment, type Message, type Op, type Question, type ReferenceUsed, type Session } from '@/lib/studio/api';
 import { plural, wordDiff } from '@/lib/studio/text';
 import LiveTurn from './LiveTurn';
+import { SetupCard } from './SetupFields';
 
 /** how the server ends a request sent with files (service.ATTACHED): the bubble shows the files as chips instead */
 const ATTACHED = '\n\nAttached with this message: ';
@@ -543,13 +544,14 @@ export default function ChatPanel(props: ChatPanelProps) {
       )}
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3" aria-live="polite"
         onScroll={(e) => { const el = e.currentTarget; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96; }}>
+        {chat.length === 0 && notStarted(session) && WRITTEN_WHOLE.includes(session.doc_type) && <SetupCard session={session} onChanged={props.onReferencesChanged} />}
         {chat.length === 0 && (
           <div className="rounded-lg border border-dashed border-[#c5ccd3] p-4 text-center text-sm text-[#586472]">
             <Sparkles className="mx-auto mb-1 h-5 w-5 text-[#0f766e]" />
             {notStarted(session) && WRITTEN_WHOLE.includes(session.doc_type) ? (
               <>
-                <p className="font-medium text-[#26323d]">Tell Comply Agent what this {session.doc_type} should cover.</p>
-                <p className="mt-1 text-xs">Before it writes anything, it looks up on the internet and in the platform the laws, regulations, standards and frameworks that apply, and asks you to confirm the scope, the region and the rules. Nothing is assumed.</p>
+                <p className="font-medium text-[#26323d]">Then tell Comply Agent what to write.</p>
+                <p className="mt-1 text-xs">Nothing is written until you ask. Before it writes, it looks up on the internet the laws, regulations and standards that apply and asks you about anything the setup leaves open.</p>
               </>
             ) : (
               <>

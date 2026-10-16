@@ -313,6 +313,15 @@ def patch_session(session_id: int, body: SessionPatch, db: Session = Depends(get
     return service.session_view(db, s, content=False)
 
 
+@router.get("/sessions/{session_id}/setup", dependencies=[Depends(require_studio)])
+def setup_options(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """What a new document can be set up with (the organisation's own departments, regulators, regulatory register and frameworks
+    first, then the usual choices). The answers are saved as instructions (PATCH the session)."""
+    from . import setup
+
+    return setup.options(db, _session(db, session_id, user))
+
+
 @router.delete("/sessions/{session_id}", dependencies=[Depends(require_studio)])
 def delete_session(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     service.delete_session(db, _session(db, session_id, user))

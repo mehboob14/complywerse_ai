@@ -1,16 +1,18 @@
 'use client';
 
 /**
- * What the document must respect, whatever is asked in the chat: the organisation's name (used exactly, and checked for),
- * the logo of an exported document and where it sits (top or foot of the page), a watermark, what to focus on, the tone,
- * the audience and the language. Saved as you type.
+ * What the document must respect, whatever is asked in the chat: how it was set up (the organisation and its name, used exactly and
+ * checked for; where it applies, its regulators, laws, frameworks, subject areas, departments, audience, length, classification and
+ * review cycle), the logo of an exported document and where it sits (top or foot of the page), a watermark, what to focus on, the tone
+ * and the language. Saved as you type.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, Loader2, Star, Trash2, Upload } from 'lucide-react';
-import { problemOf, studioApi, type Instructions, type LogoPosition, type Session } from '@/lib/studio/api';
+import { problemOf, studioApi, type LogoPosition, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import AssetImage from './AssetImage';
+import { SavedState, SetupFields, useInstructionsDraft } from './SetupFields';
 
 const LANGUAGES: { value: string; label: string }[] = [
   { value: '', label: 'As the document is written' },
@@ -22,8 +24,6 @@ const LANGUAGES: { value: string; label: string }[] = [
 ];
 
 const TONES = ['Formal and precise', 'Directive (“shall”, “must”)', 'Plain English', 'Concise', 'Explanatory (guidance)'];
-const AUDIENCES = ['All staff', 'Board and senior management', 'Managers and process owners', 'IT and information security teams',
-  'Risk, compliance and internal audit', 'Third parties and vendors', 'Regulators and external auditors', 'Customers'];
 const WATERMARKS = ['DRAFT', 'CONFIDENTIAL', 'INTERNAL USE ONLY', 'FOR REVIEW', 'UNCONTROLLED COPY'];
 const POSITIONS: { value: LogoPosition; label: string }[] = [
   { value: 'header-left', label: 'Top, left' }, { value: 'header-center', label: 'Top, centre' }, { value: 'header-right', label: 'Top, right' },
@@ -94,30 +94,8 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
   const { toast } = useToast();
   const qc = useQueryClient();
   const ins = session.instructions;
-  const [draft, setDraft] = useState<Instructions>(ins);
-  const [saved, setSaved] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const { draft, change, saved } = useInstructionsDraft(session, onChanged);
   const file = useRef<HTMLInputElement>(null);
-  const dirty = useRef(false);
-
-  // the session changed elsewhere (a reload): take it, unless the person is mid-edit
-  useEffect(() => { if (!dirty.current) setDraft(session.instructions); }, [session.instructions]);
-
-  const save = useMutation({
-    mutationFn: (body: Instructions) => studioApi.patchSession(session.id, { instructions: body }),
-    onMutate: () => setSaved('saving'),
-    onSuccess: () => { setSaved('saved'); dirty.current = false; onChanged(); },
-    onError: (e) => { setSaved('idle'); toast({ title: 'Could not save the instructions', message: problemOf(e), type: 'error' }); },
-  });
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const change = (patch: Instructions, immediately = false) => {
-    const next = { ...draft, ...patch };
-    setDraft(next);
-    dirty.current = true;
-    if (timer.current) clearTimeout(timer.current);
-    if (immediately) save.mutate(patch);
-    else timer.current = setTimeout(() => save.mutate(patch), 800);
-  };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
 
   const assets = useQuery({ queryKey: ['studio', 'assets'], queryFn: studioApi.assets, staleTime: 30_000 });
   const upload = useMutation({
@@ -148,12 +126,14 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
           <h3 className="text-sm font-semibold text-[#1f2933]">Instructions</h3>
           <p className="mt-0.5 text-xs text-[#586472]">Comply Agent follows these in every answer, and the checks verify them.</p>
         </div>
-        <span className="text-[11px] text-[#586472]" role="status">{saved === 'saving' ? 'Saving…' : saved === 'saved' ? <span className="inline-flex items-center gap-1 text-[#0a5a38]"><Check className="h-3 w-3" /> Saved</span> : ''}</span>
+        <SavedState saved={saved} />
       </div>
 
-      <Field label="Entity name" hint="Used exactly wherever the organisation is named. The checks warn when it is missing or a placeholder stands in for it.">
-        <input value={draft.entity_name ?? ''} onChange={(e) => change({ entity_name: e.target.value })} placeholder="e.g. Capital Financial Services Bank" className={inputClass} />
-      </Field>
+      <section className="rounded-xl border border-[#d5dbe1] bg-white p-3" aria-label="How the document is set up">
+        <p className="text-xs font-semibold text-[#26323d]">How the document is set up</p>
+        <p className="mb-3 mt-0.5 text-[11px] text-[#586472]">Comply Agent follows these and does not ask about them again. The entity name is used exactly wherever the organisation is named.</p>
+        <SetupFields session={session} draft={draft} change={change} onReferencesChanged={onChanged} />
+      </section>
 
       <section className="rounded-xl border border-[#d5dbe1] bg-[#f8fafb] p-3" aria-label="Logo and watermark">
         <p className="text-xs font-semibold text-[#26323d]">Logo</p>
@@ -220,10 +200,7 @@ export default function InstructionsPanel({ session, onChanged }: { session: Ses
         <textarea value={draft.focus_areas ?? ''} onChange={(e) => change({ focus_areas: e.target.value })} rows={3} placeholder="e.g. Remote working, third-party access, evidence the auditors will ask for" className={inputClass} />
       </Field>
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Choice label="Tone" value={draft.tone ?? ''} options={TONES} otherLabel="Another tone…" placeholder="e.g. Formal but warm" onPick={(v, now) => change({ tone: v }, now)} />
-        <Choice label="Audience" value={draft.audience ?? ''} options={AUDIENCES} otherLabel="Another audience…" placeholder="e.g. Branch staff" onPick={(v, now) => change({ audience: v }, now)} />
-      </div>
+      <Choice label="Tone" value={draft.tone ?? ''} options={TONES} otherLabel="Another tone…" placeholder="e.g. Formal but warm" onPick={(v, now) => change({ tone: v }, now)} />
 
       <Field label="Language and spelling">
         <select

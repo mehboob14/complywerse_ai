@@ -32,7 +32,37 @@ export interface Instructions {
   language?: string;
   audience?: string;
   citation_style?: string;
+  /** how the document was set up before it was written (`SetupOptions` lists the choices); Comply Agent does not ask about these again */
+  entity_type?: string;
+  country?: string;
+  other_countries?: string[];
+  regulators?: string[];
+  regulations?: string[];
+  regulatory_notes?: string;
+  domains?: string[];
+  departments?: string[];
+  length?: 'short' | 'standard' | 'comprehensive' | '';
+  classification?: string;
+  review_cycle?: string;
   [key: string]: unknown;
+}
+
+/** What a new document can be set up with: the organisation's own data first (its departments, the regulators it follows, its
+ * regulatory register, the platform's frameworks), then the usual choices. */
+export interface SetupOptions {
+  entity_types: string[];
+  countries: string[];
+  country_from_profile: string;
+  regulators: Record<string, string[]>;
+  regulators_followed: { label: string; country: string }[];
+  regulations: { label: string; detail: string }[];
+  frameworks: { id: number; label: string; attached: boolean }[];
+  domains: string[];
+  departments: string[];
+  audiences: string[];
+  lengths: { value: 'short' | 'standard' | 'comprehensive'; label: string; detail: string }[];
+  classifications: string[];
+  review_cycles: string[];
 }
 
 export interface Reference {
@@ -404,6 +434,8 @@ export const studioApi = {
   patchSession: (id: number, body: { title?: string; doc_type?: string; instructions?: Instructions; settings?: { auto_apply?: boolean } }) =>
     patch<Session>(`/sessions/${id}`, body),
   deleteSession: (id: number) => del<{ deleted: boolean }>(`/sessions/${id}`),
+  /** the choices a document can be set up with (saved as instructions) */
+  setupOptions: (id: number) => get<SetupOptions>(`/sessions/${id}/setup`),
   saveContent: (id: number, content: string, baseRevision?: number, summary?: string) =>
     put<{ revision: number; saved: boolean; words: number }>(`/sessions/${id}/content`, { content, base_revision: baseRevision, summary }),
 

@@ -771,10 +771,14 @@ def update_session(db, s, patch: Dict[str, Any]):
     if "doc_type" in patch and str(patch["doc_type"]).strip():
         s.doc_type = str(patch["doc_type"]).strip()[:50]
     if isinstance(patch.get("instructions"), dict):
+        from . import setup
+
         merged = dict(s.instructions or {})
         for k, v in patch["instructions"].items():
             if k == "requirements":
                 v = [str(x).strip() for x in (v or []) if str(x).strip()][:30]
+            elif k in setup.LIST_FIELDS:
+                v = setup.clean(k, v)
             elif isinstance(v, str):
                 v = v.strip()[:3000]
             merged[k] = v

@@ -158,13 +158,21 @@ Answer in Markdown, at most 15 items, under three bold lines: **Binding** (laws,
 Text like <ORG_1> stands for a name that is not shown to you: never search for it."""
 
 
-def research_task(*, label: str, title: str, request: str, ctx: Any) -> str:
-    """What the web search looks for: the document, the request, and the institution's sector and place (never its name)."""
+def research_task(*, label: str, title: str, request: str, ctx: Any, instructions: Optional[Dict[str, Any]] = None) -> str:
+    """What the web search looks for: the document, the request, what the person set the document up with, and the institution's
+    sector and place (never its name)."""
+    from . import setup
+
+    ins = instructions or {}
+    chosen = [f"- {label_}: {setup.text_of(key, ins.get(key))}" for key, label_ in setup.FIELDS
+              if key in ("entity_type", "country", "other_countries", "regulators", "regulations", "regulatory_notes", "domains") and setup.text_of(key, ins.get(key))]
     profile = [f"- {name}: {str(value).strip()}" for name, value in (("Sector", getattr(ctx, "industry", None)), ("Regulatory scope", getattr(ctx, "regulatory_scope", None)),
                                                                      ("Country or region", getattr(ctx, "geography", None))) if value and str(value).strip()]
     return (f"Document: a {label.lower()} titled \"{title}\".\n" + (f"What the person asked for: {request.strip()[:2000]}\n" if request.strip() else "")
+            + ("What the person set the document up with (it wins over the profile):\n" + "\n".join(chosen) + "\n" if chosen else "")
             + ("The institution, as its profile describes it:\n" + "\n".join(profile) + "\n" if profile
-               else "The institution's profile names no sector or country: research what applies internationally, and say so.\n")
+               else "The institution's profile names no sector or country.\n" if not chosen else "")
+            + ("Where nothing names a country, research what applies internationally, and say so.\n" if not profile and not ins.get("country") else "")
             + "Where the request names a country, a regulator or a law, it wins over the profile.")
 
 
@@ -187,14 +195,17 @@ def scope_task(*, label: str, title: str, sections: Sequence[Any]) -> str:
             "detail \"In the platform: attached as a reference when you choose it\"; then recognised ones, from <internet_research> when it is given.\n"
             "5. The one or two choices the whole document turns on that nothing settles (how the subject is classified or tiered, who owns it, how often it is "
             "reviewed, a key threshold); kind single, the choice a well-run regulated institution would make recommended.\n"
-            "Where the request, <instructions>, <organisation> or <references> already answer a question, still ask it, with that answer recommended, so the person "
-            "confirms it. Every question: id (q1, q2 ...), question (one sentence), why (one sentence: what the answer changes in the document), kind, options (2 to 8 "
+            "What the person set the document up with (the country, regulators, laws, subject areas, departments, audience, length and the rest in "
+            "<instructions>) and the frameworks attached in <references> are settled: do not ask about them again; where the setup leaves part of a topic "
+            "open, ask only about that part. Where only the request, <organisation> or another reference suggests an answer, still ask, with that answer "
+            "recommended, so the person confirms it. Always ask at least one question: the choices the document turns on. Every question: id (q1, q2 ...), question (one sentence), why (one sentence: what the answer changes in the document), kind, options (2 to 8 "
             "for single and multiple; label as a professional names it, detail one short sentence, recommended) and other true. At most six questions.\n"
             "Also `understood`: two or three sentences to the person on what you understood they want and how you will write it once they answer. "
             "Write none of the document.\n</task>")
 
 
-def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional[Any], doc_type: str, parent: bool, may_ask: bool = True) -> str:
+def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional[Any], doc_type: str, parent: bool, may_ask: bool = True,
+              area_words: Sequence[int] = (300, 650)) -> str:
     outline = "\n".join(f"- {s.full_heading}: {s.focus_line}" for s in sections)
     core_note = (f"The core of the document is section {core.full_heading}. Decide its areas: the subject areas that section must cover, in the order "
                  f"they should appear. Between {core.areas_min} and {core.areas_max} areas as the subject warrants: fewer for a narrow subject, never padded. "
@@ -210,7 +221,7 @@ def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional
             "<organisation>; instruction; reference; industry_default: your choice) and note (why, one short sentence). Set every value; leave none open.\n"
             "- core_intro: two or three sentences introducing the core section (how its areas are organised and how they relate); empty when there is no core section.\n"
             "- areas: for each area its title (short, with no number: numbers are added for you), focus (two or three sentences on what it must require), must_cover (four to eight specific topics, obligations or controls), "
-            "refs (reference ids whose content applies; empty if none) and words (target length, 300 to 650: enough for the real obligations, no padding).\n"
+            f"refs (reference ids whose content applies; empty if none) and words (target length, {area_words[0]} to {area_words[1]}: enough for the real obligations, no padding).\n"
             "- terms: 12 to 30 terms and acronyms the document will use and must define.\n"
             "- related_documents: the other documents of this institution's governance library that this one depends on or feeds (title and kind).\n"
             "- external_sources: the standards, frameworks, laws and regulators this document should be aligned to, by name, drawn from the organisation's scope, the "

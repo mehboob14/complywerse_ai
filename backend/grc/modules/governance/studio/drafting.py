@@ -19,7 +19,7 @@ import os
 import re
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
@@ -29,7 +29,7 @@ from ....services.licence_guard import LicenceRestrictedContent
 from ..ai_drafting import scaffolds
 from ..ai_drafting.tenant_context import build_tenant_context
 from . import blocks as B
-from . import checks, live, prompts
+from . import checks, live, prompts, setup
 from . import draft_prompts as P
 from . import references as refs
 from . import templates
@@ -346,14 +346,15 @@ def _committee_or_role(ctx: Any, tier: Any) -> str:
     return c["name"] if c and c.get("name") else tier.role_hint
 
 
-def render_front(section: Section, *, title: str, label: str, scaffold: Any, ctx: Any, plan: Dict[str, Any], sections: Sequence[Section], classification: str) -> str:
+def render_front(section: Section, *, title: str, label: str, scaffold: Any, ctx: Any, plan: Dict[str, Any], sections: Sequence[Section], classification: str,
+                 review_months: int = 12) -> str:
     if section.key == "document description":
         scope = next((s for s in sections if s.key.startswith("scope")), None)
         tiers = scaffold.approval_matrix
         rows = [["Field", "Value"], ["Document Title", title], ["Document Type", label],
                 ["Document Owner", tiers[0].role_hint if tiers else "[[Owner role]]"], ["Document Classification", classification or "Internal"],
                 ["Version", "1.0 (draft for approval)"], ["Effective Date", "[[Effective date]]"],
-                ["Next Review Date", "Within 12 months of the effective date, or earlier on a material change"],
+                ["Next Review Date", f"Within {review_months} months of the effective date, or earlier on a material change"],
                 ["Approval Authority", _committee_or_role(ctx, tiers[-1]) if tiers else "[[Approving body]]"],
                 ["Distribution", "All employees, contractors and third parties within the scope of this document"
                                  + (f" (Section {scope.number})" if scope else "")]]
@@ -387,8 +388,10 @@ def _fallback_areas(session, scaffold: Any, core: Optional[Section]) -> List[Dic
 
 def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sections: Sequence[Section], core: Optional[Section], parent: bool,
           total: Dict[str, int], on_progress: Optional[Callable[[claude_client.Progress], None]] = None, may_ask: bool = True,
-          should_stop: Optional[Callable[[], bool]] = None) -> Dict[str, Any]:
-    task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, parent=parent, may_ask=may_ask)
+          should_stop: Optional[Callable[[], bool]] = None, length: float = 1.0) -> Dict[str, Any]:
+    lo, hi = round(300 * length), round(650 * length)                 # the words of one area, as long as the person wants the document
+    task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, parent=parent, may_ask=may_ask,
+                       area_words=(lo, hi))
     result = _call(shared, task, system, P.PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS, on_progress=on_progress, should_stop=should_stop)
     _usage(total, result)
     plan = dict(result.data or {})
@@ -397,8 +400,26 @@ def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sec
         areas = areas[:core.areas_max]
     # the number is added when the heading is written: a title the model numbered itself would read "7.1 7.1 ..."
     plan["areas"] = [dict(a, index=i, title=re.sub(r"^\s*\d+(?:\.\d+)*[.):]?\s+", "", str(a["title"])).strip() or str(a["title"]).strip(),
-                          words=min(max(int(a.get("words") or 450), 300), 650)) for i, a in enumerate(areas, start=1)]
+                          words=min(max(int(a.get("words") or round(450 * length)), lo), hi)) for i, a in enumerate(areas, start=1)]
     return plan
+
+
+def _scaled(sections: Sequence[Section], length: float) -> List[Section]:
+    """The sections for a document as long as the person asked for (``setup.LENGTH_FACTOR``): fewer words and fewer areas."""
+    if length >= 1.0:
+        return list(sections)
+    out = []
+    for s in sections:
+        areas_max = max(2, round(s.areas_max * length))
+        out.append(replace(s, target_words=max(60, round(s.target_words * length)), min_words=max(40, round(s.min_words * length)),
+                                       min_clauses=max(2, round(s.min_clauses * length)) if s.min_clauses else s.min_clauses,
+                                       areas_min=min(max(2, round(s.areas_min * length)), areas_max), areas_max=areas_max))
+    return out
+
+
+def _sector(ins: Dict[str, Any], ctx: Any) -> Optional[str]:
+    """The sector the craft is written for: the type of organisation the person set up, else the profile's."""
+    return str(ins.get("entity_type") or "").strip() or getattr(ctx, "industry", None)
 
 
 def _write_part(shared: List[Dict[str, Any]], system: str, make_task: Callable[[str], str], *, section: Section, area_heading: str, minimum_words: int,
@@ -560,7 +581,7 @@ def run_scoping(db, session_id: int, message_id: int) -> None:
         research, sources = "", []
         try:
             found = claude_client.complete(use_case=RESEARCH_USE_CASE, system=P.RESEARCH_SYSTEM, tools=[WEB_SEARCH], max_tokens=RESEARCH_MAX_TOKENS, effort="medium",
-                                           messages=[{"role": "user", "content": P.research_task(label=label, title=session.title,
+                                           messages=[{"role": "user", "content": P.research_task(label=label, title=session.title, instructions=ins,
                                                                                                   request=brief.split(service.ATTACHED)[0], ctx=ctx)}],
                                            on_progress=_research_progress(db, msg), should_stop=stopped)
             _usage(total, found)
@@ -579,7 +600,7 @@ def run_scoping(db, session_id: int, message_id: int) -> None:
         org = P.organisation_block(ctx, str(ins.get("entity_name") or "").strip(), _active_frameworks(db, session.tenant_id))
         shared = _blocks(_shared_text(session, ins, org, custom, brief), refs.render(references) and f"<references>\n{refs.render(references)}\n</references>",
                          _research_block(research), _platform_block(db))
-        result = _call(shared, P.scope_task(label=label, title=session.title, sections=sections), P.system_for(session.doc_type, ctx.industry, ctx.regulatory_scope),
+        result = _call(shared, P.scope_task(label=label, title=session.title, sections=sections), P.system_for(session.doc_type, _sector(ins, ctx), ctx.regulatory_scope),
                        P.SCOPE_SCHEMA, max_tokens=SCOPE_MAX_TOKENS, effort="medium", should_stop=stopped,
                        on_progress=counting(db, msg, "Preparing the questions", "questions", "questions"))
         _usage(total, result)
@@ -672,10 +693,12 @@ def run_draft(db, session_id: int, message_id: int) -> None:
         label = scaffold.label
         doc_type = session.doc_type                 # plain values from here on: the parts are written on other threads, which must never read the session
         ins = dict(session.instructions or {})
+        length = setup.length_factor(ins)           # as long as the person set it up to be
+        sections = _scaled(sections, length)
         ctx = build_tenant_context(session.tenant_id, db)
         entity = str(ins.get("entity_name") or "").strip()
         org = P.organisation_block(ctx, entity, _active_frameworks(db, session.tenant_id))
-        system = P.system_for(doc_type, ctx.industry, ctx.regulatory_scope)
+        system = P.system_for(doc_type, _sector(ins, ctx), ctx.regulatory_scope)
         core = next((s for s in sections if s.kind == "core"), None)
         parent = any(r.kind == "parent_document" and r.include for r in references)
         total = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "calls": 0}
@@ -689,7 +712,7 @@ def run_draft(db, session_id: int, message_id: int) -> None:
         _stage(db, msg, "Planning the document")
         try:
             plan = _plan(shared, system, label=label, session=session, sections=sections, core=core, parent=parent, total=total,
-                         on_progress=_plan_progress(db, msg), may_ask=may_ask, should_stop=stopped)
+                         on_progress=_plan_progress(db, msg), may_ask=may_ask, should_stop=stopped, length=length)
         except claude_client.ClaudeStopped:
             raise
         except Exception as exc:        # noqa: BLE001
@@ -754,7 +777,8 @@ def run_draft(db, session_id: int, message_id: int) -> None:
 
         # the document as far as it is written, for the person to read meanwhile (the parts that are done, the text of the ones being written)
         title, classification = session.title, str(ins.get("classification") or "Internal")
-        front = {s.number: render_front(s, title=title, label=label, scaffold=scaffold, ctx=ctx, plan=plan, sections=sections, classification=classification)
+        front = {s.number: render_front(s, title=title, label=label, scaffold=scaffold, ctx=ctx, plan=plan, sections=sections, classification=classification,
+                                        review_months=setup.review_months(ins))
                  for s in sections if s.kind == "front"}
         shown: Dict[str, Any] = {"text": None, "at": 0.0, "seq": 0}
 

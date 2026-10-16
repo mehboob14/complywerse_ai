@@ -142,9 +142,15 @@ class TurnInput:
 
 
 def instructions_text(ins: Dict[str, Any]) -> str:
+    from . import setup
+
     lines: List[str] = []
     if ins.get("entity_name"):
         lines.append(f"Entity name: {ins['entity_name']} (use exactly this wherever the organisation is named)")
+    for key, label in setup.FIELDS:                       # what the person set up the document with: settled, never to be asked again
+        text = setup.text_of(key, ins.get(key))
+        if text:
+            lines.append(f"{label}: {text}")
     for key, label in (("focus_areas", "Focus areas"), ("tone", "Tone"), ("language", "Language"), ("audience", "Audience"),
                        ("citation_style", "How to cite references in the text")):
         if str(ins.get(key) or "").strip():
