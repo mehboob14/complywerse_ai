@@ -387,8 +387,8 @@ class Pair:
     format_only: bool = False                   # same words, different formatting or kind
 
 
-def _same_format(a: Block, b: Block) -> bool:
-    if a.kind != b.kind or a.level != b.level or a.ordered != b.ordered:
+def _same_format(a: Block, b: Block, numbers: bool = True) -> bool:
+    if a.kind != b.kind or a.level != b.level or a.ordered != b.ordered or (numbers and a.number != b.number):
         return False
     if a.kind == "table":
         return [[c.text for c in r] for r in a.rows] == [[c.text for c in r] for r in b.rows]
@@ -496,9 +496,37 @@ def redline(base: Sequence[Block], cur: Sequence[Block], pairs: Optional[List[Pa
             row["segments"] = [("delete", a.text)]
         else:
             row["segments"] = word_diff(a.text, b.text)
-            if a.kind != b.kind or a.level != b.level:
-                row["was"] = {"kind": a.kind, "level": a.level}
+            if a.kind != b.kind or a.level != b.level or a.ordered != b.ordered:
+                row["was"] = {"kind": a.kind, "level": a.level, "ordered": a.ordered}
+            shape = structure(a, b)
+            if shape:
+                row["structure"] = shape
         out.append(row)
+    return out
+
+
+def _shape(b: Block) -> str:
+    if b.kind == "heading":
+        return f"Heading {b.level}"
+    if b.kind == "list_item":
+        return "Numbered list" if b.ordered else "Bullet list"
+    return {"paragraph": "Paragraph", "table": "Table", "quote": "Quote", "code": "Code", "hr": "Line", "raw": "HTML block"}.get(b.kind, b.kind)
+
+
+def structure(a: Block, b: Block) -> List[str]:
+    """How a block's place in the outline changed, in words ("Heading 2 → Heading 3", "Paragraph → Heading 2", "Bullet list →
+    numbered list", "List level 1 → 2", "Renumbered 3 → 4"). Empty when only its words or their formatting changed."""
+    if a.kind != b.kind or (a.kind == "heading" and a.level != b.level):
+        return [f"{_shape(a)} → {_shape(b)}"]
+    if a.kind != "list_item":
+        return []
+    out = []
+    if a.ordered != b.ordered:
+        out.append(f"{_shape(a)} → {_shape(b).lower()}")
+    if a.level != b.level:
+        out.append(f"List level {a.level + 1} → {b.level + 1}")
+    if a.ordered and b.ordered and None not in (a.number, b.number) and a.number != b.number:
+        out.append(f"Renumbered {a.number} → {b.number}")
     return out
 
 
@@ -610,4 +638,6 @@ def apply_ops(base: Sequence[Block], ops: Sequence[Op]) -> Tuple[List[Block], Di
 def locate(base: Sequence[Block], current: Sequence[Block]) -> Dict[int, int]:
     """For each block of ``base`` that is still in ``current`` unchanged, its index there. Used to place an edit made against
     an older version onto the version the person has now."""
-    return {p.base: p.cur for p in align(base, current) if p.status == "equal"}
+    # a list item that was only renumbered (an item added above it) is still the same block for placing an edit
+    return {p.base: p.cur for p in align(base, current)
+            if p.status == "equal" or (p.format_only and _same_format(base[p.base], current[p.cur], numbers=False))}

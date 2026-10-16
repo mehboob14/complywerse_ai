@@ -37,7 +37,7 @@ _FILE_TEXT_CACHE: Dict[Tuple[int, Optional[int], str], Optional[str]] = {}
 
 STAGE_LABEL = {"draft": "Draft", "pending_review": "In review", "pending_approval": "In approval", "approved": "Approved",
                "published": "Published", "expired": "Expired", "archived": "Archived", "exception_applied": "Exception applied"}
-ORIGIN_LABEL = {"ai": "Comply Agent", "manual": "Edited by hand", "mixed": "Comply Agent and edited by hand", "revert": "Reverted",
+ORIGIN_LABEL = {"ai": "Comply Agent", "manual": "Edited by hand", "mixed": "Comply Agent and edited by hand", "revert": "Taken back",
                 "restore": "Earlier version restored", "signoff": "Sign-off stamp", "initial": "The original", "file": "File replaced",
                 "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
 # audit entries that matter to the chain (the rest - views, downloads, field edits - do not)
@@ -140,6 +140,8 @@ def _hunk(base: Sequence[B.Block], cur: Sequence[B.Block], run: _Run, paths_base
     return {"id": run.id, "status": status, "section": section, "locked": bool(LOCKED.search(section)),
             "blocks": len(run.pairs), "words_added": added, "words_removed": removed,
             "format_only": all(p.format_only for p in run.pairs),
+            # how the outline changed ("Heading 2 → Heading 3", "List level 1 → 2"): what a change shows when its words did not change
+            "structure": [x for p in run.pairs if p.base is not None and p.cur is not None for x in B.structure(base[p.base], cur[p.cur])],
             "before_text": "\n".join(_plain(b) for b in bs), "after_text": "\n".join(_plain(b) for b in cs),
             "before_digests": [b.digest for b in bs], "after_digests": [b.digest for b in cs]}
 
@@ -297,7 +299,7 @@ def public_item(hunk: Dict[str, Any], origin: Optional[Dict[str, Any]], *, defau
     o = origin or {}
     return {"status": hunk["status"], "section": hunk["section"], "locked": hunk["locked"], "blocks": hunk["blocks"],
             "words_added": hunk["words_added"], "words_removed": hunk["words_removed"], "format_only": hunk["format_only"],
-            "before_text": before, "after_text": after, "truncated": cut_a or cut_b,
+            "structure": hunk.get("structure") or [], "before_text": before, "after_text": after, "truncated": cut_a or cut_b,
             "before_digests": hunk["before_digests"], "after_digests": hunk["after_digests"],
             "origin": o.get("origin") or default_kind, "by": o.get("by") or by, "by_id": o.get("by_id") if o.get("by_id") is not None else by_id,
             "at": o.get("at") or at, "request": o.get("request") or "", "reason": o.get("reason") or "", "sources": o.get("sources") or [],
@@ -330,6 +332,15 @@ def _default_kind(version) -> str:
     if kind == "baseline":
         return "initial"
     return "manual"
+
+
+_RESTORED = re.compile(r"rollback (?:from version \S+ )?to version (\d+(?:\.\d+)*)", re.I)
+
+
+def _restored_from(version) -> Optional[str]:
+    """The version a restore went back to ("Rollback to version 1.0" in its summary). None for any other version."""
+    m = _RESTORED.search(version.change_summary or "") or _RESTORED.search(version.change_reason or "")
+    return m.group(1) if m else None
 
 
 def _origin_of(items: Sequence[Dict[str, Any]], fallback: str) -> str:
@@ -396,6 +407,7 @@ def chain(db, doc) -> Dict[str, Any]:
             "words_added": sum(i["words_added"] for i in items), "words_removed": sum(i["words_removed"] for i in items),
             "changes": len(items), "approved_by": names.get(v.approved_by), "approved_at": _iso(v.approved_at),
             "session_id": (stored or {}).get("session_id"),
+            "reverts": (stored or {}).get("reverts"), "restored_from": _restored_from(v),
         })
         previous = v
     for item in out_versions:
@@ -406,7 +418,7 @@ def chain(db, doc) -> Dict[str, Any]:
             continue
         events.append({"at": _iso(a.performed_at), "kind": a.action, "actor": names.get(a.performed_by), "actor_id": a.performed_by,
                        "detail": a.action_details or "", "from": a.old_value if a.field_changed == "status" else None,
-                       "to": a.new_value if a.field_changed == "status" else None, "stage": _stage_at(history, a.performed_at)})
+                       "to": _status_after(a), "stage": _stage_at(history, a.performed_at)})
     all_sources: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     for v in out_versions:
         for it in v["items"]:

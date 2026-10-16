@@ -7,7 +7,7 @@
  */
 import { useMemo, useState } from 'react';
 import { Loader2, Undo2 } from 'lucide-react';
-import type { ChainHunk } from '@/lib/documentChain';
+import { shapeOf, type ChainHunk } from '@/lib/documentChain';
 import type { RedlineRow, Segment, Stats } from '@/lib/studio/api';
 import { plural } from '@/lib/studio/text';
 import Attribution, { originLook } from './ChangeAttribution';
@@ -79,9 +79,10 @@ function Row({ row, number }: { row: RedlineRow; number: number }) {
   }
   return (
     <div className={`rounded-r px-3 py-1.5 text-[0.9375rem] leading-relaxed text-[#1f2933] ${BAR[row.status]}`}>
-      {(row.format_only || row.was) && (
+      {(row.format_only || row.was || row.structure?.length) && (
         <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#8a6100]">
-          {row.was ? `Was ${row.was.kind.replace('_', ' ')}${row.was.kind === 'heading' ? ` ${row.was.level}` : ''}` : 'Formatting changed'}
+          {row.structure?.length ? row.structure.join(' · ')
+            : row.was ? `Was ${row.was.kind.replace('_', ' ')}${row.was.kind === 'heading' ? ` ${row.was.level}` : ''}` : 'Formatting changed'}
         </div>
       )}
       {body}
@@ -117,13 +118,18 @@ function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChan
   const why = hunk.locked ? 'A sign-off record is stamped by the sign-off and cannot be taken back.' : blocked ? changes.whyNot || undefined : undefined;
   const look = originLook(hunk.by?.origin ?? 'unknown');
   const Icon = look.icon;
+  const shape = shapeOf(hunk);
   return (
     <div className="mt-4 overflow-hidden rounded-t-xl border border-b-0 border-[#dbe3ea] bg-[#f8fafc]" data-change={hunk.id}>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-3 py-2 text-[11px]">
         <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full ring-1 ring-inset ${look.node}`} aria-hidden><Icon className="h-3 w-3" /></span>
         <span className="min-w-0 truncate text-xs font-semibold text-[#1f2933]" title={hunk.section}>{hunk.section || 'Top of the document'}</span>
-        <span className="font-mono font-semibold text-[#0a7a43]">+{hunk.words_added}</span>
-        <span className="font-mono font-semibold text-[#b42318]">−{hunk.words_removed}</span>
+        {shape ? <span className="rounded-full bg-[#fff8e6] px-2 py-0.5 text-[10px] font-semibold text-[#8a6100] ring-1 ring-inset ring-[#f0d9a0]">{shape}</span> : (
+          <>
+            <span className="font-mono font-semibold text-[#0a7a43]">+{hunk.words_added}</span>
+            <span className="font-mono font-semibold text-[#b42318]">−{hunk.words_removed}</span>
+          </>
+        )}
         {hunk.locked && <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[10px] font-semibold text-[#067647] ring-1 ring-inset ring-[#abefc6]">Sign-off record</span>}
         <button type="button" disabled={blocked || busy} title={why} onClick={() => changes.onRevert(hunk)}
           className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c5ccd3] bg-white px-2.5 py-1 font-semibold text-[#3f4b58] hover:border-[#d97706] hover:bg-[#fffbeb] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50">

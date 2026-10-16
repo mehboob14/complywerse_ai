@@ -14,7 +14,7 @@ import {
   ListTree, Loader2, Send, ShieldCheck, Sparkles, Table2, Users, XCircle, type LucideIcon,
   RotateCcw,
 } from 'lucide-react';
-import { documentChainApi, ORIGIN_LABEL, type ChainEvent, type ChainItem, type ChainVersion, type ExportFormat } from '@/lib/documentChain';
+import { documentChainApi, ORIGIN_LABEL, shapeOf, type ChainEvent, type ChainItem, type ChainVersion, type ExportFormat } from '@/lib/documentChain';
 import { problemOf, saveBlob, type Segment } from '@/lib/studio/api';
 import { ago, plural, wordDiff } from '@/lib/studio/text';
 import { dateTime } from '@/lib/documentLifecycle';
@@ -48,7 +48,8 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   version_rollback: { label: 'Earlier version restored', icon: History, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
 };
 
-const originLabel = (v: ChainVersion, isFirst: boolean) => (isFirst && v.origin === 'initial' ? 'The original' : ORIGIN_LABEL[v.origin] ?? v.origin_label);
+const originLabel = (v: ChainVersion, isFirst: boolean) => (isFirst && v.origin === 'initial' ? 'The original'
+  : v.restored_from ? `Restored v${v.restored_from}` : ORIGIN_LABEL[v.origin] ?? v.origin_label);
 
 function Words({ added, removed }: { added: number; removed: number }) {
   return (
@@ -101,13 +102,15 @@ function Diff({ item }: { item: ChainItem }) {
 
 function ItemCard({ item, version }: { item: ChainItem; version: string }) {
   const kind = KIND[item.status] ?? KIND.modified;
+  const shape = shapeOf(item);                                      // no word changed: say how the outline or formatting changed
+  const tag = item.structure?.length ? item.structure.join(' · ') : shape;
   return (
     <li className="rounded-xl border border-slate-200 bg-white shadow-card">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#eef2f6] px-3 py-2">
         <span className="rounded-md bg-[#f1f5f9] px-1.5 py-0.5 font-mono text-[10px] font-semibold text-[#334155]" title="Reference in the export">{version}.{item.n}</span>
         <SectionPath section={item.section} />
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${kind.tone}`}>{kind.label}{item.format_only ? ' · formatting' : ''}</span>
-        <span className="ml-auto"><Words added={item.words_added} removed={item.words_removed} /></span>
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${kind.tone}`}>{kind.label}{tag ? ` · ${tag}` : ''}</span>
+        {!shape && <span className="ml-auto"><Words added={item.words_added} removed={item.words_removed} /></span>}
       </div>
       <div className="px-3 py-2.5">
         <Diff item={item} />

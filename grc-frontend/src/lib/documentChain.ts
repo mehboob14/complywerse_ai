@@ -45,6 +45,8 @@ export interface ChainItem {
   words_added: number;
   words_removed: number;
   format_only: boolean;
+  /** how the outline changed ("Heading 2 → Heading 3", "List level 1 → 2", "Renumbered 3 → 4"); absent on older versions */
+  structure?: string[];
   before_text: string;
   after_text: string;
   truncated: boolean;
@@ -86,6 +88,10 @@ export interface ChainVersion {
   approved_by: string | null;
   approved_at: string | null;
   session_id: number | null;
+  /** a take back: what it took back */
+  reverts?: { since_version: string; changes: number } | null;
+  /** a restore: the version it went back to */
+  restored_from?: string | null;
 }
 
 export interface ChainEvent {
@@ -120,6 +126,7 @@ export interface ChainHunk {
   words_added: number;
   words_removed: number;
   format_only: boolean;
+  structure?: string[];
   before_text: string;
   after_text: string;
   by: ChangeBy | null;
@@ -160,6 +167,10 @@ export function byLine(origin: string, by: string, coverage = 1): string {
     default: return who ? `Changed by ${who}` : 'Changed';
   }
 }
+
+/** What a change did when no word changed: how the outline changed ("Heading 2 → Heading 3"), else "Formatting only". Null when words changed. */
+export const shapeOf = (c: { structure?: string[]; format_only: boolean; words_added: number; words_removed: number }): string | null =>
+  c.words_added || c.words_removed ? null : c.structure?.length ? c.structure.join(' · ') : c.format_only ? 'Formatting only' : null;
 
 const filenameOf = (disposition: string | undefined, fallback: string): string => {
   const m = /filename="?([^";]+)"?/i.exec(disposition || '');

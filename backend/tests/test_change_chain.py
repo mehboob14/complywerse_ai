@@ -98,6 +98,27 @@ def test_a_change_is_taken_back_alone_and_a_removed_part_goes_back_where_it_stoo
         C.revert(POLICY, new, [])
 
 
+def test_a_change_to_the_outline_says_how_it_changed_when_no_word_did():
+    from grc.modules.governance.studio import blocks as B
+
+    base = "# T\n\n## Scope\n\nText.\n\n## Rules\n\n- one\n- two\n\nSome words.\n\n1. first\n2. second\n3. third\n"
+    cur = "# T\n\n### Scope\n\nText.\n\n## Rules\n\n- one\n  - two\n\nSome words.\n\n1. first\n2. second\n4. third\n"
+    out = C.compare(base, cur)
+    assert [h["structure"] for h in out["hunks"]] == [["Heading 2 → Heading 3"], ["List level 1 → 2"], ["Renumbered 3 → 4"]]
+    assert all(h["format_only"] and h["words_added"] == h["words_removed"] == 0 for h in out["hunks"])
+    assert [r["structure"] for r in out["rows"] if r["status"] != "equal"] == [h["structure"] for h in out["hunks"]]
+    renumbered = out["hunks"][2]
+    assert renumbered["before_digests"] == renumbered["after_digests"]                  # the digests attribution rests on are unchanged
+    assert "3. third" in C.revert(base, cur, [renumbered["id"]])
+    assert B.locate(B.parse(base), B.parse(cur))[9] == 9                                 # an edit can still be placed on a renumbered item
+    kinds = C.compare("Plain para.\n\n- a\n- b\n", "## Plain para.\n\n1. a\n2. b\n")
+    assert [h["structure"] for h in kinds["hunks"]] == [["Paragraph → Heading 2"], ["Bullet list → numbered list"], ["Bullet list → numbered list"]]
+    assert kinds["rows"][1]["was"] == {"kind": "list_item", "level": 0, "ordered": False}
+    assert C.compare("Text.\n", "Text, more.\n")["hunks"][0]["structure"] == []
+    stored = C.build_change_set(base, cur, [], default_kind="manual", by="Sara", by_id=1, at=None)
+    assert stored["items"][0]["structure"] == ["Heading 2 → Heading 3"]
+
+
 def test_the_fingerprint_of_a_document_ignores_white_space_and_notices_words():
     assert C.content_hash("# A\n\ntext\n") == C.content_hash("# A\r\n\r\n\r\ntext\r\n\r\n")
     assert C.content_hash("# A\n\ntext\n") != C.content_hash("# A\n\ntext!\n")
@@ -187,6 +208,7 @@ def test_the_chain_lists_every_version_with_who_changed_what_the_stage_and_the_a
     assert stamped["stage"] == "pending_approval"
     kinds = [e["kind"] for e in c["events"]]
     assert kinds == ["sent_for_review", "signed", "signed"] and c["events"][0]["actor"] == "Olivia Owner" and c["events"][2]["to"] == "approved"
+    assert c["events"][1]["to"] == "pending_approval"                  # a signature that moved the document on says where to
     assert c["summary"]["versions"] == 4 and c["summary"]["people"] == 3 and c["summary"]["changes"] == 3
     assert c["document"]["title"] == "Information Security Policy"
 
@@ -285,7 +307,8 @@ def test_one_change_is_taken_back_as_a_new_version_and_a_published_document_goes
     assert row.change_type == "revert" and row.change_reason == "Scope was not agreed" and row.created_by == library.me["id"]
     assert row.change_set["items"][0]["origin"] == "revert" and row.change_set["reverts"]["since_version"] == "1.0"
     chain = library.chain()
-    assert chain["versions"][-1]["origin_label"] == "Reverted" and chain["events"][-1]["kind"] == "status_changed"
+    assert chain["versions"][-1]["origin_label"] == "Taken back" and chain["events"][-1]["kind"] == "status_changed"
+    assert chain["versions"][-1]["reverts"] == {"since_version": "1.0", "changes": 1} and chain["versions"][-1]["restored_from"] is None
     assert db.query(m.DocumentAuditLog).filter_by(document_id=10, action="status_changed", new_value="pending_review").count() == 1
     # the same request again: the document was edited meanwhile, so it is refused
     stale = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [scope["id"]], "hash": red["hash"]})
@@ -369,7 +392,7 @@ def test_an_uploaded_word_original_keeps_its_history_and_a_change_is_taken_back_
 
     again = world.chain(20)
     assert [v["number"] for v in again["versions"]] == ["1.0", "1.1", "1.2"]
-    assert again["versions"][-1]["origin_label"] == "Reverted" and again["versions"][-1]["has_file"] is True
+    assert again["versions"][-1]["origin_label"] == "Taken back" and again["versions"][-1]["has_file"] is True
     nothing = world.lib.get(f"/governance/documents/20/change-chain/redline?from={uploaded['id']}").json()
     assert nothing["hunks"] == []                                              # back to the original's wording
     stale = world.lib.post("/governance/documents/20/change-chain/revert", json={"from_version_id": uploaded["id"], "hunks": [0], "hash": red["hash"]})
@@ -402,6 +425,7 @@ def test_restoring_the_original_file_of_an_uploaded_document_makes_it_the_docume
     assert doc.current_version == "1.2" and not (doc.content or "").strip() and os.path.exists(edited_file)                       # the edited file stays as 1.1
     assert db.query(m.DocumentAuditLog).filter_by(document_id=20, action="version_rollback").count() == 1
     chain = world.chain(20)
+    assert chain["versions"][-1]["restored_from"] == "1.0" and chain["versions"][-1]["reverts"] is None
     assert chain["versions"][-1]["origin"] == "restore" and world.lib.get(
         f"/governance/documents/20/change-chain/redline?from={first['id']}").json()["hunks"] == []                           # the text is the original's again
 

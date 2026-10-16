@@ -1,8 +1,8 @@
 'use client';
 
-// The document with its changes marked: what changed since an earlier version (the one before this one by default, or the
-// original), who made each change and on whose request, and a way to take a change back (a new version; an approved document
-// goes back to review). Works on a document that is its file (an uploaded Word or PDF) as on a text document.
+// The document with its changes marked: what changed since an earlier version (by default the one before the newest edit, sign-off
+// stamps passed over; or the original), the versions in between with how each was made, who made each change and on whose request,
+// and a way to take a change back (a new version; an approved document goes back to review). Works on a document that is its file (an uploaded Word or PDF) as on a text document.
 // Backend: governance/change_chain.py. Shown in the Document Viewer when the organisation has the document life cycle.
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,10 +12,24 @@ import { problemOf } from '@/lib/studio/api';
 import { plural } from '@/lib/studio/text';
 import { useToast } from '@/components/ui/ToastProvider';
 import RedlineView from '../studio/_components/RedlineView';
-import { dateTime } from '@/lib/documentLifecycle';
+import { originLook } from '../studio/_components/ChangeAttribution';
+import { dateTime, day } from '@/lib/documentLifecycle';
 import { InitialsAvatar } from '../_workspace/lib';
+import { defaultBaseline, versionOrigin, versionPill, versionsBetween } from '../_view/trackedChanges';
 
 const MUTED = 'text-[#586472]';
+
+/** Nothing to compare yet: say so, and when changes start to show. */
+function FirstVersion({ number, fileName, at }: { number: string; fileName?: string; at?: string | null }) {
+  const how = at || fileName ? ` (${fileName ? `uploaded ${fileName}` : 'created'}${at ? ` on ${day(at)}` : ''})` : '';
+  return (
+    <div className="rounded-xl border border-dashed border-[#b8c4c8] bg-white p-6 text-center">
+      <GitCompare className="mx-auto h-5 w-5 text-[#0f766e]" aria-hidden />
+      <p className="mt-2 text-sm font-semibold text-[#1f2933]">Version {number} is the first version{how}.</p>
+      <p className="mt-1 text-xs text-[#586472]">Changes made by hand, by Comply Agent, taken back or restored are marked here from the next version on.</p>
+    </div>
+  );
+}
 
 export default function TrackedChanges({ documentId, status, initial, onChanged, canTakeBack = true }: {
   documentId: number;
@@ -36,8 +50,8 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
 
   const chain = useQuery({ queryKey: ['document-chain', documentId], queryFn: () => documentChainApi.chain(documentId), staleTime: 15_000 });
   const versions = useMemo(() => chain.data?.versions ?? [], [chain.data]);
-  // the version before the current one is what a reviewer wants to see against, unless they asked for another
-  const fallback = versions.length >= 2 ? versions[versions.length - 2].id : versions[0]?.id ?? null;
+  // the version before the newest real edit (sign-off stamps passed over) is what a reviewer wants to see against, unless they asked for another
+  const fallback = useMemo(() => defaultBaseline(versions), [versions]);
   const baseline = from ?? fallback;
   useEffect(() => { if (initial?.from) { setFrom(initial.from); setTo(initial.to ?? null); } }, [initial?.from, initial?.to]);
 
@@ -67,13 +81,16 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
   });
 
   if (chain.isLoading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>;
-  if (versions.length === 0) {
-    return <p className={`rounded-xl border border-dashed border-[#cbd5e1] bg-white p-8 text-center text-sm ${MUTED}`}>This document has no earlier version to compare with yet. Once it is edited, its changes are shown here.</p>;
-  }
   const data = redline.data;
+  if (versions.length === 0) return <FirstVersion number={chain.data?.document?.version || '1.0'} />;
+  // one version: nothing to compare with, unless the document changed since without a version (then those changes show)
+  if (versions.length === 1 && !data?.hunks.length) return <FirstVersion number={versions[0].number} fileName={versions[0].file_name} at={versions[0].at} />;
   const resets = status === 'approved' || status === 'published' || status === 'exception_applied';
   const stats = data?.stats;
   const newestFirst = [...versions].reverse();
+  const baseNumber = versions.find((v) => v.id === baseline)?.number;
+  const range = versionsBetween(versions, baseline, to);           // the versions this comparison covers: a take back or a restore shows even when it left no difference
+  const onlyStamp = !!data?.hunks.length && data.hunks.every((h) => h.locked);
 
   return (
     <div className="space-y-3">
@@ -86,7 +103,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
               className="min-w-0 max-w-[24rem] rounded-lg border border-[#cbd5e1] bg-white px-2.5 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-primary-500/30">
               {newestFirst.map((v, i) => (
                 <option key={v.id} value={v.id} disabled={i === 0 && to == null}>
-                  v{v.number} · {v.by} · {dateTime(v.at)} · {v.stage_label}{i === 0 ? ' (the current one)' : i === newestFirst.length - 1 ? ' (the original)' : ''}
+                  v{v.number} · {versionOrigin(v)}{v.origin === 'initial' ? '' : ` · ${plural(v.changes, 'change')}`} · {dateTime(v.at)}{i === 0 ? ' (current)' : ''}
                 </option>
               ))}
             </select>
@@ -117,6 +134,21 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
           <span>Each change says who made it, on whose request and from which sources.</span>
           {data && !data.can_revert && data.why_not && <span className="text-amber-800">{data.why_not}</span>}
         </p>
+        {range.length > 0 && (
+          <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-[#d5dbe1] pt-2" aria-label="Versions in this comparison">
+            <span className="text-[11px] text-[#586472]">Since v{baseNumber}:</span>
+            {range.map((v) => {
+              const look = originLook(v.origin);
+              const Icon = look.icon;
+              return (
+                <span key={v.id} title={`${v.by} · ${dateTime(v.at)}${v.summary ? ` · ${v.summary}` : ''}`}
+                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${look.pill}`}>
+                  <Icon className="h-3 w-3" aria-hidden /> v{v.number} · {versionPill(v)}
+                </span>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {asking && (
@@ -146,8 +178,9 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-card sm:p-4">
         {redline.isLoading && <p className={`text-sm ${MUTED}`}><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Comparing…</p>}
         {redline.isError && <p className="text-sm text-rose-700" role="alert">{problemOf(redline.error, 'These versions could not be compared.')}</p>}
+        {onlyStamp && <p className="mb-2 text-xs font-semibold text-[#26323d]">Only the sign-off record changed.</p>}
         {data && (
-          <RedlineView rows={data.rows} empty="Nothing changed since that version."
+          <RedlineView rows={data.rows} empty={range.length ? `The text is the same as in v${data.from.number}.` : 'Nothing changed since that version.'}
             changes={{ hunks: data.hunks, canRevert: data.can_revert && canTakeBack, whyNot: canTakeBack ? data.why_not : null, busyId: takeBack.isPending ? asking?.id ?? null : null, onRevert: (h) => setAsking(h) }} />
         )}
       </div>

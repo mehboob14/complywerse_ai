@@ -293,7 +293,9 @@ export interface RedlineRow {
   format_only: boolean;
   segments?: Segment[];
   table?: { status: string; cells: Segment[][] }[];
-  was?: { kind: string; level: number };
+  was?: { kind: string; level: number; ordered?: boolean };
+  /** how the block's place in the outline changed ("Heading 2 → Heading 3", "Renumbered 3 → 4") */
+  structure?: string[];
   /** the change this block belongs to (see `Redline.hunks`); null when unchanged */
   hunk?: number | null;
 }
