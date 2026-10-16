@@ -46,6 +46,7 @@ const KIND_LABEL: Record<Op['kind'], string> = {
   insert: 'Add',
   delete: 'Remove',
   replace_all: 'Write the whole document',
+  tidy: 'Tidy the spacing',
 };
 
 const BASIS: Record<ReferenceUsed['basis'], string> = {
@@ -74,7 +75,7 @@ function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
   const [working, setWorking] = useState<'accept' | 'reject' | 'revert' | null>(null);
   const before = op.before.map((b) => b.text).join('\n\n');
   const after = op.after.map((a) => a.text).join('\n\n');
-  const where = op.kind === 'replace_all' ? '' : op.kind === 'insert' ? (op.start === 'START' ? 'at the top' : `after block ${op.start.replace(/^B/i, '')}`)
+  const where = op.kind === 'replace_all' ? '' : op.kind === 'tidy' ? 'in the Word file' : op.kind === 'insert' ? (op.start === 'START' ? 'at the top' : `after block ${op.start.replace(/^B/i, '')}`)
     : op.end && op.end !== op.start ? `blocks ${op.start.replace(/^B/i, '')}–${op.end.replace(/^B/i, '')}` : `block ${op.start.replace(/^B/i, '')}`;
   const pending = op.status === 'pending' || op.status === 'conflict';
   const run = async (kind: 'accept' | 'reject' | 'revert', fn: () => Promise<void>) => {
@@ -106,7 +107,7 @@ function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
         <div className="mt-2 rounded bg-[#f8fafb] p-2"><DiffText before={before} after={after} /></div>
       ) : op.kind === 'delete' ? (
         <div className="mt-2 rounded bg-[#fdf5f5] p-2"><p className="whitespace-pre-wrap text-[13px] text-[#9b1c1c] line-through">{before}</p></div>
-      ) : (
+      ) : op.kind === 'tidy' ? null : (
         <div className="mt-2 max-h-56 overflow-y-auto rounded bg-[#f3fbf6] p-2"><p className="whitespace-pre-wrap text-[13px] text-[#0a5a38]">{after || '(empty)'}{op.after_count > op.after.length ? ` … and ${op.after_count - op.after.length} more blocks` : ''}</p></div>
       )}
       {op.refs.length > 0 && (
@@ -114,9 +115,11 @@ function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
       )}
       {op.status === 'accepted' && (
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button type="button" onClick={onShow} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#0b6b58] hover:bg-[#e6f4f1]">
-            <GitCompare className="h-3.5 w-3.5" /> Show it in the document
-          </button>
+          {op.kind !== 'tidy' && (
+            <button type="button" onClick={onShow} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#0b6b58] hover:bg-[#e6f4f1]">
+              <GitCompare className="h-3.5 w-3.5" /> Show it in the document
+            </button>
+          )}
           <button type="button" disabled={disabled || working !== null} onClick={() => run('revert', onRevert)} title="Put back what this change replaced. It is a new version, so nothing is lost."
             className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2.5 py-1 text-xs font-semibold text-[#3f4b58] hover:bg-[#f1f3f5] disabled:opacity-50">
             {working === 'revert' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />} Take back
@@ -133,7 +136,7 @@ function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
             className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2.5 py-1 text-xs font-semibold text-[#3f4b58] hover:bg-[#f1f3f5] disabled:opacity-50">
             <X className="h-3.5 w-3.5" /> Reject
           </button>
-          {op.status === 'pending' && op.kind !== 'delete' && (
+          {op.status === 'pending' && op.kind !== 'delete' && op.kind !== 'tidy' && (
             <button type="button" onClick={() => setEditing((v) => !v)} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-[#0b6b58] hover:bg-[#e6f4f1]">
               <Pencil className="h-3.5 w-3.5" /> {editing ? 'Use Comply Agent’s wording' : 'Edit first'}
             </button>

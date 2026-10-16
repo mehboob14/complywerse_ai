@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ....services.ai_gateway import claude_client, patterns
 from ....services.ai_gateway.errors import AIBlocked
@@ -63,17 +63,20 @@ def protected_blocks(blocks: Sequence[B.Block]) -> List[int]:
     return [i for i, b in enumerate(blocks) if patterns.detect_dropped(b.source)]
 
 
-def _word_numbers(session, blocks: Sequence[B.Block]) -> List[Optional[str]]:
-    """The number Word shows in front of each block of a Word file edited in place, so a clause can be asked for by its number;
-    nothing for any other document. Never stops a turn: without them the AI still has the text."""
+def _word_facts(session, blocks: Sequence[B.Block]) -> Tuple[List[Optional[str]], List[int]]:
+    """For a Word file edited in place: the number Word shows in front of each block (so a clause can be asked for by its number)
+    and the blocks Word makes or draws itself (its table of contents, text boxes, diagrams), which the AI leaves as they are.
+    Nothing for any other document. Never stops a turn: without them the AI still has the text."""
     from . import service
 
     try:
         looks = service.word_looks(session)
     except Exception:       # noqa: BLE001 - a file python-docx cannot lay out: the turn goes on without the numbers
         logger.warning("studio session %s: the Word numbering could not be read", session.id, exc_info=True)
-        return []
-    return [look.get("label") for look in looks] if len(looks) == len(blocks) else []
+        return [], []
+    if len(looks) != len(blocks):
+        return [], []
+    return [look.get("label") for look in looks], [i for i, look in enumerate(looks) if look.get("locked")]
 
 
 def _op_view(op: B.Op, blocks: Sequence[B.Block]) -> Dict[str, Any]:
@@ -97,6 +100,34 @@ def _op_view(op: B.Op, blocks: Sequence[B.Block]) -> Dict[str, Any]:
             "refs": op.refs, "status": "pending", "words_added": added, "words_removed": removed,
             "before": [{"index": first + n, "kind": b.kind, "text": b.text[:600]} for n, b in enumerate(before[:40])] if op.kind != "replace_all" else [],
             "before_count": len(before), "after": [{"kind": b.kind, "level": b.level, "text": b.text[:600]} for b in after[:40]], "after_count": len(after)}
+
+
+_FORMATTING = re.compile(r"\b(?:re)?format\w*|\btid(?:y|ied|ies|ying)\b|\bclean(?:\s|-)?up\b|\bspac(?:es|ing)\b|\blay-?out\b|\b(?:re)?structur\w*", re.I)
+
+
+def tidy_offer(session) -> Optional[Dict[str, Any]]:
+    """For a request to format, tidy or structure a Word file edited in place: the spacing the studio takes out of the file itself
+    (stray spaces, line breaks and empty lines are not in the blocks the AI reads), as one change to accept or reject. None when
+    there is nothing to tidy."""
+    from . import docx_io, service
+
+    if not service.is_word_in_place(session):
+        return None
+    try:
+        _, n = docx_io.tidy(session.source_path, write=False)
+    except Exception:       # noqa: BLE001 - a file the tidy cannot read: the AI's own changes still stand
+        logger.warning("studio session %s: the Word file's spacing could not be checked", session.id, exc_info=True)
+        return None
+    parts = [f"{n['spaces']} extra space{'' if n['spaces'] == 1 else 's'} (at the start or end of a line, or two or three between words)" if n["spaces"] else "",
+             f"{n['line_breaks']} line break{'' if n['line_breaks'] == 1 else 's'} at the start or end of a paragraph" if n["line_breaks"] else "",
+             f"{n['empty_lines']} empty line{'' if n['empty_lines'] == 1 else 's'} at the end of the document" if n["empty_lines"] else ""]
+    parts = [p for p in parts if p]
+    if not parts:
+        return None
+    return {"id": "tidy", "kind": "tidy", "start": "", "end": "", "markdown": "", "refs": [], "status": "pending", "words_added": 0, "words_removed": 0,
+            "reason": "Tidy the spacing of the Word file: take out " + "; ".join(parts) + ". The text, pictures, page and section breaks, the table "
+                      "of contents and the empty lines that lay out its pages (a cover page, room for a signature) stay as they are.",
+            "before": [], "before_count": 0, "after": [], "after_count": 0, "tidy": n}
 
 
 def questions_of(raw: Any, limit: int = 4) -> List[Dict[str, Any]]:
@@ -139,9 +170,11 @@ def asked_text(questions: Any) -> str:
     return ("You asked:\n" + "\n".join(lines)) if lines else ""
 
 
-def interpret(data: Dict[str, Any], blocks: Sequence[B.Block], references: Sequence[Any], protected: Sequence[int]) -> Dict[str, Any]:
+def interpret(data: Dict[str, Any], blocks: Sequence[B.Block], references: Sequence[Any], protected: Sequence[int],
+              locked: Sequence[int] = ()) -> Dict[str, Any]:
     """The model's answer as the studio keeps it: reply, the edits that can be placed (pending), the references with each quote
-    checked, the placeholders now in the document and what the person should know."""
+    checked, the placeholders now in the document and what the person should know. ``locked``: blocks Word makes itself (a
+    table of contents): nothing may be put between two of them."""
     notes: List[str] = []
     keys = {r.ref_key: r for r in references}
     valid: List[B.Op] = []
@@ -153,7 +186,11 @@ def interpret(data: Dict[str, Any], blocks: Sequence[B.Block], references: Seque
         if not why and op.kind in ("replace", "delete"):
             s, e = B._range(op, len(blocks))
             if any(i in protected for i in range(s, e + 1)):
-                why = "it touches a block that holds a protected value"
+                why = "it touches a read-only block (a protected value, or a part Word makes itself)"
+        if not why and op.kind == "insert" and locked:
+            at = B.index_of(op.start, len(blocks))
+            if at is not None and at in locked and at + 1 in locked:
+                why = "it would go inside a part Word makes itself, such as the table of contents"
         if not why and re.search(r"<REMOVED_[A-Z_]+>", op.markdown):
             why = "it contains a value that was removed for protection"
         if why:
@@ -273,6 +310,19 @@ def counting(db, msg, base: str, field: str, noun: str):
     return show
 
 
+def _asked(db, request) -> str:
+    """What the person asked for in this turn: their words, or for answers to Comply Agent's questions, the request they answer."""
+    from ....models import StudioMessage
+
+    if not request.answers:
+        return request.content or ""
+    for m in (db.query(StudioMessage).filter(StudioMessage.session_id == request.session_id, StudioMessage.role == "user", StudioMessage.id < request.id)
+              .order_by(StudioMessage.id.desc()).limit(10)):
+        if not m.answers and (m.content or "").strip():
+            return m.content
+    return request.content or ""
+
+
 def run_chat_turn(db, session_id: int, message_id: int) -> None:
     """Fill in the assistant message ``message_id`` of a session. Never raises: a failure is written on the message."""
     from ....models import StudioMessage, StudioReference, StudioSession
@@ -316,7 +366,11 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         file_notes = []
         if (session.native_map or {}).get("auto_numbered"):
             file_notes.append("The headings of this Word file are numbered by Word itself: write a heading without its number (\"Scope\", not \"2. Scope\").")
-        numbers = _word_numbers(session, blocks)
+        numbers, locked = _word_facts(session, blocks)
+        if locked:
+            protected = sorted(set(protected) | set(locked))
+            file_notes.append("Some read-only blocks are made or drawn by Word itself (the table of contents, text boxes, diagrams): leave them as "
+                              "they are. Word updates its table of contents from the headings.")
         if any(numbers):
             file_notes.append("A number after a block id ([B12 · 4.2.1.]) is the number Word shows in front of that block. Use it to find what the "
                               "person refers to (\"clause 4.2.1\"), but never write it into the text: Word numbers the paragraphs itself, new ones too.")
@@ -334,7 +388,10 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         _stage(db, msg, "Checking the result")
         # first understand, then work: while Comply Agent asks, nothing changes; answers to its questions are always worked on
         asking = bool(result.data.get("ask_first")) and not request.answers and bool(questions_of(result.data.get("questions")))
-        out = interpret({**result.data, "changes": [], "references_used": []} if asking else result.data, blocks, references, protected)
+        out = interpret({**result.data, "changes": [], "references_used": []} if asking else result.data, blocks, references, protected, locked)
+        offer = tidy_offer(session) if not asking and _FORMATTING.search(_asked(db, request)) else None
+        if offer:
+            out["ops"].append(offer)
         if attached:
             out["notes"].insert(0, auto_refs.note(attached))
         if result.truncated:
@@ -396,7 +453,7 @@ def run_ai_checks(db, session_id: int, message_id: int) -> None:
         blocks = B.parse(session.content)
         if not blocks:
             raise TurnProblem("The document is empty: there is nothing to check.")
-        protected = protected_blocks(blocks)
+        protected = sorted(set(protected_blocks(blocks)) | set(_word_facts(session, blocks)[1]))    # Word's own parts are not proofread
         whole = sum(len(b.source) for b in blocks) <= CHECK_WHOLE_CHARS
         spans = [(0, len(blocks) - 1)] if whole else _chunks(blocks, protected)
         notes: List[str] = []

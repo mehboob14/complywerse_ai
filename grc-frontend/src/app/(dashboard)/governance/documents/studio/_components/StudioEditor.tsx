@@ -375,6 +375,7 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
         .studio-prose .studio-wl[data-num]::before { content: attr(data-num); display: inline-block; min-width: var(--hang, 0); padding-right: 0.5em; box-sizing: border-box; text-indent: 0; }
         .studio-prose .studio-wl-body { font-size: 0.9375rem; font-weight: 400; color: #1f2933; line-height: 1.65; margin: 0.55em 0; }
         .cw-dashboard .studio-prose .studio-wl-body, .governance-light .studio-prose .studio-wl-body { font-size: 11.5px; color: var(--color-text); }  /* as a paragraph there (globals.css) */
+        .studio-prose .studio-wl-locked { background: #f1f5f6; border-left: 3px solid #b8c7cc; padding-left: 0.5em; padding-right: 0.5em; cursor: default; white-space: pre-wrap; tab-size: 4; }
         .studio-prose p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9aa5b1; pointer-events: none; float: left; height: 0; }
       `}</style>
     </div>

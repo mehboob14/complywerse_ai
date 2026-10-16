@@ -107,7 +107,8 @@ export type OpStatus = 'pending' | 'accepted' | 'rejected' | 'conflict' | 'rever
 
 export interface Op {
   id: string;
-  kind: 'replace' | 'insert' | 'delete' | 'replace_all';
+  /** `tidy`: the spacing of a Word file (stray spaces, line breaks, empty lines), which is not in the text */
+  kind: 'replace' | 'insert' | 'delete' | 'replace_all' | 'tidy';
   start: string;
   end: string;
   markdown: string;
@@ -460,8 +461,9 @@ export const studioApi = {
   stop: (id: number, messageId: number) => post<Message>(`/sessions/${id}/messages/${messageId}/stop`),
   /** a whole document as far as it is written, while Comply Agent writes it */
   draftPreview: (id: number, messageId: number) => get<{ seq: number; markdown: string }>(`/sessions/${id}/messages/${messageId}/preview`),
+  /** `library_version`: a library document's next version, made by the accept (null when the document is not in the library) */
   accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
-    post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message }>(`/sessions/${id}/messages/${messageId}/accept`, body),
+    post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message; library_version?: LibraryVersion | null }>(`/sessions/${id}/messages/${messageId}/accept`, body),
   reject: (id: number, messageId: number, body: { op_ids?: string[] } = {}) => post<{ message: Message }>(`/sessions/${id}/messages/${messageId}/reject`, body),
   /** take a change that was accepted back out of the document (a new revision) */
   revertOp: (id: number, messageId: number, opId: string) => post<{ content: string; revision: number; message: Message }>(`/sessions/${id}/messages/${messageId}/ops/${opId}/revert`),
@@ -511,9 +513,13 @@ export const studioApi = {
   sourceFile: async (id: number): Promise<Blob> => (await apiClient.get(`${base}/sessions/${id}/source-file`, { responseType: 'blob' })).data,
 };
 
-/** What Word shows for a block: the number in front of it, its indent in points (`hang`: the part the number sits in), and
- *  `body` for a clause numbered through a heading style that looks like body text. */
-export interface BlockLook { label?: string; left?: number; hang?: number; body?: boolean }
+/** What Word shows for a block: the number in front of it, its indent in points (`hang`: the part the number sits in),
+ *  `body` for a clause numbered through a heading style that looks like body text, and `locked` for what Word makes or draws
+ *  itself (its table of contents, a text box, a diagram): shown, not edited here. */
+export interface BlockLook { label?: string; left?: number; hang?: number; body?: boolean; locked?: boolean }
+
+/** An accept that made the library document's next version (`change`: major is +1.0, minor +0.1), or why it did not */
+export interface LibraryVersion { saved: boolean; version?: string; change?: 'major' | 'minor' | null; status?: string; why?: string }
 
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);

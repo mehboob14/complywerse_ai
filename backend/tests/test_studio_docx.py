@@ -46,7 +46,7 @@ def test_a_word_file_reads_as_markdown_with_its_structure(policy):
     assert "1. Use strong passwords\n2. Lock your screen\n3. Report incidents\n- Hardware is covered\n- Software is covered" in md
     assert "### 2.1 Passwords" in md
     assert "First line\\\nsecond line" in md                                                       # a soft line break
-    assert "Page  of this policy." in md                                                            # a field's result is not text
+    assert "Page 3 of this policy." in md                                                           # a field shows its result, as in Word
     assert "| **Role** | **Responsibility** | **Owner** |" in md and "| CISO | Owns the policy | Board |" in md
     assert "| Merged header |  | Status |" in md                                                     # the merged cell covers two columns
     assert imp.kind == "docx" and imp.base_markdown is None

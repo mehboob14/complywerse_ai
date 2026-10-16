@@ -479,7 +479,8 @@ def accept_changes(session_id: int, message_id: int, body: OpsIn, db: Session = 
     s = _session(db, session_id, user)
     m = _message(db, s, message_id)
     result = service.accept_ops(db, s, m, body.op_ids or _pending_ids(m), user.id, overrides=body.overrides)
-    return {**result, "revision": s.revision_no, "content": s.content, "message": service.message_view(m)}
+    saved = service.version_after_accept(db, s, user, result["accepted"])        # a library draft: its next version
+    return {**result, "revision": s.revision_no, "content": s.content, "message": service.message_view(m), "library_version": saved}
 
 
 @router.post("/sessions/{session_id}/messages/{message_id}/reject", dependencies=[Depends(require_studio)])

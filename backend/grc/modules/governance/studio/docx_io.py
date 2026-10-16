@@ -16,6 +16,7 @@ import copy
 import hashlib
 import io
 import re
+import unicodedata
 from dataclasses import dataclass
 from difflib import SequenceMatcher
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Tuple
@@ -390,17 +391,36 @@ class Para:
     base_i: bool = False
 
 
-def _visible_field(instr: str) -> bool:
-    return instr.strip().upper().startswith("HYPERLINK")
+# the characters symbol fonts (Symbol, Wingdings) keep in the private-use area, as the Unicode characters they draw
+SYMBOL_GLYPHS = {"": "•", "": "▪", "": "➢", "": "❖", "": "✓", "": "□", "": "■", "": "➢",
+                 "o": "◦", "§": "▪", "": "•", "": "•", "": "✗", "": "☑", "": "➔", "": "⇨", "": "•",
+                 "": "❑"}
+
+
+def _symbol(c) -> str:
+    """The character a ``w:sym`` draws (its code in the symbol font, F0xx or 00xx), as Unicode where it has a twin."""
+    try:
+        code = int(c.get(qn("w:char")) or "", 16)
+    except ValueError:
+        return "□"
+    ch = chr(code + 0xF000 if code < 0x100 else code)
+    return SYMBOL_GLYPHS.get(ch, ch)
 
 
 def read_para(ctx: Ctx, p) -> Para:
-    """What a paragraph shows, piece by piece. Field codes, field results (except links), images, footnote marks and other
-    things that are not typed text are skipped here and left alone when the paragraph is edited."""
+    """What a paragraph shows, piece by piece, as Word shows it: its text, tabs, line breaks and symbols, and the results of its
+    fields (a table of contents, page numbers, document properties, cross-references: an edit there goes into the field's
+    result, which Word may refresh). Field codes, hidden text, images, footnote marks and other things that are not shown text
+    are skipped here and left alone when the paragraph is edited."""
     pieces: List[Piece] = []
     fields: List[Dict[str, Any]] = []
+    ppr = p.find(qn("w:pPr"))
+    ps = ppr.find(qn("w:pStyle")) if ppr is not None else None
+    sid = ps.get(qn("w:val")) if ps is not None else ctx.styles.default_p
+    hidden_style = bool(ctx.styles.flag(sid, "vanish"))
 
     def run(r, link) -> None:
+        hidden = _style_flag(ctx, r, "vanish", hidden_style)
         for c in r:
             t = _local(c)
             if t == "fldChar":
@@ -416,16 +436,18 @@ def read_para(ctx: Ctx, p) -> Para:
                 if fields and fields[-1]["phase"] == "instr":
                     fields[-1]["instr"] += c.text or ""
                 continue
-            if any(f["phase"] == "instr" or not _visible_field(f["instr"]) for f in fields):
+            if hidden or any(f["phase"] == "instr" for f in fields):
                 continue
             if t == "t":
                 pieces.append(Piece("t", c.text or "", r, c, link))
             elif t == "tab":
                 pieces.append(Piece("tab", "\t", r, c, link))
-            elif t in ("br", "cr") and c.get(qn("w:type")) in (None, "textWrapping"):
+            elif t in ("br", "cr"):                  # a line, page or column break: what follows starts on a new line
                 pieces.append(Piece("br", "\n", r, c, link))
             elif t == "noBreakHyphen":
                 pieces.append(Piece("t", "‑", r, c, link))
+            elif t == "sym":
+                pieces.append(Piece("sym", _symbol(c), r, c, link))
 
     def visit(container, link) -> None:
         for ch in container:
@@ -434,19 +456,14 @@ def read_para(ctx: Ctx, p) -> Para:
                 run(ch, link)
             elif t == "hyperlink":
                 visit(ch, ch)
-            elif t in ("smartTag", "customXml", "ins", "moveTo"):
+            elif t in ("smartTag", "customXml", "ins", "moveTo", "dir", "bdo", "fldSimple"):
                 visit(ch, link)
             elif t == "sdt":
                 content = ch.find(qn("w:sdtContent"))
                 if content is not None:
                     visit(content, link)
-            elif t == "fldSimple" and _visible_field(ch.get(qn("w:instr")) or ""):
-                visit(ch, link)
 
     visit(p, None)
-    ppr = p.find(qn("w:pPr"))
-    ps = ppr.find(qn("w:pStyle")) if ppr is not None else None
-    sid = ps.get(qn("w:val")) if ps is not None else ctx.styles.default_p
     return Para(p, pieces, "".join(pc.text for pc in pieces), sid, bool(ctx.styles.flag(sid, "b")), bool(ctx.styles.flag(sid, "i")))
 
 
@@ -512,11 +529,38 @@ def _protect_lines(md: str) -> str:
     return "\n".join(out)
 
 
-def _mark(text: str, seg: B.Seg) -> str:
+def _punct(ch: str) -> bool:
+    """A punctuation mark or a symbol, as CommonMark counts them."""
+    return bool(ch) and unicodedata.category(ch)[0] in "PS"
+
+
+def _apart(ch: str) -> bool:
+    """Nothing, a space or punctuation: a ``*`` next to it opens or closes emphasis whatever is on its other side."""
+    return not ch or ch.isspace() or _punct(ch)
+
+
+def _mark(text: str, seg: B.Seg, before: str = "", after: str = "") -> str:
+    """``text`` with the Markdown of ``seg``'s formatting. ``before`` and ``after`` are the characters next to it: a ``*`` or ``~~``
+    between a letter and a punctuation mark cannot open or close emphasis (it would read as a literal star), so punctuation at the
+    edge of bold, italic or struck text goes outside the markers when a letter touches it."""
     m = re.match(r"^(\s*)(.*?)(\s*)$", text, re.S)
     lead, core, trail = m.group(1), m.group(2), m.group(3)
     if not core:
         return text
+    head = tail = ""
+    if (seg.bold or seg.italic or seg.strike) and not (seg.underline or seg.href):      # the markers are the outermost ones
+        if not lead and not _apart(before) and _punct(core[0]):
+            k = 0
+            while k < len(core) and (_punct(core[k]) or core[k].isspace()):
+                k += 1
+            head, core = core[:k], core[k:]
+        if core and not trail and not _apart(after) and _punct(core[-1]):
+            k = len(core)
+            while k > 0 and (_punct(core[k - 1]) or core[k - 1].isspace()):
+                k -= 1
+            core, tail = core[:k], core[k:]
+        if not core:
+            return lead + _ESC.sub(r"\\\1", head + tail) + trail
     out = _ESC.sub(r"\\\1", core)
     if seg.italic:
         out = f"*{out}*"
@@ -529,17 +573,29 @@ def _mark(text: str, seg: B.Seg) -> str:
     if seg.href:
         url = seg.href.replace("<", "%3C").replace(">", "%3E")
         out = f"[{out}](<{url}>)" if re.search(r"[\s()]", url) else f"[{out}]({url})"
-    return lead + out + trail
+    return lead + _ESC.sub(r"\\\1", head) + out + _ESC.sub(r"\\\1", tail) + trail
 
 
 def segs_markdown(segs: Sequence[B.Seg], *, cell: bool = False, protect: bool = True) -> str:
-    """Markdown for formatted text. A line break is a hard break (or ``<br>`` in a table cell). ``protect`` escapes a line that
-    would start a heading, bullet or numbered item (not needed after a ``## `` marker or inside a cell)."""
+    """Markdown for formatted text. A line break is a hard break (or ``<br>`` in a table cell); spaces and breaks at the very
+    start or end are left out (Markdown cannot hold them). ``protect`` escapes a line that would start a heading, bullet or
+    numbered item (not needed after a ``## `` marker or inside a cell)."""
+    segs = [s for s in segs if s.text]
+    while segs and not segs[0].text.strip():
+        segs.pop(0)
+    while segs and not segs[-1].text.strip():
+        segs.pop()
+    if segs:
+        segs[0] = B.Seg(segs[0].text.lstrip(), *segs[0].flags(), href=segs[0].href)
+        segs[-1] = B.Seg(segs[-1].text.rstrip(), *segs[-1].flags(), href=segs[-1].href)
     parts = []
-    for s in segs:
+    for k, s in enumerate(segs):
+        before = segs[k - 1].text[-1:] if k else ""
+        after = segs[k + 1].text[:1] if k + 1 < len(segs) else ""
         pieces = s.text.split("\n")
-        parts.append(("<br>" if cell else "\\\n").join(_mark(p, s) if p.strip() else p for p in pieces))
-    md = "".join(parts).strip()
+        parts.append(("<br>" if cell else "\\\n").join(
+            _mark(p, s, before if j == 0 else "", after if j == len(pieces) - 1 else "") if p.strip() else p for j, p in enumerate(pieces)))
+    md = "".join(parts)
     return md if cell or not protect else _protect_lines(md)
 
 
@@ -578,6 +634,7 @@ class Node:
     ilvl: int = 0                             # a list item's level in Word (``level`` is its nesting in the Markdown, counted from its list)
     tpl_ppr: Any = None                       # copies taken before any edit, to give new paragraphs the look of this one
     tpl_rpr: Any = None
+    generated: bool = False                   # Word makes it (a table of contents) or draws it (a text box): read, not rewritten by the AI
 
 
 def _top_blocks(parent) -> Iterator[Any]:
@@ -586,15 +643,122 @@ def _top_blocks(parent) -> Iterator[Any]:
         if t in ("p", "tbl"):
             yield ch
         elif t == "sdt":
-            pr = ch.find(qn("w:sdtPr"))
-            gal = pr.find(qn("w:docPartObj") + "/" + qn("w:docPartGallery")) if pr is not None else None
-            if gal is not None and (gal.get(qn("w:val")) or "").lower().startswith("table of contents"):
-                continue
             content = ch.find(qn("w:sdtContent"))
             if content is not None:
                 yield from _top_blocks(content)
         elif t == "customXml":
             yield from _top_blocks(ch)
+
+
+def _box_paras(p) -> Iterator[Any]:
+    """The paragraphs of the text boxes drawn in paragraph ``p``, each once: a box drawn for both new and old versions of Word is in
+    the file twice, and the copy for old versions (``mc:Fallback``) is skipped."""
+    for box in p.iter(qn("w:txbxContent")):
+        if any(_local(a) == "Fallback" for a in box.iterancestors()):
+            continue
+        yield from box.findall(qn("w:p"))
+
+
+_DGM = "{http://schemas.openxmlformats.org/drawingml/2006/diagram}"
+_DML = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
+_REL = "{http://schemas.openxmlformats.org/officeDocument/2006/relationships}"
+
+
+def _diagrams(ctx: Ctx, p) -> Iterator[Tuple[Any, List[str]]]:
+    """The SmartArt diagrams drawn in paragraph ``p``: the run holding each, and the text of its shapes in reading order (a shape,
+    then the shapes under it). The text is in the diagram's own part of the file, not in the paragraph."""
+    for rel in p.iter(f"{_DGM}relIds"):
+        run = next(rel.iterancestors(qn("w:r")), None)
+        part = ctx.doc.part.related_parts.get(rel.get(f"{_REL}dm"))
+        if run is None or part is None:
+            continue
+        try:
+            root = parse_xml(part.blob)
+        except Exception:       # noqa: BLE001 - a damaged diagram is left to Word to draw
+            continue
+        texts: Dict[str, List[str]] = {}
+        top = None
+        for pt in root.iter(f"{_DGM}pt"):
+            kind = pt.get("type") or "node"
+            if kind == "doc":
+                top = pt.get("modelId")
+            elif kind in ("node", "asst"):
+                t = pt.find(f"{_DGM}t")
+                lines = ("".join(r.text or "" for r in ap.iter(f"{_DML}t")).strip() for ap in (t.findall(f"{_DML}p") if t is not None else []))
+                texts[pt.get("modelId")] = [line for line in lines if line]
+        under: Dict[str, List[Tuple[int, str]]] = {}
+        for c in root.iter(f"{_DGM}cxn"):
+            if (c.get("type") or "parOf") == "parOf":
+                order = c.get("srcOrd") or "0"
+                under.setdefault(c.get("srcId"), []).append((int(order) if order.isdigit() else 0, c.get("destId")))
+        out: List[str] = []
+        seen: set = set()
+        stack = [top]
+        while stack:
+            mid = stack.pop()
+            if mid in seen:
+                continue
+            seen.add(mid)
+            out += texts.get(mid, [])
+            stack += [child for _, child in sorted(under.get(mid, []), reverse=True)]
+        out += [line for mid, lines in texts.items() if mid not in seen for line in lines]
+        if out:
+            yield run, out
+
+
+def _outer(el):
+    """The body paragraph or table ``el`` is part of (a text box's paragraph and a diagram are drawn inside one): new blocks go
+    next to that, never into the box."""
+    for a in reversed(list(el.iterancestors())):
+        if _local(a) in ("p", "tbl"):
+            return a
+    return el
+
+
+def _generated(ctx: Ctx, el, para: Para) -> bool:
+    """A paragraph Word writes itself: a table of contents or of figures (its entries, its heading, anything in its content control)."""
+    name = ctx.styles.lname(para.style_id)
+    if name.startswith("toc") or name.startswith("table of figures"):
+        return True
+    for sdt in el.iterancestors(qn("w:sdt")):
+        gal = sdt.find(qn("w:sdtPr") + "/" + qn("w:docPartObj") + "/" + qn("w:docPartGallery"))
+        if gal is not None and (gal.get(qn("w:val")) or "").lower().startswith("table of contents"):
+            return True
+    return False
+
+
+def _wrapped(parent, name: str) -> Iterator[Any]:
+    """The ``name`` children of ``parent``, also those inside content controls and custom XML (a repeating section's rows)."""
+    for ch in parent:
+        t = _local(ch)
+        if t == name:
+            yield ch
+        elif t == "sdt":
+            content = ch.find(qn("w:sdtContent"))
+            if content is not None:
+                yield from _wrapped(content, name)
+        elif t == "customXml":
+            yield from _wrapped(ch, name)
+
+
+def _cell_paras(tc) -> Iterator[Any]:
+    """A cell's paragraphs in reading order: its own and its content controls', its text boxes', and those of a table nested in it,
+    row by row."""
+    for ch in tc:
+        t = _local(ch)
+        if t == "p":
+            yield ch
+            yield from _box_paras(ch)
+        elif t == "tbl":
+            for tr in _wrapped(ch, "tr"):
+                for inner in _wrapped(tr, "tc"):
+                    yield from _cell_paras(inner)
+        elif t == "sdt":
+            content = ch.find(qn("w:sdtContent"))
+            if content is not None:
+                yield from _cell_paras(content)
+        elif t == "customXml":
+            yield from _cell_paras(ch)
 
 
 def _span(tc) -> int:
@@ -611,7 +775,7 @@ def _vcontinue(tc) -> bool:
 
 
 def _read_table(ctx: Ctx, tbl) -> Optional[TableInfo]:
-    trs = tbl.findall(qn("w:tr"))
+    trs = list(_wrapped(tbl, "tr"))
     rows: List[List[CellRef]] = []
     complex_ = False
     for tr in trs:
@@ -621,18 +785,18 @@ def _read_table(ctx: Ctx, tbl) -> Optional[TableInfo]:
         if before is not None:
             row += [CellRef(None, []) for _ in range(int(before.get(qn("w:val")) or 0))]
             complex_ = True
-        for tc in tr.findall(qn("w:tc")):
+        for tc in _wrapped(tr, "tc"):
             span = _span(tc)
             if span > 1 or tc.find(qn("w:tcPr") + "/" + qn("w:vMerge")) is not None:
                 complex_ = True
             if _vcontinue(tc):
                 row += [CellRef(None, []) for _ in range(span)]
                 continue
-            paras = [p for p in (read_para(ctx, p) for p in tc.findall(qn("w:p"))) if p.text.strip()]
+            paras = [p for p in (read_para(ctx, p) for p in _cell_paras(tc)) if p.text.strip()]
             row.append(CellRef(tc, paras, "<br>".join(segs_markdown(para_segs(ctx, p), cell=True) for p in paras),
                                "\n".join(p.text.strip() for p in paras)))
             row += [CellRef(None, []) for _ in range(span - 1)]
-        if tr.find(".//" + qn("w:tbl")) is not None:                           # a nested table: the cell text is incomplete
+        if tr.find(".//" + qn("w:tbl")) is not None:            # a nested table reads as lines of its cell; its grid is not rebuilt
             complex_ = True
         rows.append(row)
     if not rows:
@@ -689,26 +853,39 @@ def _list_info(ctx: Ctx, para: Para) -> Tuple[Optional[str], int]:
 def walk(doc, ctx: Optional[Ctx] = None) -> Tuple[List[Node], Dict[str, Any]]:
     """The blocks of a document in order, each tied to its element, and a few facts about the file."""
     ctx = ctx or Ctx(doc)
-    raw: List[Tuple[Any, Optional[Para], Optional[TableInfo]]] = []
+    raw: List[Any] = []                       # (element, paragraph, table, generated) or a diagram's finished node
     for el in _top_blocks(doc.element.body):
         if _local(el) == "tbl":
             info = _read_table(ctx, el)
             if info is not None:
-                raw.append((el, None, info))
+                raw.append((el, None, info, False))
             continue
         para = read_para(ctx, el)
-        name = ctx.styles.lname(para.style_id)
-        if para.text.strip() and not name.startswith("toc") and name != "table of figures":
-            raw.append((el, para, None))
-    has_title = any(p is not None and ctx.styles.lname(p.style_id) == "title" for _, p, _ in raw)
+        if para.text.strip():
+            raw.append((el, para, None, _generated(ctx, el, para)))
+        for box in _box_paras(el):                                     # the text in its text boxes, after it
+            inside = read_para(ctx, box)
+            if inside.text.strip():
+                raw.append((box, inside, None, True))
+        for drawn, lines in _diagrams(ctx, el):                        # and in its SmartArt diagrams, a line for each shape
+            text = "\n".join(lines)
+            raw.append(Node("paragraph", drawn, segs_markdown([B.Seg(text)]), text, generated=True))
+    has_title = any(isinstance(e, tuple) and e[1] is not None and ctx.styles.lname(e[1].style_id) == "title" for e in raw)
     ctx.has_title = has_title
     nodes: List[Node] = []
     counters: Dict[Tuple[str, int], int] = {}
     run: List[int] = []                       # the Word levels of the list being read, one per Markdown nesting level
     auto_numbered = False
-    for el, para, info in raw:
+    for entry in raw:
+        if isinstance(entry, Node):
+            nodes.append(entry)
+            continue
+        el, para, info, generated = entry
         if info is not None:
             nodes.append(Node("table", el, _table_md(info), "\n".join(" ".join(r) for r in info.plain()), table=info))
+            continue
+        if generated:                                                  # as it reads: never a heading or a list of the document's own
+            nodes.append(Node("paragraph", el, segs_markdown(para_segs(ctx, para)), para.text.strip(), para=para, generated=True))
             continue
         segs = para_segs(ctx, para)
         ppr = el.find(qn("w:pPr"))
@@ -1195,7 +1372,7 @@ class Templates:
     def nearest(self, near: int, pred) -> Optional[Node]:
         best, dist = None, None
         for i, n in enumerate(self.nodes):
-            if n.kind != "table" and pred(n) and (dist is None or abs(i - near) < dist):
+            if n.kind != "table" and not n.generated and pred(n) and (dist is None or abs(i - near) < dist):
                 best, dist = n, abs(i - near)
         return best
 
@@ -1304,7 +1481,7 @@ def fill_cell(ctx: Ctx, tc, lines: Sequence[Sequence[B.Seg]], rpr=None) -> None:
     if first is None:
         first = OxmlElement("w:p")
         tc.append(first)
-    for extra in paras[1:]:
+    for extra in paras[1:] + [ch for ch in tc if _local(ch) in ("tbl", "sdt", "customXml")]:     # the lines are the whole cell
         tc.remove(extra)
     _clear_text(first)
     prev = first
@@ -1338,10 +1515,10 @@ def _cell_rpr(ref: CellRef):
 
 def _patch_cell(ctx: Ctx, ref: CellRef, cell: B.Cell) -> None:
     lines = _cell_lines(cell)
-    if ref.paras and len(lines) == sum(len(p.text.split("\n")) for p in ref.paras):     # same lines: edit each paragraph in place
+    if ref.paras and len(lines) == sum(len(p.text.strip().split("\n")) for p in ref.paras):     # same lines: edit each paragraph in place
         at = 0
         for para in ref.paras:
-            n = len(para.text.split("\n"))
+            n = len(para.text.strip().split("\n"))
             segs: List[B.Seg] = []
             for k, line in enumerate(lines[at:at + n]):
                 if k:
@@ -1426,17 +1603,39 @@ def _patch_table(ctx: Ctx, info: TableInfo, old: B.Block, new: B.Block) -> Optio
 # ── writing edits into the file: the whole document ──────────────────────────
 def _remove_block(el) -> None:
     ppr = el.find(qn("w:pPr")) if _local(el) == "p" else None
+    parent = el.getparent()
     if ppr is not None and ppr.find(qn("w:sectPr")) is not None:             # a section break must survive: keep the paragraph, empty
         _clear_text(el)
+    elif _local(parent) == "txbxContent" and len(parent.findall(qn("w:p"))) == 1:   # a text box must keep one paragraph
+        _clear_text(el)
     else:
-        el.getparent().remove(el)
+        parent.remove(el)
+
+
+_MC = "{http://schemas.openxmlformats.org/markup-compatibility/2006}"
+
+
+def _sync_fallbacks(body) -> None:
+    """A text box is in the file twice, the second copy for old versions of Word: after an edit it gets the edited text too."""
+    for alt in body.iter(f"{_MC}AlternateContent"):
+        choice, fallback = alt.find(f"{_MC}Choice"), alt.find(f"{_MC}Fallback")
+        if choice is None or fallback is None:
+            continue
+        new, old = list(choice.iter(qn("w:txbxContent"))), list(fallback.iter(qn("w:txbxContent")))
+        if len(new) != len(old):
+            continue
+        for a, b in zip(new, old):
+            if [t.text for t in a.iter(qn("w:t"))] != [t.text for t in b.iter(qn("w:t"))]:
+                for ch in list(b):
+                    b.remove(ch)
+                b.extend(copy.deepcopy(ch) for ch in a)
 
 
 def _place(anchor, el, first_old) -> None:
     if anchor is not None:
-        anchor.addnext(el)
+        _outer(anchor).addnext(el)
     elif first_old is not None:
-        first_old.addprevious(el)
+        _outer(first_old).addprevious(el)
     else:
         raise PatchProblem("There is nowhere in the file to put new text.")
 
@@ -1469,6 +1668,8 @@ def export_in_place(twin_path: str, new_markdown: str) -> Tuple[bytes, List[str]
         if pr.status == "modified":
             node, old = nodes[pr.base], old_blocks[pr.base]
             near = pr.base
+            if node.kind != "table" and node.para is None:
+                raise PatchProblem("The text of a diagram (SmartArt) can only be changed in Word.")
             if node.kind == "table" and block.kind == "table":
                 replacement = _patch_table(ctx, node.table, old, block)
                 if replacement is not None:
@@ -1502,9 +1703,9 @@ def export_in_place(twin_path: str, new_markdown: str) -> Tuple[bytes, List[str]
             continue
         if block.kind == "table":
             el = _build_table(ctx, block)
-            if anchor is not None and _local(anchor) == "tbl":               # two tables side by side would merge into one
+            if anchor is not None and _local(_outer(anchor)) == "tbl":       # two tables side by side would merge into one
                 gap = OxmlElement("w:p")
-                anchor.addnext(gap)
+                _outer(anchor).addnext(gap)
                 anchor = gap
             _place(anchor, el, first_old)
             anchor, prev = el, Placed("table", el)
@@ -1512,6 +1713,7 @@ def export_in_place(twin_path: str, new_markdown: str) -> Tuple[bytes, List[str]
             placed = build_paragraph(ctx, tpls, block, prev, near)
             _place(anchor, placed.el, first_old)
             anchor, prev = placed.el, placed
+    _sync_fallbacks(doc.element.body)
     out = io.BytesIO()
     doc.save(out)
     data = out.getvalue()
@@ -1519,3 +1721,115 @@ def export_in_place(twin_path: str, new_markdown: str) -> Tuple[bytes, List[str]
     if problem:
         raise PatchProblem("The edited file does not read back as the edited text: " + problem)
     return data, ctx.warnings
+
+
+# ── tidying the spacing of a Word file ───────────────────────────────────────
+_KEEPS_PARAGRAPH = {"drawing", "pict", "object", "AlternateContent", "fldChar", "fldSimple", "bookmarkStart", "bookmarkEnd", "commentRangeStart",
+                    "commentReference", "footnoteReference", "endnoteReference", "sym", "ptab", "sdt", "oMath", "oMathPara"}
+
+
+def _blank_line(p) -> bool:
+    """A paragraph typed only to make space: no text and nothing else that shows or matters (a picture, a field, a bookmark,
+    a page or section break, a frame)."""
+    if any((t.text or "").strip() for t in p.iter(qn("w:t"))):
+        return False
+    ppr = p.find(qn("w:pPr"))
+    if ppr is not None and any(ppr.find(qn(f"w:{n}")) is not None for n in ("sectPr", "pageBreakBefore", "framePr")):
+        return False
+    for el in p.iter():
+        name = _local(el)
+        if name in _KEEPS_PARAGRAPH or (name in ("br", "cr") and el.get(qn("w:type")) in ("page", "column")):
+            return False
+    return True
+
+
+def _tidy_text(ctx: Ctx, p) -> Tuple[int, int]:
+    """Paragraph ``p`` without spaces, tabs and line breaks at its start and end, and with one space where it had two or three in
+    a row. Returns (spaces taken out, line breaks taken out)."""
+    pieces = read_para(ctx, p).pieces
+    spaces = breaks = 0
+
+    def drop(pc) -> None:
+        nonlocal spaces, breaks
+        if pc.el.getparent() is not None:
+            pc.el.getparent().remove(pc.el)
+            if pc.kind == "br":
+                breaks += 1
+            else:
+                spaces += 1
+
+    for order in (pieces, pieces[::-1]):                    # the start, then the end
+        for pc in order:
+            if pc.el.getparent() is None:
+                continue
+            if pc.kind == "tab" or (pc.kind == "br" and pc.el.get(qn("w:type")) in (None, "textWrapping")):
+                drop(pc)
+                continue
+            if pc.kind != "t":
+                break
+            text = pc.el.text or ""
+            kept = text.lstrip() if order is pieces else text.rstrip()
+            spaces += len(text) - len(kept)
+            if kept != text:
+                _set_text(pc.el, kept)
+            if kept:
+                break
+    live = [pc for pc in pieces if pc.el.getparent() is not None]          # inside: one space for two or three, also across runs
+    flat: List[str] = []
+    owner: List[Optional[Tuple[int, int]]] = []
+    for k, pc in enumerate(live):
+        text = (pc.el.text or "") if pc.kind == "t" else "\x00"
+        flat += list(text)
+        owner += [(k, j) for j in range(len(text))] if pc.kind == "t" else [None]
+    drop: Dict[int, set] = {}
+    for m in re.finditer(r" {2,}", "".join(flat)):
+        if m.end() - m.start() <= 3:            # ponytail: four or more spaces line up a form, so they stay; tabs would be the fix
+            for i in range(m.start() + 1, m.end()):
+                k, j = owner[i]
+                drop.setdefault(k, set()).add(j)
+    for k, offsets in drop.items():
+        text = live[k].el.text or ""
+        new = "".join(ch for j, ch in enumerate(text) if j not in offsets)
+        spaces += len(text) - len(new)
+        _set_text(live[k].el, new)
+    for t in list(p.iter(qn("w:t"))):                       # text emptied by the tidy
+        if not t.text and t.getparent() is not None:
+            t.getparent().remove(t)
+    return spaces, breaks
+
+
+def tidy(path: str, *, write: bool = True) -> Tuple[Optional[bytes], Dict[str, int]]:
+    """The Word file at ``path`` with the spacing a professional document does not have taken out: spaces, tabs and line breaks
+    at the start and end of a paragraph, two or three spaces between words (four or more line up a form, and stay), and empty
+    lines at the end of the document (they can leave a blank last page). Empty lines anywhere else lay the pages out (a cover
+    page, room for a signature) and stay, as do what Word makes or draws (its table of contents), pictures, fields, bookmarks,
+    page and section breaks, and the paragraph after a table.
+    Returns the new file and what was taken out (``spaces``, ``line_breaks``, ``empty_lines``); no file when there is nothing to
+    tidy, or when ``write`` is off (the counts only)."""
+    doc = Document(path)
+    ctx = Ctx(doc)
+    body = doc.element.body
+    counts = {"spaces": 0, "line_breaks": 0, "empty_lines": 0}
+    for p in list(body.iter(qn("w:p"))):
+        if any(_local(a) == "Fallback" for a in p.iterancestors()):          # the copy for old Words follows the tidied box
+            continue
+        if _generated(ctx, p, read_para(ctx, p)):
+            continue                                                         # a table of contents is Word's own
+        s, b = _tidy_text(ctx, p)
+        counts["spaces"] += s
+        counts["line_breaks"] += b
+    seq = list(_top_blocks(body))
+    blank = [_local(el) == "p" and el.getparent() is body and _blank_line(el) for el in seq]
+    content = [i for i, x in enumerate(blank) if not x]
+    if content:
+        tail = list(range(content[-1] + 1, len(seq)))
+        for i in tail[1:] if _local(seq[content[-1]]) == "tbl" else tail:        # a table cannot end a Word document
+            if blank[i]:
+                body.remove(seq[i])
+                counts["empty_lines"] += 1
+    _sync_fallbacks(body)
+    if not write or not any(counts.values()):
+        return None, counts
+    out = io.BytesIO()
+    doc.save(out)
+    return out.getvalue(), counts

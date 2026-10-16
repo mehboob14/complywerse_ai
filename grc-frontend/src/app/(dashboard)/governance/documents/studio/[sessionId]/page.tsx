@@ -177,9 +177,8 @@ export default function StudioWorkspacePage() {
     if (!wasWorking.current) return;
     wasWorking.current = false;
     const last = [...items].reverse().find((m) => m.role === 'assistant' && m.kind === 'chat');
-    if (last && (last.proposal?.ops ?? []).some((o) => o.status === 'pending')) {
-      setAsFile(false);
-      setCompare({ type: 'preview', messageId: last.id });
+    if (last && (last.proposal?.ops ?? []).some((o) => o.status === 'pending' && o.kind !== 'tidy')) {     // (a tidy shows in the file view)
+      setCompare({ type: 'preview', messageId: last.id });                    // over the file view, which is back when it closes
       setPane('document');
     }
     (async () => {
@@ -242,7 +241,13 @@ export default function StudioWorkspacePage() {
       setMessage(r.message);
       setCompare((c) => (c?.type === 'preview' ? null : c));
       if (r.conflicts) toast({ title: `${plural(r.conflicts, 'change')} could not be placed`, message: 'The text they change was edited after Comply Agent read it. Ask again, or make the change yourself.', type: 'warning' });
-      if (r.accepted) { toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success' }); setJustAccepted(r.accepted); }
+      if (r.accepted) {
+        const v = r.library_version;
+        toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success',
+                message: v?.saved ? `Saved as version ${v.version}${v.change ? ` (${v.change} change)` : ''}; the version before is kept in the history.` : v?.why });
+        setJustAccepted((r.message.proposal?.ops ?? []).filter((o) => opIds.includes(o.id) && o.status === 'accepted' && o.kind !== 'tidy').length);   // text to mark
+        if (v?.saved) onSessionChanged();                                     // its label names the new version
+      }
     } catch (e) { toast({ title: 'Could not accept', message: problemOf(e), type: 'error' }); }
   };
   const revertOp = async (messageId: number, opId: string) => {
@@ -269,6 +274,10 @@ export default function StudioWorkspacePage() {
   const [pane, setPane] = useState<'document' | 'assistant'>('document');          // on a narrow screen
   const [compare, setCompare] = useState<CompareSpec | null>(null);
   const [asFile, setAsFile] = useState(false);                       // the document as its file shows it (Word, or the PDF)
+  const openedAsFile = useRef<number | null>(null);
+  useEffect(() => {                                                  // a Word file opens as Word lays it out, once per document
+    if (session?.source?.in_place && openedAsFile.current !== session.id) { openedAsFile.current = session.id; setAsFile(true); }
+  }, [session?.id, session?.source?.in_place]);
   const [justAccepted, setJustAccepted] = useState(0);                          // how many changes were just accepted: offered to be seen marked in the document
   const [dialog, setDialog] = useState<Dialog>(null);
   const [focusRef, setFocusRef] = useState<string | null>(null);
@@ -484,10 +493,12 @@ export default function StudioWorkspacePage() {
                 {proposal.proposal?.stats ? <> · +{proposal.proposal.stats.words_added} / −{proposal.proposal.stats.words_removed} words</> : null}
                 {previewing === proposal.id ? ' · nothing changes until you accept' : ''}
               </span>
-              <button type="button" onClick={() => { setAsFile(false); setCompare(previewing === proposal.id ? null : { type: 'preview', messageId: proposal.id }); }}
-                className="inline-flex items-center gap-1 rounded-md border border-[#9fd9bd] bg-white px-2 py-1 font-semibold text-[#0b6b58] hover:bg-[#f3fbf6]">
-                {previewing === proposal.id ? <><EyeOff className="h-3.5 w-3.5" /> Hide preview</> : <><Eye className="h-3.5 w-3.5" /> Preview in document</>}
-              </button>
+              {(proposal.proposal?.ops ?? []).some((o) => o.status === 'pending' && o.kind !== 'tidy') && (
+                <button type="button" onClick={() => setCompare(previewing === proposal.id ? null : { type: 'preview', messageId: proposal.id })}
+                  className="inline-flex items-center gap-1 rounded-md border border-[#9fd9bd] bg-white px-2 py-1 font-semibold text-[#0b6b58] hover:bg-[#f3fbf6]">
+                  {previewing === proposal.id ? <><EyeOff className="h-3.5 w-3.5" /> Hide preview</> : <><Eye className="h-3.5 w-3.5" /> Preview in document</>}
+                </button>
+              )}
               <button type="button" onClick={() => decideAll('accept')} disabled={!!bulk}
                 className="inline-flex items-center gap-1 rounded-md bg-[#0f766e] px-2.5 py-1 font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-60">
                 {bulk === 'accept' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Accept all

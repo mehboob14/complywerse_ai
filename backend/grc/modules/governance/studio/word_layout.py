@@ -17,10 +17,9 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from docx.oxml.ns import qn
 
+from .docx_io import SYMBOL_GLYPHS as _BULLETS
 from .docx_io import Ctx, Node, _on
 
-_BULLETS = {"": "•", "": "▪", "": "➢", "": "❖", "": "✓", "": "□", "": "■", "": "➢",
-            "o": "◦", "§": "▪", "": "•"}
 
 
 def _roman(n: int) -> str:
@@ -207,13 +206,14 @@ def indent(ctx: Ctx, p) -> Tuple[float, float]:
 
 def layout(ctx: Ctx, nodes: List[Node]) -> List[Dict[str, Any]]:
     """For each block the studio shows (in order) what Word shows that the text does not hold: ``label`` (the number in front of
-    it), ``left`` and ``hang`` (its indent, in points) and ``body`` (a heading that looks like body text). Only what applies."""
+    it), ``left`` and ``hang`` (its indent, in points), ``body`` (a heading that looks like body text) and ``locked`` (Word makes
+    or draws it: a table of contents, a text box, a diagram). Only what applies."""
     numbers = labels(ctx)
     normal = _normal_size(ctx)
     out: List[Dict[str, Any]] = []
     for n in nodes:
-        look: Dict[str, Any] = {}
-        if n.kind in ("heading", "paragraph", "list_item"):
+        look: Dict[str, Any] = {"locked": True} if n.generated else {}
+        if n.kind in ("heading", "paragraph", "list_item") and n.para is not None:
             if numbers.get(n.el):
                 look["label"] = numbers[n.el]
             left, hang = indent(ctx, n.el)

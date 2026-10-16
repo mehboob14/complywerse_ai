@@ -183,8 +183,12 @@ export const WordLayout = Extension.create({
             const decorations: Decoration[] = [];
             ranges.forEach((r, i) => {
               const l = looks[i];
-              if (!l || !(l.label || l.left || l.hang || l.body)) return;
-              const attrs: Record<string, string> = { class: l.body ? 'studio-wl studio-wl-body' : 'studio-wl' };
+              if (!l || !(l.label || l.left || l.hang || l.body || l.locked)) return;
+              const attrs: Record<string, string> = { class: `studio-wl${l.body ? ' studio-wl-body' : ''}${l.locked ? ' studio-wl-locked' : ''}` };
+              if (l.locked) {                                       // Word makes or draws it: shown as it is, changed in Word
+                attrs.contenteditable = 'false';
+                attrs.title = 'Word makes this part itself (its table of contents, a text box or a diagram), so it is changed in Word, not here';
+              }
               if (l.label) attrs['data-num'] = l.label;
               if (l.left || l.hang) attrs.style = `padding-left:${l.left ?? 0}pt;text-indent:${-(l.hang ?? 0)}pt;--hang:${Math.max(0, l.hang ?? 0)}pt`;
               decorations.push(Decoration.node(r.from, r.to, attrs));

@@ -351,6 +351,8 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
     same = _norm_doc(base_rev.content if base_rev else "") == _norm_doc(s.content)
     where = B.locate(base, now)
     chosen = [o for o in ops if o["id"] in set(op_ids) and o["status"] == "pending"]
+    tidied = [o for o in chosen if o["kind"] == "tidy" and _tidy_file(s, o)]
+    chosen = [o for o in chosen if o["kind"] != "tidy"]
     translated: List[B.Op] = []
     replaced: Dict[str, str] = {}               # op id -> the Markdown it takes out of the document (kept, so the change can be taken back)
     conflicts = 0
@@ -394,10 +396,13 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
             else:
                 o["status"], o["why"] = "conflict", status.get(o["id"], "It could not be placed.")
                 conflicts += 1
-    if applied:
-        rev = add_revision(db, s, B.render(new_blocks), author_type="ai", user_id=user_id,
-                           summary=(summary or ("Comply Agent wrote the first draft" if auto and B.is_blank(now) else f"Accepted {len(applied)} Comply Agent change(s)")), message_id=msg.id)
-        for o in applied:                       # who accepted it, when, and what it replaced: the change chain reads this
+    conflicts += sum(1 for o in ops if o["kind"] == "tidy" and o["id"] in set(op_ids) and o["status"] == "conflict")
+    if applied or tidied:                       # a tidy changes the file only: still a revision, so the file view and the history follow it
+        rev = add_revision(db, s, B.render(new_blocks) if applied else s.content, author_type="ai", user_id=user_id,
+                           summary=(summary or ("Comply Agent wrote the first draft" if auto and B.is_blank(now) else
+                                                f"Accepted {len(applied)} Comply Agent change(s)" if applied else "Tidied the spacing of the Word file")),
+                           message_id=msg.id)
+        for o in applied + tidied:              # who accepted it, when, and what it replaced: the change chain reads this
             o["accepted_by"], o["accepted_at"], o["revision"] = user_id, _now().isoformat(), rev.number
             if o["id"] in replaced:
                 o["before_markdown"] = replaced[o["id"]]
@@ -405,7 +410,43 @@ def accept_ops(db, s, msg, op_ids: Sequence[str], user_id: Optional[int], *, ove
     msg.proposal = proposal
     msg.updated_at = _now()
     db.commit()
-    return {"accepted": len(applied), "conflicts": conflicts}
+    return {"accepted": len(applied) + len(tidied), "conflicts": conflicts}
+
+
+def _tidy_file(s, o: Dict[str, Any]) -> bool:
+    """Accept a tidy (``engine.tidy_offer``): the session's Word file with its spacing tidied becomes the file its edits are
+    written into. A new file next to it, so the one before is kept and the tidy can be taken back. False, with the change marked
+    as a conflict, when it cannot be done."""
+    from . import docx_io
+
+    why = None
+    if not is_word_in_place(s):
+        why = "This document is not a Word file edited in place."
+    else:
+        try:
+            data, counts = docx_io.tidy(s.source_path)
+        except Exception:       # noqa: BLE001 - the file is left as it was
+            logger.warning("studio session %s: the Word file could not be tidied", s.id, exc_info=True)
+            data, counts, why = None, {}, "The Word file could not be tidied."
+        if why is None and data is None:
+            why = "There is nothing left to tidy."
+        if why is None:
+            path = os.path.join(os.path.dirname(s.source_path), f"{uuid.uuid4().hex}_tidied.docx")
+            with open(path, "wb") as f:
+                f.write(data)
+            try:
+                docx_io.export_in_place(path, s.content)                  # the document's text still goes into the tidied file
+            except docx_io.PatchProblem:
+                os.unlink(path)
+                why = "The tidied file could not take the document's text, so the file was left as it was."
+            else:
+                o["before_source"], o["tidy"], s.source_path = s.source_path, counts, path
+                s.settings = {**(s.settings or {}), "file_changed": True}
+    if why:
+        o["status"], o["why"] = "conflict", why
+        return False
+    o["status"] = "accepted"
+    return True
 
 
 def _run_starts(blocks: Sequence[B.Block], signatures: Sequence[str]) -> List[int]:
@@ -433,6 +474,18 @@ def revert_op(db, s, msg, op_id: str, user_id: Optional[int]) -> Dict[str, Any]:
     if op is None or op.get("status") != "accepted":
         raise StudioError("Only a change that was accepted can be taken back.")
     kind = op["kind"]
+    if kind == "tidy":                          # the file from before the tidy is kept: the edits go into it again
+        before = op.get("before_source")
+        if not before or not os.path.exists(before):
+            raise StudioError("The Word file from before the tidy is no longer kept, so the tidy cannot be taken back.")
+        s.source_path = before
+        s.settings = {**(s.settings or {}), "file_changed": True}
+        add_revision(db, s, s.content, author_type="revert", user_id=user_id, summary="Took back the tidy of the Word file's spacing", message_id=msg.id)
+        op["status"], op["reverted_by"], op["reverted_at"] = "reverted", user_id, _now().isoformat()
+        proposal["ops"] = ops
+        msg.proposal, msg.updated_at = proposal, _now()
+        db.commit()
+        return {"content": s.content, "revision": s.revision_no}
     base_rev = db.query(StudioRevision).filter(StudioRevision.session_id == s.id, StudioRevision.number == (msg.base_revision or 0)).first()
     base = B.parse(base_rev.content if base_rev else "")
     now = B.parse(s.content)
@@ -623,7 +676,8 @@ def pending_redline(db, s, msg) -> Dict[str, Any]:
     proposal = msg.proposal or {}
     base_rev = db.query(StudioRevision).filter(StudioRevision.session_id == s.id, StudioRevision.number == (msg.base_revision or 0)).first()
     base = B.parse(base_rev.content if base_rev else "")
-    ops = [B.Op(o["id"], o["kind"], o["start"], o.get("end", ""), o["markdown"]) for o in proposal.get("ops") or [] if o["status"] == "pending"]
+    ops = [B.Op(o["id"], o["kind"], o["start"], o.get("end", ""), o["markdown"]) for o in proposal.get("ops") or []
+           if o["status"] == "pending" and o["kind"] != "tidy"]          # a tidy changes the file's spacing, not the text
     proposed, status = B.apply_ops(base, ops)
     return {"rows": B.redline(base, proposed), "stats": B.stats(base, proposed), "applied": [k for k, v in status.items() if v == "applied"]}
 
@@ -975,6 +1029,34 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     return doc
 
 
+def version_after_accept(db, s, user, accepted: int) -> Optional[Dict[str, Any]]:
+    """Accepted changes to a draft in the library become its next version at once: +1.0 for a major change, +0.1 for a minor one,
+    as Comply Agent judges it; the version before stays in the history with its file. ``None`` for a document not in the library.
+    A document in review or in force is not saved here (the user's decision, 2026-10-16): its accepted changes collect in the
+    studio until Save to library, which starts the review again. Never fails the accept: when no version can be made it says why,
+    and Save to library makes it later."""
+    from ....models import GovernanceDocument
+
+    if not s.document_id or not accepted:
+        return None
+    doc = db.get(GovernanceDocument, s.document_id)
+    if doc is not None and (doc.status or "draft") != "draft":
+        state = {"pending_review": "in review", "pending_approval": "waiting for approval"}.get(doc.status, doc.status.replace("_", " "))
+        return {"saved": False, "why": f"The document is {state}, so this change stays in the studio. Save to library makes the next "
+                                       "version when you are ready; it starts the review again."}
+    try:
+        doc = save_to_document(db, s, user, change_reason=f"Accepted {accepted} change{'' if accepted == 1 else 's'} from Comply Agent")
+    except StudioError as exc:
+        db.rollback()
+        return {"saved": False, "why": str(exc)}
+    except Exception:       # noqa: BLE001 - the accepted text is in the studio; Save to library tries again
+        db.rollback()
+        logger.warning("studio session %s: the accepted changes could not be saved as a new library version", s.id, exc_info=True)
+        return {"saved": False, "why": "The changes are in the document, but its new library version could not be made. Use Save to library to try again."}
+    row = _version_row(db, doc, doc.current_version)
+    return {"saved": True, "version": doc.current_version, "change": row.change_type if row is not None else None, "status": doc.status}
+
+
 def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary: str, reason: Optional[str], done: str, ext: str = "docx",
                        audit_action: str = "content_edited"):
     """Make ``data`` (a Word file, or a file of type ``ext``) the next version of a document that is its file, and its file. The file it
@@ -1065,7 +1147,7 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
     """Save a document that is its file (an uploaded Word or PDF) as the next version: a new file. A Word file is the original with
     the changes written into it; a PDF cannot be edited, so its new version is a Word copy built from the text and the PDF stays as
     the earlier version. Statements are anchored in the new file again (organisations that have them tied to the file)."""
-    if _norm_doc(s.content) == _norm_doc(s.base_content):
+    if _norm_doc(s.content) == _norm_doc(s.base_content) and not (s.settings or {}).get("file_changed"):     # (a tidy changes the file only)
         raise StudioError("Nothing has changed since the library version.")
     if not force and doc.file_path != (s.settings or {}).get("library_file"):
         raise Conflict("The file of this document was replaced in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
@@ -1077,7 +1159,7 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
                                                       summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
     _record_change_set(db, s, row, s.base_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
-    s.settings = {**(s.settings or {}), "library_file": doc.file_path}
+    s.settings = {**{k: v for k, v in (s.settings or {}).items() if k != "file_changed"}, "library_file": doc.file_path}
     db.commit()
     reanchor(db, doc, user.id)
     return doc
