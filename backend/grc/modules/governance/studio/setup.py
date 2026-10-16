@@ -50,7 +50,7 @@ LENGTHS = [{"value": "short", "label": "Short", "detail": "The essentials, about
            {"value": "comprehensive", "label": "Comprehensive", "detail": "Regulator-grade detail, 15 pages or more"}]
 LENGTH_FACTOR = {"short": 0.4, "standard": 0.7, "comprehensive": 1.0}        # of the words and areas a whole document is written with
 CLASSIFICATIONS = ["Public", "Internal", "Confidential", "Restricted"]
-REVIEW_CYCLES = {"Every year": 12, "Every two years": 24, "Every three years": 36}
+REVIEW_CYCLES = {"Every 6 months": 6, "Every year": 12, "Every two years": 24, "Every three years": 36}
 AUDIENCES = ["All staff", "Board and senior management", "Managers and process owners", "IT and information security teams",
              "Risk, compliance and internal audit", "Third parties and vendors", "Regulators and external auditors", "Customers"]
 
@@ -94,9 +94,58 @@ def clean(key: str, value: Any) -> Any:
     return value
 
 
+# the type of organisation a profile's industry most likely means, the most specific first
+# ponytail: naive keyword match on Tenant.industry; a mapping table if it misses real profiles
+_ENTITY_HINTS = [("islamic", "Islamic bank"), ("microfinance", "Microfinance bank"), ("development finance", "Development finance institution"),
+                 ("exchange compan", "Exchange company"), ("takaful", "Insurance or takaful company"), ("insur", "Insurance or takaful company"),
+                 ("asset manage", "Asset management or investment firm"), ("invest", "Asset management or investment firm"),
+                 ("broker", "Securities broker"), ("payment", "Payment service provider or fintech"), ("fintech", "Payment service provider or fintech"),
+                 ("government", "Government or public sector body"), ("public sector", "Government or public sector body"), ("bank", "Commercial bank")]
+
+
+def _entity_type(industry: str) -> str:
+    low = industry.lower()
+    return next((kind for hint, kind in _ENTITY_HINTS if hint in low), "")
+
+
+def _country(name: str) -> str:
+    return next((c for c in REGULATORS if c.lower() == name.strip().lower()), "")
+
+
+def _fold(label: str, country: str) -> str:
+    """A followed feed's regulator as the fixed list names it ("State Bank of Pakistan" -> "State Bank of Pakistan (SBP)"), so it is
+    offered once."""
+    for c, names in REGULATORS.items():
+        if country and c != country:
+            continue
+        for n in names:
+            if n.lower() == label.lower() or n.lower().startswith(label.lower() + " ("):
+                return n
+    return label
+
+
+def from_document(db, doc) -> Dict[str, Any]:
+    """What a library document already says about itself, as instructions: copied into a draft of it, never written back to it."""
+    from ....models import GRCDepartment
+
+    out: Dict[str, Any] = {}
+    if str(doc.classification or "").strip():
+        out["classification"] = str(doc.classification).strip().title()            # 'internal' -> 'Internal'
+    cycle = next((k for k, v in REVIEW_CYCLES.items() if v == doc.review_cycle_months), "")
+    if cycle:
+        out["review_cycle"] = cycle
+    dept = db.get(GRCDepartment, doc.department_id) if doc.department_id else None
+    if dept is not None and (dept.name or "").strip():
+        out["departments"] = [dept.name.strip()]
+    scope = clean("regulations", [x for x in doc.regulatory_scope or [] if isinstance(x, str)])
+    if scope:
+        out["regulations"] = scope
+    return out
+
+
 def options(db, session) -> Dict[str, Any]:
     """The lists the person picks from, the organisation's own first. Reads only."""
-    from ....models import BusinessUnit, GRCDepartment, RegulatoryChange, RegulatoryFeedSource, StudioReference, Tenant
+    from ....models import BusinessUnit, GovernanceDocument, GRCDepartment, GRCUser, RegulatoryChange, RegulatoryFeedSource, StudioReference, Tenant
     from . import references as refs
 
     tenant = db.query(Tenant).first()
@@ -104,9 +153,11 @@ def options(db, session) -> Dict[str, Any]:
     regulators = {country: list(names) for country, names in REGULATORS.items()}
     followed: List[Dict[str, str]] = []
     for country, regulator in (db.query(RegulatoryFeedSource.country, RegulatoryFeedSource.regulator)
-                               .filter(RegulatoryFeedSource.is_active.is_(True)).all()):
+                               .filter(RegulatoryFeedSource.is_active.is_(True)).order_by(RegulatoryFeedSource.id).all()):
         if regulator and str(regulator).strip():
-            followed.append({"label": str(regulator).strip(), "country": str(country or "").strip()})
+            row = {"label": _fold(str(regulator).strip(), str(country or "").strip()), "country": str(country or "").strip()}
+            if row not in followed:                         # several feeds of one regulator: offered once
+                followed.append(row)
     register = [{"label": r.title.strip() + (f" ({r.regulation_reference.strip()})" if r.regulation_reference and r.regulation_reference.strip() not in r.title else ""),
                  "detail": (r.source or "").strip()}
                 for r in db.query(RegulatoryChange).filter(RegulatoryChange.status != "not_applicable")
@@ -119,8 +170,25 @@ def options(db, session) -> Dict[str, Any]:
         if name and name.strip() and name.strip() not in departments:
             departments.append(name.strip())
     attached = {sid for (sid,) in db.query(StudioReference.source_id).filter(StudioReference.session_id == session.id, StudioReference.kind == "framework").all()}
-    frameworks = [{"id": f.id, "label": f.name if not f.version or f.version in f.name else f"{f.name} ({f.version})", "attached": f.id in attached}
+    doc = db.get(GovernanceDocument, session.document_id) if session.document_id else None
+    of_document = {i for i in [*(doc.framework_ids or []), *(doc.applicable_framework_ids or [])] if isinstance(i, int)} if doc is not None else set()
+    frameworks = [{"id": f.id, "label": f.name if not f.version or f.version in f.name else f"{f.name} ({f.version})", "attached": f.id in attached,
+                   "of_document": f.id in of_document}
                   for f, _count in refs.available_frameworks(db)]
+    # what "Fill in from your organisation" sets: the profile's country (or the one country its followed regulators are in), its type
+    # from the industry, and the regulators it follows there
+    feed_countries = {r["country"] for r in followed if r["country"] in REGULATORS}
+    country = _country(geography) or (next(iter(feed_countries)) if len(feed_countries) == 1 else "")
+    defaults = {"country": country, "entity_type": _entity_type(str(getattr(tenant, "industry", "") or "")),
+                "regulators": [r["label"] for r in followed if not country or not r["country"] or r["country"] == country]}
+    names = [n for n in ((getattr(tenant, "legal_entity", "") or "").strip(), (getattr(tenant, "name", "") or "").strip()) if n]
+    document = None
+    if doc is not None:
+        facts = from_document(db, doc)
+        owner = db.get(GRCUser, doc.owner_id) if doc.owner_id else None
+        document = {"classification": facts.get("classification", ""), "review_cycle": facts.get("review_cycle", ""),
+                    "owner": ((owner.display_name or owner.username) if owner is not None else "") or "",
+                    "department": (facts.get("departments") or [""])[0]}
     return {
         "entity_types": ENTITY_TYPES,
         "countries": COUNTRIES,
@@ -135,4 +203,7 @@ def options(db, session) -> Dict[str, Any]:
         "lengths": LENGTHS,
         "classifications": CLASSIFICATIONS,
         "review_cycles": list(REVIEW_CYCLES),
+        "entity_names": list(dict.fromkeys(names)),
+        "defaults": defaults,
+        "document": document,
     }

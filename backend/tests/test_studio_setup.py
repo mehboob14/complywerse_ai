@@ -26,9 +26,9 @@ def test_the_lists_start_with_what_the_platform_knows_about_the_organisation(wor
     world.http.post(world.api(f"/sessions/{s['id']}/references"), json={"kind": "framework", "source_id": 1, "scope": {"mode": "all"}})
     out = world.http.get(world.api(f"/sessions/{s['id']}/setup")).json()
     assert out["departments"] == ["IT Operations", "Retail Banking"]                                      # active departments, then business units
-    assert out["regulators_followed"] == [{"label": "State Bank of Pakistan", "country": "Pakistan"}]
+    assert out["regulators_followed"] == [{"label": "State Bank of Pakistan (SBP)", "country": "Pakistan"}]      # folded into the list's name
     assert out["regulations"] == [{"label": "Enterprise Technology Governance & Risk Management Framework (BPRD Circular No. 05 of 2017)", "detail": "SBP"}]
-    assert out["frameworks"] == [{"id": 1, "label": "ISO/IEC 27001 (2022)", "attached": True}]
+    assert out["frameworks"] == [{"id": 1, "label": "ISO/IEC 27001 (2022)", "attached": True, "of_document": False}]
     assert out["country_from_profile"] == "Pakistan" and "State Bank of Pakistan (SBP)" in out["regulators"]["Pakistan"]
     assert [x["value"] for x in out["lengths"]] == ["short", "standard", "comprehensive"] and "Every two years" in out["review_cycles"]
 
