@@ -11,7 +11,7 @@ import pytest
 import grc.models as m
 from grc.modules.governance.studio import auto_refs, draft_prompts, engine, prompts
 
-from _claude_mock import reply
+from _claude_mock import reply, searched
 from test_studio_draft import PLAN, drafts, finished, new_policy, part   # noqa: F401  (drafts is a fixture)
 from test_studio_flow import answer, change, user_turn, world             # noqa: F401  (world is a fixture)
 
@@ -181,11 +181,16 @@ def test_the_prompts_let_comply_agent_apply_any_standard_and_ask_before_writing(
 # ── a whole new document ─────────────────────────────────────────────────────
 def test_a_new_document_asks_first_when_its_rules_are_open_and_is_written_with_the_answers(drafts):
     calls = []
-    plans = iter([dict(PLAN, ask_first=True, questions=ASK[:2]), dict(PLAN, ask_first=True, questions=ASK[:1])])
+    plans = iter([dict(PLAN, ask_first=True, questions=ASK[:1])])
 
     def respond(body):
+        if body.get("tools"):                   # the web research before the questions
+            calls.append({"task": "research", "body": body})
+            return searched("**Binding**\n- " + GLBA, searches=["US bank access control rules"], pages=[("https://www.ftc.gov/glba", GLBA)])
         task = body["messages"][0]["content"][-1]["text"]
         calls.append({"task": task, "body": body})
+        if 'kind="scope"' in task:
+            return reply(json.dumps({"understood": "An access control policy for a US bank.", "questions": ASK[:2]}))
         if 'kind="plan"' in task:
             return reply(json.dumps(next(plans)))
         kind, number, heading = re.search(r'<task kind="(section|area)" number="([^"]+)" heading="([^"]+)"', task).groups()
@@ -197,13 +202,14 @@ def test_a_new_document_asks_first_when_its_rules_are_open_and_is_written_with_t
     request = "Write the complete access control policy following US banking security standards."
     first = drafts.http.post(drafts.api(f"/sessions/{s['id']}/messages"), json={"text": request}).json()
     asked = finished(drafts, s["id"], first["id"])
-    assert asked["proposal"]["ask_first"] == "draft" and [q["id"] for q in asked["questions"]] == ["q1", "q2"] and len(calls) == 1
-    assert asked["content"].startswith("Before I write the policy") and drafts.http.get(drafts.api(f"/sessions/{s['id']}")).json()["revision"] == 1
+    assert asked["proposal"]["ask_first"] == "draft" and [q["id"] for q in asked["questions"]] == ["q1", "q2"] and len(calls) == 2
+    assert asked["content"].startswith("An access control policy for a US bank.\n\nBefore I write the policy")
+    assert drafts.http.get(drafts.api(f"/sessions/{s['id']}")).json()["revision"] == 1
 
     second = drafts.http.post(drafts.api(f"/sessions/{s['id']}/messages"), json={"reply_to": first["id"], "answers": [
         {"id": "q1", "chosen": [GLBA, FFIEC]}, {"id": "q2", "chosen": ["ISO/IEC 27001:2022"]}]}).json()
     done = finished(drafts, s["id"], second["id"])
-    replan = calls[1]
+    replan = calls[2]
     assert 'kind="plan"' in replan["task"] and "The person has already answered your questions" in replan["task"]
     shared = json.dumps(replan["body"])
     assert request in shared and GLBA in shared and "ISO/IEC 27001:2022" in shared            # the request, then the answers, in the brief

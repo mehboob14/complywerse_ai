@@ -159,11 +159,13 @@ export interface LiveView {
   /** the last lines of the text being written, and what it is */
   tail?: string;
   tail_label?: string;
+  /** a whole document being written: grows each time more of it can be shown (`studioApi.draftPreview`) */
+  preview_seq?: number;
 }
 
 export interface Progress {
   id: number;
-  status: 'working' | 'done' | 'error';
+  status: 'working' | 'done' | 'error' | 'stopped';
   stage: string | null;
   live: LiveView | null;
 }
@@ -207,7 +209,8 @@ export interface Message {
   role: 'user' | 'assistant';
   kind: 'chat' | 'checks' | 'compare';
   content: string;
-  status: 'working' | 'done' | 'error';
+  /** stopped: the person pressed Stop and nothing it was writing was applied */
+  status: 'working' | 'done' | 'error' | 'stopped';
   stage: string | null;
   /** present while the turn works (an older server sends none) */
   live?: LiveView | null;
@@ -421,6 +424,10 @@ export const studioApi = {
   send: (id: number, text: string, extra?: { reply_to?: number; answers?: AnswerItem[]; decide?: boolean; attachments?: number[] }) =>
     post<Message>(`/sessions/${id}/messages`, { text, ...(extra ?? {}) }),
   message: (id: number, messageId: number) => get<Message>(`/sessions/${id}/messages/${messageId}`),
+  /** stop Comply Agent where it is: nothing it was writing is applied (409 once it has finished) */
+  stop: (id: number, messageId: number) => post<Message>(`/sessions/${id}/messages/${messageId}/stop`),
+  /** a whole document as far as it is written, while Comply Agent writes it */
+  draftPreview: (id: number, messageId: number) => get<{ seq: number; markdown: string }>(`/sessions/${id}/messages/${messageId}/preview`),
   accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
     post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message }>(`/sessions/${id}/messages/${messageId}/accept`, body),
   reject: (id: number, messageId: number, body: { op_ids?: string[] } = {}) => post<{ message: Message }>(`/sessions/${id}/messages/${messageId}/reject`, body),

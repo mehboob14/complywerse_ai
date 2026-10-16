@@ -728,6 +728,23 @@ def start_turn(db, s, user, text: str, *, reply_to: Optional[int] = None, answer
     return msg
 
 
+STOPPED = "You stopped Comply Agent here. Nothing in the document changed."
+
+
+def stop_turn(db, m) -> bool:
+    """Stop a chat turn that is working: its message says so at once, and the worker, which looks about once a second, abandons what it
+    was writing (nothing is applied). False when the turn had already finished: the row is changed only while it is "working", so a
+    result written at the same moment is never overwritten."""
+    from ....models import StudioMessage
+
+    stopped = (db.query(StudioMessage).filter(StudioMessage.id == m.id, StudioMessage.kind == "chat", StudioMessage.status == "working")
+               .update({"status": "stopped", "content": STOPPED, "stage": None, "live": None, "preview": None, "updated_at": _now()},
+                       synchronize_session=False))
+    db.commit()
+    db.refresh(m)
+    return stopped == 1
+
+
 def start_task(db, s, user, kind: str):
     """An assistant message for a check or a comparison."""
     from ....models import StudioMessage

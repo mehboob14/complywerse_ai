@@ -11,7 +11,7 @@ from grc.modules.governance.studio import blocks as B
 from grc.modules.governance.studio import draft_prompts as P
 from grc.modules.governance.studio import drafting
 
-from _claude_mock import error, reply
+from _claude_mock import error, reply, searched
 from test_studio_flow import ENTITY, world          # noqa: F401  (world is a fixture)
 
 PLAN = {
@@ -26,6 +26,14 @@ PLAN = {
     "external_sources": ["ISO/IEC 27001:2022", "PCI DSS v4.0"], "questions": ["Which systems hold customer card data?"],
 }
 CLAUSE = "{org} shall remove the access of a leaver within 24 hours of the leaving date and the Information Security Function shall record the removal in the access register. "
+SBP = ("https://www.sbp.org.pk/bprd/2017/C5.htm", "Enterprise Technology Governance & Risk Management Framework for Financial Institutions")
+RESEARCH = "**Binding**\n- SBP Enterprise Technology Governance & Risk Management Framework (BPRD Circular No. 05 of 2017) — State Bank of Pakistan — access rights reviewed."
+SCOPE = {"understood": "You want a complete access control policy for the bank.",
+         "questions": [{"id": "q1", "question": "Which laws and regulations must it follow?", "why": "The clauses cite them.", "kind": "multiple",
+                        "options": [{"label": "SBP ETGRM Framework 2017", "detail": "State Bank of Pakistan", "recommended": True},
+                                    {"label": "ISO/IEC 27001", "detail": "In the platform: attached as a reference when you choose it", "recommended": True}],
+                        "other": True},
+                       {"id": "q2", "question": "Which systems are in scope?", "why": "Sets what it covers.", "kind": "text", "options": [], "other": True}]}
 
 
 def text(words: int, org: str = "<ORG_1>") -> str:
@@ -48,10 +56,16 @@ def part(kind: str, number: str, heading: str, org: str = "<ORG_1>") -> dict:
 
 
 def script(calls, overrides=None):
-    """The scripted AI: a plan, then a part for whatever the task asks for. ``overrides[heading](task)`` answers a part itself."""
+    """The scripted AI: the web research and the questions before a document is written; a plan, then a part for whatever the task asks
+    for. ``overrides[heading](task)`` answers a part itself."""
     def respond(body):
+        if body.get("tools"):
+            calls.append({"task": "research", "body": body})
+            return searched(RESEARCH, searches=["access control regulation banks Pakistan"], pages=[SBP], cited=[SBP], preface="I'll look that up.")
         task = body["messages"][0]["content"][-1]["text"]
         calls.append({"task": task, "body": body})
+        if 'kind="scope"' in task:
+            return reply(json.dumps(SCOPE))
         if 'kind="plan"' in task:
             return reply(json.dumps(PLAN))
         kind, number, heading = re.search(r'<task kind="(section|area)" number="([^"]+)" heading="([^"]+)"', task).groups()
@@ -224,78 +238,34 @@ def test_a_plan_that_cannot_be_made_does_not_stop_the_document(drafts):
 
 
 # ── asking for it ────────────────────────────────────────────────────────────
-def test_a_new_document_is_written_as_soon_as_it_is_created_and_waits_for_the_person_to_open_it(drafts, monkeypatch):
-    """The start page creates the document, attaches the references one by one, then opens it: the draft starts when it is opened."""
-    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "on")
-    monkeypatch.setattr(drafting, "SETTLE_GRACE", 0)
-    seen = []
-
-    def opened(db, session_id, since):                 # the person opens the document: the references are attached by now
-        seen.append(session_id)
-        row = db.get(m.StudioSession, session_id)
-        assert db.query(m.StudioReference).filter_by(session_id=session_id).count() == 0            # nothing attached yet: it waited for the open
-        row.last_opened_at = since + __import__("datetime").timedelta(seconds=3)
-        db.commit()
-        return real(db, session_id, since)
-    real = drafting.wait_until_opened
-    monkeypatch.setattr(drafting, "wait_until_opened", opened)
+def test_a_new_document_is_not_written_on_creation_it_waits_for_the_persons_request(drafts):
     calls = []
     drafts.respond(script(calls))
-    s = drafts.http.post(drafts.api("/sessions"), json={"kind": "new", "title": "Access Control Policy", "doc_type": "policy"}).json()
-    items = drafts.http.get(drafts.api(f"/sessions/{s['id']}/messages")).json()["items"]
-    assert seen == [s["id"]] and [(x["role"], x["content"]) for x in items][0] == ("user", "Write the complete document.")
-    assert items[1]["status"] == "done" and drafts.http.get(drafts.api(f"/sessions/{s['id']}")).json()["revision"] == 2 and len(calls) == 15
-
-
-def test_a_new_document_is_not_written_on_creation_when_it_is_blank_or_other_or_declined_or_switched_off(drafts, monkeypatch):
-    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "on")
-    monkeypatch.setattr(drafting, "SETTLE_GRACE", 0)
-    monkeypatch.setattr(drafting, "SETTLE_MAX", 0.2)
-    calls = []
-    drafts.respond(script(calls))
-
-    def created(**body):
+    for body in ({"doc_type": "policy"}, {"doc_type": "policy", "template_id": "builtin:blank"}, {"doc_type": "other"}, {"doc_type": "policy", "draft": True}):
         s = drafts.http.post(drafts.api("/sessions"), json={"kind": "new", "title": "T", **body}).json()
-        return drafts.http.get(drafts.api(f"/sessions/{s['id']}/messages")).json()["items"]
-    assert created(doc_type="policy", template_id="builtin:blank") == []                      # the blank template is a deliberate empty start
-    assert created(doc_type="other", template_id="builtin:blank") == []
-    assert created(doc_type="policy", draft=False) == []                                      # the caller said not to
-    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "off")
-    assert created(doc_type="policy") == []                                                   # the operator switched it off
-    monkeypatch.setenv("DOCUMENT_STUDIO_AUTO_DRAFT", "on")
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    assert created(doc_type="policy") == []                                                   # the AI is not set up: nothing is started
+        assert drafts.http.get(drafts.api(f"/sessions/{s['id']}/messages")).json()["items"] == []
+        assert drafts.http.get(drafts.api(f"/sessions/{s['id']}")).json()["revision"] == 1
     assert calls == []
-    library = drafts.http.post(drafts.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
-    assert drafts.http.get(drafts.api(f"/sessions/{library['id']}/messages")).json()["items"] == []
 
 
-def test_the_draft_waits_for_the_document_to_be_opened_and_no_longer_than_the_limit(drafts, monkeypatch):
-    from datetime import timedelta
-
-    monkeypatch.setattr(drafting, "SETTLE_GRACE", 0)
-    s = drafts.http.post(drafts.api("/sessions"), json={"kind": "new", "title": "T", "doc_type": "policy"}).json()
-    since = drafts.db.get(m.StudioSession, s["id"]).last_opened_at
-    monkeypatch.setattr(drafting, "SETTLE_MAX", 0.6)
-    started = drafting.time.monotonic()
-    drafting.wait_until_opened(drafts.db, s["id"], since)                                        # never opened: gives up at the limit
-    assert 0.5 <= drafting.time.monotonic() - started < 3
-    monkeypatch.setattr(drafting, "SETTLE_MAX", 30)
-    drafts.db.get(m.StudioSession, s["id"]).last_opened_at = since + timedelta(seconds=2)
-    drafts.db.commit()
-    started = drafting.time.monotonic()
-    drafting.wait_until_opened(drafts.db, s["id"], since)                                        # opened: returns at once
-    assert drafting.time.monotonic() - started < 2
-    drafting.wait_until_opened(drafts.db, 99999, since)                                          # deleted meanwhile: returns
-
-
-def test_the_chat_writes_the_whole_document_when_asked_for_it_on_a_document_not_yet_started(drafts):
+def test_the_chat_asks_first_and_writes_the_whole_document_with_the_answers(drafts):
     calls = []
     drafts.respond(script(calls))
     s = new_policy(drafts)
-    msg = drafts.http.post(drafts.api(f"/sessions/{s['id']}/messages"), json={"text": "Write the complete access control policy."}).json()
-    done = finished(drafts, s["id"], msg["id"])
-    assert 'kind="plan"' in calls[0]["task"] and len(calls) == 15 and "The person's request: Write the complete access control policy." in json.dumps(calls[0]["body"])
+    first = drafts.http.post(drafts.api(f"/sessions/{s['id']}/messages"), json={"text": "Write the complete access control policy."}).json()
+    asked = finished(drafts, s["id"], first["id"])
+    assert [c["task"] for c in calls][0] == "research" and 'kind="scope"' in calls[1]["task"] and len(calls) == 2
+    assert asked["proposal"]["ask_first"] == "draft" and [q["id"] for q in asked["questions"]] == ["q1", "q2"]
+    assert drafts.http.get(drafts.api(f"/sessions/{s['id']}")).json()["revision"] == 1                      # nothing is written before the answers
+
+    second = drafts.http.post(drafts.api(f"/sessions/{s['id']}/messages"), json={"reply_to": first["id"], "decide": True, "answers": [
+        {"id": "q1", "chosen": ["SBP ETGRM Framework 2017"]}]}).json()
+    done = finished(drafts, s["id"], second["id"])
+    plan = calls[2]
+    assert 'kind="plan"' in plan["task"] and len(calls) == 2 + 15 and "The person has already answered your questions" in plan["task"]
+    sent = json.dumps(plan["body"])
+    assert "The person's request: Write the complete access control policy." in sent and "SBP ETGRM Framework 2017" in sent
+    assert "<internet_research>" in sent and "BPRD Circular No. 05 of 2017" in sent                       # what was found is used for the names and editions
     assert drafts.http.get(drafts.api(f"/sessions/{s['id']}")).json()["revision"] == 2 and done["kind"] == "chat"
 
 

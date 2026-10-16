@@ -17,9 +17,10 @@ import contextvars
 import logging
 import os
 import re
+import threading
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ....services.ai_gateway import claude_client
@@ -40,9 +41,13 @@ PARALLEL = max(1, int(os.environ.get("DOCUMENT_STUDIO_DRAFT_PARALLEL", "5") or 5
 SECTION_MAX_TOKENS = 16000
 PLAN_MAX_TOKENS = 12000
 RETRY_WAITS = (6, 20, 45)                 # seconds before another try of a call the provider said may work later
-SETTLE_GRACE = 1.0                        # seconds after the person opens a new document before it is written (late references)
-SETTLE_MAX = 40.0                         # the longest a new document waits to be opened before it is written anyway
 USE_CASE = "governance.studio_draft"
+RESEARCH_USE_CASE = "governance.studio_research"
+WEB_SEARCH = {"type": "web_search_20260209", "name": "web_search", "max_uses": 6}
+RESEARCH_MAX_TOKENS = 6000
+RESEARCH_CHARS = 12000                    # of the findings kept for the questions and the draft
+SCOPE_MAX_TOKENS = 8000
+PREVIEW_EVERY = 1.5                       # seconds between two saves of the document shown while it is written
 
 _FRONT_KEYS = {"document description", "approval signoff", "revision history"}
 _DEPENDENT_WORDS = ("definition", "acronym", "related document", "raci", "responsibilities matrix")
@@ -200,18 +205,27 @@ def _fatal(exc: BaseException) -> bool:
 
 
 def _call(blocks: List[Dict[str, Any]], task: str, system: str, schema: Dict[str, Any], *, max_tokens: int, effort: str = "high",
-          on_progress: Optional[Callable[[claude_client.Progress], None]] = None) -> claude_client.Result:
+          on_progress: Optional[Callable[[claude_client.Progress], None]] = None, should_stop: Optional[Callable[[], bool]] = None) -> claude_client.Result:
     """One guarded call, tried again a few times when the provider says it may work later."""
     messages = [{"role": "user", "content": blocks + [{"type": "text", "text": task}]}]
     for attempt in range(len(RETRY_WAITS) + 1):
         try:
             return claude_client.complete(use_case=USE_CASE, system=system, messages=messages, schema=schema, max_tokens=max_tokens, effort=effort,
-                                          on_progress=on_progress)
+                                          on_progress=on_progress, should_stop=should_stop)
         except claude_client.ClaudeFailed as exc:
             if not exc.retryable or attempt == len(RETRY_WAITS) or _fatal(exc):
                 raise
-            time.sleep(RETRY_WAITS[attempt])
+            _pause(RETRY_WAITS[attempt], should_stop)
     raise AssertionError("unreachable")
+
+
+def _pause(seconds: float, should_stop: Optional[Callable[[], bool]]) -> None:
+    """A wait before trying again, which a Stop cuts short."""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        if should_stop is not None and should_stop():
+            raise claude_client.ClaudeStopped()
+        time.sleep(min(0.5, max(0.0, end - time.monotonic())))
 
 
 def _usage(total: Dict[str, int], result: claude_client.Result) -> None:
@@ -264,12 +278,15 @@ class Track:
             return
         md = p.data.get("markdown") if isinstance(p.data, dict) else None
         if isinstance(md, str):                     # the words speak for themselves once there are some
+            self.board.text(self.key, p.show(md))
             self.board.set(self.key, words=live.words(md), phase=None)
             self.board.tail(self.key, live.tail(md, p.show))
         else:                                       # before the first words: the AI is reading the brief, or thinking it through
             self.board.set(self.key, phase=p.phase)
 
     def settle(self, piece: "Piece") -> "Piece":
+        if self.board is not None:
+            self.board.text(self.key, piece.body)
         if piece.failed:
             self._set(state="failed", note=piece.failed)
         else:
@@ -369,9 +386,10 @@ def _fallback_areas(session, scaffold: Any, core: Optional[Section]) -> List[Dic
 
 
 def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sections: Sequence[Section], core: Optional[Section], parent: bool,
-          total: Dict[str, int], on_progress: Optional[Callable[[claude_client.Progress], None]] = None, may_ask: bool = True) -> Dict[str, Any]:
+          total: Dict[str, int], on_progress: Optional[Callable[[claude_client.Progress], None]] = None, may_ask: bool = True,
+          should_stop: Optional[Callable[[], bool]] = None) -> Dict[str, Any]:
     task = P.plan_task(label=label, title=session.title, sections=sections, core=core, doc_type=session.doc_type, parent=parent, may_ask=may_ask)
-    result = _call(shared, task, system, P.PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS, on_progress=on_progress)
+    result = _call(shared, task, system, P.PLAN_SCHEMA, max_tokens=PLAN_MAX_TOKENS, on_progress=on_progress, should_stop=should_stop)
     _usage(total, result)
     plan = dict(result.data or {})
     areas = [a for a in plan.get("areas") or [] if str(a.get("title") or "").strip()]
@@ -384,20 +402,22 @@ def _plan(shared: List[Dict[str, Any]], system: str, *, label: str, session, sec
 
 
 def _write_part(shared: List[Dict[str, Any]], system: str, make_task: Callable[[str], str], *, section: Section, area_heading: str, minimum_words: int,
-                minimum_clauses: Optional[int], number: str, track: Optional[Track] = None) -> Piece:
+                minimum_clauses: Optional[int], number: str, track: Optional[Track] = None, should_stop: Optional[Callable[[], bool]] = None) -> Piece:
     """Write one part, check it, and write it again once with the problems named if it falls short."""
     piece, track = Piece(), track or Track()
     fix = why = ""
     for attempt in (0, 1):
         track.begin(attempt, why)
         try:
-            result = _call(shared, make_task(fix), system, P.SECTION_SCHEMA, max_tokens=SECTION_MAX_TOKENS, on_progress=track.progress)
+            result = _call(shared, make_task(fix), system, P.SECTION_SCHEMA, max_tokens=SECTION_MAX_TOKENS, on_progress=track.progress, should_stop=should_stop)
+        except claude_client.ClaudeStopped:
+            raise
         except Exception as exc:        # noqa: BLE001
             if _fatal(exc):
                 raise Fatal(friendly(exc)) from exc
             logger.warning("a part of a draft could not be written (attempt %s): %s", attempt + 1, exc)
             if attempt == 0 and not piece.body:         # once more: a call that failed once usually does not fail twice
-                time.sleep(RETRY_WAITS[0])
+                _pause(RETRY_WAITS[0], should_stop)
                 continue
             if not piece.body:
                 piece.failed = friendly(exc)
@@ -467,33 +487,121 @@ def _known_ids(references: Sequence[Any]) -> set:
     return ids
 
 
-def auto_draft_enabled() -> bool:
-    """Whether a new document is written as soon as it is created (``DOCUMENT_STUDIO_AUTO_DRAFT``, on unless the operator says off)."""
-    return os.environ.get("DOCUMENT_STUDIO_AUTO_DRAFT", "on").strip().lower() not in ("off", "0", "false", "no")
+def _asking(db, session_id: int, before_id: int) -> Any:
+    """The latest message that asked the questions a new document is written with, or None: it asks once in a document's life."""
+    from ....models import StudioMessage
+
+    rows = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "assistant", StudioMessage.id < before_id)
+            .order_by(StudioMessage.id.desc()).all())
+    return next((m for m in rows if (m.proposal or {}).get("ask_first") == "draft"), None)
 
 
-def wants_auto_draft(session, requested: Optional[bool]) -> bool:
-    """Whether a document just created should be written now: a new policy, standard, procedure, guideline or charter that was not
-    started from the blank template, when the AI is set up, unless the caller said not to (``requested`` False) or the operator turned it off."""
-    return (requested is not False and auto_draft_enabled() and session.kind == "new" and session.doc_type in templates.DOC_TYPES
-            and session.template_id != "builtin:blank" and claude_client.configured())
+def asked_before(db, session_id: int, before_id: int) -> bool:
+    return _asking(db, session_id, before_id) is not None
 
 
-def wait_until_opened(db, session_id: int, since: datetime) -> None:
-    """A document is created first and its references are attached after, by separate calls; the person opens it when that is done
-    (opening it is what moves ``last_opened_at``). So the writing waits for that, plus a moment, and at most ``SETTLE_MAX`` seconds."""
-    from ....models import StudioSession
+def _research_block(text: str) -> str:
+    return ("<internet_research>\nWhat Comply Agent found on the internet about the laws, regulations and standards that apply (official titles, issuers, "
+            "editions). Use it for their names and editions; what the person chose decides which of them apply.\n" + text[:RESEARCH_CHARS]
+            + "\n</internet_research>") if text.strip() else ""
 
-    deadline = time.monotonic() + SETTLE_MAX
-    while time.monotonic() < deadline:
-        db.expire_all()
-        s = db.get(StudioSession, session_id)
-        if s is None:
-            return
-        if s.last_opened_at and s.last_opened_at > since + timedelta(milliseconds=200):
-            time.sleep(SETTLE_GRACE)
-            return
-        time.sleep(0.5)
+
+def _research_of(db, session_id: int, before_id: int) -> str:
+    """What was found on the internet when the questions were asked, kept on the message that asked them."""
+    asked = _asking(db, session_id, before_id)
+    return str(((asked.proposal or {}).get("research") or {}).get("text") or "") if asked is not None else ""
+
+
+def _platform_block(db) -> str:
+    names = [f.name if not f.version or f.version in f.name else f"{f.name} ({f.version})" for f, _count in refs.available_frameworks(db)]
+    return ("<platform_frameworks>\nThe frameworks this platform holds. One the person chooses is attached to the document as a reference.\n"
+            + "\n".join(f"- {n}" for n in names[:80]) + "\n</platform_frameworks>") if names else ""
+
+
+def _sources_text(sources: Sequence[Dict[str, str]]) -> str:
+    links = [f"[{s['title'].replace('[', '(').replace(']', ')')[:120]}](<{s['url']}>)" for s in sources if str(s.get("url", "")).startswith(("https://", "http://"))]
+    return "**Found on the internet:** " + " · ".join(links[:8]) if links else ""
+
+
+def _research_progress(db, msg):
+    """Shows the web search as it happens: what is searched for, then what was found as it is written down."""
+    def show(p: claude_client.Progress) -> None:
+        writing = p.phase == "writing" and bool(p.text.strip())
+        live.stage(db, msg, "Searching the internet for the rules that apply", step=False,
+                   detail={"reading": "Comply Agent is reading your request", "thinking": "Comply Agent is deciding what to look up",
+                           "searching": "Searching", "writing": "Writing down what it found"}.get(p.phase),
+                   groups=[{"label": "Searched the internet for", "items": [q[:160] for q in p.searches[-10:]]}] if p.searches else None,
+                   tail=live.tail(p.text) if writing else None, tail_label="What it found" if writing else None)
+    return show
+
+
+def run_scoping(db, session_id: int, message_id: int) -> None:
+    """Before a new document is written, the person settles what it covers and which rules it follows: Comply Agent looks up on the
+    internet what applies, adds the frameworks the platform holds, and asks. Nothing is assumed and nothing in the document changes;
+    the answers start the draft (``answers_a_draft``). Never raises: a failure is written on the message."""
+    from ....models import StudioMessage, StudioReference, StudioSession
+    from . import service
+    from .engine import counting
+
+    session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
+    stopped = live.stopper(db, message_id)
+    try:
+        request = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user", StudioMessage.id < message_id)
+                   .order_by(StudioMessage.id.desc()).first())
+        brief = request.content if request is not None else ""
+        sections, scaffold, custom = sections_for(db, session)
+        label, ins = scaffold.label, dict(session.instructions or {})
+        ctx = build_tenant_context(session.tenant_id, db)
+        references = db.query(StudioReference).filter(StudioReference.session_id == session_id).order_by(StudioReference.id).all()
+        total = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "calls": 0}
+        notes: List[str] = []
+
+        _stage(db, msg, "Searching the internet for the rules that apply")
+        research, sources = "", []
+        try:
+            found = claude_client.complete(use_case=RESEARCH_USE_CASE, system=P.RESEARCH_SYSTEM, tools=[WEB_SEARCH], max_tokens=RESEARCH_MAX_TOKENS, effort="medium",
+                                           messages=[{"role": "user", "content": P.research_task(label=label, title=session.title,
+                                                                                                  request=brief.split(service.ATTACHED)[0], ctx=ctx)}],
+                                           on_progress=_research_progress(db, msg), should_stop=stopped)
+            _usage(total, found)
+            research, sources = found.text.strip()[:RESEARCH_CHARS], found.sources[:12]
+            live.note(db, msg, f"{len(found.searches)} search{'' if len(found.searches) == 1 else 'es'} · {len(sources)} source{'' if len(sources) == 1 else 's'}")
+        except claude_client.ClaudeStopped:
+            raise
+        except Exception as exc:        # noqa: BLE001 - the questions still come, from what Comply Agent knows
+            if _fatal(exc):
+                raise Fatal(friendly(exc)) from exc
+            logger.warning("the web research before a draft failed: %s", exc)
+            notes.append("Comply Agent could not search the internet just now, so the laws and standards below come from what it already knows. "
+                         "Check their editions before you rely on them.")
+
+        _stage(db, msg, "Preparing the questions")
+        org = P.organisation_block(ctx, str(ins.get("entity_name") or "").strip(), _active_frameworks(db, session.tenant_id))
+        shared = _blocks(_shared_text(session, ins, org, custom, brief), refs.render(references) and f"<references>\n{refs.render(references)}\n</references>",
+                         _research_block(research), _platform_block(db))
+        result = _call(shared, P.scope_task(label=label, title=session.title, sections=sections), P.system_for(session.doc_type, ctx.industry, ctx.regulatory_scope),
+                       P.SCOPE_SCHEMA, max_tokens=SCOPE_MAX_TOKENS, effort="medium", should_stop=stopped,
+                       on_progress=counting(db, msg, "Preparing the questions", "questions", "questions"))
+        _usage(total, result)
+        data = result.data or {}
+        questions = questions_of(data.get("questions"), limit=6) or questions_of([{                     # it never writes without asking
+            "id": "q1", "question": f"What should this {label.lower()} cover, for which country or region, and which laws, regulations, standards and frameworks must it follow?",
+            "why": "The document is written to exactly that: nothing in it is assumed.", "kind": "text", "options": [], "other": True}])
+        text = "\n\n".join(t for t in (str(data.get("understood") or "").strip(),
+                                       f"Before I write the {label.lower()}, settle what it covers and which rules it follows. Pick an answer below or write "
+                                       "your own; I write the document as soon as you send them.", _sources_text(sources)) if t)
+        if not live.still_working(db, msg):
+            raise claude_client.ClaudeStopped()
+        msg.content, msg.questions, msg.references_used, msg.notes = text, questions, [], notes
+        msg.proposal = {"ops": [], "ask_first": "draft", "base_revision": session.revision_no, "stats": None, "placeholders": 0, "requirements": [],
+                        "research": {"text": research, "sources": sources}}
+        msg.usage = {k: total[k] for k in ("input_tokens", "output_tokens", "cached_tokens")}
+        msg.status, msg.stage, msg.error, msg.updated_at = "done", None, None, datetime.utcnow()
+        db.commit()
+    except claude_client.ClaudeStopped:
+        live.forget(db, message_id)
+    except Exception as exc:        # noqa: BLE001 - the person sees a sentence, the log sees the cause
+        live.fail(db, message_id, friendly(exc))
 
 
 def _asked_message(db, request) -> Any:
@@ -511,43 +619,48 @@ def answers_a_draft(db, request) -> bool:
 
 
 def _brief_of(db, session_id: int, request) -> str:
-    """What the person asked for: their message, and when it answers the draft's questions, the request those questions were about
-    first, then the answers."""
+    """What the person asked for: their message, and when the document asked its questions before, first the request those questions
+    were about and the answers given (also when the person asks again after stopping the draft)."""
     from ....models import StudioMessage
 
     if request is None:
         return ""
-    asked = _asked_message(db, request) if answers_a_draft(db, request) else None
+    asked = _asked_message(db, request) if answers_a_draft(db, request) else _asking(db, session_id, request.id)
     if asked is None:
         return request.content
-    original = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user", StudioMessage.id < asked.id)
-                .order_by(StudioMessage.id.desc()).first())
-    return "\n\n".join(t for t in ((original.content if original is not None else ""), request.content) if t.strip())
+    earlier = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user", StudioMessage.id < request.id)
+               .order_by(StudioMessage.id.desc()).all())
+    original = next((m for m in earlier if m.id < asked.id), None)
+    answered = next((m for m in earlier if m.id > asked.id and (m.answers or {}).get("reply_to") == asked.id), None)
+    texts = [m.content for m in (original, answered) if m is not None] + [request.content]
+    return "\n\n".join(dict.fromkeys(t for t in texts if t.strip()))
 
 
-def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetime] = None) -> None:
+def run_draft(db, session_id: int, message_id: int) -> None:
     """Write the whole document into the assistant message ``message_id`` and apply it. Never raises: a failure is written on the message.
-    ``wait_since`` (the moment the document was created) makes it wait until the person has opened the document, so that the
-    references attached right after creation are part of the draft."""
+    While the parts are written the document as far as it goes is kept on the message (``preview``) for the person to read; a Stop
+    (the message no longer "working") ends it, and nothing is applied."""
     from ....models import StudioMessage, StudioReference, StudioSession
     from . import service
 
     session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
+    owner, halt, check = threading.get_ident(), threading.Event(), live.stopper(db, message_id)
+
+    def stopped() -> bool:
+        """Whether the person stopped the draft. The parts ask from their own threads, which see only the flag: this thread reads the database."""
+        if not halt.is_set() and threading.get_ident() == owner and check():
+            halt.set()
+        return halt.is_set()
+
     try:
-        if wait_since is not None:
-            _stage(db, msg, "Getting ready", detail="Waiting for the references to be attached")
-            wait_until_opened(db, session_id, wait_since)
-            session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
-            if session is None or msg is None or msg.status != "working":          # the document was deleted meanwhile
-                return
         if session.doc_type not in templates.DOC_TYPES or session.kind != "new":
             raise TurnProblem("Only a new policy, standard, procedure, guideline or charter can be written from scratch.")
         request = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user", StudioMessage.id < message_id)
                    .order_by(StudioMessage.id.desc()).first())
         brief = _brief_of(db, session_id, request)
         # the draft asks before it is written at most once in a document's life: after that it follows the answers and decides the rest
-        may_ask = not any((m.proposal or {}).get("ask_first") == "draft" for m in db.query(StudioMessage).filter(
-            StudioMessage.session_id == session_id, StudioMessage.role == "assistant", StudioMessage.id < message_id).all())
+        may_ask = not asked_before(db, session_id, message_id)
+        research = _research_of(db, session_id, message_id)
         _stage(db, msg, "Reading the references and the organisation")
         references = db.query(StudioReference).filter(StudioReference.session_id == session_id).order_by(StudioReference.id).all()
         if refs.total_chars(references) > refs.MAX_TOTAL_CHARS:
@@ -570,12 +683,15 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         base_revision = session.revision_no
 
         # the part every call shares comes first, so the provider can reuse it between the plan and the sections
-        shared = _blocks(_shared_text(session, ins, org, custom, brief), refs.render(references) and f"<references>\n{refs.render(references)}\n</references>", cache_last=True)
+        shared = _blocks(_shared_text(session, ins, org, custom, brief), refs.render(references) and f"<references>\n{refs.render(references)}\n</references>",
+                         _research_block(research), cache_last=True)
 
         _stage(db, msg, "Planning the document")
         try:
             plan = _plan(shared, system, label=label, session=session, sections=sections, core=core, parent=parent, total=total,
-                         on_progress=_plan_progress(db, msg), may_ask=may_ask)
+                         on_progress=_plan_progress(db, msg), may_ask=may_ask, should_stop=stopped)
+        except claude_client.ClaudeStopped:
+            raise
         except Exception as exc:        # noqa: BLE001
             if _fatal(exc):
                 raise Fatal(friendly(exc)) from exc
@@ -584,6 +700,8 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
             notes.append("The plan could not be made, so the document was written without it: check that its parts agree with each other.")
         asking = questions_of(plan.get("questions")) if may_ask and plan.get("ask_first") else []
         if asking:                              # choices the whole document depends on: the person answers before it is written
+            if not live.still_working(db, msg):
+                raise claude_client.ClaudeStopped()
             msg.content = (f"Before I write the {label.lower()}, a few choices decide what it covers and which rules it follows. Pick an answer "
                            "below, or write your own; I write the document as soon as you send them. If you would rather I decide, say so.")
             msg.questions = asking
@@ -604,42 +722,66 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         board = live.Board()
         titles = [a["title"] for a in areas]
         todo: List[Tuple[str, Section, Optional[Dict[str, Any]], Callable[[], Piece]]] = []
+        places: Dict[Tuple[str, str], str] = {}                 # (section number, area index or "") -> the part's key on the board
 
-        def track_for(label_: str) -> Track:
-            return Track(board, board.add(label_))
+        def track_for(label_: str, place: Tuple[str, str]) -> Track:
+            places[place] = board.add(label_)
+            return Track(board, places[place])
 
         for s in sections:
             if s.kind in ("narrative",):
-                todo.append(("section", s, None, lambda s=s, track=track_for(s.full_heading): _write_part(
+                todo.append(("section", s, None, lambda s=s, track=track_for(s.full_heading, (s.number, "")): _write_part(
                     shared_plus, system, lambda fix, s=s: P.section_task(label=label, section=s, area=None, core=core, doc_type=doc_type,
                                                                       sibling_areas=titles, target_words=s.target_words, minimum_words=s.min_words, minimum_clauses=s.min_clauses, fix=fix),
-                    section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="", track=track)))
+                    section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="", track=track, should_stop=stopped)))
             elif s.kind == "core":
                 for a in areas:
                     target = a["words"]
                     minimum = int(target * 0.7)
                     clauses = 4 if doc_type in ("policy", "standard") else 3
                     num = f"{s.number}.{a['index']}"
-                    todo.append(("area", s, a, lambda s=s, a=a, target=target, minimum=minimum, clauses=clauses, num=num, track=track_for(f"{num} {a['title']}"): _write_part(
+                    todo.append(("area", s, a, lambda s=s, a=a, target=target, minimum=minimum, clauses=clauses, num=num,
+                                 track=track_for(f"{num} {a['title']}", (s.number, str(a["index"]))): _write_part(
                         shared_plus, system, lambda fix, s=s, a=a, target=target, minimum=minimum, clauses=clauses: P.section_task(
                             label=label, section=s, area=a, core=s, doc_type=doc_type, sibling_areas=titles, target_words=target,
                             minimum_words=minimum, minimum_clauses=clauses, fix=fix),
-                        section=s, area_heading=a["title"], minimum_words=minimum, minimum_clauses=clauses, number=num, track=track)))
+                        section=s, area_heading=a["title"], minimum_words=minimum, minimum_clauses=clauses, number=num, track=track, should_stop=stopped)))
         dependents = [s for s in sections if s.kind == "dependent"]
-        dep_tracks = {s.number: track_for(s.full_heading) for s in dependents}
+        dep_tracks = {s.number: track_for(s.full_heading, (s.number, "")) for s in dependents}
         for t in dep_tracks.values():
             t.note("Written last, from the rest of the document")
         count = len(todo) + len(dependents)                      # what the screen counts: the parts written now and the ones written last
-        board.saver = lambda: board.save(db, msg)               # from here the parts may be written on this thread, and then they save as they report
+
+        # the document as far as it is written, for the person to read meanwhile (the parts that are done, the text of the ones being written)
+        title, classification = session.title, str(ins.get("classification") or "Internal")
+        front = {s.number: render_front(s, title=title, label=label, scaffold=scaffold, ctx=ctx, plan=plan, sections=sections, classification=classification)
+                 for s in sections if s.kind == "front"}
+        shown: Dict[str, Any] = {"text": None, "at": 0.0, "seq": 0}
+
+        def show_document(now: bool = False) -> None:
+            if not now and time.monotonic() - shown["at"] < PREVIEW_EVERY:
+                return
+            text = _preview(title, sections, areas, plan, front, places, board.written())
+            if text != shown["text"]:
+                shown.update(text=text, at=time.monotonic(), seq=shown["seq"] + 1)
+                msg.preview = text
+                live.update(db, msg, preview_seq=shown["seq"])
+
+        def tick() -> None:
+            if stopped():
+                raise claude_client.ClaudeStopped()
+            board.save(db, msg)
+            show_document()
+
+        board.saver = lambda: (board.save(db, msg), show_document())      # from here the parts may be written on this thread, and then they save as they report
         _stage(db, msg, f"Writing the document: 0 of {count} parts", text=None, text_label=None, groups=None, **board.view())
-        pieces = _run_pool([t[3] for t in todo], lambda n: _stage(db, msg, f"Writing the document: {n} of {count} parts", step=False, **board.view()),
-                           lambda: board.save(db, msg))
+        show_document(now=True)
+        pieces = _run_pool([t[3] for t in todo], lambda n: _stage(db, msg, f"Writing the document: {n} of {count} parts", step=False, **board.view()), tick)
         written: Dict[Tuple[str, str], Piece] = {}
         for (kind, s, a, _), piece in zip(todo, pieces):
             written[(s.number, str(a["index"]) if a else "")] = piece
 
         # parts that need the rest of the document: the glossary, the related documents and the responsibility matrix
-        classification = str(ins.get("classification") or "Internal")
         so_far: List[str] = [f"# {session.title}"]
         deps: List[Section] = []
         for s in sections:
@@ -657,8 +799,9 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
             dep_shared = shared + plan_blocks + _blocks(document)
             jobs = [(lambda s=s: _write_part(dep_shared, system, lambda fix, s=s: P.dependent_task(label=label, section=s, target_words=s.target_words,
                                                                                                     minimum_words=s.min_words, plan=plan, fix=fix),
-                                             section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="", track=dep_tracks.get(s.number))) for s in deps]
-            for s, piece in zip(deps, _run_pool(jobs, lambda n: None, lambda: board.save(db, msg))):
+                                             section=s, area_heading="", minimum_words=s.min_words, minimum_clauses=None, number="", track=dep_tracks.get(s.number),
+                                             should_stop=stopped)) for s in deps]
+            for s, piece in zip(deps, _run_pool(jobs, lambda n: None, tick)):
                 dep_pieces[s.number] = piece
 
         _stage(db, msg, "Putting the document together", **board.view())
@@ -667,7 +810,7 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
         for s in sections:
             out.append(f"## {s.full_heading}")
             if s.kind == "front":
-                out.append(render_front(s, title=session.title, label=label, scaffold=scaffold, ctx=ctx, plan=plan, sections=sections, classification=classification))
+                out.append(front[s.number])
             elif s.kind == "dependent":
                 piece = dep_pieces.get(s.number) or Piece(failed="not written")
                 out.append(piece.body or _missing(s, piece.failed))
@@ -708,7 +851,9 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
                 + (" The values I chose where nothing was specified are listed below for you to confirm." if assumptions else ""))
         questions = questions_of(plan.get("questions"), limit=3)
 
-        # apply it as the first draft (what the person typed meanwhile stays in the document's history)
+        # apply it as the first draft (what the person typed meanwhile stays in the document's history), unless the person stopped it
+        if not live.still_working(db, msg):
+            raise claude_client.ClaudeStopped()
         current = db.get(StudioSession, session_id)
         op = B.Op("c1", "replace_all", markdown=markdown, reason="The complete first draft")
         msg.proposal = {"ops": [_op_view(op, B.parse(current.content))], "base_revision": base_revision, "stats": B.stats(B.parse(current.content), blocks_after),
@@ -723,14 +868,40 @@ def run_draft(db, session_id: int, message_id: int, wait_since: Optional[datetim
             msg.notes = notes
         service.accept_ops(db, current, msg, ["c1"], request.created_by if request is not None else msg.created_by, auto=True, summary="Comply Agent wrote the first draft")
         logger.info("studio draft %s: %s words, %s calls, %s rewritten, %s failed", message_id, words, total["calls"], rewritten, len(failures))
+    except claude_client.ClaudeStopped:
+        live.forget(db, message_id)
     except Exception as exc:        # noqa: BLE001 - the person sees a sentence, the log sees the cause
-        db.rollback()
-        msg = db.get(StudioMessage, message_id)
-        msg.status, msg.stage, msg.error, msg.updated_at = "error", None, friendly(exc), datetime.utcnow()
-        db.commit()
+        live.fail(db, message_id, friendly(exc))
 
 
 # ── putting the parts together ───────────────────────────────────────────────
+_WAITING = {"todo": "*Waiting to be written.*", "writing": "*Comply Agent is writing this part…*", "rewriting": "*Comply Agent is rewriting this part…*",
+            "failed": "*This part could not be written; the finished document says so.*"}
+
+
+def _preview(title: str, sections: Sequence[Section], areas: Sequence[Dict[str, Any]], plan: Dict[str, Any], front: Dict[str, str],
+             places: Dict[Tuple[str, str], str], written: Dict[str, Tuple[str, str]]) -> str:
+    """The document as far as it is written: the parts that are done, the text of those being written, a line for each of the rest."""
+    def part(section: Section, place: Tuple[str, str], heading: str = "") -> str:
+        state, text = written.get(places.get(place, ""), ("todo", ""))
+        if text.strip():
+            return _clean(text, section, heading)
+        return "*Written last, from the rest of the document.*" if section.kind == "dependent" and state == "todo" else _WAITING.get(state, _WAITING["todo"])
+
+    out = [f"# {title}"]
+    for s in sections:
+        out.append(f"## {s.full_heading}")
+        if s.kind == "front":
+            out.append(front.get(s.number, ""))
+        elif s.kind == "core":
+            out.append(str(plan.get("core_intro") or "").strip())
+            for a in areas:
+                out += [f"### {s.number}.{a['index']} {a['title']}", part(s, (s.number, str(a["index"])), a["title"])]
+        else:
+            out.append(part(s, (s.number, "")))
+    return "\n\n".join(x for x in out if x).strip() + "\n"
+
+
 def _missing(section: Section, reason: Optional[str]) -> str:
     return f"[[This part could not be written: {(reason or 'Comply Agent did not answer').rstrip('. ')}. Ask Comply Agent to write the {section.heading.lower()} section.]]"
 

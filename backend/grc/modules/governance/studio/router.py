@@ -14,7 +14,7 @@ from ....models import (GRCUser, GovernanceDocument, StudioAsset, StudioMessage,
 from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
 from . import blocks as B
-from . import assets, checks, drafting, exporters, gate, jobs, service, templates
+from . import assets, checks, exporters, gate, jobs, service, templates
 from . import references as refs
 
 router = APIRouter(prefix="/studio", tags=["Governance - AI Studio"])
@@ -58,7 +58,6 @@ class SessionIn(BaseModel):
     template_id: Optional[str] = None
     document_id: Optional[int] = None
     instructions: Optional[Dict[str, Any]] = None
-    draft: Optional[bool] = None                   # a new document is written as soon as it is created; false starts it empty (the blank template always does)
 
 
 class SessionPatch(BaseModel):
@@ -285,15 +284,7 @@ def create_session(body: SessionIn, db: Session = Depends(get_db), user: GRCUser
                                    document_id=body.document_id, instructions=body.instructions)
     except service.StudioError as exc:
         raise _problem(exc)
-    if body.kind == "new" and drafting.wants_auto_draft(s, body.draft):
-        # "Write a new document" writes it: the draft waits until the person has opened the document, so the references attached right after are in it
-        try:
-            msg = service.start_turn(db, s, user, "Write the complete document.")
-        except service.StudioError:
-            msg = None
-        if msg is not None:
-            jobs.launch(_slug(db), "draft", s.id, msg.id, user, {"since": s.last_opened_at.isoformat() if s.last_opened_at else service._now().isoformat()})
-    return service.session_view(db, s)
+    return service.session_view(db, s)          # a new document waits for the person's request: nothing is written on its own
 
 
 @router.post("/sessions/upload", dependencies=[Depends(require_studio)])
@@ -442,6 +433,25 @@ def write_document(session_id: int, body: DraftIn, db: Session = Depends(get_db)
         raise _problem(exc)
     jobs.launch(_slug(db), "draft", s.id, msg.id, user)
     return service.message_view(db.get(StudioMessage, msg.id))
+
+
+@router.post("/sessions/{session_id}/messages/{message_id}/stop", dependencies=[Depends(require_studio)])
+def stop_turn(session_id: int, message_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Stop Comply Agent where it is: nothing it was writing is applied. 409 when it has already finished."""
+    s = _session(db, session_id, user)
+    m = _message(db, s, message_id)
+    if not service.stop_turn(db, m):
+        raise HTTPException(status_code=409, detail="Comply Agent has already finished this.")
+    return service.message_view(m)
+
+
+@router.get("/sessions/{session_id}/messages/{message_id}/preview", dependencies=[Depends(require_studio)])
+def draft_preview(session_id: int, message_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """A whole document as far as it is written, while Comply Agent writes it (empty once it is done: the document then has it)."""
+    s = _session(db, session_id, user)
+    m = _message(db, s, message_id)
+    working = m.status == "working"
+    return {"seq": (m.live or {}).get("preview_seq", 0) if working else 0, "markdown": (m.preview or "") if working else ""}
 
 
 @router.get("/sessions/{session_id}/messages/{message_id}", dependencies=[Depends(require_studio)])

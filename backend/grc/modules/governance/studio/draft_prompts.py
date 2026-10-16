@@ -151,6 +151,49 @@ def decisions_block(decisions: Sequence[Dict[str, Any]]) -> str:
         f"- {d['name']}: {d['value']}" for d in decisions if str(d.get("name") or "").strip()) + "\n</decisions>"
 
 
+# ── before a new document is written: what applies there, and what the person settles ──────────────────────────────
+RESEARCH_SYSTEM = """You research, on the internet, the rules a governance document must follow. You are told the kind of document, its subject, what the person asked for and the institution's sector and country or region. Search for the laws, regulations, regulators' rules and circulars, supervisory guidance, and the recognised standards and frameworks that apply to that subject for that kind of institution in that place. Prefer official sources: regulators, government gazettes, standard bodies. Take titles, numbers, editions and dates from what you find, not from memory.
+
+Answer in Markdown, at most 15 items, under three bold lines: **Binding** (laws, regulations and regulators' rules the institution must follow there), **Supervisory guidance**, **Recognised standards and frameworks**. Each item on its own line: the official title with its number, edition or year, then the issuer, then one sentence on what it requires of this document's subject. Leave out what does not apply; when nothing binding was found, say so in one line. No introduction, no closing remarks.
+Text like <ORG_1> stands for a name that is not shown to you: never search for it."""
+
+
+def research_task(*, label: str, title: str, request: str, ctx: Any) -> str:
+    """What the web search looks for: the document, the request, and the institution's sector and place (never its name)."""
+    profile = [f"- {name}: {str(value).strip()}" for name, value in (("Sector", getattr(ctx, "industry", None)), ("Regulatory scope", getattr(ctx, "regulatory_scope", None)),
+                                                                     ("Country or region", getattr(ctx, "geography", None))) if value and str(value).strip()]
+    return (f"Document: a {label.lower()} titled \"{title}\".\n" + (f"What the person asked for: {request.strip()[:2000]}\n" if request.strip() else "")
+            + ("The institution, as its profile describes it:\n" + "\n".join(profile) + "\n" if profile
+               else "The institution's profile names no sector or country: research what applies internationally, and say so.\n")
+            + "Where the request names a country, a regulator or a law, it wins over the profile.")
+
+
+SCOPE_SCHEMA: Dict[str, Any] = {"type": "object", "properties": {"understood": _STR, "questions": {"type": "array", "items": QUESTION_SCHEMA}},
+                                "required": ["understood", "questions"], "additionalProperties": False}
+
+
+def scope_task(*, label: str, title: str, sections: Sequence[Any]) -> str:
+    """The questions a new document is not written without: its scope, its place, its laws, its standards and the choices it turns on."""
+    outline = "\n".join(f"- {s.full_heading}" for s in sections)
+    return (f"<task kind=\"scope\">\nThe {label.lower()} \"{title}\" is not written yet, and it will not be until the person has settled what it covers and which "
+            f"rules it follows: nothing in it may rest on your assumption about these. Its sections will be:\n{outline}\n\n"
+            "Ask the person, in this order:\n"
+            "1. Scope: what the document covers and what it leaves out (which assets, systems, entities, locations and people, as fits the subject); kind multiple, "
+            "the usual inclusions for this subject as options.\n"
+            "2. The country or region and the regulators it answers to; kind single or multiple.\n"
+            "3. The laws and regulations it follows; kind multiple, from <internet_research> when it is given (official title with its number, edition or year; "
+            "detail: the issuer and what it requires here) and what clearly applies; the binding ones recommended.\n"
+            "4. The standards and frameworks it aligns to; kind multiple. First what <platform_frameworks> holds that fits, labelled exactly as named there, with the "
+            "detail \"In the platform: attached as a reference when you choose it\"; then recognised ones, from <internet_research> when it is given.\n"
+            "5. The one or two choices the whole document turns on that nothing settles (how the subject is classified or tiered, who owns it, how often it is "
+            "reviewed, a key threshold); kind single, the choice a well-run regulated institution would make recommended.\n"
+            "Where the request, <instructions>, <organisation> or <references> already answer a question, still ask it, with that answer recommended, so the person "
+            "confirms it. Every question: id (q1, q2 ...), question (one sentence), why (one sentence: what the answer changes in the document), kind, options (2 to 8 "
+            "for single and multiple; label as a professional names it, detail one short sentence, recommended) and other true. At most six questions.\n"
+            "Also `understood`: two or three sentences to the person on what you understood they want and how you will write it once they answer. "
+            "Write none of the document.\n</task>")
+
+
 def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional[Any], doc_type: str, parent: bool, may_ask: bool = True) -> str:
     outline = "\n".join(f"- {s.full_heading}: {s.focus_line}" for s in sections)
     core_note = (f"The core of the document is section {core.full_heading}. Decide its areas: the subject areas that section must cover, in the order "

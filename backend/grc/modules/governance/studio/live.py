@@ -15,12 +15,59 @@ import re
 import threading
 import time
 from datetime import datetime
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 MAX_STEPS = 12
 MAX_TAIL = 1200                         # characters of the text being written that the screen shows
 MAX_TEXT = 6000
 SAVE_EVERY = 0.6                        # seconds between two saves of the parts of a draft written on the saving thread
+STOP_EVERY = 1.0                        # seconds between two looks at whether the person stopped the turn
+
+
+def stopper(db, message_id: int) -> Callable[[], bool]:
+    """Whether the person stopped the turn (its message is no longer "working": the Stop route changed it, or it was deleted), read
+    from the database at most every ``STOP_EVERY`` seconds. For the thread that owns ``db`` only."""
+    from ....models import StudioMessage
+
+    state = {"at": 0.0, "stopped": False}
+
+    def stopped() -> bool:
+        if not state["stopped"] and time.monotonic() - state["at"] >= STOP_EVERY:
+            state["at"] = time.monotonic()
+            with db.no_autoflush:
+                status = db.query(StudioMessage.status).filter(StudioMessage.id == message_id).scalar()
+            state["stopped"] = status != "working"
+        return state["stopped"]
+
+    return stopped
+
+
+def still_working(db, msg) -> bool:
+    """Whether the turn may still finish its message. The row stays locked until the next commit, so a Stop that comes now waits for
+    the result and then finds the turn finished, and one that came before is seen here."""
+    db.refresh(msg, with_for_update=True)
+    return msg.status == "working"
+
+
+def forget(db, message_id: int) -> None:
+    """After a Stop: what the turn saved of its progress after the Stop had cleared it."""
+    from ....models import StudioMessage
+
+    db.rollback()
+    db.query(StudioMessage).filter(StudioMessage.id == message_id, StudioMessage.status != "working").update(
+        {"live": None, "stage": None, "preview": None}, synchronize_session=False)
+    db.commit()
+
+
+def fail(db, message_id: int, text: str) -> None:
+    """A turn that went wrong says so on its message, unless the person stopped it first."""
+    from ....models import StudioMessage
+
+    db.rollback()
+    msg = db.get(StudioMessage, message_id)
+    if msg is not None and msg.status == "working":
+        msg.status, msg.stage, msg.error, msg.updated_at = "error", None, text, datetime.utcnow()
+        db.commit()
 
 
 def _same(a: Optional[Dict[str, Any]], b: Optional[Dict[str, Any]]) -> bool:
@@ -103,6 +150,7 @@ class Board:
         self._owner = threading.get_ident()
         self._parts: Dict[str, Dict[str, Any]] = {}
         self._tails: Dict[str, str] = {}
+        self._texts: Dict[str, str] = {}                              # each part as far as it is written: the document shown meanwhile
         self._shown: Optional[str] = None
         self._at = 0.0
         self.saver: Optional[Callable[[], None]] = None              # set by the owner when it writes parts itself
@@ -127,6 +175,15 @@ class Board:
         with self._lock:
             self._tails[key] = text
         self.touch()
+
+    def text(self, key: str, text: str) -> None:
+        with self._lock:
+            self._texts[key] = text
+
+    def written(self) -> Dict[str, Tuple[str, str]]:
+        """Each part's state and its text so far."""
+        with self._lock:
+            return {k: (p["state"], self._texts.get(k, "")) for k, p in self._parts.items()}
 
     def touch(self) -> None:
         """Save now when this is the owning thread and the last save is not recent (parts written on the owner's own thread)."""

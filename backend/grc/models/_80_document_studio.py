@@ -63,9 +63,10 @@ class StudioMessage(Base):
     role = Column(String(20), nullable=False)                            # user | assistant
     kind = Column(String(20), nullable=False, default="chat")            # chat | checks | compare
     content = Column(Text, nullable=False, default="")
-    status = Column(String(20), nullable=False, default="done")          # working | done | error
+    status = Column(String(20), nullable=False, default="done")          # working | done | error | stopped (the person stopped it)
     stage = Column(String(120), nullable=True)                           # what a working turn is doing
     live = Column(JSON, nullable=True)                                   # what the screen shows while it works (steps, text so far, parts); gone once it is done
+    preview = Column(Text, nullable=True)                                # a whole document while it is written, as far as it is: gone once it is done
     error = Column(Text, nullable=True)
     proposal = Column(JSON, nullable=True)                               # the AI's changes, each pending | accepted | rejected | conflict
     references_used = Column(JSON, nullable=True)
@@ -84,6 +85,7 @@ class StudioMessage(Base):
         """A turn that is no longer working keeps no live view: whoever finishes a message (the engine, the reaper) clears it with the status."""
         if value != "working":
             self.live = None
+            self.preview = None
         return value
 
 

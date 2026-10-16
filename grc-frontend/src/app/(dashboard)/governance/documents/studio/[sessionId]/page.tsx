@@ -10,10 +10,10 @@ export const dynamic = 'force-dynamic';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Library, ListChecks, Loader2,
-  MessageSquare, Pencil, Save, Settings2, Sparkles, X,
+  MessageSquare, Pencil, Save, Settings2, Sparkles, Square, X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -207,6 +207,32 @@ export default function StudioWorkspacePage() {
     }
   };
   const answer = (messageId: number, items: AnswerItem[], decide: boolean) => send('', { reply_to: messageId, answers: items, decide });
+  const [stopping, setStopping] = useState(false);
+  const stop = async () => {
+    const m = items.find((x) => x.status === 'working' && x.kind === 'chat');
+    if (!m) return;
+    setStopping(true);
+    try {
+      setMessage(await studioApi.stop(id, m.id));
+    } catch (e) {
+      toast({ title: 'Could not stop it', message: problemOf(e), type: 'error' });      // it may have just finished: the conversation shows it
+    } finally {
+      setStopping(false);
+      qc.invalidateQueries({ queryKey: ['studio', 'messages', id] });
+    }
+  };
+
+  // a whole document being written: shown in the document as far as it goes, refreshed each time more of it can be shown
+  const drafting = items.find((m) => m.status === 'working' && m.kind === 'chat' && (m.live?.preview_seq ?? 0) > 0) ?? null;
+  const draftView = useQuery({
+    queryKey: ['studio', 'draft-preview', id, drafting?.id, drafting?.live?.preview_seq ?? 0],
+    queryFn: () => studioApi.draftPreview(id, drafting!.id),
+    enabled: !!drafting,
+    placeholderData: keepPreviousData,
+    staleTime: Infinity,
+  });
+  const writing = drafting && draftView.data?.markdown ? draftView.data : null;
+  const draftParts = drafting?.live?.parts ?? [];
 
   const accept = async (messageId: number, opIds: string[], overrides?: Record<string, string>) => {
     await flush();
@@ -472,6 +498,20 @@ export default function StudioWorkspacePage() {
               </button>
             </div>
           )}
+          {writing && !compare && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#9fd9bd] bg-[#e6f4f1] px-3 py-1.5 text-xs text-[#0b4f46]" role="status" aria-label="Comply Agent is writing">
+              <Loader2 className="h-4 w-4 shrink-0 animate-spin text-[#0b6b58]" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="font-semibold">Comply Agent is writing the document</span>
+                {draftParts.length > 0 && <> · {draftParts.filter((p) => p.state === 'done' || p.state === 'failed').length} of {draftParts.length} parts</>}
+                {' · '}read it as it is written; you can edit it once it is finished
+              </span>
+              <button type="button" onClick={stop} disabled={stopping}
+                className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2 py-1 font-semibold text-[#8a1c1c] hover:bg-[#fdf3f3] disabled:opacity-60">
+                {stopping ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Square className="h-3 w-3 fill-current" />} Stop
+              </button>
+            </div>
+          )}
           {justAccepted > 0 && !compare && (
             <div className="flex shrink-0 items-center gap-2 border-b border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs text-[#0a5a38]" role="status">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
@@ -481,13 +521,15 @@ export default function StudioWorkspacePage() {
             </div>
           )}
           <div className="min-h-0 flex-1">
-            {/* kept mounted under a preview, a comparison or the file view: it holds the person's typing and undo history */}
-            <div className={compare || asFile ? 'hidden' : 'h-full'}>
+            {/* kept mounted under a preview, a comparison, the document being written or the file view: it holds the person's typing and undo history */}
+            <div className={compare || writing || asFile ? 'hidden' : 'h-full'}>
               <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
             </div>
             {compare ? (
               <ChangesView session={session} spec={compare} aiConfigured={aiConfigured} onClose={() => setCompare(null)} flush={flush}
                 onContent={(c, r) => applyServerContent(c, r)} onShowSource={(k) => { setFocusRef(k); setTab('references'); }} />
+            ) : writing ? (
+              <StudioEditor value={writing.markdown} version={writing.seq} mode="view" onChange={() => undefined} />
             ) : asFile ? <FileView session={session} /> : null}
           </div>
         </section>
@@ -510,7 +552,7 @@ export default function StudioWorkspacePage() {
               <ChatPanel
                 session={session} messages={items} aiConfigured={aiConfigured} busy={working}
                 onSend={(t, files) => send(t, undefined, files)} onAnswer={answer} onReferencesChanged={onSessionChanged}
-                onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges}
+                onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges} onStop={stop} stopping={stopping}
                 onOpenTab={(t) => setTab(t)} onShowReference={(k) => { setFocusRef(k); setTab('references'); }}
               />
             </div>

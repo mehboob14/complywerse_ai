@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, FileText, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Paperclip, Pencil, Send, Sparkles, Undo2, Wand2, X, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, FileText, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Paperclip, Pencil, Send, Sparkles, Square, Undo2, Wand2, X, XCircle } from 'lucide-react';
 import { problemOf, studioApi, type AnswerItem, type Attachment, type Message, type Op, type Question, type ReferenceUsed, type Session } from '@/lib/studio/api';
 import { plural, wordDiff } from '@/lib/studio/text';
 import LiveTurn from './LiveTurn';
@@ -35,6 +35,9 @@ export interface ChatPanelProps {
   onShowReference: (key: string) => void;
   /** answer Comply Agent's questions on a message: the options chosen and own words per question; ``decide`` leaves them all to it */
   onAnswer: (messageId: number, answers: AnswerItem[], decide: boolean) => Promise<void>;
+  /** stop the turn that is working: nothing it was writing is applied */
+  onStop: () => void;
+  stopping: boolean;
 }
 
 const KIND_LABEL: Record<Op['kind'], string> = {
@@ -378,7 +381,14 @@ function FileChips({ files, onShow }: { files: Attachment[]; onShow: (key: strin
   );
 }
 
-function Bubble({ message, props, lastUser, answerable }: { message: Message; props: ChatPanelProps; lastUser: string | null; answerable: boolean }) {
+/** a request sent again as it was made: answers as answers (so a document waiting for them is written with them), files with it */
+function sendAgain(props: ChatPanelProps, request: Message) {
+  const given = request.answers;
+  if (given?.reply_to) return props.onAnswer(given.reply_to, given.items, !given.items.length);
+  return props.onSend(request.content.split(ATTACHED)[0], request.attachments ?? []);
+}
+
+function Bubble({ message, props, lastUser, answerable }: { message: Message; props: ChatPanelProps; lastUser: Message | null; answerable: boolean }) {
   if (message.role === 'user') {
     const given = message.answers;
     const files = message.attachments ?? [];
@@ -416,10 +426,16 @@ function Bubble({ message, props, lastUser, answerable }: { message: Message; pr
       <div className="min-w-0 flex-1">
         <p className="mb-0.5 text-[11px] font-semibold text-[#0b6b58]">Comply Agent</p>
         {message.status === 'working' && <LiveTurn message={message} />}
+        {message.status === 'stopped' && (
+          <div className="rounded-2xl rounded-tl-sm bg-[#f1f3f5] px-3.5 py-2 ring-1 ring-[#d5dbe1]">
+            <p className="flex items-center gap-1.5 text-sm text-[#3f4b58]"><Square className="h-3 w-3 shrink-0 fill-current" aria-hidden /> {message.content}</p>
+            {lastUser && <button type="button" onClick={() => void sendAgain(props, lastUser)} className="mt-1 text-xs font-semibold text-[#0b6b58] underline">Ask again</button>}
+          </div>
+        )}
         {message.status === 'error' && (
           <div className="rounded-2xl rounded-tl-sm border border-[#f1b5b5] bg-[#fdf3f3] px-3.5 py-2 text-sm text-[#8a1c1c]" role="alert">
             {message.error || 'Comply Agent could not answer.'}
-            {lastUser && <button type="button" onClick={() => props.onSend(lastUser)} className="ml-2 font-semibold underline">Try again</button>}
+            {lastUser && <button type="button" onClick={() => void sendAgain(props, lastUser)} className="ml-2 font-semibold underline">Try again</button>}
           </div>
         )}
         {message.status === 'done' && (
@@ -442,15 +458,20 @@ function Bubble({ message, props, lastUser, answerable }: { message: Message; pr
   );
 }
 
+/** a new document nobody has written yet: Comply Agent asks about its scope and rules before it writes it */
+const notStarted = (session: Session) => session.kind === 'new' && session.revision <= 1;
+const WRITTEN_WHOLE = ['policy', 'standard', 'procedure', 'guideline', 'charter'];
+
 function ideas(session: Session): string[] {
   const hasFramework = session.references.some((r) => r.kind === 'framework' && r.include);
   const hasFile = session.references.some((r) => r.kind === 'upload' && r.include);
   const blank = session.words < 15;
-  if (blank) {
+  if (blank || notStarted(session)) {
+    const what = WRITTEN_WHOLE.includes(session.doc_type) ? session.doc_type : 'document';
     return [
-      'Draft the full document with every required section.',
-      ...(hasFramework ? ['Draft it so every relevant clause of the attached framework is covered, and cite the clause numbers.'] : []),
-      ...(hasFile ? ['Draft the document from what the attached file requires.'] : []),
+      `Write the complete ${what}.`,
+      ...(hasFramework ? [`Write the complete ${what} so every relevant clause of the attached framework is covered, citing the clause numbers.`] : []),
+      ...(hasFile ? [`Write the complete ${what} from what the attached file requires.`] : []),
       'Draft a short version first, about one page.',
     ];
   }
@@ -510,7 +531,7 @@ export default function ChatPanel(props: ChatPanelProps) {
     atBottom.current = true;
     await onSend(t, ready);
   };
-  const lastUserBefore = (i: number): string | null => { for (let k = i - 1; k >= 0; k--) if (chat[k].role === 'user') return chat[k].content; return null; };
+  const lastUserBefore = (i: number): Message | null => { for (let k = i - 1; k >= 0; k--) if (chat[k].role === 'user') return chat[k]; return null; };
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -525,8 +546,17 @@ export default function ChatPanel(props: ChatPanelProps) {
         {chat.length === 0 && (
           <div className="rounded-lg border border-dashed border-[#c5ccd3] p-4 text-center text-sm text-[#586472]">
             <Sparkles className="mx-auto mb-1 h-5 w-5 text-[#0f766e]" />
-            <p className="font-medium text-[#26323d]">Tell Comply Agent what you want.</p>
-            <p className="mt-1 text-xs">It proposes changes; nothing is written into your document until you accept it.</p>
+            {notStarted(session) && WRITTEN_WHOLE.includes(session.doc_type) ? (
+              <>
+                <p className="font-medium text-[#26323d]">Tell Comply Agent what this {session.doc_type} should cover.</p>
+                <p className="mt-1 text-xs">Before it writes anything, it looks up on the internet and in the platform the laws, regulations, standards and frameworks that apply, and asks you to confirm the scope, the region and the rules. Nothing is assumed.</p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium text-[#26323d]">Tell Comply Agent what you want.</p>
+                <p className="mt-1 text-xs">It proposes changes; nothing is written into your document until you accept it.</p>
+              </>
+            )}
             <p className="mt-1 text-xs">Attach any file with the paperclip (a regulation, a contract, an audit report, a spreadsheet) and ask anything about it: a gap analysis, a summary, the obligations it sets.</p>
             <p className="mt-2 text-xs">
               Add what it should lean on in{' '}
@@ -588,10 +618,17 @@ export default function ChatPanel(props: ChatPanelProps) {
             placeholder={aiConfigured ? 'Ask anything: a draft, a rewrite, a gap analysis against a file you attach …' : 'Comply Agent is not connected yet'}
             className="min-h-[2.75rem] flex-1 resize-y rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0] disabled:bg-[#f1f3f5]"
           />
-          <button type="button" onClick={() => void submit()} disabled={(!text.trim() && !ready.length) || reading || working || !aiConfigured}
-            className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50" aria-label="Send">
-            {working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-          </button>
+          {working ? (
+            <button type="button" onClick={props.onStop} disabled={props.stopping} title="Stop Comply Agent: nothing it is writing is applied"
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 text-sm font-semibold text-[#8a1c1c] hover:bg-[#fdf3f3] disabled:opacity-50">
+              {props.stopping ? <Loader2 className="h-4 w-4 animate-spin" /> : <Square className="h-3.5 w-3.5 fill-current" />} Stop
+            </button>
+          ) : (
+            <button type="button" onClick={() => void submit()} disabled={(!text.trim() && !ready.length) || reading || !aiConfigured}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50" aria-label="Send">
+              <Send className="h-4 w-4" />
+            </button>
+          )}
         </div>
         <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-[#586472]">
           <button type="button" onClick={() => props.onOpenTab('references')} className="hover:underline">{plural(session.references.filter((r) => r.include).length, 'reference')} attached</button>

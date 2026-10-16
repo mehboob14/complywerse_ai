@@ -61,6 +61,13 @@ class ClaudeFailed(RuntimeError):
         super().__init__(message)
 
 
+class ClaudeStopped(RuntimeError):
+    """The person stopped the work (``should_stop`` said so): the answer was abandoned where it was."""
+
+    def __init__(self) -> None:
+        super().__init__("You stopped Comply Agent.")
+
+
 @dataclass
 class Result:
     text: str                                   # the answer with the original values back in it
@@ -70,17 +77,20 @@ class Result:
     truncated: bool = False                     # the answer hit the output ceiling
     usage: Dict[str, int] = field(default_factory=dict)
     report: Dict[str, Any] = field(default_factory=dict)      # the guard's report: counts and decisions, never a value
+    searches: List[str] = field(default_factory=list)          # with the web search tool: what was searched for
+    sources: List[Dict[str, str]] = field(default_factory=list)   # and the pages the answer cites ({url, title}), else the pages found
 
 
 @dataclass
 class Progress:
     """An answer that is being written, as ``on_progress`` receives it."""
-    phase: str                                   # reading (the AI has the request) | thinking | writing
+    phase: str                                   # reading (the AI has the request) | thinking | searching (the web) | writing
     chars: int = 0                               # how much of the answer exists so far
     data: Any = None                             # a structured answer so far, as written: placeholders not yet replaced (see ``show``)
     text: str = ""                               # the answer so far when it is not structured, original values back in it
     protected: int = 0                           # values replaced or removed in the request before it was sent
     show: Callable[[str], str] = str             # a piece of ``data`` with the original values back in it: for what goes on the screen
+    searches: List[str] = field(default_factory=list)     # what has been searched for on the web so far, original values back in it
 
 
 def _partial_json(text: str) -> Any:
@@ -108,13 +118,15 @@ class _Watcher:
 
     def report(self, phase: str, stream=None) -> None:
         self.phase, self.last = phase, time.monotonic()
-        text = ""
+        text, searches = "", []
         if stream is not None:
             try:
-                text = "".join(b.text for b in stream.current_message_snapshot.content if getattr(b, "type", "") == "text")
+                content = stream.current_message_snapshot.content
+                text = "".join(b.text for b in content if getattr(b, "type", "") == "text")
+                searches = [self.show(q) for q in (_query(b) for b in content) if q]
             except AssertionError:      # the message has not started
                 pass
-        progress = Progress(phase=phase, chars=len(text), protected=self.protected, show=self.show)
+        progress = Progress(phase=phase, chars=len(text), protected=self.protected, show=self.show, searches=searches)
         if self.structured:
             progress.data = _partial_json(text)
         else:
@@ -129,11 +141,39 @@ class _Watcher:
         kind = getattr(event, "type", "")
         if kind == "content_block_start":
             block = getattr(getattr(event, "content_block", None), "type", "")
-            phase = "thinking" if block in ("thinking", "redacted_thinking") else "writing"
+            phase = ("thinking" if block in ("thinking", "redacted_thinking") else "searching" if block in ("server_tool_use", "web_search_tool_result")
+                     else "writing")
             if phase != self.phase:
                 self.report(phase, stream)
         elif kind == "content_block_delta" and time.monotonic() - self.last >= PROGRESS_EVERY:
             self.report(self.phase or "writing", stream)
+
+
+def _query(block) -> Optional[str]:
+    """What a web search block searched for (as far as it is written), or None."""
+    if getattr(block, "type", "") != "server_tool_use":
+        return None
+    given = getattr(block, "input", None)
+    if not isinstance(given, dict):
+        return None
+    return str(given.get("query") or "").strip() or None
+
+
+def _found(content) -> List[Dict[str, str]]:
+    """The pages a web-searched answer cites, else the pages its searches returned: {url, title}, each once."""
+    cited, returned = [], []
+    for b in content:
+        kind = getattr(b, "type", "")
+        if kind == "text":
+            cited += [c for c in getattr(b, "citations", None) or [] if getattr(c, "url", None)]
+        elif kind == "web_search_tool_result" and isinstance(getattr(b, "content", None), list):
+            returned += [r for r in b.content if getattr(r, "url", None)]
+    out, seen = [], set()
+    for page in cited or returned:
+        if page.url not in seen:
+            seen.add(page.url)
+            out.append({"url": page.url, "title": (getattr(page, "title", "") or page.url).strip()})
+    return out
 
 
 def configured() -> bool:
@@ -261,15 +301,21 @@ def _failure(exc: BaseException) -> ClaudeFailed:
 
 def complete(*, use_case: str, system: Union[str, List[dict], None], messages: List[dict],
              schema: Optional[Dict[str, Any]] = None, max_tokens: int = 32000, effort: str = "medium",
-             model: Optional[str] = None, on_progress: Optional[Callable[[Progress], None]] = None) -> Result:
+             model: Optional[str] = None, on_progress: Optional[Callable[[Progress], None]] = None,
+             tools: Optional[List[Dict[str, Any]]] = None, should_stop: Optional[Callable[[], bool]] = None) -> Result:
     """One guarded call. ``system`` is text or text blocks, ``messages`` are Messages-API turns whose content is text.
     ``schema`` (a JSON schema) makes the answer structured and is returned parsed in ``Result.data``.
     ``on_progress`` is called on this thread while the answer arrives (see ``Progress``): to show it, never to act on it.
+    ``tools`` are the provider's own tools (web search): ``Result.text`` is then the answer written after the last search, with
+    ``searches`` and ``sources``. A schema cannot go with them (citations and structured answers do not mix).
+    ``should_stop`` is asked before the call and at every event of the answer; True abandons the call (``ClaudeStopped``).
 
     Raises ``ClaudeNotConfigured`` (no credentials), ``AIBlocked`` (the guard refused), ``LicenceRestrictedContent``,
-    ``ClaudeRefused`` (declined, no fallback) or ``ClaudeFailed`` (anything else; ``message`` is safe to show)."""
+    ``ClaudeRefused`` (declined, no fallback), ``ClaudeStopped`` or ``ClaudeFailed`` (anything else; ``message`` is safe to show)."""
     if not configured():
         raise ClaudeNotConfigured()
+    if should_stop is not None and should_stop():
+        raise ClaudeStopped()
     model = model_name(model)
     output_config: Dict[str, Any] = {"effort": effort}
     if schema:
@@ -278,6 +324,8 @@ def complete(*, use_case: str, system: Union[str, List[dict], None], messages: L
                               "output_config": output_config, "cache_control": {"type": "ephemeral"}}
     if system:
         kwargs["system"] = system
+    if tools:
+        kwargs["tools"] = tools
     started = time.perf_counter()
     _screen(system, kwargs["messages"])
     gw = _guard(kwargs, use_case, model, started)
@@ -285,8 +333,16 @@ def complete(*, use_case: str, system: Union[str, List[dict], None], messages: L
     if on_progress is not None:
         watcher = _Watcher(on_progress, gw, bool(schema), int(gw.report.get("tokens", 0) + gw.report.get("dropped", 0)) if gw is not None else 0)
         watcher.report("reading")
+    def watch(event, stream) -> None:
+        if should_stop is not None and should_stop():
+            raise ClaudeStopped()
+        if watcher is not None:
+            watcher(event, stream)
     try:
-        message = _stream_final(kwargs, watcher)
+        message = _stream_final(kwargs, watch if watcher is not None or should_stop is not None else None)
+    except ClaudeStopped as exc:
+        _record(error=exc, model=model, started_at=started, gw=gw, payload=_payload(gw, kwargs))
+        raise
     except Exception as exc:        # noqa: BLE001
         _record(error=exc, model=model, started_at=started, gw=gw, payload=_payload(gw, kwargs))
         raise _failure(exc) from exc
@@ -301,8 +357,12 @@ def complete(*, use_case: str, system: Union[str, List[dict], None], messages: L
         category = getattr(getattr(message, "stop_details", None), "category", None)
         _record(response=message, model=model, started_at=started, gw=gw, payload=_payload(gw, kwargs, as_written))
         raise ClaudeRefused(category)
-    text = "".join(getattr(b, "text", "") for b in message.content if getattr(b, "type", None) == "text")
-    truncated = stop == "max_tokens"
+    content = list(message.content)
+    if tools:       # the answer is what was written after the last search ("I'll search for …" before it is not)
+        last = max((i for i, b in enumerate(content) if getattr(b, "type", "") == "web_search_tool_result"), default=-1)
+        content = [b for b in content[last + 1:] if getattr(b, "type", None) == "text"] or content
+    text = "".join(getattr(b, "text", "") for b in content if getattr(b, "type", None) == "text")
+    truncated = stop == "max_tokens"        # a "pause_turn" (the provider's own search loop reached its limit) keeps what was written
     data: Any = None
     if schema:
         try:
@@ -319,8 +379,10 @@ def complete(*, use_case: str, system: Union[str, List[dict], None], messages: L
         text = gw.restore_text(text)
     report = dict(gw.report) if gw is not None else {}
     _record(response=message, model=model, started_at=started, gw=gw, payload=_payload(gw, kwargs, as_written))
+    searches = [q for q in (_query(b) for b in message.content) if q]
     return Result(text=text, data=data, model=getattr(message, "model", model) or model, stop_reason=stop,
-                  truncated=truncated, usage=usage, report=report)
+                  truncated=truncated, usage=usage, report=report, searches=[gw.restore_partial(q) for q in searches] if gw is not None else searches,
+                  sources=_found(message.content) if tools else [])
 
 
 def _payload(gw, kwargs: Dict[str, Any], answer: Optional[str] = None) -> Optional[Dict[str, Any]]:

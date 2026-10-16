@@ -33,6 +33,38 @@ def reply(text: str, *, stop: str = "end_turn", input_tokens: int = 120, output_
     return httpx2.Response(200, content=body.encode("utf-8"), headers={"content-type": "text/event-stream"})
 
 
+def searched(text: str, *, searches=(), pages=(), cited=(), preface: str = "", input_tokens: int = 300, output_tokens: int = 60) -> httpx2.Response:
+    """An answer that searched the web first, as the provider streams it: an optional ``preface`` text, then for each query a search
+    block and its results (``pages``: (url, title) pairs), then ``text`` citing ``cited`` ((url, title) pairs)."""
+    usage = {"input_tokens": input_tokens, "output_tokens": 1, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0}
+    start = {"id": "msg_test", "type": "message", "role": "assistant", "model": "claude-opus-5-5", "content": [],
+             "stop_reason": None, "stop_sequence": None, "usage": usage}
+    body, i = _event("message_start", {"type": "message_start", "message": start}), 0
+
+    def block(content: dict, deltas=()) -> str:
+        nonlocal i
+        out = _event("content_block_start", {"type": "content_block_start", "index": i, "content_block": content})
+        for d in deltas:
+            out += _event("content_block_delta", {"type": "content_block_delta", "index": i, "delta": d})
+        out += _event("content_block_stop", {"type": "content_block_stop", "index": i})
+        i += 1
+        return out
+
+    if preface:
+        body += block({"type": "text", "text": ""}, [{"type": "text_delta", "text": preface}])
+    for n, query in enumerate(searches):
+        body += block({"type": "server_tool_use", "id": f"srvtoolu_{n}", "name": "web_search", "input": {}},
+                      [{"type": "input_json_delta", "partial_json": json.dumps({"query": query})}])
+        body += block({"type": "web_search_tool_result", "tool_use_id": f"srvtoolu_{n}",
+                       "content": [{"type": "web_search_result", "url": u, "title": t, "encrypted_content": "enc", "page_age": None} for u, t in pages]})
+    body += block({"type": "text", "text": ""}, [{"type": "citations_delta", "citation": {"type": "web_search_result_location", "cited_text": t,
+                                                                                         "url": u, "title": t, "encrypted_index": "enc"}} for u, t in cited]
+                  + [{"type": "text_delta", "text": text}])
+    body += _event("message_delta", {"type": "message_delta", "delta": {"stop_reason": "end_turn", "stop_sequence": None}, "usage": {"output_tokens": output_tokens}})
+    body += _event("message_stop", {"type": "message_stop"})
+    return httpx2.Response(200, content=body.encode("utf-8"), headers={"content-type": "text/event-stream"})
+
+
 def error(status: int, message: str, kind: str = "invalid_request_error") -> httpx2.Response:
     return httpx2.Response(status, json={"type": "error", "error": {"type": kind, "message": message}})
 

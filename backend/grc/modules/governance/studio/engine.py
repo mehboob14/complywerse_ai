@@ -279,6 +279,7 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
     from . import service, templates
 
     session, msg = db.get(StudioSession, session_id), db.get(StudioMessage, message_id)
+    stopped = live.stopper(db, message_id)
     try:
         request = (db.query(StudioMessage).filter(StudioMessage.session_id == session_id, StudioMessage.role == "user",
                                                   StudioMessage.id < message_id).order_by(StudioMessage.id.desc()).first())
@@ -292,8 +293,13 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         attached = auto_refs.attach_named(db, session, request.content.split(service.ATTACHED)[0])
         if attached:
             _stage(db, msg, "Attaching what you named from the platform", detail=auto_refs.summary(attached))
-        if drafting.answers_a_draft(db, request) or drafting.wants_whole_document(session, blocks, request.content):
-            drafting.run_draft(db, session_id, message_id)       # a document not yet started, asked for whole (or answers to its questions): write it
+        answering = drafting.answers_a_draft(db, request)
+        if answering or drafting.wants_whole_document(session, blocks, request.content):
+            # a document not yet started, asked for whole: first the person settles its scope and rules, then (their answers) it is written
+            if answering or drafting.asked_before(db, session_id, message_id):
+                drafting.run_draft(db, session_id, message_id)
+            else:
+                drafting.run_scoping(db, session_id, message_id)
             if attached:
                 auto_refs.add_note(db, message_id, attached)
             return
@@ -323,7 +329,8 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         big = B.is_blank(blocks) or bool(_GENERATE.search(request.content))
         result = claude_client.complete(
             use_case="governance.studio_chat", system=prompts.SYSTEM, messages=[{"role": "user", "content": prompts.render_user(turn)}],
-            schema=prompts.TURN_SCHEMA, max_tokens=64000 if big else 32000, effort="high" if big else "medium", on_progress=chat_progress(db, msg))
+            schema=prompts.TURN_SCHEMA, max_tokens=64000 if big else 32000, effort="high" if big else "medium", on_progress=chat_progress(db, msg),
+            should_stop=stopped)
         _stage(db, msg, "Checking the result")
         # first understand, then work: while Comply Agent asks, nothing changes; answers to its questions are always worked on
         asking = bool(result.data.get("ask_first")) and not request.answers and bool(questions_of(result.data.get("questions")))
@@ -332,6 +339,8 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
             out["notes"].insert(0, auto_refs.note(attached))
         if result.truncated:
             out["notes"].append("The answer reached its length limit: the last change may be incomplete. Ask for the rest in a follow-up.")
+        if not live.still_working(db, msg):
+            raise claude_client.ClaudeStopped()
         msg.content = out["reply"] or ("Before I change anything, a few choices decide what I write." if asking
                                        else "I made changes for you to review." if out["ops"] else "")
         msg.proposal = {"ops": out["ops"], "base_revision": session.revision_no, "stats": out["stats"],
@@ -345,11 +354,10 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         db.commit()
         if out["ops"] and (B.is_blank(blocks) or (session.settings or {}).get("auto_apply")):
             service.accept_ops(db, session, msg, [o["id"] for o in out["ops"]], request.created_by, auto=True)
+    except claude_client.ClaudeStopped:
+        live.forget(db, message_id)
     except Exception as exc:        # noqa: BLE001 - the person sees a sentence, the log sees the cause
-        db.rollback()
-        msg = db.get(StudioMessage, message_id)
-        msg.status, msg.stage, msg.error, msg.updated_at = "error", None, friendly(exc), datetime.utcnow()
-        db.commit()
+        live.fail(db, message_id, friendly(exc))
 
 
 # ── language and requirement checks ──────────────────────────────────────────
