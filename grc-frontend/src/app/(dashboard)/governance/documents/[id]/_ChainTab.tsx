@@ -7,7 +7,7 @@
 //
 // Colours are explicit values where the platform shell repaints slate classes (see the design system): teal for the AI, amber
 // for taken back, emerald for approvals, neutral for edits by hand, the original outlined.
-import { Fragment, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
@@ -302,8 +302,10 @@ function ChangesTable({ versions }: { versions: ChainVersion[] }) {
   );
 }
 
-export default function ChainTab({ documentId, currentVersion, onShowInDocument, onRestore }: {
+export default function ChainTab({ documentId, currentVersion, onShowInDocument, onRestore, focusVersionId }: {
   documentId: number;
+  /** a version to open and scroll to once the chain is read (a link from the library tree) */
+  focusVersionId?: number;
   /** editors: make a version the document again (asks first) */
   onRestore?: (v: { id: number; number: string }) => void;
   currentVersion?: string | null;
@@ -354,6 +356,13 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
     setOpened(new Set(Array.from(open).concat(id)));
     setTimeout(() => document.querySelector(`[data-version-id="${id}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60);
   };
+  const focused = useRef<number | null>(null);
+  useEffect(() => {
+    if (!focusVersionId || focused.current === focusVersionId || !oldestFirst.some((v) => v.id === focusVersionId)) return;
+    focused.current = focusVersionId;
+    jumpTo(focusVersionId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusVersionId, oldestFirst]);
   const download = async (format: ExportFormat) => {
     setExporting(format);
     try {

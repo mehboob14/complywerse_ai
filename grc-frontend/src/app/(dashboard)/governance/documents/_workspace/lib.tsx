@@ -55,8 +55,24 @@ export interface GovDoc {
   policy_statement_count?: number;
 }
 
+/** One version of a document as the library tree shows it (GET /governance/documents/hierarchy), base first. */
+export interface TreeVersion {
+  id: number;
+  number: string;
+  kind: string | null;
+  current: boolean;
+  at: string | null;
+  by: string | null;
+  reason: string;
+  summary: string;
+  has_file: boolean;
+}
+
 export interface GovDocNode extends GovDoc {
   children?: GovDocNode[];
+  /** the base and the newest five; ``version_count`` is how many there are in all */
+  versions?: TreeVersion[];
+  version_count?: number;
 }
 
 // ─── Lifecycle stages ────────────────────────────────────────────────────────

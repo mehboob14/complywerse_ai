@@ -358,7 +358,7 @@ def rollback_to_version(
             detail="Target version not found for this document"
         )
     
-    rollback_reason = rollback_data.rollback_reason if rollback_data else None
+    rollback_reason = ((rollback_data.rollback_reason if rollback_data else None) or "").strip()[:2000] or None     # the person's why
     change_summary = f"Rollback to version {target_version.version_number}"
     if rollback_reason:
         change_summary += f": {rollback_reason}"
@@ -375,7 +375,7 @@ def rollback_to_version(
         row, new_version_number, _ = studio.write_file_version(
             db, document, current_user, data, change_type="minor", summary=change_summary, reason=rollback_reason, ext=ext,
             done=f"Version {target_version.version_number} restored", audit_action="version_rollback")
-        row.change_reason = f"Rollback from version {old_version} to version {target_version.version_number}"
+        row.change_reason = rollback_reason or f"Rollback from version {old_version} to version {target_version.version_number}"
         document.content = None
         db.commit()
         studio.reanchor(db, document, current_user.id)
@@ -402,7 +402,7 @@ def rollback_to_version(
         title=target_version.title,
         content=target_version.content,
         change_summary=change_summary,
-        change_reason=f"Rollback from version {document.current_version} to version {target_version.version_number}",
+        change_reason=rollback_reason or f"Rollback from version {document.current_version} to version {target_version.version_number}",
         status="current",
         created_by=current_user.id,
         created_at=datetime.utcnow()

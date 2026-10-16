@@ -91,14 +91,17 @@ export default function DocumentStudio() {
   const [view, setViewState] = useState<DocView>(() => viewOf(search?.get('tab')));
   const [popup, setPopup] = useState<Popup | null>(() => (search?.get('details') === '1' ? 'details' : null));
   const [stale, setStale] = useState<DraftOpened | null>(null);
-  const [restoring, setRestoring] = useState<{ id: number; number: string } | null>(null);
+  const [restoring, setRestoring] = useState<{ id: number; number: string; why?: string } | null>(null);
   const [trackedRange, setTrackedRange] = useState<{ from: number; to: number } | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
+  // ?version=<id> (a version in the library tree): the Versions view opens on it
+  const focusVersion = Number(search?.get('version')) || undefined;
   const setView = (v: DocView) => {
     setViewState(v);
     const q = new URLSearchParams(search?.toString() ?? '');
     q.set('tab', v);
     q.delete('details');
+    q.delete('version');
     router.replace(`/governance/documents/${id}?${q.toString()}`, { scroll: false });
   };
 
@@ -129,10 +132,20 @@ export default function DocumentStudio() {
     onError: (e) => toast({ type: 'error', title: 'Not published', message: problemOf(e) }),
   });
   const restore = useMutation({
-    mutationFn: (versionId: number) => governanceApi.rollbackDocumentVersion(id, versionId),
+    mutationFn: (v: { id: number; why?: string }) => governanceApi.rollbackDocumentVersion(id, v.id, v.why),
     onSuccess: () => { setRestoring(null); refreshAll(); toast({ type: 'success', title: 'Restored', message: 'That version is the document again, as a new version; the later ones are kept.' }); },
     onError: (e) => toast({ type: 'error', title: 'Not restored', message: problemOf(e) }),
   });
+
+  // a version asked for by the URL where the life cycle is off: its Versions view is only a button, so the version history opens
+  const historyAsked = useRef(false);
+  useEffect(() => {
+    if (!focusVersion || historyAsked.current || !accessQ.data) return;
+    const on = accessQ.data.lifecycle ?? (lifecycleQ.isLoading ? null : !!lifecycleQ.data?.enabled);
+    if (on === null) return;
+    historyAsked.current = true;
+    if (!on) setPopup('history');
+  }, [focusVersion, accessQ.data, lifecycleQ.isLoading, lifecycleQ.data]);
 
   // a sign-off done in the popup: the step is gone, so is the popup
   const myRole = signoff.data?.my_actionable_role ?? null;
@@ -312,7 +325,7 @@ export default function DocumentStudio() {
         {view === 'mappings' && <GovernanceMappingsPage initialDocumentId={id} />}
         {view === 'versions' && (
           lifecycleOn ? (
-            <ChainTab documentId={id} currentVersion={version} onRestore={canEdit ? setRestoring : undefined}
+            <ChainTab documentId={id} currentVersion={version} onRestore={canEdit ? setRestoring : undefined} focusVersionId={focusVersion}
               onShowInDocument={(range) => { setTrackedRange(range); setView('document'); }} />
           ) : (
             <section className="rounded-xl border border-[#d5dbe1] bg-white p-4">
@@ -363,13 +376,21 @@ export default function DocumentStudio() {
         footer={(
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setRestoring(null)} className={BTN}>Cancel</button>
-            <button type="button" onClick={() => restoring && restore.mutate(restoring.id)} disabled={restore.isPending} className={PRIMARY}>{restore.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Restore</button>
+            <button type="button" onClick={() => restoring && restore.mutate(restoring)} disabled={restore.isPending} className={PRIMARY}>{restore.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Restore</button>
           </div>
         )}>
-        <p className="px-5 py-4 text-sm text-[#26323d]">
-          Version {restoring?.number} becomes the document again, as a new version; the versions after it are kept.
-          {['approved', 'published'].includes(doc.status) ? ' It is approved, so it goes back to review.' : ''}
-        </p>
+        <div className="space-y-3 px-5 py-4">
+          <p className="text-sm text-[#26323d]">
+            Version {restoring?.number} becomes the document again, as a new version; the versions after it are kept.
+            {['approved', 'published'].includes(doc.status) ? ' It is approved, so it goes back to review.' : ''}
+          </p>
+          <label className="block">
+            <span className="text-xs font-semibold text-[#26323d]">Why <span className="font-normal text-[#586472]">(optional)</span></span>
+            <input type="text" value={restoring?.why ?? ''} maxLength={500} placeholder="e.g. The last edit was made in error"
+              onChange={(e) => setRestoring((r) => (r ? { ...r, why: e.target.value } : r))}
+              className="mt-1 w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#586472] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]" />
+          </label>
+        </div>
       </AnimatedModal>
       {canEdit && <DocumentSignoffPanel documentId={id} isOpen={popup === 'control'} onClose={() => setPopup(null)} onDone={refreshAll} />}
       <DocumentVersionHistoryPanel documentId={id} isOpen={popup === 'history'} onClose={() => setPopup(null)} canRestore={canEdit} onRestored={() => { setPopup(null); refreshAll(); }} />

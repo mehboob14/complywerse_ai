@@ -1068,8 +1068,17 @@ def version_after_accept(db, s, user, accepted: int) -> Optional[Dict[str, Any]]
         state = {"pending_review": "in review", "pending_approval": "waiting for approval"}.get(doc.status, doc.status.replace("_", " "))
         return {"saved": False, "why": f"The document is {state}, so this change stays in the studio. Save to library makes the next "
                                        "version when you are ready; it starts the review again."}
+    reason = f"Accepted {accepted} change{'' if accepted == 1 else 's'} from Comply Agent"
+    try:        # the person's request, as the change set of this version keeps it, is the version's why
+        since = int((s.settings or {}).get("saved_revision") or 0)
+        ask = next((" ".join(o["request"].split()) for o in session_origins(db, s, since_revision=since) if (o.get("request") or "").strip()), "")
+    except Exception:       # noqa: BLE001 - the version is made without it
+        logger.warning("studio session %s: the request of the accepted changes could not be read", s.id, exc_info=True)
+        ask = ""
+    if ask:
+        reason += ": " + (ask if len(ask) <= 150 else ask[:149].rstrip() + "…")
     try:
-        doc = save_to_document(db, s, user, change_reason=f"Accepted {accepted} change{'' if accepted == 1 else 's'} from Comply Agent")
+        doc = save_to_document(db, s, user, change_reason=reason)
     except StudioError as exc:
         db.rollback()
         return {"saved": False, "why": str(exc)}

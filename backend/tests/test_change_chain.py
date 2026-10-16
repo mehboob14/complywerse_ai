@@ -420,6 +420,7 @@ def test_restoring_the_original_file_of_an_uploaded_document_makes_it_the_docume
     out = version_routes.rollback_to_version(document_id=20, version_id=first["id"], rollback_data=version_routes.VersionRollback(rollback_reason="Back to what was approved"),
                                              db=db, current_user=db.get(m.GRCUser, 1))
     assert out["new_version"]["version_number"] == "1.2" and out["new_version"]["has_file"] is True and out["status"] == "pending_review"
+    assert db.get(m.GovernanceDocumentVersion, out["new_version"]["id"]).change_reason == "Back to what was approved"            # the person's why
     db.refresh(doc)
     assert open(doc.file_path, "rb").read() == open(original, "rb").read() and doc.file_path not in (original, edited_file)    # a copy of the original
     assert doc.current_version == "1.2" and not (doc.content or "").strip() and os.path.exists(edited_file)                       # the edited file stays as 1.1

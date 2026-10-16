@@ -620,12 +620,33 @@ def get_document_hierarchy(
         query = query.filter(GovernanceDocument.parent_document_id == parent_id)
     
     documents = query.order_by(GovernanceDocument.doc_type, GovernanceDocument.title).all()
-    
+
+    # each document's versions for the tree, base first: one query of columns only (never the versions' content)
+    from .. import change_chain
+    V = GovernanceDocumentVersion
+    rows = (db.query(V.id, V.document_id, V.version_number, V.change_type, V.status, V.created_at, V.created_by,
+                     V.change_reason, V.change_summary, V.file_path)
+            .join(GovernanceDocument, GovernanceDocument.id == V.document_id)
+            .filter(GovernanceDocument.tenant_id.in_(user_tenants))
+            .order_by(V.created_at.asc(), V.id.asc()).all())
+    names = change_chain._names(db, [r.created_by for r in rows])
+    versions_of: Dict[int, List[Dict[str, Any]]] = {}
+    for r in rows:
+        vs = versions_of.setdefault(r.document_id, [])
+        if vs and vs[-1]["number"] == r.version_number:      # a snapshot that repeats the number before it (the gap fix's pre-fix copy)
+            continue
+        vs.append({"id": r.id, "number": r.version_number, "kind": r.change_type, "current": r.status == "current",
+                   "at": r.created_at.isoformat() if r.created_at else None, "by": names.get(r.created_by),
+                   "reason": (r.change_reason or "")[:300], "summary": (r.change_summary or "")[:200], "has_file": bool(r.file_path)})
+
     def build_hierarchy(doc):
         result = serialize_document(doc, db)
+        vs = versions_of.get(doc.id, [])
+        result["version_count"] = len(vs)
+        result["versions"] = vs if len(vs) <= 6 else [vs[0]] + vs[-5:]       # the base and the newest five
         children = db.query(GovernanceDocument).filter(
             GovernanceDocument.parent_document_id == doc.id
-        ).all()
+        ).order_by(GovernanceDocument.doc_type, GovernanceDocument.title, GovernanceDocument.id).all()
         result["children"] = [build_hierarchy(child) for child in children]
         return result
     

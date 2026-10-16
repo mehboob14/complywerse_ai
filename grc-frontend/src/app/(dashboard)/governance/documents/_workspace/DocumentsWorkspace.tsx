@@ -97,7 +97,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     queryKey: ['gov-docs-workspace'],
     queryFn: () => fetchDocuments({ limit: 1000, sort_by: 'updated_at', sort_order: 'desc' }),
   });
-  const { data: hierarchy = [] } = useQuery({ queryKey: ['gov-docs-hierarchy'], queryFn: fetchHierarchy });
+  // refetched on every visit: a version saved a moment ago shows in the tree at once
+  const { data: hierarchy = [] } = useQuery({ queryKey: ['gov-docs-hierarchy'], queryFn: fetchHierarchy, refetchOnMount: 'always' });
   const { data: summary } = useQuery({ queryKey: ['gov-docs-summary'], queryFn: fetchSummary });
   const { data: overdue } = useQuery({ queryKey: ['gov-docs-overdue'], queryFn: fetchOverdueReviews });
   const { data: myPending } = useQuery({ queryKey: ['gov-docs-mypending'], queryFn: fetchMyPending });

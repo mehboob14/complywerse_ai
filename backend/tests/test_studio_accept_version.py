@@ -12,9 +12,9 @@ from test_studio_files import lib, make_library_doc                 # noqa: F401
 from test_studio_flow import answer, change, world                  # noqa: F401  (world is a fixture)
 
 
-def _ask(world, sid, changes):
+def _ask(world, sid, changes, text="Change it."):
     world.respond(lambda body: reply(answer(changes, "Done.")))
-    sent = world.http.post(world.api(f"/sessions/{sid}/messages"), json={"text": "Change it."}).json()
+    sent = world.http.post(world.api(f"/sessions/{sid}/messages"), json={"text": text}).json()
     return world.http.get(world.api(f"/sessions/{sid}/messages/{sent['id']}")).json()
 
 
@@ -44,6 +44,23 @@ def test_each_accept_on_a_draft_makes_the_next_version_minor_then_major(world):
     out = _accept(world, s["id"], msg, "major")
     assert out["library_version"]["version"] == "2.0" and out["library_version"]["change"] == "major"
     assert [v for v, st in _versions(world.db, 11) if st == "current"] == ["2.0"]
+
+
+
+def test_the_persons_request_is_the_reason_of_the_version_it_makes(world):
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 11}).json()
+    msg = _ask(world, s["id"], [change("replace", "B3", markdown="Accounts shall be reviewed monthly.", reason="monthly")],
+               text="Make the account reviews\nmonthly, as the auditors asked.")
+    _accept(world, s["id"], msg, "minor")
+    row = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=11, version_number="1.1").one()
+    assert row.change_reason == "Accepted 1 change from Comply Agent: Make the account reviews monthly, as the auditors asked."
+
+    long_ask = "Add an exceptions section " + "with every detail " * 20
+    msg = _ask(world, s["id"], [change("insert", "B3", markdown="## 2. Exceptions\n\nExceptions need the CISO's approval.", reason="exceptions")], text=long_ask)
+    _accept(world, s["id"], msg, "major")
+    row = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=11, version_number="2.0").one()
+    request = row.change_reason.split(": ", 1)[1]
+    assert row.change_reason.startswith("Accepted 1 change from Comply Agent: Add an exceptions section") and len(request) == 150 and request.endswith("…")
 
 
 def test_a_published_document_waits_for_save_to_library(world):

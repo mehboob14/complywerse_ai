@@ -319,8 +319,8 @@ export const governanceApi = {
   // Diff two content versions (version ROW ids) + restore a prior version.
   compareDocumentVersions: (versionAId: number, versionBId: number) =>
     apiClient.get(`/governance/versions/compare/${versionAId}/${versionBId}`),
-  rollbackDocumentVersion: (documentId: number, versionId: number) =>
-    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, {}),
+  rollbackDocumentVersion: (documentId: number, versionId: number, reason?: string) =>
+    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, reason?.trim() ? { rollback_reason: reason.trim() } : {}),
   // Edit document body content with a version snapshot + audit ("why").
   editDocumentContent: (documentId: number, data: { content: string; change_reason?: string }) =>
     apiClient.put(`/governance/documents/${documentId}`, data),

@@ -3,14 +3,17 @@
 /**
  * LibraryTree — LEFT sidebar of the governance documents workspace.
  * Section 1: LIBRARY quick-filters (All / Recently updated / My documents).
- * Section 2: BY HIERARCHY — recursive, expandable tree of the policy hierarchy.
+ * Section 2: BY HIERARCHY — recursive, expandable tree of the policy hierarchy; under each document its versions, base first
+ * to the newest, each with who made it and why (a link to that version in the document's Versions view).
  * Presentational: selection + active-library state are owned by the shell.
  */
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { FileText, Clock, User, ChevronRight, ChevronDown } from 'lucide-react';
-import { DocTypeTile } from './lib';
-import type { GovDocNode } from './lib';
+import { parseUtc } from '@/lib/serverTime';
+import { DocTypeTile, verLabel } from './lib';
+import type { GovDocNode, TreeVersion } from './lib';
 import type { DashboardSummary } from './api';
 
 export interface LibraryTreeProps {
@@ -54,11 +57,51 @@ function LibraryRow({
   );
 }
 
+/** What kind of version it is, as a small pill: the first one is the base. */
+function versionKind(v: TreeVersion, isBase: boolean): string {
+  if (isBase) return 'Base';
+  if ((v.summary || '').toLowerCase().startsWith('rollback to')) return 'Restored';
+  const kind = (v.kind || '').toLowerCase();
+  if (kind === 'major') return 'Major';
+  if (kind === 'signoff') return 'Sign-off';
+  if (kind === 'revert') return 'Taken back';
+  return 'Minor';
+}
+
+function shortDate(at: string | null): string {
+  const d = parseUtc(at);
+  if (!d) return '';
+  const sameYear = d.getFullYear() === new Date().getFullYear();
+  return d.toLocaleDateString(undefined, sameYear ? { day: 'numeric', month: 'short' } : { day: 'numeric', month: 'short', year: '2-digit' });
+}
+
+function VersionRow({ docId, v, isBase }: { docId: number; v: TreeVersion; isBase: boolean }) {
+  const why = v.reason || v.summary;
+  const line = [v.by, why].filter(Boolean).join(' · ');
+  return (
+    <li className="relative text-[12px] text-[#26323d]">
+      <span aria-hidden className={`absolute -left-[4.5px] top-[9px] h-2 w-2 rounded-full border border-white ${v.current ? 'bg-[#0f766e]' : 'bg-[#b8c4c8]'}`} />
+      <Link href={`/governance/documents/${docId}?tab=versions&version=${v.id}`} title={line ? `${verLabel(v.number)} · ${line}` : verLabel(v.number)}
+        className="ml-2 block rounded-md px-1.5 py-1 hover:bg-[#f3f6f8]">
+        <span className="flex items-center gap-1.5">
+          <span className="text-[12px] font-semibold tabular-nums text-[#1f2933]">{verLabel(v.number)}</span>
+          <span className="rounded border border-[#d5dbe1] px-1 text-[10px] font-medium leading-4 text-[#586472]">{versionKind(v, isBase)}</span>
+          {v.current && <span className="rounded bg-[#0f766e] px-1 text-[10px] font-semibold leading-4 text-white">Current</span>}
+          <span className="ml-auto shrink-0 text-[11px] tabular-nums text-[#586472]">{shortDate(v.at)}</span>
+        </span>
+        {line && <span className="block truncate text-[11px] text-[#586472]">{line}</span>}
+      </Link>
+    </li>
+  );
+}
+
 function TreeNode({
   node,
   depth,
   expanded,
   toggle,
+  versionsOpen,
+  toggleVersions,
   selectedNodeId,
   onSelectNode,
 }: {
@@ -66,6 +109,8 @@ function TreeNode({
   depth: number;
   expanded: Set<number>;
   toggle: (id: number) => void;
+  versionsOpen: Set<number>;
+  toggleVersions: (id: number) => void;
   selectedNodeId: number | null;
   onSelectNode: (id: number | null) => void;
 }) {
@@ -73,38 +118,74 @@ function TreeNode({
   const hasChildren = children.length > 0;
   const isOpen = expanded.has(node.id);
   const isSelected = selectedNodeId === node.id;
+  const versions = node.versions ?? [];
+  const versionCount = node.version_count ?? versions.length;
+  const hidden = versionCount - versions.length;          // the tree gets the base and the newest five
+  const showVersions = versions.length > 0 && versionsOpen.has(node.id);
+  const listId = `tree-versions-${node.id}`;
+  const more = hidden > 0 && (
+    <li className="text-[11px] text-[#586472]">
+      <Link href={`/governance/documents/${node.id}?tab=versions`} className="ml-2 block rounded-md px-1.5 py-1 font-medium text-[#0f766e] hover:bg-[#f3f6f8] hover:text-[#0b5f58]">
+        {hidden} more…
+      </Link>
+    </li>
+  );
 
   return (
     <div>
-      <button
-        type="button"
-        onClick={() => onSelectNode(node.id)}
+      <div
         style={{ paddingLeft: 8 + depth * 14 }}
-        className={`group w-full flex items-center gap-1.5 pr-2 py-1.5 rounded-md text-sm ${
+        className={`group flex items-center gap-1 pr-1 rounded-md text-sm ${
           isSelected ? 'bg-primary-50 text-primary-700 font-medium' : 'text-slate-700 hover:bg-slate-50'
         }`}
       >
-        <span
-          role={hasChildren ? 'button' : undefined}
-          onClick={
-            hasChildren
-              ? (e) => {
-                  e.stopPropagation();
-                  toggle(node.id);
-                }
-              : undefined
-          }
-          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center rounded ${
-            hasChildren ? 'text-slate-400 hover:text-slate-600 hover:bg-slate-100' : ''
-          }`}
+        {hasChildren ? (
+          <button
+            type="button"
+            onClick={() => toggle(node.id)}
+            aria-expanded={isOpen}
+            aria-label={`${isOpen ? 'Hide' : 'Show'} the documents under ${node.title}`}
+            className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+          >
+            {isOpen ? <ChevronDown className="h-4 w-4" strokeWidth={1.75} /> : <ChevronRight className="h-4 w-4" strokeWidth={1.75} />}
+          </button>
+        ) : (
+          <span aria-hidden className="h-5 w-5 shrink-0" />
+        )}
+        <button
+          type="button"
+          onClick={() => onSelectNode(node.id)}
+          aria-current={isSelected ? 'true' : undefined}
+          className="flex min-w-0 flex-1 items-center gap-1.5 py-1.5 text-left"
         >
-          {hasChildren &&
-            (isOpen ? <ChevronDown className="h-4 w-4" strokeWidth={1.75} /> : <ChevronRight className="h-4 w-4" strokeWidth={1.75} />)}
-        </span>
-        <DocTypeTile docType={node.doc_type} size="sm" />
-        <span className="min-w-0 flex-1 truncate text-left">{node.title}</span>
-        {hasChildren && <span className="shrink-0 text-xs text-slate-400 tabular-nums">{children.length}</span>}
-      </button>
+          <DocTypeTile docType={node.doc_type} size="sm" />
+          <span className="min-w-0 flex-1 truncate text-left">{node.title}</span>
+          {hasChildren && <span className="shrink-0 text-xs text-slate-400 tabular-nums">{children.length}</span>}
+        </button>
+        {versions.length > 0 ? (
+          <button
+            type="button"
+            onClick={() => toggleVersions(node.id)}
+            aria-expanded={showVersions}
+            aria-controls={listId}
+            title={`${showVersions ? 'Hide' : 'Show'} the versions of ${node.title}`}
+            className="inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[11px] font-medium text-[#586472] hover:bg-[#eef2f6] hover:text-[#1f2933]"
+          >
+            {versionCount} {versionCount === 1 ? 'version' : 'versions'}
+            <ChevronDown className={`h-3 w-3 transition-transform ${showVersions ? 'rotate-180' : ''}`} strokeWidth={2} aria-hidden />
+          </button>
+        ) : (
+          <span className="shrink-0 px-1 text-[11px] tabular-nums text-[#586472]">{verLabel(node.current_version)}</span>
+        )}
+      </div>
+      {versions.length > 0 && (
+        <ul id={listId} hidden={!showVersions} aria-label={`Versions of ${node.title}`} style={{ marginLeft: 8 + depth * 14 + 10 }}
+          className="my-0.5 border-l border-[#d5dbe1] pr-1">
+          <VersionRow docId={node.id} v={versions[0]} isBase />
+          {more}
+          {versions.slice(1).map((v) => <VersionRow key={v.id} docId={node.id} v={v} isBase={false} />)}
+        </ul>
+      )}
       {hasChildren && isOpen && (
         <div>
           {children.map((child) => (
@@ -114,6 +195,8 @@ function TreeNode({
               depth={depth + 1}
               expanded={expanded}
               toggle={toggle}
+              versionsOpen={versionsOpen}
+              toggleVersions={toggleVersions}
               selectedNodeId={selectedNodeId}
               onSelectNode={onSelectNode}
             />
@@ -145,13 +228,17 @@ export function LibraryTree({
     setDidAutoExpand(true);
   }, [roots, didAutoExpand]);
 
-  const toggle = (id: number) =>
-    setExpanded((prev) => {
+  // a document's versions open on their own toggle: the roots opening at first load does not open every list of versions
+  const [versionsOpen, setVersionsOpen] = useState<Set<number>>(new Set());
+  const flip = (set: typeof setExpanded) => (id: number) =>
+    set((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
       return next;
     });
+  const toggle = flip(setExpanded);
+  const toggleVersions = flip(setVersionsOpen);
 
   const totalDocs = summary?.total_documents ?? 0;
   const treeSelected = selectedNodeId != null;
@@ -221,6 +308,8 @@ export function LibraryTree({
                 depth={0}
                 expanded={expanded}
                 toggle={toggle}
+                versionsOpen={versionsOpen}
+                toggleVersions={toggleVersions}
                 selectedNodeId={selectedNodeId}
                 onSelectNode={onSelectNode}
               />
