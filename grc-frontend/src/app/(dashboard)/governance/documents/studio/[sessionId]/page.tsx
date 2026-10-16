@@ -369,7 +369,8 @@ export default function StudioWorkspacePage() {
   const saveLabel = { saved: 'Saved', dirty: 'Unsaved changes', saving: 'Saving…', conflict: 'Not saved', error: 'Not saved' }[saveState];
 
   return (
-    <div className="-mx-4 -my-4 flex h-[calc(100vh-7.5rem)] min-h-[560px] flex-col bg-[#f4f6f8] sm:-mx-6 sm:-my-5" data-testid="studio-workspace">
+    // the whole page under the top bar (3rem): the margins cancel the page's own padding (14px, 16px from lg in compact density)
+    <div className="-m-[14px] flex h-[calc(100vh-3rem)] min-h-[560px] flex-col bg-[#f4f6f8] lg:-m-4" data-testid="studio-workspace">
       {/* top bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#d5dbe1] bg-white px-3 py-2 sm:px-4">
         <Link href="/governance/documents/studio" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]" aria-label="Back to the AI Studio"><ArrowLeft className="h-4 w-4" /> Studio</Link>

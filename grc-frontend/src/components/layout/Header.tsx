@@ -7,6 +7,7 @@ import { ChevronDown, ChevronRight, LogOut, UserCircle, Users, Search, Loader2, 
 import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
+import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
 
 const navIconProps = {
   size: 18,
@@ -187,8 +188,10 @@ export default function Header() {
 
   return (
     <header className="top-nav flex h-12 items-center justify-between px-4 lg:px-5">
-      <div className="flex-1 min-w-0 px-1">
+      <div className="flex flex-1 min-w-0 self-stretch items-center px-1">
         {(() => {
+          // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take
+          if (inDocumentsArea(pathname)) return <DocumentsTabs />;
           const info = PAGE_TITLES[pathname ?? ''];
           // Asset detail pages (/assets/<id>) have no static entry — show the
           // section breadcrumb here so the page needs no second bar of its own.
@@ -228,7 +231,7 @@ export default function Header() {
       <div className="ml-3 flex items-center gap-2.5">
         {/* ComplyChat — global AI assistant, as a wide input (replaces the
             old search bar). Type a question and hit Enter to open the chat. */}
-        <form onSubmit={submitChat} className="relative hidden md:block">
+        <form onSubmit={submitChat} className={`relative hidden ${inDocumentsArea(pathname) ? 'lg:block' : 'md:block'}`}>
           <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
           <input
             value={chatQ}
@@ -241,6 +244,13 @@ export default function Header() {
             <ChevronRight size={14} />
           </button>
         </form>
+        {/* on a narrower screen the Documents tabs need that room: ComplyChat is an icon there */}
+        {inDocumentsArea(pathname) && (
+          <Link href="/complychat" aria-label="Ask ComplyChat" title="Ask ComplyChat"
+            className="hidden rounded-md p-1.5 text-[var(--color-base)] transition-colors hover:bg-[var(--color-base)]/10 md:inline-flex lg:hidden">
+            <Sparkles size={18} strokeWidth={1.75} />
+          </Link>
+        )}
 
         {/* Issues moved into the sidebar "Issue & Incident Management" module. */}
 
