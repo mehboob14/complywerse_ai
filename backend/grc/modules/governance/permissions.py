@@ -24,10 +24,22 @@ PUBLISH_REFUSED = "Only someone allowed to publish documents can approve or publ
 DELETE_REFUSED = "Only the document's owner, its author or someone allowed to delete documents can delete it."
 
 
-def _granted(db: Session, user: GRCUser, name: str) -> bool:
-    from ...routers.admin_router import check_permission      # the primary contact and "Administrator" pass it too
+def _platform_role():
+    """A role given in the platform (by hand, or by an SSO group mapping) - not an entitlement an access-review connector
+    imported: a connected app's "Administrator" group reuses the platform's role row by name and must not make anyone an admin."""
+    from ...routers.sso_router import SOURCE_SSO
 
-    return check_permission(user, db, name)
+    return or_(UserRole.source.is_(None), UserRole.source == SOURCE_SSO)
+
+
+def _granted(db: Session, user: GRCUser, name: str) -> bool:
+    """An administrator, or a role that holds the permission (an admin ticks permissions on a role in Administration > Roles)."""
+    from ...models import Permission, RolePermission
+
+    if is_admin(db, user):
+        return True
+    return db.query(RolePermission.id).join(Permission, Permission.id == RolePermission.permission_id).join(
+        UserRole, UserRole.role_id == RolePermission.role_id).filter(UserRole.user_id == user.id, Permission.name == name).first() is not None
 
 
 def is_admin(db: Session, user: GRCUser) -> bool:
@@ -36,14 +48,14 @@ def is_admin(db: Session, user: GRCUser) -> bool:
     if tenant and tenant.primary_contact_email and email and tenant.primary_contact_email.lower() == email:
         return True
     return db.query(UserRole.id).join(Role, Role.id == UserRole.role_id).filter(
-        UserRole.user_id == user.id, Role.name == ADMIN_ROLE).first() is not None
+        UserRole.user_id == user.id, Role.name == ADMIN_ROLE, _platform_role()).first() is not None
 
 
 def admin_user_ids(db: Session) -> Set[int]:
     """The active users who are administrators."""
     tenant = db.query(Tenant).first()
     contact = (tenant.primary_contact_email or "").lower() if tenant else ""
-    who = GRCUser.id.in_(select(UserRole.user_id).join(Role, Role.id == UserRole.role_id).where(Role.name == ADMIN_ROLE))
+    who = GRCUser.id.in_(select(UserRole.user_id).join(Role, Role.id == UserRole.role_id).where(Role.name == ADMIN_ROLE, _platform_role()))
     if contact:
         who = or_(who, func.lower(GRCUser.email) == contact)
     return {uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.is_active.is_(True), who)}

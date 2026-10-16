@@ -301,6 +301,12 @@ async def create_session_from_file(file: UploadFile = File(...), title: str = Fo
                                    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """A file opened in the studio goes into the library at once, with the details the person confirmed (read from the file first:
     POST /governance/documents/read-details)."""
+    from ..doc_details import check_details
+
+    try:
+        check_details(db, owner_id=owner_id, department_id=department_id, review_cycle_months=review_cycle_months)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     data = await file.read()
     details = {"classification": classification, "description": description, "owner_id": owner_id, "department_id": department_id,
                "review_cycle_months": review_cycle_months, "effective_date": effective_date, "next_review_date": next_review_date}
@@ -702,7 +708,13 @@ def compare(session_id: int, body: CompareIn, db: Session = Depends(get_db), use
 # ── library ──────────────────────────────────────────────────────────────────
 @router.post("/sessions/{session_id}/move-to-library", dependencies=[Depends(require_studio)])
 def move_to_library(session_id: int, body: MoveIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    from ..doc_details import check_details
+
     s = _session(db, session_id, user)
+    try:
+        check_details(db, owner_id=body.owner_id, department_id=body.department_id, review_cycle_months=body.review_cycle_months)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     try:
         doc = service.move_to_library(db, s, user, title=body.title, doc_type=body.doc_type, classification=body.classification,
                                       parent_document_id=body.parent_document_id, framework_ids=body.framework_ids, **body.details())

@@ -387,7 +387,9 @@ class Pair:
     format_only: bool = False                   # same words, different formatting or kind
 
 
-def _same_format(a: Block, b: Block, numbers: bool = True) -> bool:
+def _same_format(a: Block, b: Block, numbers: bool = False) -> bool:
+    # the typed list number is not compared by default: Markdown shows a list numbered from its first item whatever the later
+    # items say, and Word numbers lists itself, so a different typed number is no change a reader sees
     if a.kind != b.kind or a.level != b.level or a.ordered != b.ordered or (numbers and a.number != b.number):
         return False
     if a.kind == "table":
@@ -515,7 +517,7 @@ def _shape(b: Block) -> str:
 
 def structure(a: Block, b: Block) -> List[str]:
     """How a block's place in the outline changed, in words ("Heading 2 → Heading 3", "Paragraph → Heading 2", "Bullet list →
-    numbered list", "List level 1 → 2", "Renumbered 3 → 4"). Empty when only its words or their formatting changed."""
+    numbered list", "List level 1 → 2"). Empty when only its words or their formatting changed."""
     if a.kind != b.kind or (a.kind == "heading" and a.level != b.level):
         return [f"{_shape(a)} → {_shape(b)}"]
     if a.kind != "list_item":
@@ -525,8 +527,6 @@ def structure(a: Block, b: Block) -> List[str]:
         out.append(f"{_shape(a)} → {_shape(b).lower()}")
     if a.level != b.level:
         out.append(f"List level {a.level + 1} → {b.level + 1}")
-    if a.ordered and b.ordered and None not in (a.number, b.number) and a.number != b.number:
-        out.append(f"Renumbered {a.number} → {b.number}")
     return out
 
 

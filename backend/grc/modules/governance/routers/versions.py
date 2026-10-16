@@ -201,8 +201,13 @@ def create_version(
     document.current_version = new_version_number
     if version_data.title:
         document.title = version_data.title
+    old_status = document.status
     if version_data.content:
         document.content = version_data.content
+        from .. import doc_lifecycle
+
+        doc_lifecycle.changed_after_review(db, document, old_status, current_user.id,
+                                           f"New version {new_version_number}, so it needs approving again")
     document.updated_at = datetime.utcnow()
     
     create_audit_log(

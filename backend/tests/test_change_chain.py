@@ -104,12 +104,10 @@ def test_a_change_to_the_outline_says_how_it_changed_when_no_word_did():
     base = "# T\n\n## Scope\n\nText.\n\n## Rules\n\n- one\n- two\n\nSome words.\n\n1. first\n2. second\n3. third\n"
     cur = "# T\n\n### Scope\n\nText.\n\n## Rules\n\n- one\n  - two\n\nSome words.\n\n1. first\n2. second\n4. third\n"
     out = C.compare(base, cur)
-    assert [h["structure"] for h in out["hunks"]] == [["Heading 2 → Heading 3"], ["List level 1 → 2"], ["Renumbered 3 → 4"]]
+    # a typed list number is not a change a reader sees (Markdown numbers a list from its first item; Word numbers lists itself)
+    assert [h["structure"] for h in out["hunks"]] == [["Heading 2 → Heading 3"], ["List level 1 → 2"]]
     assert all(h["format_only"] and h["words_added"] == h["words_removed"] == 0 for h in out["hunks"])
     assert [r["structure"] for r in out["rows"] if r["status"] != "equal"] == [h["structure"] for h in out["hunks"]]
-    renumbered = out["hunks"][2]
-    assert renumbered["before_digests"] == renumbered["after_digests"]                  # the digests attribution rests on are unchanged
-    assert "3. third" in C.revert(base, cur, [renumbered["id"]])
     assert B.locate(B.parse(base), B.parse(cur))[9] == 9                                 # an edit can still be placed on a renumbered item
     kinds = C.compare("Plain para.\n\n- a\n- b\n", "## Plain para.\n\n1. a\n2. b\n")
     assert [h["structure"] for h in kinds["hunks"]] == [["Paragraph → Heading 2"], ["Bullet list → numbered list"], ["Bullet list → numbered list"]]

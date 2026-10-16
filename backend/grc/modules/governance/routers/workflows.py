@@ -12,6 +12,7 @@ from ....models import (
     WorkflowStepApprover
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from .. import permissions
 
 router = APIRouter(prefix="/workflows", tags=["Governance - Workflows"])
 
@@ -217,12 +218,13 @@ def submit_for_approval(
             detail="Document not found"
         )
     
+    permissions.ensure_editor(db, current_user, document)
     if document.status not in ["draft", "pending_review"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Document cannot be submitted for approval in '{document.status}' status"
         )
-    
+
     if not document.owner_id:
         document.owner_id = current_user.id
     if not document.author_id:
@@ -338,8 +340,7 @@ def approve_step(
             detail="Access denied"
         )
     
-    # Temporary simplified model: any logged-in user from the same tenant can
-    # approve a pending document review step.
+    _ensure_step_approver(db, current_user, step)
     if step.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -404,6 +405,12 @@ def approve_step(
     }
 
 
+def _ensure_step_approver(db: Session, user: GRCUser, step) -> None:
+    """A step is approved or rejected by its approver (or the person it was delegated to), or an administrator."""
+    if user.id not in (step.approver_id, step.delegated_to) and not permissions.is_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the approver of this step can decide it.")
+
+
 @router.post("/steps/{step_id}/reject")
 def reject_step(
     step_id: int,
@@ -430,6 +437,7 @@ def reject_step(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied"
         )
+    _ensure_step_approver(db, current_user, step)
     
     # Temporary simplified model: any logged-in user from the same tenant can
     # reject a pending document review step.
@@ -935,7 +943,7 @@ def check_step_completion(instance: DocumentWorkflowInstance, db: Session) -> bo
     return len(actions) >= 1
 
 
-@router.post("/documents/{document_id}/start")
+@router.post("/documents/{document_id}/start", dependencies=[Depends(permissions.require_doc_editor)])
 def start_workflow(
     document_id: int,
     request: StartWorkflowRequest,
@@ -1338,7 +1346,7 @@ def advance_workflow(
     return result
 
 
-@router.post("/documents/{document_id}/rollback")
+@router.post("/documents/{document_id}/rollback", dependencies=[Depends(permissions.require_doc_editor)])
 def rollback_workflow(
     document_id: int,
     request: RollbackWorkflowRequest,
@@ -1434,7 +1442,7 @@ def rollback_workflow(
     }
 
 
-@router.post("/documents/{document_id}/cancel")
+@router.post("/documents/{document_id}/cancel", dependencies=[Depends(permissions.require_doc_editor)])
 def cancel_workflow(
     document_id: int,
     request: CancelWorkflowRequest,

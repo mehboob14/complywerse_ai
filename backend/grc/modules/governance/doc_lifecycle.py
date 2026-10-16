@@ -99,13 +99,16 @@ def _safe(fn):
 # ── people, alerts, tasks ────────────────────────────────────────────────────
 def _people(db, ids: Optional[Iterable[int]] = None) -> List[int]:
     """The active users who are people (of ``ids``, or all): local or SSO accounts, or anyone who has signed in."""
-    from sqlalchemy import or_
+    from sqlalchemy import and_, or_
 
     from ...models import GRCUser
     from ...routers.sso_router import PROVIDER_ENTRA
 
+    # an Entra account counts before its first sign-in only when SSO made it; the access-review directory sync stamps
+    # access_synced_at on the accounts it imports (mailboxes, service and room accounts among them)
     q = db.query(GRCUser.id).filter(GRCUser.is_active.is_(True), or_(
-        GRCUser.external_provider.is_(None), GRCUser.external_provider == PROVIDER_ENTRA, GRCUser.last_login.isnot(None)))
+        GRCUser.external_provider.is_(None), GRCUser.last_login.isnot(None),
+        and_(GRCUser.external_provider == PROVIDER_ENTRA, GRCUser.access_synced_at.is_(None))))
     if ids is not None:
         q = q.filter(GRCUser.id.in_({int(i) for i in ids if i}))
     return [uid for (uid,) in q.order_by(GRCUser.id)]
@@ -383,9 +386,15 @@ def _add_joiners(db, doc) -> int:
     the life cycle was switched on asks nobody until it is published again (or someone asks for acknowledgements)."""
     from ...models import DocumentObligation
 
-    asked = db.query(DocumentObligation.id).filter(DocumentObligation.document_id == doc.id,
-                                                   DocumentObligation.kind == "acknowledgement").first()
-    return _ensure_acknowledgements(db, doc) if asked else 0
+    if doc.acks_everyone_at is None:
+        # ponytail: documents asked before the marker existed count as asked of everyone when most people were asked; a request
+        # to a few people (a workflow's attestation) does not make the whole organisation follow
+        asked = db.query(DocumentObligation.user_id).filter(DocumentObligation.document_id == doc.id,
+                                                            DocumentObligation.kind == "acknowledgement").distinct().count()
+        if not asked or asked < max(3, len(_people(db)) // 2):
+            return 0
+        doc.acks_everyone_at = datetime.utcnow()
+    return _ensure_acknowledgements(db, doc)
 
 
 def request_acknowledgements(db, doc, user_ids: Optional[Iterable[int]] = None, by: Optional[int] = None, days: Optional[int] = None) -> int:
@@ -396,6 +405,8 @@ def request_acknowledgements(db, doc, user_ids: Optional[Iterable[int]] = None, 
         DocumentObligation.document_id == doc.id, DocumentObligation.kind == "acknowledgement",
         DocumentObligation.status.in_(("pending", "done")))}
     people = _people(db)
+    if user_ids is None and doc.acks_everyone_at is None:
+        doc.acks_everyone_at = datetime.utcnow()                    # asked of everyone: people who join later are asked too
     pool = people if user_ids is None else [u for u in dict.fromkeys(int(i) for i in user_ids) if u in set(people)]
     asked = _request(db, doc, "acknowledgement", [u for u in pool if u not in have], by,
                      days or settings(db, doc.tenant_id)["ack_days"])
@@ -549,14 +560,28 @@ def state(db, doc, user) -> Dict[str, Any]:
 
 
 # ── the daily sweep ──────────────────────────────────────────────────────────
+def drop_non_people(db) -> int:
+    """Requests to accounts that are not people (asked before the people rule, e.g. identities a connector imported) end, with
+    their tasks, so nobody is reminded or escalated about them and they leave the counts."""
+    from ...models import DocumentObligation
+
+    people = set(_people(db))
+    gone = [ob for ob in db.query(DocumentObligation).filter(DocumentObligation.status == "pending").all() if ob.user_id not in people]
+    for ob in gone:
+        ob.status, ob.done_at = "cancelled", datetime.utcnow()
+        _close(db, ob, completed=False)
+    return len(gone)
+
+
 def sweep(db) -> Dict[str, int]:
     """Add acknowledgements for people who joined since, remind, and escalate. Called per tenant by the scheduler."""
     from ...models import CriticalTask, DocumentObligation, GovernanceDocument
     from .permissions import admin_user_ids
 
-    out = {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0}
+    out = {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0, "dropped": 0}
     if not enabled(db):
         return out
+    out["dropped"] = drop_non_people(db)
     for doc in db.query(GovernanceDocument).filter(GovernanceDocument.status == "published").order_by(GovernanceDocument.id).all():
         out["asked"] += _add_joiners(db, doc)
     now = datetime.utcnow()

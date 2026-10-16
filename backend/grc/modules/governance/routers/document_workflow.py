@@ -12,6 +12,8 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 
+from ..permissions import require_doc_editor as _require_doc_editor  # noqa: E402
+
 router = APIRouter(prefix="/documents", tags=["Governance - Document Workflow"])
 
 
@@ -266,7 +268,7 @@ def serialize_workflow_instance(
     return result
 
 
-@router.post("/{document_id}/start-workflow", status_code=status.HTTP_201_CREATED)
+@router.post("/{document_id}/start-workflow", status_code=status.HTTP_201_CREATED, dependencies=[Depends(_require_doc_editor)])
 def start_workflow(
     document_id: int,
     request: StartWorkflowRequest = None,

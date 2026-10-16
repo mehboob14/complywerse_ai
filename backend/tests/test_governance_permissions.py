@@ -90,7 +90,11 @@ CHANGES = [
     ("post", "/governance/reviews/5/skip", {"json": {"reason": "not now"}}),
     ("post", "/governance/documents/5/document-sync/apply", {"json": {}}),
     ("post", "/governance/gap-analysis/findings/1/apply-fix", {"json": {"proposed_text": "A new clause.", "mode": "append"}}),
-    ("post", "/governance/studio/sessions", {"json": {"kind": "library", "document_id": 5}}),
+    ("post", "/governance/workflows/submit", {"json": {"document_id": 5}}),                 # the older approvals engine
+    ("post", "/governance/workflows/documents/5/start", {"json": {}}),
+    ("post", "/governance/workflows/documents/5/rollback", {"json": {}}),
+    ("post", "/governance/workflows/documents/5/cancel", {"json": {}}),
+    ("post", "/governance/documents/5/start-workflow", {"json": {}}),
 ]
 
 
@@ -103,7 +107,9 @@ def test_every_route_that_changes_a_document_refuses_someone_who_may_not_change_
     assert world.http.post("/governance/documents/5/publish").status_code == 403
     d = doc(world)
     assert (d.title, d.status, d.content) == ("Access policy", "draft", TEXT)
-    assert world.db.query(m.DocumentSignoffAssignment).count() == 0 and world.db.query(m.StudioSession).count() == 0
+    assert world.db.query(m.DocumentSignoffAssignment).count() == 0 and world.db.query(m.DocumentApprovalStep).count() == 0
+    # a reader may open a library document in the AI Studio to read and compare it; saving it back is refused (below)
+    assert world.http.post("/governance/studio/sessions", json={"kind": "library", "document_id": 5}).status_code == 200
     assert world.http.put("/governance/documents/404", json={"title": "x"}).status_code == 404       # a document that is not there
 
 
@@ -217,3 +223,99 @@ def test_switching_the_life_cycle_on_asks_nobody_about_a_document_published_befo
     assert life.sweep(db)["asked"] == 1                                        # the new joiner, on the new document only
     assert db.query(m.DocumentObligation).count() == first + 1
     assert db.query(m.DocumentObligation).filter_by(document_id=6).count() == 0
+
+
+def test_a_step_of_the_older_approvals_engine_is_decided_by_its_approver_only(world):
+    db = world.db
+    d = doc(world)
+    d.status = "pending_review"
+    db.add(m.DocumentApprovalStep(id=1, document_id=5, step_sequence=1, step_name="Approval", approver_id=OWNER, status="pending"))
+    db.commit()
+    for path in ("/governance/workflows/steps/1/approve", "/governance/workflows/steps/1/reject"):
+        r = world.http.post(path, json={"comments": "fine"})
+        assert r.status_code == 403 and "approver" in r.json()["detail"], path
+    assert db.get(m.DocumentApprovalStep, 1).status == "pending" and doc(world).status == "pending_review"
+    world.me["id"] = OWNER
+    assert world.http.post("/governance/workflows/steps/1/approve", json={"comments": "fine"}).status_code == 200
+
+
+def test_a_new_text_of_a_published_document_is_reviewed_again_whichever_route_wrote_it(world):
+    db = world.db
+    d = doc(world)
+    d.status = "published"
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="reviewer", target_type="user", target_id=EDITOR, added_by=OWNER))
+    db.commit()
+    world.me["id"] = OWNER
+    assert world.http.put("/governance/documents/5", json={"content": TEXT + "\nNew rules.\n"}).status_code == 200
+    assert doc(world).status == "pending_review"                               # the new wording is not in force until approved
+    d = doc(world)
+    d.status = "published"
+    db.commit()
+    r = world.http.post("/governance/versions/document/5", json={"change_type": "minor", "content": TEXT + "\nOther rules.\n"})
+    assert r.status_code == 201 and doc(world).status == "pending_review"
+    r = world.http.post("/governance/documents/5/signoff", json={"signoffs": [], "mark_approved": True})
+    assert r.status_code == 403 and r.json()["detail"] == permissions.PUBLISH_REFUSED          # approving by hand needs publish
+    world.me["id"] = ADMIN
+    assert world.http.post("/governance/documents/5/signoff", json={"signoffs": [], "mark_approved": True}).status_code == 200
+
+
+def test_an_entitlement_named_administrator_that_a_connector_imported_makes_nobody_an_admin(world):
+    db = world.db
+    db.add(m.UserRole(user_id=CLOUD, role_id=22, tenant_id=1, source="okta"))             # the app's "Administrator" group, imported
+    db.add(m.UserRole(user_id=SSO, role_id=22, tenant_id=1, source="sso"))                # an SSO group mapped to the role: an admin
+    db.commit()
+    assert not permissions.is_admin(db, db.get(m.GRCUser, CLOUD))
+    assert permissions.is_admin(db, db.get(m.GRCUser, SSO))
+    assert permissions.admin_user_ids(db) == {ADMIN, CONTACT, SSO}
+    assert not permissions.can_edit(db, db.get(m.GRCUser, CLOUD), doc(world))
+
+
+def test_accounts_the_directory_sync_imported_are_not_people_until_they_sign_in(world):
+    db = world.db
+    db.add(m.GRCUser(id=12, username="room", email="room-1@cfsb.test", display_name="Meeting Room 1", external_provider="entra_id",
+                     access_synced_at=datetime.utcnow()))                      # imported by the access-review directory sync
+    db.commit()
+    assert 12 not in life._people(db) and SSO in life._people(db)
+    db.get(m.GRCUser, 12).last_login = datetime.utcnow()
+    db.commit()
+    assert 12 in life._people(db)
+
+
+def test_a_request_to_a_few_people_does_not_make_everyone_follow_and_old_requests_to_non_people_end(world):
+    db = world.db
+    old = doc(world, 6)
+    old.status = "published"
+    db.commit()
+    life.request_acknowledgements(db, old, [SAM], OWNER)                      # a workflow asks one person
+    db.commit()
+    assert old.acks_everyone_at is None and life._add_joiners(db, old) == 0
+    assert {o.user_id for o in db.query(m.DocumentObligation).filter_by(document_id=6)} == {SAM}
+    life.request_acknowledgements(db, old, None, OWNER)                       # asked of everyone
+    db.commit()
+    assert old.acks_everyone_at is not None
+    db.add(m.GRCUser(id=13, username="neo", email="neo@cfsb.test", display_name="Neo New"))
+    db.commit()
+    assert life._add_joiners(db, old) == 1                                    # people who join later are asked too, now
+    db.add(m.DocumentObligation(tenant_id=1, document_id=6, kind="acknowledgement", user_id=CLOUD, status="pending",
+                                due_date=datetime.utcnow()))               # asked before the people rule
+    db.commit()
+    assert life.drop_non_people(db) == 1
+    assert db.query(m.DocumentObligation).filter_by(user_id=CLOUD).one().status == "cancelled"
+
+
+def test_the_details_a_save_is_given_are_checked_before_any_file_is_written(world):
+    from grc.modules.governance.doc_details import check_details
+
+    db = world.db
+    db.get(m.GRCUser, SAM).is_active = False
+    db.commit()
+    for kw, words in [({"owner_id": SAM}, "owner"), ({"owner_id": 999}, "owner"), ({"department_id": 999}, "department"),
+                      ({"review_cycle_months": 1000}, "between")]:
+        with pytest.raises(ValueError, match=words):
+            check_details(db, **kw)
+    check_details(db, owner_id=OWNER, review_cycle_months=24)
+    world.me["id"] = OWNER
+    r = world.http.post("/governance/documents/upload-with-file", data={"title": "T", "doc_type": "policy", "owner_id": "999"},
+                        files={"file": ("../../evil.pdf", b"%PDF-1.4", "application/pdf")})
+    assert r.status_code == 400 and "owner" in r.json()["detail"]
+

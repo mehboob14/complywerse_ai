@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import concurrent.futures
 import contextvars
+import threading
 import logging
 import os
 import re
@@ -244,6 +245,8 @@ def _read_file(path: str, name: str) -> Tuple[List[List[List[str]]], List[str], 
             tables, lines = doc_version._read_docx(path) if ext == ".docx" else doc_version._read_pdf(path)
         except Exception:       # noqa: BLE001 - a file that cannot be read states nothing; its name still may
             logger.info("could not read the tables of %s", name, exc_info=True)
+    if ext == ".pdf" and sum(len(x) for x in lines) < 40:
+        return tables, lines, ""                            # a scanned PDF: no OCR just to fill a form (the name still helps)
     try:
         markdown = import_file(path, name).markdown
     except ImportProblem:
@@ -276,12 +279,16 @@ def _ask_ai(opening: str, name: str) -> Optional[Dict[str, Any]]:
         return None
     user = f"<document file=\"{(name or 'document').replace(chr(34), chr(39))}\">\n{opening}\n</document>"
     pool = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    stop = threading.Event()
     try:
-        # on a thread of its own with the request's context (whose usage it is), so the form never waits longer than AI_SECONDS
+        # on a thread of its own with the request's context (whose usage it is), so the form never waits longer than AI_SECONDS;
+        # past it the call is told to stop, so a slow provider does not keep running (and billing) answers nobody reads
         future = pool.submit(contextvars.copy_context().run, claude_client.complete, use_case="governance.document_details", system=SYSTEM,
-                             messages=[{"role": "user", "content": user}], schema=SCHEMA, max_tokens=2000, effort="low")
+                             messages=[{"role": "user", "content": user}], schema=SCHEMA, max_tokens=2000, effort="low",
+                             should_stop=stop.is_set)
         return future.result(timeout=AI_SECONDS).data or {}
     except concurrent.futures.TimeoutError:
+        stop.set()
         logger.warning("reading the details of %r took longer than %ss; the file's own details are used", name, AI_SECONDS)
     except Exception:       # noqa: BLE001 - not configured, blocked by the guard or the licence screen, refused, failed: the file's own details
         logger.warning("Comply Agent could not read the details of %r", name, exc_info=True)
@@ -377,3 +384,17 @@ def schedule(doc) -> None:
     if doc.next_review_date is None:
         start = doc.effective_date or datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
         doc.next_review_date = add_months(start, doc.review_cycle_months or 12)
+
+
+def check_details(db, *, owner_id=None, department_id=None, review_cycle_months=None) -> None:
+    """The details a save is given, checked before any file is written: ValueError with a sentence when one is not usable."""
+    from ...models import GRCDepartment, GRCUser
+
+    if owner_id is not None:
+        owner = db.get(GRCUser, int(owner_id))
+        if owner is None or not owner.is_active:
+            raise ValueError("The owner chosen is not an active user.")
+    if department_id is not None and db.get(GRCDepartment, int(department_id)) is None:
+        raise ValueError("The department chosen does not exist.")
+    if review_cycle_months is not None and not 1 <= int(review_cycle_months) <= 60:
+        raise ValueError("The review cycle must be between 1 and 60 months.")

@@ -335,6 +335,10 @@ export default function ApprovalsPage() {
     },
   });
   const lifecycleOn = !!docRequests?.enabled;
+  // documents waiting for this person's signature that have no request of the life cycle (they were already in review when it
+  // was switched on): still listed, so nobody's turn disappears
+  const signoffOnly = (signoffPending?.items ?? []).filter((it) => !lifecycleOn
+    || !(docRequests?.items ?? []).some((r) => r.document_id === it.document_id && (r.kind === 'review' || r.kind === 'approval')));
   // overdue first, then the soonest due
   const byUrgency = (a: { overdue: boolean; due_date: string | null }, b: { overdue: boolean; due_date: string | null }) =>
     Number(b.overdue) - Number(a.overdue) || (a.due_date || '9999').localeCompare(b.due_date || '9999');
@@ -438,7 +442,7 @@ export default function ApprovalsPage() {
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700">
             <Clock size={14} />
-            {items.length + (lifecycleOn ? docRequests?.total ?? 0 : signoffPending?.total ?? 0)} waiting for you
+            {items.length + (lifecycleOn ? docRequests?.total ?? 0 : 0) + signoffOnly.length} waiting for you
           </span>
         </div>
       </div>
@@ -487,15 +491,15 @@ export default function ApprovalsPage() {
         </div>
       )}
 
-      {!lifecycleOn && signoffPending && signoffPending.total > 0 && (
+      {signoffOnly.length > 0 && (
         <div className="rounded-xl border border-primary-200 bg-primary-50/40 p-4">
           <div className="flex items-center gap-2 mb-2">
             <ShieldCheck size={16} className="text-primary-600" />
             <h3 className="text-sm font-semibold text-black">Documents awaiting your signature</h3>
-            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{signoffPending.total}</span>
+            <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-medium text-primary-700">{signoffOnly.length}</span>
           </div>
           <div className="space-y-1.5">
-            {signoffPending.items.map((it) => (
+            {signoffOnly.map((it) => (
               <a
                 key={it.document_id}
                 href={`/governance/documents/${it.document_id}?tab=sign-off`}

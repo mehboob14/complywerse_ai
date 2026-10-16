@@ -58,6 +58,8 @@ def remind(document_id: int, db: Session = Depends(get_db), current_user: GRCUse
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not enabled for this organisation")
     pending = db.query(DocumentObligation).filter(DocumentObligation.document_id == document_id,
                                                   DocumentObligation.status == "pending").all()
+    people = set(doc_lifecycle._people(db))
+    pending = [o for o in pending if o.user_id in people]                  # never an account that is not a person
     for kind in {o.kind for o in pending}:
         ids = [o.user_id for o in pending if o.kind == kind]
         doc_lifecycle._notify(db, doc, ids, f"Reminder: {doc_lifecycle._VERB[kind]} {doc.title}",

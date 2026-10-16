@@ -942,6 +942,7 @@ def update_document(
     old_content = document.content
     old_title = document.title
     old_version = document.current_version or "1.0"
+    old_status = document.status
     content_changing = (
         "content" in update_data
         and (update_data.get("content") or "") != (old_content or "")
@@ -966,6 +967,9 @@ def update_document(
             old_version=old_version, change_type=decision["change"], change_reason=change_reason,
             user_id=current_user.id, summary=summary_of("Content edited", decision),
         )
+        if "status" not in update_data:          # the new text is reviewed again, as an AI Studio save is
+            doc_lifecycle.changed_after_review(db, document, old_status, current_user.id,
+                                               f"Content edited (version {document.current_version}), so it needs approving again")
 
     def _preview(v):
         s = "" if v is None else str(v)
@@ -1060,6 +1064,7 @@ def signoff_document(
         except (ValueError, TypeError):
             pass
     if body.mark_approved:
+        permissions.ensure_publisher(db, current_user)          # recording an approval by hand needs the publish right
         document.approved_by = current_user.id
         document.approved_at = datetime.utcnow()
 
@@ -2127,9 +2132,15 @@ async def create_document_with_file(
     if parent_document_id and not db.query(GovernanceDocument).filter(
             GovernanceDocument.id == parent_document_id, GovernanceDocument.tenant_id == tenant_id).first():
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found")
+    from ..doc_details import check_details
+
+    try:
+        check_details(db, owner_id=owner_id, department_id=department_id, review_cycle_months=review_cycle_months)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     
     unique_id = str(uuid.uuid4())
-    safe_filename = f"{unique_id}_{file.filename}"
+    safe_filename = f"{unique_id}_{os.path.basename(file.filename.replace(chr(92), '/'))}"     # no folders from the upload's name
     file_path = os.path.join(GOVERNANCE_UPLOAD_DIR, safe_filename)
     
     content = await file.read()

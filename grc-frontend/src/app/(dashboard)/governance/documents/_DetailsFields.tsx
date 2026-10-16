@@ -56,16 +56,20 @@ export function useOrgDepartments(enabled = true) {
 
 /** The form's state: the owner starts as the person; `read(file)` fills what the person has not touched. */
 export function useDocumentDetails(start: Partial<Details> = {}) {
-  // same key and query as the documents page
+  // a key of its own: another page caches the whole /auth/me answer under ['current-user-id']
   const me = useQuery({
-    queryKey: ['current-user-id'],
-    queryFn: async () => ((await apiClient.get('/auth/me')).data?.user?.id ?? null) as number | null,
+    queryKey: ['governance-me-id'],
+    queryFn: async () => {
+      const id = (await apiClient.get('/auth/me')).data?.user?.id;
+      return typeof id === 'number' ? id : null;
+    },
     staleTime: 5 * 60 * 1000,
   });
   const [form, setForm] = useState<Details>(() => ({ ...EMPTY_DETAILS, ...start }));
   const [from, setFrom] = useState<Partial<Record<DetailKey, Origin>>>({});
   const [ownerStated, setOwnerStated] = useState<string | null>(null);
   const touched = useRef(new Set<string>());
+  const reading = useRef<File | null>(null);          // only the file chosen last fills the form
   const latest = useRef(form);
   latest.current = form;
   const initial = (): Details => ({ ...EMPTY_DETAILS, ...start, owner_id: start.owner_id ?? me.data ?? null });
@@ -81,7 +85,8 @@ export function useDocumentDetails(start: Partial<Details> = {}) {
       body.append('file', file);
       return (await apiClient.post('/governance/documents/read-details', body, { headers: { 'Content-Type': 'multipart/form-data' } })).data as ReadResult;
     },
-    onSuccess: (r) => {
+    onSuccess: (r, file) => {
+      if (file !== reading.current) return;           // an earlier file's answer, after another file was chosen
       const out = applyRead(initial(), latest.current, touched.current, r);
       setForm(out.form);
       setFrom(out.from);
@@ -97,6 +102,7 @@ export function useDocumentDetails(start: Partial<Details> = {}) {
   const read = (file: File) => {
     // the file's name until its details arrive (and if they cannot be read)
     if (!touched.current.has('title')) setForm((f) => ({ ...f, title: file.name.replace(/\.[^.]+$/, '') }));
+    reading.current = file;
     reader.mutate(file);
   };
   return { form, set, from, ownerStated, read, reading: reader.isPending, readFailed: reader.isError };

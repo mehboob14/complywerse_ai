@@ -301,6 +301,7 @@ _COLUMN_ADDS = [
     ("grc_audit_register_reports", "project_name", "TEXT", None),
     ("grc_governance_documents", "mapping_framework_ids", "JSON DEFAULT '[]'::json", None),
     ("grc_governance_documents", "signoff_round_at", "TIMESTAMP", None),     # doc_lifecycle.start_round
+    ("grc_governance_documents", "acks_everyone_at", "TIMESTAMP", None),     # doc_lifecycle._add_joiners
     # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
     # a stage's numbers/actions unlock only after the previous stage is stamped.
     ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),

@@ -241,7 +241,7 @@ def test_other_organisations_are_untouched_until_switched_on(world, monkeypatch)
         participants(db)
         signoff.send_for_review(5, db, user(db, 1))
         assert obligations(db) == [] and tasks(db) == [] and not life.enabled(db)
-        assert life.sweep(db) == {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0}
+        assert life.sweep(db) == {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0, "dropped": 0}
         monkeypatch.setattr("grc.config.DOCUMENT_LIFECYCLE_TENANTS", frozenset({"*"}))          # the quick switch for every tenant
         assert life.enabled(db)
 

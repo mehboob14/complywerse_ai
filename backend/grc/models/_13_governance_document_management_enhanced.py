@@ -64,6 +64,8 @@ class GovernanceDocument(Base):
     # when the current sign-off round began: signatures given before it no longer count (a changed document is signed again).
     # Set by _new_signoff_round below whenever the status goes to review or approval from anything else.
     signoff_round_at = Column(DateTime, nullable=True)
+    # when everyone was asked to acknowledge it (published with the life cycle on): only then are people who join later asked too
+    acks_everyone_at = Column(DateTime, nullable=True)
 
     tenant = relationship("Tenant", back_populates="governance_documents")
     owner = relationship("GRCUser", back_populates="owned_gov_documents", foreign_keys=[owner_id])

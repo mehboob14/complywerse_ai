@@ -181,7 +181,6 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
         doc = db.get(GovernanceDocument, document_id) if document_id else None
         if doc is None:
             raise StudioError("That document was not found.")
-        _may_change(db, user, doc)                    # a session on a library document saves back to it
         s.title, s.doc_type, s.document_id = doc.title, doc.doc_type or "policy", doc.id
         file_type = (doc.file_type or "").lower().lstrip(".")
         if not (doc.content or "").strip() and doc.file_path and os.path.exists(doc.file_path) and file_type in ("docx", "pdf"):
