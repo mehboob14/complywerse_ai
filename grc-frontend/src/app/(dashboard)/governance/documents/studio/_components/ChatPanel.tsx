@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, Eye, FileText, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Paperclip, Pencil, Send, Sparkles, Undo2, Wand2, X, XCircle } from 'lucide-react';
+import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, FileText, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Paperclip, Pencil, Send, Sparkles, Undo2, Wand2, X, XCircle } from 'lucide-react';
 import { problemOf, studioApi, type AnswerItem, type Attachment, type Message, type Op, type Question, type ReferenceUsed, type Session } from '@/lib/studio/api';
 import { plural, wordDiff } from '@/lib/studio/text';
 import LiveTurn from './LiveTurn';
@@ -31,8 +31,6 @@ export interface ChatPanelProps {
   onRevertOp: (messageId: number, opId: string) => Promise<void>;
   /** show the document with the changes marked (since the start) */
   onShowChanges: () => void;
-  onPreview: (messageId: number | null) => void;
-  previewing: number | null;
   onOpenTab: (tab: 'references' | 'instructions') => void;
   onShowReference: (key: string) => void;
   /** answer Comply Agent's questions on a message: the options chosen and own words per question; ``decide`` leaves them all to it */
@@ -188,24 +186,12 @@ function Proposal({ message, props }: { message: Message; props: ChatPanelProps 
   if (!ops.length) return null;
   const pending = ops.filter((o) => o.status === 'pending');
   const stats = message.proposal?.stats;
-  const previewing = props.previewing === message.id;
   return (
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2 text-xs text-[#586472]">
         <span className="font-semibold text-[#26323d]">{plural(ops.length, 'proposed change')}</span>
         {stats && <span>+{stats.words_added} / −{stats.words_removed} words</span>}
-        {pending.length > 0 && (
-          <span className="ml-auto flex items-center gap-1.5">
-            <button type="button" onClick={() => props.onPreview(previewing ? null : message.id)}
-              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-semibold ${previewing ? 'bg-[#d6f3ec] text-[#0b6b58]' : 'text-[#0b6b58] hover:bg-[#e6f4f1]'}`}>
-              <Eye className="h-3.5 w-3.5" /> {previewing ? 'Hide preview' : 'Preview in document'}
-            </button>
-            <button type="button" onClick={() => props.onAccept(message.id, pending.map((o) => o.id))}
-              className="inline-flex items-center gap-1 rounded-md bg-[#0f766e] px-2.5 py-1 font-semibold text-white hover:bg-[#0b5f58]"><Check className="h-3.5 w-3.5" /> Accept all</button>
-            <button type="button" onClick={() => props.onReject(message.id, pending.map((o) => o.id))}
-              className="rounded-md border border-[#b8c4c8] bg-white px-2 py-1 font-semibold text-[#3f4b58] hover:bg-[#f1f3f5]">Reject all</button>
-          </span>
-        )}
+        {pending.length > 0 && <span className="w-full text-[11px]">Shown in the document: accept or reject them all there, or one by one here.</span>}
       </div>
       <ul className="mt-2 space-y-2">
         {ops.map((op) => (
@@ -348,7 +334,7 @@ const toneOf = (cell: unknown) =>
 function Markdown({ text }: { text: string }) {
   return (
     <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
-      p: ({ children }) => <p className="my-1.5 first:mt-0 last:mb-0">{children}</p>,
+      p: ({ children }) => <p className="my-1.5 text-sm text-[#1f2933] first:mt-0 last:mb-0">{children}</p>,
       ul: ({ children }) => <ul className="my-1.5 list-disc space-y-0.5 pl-5">{children}</ul>,
       ol: ({ children }) => <ol className="my-1.5 list-decimal space-y-0.5 pl-5">{children}</ol>,
       h1: ({ children }) => <h4 className="mb-1 mt-3 text-[13px] font-semibold text-[#1f2933] first:mt-0">{children}</h4>,
@@ -361,11 +347,11 @@ function Markdown({ text }: { text: string }) {
       code: ({ children }) => <code className="rounded bg-[#eef1f4] px-1 py-px text-[12px] text-[#26323d]">{children}</code>,
       table: ({ children }) => <div className="my-2 overflow-x-auto rounded-lg border border-[#d5dbe1]"><table className="min-w-full border-collapse text-[12px]">{children}</table></div>,
       thead: ({ children }) => <thead className="bg-[#eef6f4]">{children}</thead>,
-      th: ({ children }) => <th className="border-b border-[#d5dbe1] px-2.5 py-1.5 text-left font-semibold text-[#26323d]">{children}</th>,
+      th: ({ children }) => <th className="border-b border-[#d5dbe1] px-2.5 py-1.5 text-left text-[12px] font-semibold text-[#26323d]">{children}</th>,
       td: ({ children }) => {
         const tone = toneOf(children);
         return (
-          <td className="border-t border-[#e6eaee] px-2.5 py-1.5 align-top text-[#26323d]">
+          <td className="border-t border-[#e6eaee] px-2.5 py-1.5 align-top text-[12px] text-[#26323d]">
             {tone ? <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{children}</span> : children}
           </td>
         );
@@ -409,7 +395,7 @@ function Bubble({ message, props, lastUser, answerable }: { message: Message; pr
               ))}
             </ul>
             {(given.decide?.length ?? 0) > 0 && <p className="mt-1 text-[11px] text-[#cde9e3]">{given.items.length ? 'The rest: Comply Agent decides.' : 'Comply Agent decides, as it recommends.'}</p>}
-            {own && <p className="mt-1.5 whitespace-pre-wrap border-t border-white/20 pt-1.5">{own}</p>}
+            {own && <p className="mt-1.5 whitespace-pre-wrap border-t border-white/20 pt-1.5 text-sm text-white">{own}</p>}
           </div>
         </div>
       );
@@ -419,7 +405,7 @@ function Bubble({ message, props, lastUser, answerable }: { message: Message; pr
       <div className="flex justify-end">
         <div className="max-w-[88%] rounded-2xl rounded-br-sm bg-[#0f4c5c] px-3.5 py-2 text-sm text-white">
           {files.length > 0 && <FileChips files={files} onShow={props.onShowReference} />}
-          {typed && <p className="whitespace-pre-wrap">{typed}</p>}
+          {typed && <p className="whitespace-pre-wrap text-sm text-white">{typed}</p>}
         </div>
       </div>
     );

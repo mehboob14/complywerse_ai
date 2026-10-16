@@ -12,8 +12,8 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, BookMarked, CheckCircle2, ChevronDown, Code2, Download, Eye, FilePlus2, FileText, GitCompare, History, Library, ListChecks, Loader2,
-  MessageSquare, Pencil, Save, Settings2, X,
+  AlertTriangle, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Library, ListChecks, Loader2,
+  MessageSquare, Pencil, Save, Settings2, Sparkles, X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -46,7 +46,6 @@ const TABS: { key: SideTab; label: string; icon: typeof MessageSquare }[] = [
 const MODES: { key: EditorMode; label: string; icon: typeof Pencil }[] = [
   { key: 'edit', label: 'Edit', icon: Pencil },
   { key: 'view', label: 'View', icon: Eye },
-  { key: 'source', label: 'Markdown', icon: Code2 },
 ];
 
 export default function StudioWorkspacePage() {
@@ -167,7 +166,7 @@ export default function StudioWorkspacePage() {
     enabled: !!session,
     refetchInterval: (q) => (q.state.data?.items.some((m) => m.status === 'working') ? (liveOk.current ? 5000 : 1500) : false),
   });
-  const items = messages.data?.items ?? [];
+  const items = useMemo(() => messages.data?.items ?? [], [messages.data]);
   liveOk.current = useLiveProgress(id, items);
   const working = items.some((m) => m.status === 'working' && m.kind === 'chat');
 
@@ -177,6 +176,12 @@ export default function StudioWorkspacePage() {
     if (working) { wasWorking.current = true; return; }
     if (!wasWorking.current) return;
     wasWorking.current = false;
+    const last = [...items].reverse().find((m) => m.role === 'assistant' && m.kind === 'chat');
+    if (last && (last.proposal?.ops ?? []).some((o) => o.status === 'pending')) {
+      setAsFile(false);
+      setCompare({ type: 'preview', messageId: last.id });
+      setPane('document');
+    }
     (async () => {
       try {
         const fresh = await studioApi.session(id);
@@ -184,7 +189,7 @@ export default function StudioWorkspacePage() {
         if (fresh.revision !== revision.current && latest.current.trim() === saved.current.trim()) applyServerContent(fresh.content ?? '', fresh.revision);
       } catch { /* the next action reloads it */ }
     })();
-  }, [working, id, qc, applyServerContent]);
+  }, [working, items, id, qc, applyServerContent]);
 
   const setMessage = (m: Message) => qc.setQueryData<{ items: Message[] }>(['studio', 'messages', id], (old) => ({ items: (old?.items ?? []).map((x) => (x.id === m.id ? m : x)) }));
 
@@ -243,6 +248,15 @@ export default function StudioWorkspacePage() {
   const [focusRef, setFocusRef] = useState<string | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const previewing = compare?.type === 'preview' ? compare.messageId : null;
+  // Comply Agent's latest answer that still has changes waiting: decided from the bar on the document side
+  const proposal = [...items].reverse().find((m) => m.role === 'assistant' && m.kind === 'chat' && (m.proposal?.ops ?? []).some((o) => o.status === 'pending')) ?? null;
+  const proposalOps = (proposal?.proposal?.ops ?? []).filter((o) => o.status === 'pending').map((o) => o.id);
+  const [bulk, setBulk] = useState<'accept' | 'reject' | null>(null);
+  const decideAll = async (how: 'accept' | 'reject') => {
+    if (!proposal) return;
+    setBulk(how);
+    try { await (how === 'accept' ? accept(proposal.id, proposalOps) : reject(proposal.id, proposalOps)); } finally { setBulk(null); }
+  };
   const showChanges = () => {
     setCompare({ type: 'revision', from: 0, label: session?.base_label ? `Changes since “${session.base_label}”` : 'Changes since the start' });
     setPane('document');
@@ -435,6 +449,28 @@ export default function StudioWorkspacePage() {
 
       <div className="grid min-h-0 flex-1 lg:grid-cols-[minmax(0,1fr)_26rem] xl:grid-cols-[minmax(0,1fr)_29rem]">
         <section className={`min-h-0 min-w-0 ${pane === 'document' ? 'flex' : 'hidden'} flex-col lg:flex`} aria-label="Document">
+          {proposal && proposalOps.length > 0 && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-[#9fd9bd] bg-[#e6f4f1] px-3 py-1.5 text-xs text-[#0b4f46]" role="region" aria-label="Proposed changes">
+              <Sparkles className="h-4 w-4 shrink-0 text-[#0b6b58]" aria-hidden />
+              <span className="min-w-0 flex-1">
+                <span className="font-semibold">Comply Agent proposes {plural(proposalOps.length, 'change')}</span>
+                {proposal.proposal?.stats ? <> · +{proposal.proposal.stats.words_added} / −{proposal.proposal.stats.words_removed} words</> : null}
+                {previewing === proposal.id ? ' · nothing changes until you accept' : ''}
+              </span>
+              <button type="button" onClick={() => { setAsFile(false); setCompare(previewing === proposal.id ? null : { type: 'preview', messageId: proposal.id }); }}
+                className="inline-flex items-center gap-1 rounded-md border border-[#9fd9bd] bg-white px-2 py-1 font-semibold text-[#0b6b58] hover:bg-[#f3fbf6]">
+                {previewing === proposal.id ? <><EyeOff className="h-3.5 w-3.5" /> Hide preview</> : <><Eye className="h-3.5 w-3.5" /> Preview in document</>}
+              </button>
+              <button type="button" onClick={() => decideAll('accept')} disabled={!!bulk}
+                className="inline-flex items-center gap-1 rounded-md bg-[#0f766e] px-2.5 py-1 font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-60">
+                {bulk === 'accept' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />} Accept all
+              </button>
+              <button type="button" onClick={() => decideAll('reject')} disabled={!!bulk}
+                className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2 py-1 font-semibold text-[#3f4b58] hover:bg-[#f1f3f5] disabled:opacity-60">
+                {bulk === 'reject' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <X className="h-3.5 w-3.5" />} Reject all
+              </button>
+            </div>
+          )}
           {justAccepted > 0 && !compare && (
             <div className="flex shrink-0 items-center gap-2 border-b border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs text-[#0a5a38]" role="status">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
@@ -444,18 +480,14 @@ export default function StudioWorkspacePage() {
             </div>
           )}
           <div className="min-h-0 flex-1">
+            {/* kept mounted under a preview, a comparison or the file view: it holds the person's typing and undo history */}
+            <div className={compare || asFile ? 'hidden' : 'h-full'}>
+              <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
+            </div>
             {compare ? (
               <ChangesView session={session} spec={compare} aiConfigured={aiConfigured} onClose={() => setCompare(null)} flush={flush}
                 onContent={(c, r) => applyServerContent(c, r)} onShowSource={(k) => { setFocusRef(k); setTab('references'); }} />
-            ) : (
-              <>
-                {/* kept mounted under the file view: it holds the person's typing and undo history */}
-                <div className={asFile ? 'hidden' : 'h-full'}>
-                  <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
-                </div>
-                {asFile && <FileView session={session} />}
-              </>
-            )}
+            ) : asFile ? <FileView session={session} /> : null}
           </div>
         </section>
         <aside className={`flex min-h-0 min-w-0 flex-col border-l border-[#d5dbe1] bg-[#f8fafb] ${pane === 'assistant' ? 'flex' : 'hidden'} lg:flex`} aria-label="Assistant">
@@ -478,7 +510,6 @@ export default function StudioWorkspacePage() {
                 session={session} messages={items} aiConfigured={aiConfigured} busy={working}
                 onSend={(t, files) => send(t, undefined, files)} onAnswer={answer} onReferencesChanged={onSessionChanged}
                 onAccept={accept} onReject={reject} onRevertOp={revertOp} onShowChanges={showChanges}
-                onPreview={(mid) => setCompare(mid == null ? null : { type: 'preview', messageId: mid })} previewing={previewing}
                 onOpenTab={(t) => setTab(t)} onShowReference={(k) => { setFocusRef(k); setTab('references'); }}
               />
             </div>
