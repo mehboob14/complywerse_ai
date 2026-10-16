@@ -12,12 +12,13 @@ from sqlalchemy.orm import Session
 from ....models import DocumentObligation, GRCUser, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import doc_lifecycle
-from .document_signoff import _doc_or_404
+from .document_signoff import _doc_or_404, check_version
 
 router = APIRouter(prefix="/documents", tags=["Governance - Lifecycle"])
 
 
 class AcknowledgeIn(BaseModel):
+    version: Optional[str] = None             # the version the person read; 409 when it changed since
     comment: Optional[str] = None
     signature_image: Optional[str] = None     # optional PNG data URL; sealed like a sign-off when given
 
@@ -36,6 +37,7 @@ def acknowledge(document_id: int, body: AcknowledgeIn, request: Request, db: Ses
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     if not doc_lifecycle.enabled(db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgements are not enabled for this organisation")
+    check_version(db, doc, body.version)
     try:
         doc_lifecycle.acknowledge(db, doc, current_user, body.comment, body.signature_image, request)
     except ValueError as exc:

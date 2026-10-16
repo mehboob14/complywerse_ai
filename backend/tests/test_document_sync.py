@@ -101,6 +101,7 @@ def test_the_same_sentence_twice_in_a_file_is_two_places(world):
 def test_an_edited_statement_is_written_into_the_word_file_and_makes_the_next_version(world):
     with world.factory() as db:
         doc = db.get(m.GovernanceDocument, 5)
+        db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="reviewer", target_type="user", target_id=1, added_by=1))    # it has a reviewer, so a change sends it back to review
         doc_sync.anchor(db, doc)
         assert doc_sync.state(db, doc)["pending"] == []
         statement(db, "PS-0005-001").statement_text = "All administrators and contractors shall use multi-factor authentication."
@@ -185,6 +186,8 @@ def test_the_routes_report_check_and_apply(world):
     app = FastAPI()
     app.include_router(router)
     db = world.factory()
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="reviewer", target_type="user", target_id=1, added_by=1))
+    db.commit()                                                                # it has a reviewer, so a change sends it back to review
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[require_auth] = lambda: SimpleNamespace(id=1)
     client = TestClient(app)

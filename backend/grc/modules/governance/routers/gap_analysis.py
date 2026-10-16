@@ -1343,6 +1343,10 @@ def apply_finding_fix(
     # route it into the approval queue for its assigned reviewer/approver.
     document.status = "pending_approval"
     document.updated_at = datetime.utcnow()
+    if original_status not in ("pending_review", "pending_approval"):
+        from .. import doc_lifecycle
+
+        doc_lifecycle.on_status_changed(db, document, original_status, "pending_approval", current_user.id)     # a new round, the approvers asked
 
     now = datetime.utcnow()
     finding.applied_clause_text = proposed_text

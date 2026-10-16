@@ -470,6 +470,8 @@ def test_a_session_moves_into_the_library_and_then_saves_as_new_versions(world, 
 
 
 def test_saving_over_a_library_document_that_changed_is_a_conflict_and_approved_documents_go_back_to_review(world):
+    world.db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=10, role_type="reviewer", target_type="user", target_id=1, added_by=1))    # it has a reviewer, so the save sends it back to review
+    world.db.commit()
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
     world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"].replace("every year", "every month"), "base_revision": 1})
     doc = world.db.get(m.GovernanceDocument, 10)

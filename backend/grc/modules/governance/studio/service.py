@@ -1012,14 +1012,11 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
                                             change_type=decision["change"], change_reason=change_reason, user_id=user.id,
                                             summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
     db.flush()
-    if old_status in ("approved", "published", "exception_applied"):       # edited text needs approving again
-        doc.status = "pending_review"
-        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="status_changed", field_changed="status",
-                         old_value=old_status, new_value="pending_review", action_details=f"Edited in the AI Studio (version {new_version}), so it needs approving again")
-        doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", user.id)
+    # edited text is reviewed again: approved or published, and also while in review or approval (a new round)
+    sent = doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"Edited in the AI Studio (version {new_version}), so it needs approving again")
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="content_edited",
                      action_details=f"Edited in the AI Studio; version {new_version}" + (f". {change_reason}" if change_reason else "")
-                     + ("; sent back to review" if doc.status != old_status else ""),
+                     + ("; sent back to review" if sent else "; it is a draft again" if doc.status != old_status else ""),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     row = _version_row(db, doc, new_version)
     if row is not None:
@@ -1089,14 +1086,10 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
     db.flush()
     doc.file_name, doc.file_path, doc.file_size, doc.file_type = new_name, new_path, len(data), ext
     doc.current_version, doc.updated_at = new_version, _now()
-    if old_status in ("approved", "published", "exception_applied"):
-        doc.status = "pending_review"
-        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="status_changed", field_changed="status",
-                         old_value=old_status, new_value="pending_review", action_details=f"{done} (version {new_version}), so it needs approving again")
-        doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", user.id)
+    sent = doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"{done} (version {new_version}), so it needs approving again")
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action=audit_action,
                      action_details=f"{done}; the file was replaced by version {new_version}" + (f". {reason}" if reason else "")
-                     + ("; sent back to review" if doc.status != old_status else ""),
+                     + ("; sent back to review" if sent else "; it is a draft again" if doc.status != old_status else ""),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     return row, new_version, old_status
 

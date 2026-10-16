@@ -376,8 +376,10 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     old_status = document.status
     document.file_name, document.file_path, document.file_size, document.file_type = new_name, new_path, row.file_size, "docx"
     document.current_version, document.content, document.updated_at = new_version, content, datetime.utcnow()
-    if old_status in _REVIEW_FROM:
-        document.status = "pending_review"
+    from . import doc_lifecycle
+
+    sent = doc_lifecycle.changed_after_review(db, document, old_status, user.id,
+                                              f"Statements written into the document (version {new_version}), so it needs approving again")
 
     for item in info["pending"]:
         if item["code"] in conflicts:
@@ -391,9 +393,9 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id,
                      action="statements_written_to_document",
                      action_details=f"{len(edits)} statement edit(s) written into the document; version {new_version} created"
-                                    + (f"; sent back to review" if document.status != old_status else ""),
+                                    + ("; sent back to review" if sent else "; it is a draft again" if document.status != old_status else ""),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     db.commit()
     return {"version": new_version, "version_id": row.id, "updated": len(edits), "conflicts": conflicts,
-            "status": document.status, "sent_to_review": document.status != old_status,
+            "status": document.status, "sent_to_review": sent,
             "file_type": "docx", "word_copy": not editable}

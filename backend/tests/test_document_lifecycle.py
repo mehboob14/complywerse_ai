@@ -418,3 +418,27 @@ def test_my_requests_across_documents_and_the_settings_routes(world):
     db.query(m.Tenant).one().slug = "acme"
     db.commit()
     assert client.get("/documents/lifecycle/mine").json() == {"enabled": False, "items": []}
+
+
+def test_the_hooks_see_their_own_changes_on_a_session_that_does_not_autoflush(world):
+    """Tenant sessions are made with autoflush=False (grc/db.py): a signed request must not be found pending again, and a document
+    sent back to review must ask its reviewers again."""
+    from sqlalchemy import event
+
+    engine = world.factory.kw["bind"]
+    event.listen(engine, "connect", lambda conn, _r: conn.execute("PRAGMA foreign_keys=ON"))
+    plain = sessionmaker(bind=engine, autoflush=False)
+    with plain() as db:
+        participants(db, reviewers=(2,))
+        signoff.send_for_review(5, db, user(db, 1))
+        sign(db, 2)                                                            # the review is done: approvers asked
+        assert [o.status for o in obligations(db, "review")] == ["done"] and len(obligations(db, "approval", "pending")) == 2
+        for uid in (4,):
+            sign(db, uid)
+        d = doc(db)
+        assert d.status == "approved"
+        d.status = "pending_review"                                            # changed after approval: back to review
+        life.on_status_changed(db, d, "approved", "pending_review", 1)
+        db.commit()
+        assert [o.user_id for o in obligations(db, "review", "pending")] == [2]   # the same reviewer is asked again
+        assert signoff.get_signoff(5, db, user(db, 2))["my_actionable_role"] == "reviewer"

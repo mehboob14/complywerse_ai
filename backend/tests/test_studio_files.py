@@ -121,6 +121,8 @@ def make_library_doc(world, folder, *, status="published", file_fixture=F.corpor
 
 def test_a_library_word_file_is_opened_edited_and_saved_as_the_next_version_file(world, lib):
     original = make_library_doc(world, lib)
+    world.db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=20, role_type="reviewer", target_type="user", target_id=1, added_by=1))
+    world.db.commit()                                                          # it has a reviewer, so the save sends it back to review
     before = open(original, "rb").read()
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 20}).json()
     assert s["source"]["in_place"] is True and s["document_id"] == 20 and "**all employees**" in s["content"] and s["base_label"] == "Uploaded Policy v1.0"

@@ -272,6 +272,8 @@ def test_the_changes_of_one_version_are_taken_back_from_the_document_as_it_is_no
 def test_one_change_is_taken_back_as_a_new_version_and_a_published_document_goes_back_to_review(library):
     db = library.db
     versions = _three_versions(db)
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=10, role_type="reviewer", target_type="user", target_id=library.me["id"], added_by=library.me["id"]))
+    db.commit()                                                                      # it has a reviewer, so it goes back to review
     red = library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[0].id}").json()
     scope = next(h for h in red["hunks"] if h["section"] == "2. Scope")
     out = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [scope["id"]], "hash": red["hash"],
@@ -327,6 +329,8 @@ def _edit_in_studio(world, doc_id, old, new, *, reason):
 def test_an_uploaded_word_original_keeps_its_history_and_a_change_is_taken_back_into_a_new_file(library, lib):
     world, db = library, library.db
     original = make_library_doc(world, lib)                                    # the uploaded file: version 1.0, published
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=20, role_type="reviewer", target_type="user", target_id=1, added_by=1))    # it has a reviewer, so a change sends it back to review
+    db.commit()
     before = open(original, "rb").read()
     assert _edit_in_studio(world, 20, "Review it every year.", "Review it every six months.", reason="Review cycle")["version"] == "1.1"
 
@@ -377,6 +381,8 @@ def test_restoring_the_original_file_of_an_uploaded_document_makes_it_the_docume
 
     world, db = library, library.db
     original = make_library_doc(world, lib)                                    # the uploaded file, 1.0
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=20, role_type="reviewer", target_type="user", target_id=1, added_by=1))
+    db.commit()
     _edit_in_studio(world, 20, "Review it every year.", "Review it every six months.", reason="Review cycle")       # 1.1, a new file
     doc = db.get(m.GovernanceDocument, 20)
     doc.status = "published"
@@ -589,6 +595,7 @@ def test_saving_to_the_library_records_the_changes_with_their_sources_and_the_ch
     doc = world.db.get(m.GovernanceDocument, 10)
     doc.content = POLICY
     doc.status = "published"
+    world.db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=10, role_type="reviewer", target_type="user", target_id=1, added_by=1))
     world.db.commit()
     _audit(world.db, 10, 1, "published", datetime(2026, 9, 1, 9, 0), status="published", old="approved")
     s = _session_with_reference(world)

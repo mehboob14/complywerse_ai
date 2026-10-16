@@ -61,6 +61,10 @@ class GovernanceDocument(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # when the current sign-off round began: signatures given before it no longer count (a changed document is signed again).
+    # Set by _new_signoff_round below whenever the status goes to review or approval from anything else.
+    signoff_round_at = Column(DateTime, nullable=True)
+
     tenant = relationship("Tenant", back_populates="governance_documents")
     owner = relationship("GRCUser", back_populates="owned_gov_documents", foreign_keys=[owner_id])
     author = relationship("GRCUser", foreign_keys=[author_id])
@@ -87,6 +91,22 @@ class GovernanceDocument(Base):
         Index("ix_gov_doc_next_review", "tenant_id", "next_review_date"),
         Index("ix_gov_doc_expiry", "tenant_id", "expiry_date"),
     )
+
+
+
+from sqlalchemy import event as _event  # noqa: E402
+
+_PENDING_SIGNOFF = ("pending_review", "pending_approval")
+
+
+@_event.listens_for(GovernanceDocument.status, "set", active_history=True)
+def _new_signoff_round(doc, value, old, _initiator):
+    """Going to review or approval from any other status, by any path (Send, a save over an approved document, take-back,
+    restore, a status set by hand, the older approvals engine, a gap fix), starts a new sign-off round: the signatures given
+    before it no longer count (routers/document_signoff._signatures), so the same people sign the changed document again. Going
+    back from approval to review starts one too (the reviewers who signed are asked again)."""
+    if (value in _PENDING_SIGNOFF and old not in _PENDING_SIGNOFF) or (value == "pending_review" and old == "pending_approval"):
+        doc.signoff_round_at = datetime.utcnow()
 
 
 class GovernanceDocumentVersion(Base):

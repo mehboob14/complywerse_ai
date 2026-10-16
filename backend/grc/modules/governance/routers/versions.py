@@ -425,7 +425,12 @@ def rollback_to_version(
         old_value=old_version,
         new_value=new_version_number
     )
-    
+    from .. import doc_lifecycle
+
+    # restored text is reviewed again, as a file is (approved or published, or while in review or approval)
+    doc_lifecycle.changed_after_review(db, document, document.status, current_user.id,
+                                       f"Version {target_version.version_number} restored (version {new_version_number}), so it needs approving again")
+
     db.commit()
     db.refresh(new_version)
     
@@ -433,7 +438,8 @@ def rollback_to_version(
         "message": f"Successfully rolled back to version {target_version.version_number}",
         "new_version": serialize_version(new_version),
         "rollback_from": old_version,
-        "rollback_to_content_from": target_version.version_number
+        "rollback_to_content_from": target_version.version_number,
+        "status": document.status,
     }
 
 

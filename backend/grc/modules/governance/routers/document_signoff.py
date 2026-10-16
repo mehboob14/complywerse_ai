@@ -49,6 +49,7 @@ class ParticipantsUpdate(BaseModel):
 
 
 class SignRequest(BaseModel):
+    version: Optional[str] = None          # the version the signer was shown; 409 when the document has moved on since
     comment: Optional[str] = None
     signature_text: Optional[str] = None   # typed name of record (defaults to display name)
     signature_image: Optional[str] = None  # PNG data URL drawn on screen: a formal sign-off is signed electronically
@@ -56,6 +57,25 @@ class SignRequest(BaseModel):
 
 class RejectRequest(BaseModel):
     comment: str
+    version: Optional[str] = None
+
+
+def check_version(db: Session, doc: GovernanceDocument, shown: Optional[str]) -> None:
+    """A decision is about the version the person was shown: refused when the document changed since (older callers send none).
+    Versions that only stamped someone's sign-off into its table are not a change to what was read."""
+    current = doc.current_version or "1.0"
+    if not shown or shown == current:
+        return
+    rows = (db.query(GovernanceDocumentVersion.version_number, GovernanceDocumentVersion.change_type)
+            .filter(GovernanceDocumentVersion.document_id == doc.id)
+            .order_by(GovernanceDocumentVersion.created_at, GovernanceDocumentVersion.id).all())
+    numbers = [r.version_number for r in rows]
+    if shown in numbers:
+        after = rows[len(numbers) - numbers[::-1].index(shown):]
+        if after and all(r.change_type == "signoff" for r in after):
+            return
+    raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                        detail=f"The document changed since you opened it (now version {current}). Reload it and read it again.")
 
 
 # ── helpers ──────────────────────────────────────────────────────────────
@@ -118,10 +138,13 @@ def _assignments(db: Session, document_id: int) -> List[DocumentSignoffAssignmen
 
 
 def _signatures(db: Session, document_id: int) -> List[DocumentSignature]:
-    return db.query(DocumentSignature).filter(
+    """The signatures of the current round (``doc_lifecycle.start_round``): a document that changed is signed again."""
+    q = db.query(DocumentSignature).filter(
         DocumentSignature.document_id == document_id,
         DocumentSignature.decision == "signed",
-    ).all()
+    )
+    since = db.query(GovernanceDocument.signoff_round_at).filter(GovernanceDocument.id == document_id).scalar()
+    return (q.filter(DocumentSignature.signed_at >= since) if since else q).all()
 
 
 def _stage_complete(db: Session, tenant_ids: List[int], document_id: int, role_type: str,
@@ -215,8 +238,11 @@ def get_signoff(
                 "decision": s.decision, "comment": s.comment,
                 "signed_at": s.signed_at.isoformat() if s.signed_at else None,
                 "esign": esigns.get(s.id),   # the drawn signature kept with this one: id and fingerprints
+                "this_round": not doc.signoff_round_at or (s.signed_at is not None and s.signed_at >= doc.signoff_round_at),
             } for s in all_sigs
         ],
+        "round_started_at": doc.signoff_round_at.isoformat() if doc.signoff_round_at else None,
+        "version": doc.current_version or "1.0",
         "progress": progress,
         "my_actionable_role": actionable,   # 'reviewer' | 'approver' | null — can sign now
     }
@@ -281,7 +307,7 @@ def send_for_review(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Assign at least one reviewer or approver before sending.")
     new_status = "pending_review" if has_reviewers else "pending_approval"
-    doc.status = new_status
+    doc.status = new_status                            # from a draft: a new round (models: _new_signoff_round)
     doc.updated_at = datetime.utcnow()
     create_audit_log(
         db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id,
@@ -309,6 +335,7 @@ def sign_document(
     advances the document status when the stage completes."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
+    check_version(db, doc, body.version)
     signatures = _signatures(db, document_id)
     role_type = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
     if not role_type:
@@ -406,6 +433,7 @@ def reject_document(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A reason is required to reject.")
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
+    check_version(db, doc, body.version)
     signatures = _signatures(db, document_id)
     role_type = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
     if not role_type:

@@ -161,6 +161,7 @@ def _close(db, ob, completed: bool, by: Optional[int] = None) -> None:
 def _pending(db, document_id: int, kinds: Iterable[str], user_id: Optional[int] = None):
     from ...models import DocumentObligation
 
+    db.flush()          # tenant sessions do not autoflush: a hook that just closed or cancelled a row must not find it pending again
     q = db.query(DocumentObligation).filter(DocumentObligation.document_id == document_id,
                                             DocumentObligation.kind.in_(list(kinds)), DocumentObligation.status == "pending")
     return q.filter(DocumentObligation.user_id == user_id) if user_id else q
@@ -273,10 +274,73 @@ def on_participants_changed(db, doc, by: Optional[int]) -> None:
     _open_stage(db, doc, stage, by)
 
 
+def start_round(db, doc, by: Optional[int] = None) -> None:
+    """The document went to review or approval from anything else (a change to an approved or published one, a status set by
+    hand): a new round with the same reviewers and approvers (the round itself is stamped by the models' status listener, so the
+    signatures given before no longer count). With nobody to sign that stage it goes to the stage that has someone, as Send
+    would, or back to draft to be sent. Runs for every organisation, with or without the life cycle."""
+    from .routers.document_signoff import _assignments
+    from .routers.versions import create_audit_log
+
+    roles = {a.role_type for a in _assignments(db, doc.id)}
+    stage = "reviewer" if doc.status == "pending_review" else "approver"
+    if stage in roles:
+        return
+    other = "approver" if stage == "reviewer" else "reviewer"
+    to = ("pending_approval" if other == "approver" else "pending_review") if other in roles else "draft"
+    why = {"pending_approval": "No reviewers are set, so it goes to its approvers",
+           "pending_review": "No approvers are set, so it goes to its reviewers",
+           "draft": "Nobody is set to review or approve it, so it is a draft again: choose reviewers and send it for review"}[to]
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="status_changed", field_changed="status",
+                     old_value=doc.status, new_value=to, action_details=why)
+    doc.status = to
+
+
+REVIEWED = ("approved", "published", "exception_applied") + _PENDING_STAGE
+
+
+def changed_after_review(db, doc, old_status: Optional[str], by: Optional[int], why: str) -> bool:
+    """The document's text or file became a new version. One that is approved or published, or in review or approval, is
+    reviewed again from the start by the same people (the user's decisions of 2026-10-16): a new round, so signatures given on
+    the earlier text no longer count. Writes the status row; True when it is (back) in review or approval afterwards."""
+    from .routers.versions import create_audit_log
+
+    if old_status not in REVIEWED:
+        return False
+    doc.status = "pending_review"
+    if old_status == "pending_review":
+        doc.signoff_round_at = datetime.utcnow()      # the same status: the models' listener sees no change, so the round is set here
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="status_changed", field_changed="status",
+                     old_value=old_status, new_value="pending_review", action_details=why)
+    if old_status in _PENDING_STAGE:                  # already in a round: start it again and ask the same people again
+        start_round(db, doc, by)
+        _reask(db, doc, by)
+    else:
+        on_status_changed(db, doc, old_status, "pending_review", by)
+    return doc.status in _PENDING_STAGE
+
+
 @_safe
+def _reask(db, doc, by: Optional[int] = None) -> None:
+    _cancel(db, doc, ("review", "approval"))
+    if doc.status in _PENDING_STAGE:
+        _open_stage(db, doc, "reviewer" if doc.status == "pending_review" else "approver", by)
+
+
 def on_status_changed(db, doc, old: Optional[str], new: Optional[str], by: Optional[int] = None) -> None:
+    """Every status change the platform makes passes here (the studio's saves, take-back, restore, the status endpoints)."""
+    if new in _PENDING_STAGE and old not in _PENDING_STAGE:
+        start_round(db, doc, by)
+    _status_hooks(db, doc, old, doc.status, by)
+
+
+@_safe
+def _status_hooks(db, doc, old: Optional[str], new: Optional[str], by: Optional[int] = None) -> None:
     if old in _PENDING_STAGE and new not in _PENDING_STAGE:
         _cancel(db, doc, ("review", "approval"))
+    if new in _PENDING_STAGE and old not in _PENDING_STAGE:          # back to review: the same people are asked again
+        _cancel(db, doc, ("review", "approval"))
+        _open_stage(db, doc, "reviewer" if new == "pending_review" else "approver", by)
     if old == "published" and new != "published":
         _cancel(db, doc, ("acknowledgement",))
     if new == "published" and old != "published":

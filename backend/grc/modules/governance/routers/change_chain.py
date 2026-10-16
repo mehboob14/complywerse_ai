@@ -118,14 +118,11 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
             item["reason"] = reason
         row.change_set = cs
     if not is_file:               # (a file's status and history are written with its new version)
-        if old_status in ("approved", "published", "exception_applied"):
-            doc.status = "pending_review"
-            create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="status_changed", field_changed="status",
-                             old_value=old_status, new_value="pending_review", action_details=f"Changes were taken back (version {new_version}), so it needs approving again")
-            doc_lifecycle.on_status_changed(db, doc, old_status, "pending_review", current_user.id)
+        sent = doc_lifecycle.changed_after_review(db, doc, old_status, current_user.id,
+                                                  f"Changes were taken back (version {new_version}), so it needs approving again")
         create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="content_edited", field_changed="current_version",
                          old_value=old_version, new_value=new_version, action_details=f"{reason}; version {new_version}"
-                         + ("; sent back to review" if doc.status != old_status else ""))
+                         + ("; sent back to review" if sent else "; it is a draft again" if doc.status != old_status else ""))
     db.commit()
     if is_file:
         studio.reanchor(db, doc, current_user.id)

@@ -270,10 +270,12 @@ def _status_history(rows: Sequence[Any]) -> List[Tuple[datetime, str]]:
     return out
 
 
-def _stage_at(history: Sequence[Tuple[datetime, str]], when: Optional[datetime]) -> str:
+def _stage_at(history: Sequence[Tuple[datetime, str]], when: Optional[datetime], *, before: bool = False) -> str:
+    """The stage at ``when``. ``before``: just before it - for a version, whose save writes the status change it causes in the
+    same clock tick on Windows (~15 ms steps, PITFALLS 73), so an equal time is the version's own consequence, not its stage."""
     stage = "draft"
     for at, s in history:
-        if when is not None and at > when:
+        if when is not None and (at >= when if before else at > when):
             break
         stage = s
     return stage
@@ -388,7 +390,7 @@ def chain(db, doc) -> Dict[str, Any]:
             it.setdefault("origin", "unknown")
         out_versions.append({
             "id": v.id, "number": v.version_number, "kind": v.change_type, "status": v.status, "at": at, "by": by, "by_id": v.created_by,
-            "stage": _stage_at(history, v.created_at), "origin": origin, "origin_label": ORIGIN_LABEL.get(origin, ORIGIN_LABEL["unknown"]),
+            "stage": _stage_at(history, v.created_at, before=True), "origin": origin, "origin_label": ORIGIN_LABEL.get(origin, ORIGIN_LABEL["unknown"]),
             "summary": v.change_summary or "", "reason": v.change_reason or "", "comparable": comparable,
             "has_file": bool(v.file_path), "file_name": v.file_name or "", "title": v.title, "items": items, "sources": sources,
             "words_added": sum(i["words_added"] for i in items), "words_removed": sum(i["words_removed"] for i in items),

@@ -1625,8 +1625,6 @@ def update_document_status(
         document.published_by = current_user.id
         document.published_at = datetime.utcnow()
     db.flush()
-    doc_lifecycle.on_status_changed(db, document, old_status, new_status, current_user.id)
-
     create_audit_log(
         db=db,
         document_id=document_id,
@@ -1638,6 +1636,7 @@ def update_document_status(
         old_value=old_status,
         new_value=new_status
     )
+    doc_lifecycle.on_status_changed(db, document, old_status, new_status, current_user.id)     # after: its own row (nobody to sign) is the last
 
     # When the document reaches an approved/published state, any gap-remediation
     # clauses applied to it (left in_progress pending sign-off) are now formally
