@@ -51,6 +51,8 @@ import type { RecommendedDoc } from './_recommendedDocsCatalog';
 import RichTextEditor from './_RichTextEditor';
 import { buildTemplateContent, buildArtifactContent } from './_templateContent';
 import { DocumentsWorkspace } from './_workspace/DocumentsWorkspace';
+import { DocumentDetailsFields, useDocumentDetails } from './_DetailsFields';
+import { detailsPayload } from './_detailsRead';
 
 interface TenantUser {
   id: number;
@@ -1052,15 +1054,18 @@ interface UploadDocumentModalProps {
 }
 
 function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentModalProps) {
+  // title, type, classification, description, owner, department, review cycle and dates: read from the file when it is chosen
+  const details = useDocumentDetails();
   const [formData, setFormData] = useState({
-    title: '',
-    description: '',
-    doc_type: 'policy',
-    classification: 'internal',
     framework_ids: [] as number[],
     applicable_framework_ids: [] as number[],
   });
   const [file, setFile] = useState<File | null>(null);
+  const take = (chosen: File) => {
+    if (!validateFile(chosen)) return;
+    setFile(chosen);
+    details.read(chosen);
+  };
   const [dragActive, setDragActive] = useState(false);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -1111,25 +1116,19 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
     }
   }, []);
 
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const droppedFile = e.dataTransfer.files[0];
-      if (validateFile(droppedFile)) {
-        setFile(droppedFile);
-      }
+      take(e.dataTransfer.files[0]);
     }
-  }, []);
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (validateFile(selectedFile)) {
-        setFile(selectedFile);
-      }
+      take(e.target.files[0]);
     }
   };
 
@@ -1142,12 +1141,8 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
 
     const data = new FormData();
     data.append('file', file);
-    data.append('title', formData.title);
-    data.append('doc_type', formData.doc_type);
-    data.append('classification', formData.classification);
-    if (formData.description) {
-      data.append('description', formData.description);
-    }
+    // title, doc_type, classification, description, owner_id, department_id, review_cycle_months, effective_date, next_review_date
+    for (const [key, value] of Object.entries(detailsPayload(details.form))) data.append(key, String(value));
     if (formData.framework_ids.length > 0) {
       // JSON-encoded so the backend can rehydrate the list with one
       // parse call (more reliable than repeated form keys here).
@@ -1262,60 +1257,7 @@ function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentMod
             </div>
           )}
 
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Enter document title"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={2}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Brief description of the document"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Document Type *</label>
-              <MultiSelectDropdown
-                title="Document Type"
-                items={DOCUMENT_TYPES.filter(t => t.value).map(type => ({ value: type.value, label: type.label }))}
-                selectedValues={formData.doc_type ? [formData.doc_type] : []}
-                onApply={(vals) => setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }))}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-                placeholder="Select Document Type"
-                size="md"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Classification *</label>
-              <MultiSelectDropdown
-                title="Classification"
-                items={CLASSIFICATIONS.filter(c => c.value).map(cls => ({ value: cls.value, label: cls.label }))}
-                selectedValues={formData.classification ? [formData.classification] : []}
-                onApply={(vals) => setFormData(prev => ({ ...prev, classification: vals[0] || '' }))}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-                placeholder="Select Classification"
-                size="md"
-              />
-            </div>
-          </div>
+          <DocumentDetailsFields d={details} />
 
           {/* Optional framework linkage — same field as the AI-draft and
               manual-create flows so uploaded docs also surface in the

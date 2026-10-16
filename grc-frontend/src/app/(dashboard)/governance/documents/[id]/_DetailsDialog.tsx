@@ -6,19 +6,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import apiClient, { governanceApi, tenantApi } from '@/lib/api';
+import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
 import { useToast } from '@/components/ui/ToastProvider';
-
-const TYPES: [string, string][] = [
-  ['policy', 'Policy'], ['standard', 'Standard'], ['procedure', 'Procedure'],
-  ['guideline', 'Guideline'], ['charter', 'Charter'], ['framework', 'Framework'],
-];
-const CLASSES: [string, string][] = [
-  ['public', 'Public'], ['internal', 'Internal'], ['confidential', 'Confidential'], ['restricted', 'Restricted'],
-];
-const CYCLES: [number, string][] = [[6, 'Every 6 months'], [12, 'Every year'], [24, 'Every two years'], [36, 'Every three years']];
+import { CLASSES, CYCLES, DOC_TYPES as TYPES, titleCase, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
+import { addMonths } from '../_detailsRead';
 
 const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const TRIGGER = 'w-full !h-[34px] !border-[#b8c4c8] !text-sm';
@@ -65,23 +58,10 @@ function changes(base: Form, form: Form): Record<string, unknown> {
   return patch;
 }
 
-/** YYYY-MM-DD plus whole months, the day clamped to the month's end (31 Jan + 1 = 28/29 Feb). */
-function addMonths(ymd: string, months: number): string {
-  const [y, m, d] = ymd.split('-').map(Number);
-  if (!y || !m || !d) return '';
-  const t = new Date(Date.UTC(y, m - 1 + months, 1));
-  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
-  t.setUTCDate(Math.min(d, last));
-  return t.toISOString().slice(0, 10);
-}
 const suggestNext = (f: Form) => (f.effective_date && f.review_cycle_months ? addMonths(f.effective_date, f.review_cycle_months) : '');
 
 const day = (ymd: string) =>
   ymd ? new Date(`${ymd}T00:00:00Z`).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' }) : '';
-const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
-/** The fixed options, plus the stored value when it is none of them. */
-const withCurrent = <T extends string | number>(opts: [T, string][], value: T | null | '', label: (v: T) => string): [T, string][] =>
-  value === null || value === '' || opts.some(([v]) => v === value) ? opts : [...opts, [value as T, label(value as T)]];
 const labelOf = <T,>(opts: [T, string][], value: T) => opts.find(([v]) => v === value)?.[1] || '';
 
 function Field({ label, wide, children }: { label: string; wide?: boolean; children: React.ReactNode }) {
@@ -119,30 +99,8 @@ export default function DetailsDialog({ doc, open, onClose, canEdit }: { doc: an
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only when the popup opens
 
   const tenantId: number | undefined = doc?.tenant_id;
-  // Same key and shape as useAssigneeOptions in ../_SignoffControl (users only here).
-  const usersQ = useQuery({
-    queryKey: ['signoff-users', tenantId],
-    queryFn: async () => {
-      try {
-        const r = await tenantApi.getTenantUsers(tenantId);
-        const d: any = r.data;
-        return (Array.isArray(d) ? d : d?.users || []) as any[];
-      } catch { return []; }
-    },
-    enabled: open && canEdit,
-  });
-  // The organisation's departments (grc_departments: the table department_id points at, as studio/setup.py reads it).
-  const deptQ = useQuery({
-    queryKey: ['org-departments'],
-    queryFn: async () => {
-      try {
-        const d: any = (await apiClient.get('/vuln-management/departments', { params: { limit: 500 } })).data;
-        return (Array.isArray(d) ? d : []) as Array<{ id: number; name: string; is_active?: boolean }>;
-      } catch { return []; }
-    },
-    enabled: open,
-    staleTime: 5 * 60 * 1000,
-  });
+  const usersQ = useOrgUsers(tenantId, open && canEdit);
+  const deptQ = useOrgDepartments(open);
   // Same key and query as the documents list's create/edit modal.
   const fwQ = useQuery({
     queryKey: ['document-modal-frameworks'],

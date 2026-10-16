@@ -19,6 +19,8 @@ import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryD
 import { ago, plural } from '@/lib/studio/text';
 import { documentApi } from '@/lib/studio/documentApi';
 import { FrameworkList } from './_components/ReferencesPanel';
+import { DocumentDetailsFields, useDocumentDetails } from '../_DetailsFields';
+import { detailsPayload } from '../_detailsRead';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const primary = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -156,34 +158,44 @@ function NewDocumentDialog({ onClose, onOpen, prefill }: { onClose: () => void; 
 }
 
 // ── upload ───────────────────────────────────────────────────────────────────
+/** Choose a file → its details are read from it → the person confirms them → it opens (and is in the library as a draft). */
 function UploadDialog({ onClose, onOpen, maxMb }: { onClose: () => void; onOpen: (s: Session) => void; maxMb: number }) {
   const { toast } = useToast();
   const file = useRef<HTMLInputElement>(null);
-  const [docType, setDocType] = useState('policy');
+  const [chosen, setChosen] = useState<File | null>(null);
   const [over, setOver] = useState(false);
+  const details = useDocumentDetails();
   const upload = useMutation({
-    mutationFn: (f: File) => studioApi.uploadSession(f, docType),
+    mutationFn: () => studioApi.uploadSession(chosen!, details.form.doc_type, details.form.title, detailsPayload(details.form)),
     onSuccess: onOpen,
     onError: (e) => toast({ title: 'That file could not be opened', message: problemOf(e), type: 'error' }),
   });
-  const take = (f?: File | null) => { if (f) upload.mutate(f); };
+  const take = (f?: File | null) => {
+    if (!f) return;
+    if (f.size > maxMb * 1024 * 1024) { toast({ title: 'That file is too large', message: `Up to ${maxMb} MB.`, type: 'error' }); return; }
+    setChosen(f);
+    details.read(f);
+  };
   return (
-    <AnimatedModal isOpen onClose={onClose} title="Upload a document" size="md">
+    <AnimatedModal isOpen onClose={onClose} title="Upload a document" size={chosen ? 'lg' : 'md'}
+      footer={chosen ? <div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
+        <button type="button" disabled={!details.form.title.trim() || details.reading || upload.isPending} onClick={() => upload.mutate()} className={primary}>
+          {upload.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Open</button></div> : undefined}>
       <div className="space-y-3 p-5">
-        <label className="block"><span className={fieldLabel}>Type</span>
-          <select value={docType} onChange={(e) => setDocType(e.target.value)} className={`${input} mt-1`}>{Object.entries(DOC_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
         <input ref={file} type="file" hidden accept=".docx,.pdf,.txt,.md,.markdown,.html,.htm" onChange={(e) => { take(e.target.files?.[0]); e.target.value = ''; }} />
-        <div onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
-          onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files?.[0]); }}
-          className={`rounded-lg border-2 border-dashed p-6 text-center ${over ? 'border-[#0f766e] bg-[#f3fbf9]' : 'border-[#b8c4c8] bg-[#f8fafb]'}`}>
-          {upload.isPending ? <p className="text-sm text-[#3f4b58]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Reading the file…</p> : (
-            <>
-              <Upload className="mx-auto h-6 w-6 text-[#586472]" />
-              <p className="mt-1 text-sm text-[#26323d]">Drop a file here, or <button type="button" onClick={() => file.current?.click()} className="font-semibold text-[#0b6b58] underline">choose one</button></p>
-              <p className="mt-0.5 text-[11px] text-[#586472]">Word, PDF, text or HTML · up to {maxMb} MB</p>
-            </>
-          )}
-        </div>
+        {chosen ? (
+          <p className="flex items-center gap-2 rounded-lg bg-[#f3fbf9] px-3 py-2 text-sm text-[#1f2933]"><FileText className="h-4 w-4 shrink-0 text-[#586472]" /><span className="min-w-0 flex-1 truncate">{chosen.name}</span>
+            <button type="button" onClick={() => file.current?.click()} className="text-xs font-semibold text-[#0b6b58] hover:underline">Change</button></p>
+        ) : (
+          <div onDragOver={(e) => { e.preventDefault(); setOver(true); }} onDragLeave={() => setOver(false)}
+            onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files?.[0]); }}
+            className={`rounded-lg border-2 border-dashed p-6 text-center ${over ? 'border-[#0f766e] bg-[#f3fbf9]' : 'border-[#b8c4c8] bg-[#f8fafb]'}`}>
+            <Upload className="mx-auto h-6 w-6 text-[#586472]" />
+            <p className="mt-1 text-sm text-[#26323d]">Drop a file here, or <button type="button" onClick={() => file.current?.click()} className="font-semibold text-[#0b6b58] underline">choose one</button></p>
+            <p className="mt-0.5 text-[11px] text-[#586472]">Word, PDF, text or HTML · up to {maxMb} MB</p>
+          </div>
+        )}
+        {chosen && <DocumentDetailsFields d={details} />}
       </div>
     </AnimatedModal>
   );

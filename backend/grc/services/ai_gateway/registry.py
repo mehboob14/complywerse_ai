@@ -414,6 +414,11 @@ USE_CASES: Tuple[UseCase, ...] = (
         "Governance › Documents", "auto", "DOC", "L3", ("document",),
         "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/doc_version.py:decide",),
         apis=("anthropic",)),
+    _uc("governance.document_details", "Fill in a document's details from its file",
+        "Reads the opening of a document you upload and proposes the title, type and description its file does not state; nothing is saved until you confirm.",
+        "Governance › Documents", "auto", "DOC", "L3", ("document", "upload"),
+        "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/doc_details.py:_ask_ai",),
+        apis=("anthropic",)),
 
     # ── Regulatory Changes ───────────────────────────────────────────────────
     _uc("regulatory.read_circular", "Read a regulatory circular",

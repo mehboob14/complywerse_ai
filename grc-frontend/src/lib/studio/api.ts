@@ -389,6 +389,11 @@ export interface MoveToLibrary {
   parent_document_id?: number | null;
   framework_ids?: number[];
   description?: string;
+  owner_id?: number;
+  department_id?: number;
+  review_cycle_months?: number;
+  effective_date?: string;                       // YYYY-MM-DD
+  next_review_date?: string;                     // the effective date (or today) + the review cycle when left out
 }
 
 /** The sentence the server wrote for a failed call (never a stack trace). */
@@ -426,11 +431,14 @@ export const studioApi = {
   sessions: () => get<{ items: Session[] }>('/sessions'),
   createSession: (body: { kind: 'new' | 'library'; title?: string; doc_type?: string; template_id?: string | null; document_id?: number | null; instructions?: Instructions }) =>
     post<Session>('/sessions', body),
-  uploadSession: async (file: File, docType: string, title = ''): Promise<Session> => {
+  /** `details`: what the library document is created with (classification, description, owner_id, department_id,
+   *  review_cycle_months, effective_date, next_review_date), as the person confirmed them. */
+  uploadSession: async (file: File, docType: string, title = '', details: Record<string, string | number> = {}): Promise<Session> => {
     const form = new FormData();
     form.append('file', file);
     form.append('doc_type', docType);
     form.append('title', title);
+    for (const [key, value] of Object.entries(details)) if (!['doc_type', 'title'].includes(key)) form.append(key, String(value));
     return (await apiClient.post(`${base}/sessions/upload`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
   },
   session: (id: number) => get<Session>(`/sessions/${id}`),

@@ -1,6 +1,7 @@
 """AI Studio API (``/governance/studio``). Tenants without it get ``{"enabled": false}`` from ``/status`` and 404 elsewhere."""
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote
 
@@ -124,6 +125,14 @@ class MoveIn(BaseModel):
     parent_document_id: Optional[int] = None
     framework_ids: Optional[List[int]] = None
     description: Optional[str] = None
+    owner_id: Optional[int] = None                 # the person moving it, when not given
+    department_id: Optional[int] = None
+    review_cycle_months: int = 12
+    effective_date: Optional[datetime] = None
+    next_review_date: Optional[datetime] = None    # the effective date (or today) + the review cycle, when not given
+
+    def details(self) -> Dict[str, Any]:
+        return self.model_dump(include={"description", "owner_id", "department_id", "review_cycle_months", "effective_date", "next_review_date"})
 
 
 class SaveIn(BaseModel):
@@ -285,10 +294,18 @@ def create_session(body: SessionIn, db: Session = Depends(get_db), user: GRCUser
 
 @router.post("/sessions/upload", dependencies=[Depends(require_studio)])
 async def create_session_from_file(file: UploadFile = File(...), title: str = Form(""), doc_type: str = Form("policy"),
+                                   classification: str = Form("internal"), description: Optional[str] = Form(None),
+                                   owner_id: Optional[int] = Form(None), department_id: Optional[int] = Form(None),
+                                   review_cycle_months: int = Form(12), effective_date: Optional[datetime] = Form(None),
+                                   next_review_date: Optional[datetime] = Form(None),
                                    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """A file opened in the studio goes into the library at once, with the details the person confirmed (read from the file first:
+    POST /governance/documents/read-details)."""
     data = await file.read()
+    details = {"classification": classification, "description": description, "owner_id": owner_id, "department_id": department_id,
+               "review_cycle_months": review_cycle_months, "effective_date": effective_date, "next_review_date": next_review_date}
     try:
-        s = service.create_session(db, user, kind="upload", title=title, doc_type=doc_type, upload=(file.filename or "document", data))
+        s = service.create_session(db, user, kind="upload", title=title, doc_type=doc_type, upload=(file.filename or "document", data), details=details)
     except service.StudioError as exc:
         raise _problem(exc)
     return service.session_view(db, s)
@@ -688,7 +705,7 @@ def move_to_library(session_id: int, body: MoveIn, db: Session = Depends(get_db)
     s = _session(db, session_id, user)
     try:
         doc = service.move_to_library(db, s, user, title=body.title, doc_type=body.doc_type, classification=body.classification,
-                                      parent_document_id=body.parent_document_id, framework_ids=body.framework_ids, description=body.description)
+                                      parent_document_id=body.parent_document_id, framework_ids=body.framework_ids, **body.details())
     except service.StudioError as exc:
         raise _problem(exc)
     return {"document_id": doc.id, "title": doc.title, "version": doc.current_version}

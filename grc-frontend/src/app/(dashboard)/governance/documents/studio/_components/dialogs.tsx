@@ -6,9 +6,10 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2, Search } from 'lucide-react';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
-import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioApi, type ExportNote, type ExportOptions, type Session } from '@/lib/studio/api';
-import { governanceApi } from '@/lib/api';
+import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioApi, type ExportNote, type ExportOptions, type MoveToLibrary, type Session } from '@/lib/studio/api';
 import AssetImage from './AssetImage';
+import { DocumentDetailsFields, useDocumentDetails } from '../../_DetailsFields';
+import { detailsPayload } from '../../_detailsRead';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -114,14 +115,14 @@ const REVIEW_MONTHS: Record<string, number> = { 'Every 6 months': 6, 'Every year
 
 export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { session: Session; onClose: () => void; flush: () => Promise<void>; onDone: (docId: number) => void }) {
   const { toast } = useToast();
-  const [title, setTitle] = useState(session.title);
-  const [docType, setDocType] = useState(session.doc_type === 'other' ? 'policy' : session.doc_type);
-  // what the setup chose, so the library document starts as the person set it up
-  const [classification, setClassification] = useState(() => {
-    const chosen = String(session.instructions.classification ?? '').toLowerCase();
-    return (CLASSIFICATIONS as readonly string[]).includes(chosen) ? chosen : 'internal';
+  // what the setup chose, so the library document starts as the person set it up; the owner starts as the person
+  const chosen = String(session.instructions.classification ?? '').toLowerCase();
+  const details = useDocumentDetails({
+    title: session.title,
+    doc_type: session.doc_type === 'other' ? 'policy' : session.doc_type,
+    classification: (CLASSIFICATIONS as readonly string[]).includes(chosen) ? chosen : 'internal',
+    review_cycle_months: REVIEW_MONTHS[String(session.instructions.review_cycle ?? '')] ?? 12,
   });
-  const [description, setDescription] = useState('');
   const [parent, setParent] = useState<number | null>(null);
   const [q, setQ] = useState('');
   const [frameworks, setFrameworks] = useState<number[]>([]);
@@ -130,11 +131,7 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   const move = useMutation({
     mutationFn: async () => {
       await flush();
-      const r = await studioApi.moveToLibrary(session.id, { title, doc_type: docType, classification, description: description || undefined, parent_document_id: parent, framework_ids: frameworks });
-      // ponytail: the review cycle chosen in the setup is set on the new document here; move_to_library could take it itself
-      const months = REVIEW_MONTHS[String(session.instructions.review_cycle ?? '')];
-      if (months) await governanceApi.updateDocument(r.document_id, { review_cycle_months: months } as never).catch(() => undefined);
-      return r;
+      return studioApi.moveToLibrary(session.id, { ...(detailsPayload(details.form) as Partial<MoveToLibrary>), parent_document_id: parent, framework_ids: frameworks });
     },
     onSuccess: (r) => { toast({ title: 'Moved to the document library', message: `${r.title} is a draft, version ${r.version}.`, type: 'success' }); onDone(r.document_id); },
     onError: (e) => toast({ title: 'Could not move it', message: problemOf(e), type: 'error' }),
@@ -146,16 +143,9 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
         ? `It becomes a draft. Your uploaded file ${session.source.name} is kept as version 1.0, the original${session.revision > 1 ? '; what you changed here becomes version 1.1' : ''}. Statements are extracted from it as for any new document.`
         : 'It becomes a draft, version 1.0. Statements are extracted from it as for any new document.'}
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
-        <button type="button" className={primary} disabled={!title.trim() || move.isPending} onClick={() => move.mutate()}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
+        <button type="button" className={primary} disabled={!details.form.title.trim() || move.isPending} onClick={() => move.mutate()}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
       <div className="space-y-4 p-5">
-        <label className="block"><span className="text-xs font-semibold text-[#26323d]">Title</span><input value={title} onChange={(e) => setTitle(e.target.value)} className={`${input} mt-1`} /></label>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block"><span className="text-xs font-semibold text-[#26323d]">Document type</span>
-            <select value={docType} onChange={(e) => setDocType(e.target.value)} className={`${input} mt-1`}>{Object.entries(DOC_TYPE_LABEL).filter(([k]) => k !== 'other').map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
-          <label className="block"><span className="text-xs font-semibold text-[#26323d]">Classification</span>
-            <select value={classification} onChange={(e) => setClassification(e.target.value)} className={`${input} mt-1 capitalize`}>{CLASSIFICATIONS.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
-        </div>
-        <label className="block"><span className="text-xs font-semibold text-[#26323d]">Description (optional)</span><textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={`${input} mt-1`} /></label>
+        <DocumentDetailsFields d={details} />
         <div>
           <p className="text-xs font-semibold text-[#26323d]">Parent document (optional)</p>
           {parent ? (

@@ -155,8 +155,10 @@ def add_revision(db, s, content: str, *, author_type: str, user_id: Optional[int
 
 
 def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: str = "policy", template_id: Optional[str] = None,
-                   document_id: Optional[int] = None, upload: Optional[tuple] = None, instructions: Optional[Dict[str, Any]] = None):
-    """Start a session: a new document (from a template or blank), a library document, or an uploaded file."""
+                   document_id: Optional[int] = None, upload: Optional[tuple] = None, instructions: Optional[Dict[str, Any]] = None,
+                   details: Optional[Dict[str, Any]] = None):
+    """Start a session: a new document (from a template or blank), a library document, or an uploaded file (``details``: what the
+    library document is created with - classification, description, owner, department, review cycle and dates)."""
     from ....models import GovernanceDocument, StudioSession
 
     s = StudioSession(tenant_id=(_tenant(db).id if _tenant(db) else 1), created_by=user.id, title=(title or "Untitled document").strip()[:500],
@@ -224,7 +226,7 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
         if imported.native:
             s.native_map = imported.native.get("map")
             s.source_path = imported.native.get("path") or path
-        registered = _register_upload(db, s, user, path, name, content)
+        registered = _register_upload(db, s, user, path, name, content, details)
         base_label = f"{s.title} v{registered.current_version}" + ("" if imported.base_markdown is None else " before its tracked changes")
         summary = (f"Opened from {name}, and put in the library as a draft, version {registered.current_version}"
                    + ("".join(f" ({n})" for n in imported.notes[:1])))
@@ -241,12 +243,13 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
     return s
 
 
-def _register_upload(db, s, user, path: str, name: str, content: str):
+def _register_upload(db, s, user, path: str, name: str, content: str, details: Optional[Dict[str, Any]] = None):
     """A file uploaded into the studio goes into the library at once, as a draft whose first version is the file itself, numbered
-    as the file states (``doc_version.detect``: its revision table, its document control, else its name, else 1.0). The session
-    then edits that library document, as one opened from the library. Does not commit."""
+    as the file states (``doc_version.detect``: its revision table, its document control, else its name, else 1.0), with the
+    details the person confirmed. The session then edits that library document, as one opened from the library. Does not commit."""
     from ....models import GovernanceDocument, GovernanceDocumentVersion
     from .. import doc_version
+    from ..doc_details import schedule
     from ..routers.documents import GOVERNANCE_UPLOAD_DIR
     from ..routers.versions import create_audit_log
 
@@ -254,9 +257,14 @@ def _register_upload(db, s, user, path: str, name: str, content: str):
     version, found_in = doc_version.detect(path, name)
     is_file = s.source_kind in ("docx", "pdf")
     files = _keep_original((path, name), GOVERNANCE_UPLOAD_DIR) if is_file else {}
-    doc = GovernanceDocument(tenant_id=tenant.id, title=s.title, doc_type=s.doc_type or "policy", classification="internal", owner_id=user.id,
-                             author_id=user.id, framework_ids=[], applicable_framework_ids=[], status="draft", current_version=version,
+    d = details or {}
+    doc = GovernanceDocument(tenant_id=tenant.id, title=s.title, doc_type=s.doc_type or "policy", classification=d.get("classification") or "internal",
+                             description=d.get("description") or None, owner_id=d.get("owner_id") or user.id, author_id=user.id,
+                             department_id=d.get("department_id"), review_cycle_months=d.get("review_cycle_months") or 12,
+                             effective_date=d.get("effective_date"), next_review_date=d.get("next_review_date"),
+                             framework_ids=[], applicable_framework_ids=[], status="draft", current_version=version,
                              content=None if is_file else content, **files)
+    schedule(doc)
     db.add(doc)
     db.flush()
     db.add(GovernanceDocumentVersion(document_id=doc.id, version_number=version, change_type="major", title=doc.title, content=None if is_file else content,
@@ -891,8 +899,11 @@ def _keep_original(upload: Tuple[str, str], folder: str) -> Dict[str, Any]:
 
 
 def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optional[str] = None, classification: str = "internal",
-                    parent_document_id: Optional[int] = None, framework_ids: Optional[List[int]] = None, description: Optional[str] = None):
+                    parent_document_id: Optional[int] = None, framework_ids: Optional[List[int]] = None, description: Optional[str] = None,
+                    owner_id: Optional[int] = None, department_id: Optional[int] = None, review_cycle_months: int = 12,
+                    effective_date: Optional[datetime] = None, next_review_date: Optional[datetime] = None):
     """Make the session's document a library document (draft, version 1.0). The session then edits that document."""
+    from ..doc_details import schedule
     from ....models import GovernanceDocument
     from ..action_logger import log_governance_action
     from ..routers.versions import create_audit_log
@@ -937,8 +948,11 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
     number = doc_version.next_version(start, decision["change"]) if decision else start
     doc = GovernanceDocument(tenant_id=tenant.id, title=name, description=description, content=None if word else s.content,
                              doc_type=doc_type or s.doc_type or "policy", classification=classification, parent_document_id=parent_document_id,
-                             owner_id=user.id, author_id=user.id, framework_ids=framework_ids or [], applicable_framework_ids=framework_ids or [],
+                             owner_id=owner_id or user.id, author_id=user.id, department_id=department_id, review_cycle_months=review_cycle_months or 12,
+                             effective_date=effective_date, next_review_date=next_review_date,
+                             framework_ids=framework_ids or [], applicable_framework_ids=framework_ids or [],
                              status="draft", current_version=number, **file_fields)
+    schedule(doc)
     db.add(doc)
     db.flush()
     if two:

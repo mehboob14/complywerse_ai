@@ -437,8 +437,15 @@ def create_document(
         status="draft",
         current_version="1.0"
     )
+    from ..doc_details import schedule
+    schedule(db_document)
     db.add(db_document)
     db.flush()
+    # its first version from the start, as a document made in the AI Studio has, so its history and changes count from 1.0
+    db.add(GovernanceDocumentVersion(
+        document_id=db_document.id, version_number="1.0", change_type="major", title=db_document.title, content=db_document.content,
+        change_summary="Initial version", status="current", created_by=current_user.id,
+    ))
     
     create_audit_log(
         db=db,
@@ -2016,6 +2023,37 @@ def export_document(
     )
 
 
+READ_DETAILS_MAX_BYTES = 50 * 1024 * 1024
+
+
+@router.post("/read-details")
+def read_document_details(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """What a file says about the document it holds (title, type, description, classification, owner, department, review cycle,
+    dates), to fill in the form before it is uploaded. Saves nothing: the file is read from a temporary copy that is deleted.
+    Not async: the reading (and Comply Agent, up to doc_details.AI_SECONDS) runs on a worker thread, not the event loop."""
+    import tempfile
+    from ..doc_details import read
+
+    data = file.file.read(READ_DETAILS_MAX_BYTES + 1)
+    if len(data) > READ_DETAILS_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File size must be less than 50MB")
+    name = os.path.basename(file.filename or "document")
+    fd, path = tempfile.mkstemp(suffix=os.path.splitext(name)[1].lower()[:10])
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(data)
+        return read(path, name, db)
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            logger.warning("could not delete the temporary copy %s", path)
+
+
 @router.post("/upload-with-file", status_code=status.HTTP_201_CREATED)
 async def create_document_with_file(
     file: UploadFile = File(...),
@@ -2034,6 +2072,11 @@ async def create_document_with_file(
     # The frameworks it is audited against, the same JSON form; defaults to the
     # linked ones, as creating a document does.
     applicable_framework_ids: Optional[str] = Form(None),
+    department_id: Optional[int] = Form(None),
+    review_cycle_months: int = Form(12),
+    effective_date: Optional[datetime] = Form(None),
+    next_review_date: Optional[datetime] = Form(None),          # effective date (or today) + the review cycle when not given
+    parent_document_id: Optional[int] = Form(None),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2060,6 +2103,9 @@ async def create_document_with_file(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Only PDF, Word (.doc, .docx), and Excel (.xls, .xlsx) files are supported"
         )
+    if parent_document_id and not db.query(GovernanceDocument).filter(
+            GovernanceDocument.id == parent_document_id, GovernanceDocument.tenant_id == tenant_id).first():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent document not found")
     
     unique_id = str(uuid.uuid4())
     safe_filename = f"{unique_id}_{file.filename}"
@@ -2095,6 +2141,11 @@ async def create_document_with_file(
         classification=classification,
         owner_id=owner_id or current_user.id,
         author_id=current_user.id,
+        department_id=department_id,
+        parent_document_id=parent_document_id,
+        review_cycle_months=review_cycle_months,
+        effective_date=effective_date,
+        next_review_date=next_review_date,
         file_name=file.filename,
         file_path=file_path,
         file_size=file_size,
@@ -2104,6 +2155,8 @@ async def create_document_with_file(
         framework_ids=parsed_framework_ids,
         applicable_framework_ids=parsed_applicable_ids,
     )
+    from ..doc_details import schedule
+    schedule(document)
     db.add(document)
     db.flush()
 
