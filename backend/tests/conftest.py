@@ -22,6 +22,24 @@ def _never_the_real_claude(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _never_real_email(monkeypatch):
+    """Tests never send email. backend/.env is loaded on import, and the workflow e-mail service falls back to its SMTP_*
+    settings when an organisation has none of its own, so a test that raised a notification (a document sent for review, a
+    reminder) logged in to the real mailbox and sent mail to the tests' made-up addresses — dozens per run. Tests that check
+    e-mail replace `email_service.send_email` themselves."""
+    import smtplib
+
+    for key in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM_EMAIL"):
+        monkeypatch.delenv(key, raising=False)
+
+    def refuse(*args, **kwargs):
+        raise ConnectionRefusedError("tests never send email")
+
+    monkeypatch.setattr(smtplib, "SMTP", refuse)
+    monkeypatch.setattr(smtplib, "SMTP_SSL", refuse)
+
+
+@pytest.fixture(autouse=True)
 def _no_ai_context_leaks():
     """The data-protection guard looks up the calling tenant before every AI call, so a tenant left in the usage
     context by one test (``bind_request_context``, ``usage_scope``) would make the next test try a real database."""
