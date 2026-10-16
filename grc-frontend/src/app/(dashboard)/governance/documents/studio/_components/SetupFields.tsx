@@ -3,40 +3,73 @@
 /**
  * Setting up a document before Comply Agent writes it: the organisation, where it applies and its regulators, the laws and circulars,
  * the frameworks, the subject areas, the departments, the audience, the length, the classification and the review cycle — picked from
- * lists that start with what the platform knows about the organisation. Kept as the document's instructions (saved as you choose),
- * so the web research, Comply Agent's questions and the draft follow them; it asks only about what is left open.
+ * dropdowns that start with what the platform knows about the organisation, with "Fill in from your organisation" for the rest. Kept as
+ * the document's instructions (saved as you choose), so the web research, Comply Agent's questions and the draft follow them. A library
+ * document's own classification and review cycle come from the document and change only in its Details.
  */
-import { useEffect, useRef, useState } from 'react';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Check, Loader2, Plus, Settings2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import { Check, ChevronRight, Loader2, Sparkles } from 'lucide-react';
 import { problemOf, studioApi, type Instructions, type Session, type SetupOptions } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { ComboBoxInput } from '@/components/ui/ComboBoxInput';
+import { MultiSelectDropdown, type MultiSelectDropdownItem } from '@/components/ui/MultiSelectDropdown';
+import { queueFor } from './setupPatch';
 
 export const setupInputClass = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 
-/** The document's instructions as the person edits them: saved a moment after typing, at once after a choice. */
-export function useInstructionsDraft(session: Session, onChanged: () => void) {
+/** The lists as this server sends them; the newer fields are optional so an older server still works. */
+type Options = SetupOptions & {
+  entity_names?: string[];
+  defaults?: { country: string; entity_type: string; regulators: string[] };
+  document?: { classification: string; review_cycle: string; owner: string; department: string } | null;
+  frameworks: { id: number; label: string; attached: boolean; of_document?: boolean }[];
+};
+
+/** The document's instructions as the person edits them: saved a moment after typing, at once after a choice, one save at a time with
+ * everything not saved yet in it, and never replaced by the server's copy while something is on its way. */
+export function useInstructionsDraft(session: Session, onChanged: () => void | Promise<void>) {
   const { toast } = useToast();
-  const [draft, setDraft] = useState<Instructions>(session.instructions);
+  const queue = useMemo(() => queueFor(session.id), [session.id]);
+  const [draft, setDraft] = useState<Instructions>(() => queue.view(session.instructions));
   const [saved, setSaved] = useState<'idle' | 'saving' | 'saved'>('idle');
-  const dirty = useRef(false);
-  // the session changed elsewhere (a reload): take it, unless the person is mid-edit
-  useEffect(() => { if (!dirty.current) setDraft(session.instructions); }, [session.instructions]);
-  const save = useMutation({
-    mutationFn: (body: Instructions) => studioApi.patchSession(session.id, { instructions: body }),
-    onMutate: () => setSaved('saving'),
-    onSuccess: () => { setSaved('saved'); dirty.current = false; onChanged(); },
-    onError: (e) => { setSaved('idle'); toast({ title: 'Could not save the instructions', message: problemOf(e), type: 'error' }); },
-  });
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latest = useRef({ onChanged, toast, id: session.id, server: session.instructions, queue });
+  latest.current = { onChanged, toast, id: session.id, server: session.instructions, queue };
+  // the server's copy (after a save or a reload), with what is not saved yet still on top
+  useEffect(() => { setDraft(queue.view(session.instructions)); }, [session.instructions, queue]);
+
+  const send = useCallback(() => {
+    if (timer.current) { clearTimeout(timer.current); timer.current = null; }
+    const q = latest.current.queue;
+    const body = q.take();
+    if (!body) return;
+    setSaved('saving');
+    studioApi.patchSession(latest.current.id, { instructions: body as Instructions }).then(
+      () => {
+        q.done();
+        if (q.pending) { send(); return; }
+        setSaved('saved');
+        // the copy fetched now has every save in it: from then on the server's copy is taken as it is
+        void Promise.resolve(latest.current.onChanged()).finally(() => { q.settled(); setDraft(q.view(latest.current.server)); });
+      },
+      (e) => {
+        q.failed();
+        setSaved('idle');
+        latest.current.toast({ title: 'Could not save the instructions', message: problemOf(e), type: 'error' });
+      });
+  }, []);
+  // leaving the tab mid-typing still saves it
+  useEffect(() => () => send(), [send]);
+
   const change = (patch: Instructions, immediately = false) => {
+    queue.add(patch);
     setDraft((cur) => ({ ...cur, ...patch }));
-    dirty.current = true;
     if (timer.current) clearTimeout(timer.current);
-    if (immediately) save.mutate(patch);
-    else timer.current = setTimeout(() => save.mutate(patch), 800);
+    if (immediately) send();
+    else timer.current = setTimeout(send, 800);
   };
-  useEffect(() => () => { if (timer.current) clearTimeout(timer.current); }, []);
   return { draft, change, saved };
 }
 
@@ -44,172 +77,240 @@ export function SavedState({ saved }: { saved: 'idle' | 'saving' | 'saved' }) {
   return <span className="text-[11px] text-[#586472]" role="status">{saved === 'saving' ? 'Saving…' : saved === 'saved' ? <span className="inline-flex items-center gap-1 text-[#0a5a38]"><Check className="h-3 w-3" /> Saved</span> : ''}</span>;
 }
 
-function Group({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+/** A section that folds away to one line of what it holds. */
+export function Section({ title, summary, open, children }: { title: string; summary: string; open?: boolean; children: React.ReactNode }) {
   return (
-    <div>
-      <p className="text-xs font-semibold text-[#26323d]">{label}</p>
-      {hint && <p className="mt-0.5 text-[11px] text-[#586472]">{hint}</p>}
-      <div className="mt-1.5">{children}</div>
+    <details open={open} className="group rounded-xl border border-[#d5dbe1] bg-white">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-xl px-3 py-2 hover:bg-[#f3f8f7] [&::-webkit-details-marker]:hidden">
+        <ChevronRight className="h-3.5 w-3.5 shrink-0 text-[#586472] transition-transform group-open:rotate-90" aria-hidden />
+        <span className="text-xs font-semibold text-[#26323d]">{title}</span>
+        <span className="min-w-0 flex-1 truncate text-right text-[11px] text-[#586472] group-open:hidden" title={summary}>{summary || 'Not set'}</span>
+      </summary>
+      <div className="space-y-3 border-t border-[#e6eaee] px-3 pb-3 pt-2.5">{children}</div>
+    </details>
+  );
+}
+
+export function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <p className="mb-1 text-xs font-semibold text-[#26323d]" title={hint}>{label}{hint && <span className="ml-1 cursor-help font-normal text-[#7b8794]" aria-label={hint}>ⓘ</span>}</p>
+      {children}
     </div>
   );
 }
 
-/** Several choices from a list, as chips, plus the person's own ("Add"). */
-function Chips({ label, options, value, onChange, details, addLabel = 'Add another' }: {
-  label: string; options: string[]; value: string[]; onChange: (next: string[]) => void; details?: Record<string, string>; addLabel?: string;
+/** Several of a list, from a dropdown with search, plus the person's own ("+ Add"). */
+function Many({ label, items, value, onChange, create = true, disabled }: {
+  label: string; items: MultiSelectDropdownItem[]; value: string[]; onChange: (next: string[]) => void; create?: boolean; disabled?: boolean;
 }) {
-  const [adding, setAdding] = useState('');
-  const shown = [...options, ...value.filter((v) => !options.includes(v))];
-  const toggle = (o: string) => onChange(value.includes(o) ? value.filter((v) => v !== o) : [...value, o]);
-  const add = () => { const t = adding.trim(); if (t && !value.includes(t)) onChange([...value, t]); setAdding(''); };
+  const known = new Set(items.map((i) => i.value));
+  const all = [...items, ...value.filter((v) => !known.has(v)).map((v) => ({ value: v, label: v, subLabel: 'Your own' }))];
+  // the dropdown reports a choice while it renders: take it after, or React warns about updating another component
   return (
-    <div role="group" aria-label={label}>
-      <div className="flex flex-wrap gap-1.5">
-        {shown.map((o) => {
-          const on = value.includes(o);
-          return (
-            <button key={o} type="button" aria-pressed={on} title={details?.[o] || undefined} onClick={() => toggle(o)}
-              className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2.5 py-1 text-left text-[11px] font-medium ${on ? 'border-[#0f766e] bg-[#e6f4f1] text-[#0b4f46]' : 'border-[#c5ccd3] bg-white text-[#3f4b58] hover:border-[#0f766e]'}`}>
-              {on && <Check className="h-3 w-3 shrink-0" aria-hidden />}<span className="truncate">{o}</span>
-            </button>
-          );
-        })}
-      </div>
-      <div className="mt-1.5 flex gap-1.5">
-        <input value={adding} onChange={(e) => setAdding(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }}
-          placeholder={`${addLabel}…`} aria-label={`${label}: ${addLabel.toLowerCase()}`} className={`${setupInputClass} py-1.5 text-xs`} />
-        <button type="button" onClick={add} disabled={!adding.trim()} aria-label={`Add to ${label}`}
-          className="inline-flex shrink-0 items-center rounded-lg border border-[#b8c4c8] bg-white px-2 text-[#0b6b58] hover:bg-[#f3fbf6] disabled:opacity-40"><Plus className="h-3.5 w-3.5" /></button>
-      </div>
-    </div>
+    <Field label={label}>
+      <MultiSelectDropdown title={label} items={all} selectedValues={value} onApply={(v) => queueMicrotask(() => onChange(v))} triggerVariant="input" size="sm" showAvatars={false}
+        forceSearch placeholder="Choose…" searchPlaceholder={create ? 'Search or type your own' : 'Search'} className="w-full" triggerClassName="w-full"
+        onCreate={create ? (t) => onChange([...value, t]) : undefined} disabled={disabled} />
+      {value.length > 0 && <p className="mt-1 truncate text-[11px] text-[#3f4b58]" title={all.filter((i) => value.includes(i.value)).map((i) => i.label).join('; ')}>
+        {all.filter((i) => value.includes(i.value)).map((i) => i.label).join(' · ')}</p>}
+    </Field>
   );
 }
 
-/** One of a list, with "Other…" kept as typed. */
-function Pick({ label, value, options, onPick }: { label: string; value: string; options: string[]; onPick: (v: string, now: boolean) => void }) {
-  const [other, setOther] = useState(() => value !== '' && !options.includes(value));
+/** One of a list, with search; the person may type their own. */
+export function One({ label, value, options, onChange, hint, custom = true }: {
+  label: string; value: string; options: { value: string; label: string; hint?: string; group?: string }[]; onChange: (v: string) => void; hint?: string; custom?: boolean;
+}) {
   return (
-    <label className="block">
-      <span className="text-xs font-semibold text-[#26323d]">{label}</span>
-      <select value={other ? '__other' : value} aria-label={label} className={`${setupInputClass} mt-1`}
-        onChange={(e) => { if (e.target.value === '__other') { setOther(true); return; } setOther(false); onPick(e.target.value, true); }}>
+    <Field label={label} hint={hint}>
+      <ComboBoxInput value={value} onChange={onChange} options={options} allowCustom={custom} ariaLabel={label} placeholder={custom ? 'Choose or type…' : 'Choose…'}
+        displayLabelInsteadOfValue emptyText="No match: press Enter to use your words." />
+    </Field>
+  );
+}
+
+/** A short fixed list, nothing else. */
+function Plain({ label, value, options, onChange }: { label: string; value: string; options: string[]; onChange: (v: string) => void }) {
+  return (
+    <Field label={label}>
+      <select value={value} onChange={(e) => onChange(e.target.value)} aria-label={label} className={`${setupInputClass} py-1.5`}>
         <option value="">Not set</option>
         {options.map((o) => <option key={o} value={o}>{o}</option>)}
-        <option value="__other">Other…</option>
+        {value && !options.includes(value) && <option value={value}>{value}</option>}
       </select>
-      {other && <input value={options.includes(value) ? '' : value} onChange={(e) => onPick(e.target.value, false)} placeholder={`${label}, in your own words`} aria-label={`${label}, in your own words`} className={`${setupInputClass} mt-1.5`} />}
-    </label>
+    </Field>
   );
 }
 
-export function SetupFields({ session, draft, change, onReferencesChanged }: {
+const plain = (xs: string[]) => xs.map((x) => ({ value: x, label: x }));
+const count = (n: number, one: string, many = `${one}s`) => (n ? `${n} ${n === 1 ? one : many}` : '');
+const joined = (...xs: (string | false | undefined)[]) => xs.filter(Boolean).join(' · ');
+
+export function SetupFields({ session, draft, change, onReferencesChanged, firstOpen = true, allOpen = false, compact = false }: {
   session: Session; draft: Instructions; change: (patch: Instructions, immediately?: boolean) => void; onReferencesChanged: () => void | Promise<void>;
+  /** the first section opens (the Instructions tab); `allOpen` opens every section */
+  firstOpen?: boolean; allOpen?: boolean;
+  /** the chat's setup card: the four choices that shape a draft most, the rest behind "More options" */
+  compact?: boolean;
 }) {
   const { toast } = useToast();
-  const options = useQuery({ queryKey: ['studio', 'setup', session.id], queryFn: () => studioApi.setupOptions(session.id), staleTime: 60_000, retry: false });
-  const o: SetupOptions | undefined = options.data;
+  const options = useQuery({ queryKey: ['studio', 'setup', session.id], queryFn: () => studioApi.setupOptions(session.id) as Promise<Options>, staleTime: 60_000, retry: false });
+  const o = options.data;
   const list = (key: keyof Instructions) => (Array.isArray(draft[key]) ? (draft[key] as string[]) : []);
-  const country = String(draft.country ?? '');
-  const [busyFramework, setBusyFramework] = useState<number | null>(null);
+  const text = (key: keyof Instructions) => String(draft[key] ?? '');
+  const country = text('country');
+  const [fwBusy, setFwBusy] = useState(false);
+  const [notes, setNotes] = useState(() => !!text('regulatory_notes'));
+  const [more, setMore] = useState(false);
+  const doc = o?.document ?? null;
+
+  // a library document's classification and review cycle are its own: the instructions follow the document, never the other way
+  // (a document moved to the library takes them from the setup when it is moved: MoveToLibraryDialog)
+  const syncFromDoc = doc && ((doc.classification && doc.classification !== text('classification')) || (doc.review_cycle && doc.review_cycle !== text('review_cycle')));
+  useEffect(() => {
+    if (syncFromDoc && doc) change({ ...(doc.classification ? { classification: doc.classification } : {}), ...(doc.review_cycle ? { review_cycle: doc.review_cycle } : {}) }, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [syncFromDoc]);
 
   if (options.isLoading) return <p className="text-xs text-[#586472]"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Loading the choices…</p>;
   if (!o) return <p className="text-xs text-[#8a1c1c]">The choices could not be loaded. {problemOf(options.error)}</p>;
 
-  const followed = o.regulators_followed.filter((r) => !country || !r.country || r.country === country).map((r) => r.label);
-  const regulatorOptions = [...followed, ...(o.regulators[country] ?? []).filter((r) => !followed.includes(r))];
-  const attached = (id: number) => session.references.some((r) => r.kind === 'framework' && r.source_id === id);
-  const toggleFramework = async (id: number) => {
-    setBusyFramework(id);
+  const followed = o.regulators_followed.filter((r) => !country || !r.country || r.country === country);
+  const regulatorItems: MultiSelectDropdownItem[] = [
+    ...followed.map((r) => ({ value: r.label, label: r.label, subLabel: 'Followed in Regulatory Feeds' })),
+    ...(country && o.regulators[country]
+      ? o.regulators[country].map((r) => ({ value: r, label: r }))
+      : Object.entries(o.regulators).flatMap(([c, names]) => names.map((r) => ({ value: r, label: r, subLabel: c })))),
+  ].filter((item, i, all) => all.findIndex((x) => x.value === item.value) === i);
+  const frameworks = [...o.frameworks].sort((a, b) => Number(!!b.of_document) - Number(!!a.of_document));
+  const attachedIds = session.references.filter((r) => r.kind === 'framework' && r.source_id != null).map((r) => String(r.source_id));
+  const applyFrameworks = async (next: string[]) => {
+    setFwBusy(true);
     try {
-      const ref = session.references.find((r) => r.kind === 'framework' && r.source_id === id);
-      if (ref) await studioApi.removeReference(session.id, ref.id);
-      else await studioApi.addReference(session.id, { kind: 'framework', source_id: id, scope: { mode: 'all' } });
+      const want = new Set(next);
+      for (const r of session.references) if (r.kind === 'framework' && r.source_id != null && !want.has(String(r.source_id))) await studioApi.removeReference(session.id, r.id);
+      for (const id of next) if (!attachedIds.includes(id)) await studioApi.addReference(session.id, { kind: 'framework', source_id: Number(id), scope: { mode: 'all' } });
       await onReferencesChanged();
     } catch (e) { toast({ title: 'That framework could not be changed', message: problemOf(e), type: 'error' }); }
-    finally { setBusyFramework(null); }
+    finally { setFwBusy(false); }
   };
 
+  const d = o.defaults;
+  const fill: Instructions = {};
+  if (session.kind === 'new' && d) {
+    if (!country && d.country) fill.country = d.country;
+    if (!text('entity_type') && d.entity_type) fill.entity_type = d.entity_type;
+    // the followed regulators are the default country's: only for a document set up for that country
+    if (!list('regulators').length && d.regulators.length && (!country || country === d.country)) fill.regulators = d.regulators;
+  }
+  const lengthOn = session.kind === 'new' || !!draft.length;          // a length chosen earlier can still be seen and cleared
+  const open = (i: number) => allOpen || (firstOpen && i === 0);
+
+  const fillButton = Object.keys(fill).length > 0 && (
+    <button type="button" onClick={() => change(fill, true)}
+      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f6ee]"
+      title={joined(fill.country as string, fill.entity_type as string, (fill.regulators as string[] | undefined)?.join(', '))}>
+      <Sparkles className="h-3.5 w-3.5" aria-hidden /> Fill in from your organisation
+    </button>
+  );
+  const countryField = <One label="Country" value={country} options={plain(o.countries)} onChange={(v) => change({ country: v }, true)} />;
+  const regulatorsField = <Many label="Regulators it answers to" items={regulatorItems} value={list('regulators')} onChange={(v) => change({ regulators: v }, true)} />;
+  const frameworksField = o.frameworks.length ? (
+    <Many label="Frameworks and standards" create={false} disabled={fwBusy}
+      items={frameworks.map((f) => ({ value: String(f.id), label: f.label, subLabel: f.of_document ? 'This document’s' : undefined, disabled: fwBusy }))}
+      value={attachedIds} onChange={(v) => void applyFrameworks(v)} />
+  ) : <p className="text-[11px] text-[#586472]">No framework is available in the platform yet.</p>;
+  const lengthField = lengthOn && (
+    <Field label="Length">
+      <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#b8c4c8] bg-white p-0.5" role="radiogroup" aria-label="Length">
+        {o.lengths.map((l) => {
+          const on = draft.length === l.value;
+          return (
+            <button key={l.value} type="button" role="radio" aria-checked={on} title={l.detail} onClick={() => change({ length: on ? '' : l.value }, true)}
+              className={`rounded-md px-2 py-1 text-xs font-semibold ${on ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>{l.label}</button>
+          );
+        })}
+      </div>
+    </Field>
+  );
+
+  if (compact && !more) {
+    const others = joined(text('entity_type'), count(list('regulations').length, 'law'), count(list('domains').length, 'subject area'),
+      count(list('departments').length, 'department'), text('audience'), text('classification'), text('review_cycle'));
+    return (
+      <div className="space-y-2.5">
+        {fillButton}
+        <div className="grid gap-2.5 sm:grid-cols-2">
+          {countryField}
+          {regulatorsField}
+          {frameworksField}
+          {lengthField}
+        </div>
+        <button type="button" onClick={() => setMore(true)} className="flex w-full items-center justify-between gap-2 rounded-lg px-1 py-1 text-left text-[11px] hover:bg-[#eef6f3]">
+          <span className="font-semibold text-[#0b6b58]">More options</span>
+          <span className="min-w-0 truncate text-[#586472]">{others || 'organisation, laws, subject areas, reader'}</span>
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <label className="block">
-          <span className="text-xs font-semibold text-[#26323d]">Entity name</span>
-          <input value={draft.entity_name ?? ''} onChange={(e) => change({ entity_name: e.target.value })} placeholder="e.g. Capital Financial Services Bank" className={`${setupInputClass} mt-1`} />
-        </label>
-        <Pick label="Type of organisation" value={String(draft.entity_type ?? '')} options={o.entity_types} onPick={(v, now) => change({ entity_type: v }, now)} />
-      </div>
+    <div className="space-y-2">
+      {doc && (
+        <p className="rounded-lg bg-[#f3f6f8] px-3 py-2 text-[11px] text-[#3f4b58]">
+          <span className="font-semibold text-[#26323d]">This document: </span>
+          {joined(doc.classification, doc.review_cycle && `reviewed ${doc.review_cycle.toLowerCase()}`, doc.owner && `owner ${doc.owner}`, doc.department) || 'no details yet'}
+          {session.document_id && <> · <Link href={`/governance/documents/${session.document_id}?details=1`} className="font-semibold text-[#0b6b58] underline">Change in Details</Link></>}
+        </p>
+      )}
+      {fillButton}
 
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <Pick key={country || 'none'} label="Country" value={country} options={o.countries} onPick={(v, now) => change({ country: v }, now)} />
-          {!country && o.country_from_profile && (
-            <button type="button" onClick={() => change({ country: o.country_from_profile }, true)} className="mt-1 text-[11px] font-semibold text-[#0b6b58] underline">
-              Use {o.country_from_profile}, from your organisation’s profile
-            </button>
-          )}
+      <Section title="Organisation" open={open(0)} summary={joined(text('entity_type'), country, count(list('other_countries').length, 'more country', 'more countries'))}>
+        {/* the name is typed as the organisation writes it (a list pick would replace a shorter name with the first longer one) */}
+        <Field label="Entity name" hint="Used exactly wherever the organisation is named, and checked for.">
+          <input value={text('entity_name')} onChange={(e) => change({ entity_name: e.target.value })} list={`entity-names-${session.id}`} aria-label="Entity name"
+            placeholder="The organisation's legal name" className={`${setupInputClass} py-1.5`} />
+          <datalist id={`entity-names-${session.id}`}>{(o.entity_names ?? []).map((n) => <option key={n} value={n} />)}</datalist>
+        </Field>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <One label="Type of organisation" value={text('entity_type')} options={plain(o.entity_types)} onChange={(v) => change({ entity_type: v }, true)} />
+          {countryField}
         </div>
-        <Pick label="Classification" value={String(draft.classification ?? '')} options={o.classifications} onPick={(v, now) => change({ classification: v }, now)} />
-      </div>
+        <Many label="Also applies in" items={plain(o.countries.filter((c) => c !== country && c !== 'Several countries'))} value={list('other_countries')}
+          onChange={(v) => change({ other_countries: v }, true)} />
+      </Section>
 
-      <Group label="Also applies in" hint="Other countries whose rules it must meet.">
-        <Chips label="Also applies in" options={o.countries.filter((c) => c !== country && c !== 'Several countries')} value={list('other_countries')} onChange={(v) => change({ other_countries: v }, true)} />
-      </Group>
+      <Section title="Rules it follows" open={open(1)} summary={joined(list('regulators').slice(0, 2).join(', ') + (list('regulators').length > 2 ? ` +${list('regulators').length - 2}` : ''),
+        count(list('regulations').length, 'law'), count(attachedIds.length, 'framework'))}>
+        {regulatorsField}
+        <Many label="Laws, regulations and circulars" items={o.regulations.map((r) => ({ value: r.label, label: r.label, subLabel: r.detail || undefined }))}
+          value={list('regulations')} onChange={(v) => change({ regulations: v }, true)} />
+        {frameworksField}
+        {notes ? (
+          <Field label="Other regulatory requirements">
+            <textarea value={text('regulatory_notes')} onChange={(e) => change({ regulatory_notes: e.target.value })} rows={2} autoFocus={!text('regulatory_notes')}
+              placeholder="Licence conditions, an inspection finding, a ruling…" aria-label="Other regulatory requirements" className={setupInputClass} />
+          </Field>
+        ) : (
+          <button type="button" onClick={() => setNotes(true)} className="text-[11px] font-semibold text-[#0b6b58] hover:underline">+ Add a requirement in your own words</button>
+        )}
+      </Section>
 
-      <Group label="Regulators it answers to" hint={followed.length ? 'The ones your organisation follows in Regulatory Feeds come first.' : country ? undefined : 'Choose a country to see its regulators, or add your own.'}>
-        <Chips label="Regulators" options={regulatorOptions} value={list('regulators')} onChange={(v) => change({ regulators: v }, true)} />
-      </Group>
-
-      <Group label="Laws, regulations and circulars" hint={o.regulations.length ? 'From your register of regulatory changes, or add any other.' : 'Add the ones it must follow; Comply Agent also looks them up on the internet.'}>
-        <Chips label="Laws, regulations and circulars" options={o.regulations.map((r) => r.label)} details={Object.fromEntries(o.regulations.map((r) => [r.label, r.detail]))}
-          value={list('regulations')} onChange={(v) => change({ regulations: v }, true)} addLabel="Add a law, regulation or circular" />
-        <textarea value={draft.regulatory_notes ?? ''} onChange={(e) => change({ regulatory_notes: e.target.value })} rows={2}
-          placeholder="Other regulatory requirements: licence conditions, an inspection finding, a ruling…" aria-label="Other regulatory requirements" className={`${setupInputClass} mt-2`} />
-      </Group>
-
-      <Group label="Frameworks and standards" hint="In the platform: a framework you choose is attached as a reference.">
-        {o.frameworks.length ? (
-          <div className="flex flex-wrap gap-1.5" role="group" aria-label="Frameworks">
-            {o.frameworks.map((f) => {
-              const on = attached(f.id);
-              return (
-                <button key={f.id} type="button" aria-pressed={on} disabled={busyFramework !== null} onClick={() => void toggleFramework(f.id)}
-                  className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium disabled:opacity-60 ${on ? 'border-[#0f766e] bg-[#e6f4f1] text-[#0b4f46]' : 'border-[#c5ccd3] bg-white text-[#3f4b58] hover:border-[#0f766e]'}`}>
-                  {busyFramework === f.id ? <Loader2 className="h-3 w-3 animate-spin" /> : on ? <Check className="h-3 w-3" aria-hidden /> : null}{f.label}
-                </button>
-              );
-            })}
+      <Section title="Scope and reader" open={open(2)} summary={joined(count(list('domains').length, 'subject area'), count(list('departments').length, 'department'),
+        text('audience'), !doc && text('classification'), !doc && text('review_cycle'), lengthOn && o.lengths.find((l) => l.value === draft.length)?.label)}>
+        <Many label="Subject areas it must cover" items={plain(o.domains)} value={list('domains')} onChange={(v) => change({ domains: v }, true)} />
+        <Many label="Departments and units it applies to" items={plain(o.departments)} value={list('departments')} onChange={(v) => change({ departments: v }, true)} />
+        <One label="Audience" value={text('audience')} options={plain(o.audiences)} onChange={(v) => change({ audience: v }, true)} />
+        {!doc && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Plain label="Classification" value={text('classification')} options={o.classifications} onChange={(v) => change({ classification: v }, true)} />
+            <Plain label="Review cycle" value={text('review_cycle')} options={o.review_cycles} onChange={(v) => change({ review_cycle: v }, true)} />
           </div>
-        ) : <p className="text-[11px] text-[#586472]">No framework is available in the platform yet.</p>}
-      </Group>
-
-      <Group label="Subject areas it must cover">
-        <Chips label="Subject areas" options={o.domains} value={list('domains')} onChange={(v) => change({ domains: v }, true)} addLabel="Add a subject area" />
-      </Group>
-
-      <Group label="Departments and units it applies to" hint={o.departments.length ? 'Your organisation’s departments and business units.' : undefined}>
-        <Chips label="Departments" options={o.departments} value={list('departments')} onChange={(v) => change({ departments: v }, true)} addLabel="Add a department" />
-      </Group>
-
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Pick label="Audience" value={String(draft.audience ?? '')} options={o.audiences} onPick={(v, now) => change({ audience: v }, now)} />
-        <Pick label="Review cycle" value={String(draft.review_cycle ?? '')} options={o.review_cycles} onPick={(v, now) => change({ review_cycle: v }, now)} />
-      </div>
-
-      <div>
-        <p className="text-xs font-semibold text-[#26323d]" id={`length-${session.id}`}>Length</p>
-        <div className="mt-1.5 grid gap-1.5 sm:grid-cols-3" role="radiogroup" aria-labelledby={`length-${session.id}`}>
-          {o.lengths.map((l) => {
-            const on = draft.length === l.value;
-            return (
-              <button key={l.value} type="button" role="radio" aria-checked={on} onClick={() => change({ length: on ? '' : l.value }, true)}
-                className={`rounded-lg border px-2.5 py-1.5 text-left ${on ? 'border-[#0f766e] bg-[#e6f4f1]' : 'border-[#c5ccd3] bg-white hover:border-[#0f766e]'}`}>
-                <span className={`block text-xs font-semibold ${on ? 'text-[#0b4f46]' : 'text-[#26323d]'}`}>{l.label}</span>
-                <span className="block text-[11px] text-[#586472]">{l.detail}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
+        )}
+        {lengthField}
+      </Section>
+      {compact && <button type="button" onClick={() => setMore(false)} className="text-[11px] font-semibold text-[#0b6b58] hover:underline">Fewer options</button>}
     </div>
   );
 }
@@ -222,17 +323,15 @@ export function SetupCard({ session, onChanged }: { session: Session; onChanged:
   const label = ['policy', 'standard', 'procedure', 'guideline', 'charter'].includes(session.doc_type) ? session.doc_type : 'document';
   if (options.isError) return null;
   return (
-    <section className="rounded-xl border border-[#9fd9bd] bg-white p-3 text-left" aria-label={`Set up this ${label}`}>
-      <div className="flex items-start gap-2">
-        <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#d6f3ec] text-[#0b6b58]" aria-hidden><Settings2 className="h-3.5 w-3.5" /></span>
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-semibold text-[#1f2933]">First, set up this {label}</p>
-          <p className="mt-0.5 text-xs text-[#586472]">Choose what you already know. Comply Agent follows it, looks up on the internet what applies, and asks you only about what is left open before it writes anything.</p>
+    <section className="rounded-xl border border-[#d5dbe1] bg-white p-3 text-left shadow-sm" aria-label={`Set up this ${label}`}>
+      <div className="mb-2.5 flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-[#1f2933]">Set up this {label}</p>
+          <p className="mt-0.5 text-[11px] text-[#586472]">Pick what you know, then tell Comply Agent below what to write. It asks about the rest.</p>
         </div>
         <SavedState saved={saved} />
       </div>
-      <div className="mt-3"><SetupFields session={session} draft={draft} change={change} onReferencesChanged={onChanged} /></div>
-      <p className="mt-3 text-xs text-[#586472]">When you are ready, tell Comply Agent below what to write.</p>
+      <SetupFields session={session} draft={draft} change={change} onReferencesChanged={onChanged} compact firstOpen={false} />
     </section>
   );
 }

@@ -66,7 +66,7 @@ export function AnimatedModal({
   // Escape to close + lock body scroll while open
   useEffect(() => {
     if (!render) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape' && !e.defaultPrevented) onClose(); };     // a list inside handled it
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';

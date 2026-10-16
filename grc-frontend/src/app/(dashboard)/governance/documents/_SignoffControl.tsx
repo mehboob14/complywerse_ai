@@ -30,6 +30,8 @@ export type Signoff = {
   signatures: SignoffSignature[];
   progress: { reviewer?: { signed: number; required: number }; approver?: { signed: number; required: number } };
   my_actionable_role: 'reviewer' | 'approver' | null;
+  /** the version the sign-off is about (newer servers): sent back when signing, refused when it moved on */
+  version?: string;
 };
 
 /** The document's status as people say it, and its colour. */
@@ -64,7 +66,7 @@ function useRefreshAll(documentId: number) {
   };
 }
 
-function useAssigneeOptions(tenantId?: number): Option[] {
+export function useAssigneeOptions(tenantId?: number): Option[] {
   const usersQ = useQuery({
     queryKey: ['signoff-users', tenantId],
     queryFn: async () => {
@@ -100,7 +102,7 @@ function useAssigneeOptions(tenantId?: number): Option[] {
   }, [usersQ.data, rolesQ.data, teamsQ.data]);
 }
 
-function AssigneeMultiSelect({
+export function AssigneeMultiSelect({
   label, hint, value, onChange, options,
 }: { label: string; hint?: string; value: Participant[]; onChange: (p: Participant[]) => void; options: Option[] }) {
   return (
@@ -136,7 +138,11 @@ const ROLES = [
  * The signer's own step: shown only to someone who can sign now. Draw the signature, sign; or reject with a reason, which sends
  * the document back to draft. `due` is when the request is due (from the life cycle, when the organisation has it).
  */
-export function SignoffAction({ documentId, due }: { documentId: number; due?: string | null }) {
+export function SignoffAction({ documentId, due, version: shown }: {
+  documentId: number; due?: string | null;
+  /** the version the person is reading: sent with the decision, refused by the server if the document moved on */
+  version?: string;
+}) {
   const { toast } = useToast();
   const refresh = useRefreshAll(documentId);
   const { data } = useSignoff(documentId);
@@ -146,12 +152,12 @@ export function SignoffAction({ documentId, due }: { documentId: number; due?: s
   const [reason, setReason] = useState('');
 
   const sign = useMutation({
-    mutationFn: async () => governanceApi.signDocumentOff(documentId, { comment: comment || undefined, signature_image: signature || undefined }),
+    mutationFn: async () => governanceApi.signDocumentOff(documentId, { comment: comment || undefined, signature_image: signature || undefined, version: shown ?? data?.version }),
     onSuccess: () => { toast({ type: 'success', title: 'Signed', message: 'Your electronic signature was recorded on the document.' }); setComment(''); setSignature(null); refresh(); },
     onError: (e: any) => toast({ type: 'error', title: 'Not signed', message: e?.response?.data?.detail || 'Could not sign.' }),
   });
   const reject = useMutation({
-    mutationFn: async () => governanceApi.rejectDocumentSignoff(documentId, { comment: reason }),
+    mutationFn: async () => governanceApi.rejectDocumentSignoff(documentId, { comment: reason, version: shown ?? data?.version }),
     onSuccess: () => { toast({ type: 'success', title: 'Rejected', message: 'The document went back to draft with your reason.' }); setRejectMode(false); setReason(''); refresh(); },
     onError: (e: any) => toast({ type: 'error', title: 'Not rejected', message: e?.response?.data?.detail || 'Could not reject.' }),
   });
@@ -217,7 +223,7 @@ export function SignoffAction({ documentId, due }: { documentId: number; due?: s
  * Who prepares, reviews and approves: a summary, changed with "Change" while the document is not yet approved; a draft is sent
  * for review from here. `open` starts with the editor open (a draft with nobody assigned yet).
  */
-export function SignoffParticipants({ documentId, doc }: { documentId: number; doc: any }) {
+export function SignoffParticipants({ documentId, doc, readOnly = false }: { documentId: number; doc: any; readOnly?: boolean }) {
   const { toast } = useToast();
   const refresh = useRefreshAll(documentId);
   const options = useAssigneeOptions(doc?.tenant_id);
@@ -248,9 +254,9 @@ export function SignoffParticipants({ documentId, doc }: { documentId: number; d
 
   if (!data) return null;
   const status = data.status || doc?.status;
-  const editable = ['draft', 'pending_review', 'pending_approval'].includes(status);
+  const editable = !readOnly && ['draft', 'pending_review', 'pending_approval'].includes(status);
   const nobody = !(data.participants?.reviewer?.length || data.participants?.approver?.length);
-  const open = editing || (status === 'draft' && nobody);
+  const open = !readOnly && (editing || (status === 'draft' && nobody));
   const canSend = status === 'draft' && !nobody;
 
   return (
@@ -293,7 +299,7 @@ export function SignoffParticipants({ documentId, doc }: { documentId: number; d
           </div>
         </div>
       )}
-      {status === 'draft' && !open && (
+      {status === 'draft' && !open && !readOnly && (
         <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary-50 px-3 py-2">
           <p className="text-xs text-primary-900">Ready? The reviewers are asked first, then the approvers. Each gets it in their Task Management.</p>
           <button type="button" onClick={() => send.mutate()} disabled={!canSend || send.isPending} title={canSend ? '' : 'Add a reviewer or an approver first'}
@@ -340,7 +346,7 @@ export function SignoffTrail({ documentId }: { documentId: number }) {
 }
 
 /** The document's own Sign-off tab (organisations without the life cycle): where it stands, your step, who signs, the signatures. */
-export function SignOffControlTab({ documentId, doc }: { documentId: number; doc: any }) {
+export function SignOffControlTab({ documentId, doc, canEdit = true, version }: { documentId: number; doc: any; canEdit?: boolean; version?: string }) {
   const { data, isLoading } = useSignoff(documentId);
   if (isLoading) {
     return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-400" /></div>;
@@ -363,8 +369,8 @@ export function SignOffControlTab({ documentId, doc }: { documentId: number; doc
           ))}
         </div>
       </section>
-      <SignoffAction documentId={documentId} />
-      <SignoffParticipants documentId={documentId} doc={doc} />
+      <SignoffAction documentId={documentId} version={version} />
+      <SignoffParticipants documentId={documentId} doc={doc} readOnly={!canEdit} />
       <SignoffTrail documentId={documentId} />
     </div>
   );

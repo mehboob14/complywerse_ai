@@ -46,10 +46,11 @@ DOCUMENT_LIFECYCLE_TENANTS = frozenset(
     slug.strip().lower() for slug in os.getenv("DOCUMENT_LIFECYCLE_TENANTS", "cfsb").split(",") if slug.strip())
 
 
-# The AI Studio (chat drafting, rich editor, checks, compare and export of documents; modules/governance/studio):
-# only for the tenants named here (comma-separated slugs); "*" switches it on for every tenant.
+# The AI Studio (chat drafting, rich editor, checks, compare and export of documents; modules/governance/studio, and the
+# document view every document opens in): every tenant by default (the user's decision, 2026-10-16); set comma-separated
+# slugs to limit it.
 DOCUMENT_STUDIO_TENANTS = frozenset(
-    slug.strip().lower() for slug in os.getenv("DOCUMENT_STUDIO_TENANTS", "cfsb").split(",") if slug.strip())
+    slug.strip().lower() for slug in os.getenv("DOCUMENT_STUDIO_TENANTS", "*").split(",") if slug.strip())
 
 
 # ----- OpenAI ---------------------------------------------------------------

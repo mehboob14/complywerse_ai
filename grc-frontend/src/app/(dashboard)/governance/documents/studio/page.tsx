@@ -17,6 +17,7 @@ import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Session, type TemplateItem } from '@/lib/studio/api';
 import { ago, plural } from '@/lib/studio/text';
+import { documentApi } from '@/lib/studio/documentApi';
 import { FrameworkList } from './_components/ReferencesPanel';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -189,11 +190,12 @@ function UploadDialog({ onClose, onOpen, maxMb }: { onClose: () => void; onOpen:
 }
 
 // ── open a library document / compare ───────────────────────────────────────
-function LibraryDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (s: Session) => void }) {
+function LibraryDialog({ onClose }: { onClose: () => void }) {
   const { toast } = useToast();
+  const router = useRouter();
   const open = useMutation({
-    mutationFn: (d: LibraryDoc) => studioApi.createSession({ kind: 'library', document_id: d.id }),
-    onSuccess: onOpen,
+    mutationFn: (d: LibraryDoc) => documentApi.draft(d.id),          // the person's one draft of the document, reused
+    onSuccess: (r) => router.push(`/governance/documents/studio/${r.session_id}`),
     onError: (e) => toast({ title: 'Could not open it', message: problemOf(e), type: 'error' }),
   });
   return (
@@ -203,13 +205,19 @@ function LibraryDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (s: S
   );
 }
 
-function CompareDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (s: Session, compareWith: LibraryDoc) => void }) {
+function CompareDialog({ onClose, onOpen }: { onClose: () => void; onOpen: (sessionId: number, compareWith: LibraryDoc) => void }) {
   const { toast } = useToast();
   const [a, setA] = useState<LibraryDoc | null>(null);
   const [b, setB] = useState<LibraryDoc | null>(null);
   const go = useMutation({
-    mutationFn: async () => studioApi.createSession({ kind: 'library', document_id: a!.id }),
-    onSuccess: (s) => onOpen(s, b!),
+    // in the person's own draft of the first document when they may change it; otherwise a session to read and compare in
+    mutationFn: async () => {
+      try { return (await documentApi.draft(a!.id)).session_id; } catch (e: any) {
+        if (e?.response?.status !== 403) throw e;
+        return (await studioApi.createSession({ kind: 'library', document_id: a!.id })).id;
+      }
+    },
+    onSuccess: (sid) => onOpen(sid, b!),
     onError: (e) => toast({ title: 'Could not compare them', message: problemOf(e), type: 'error' }),
   });
   return (
@@ -372,8 +380,8 @@ export default function StudioHomePage() {
 
       {dialog === 'new' && <NewDocumentDialog onClose={close} onOpen={open} prefill={prefill} />}
       {dialog === 'upload' && <UploadDialog onClose={close} onOpen={open} maxMb={status.data.max_upload_mb ?? 30} />}
-      {dialog === 'library' && <LibraryDialog onClose={close} onOpen={open} />}
-      {dialog === 'compare' && <CompareDialog onClose={close} onOpen={(s, other) => router.push(`/governance/documents/studio/${s.id}?compare=${other.id}&title=${encodeURIComponent(other.title)}`)} />}
+      {dialog === 'library' && <LibraryDialog onClose={close} />}
+      {dialog === 'compare' && <CompareDialog onClose={close} onOpen={(sid, other) => router.push(`/governance/documents/studio/${sid}?compare=${other.id}&title=${encodeURIComponent(other.title)}`)} />}
     </div>
   );
 }

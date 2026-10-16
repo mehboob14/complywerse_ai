@@ -14,6 +14,8 @@ export default function GovernanceLayout({
   const pathname = usePathname();
   // A document open in the AI Studio fills the whole page itself (it cancels the page padding), so it gets no padding here
   if (/^\/governance\/documents\/studio\/[^/]+/.test(pathname ?? '')) return <div className="text-slate-900">{children}</div>;
+  // a document's page: the AI Studio view fills it (and the classic page brings its own padding, [id]/_LegacyDocumentPage)
+  if (/^\/governance\/documents\/\d+$/.test(pathname ?? '')) return <div className="text-slate-900">{children}</div>;
   return (
     // cancels main's padding exactly (14px, 16px from lg in compact density); -m-4/-m-5 overhung it by 2-4px and gave a scrollbar
     <div className="-m-[14px] lg:-m-4 text-slate-900">

@@ -7,6 +7,7 @@ import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2, Search }
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioApi, type ExportNote, type ExportOptions, type Session } from '@/lib/studio/api';
+import { governanceApi } from '@/lib/api';
 import AssetImage from './AssetImage';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -109,12 +110,17 @@ export function ExportDialog({ session, onClose, flush }: { session: Session; on
 
 // ── move to the library ──────────────────────────────────────────────────────
 const CLASSIFICATIONS = ['public', 'internal', 'confidential', 'restricted'];
+const REVIEW_MONTHS: Record<string, number> = { 'Every 6 months': 6, 'Every year': 12, 'Every two years': 24, 'Every three years': 36 };   // setup.REVIEW_CYCLES
 
 export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { session: Session; onClose: () => void; flush: () => Promise<void>; onDone: (docId: number) => void }) {
   const { toast } = useToast();
   const [title, setTitle] = useState(session.title);
   const [docType, setDocType] = useState(session.doc_type === 'other' ? 'policy' : session.doc_type);
-  const [classification, setClassification] = useState('internal');
+  // what the setup chose, so the library document starts as the person set it up
+  const [classification, setClassification] = useState(() => {
+    const chosen = String(session.instructions.classification ?? '').toLowerCase();
+    return (CLASSIFICATIONS as readonly string[]).includes(chosen) ? chosen : 'internal';
+  });
   const [description, setDescription] = useState('');
   const [parent, setParent] = useState<number | null>(null);
   const [q, setQ] = useState('');
@@ -122,7 +128,14 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   const docs = useQuery({ queryKey: ['studio', 'documents', q], queryFn: () => studioApi.documents(q, 10), staleTime: 30_000 });
   const fws = useQuery({ queryKey: ['studio', 'frameworks'], queryFn: studioApi.frameworks, staleTime: 120_000 });
   const move = useMutation({
-    mutationFn: async () => { await flush(); return studioApi.moveToLibrary(session.id, { title, doc_type: docType, classification, description: description || undefined, parent_document_id: parent, framework_ids: frameworks }); },
+    mutationFn: async () => {
+      await flush();
+      const r = await studioApi.moveToLibrary(session.id, { title, doc_type: docType, classification, description: description || undefined, parent_document_id: parent, framework_ids: frameworks });
+      // ponytail: the review cycle chosen in the setup is set on the new document here; move_to_library could take it itself
+      const months = REVIEW_MONTHS[String(session.instructions.review_cycle ?? '')];
+      if (months) await governanceApi.updateDocument(r.document_id, { review_cycle_months: months } as never).catch(() => undefined);
+      return r;
+    },
     onSuccess: (r) => { toast({ title: 'Moved to the document library', message: `${r.title} is a draft, version ${r.version}.`, type: 'success' }); onDone(r.document_id); },
     onError: (e) => toast({ title: 'Could not move it', message: problemOf(e), type: 'error' }),
   });

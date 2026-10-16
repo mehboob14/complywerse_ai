@@ -17,8 +17,10 @@ import { InitialsAvatar } from '../_workspace/lib';
 
 const MUTED = 'text-[#586472]';
 
-export default function TrackedChanges({ documentId, status, initial, onChanged }: {
+export default function TrackedChanges({ documentId, status, initial, onChanged, canTakeBack = true }: {
   documentId: number;
+  /** people who may not change the document see the changes but cannot take one back */
+  canTakeBack?: boolean;
   /** the document's status: an approved or published document goes back to review when a change is taken back */
   status: string;
   /** start from this version (and show the changes up to `to`, a version, instead of up to the document as it is now) */
@@ -146,7 +148,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged 
         {redline.isError && <p className="text-sm text-rose-700" role="alert">{problemOf(redline.error, 'These versions could not be compared.')}</p>}
         {data && (
           <RedlineView rows={data.rows} empty="Nothing changed since that version."
-            changes={{ hunks: data.hunks, canRevert: data.can_revert, whyNot: data.why_not, busyId: takeBack.isPending ? asking?.id ?? null : null, onRevert: (h) => setAsking(h) }} />
+            changes={{ hunks: data.hunks, canRevert: data.can_revert && canTakeBack, whyNot: canTakeBack ? data.why_not : null, busyId: takeBack.isPending ? asking?.id ?? null : null, onRevert: (h) => setAsking(h) }} />
         )}
       </div>
     </div>

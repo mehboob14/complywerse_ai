@@ -89,13 +89,17 @@ function Stages({ status, signoff, acks }: { status: string; signoff?: Signoff; 
 }
 
 // ── the person's own acknowledgement ─────────────────────────────────────────
-function AckAction({ base, row, onDone }: { base: string; row: Row; onDone: () => void }) {
+export function AckAction({ base, row, onDone, open: startOpen = false, version, onCancel }: {
+  base: string; row: Row; onDone: () => void; open?: boolean; version?: string;
+  /** a popup that opened it closes on Cancel */
+  onCancel?: () => void;
+}) {
   const { toast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(startOpen);
   const [comment, setComment] = useState('');
   const [signature, setSignature] = useState<string | null>(null);
   const acknowledge = useMutation({
-    mutationFn: async () => (await apiClient.post(`${base}/acknowledge`, { comment: comment.trim() || null, signature_image: signature })).data,
+    mutationFn: async () => (await apiClient.post(`${base}/acknowledge`, { comment: comment.trim() || null, signature_image: signature, version })).data,
     onSuccess: () => { setOpen(false); setComment(''); setSignature(null); onDone(); toast({ type: 'success', title: 'Acknowledged', message: 'Your acknowledgement was recorded.' }); },
     onError: (e: any) => toast({ type: 'error', title: 'Not acknowledged', message: e?.response?.data?.detail || 'Could not record the acknowledgement.' }),
   });
@@ -105,7 +109,7 @@ function AckAction({ base, row, onDone }: { base: string; row: Row; onDone: () =
         <span className="rounded-full bg-primary-50 p-2"><FileCheck2 className="h-5 w-5 text-primary-700" /></span>
         <div className="min-w-[14rem] flex-1">
           <h3 className="text-sm font-semibold text-gray-900">Please read and acknowledge this document{row.due_date ? ` by ${day(row.due_date)}` : ''}</h3>
-          <p className="text-xs text-gray-600">Read it in the Document Viewer. Acknowledging records that you have read it and will follow it.</p>
+          <p className="text-xs text-gray-600">Read it first. Acknowledging records that you have read it and will follow it.</p>
         </div>
         {!open && (
           <button type="button" onClick={() => setOpen(true)} className="rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700">Acknowledge</button>
@@ -124,7 +128,7 @@ function AckAction({ base, row, onDone }: { base: string; row: Row; onDone: () =
               className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
               {acknowledge.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} I have read it and acknowledge it
             </button>
-            <button type="button" onClick={() => setOpen(false)} className="rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
+            <button type="button" onClick={() => (onCancel ? onCancel() : setOpen(false))} className="rounded-lg px-4 py-2 text-sm text-gray-700 hover:bg-gray-100">Cancel</button>
           </div>
         </div>
       )}
@@ -188,7 +192,7 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
 // ── acknowledgements ─────────────────────────────────────────────────────────
 type Filter = 'waiting' | 'overdue' | 'done' | 'all';
 
-function Acknowledgements({ data, meId, base }: { data: Lifecycle; meId?: number; base: string }) {
+function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecycle; meId?: number; base: string; canRemind?: boolean }) {
   const { toast } = useToast();
   const acks = data.acknowledgements;
   const [filter, setFilter] = useState<Filter>(acks.pending > 0 ? 'waiting' : 'all');
@@ -210,7 +214,7 @@ function Acknowledgements({ data, meId, base }: { data: Lifecycle; meId?: number
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-200 px-4 py-3">
         <h3 className="text-sm font-semibold text-gray-900">Acknowledgements</h3>
         {acks.total > 0 && <span className="text-xs text-gray-600">{acks.done} of {acks.total} people ({acks.percent}%)</span>}
-        {acks.pending > 0 && (
+        {acks.pending > 0 && canRemind && (
           <button type="button" onClick={() => remind.mutate()} disabled={remind.isPending}
             className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-1 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-50">
             {remind.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Bell className="h-3.5 w-3.5" />} Remind everyone waiting
@@ -303,7 +307,7 @@ function Timeline({ events }: { events: Lifecycle['timeline'] }) {
 }
 
 // ── due dates and escalation ─────────────────────────────────────────────────
-function SettingsCard() {
+export function SettingsCard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
@@ -357,7 +361,15 @@ function SettingsCard() {
 }
 
 // ── the tab ──────────────────────────────────────────────────────────────────
-export default function LifecycleTab({ documentId, doc }: { documentId: number; doc: any }) {
+export default function LifecycleTab({ documentId, doc, canEdit = true, settings = true, ownSteps = true }: {
+  documentId: number; doc: any;
+  /** who may change the document: participants, Send and Remind */
+  canEdit?: boolean;
+  /** the organisation-wide due-date settings (the AI Studio's view keeps them behind its ⋯ menu) */
+  settings?: boolean;
+  /** the person's own sign / acknowledge step (the AI Studio's view asks for those in its own popups) */
+  ownSteps?: boolean;
+}) {
   const queryClient = useQueryClient();
   const base = `/governance/documents/${documentId}/lifecycle`;
   const { data, isLoading } = useQuery<Lifecycle>({
@@ -395,14 +407,14 @@ export default function LifecycleTab({ documentId, doc }: { documentId: number; 
         )}
       </section>
 
-      <SignoffAction documentId={documentId} due={mySign?.due_date} />
-      {myAck && <AckAction base={base} row={myAck} onDone={refresh} />}
+      {ownSteps && <SignoffAction documentId={documentId} due={mySign?.due_date} />}
+      {ownSteps && myAck && <AckAction base={base} row={myAck} onDone={refresh} version={data.document.version} />}
 
       <ReviewAndApproval rows={data.approvals} signoff={signoff} meId={meId} />
-      <SignoffParticipants documentId={documentId} doc={doc} />
-      <Acknowledgements data={data} meId={meId} base={base} />
+      <SignoffParticipants documentId={documentId} doc={doc} readOnly={!canEdit} />
+      <Acknowledgements data={data} meId={meId} base={base} canRemind={canEdit} />
       <Timeline events={data.timeline} />
-      <SettingsCard />
+      {settings && <SettingsCard />}
 
       <section className="rounded-xl border border-gray-200 bg-white p-4">
         <h3 className="mb-1 text-sm font-semibold text-gray-900">Discussion</h3>

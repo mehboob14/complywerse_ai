@@ -229,7 +229,11 @@ export function MultiSelectDropdown({
         ref={triggerRef}
         type="button"
         onClick={() => { if (!disabled) setIsOpen((current) => !current); }}
+        onKeyDown={(event) => {
+          if (event.key === 'Escape' && isOpen) { event.preventDefault(); event.stopPropagation(); setIsOpen(false); setQuery(''); }
+        }}
         disabled={disabled}
+        aria-label={triggerVariant === 'input' ? `${title}: ${triggerLabel}` : undefined}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={clsx(
@@ -272,6 +276,10 @@ export function MultiSelectDropdown({
       {isOpen && dropdownStyle && createPortal(
         <div
           ref={dropdownRef}
+          onKeyDown={(event) => {
+            // Escape closes the list, not a popup the picker is in
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setIsOpen(false); setQuery(''); triggerRef.current?.focus(); }
+          }}
           className={clsx(
             'fixed z-[9999] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl',
             'animate-fade-in',

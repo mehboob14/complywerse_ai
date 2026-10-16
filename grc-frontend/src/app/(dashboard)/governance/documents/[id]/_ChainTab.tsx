@@ -12,6 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
   ListTree, Loader2, Send, ShieldCheck, Sparkles, Table2, Users, XCircle, type LucideIcon,
+  RotateCcw,
 } from 'lucide-react';
 import { documentChainApi, ORIGIN_LABEL, type ChainEvent, type ChainItem, type ChainVersion, type ExportFormat } from '@/lib/documentChain';
 import { problemOf, saveBlob, type Segment } from '@/lib/studio/api';
@@ -122,8 +123,10 @@ function ItemCard({ item, version }: { item: ChainItem; version: string }) {
   );
 }
 
-function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, downloading }: {
+function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, downloading, onRestore }: {
   v: ChainVersion; isFirst: boolean; current: boolean; open: boolean; onToggle: () => void; onShow: () => void; onDownload: () => void; downloading: boolean;
+  /** make this version the document again, as a new version (editors only) */
+  onRestore?: () => void;
 }) {
   const look = originLook(isFirst && v.origin === 'initial' ? 'initial' : v.origin);
   const Icon = look.icon;
@@ -158,6 +161,12 @@ function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, 
             className="inline-flex items-center gap-1 rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-semibold text-[#334155] hover:border-primary-600 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40">
             <GitCompare className="h-3.5 w-3.5" /> Show in the document
           </button>
+          {onRestore && !current && (
+            <button type="button" onClick={onRestore} title={`Make version ${v.number} the document again, as a new version`}
+              className="inline-flex items-center gap-1 rounded-lg border border-amber-300 bg-white px-2 py-1 text-[11px] font-semibold text-amber-800 hover:bg-amber-50">
+              <RotateCcw className="h-3.5 w-3.5" /> Restore
+            </button>
+          )}
         </div>
       </div>
       {quote && <p className="mx-4 mb-2.5 border-l-2 border-[#cbd5e1] pl-3 text-[13px] text-[#475569]">{quote}</p>}
@@ -290,8 +299,10 @@ function ChangesTable({ versions }: { versions: ChainVersion[] }) {
   );
 }
 
-export default function ChainTab({ documentId, currentVersion, onShowInDocument }: {
+export default function ChainTab({ documentId, currentVersion, onShowInDocument, onRestore }: {
   documentId: number;
+  /** editors: make a version the document again (asks first) */
+  onRestore?: (v: { id: number; number: string }) => void;
   currentVersion?: string | null;
   /** open the Document Viewer with the changes of one version marked (from the version before it, to it) */
   onShowInDocument: (range: { from: number; to: number }) => void;
@@ -449,7 +460,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument 
               <li key={`v${v.id}`} className="relative pl-12">
                 <span className={`absolute left-0 top-3 inline-flex h-10 w-10 items-center justify-center rounded-full ring-1 ring-inset shadow-card ${look.node}`} aria-hidden><Icon className="h-4 w-4" /></span>
                 <VersionCard v={v} isFirst={isFirst} current={v.number === latest} open={open.has(v.id)} onToggle={() => toggle(v.id)}
-                  downloading={fetching === v.id} onDownload={() => downloadVersion(v)}
+                  downloading={fetching === v.id} onDownload={() => downloadVersion(v)} onRestore={onRestore ? () => onRestore({ id: v.id, number: v.number }) : undefined}
                   onShow={() => {
                     const idx = oldestFirst.findIndex((x) => x.id === v.id);
                     const before = idx > 0 ? oldestFirst[idx - 1] : null;

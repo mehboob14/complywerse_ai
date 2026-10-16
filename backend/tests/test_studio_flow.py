@@ -118,7 +118,7 @@ def token_of(world, kind="ORG"):
 
 
 # ── enabling ─────────────────────────────────────────────────────────────────
-def test_only_the_configured_tenants_have_the_studio(world):
+def test_only_the_configured_tenants_have_the_studio(world, monkeypatch):
     assert world.http.get(world.api("/status")).json() == {"enabled": True, "ai_configured": True, "doc_types": [
         "policy", "standard", "procedure", "guideline", "charter", "other"], "max_upload_mb": 30, "is_admin": True}
     world.me["id"] = 2
@@ -126,6 +126,8 @@ def test_only_the_configured_tenants_have_the_studio(world):
     world.me["id"] = 1
     world.db.query(m.Tenant).one().slug = "acme"
     world.db.commit()
+    assert world.http.get(world.api("/status")).json()["enabled"] is True          # every organisation by default
+    monkeypatch.setattr("grc.config.DOCUMENT_STUDIO_TENANTS", frozenset({"cfsb"}))  # limited to named ones
     assert world.http.get(world.api("/status")).json() == {"enabled": False}
     assert world.http.get(world.api("/sessions")).status_code == 404
 

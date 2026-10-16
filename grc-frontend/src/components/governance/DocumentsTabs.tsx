@@ -24,13 +24,15 @@ export default function DocumentsTabs() {
   const pathname = usePathname() ?? '';
   const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
   const tabs = studio.data?.enabled ? [DOCUMENTS, STUDIO, ATTESTATION, EXCEPTIONS] : [DOCUMENTS, ATTESTATION, EXCEPTIONS];
+  // a document opens in the AI Studio where it is on, so that tab is the open one there
+  const docInStudio = !!studio.data?.enabled && /^\/governance\/documents\/\d+$/.test(pathname);
   return (
     <nav aria-label="Documents" className="-mb-px flex min-w-0 self-stretch overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       {tabs.map((t) => {
         // Documents only for itself and a document's own pages, not for the attestation or AI Studio pages under it
         const active = t === DOCUMENTS
-          ? pathname === t.href || (pathname.startsWith(`${t.href}/`) && !pathname.startsWith(ATTESTATION.href) && !pathname.startsWith(STUDIO.href))
-          : pathname.startsWith(t.href);
+          ? pathname === t.href || (!docInStudio && pathname.startsWith(`${t.href}/`) && !pathname.startsWith(ATTESTATION.href) && !pathname.startsWith(STUDIO.href))
+          : t === STUDIO ? docInStudio || pathname.startsWith(t.href) : pathname.startsWith(t.href);
         return (
           <Link key={t.href} href={t.href} title={t.name} aria-label={t.name} aria-current={active ? 'page' : undefined}
             className={clsx('inline-flex items-center gap-1.5 whitespace-nowrap border-b-2 px-3 text-sm font-medium transition-colors',

@@ -162,7 +162,9 @@ export function ComboBoxInput({
       } else {
         commitAndClose();
       }
-    } else if (e.key === 'Escape') {
+    } else if (e.key === 'Escape' && open) {
+      e.preventDefault();                 // the list closes, not a popup the field is in
+      e.stopPropagation();
       setOpen(false);
       setQuery('');
     }
@@ -200,6 +202,10 @@ export function ComboBoxInput({
             }
           }}
           onKeyDown={onInputKeyDown}
+          onBlur={(e) => {
+            // leaving the field (Tab) keeps what was typed, as a click outside does
+            if (!containerRef.current?.contains(e.relatedTarget as Node | null)) commitAndClose();
+          }}
           className="flex-1 min-w-0 bg-transparent text-slate-900 focus:outline-none"
         />
         {value && !disabled && (
