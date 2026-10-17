@@ -148,3 +148,41 @@ def test_a_request_to_format_offers_a_tidy_that_becomes_the_next_version_and_can
     world.respond(lambda body: reply(answer([], "Nothing to change.")))
     sent = world.http.post(world.api(f"/sessions/{plain['id']}/messages"), json={"text": "Is the scope clear?"}).json()
     assert not world.http.get(world.api(f"/sessions/{plain['id']}/messages/{sent['id']}")).json()["proposal"]["ops"]   # no tidy unasked
+
+
+def test_tracked_changes_count_from_the_original_until_published_then_from_the_version_in_force(world):
+    """The AI Studio's Tracked changes (GET .../tracked). Every save to the library moves where the session's own diff starts, so
+    after a reload it showed nothing (the user, 2026-10-17: "it shows me empty even though the document is 1.2"). It counts from the
+    library instead: the original until the document is published, then the version in force; with nothing since, what that
+    version itself changed."""
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 11}).json()
+    sid = s["id"]
+    first = world.http.get(world.api(f"/sessions/{sid}/tracked")).json()
+    assert first["hunks"] == [] and first["from_version_id"] is None              # no versions yet: since where the session started
+
+    _accept(world, sid, _ask(world, sid, [change("replace", "B3", markdown="Accounts shall be reviewed monthly.", reason="monthly")]), "minor")
+    _accept(world, sid, _ask(world, sid, [change("insert", "B3", markdown="## 2. Exceptions\n\nExceptions need the CISO's approval.",
+                                                 reason="exceptions")]), "major")
+    assert world.http.get(world.api(f"/sessions/{sid}/diff?from=0")).json()["hunks"] == []      # what it showed: nothing
+    revisions = world.db.query(m.StudioRevision).filter_by(session_id=sid).count()
+    t = world.http.get(world.api(f"/sessions/{sid}/tracked")).json()
+    original = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=11, version_number="1.0").one()
+    assert t["label"] == "Changes since v1.0 (the original)" and t["from_version_id"] == original.id and t["can_revert"]
+    assert len(t["hunks"]) == 2 and all(h["by"] and h["by"]["origin"] == "ai" for h in t["hunks"])    # who made each
+    assert world.db.query(m.StudioRevision).filter_by(session_id=sid).count() == revisions           # a GET writes nothing
+
+    doc = world.db.get(m.GovernanceDocument, 11)
+    doc.status = "published"                                                       # 2.0 in force, nothing changed since
+    world.db.commit()
+    t = world.http.get(world.api(f"/sessions/{sid}/tracked")).json()
+    assert t["label"] == "What v2.0 changed (since v1.0)" and len(t["hunks"]) == 2
+
+    # one taken back, counted from that version: a new revision in the studio, not in the library yet
+    monthly = next(h for h in t["hunks"] if "monthly" in h["after_text"])
+    out = world.http.post(world.api(f"/sessions/{sid}/changes/revert"), json={"hunks": [monthly["id"]], "hash": t["hash"], "version_id": t["from_version_id"]})
+    assert out.status_code == 200, out.text
+    assert "reviewed monthly" not in out.json()["content"] and "Exceptions need" in out.json()["content"]
+    t = world.http.get(world.api(f"/sessions/{sid}/tracked")).json()
+    assert t["label"] == "Changes since v2.0, the version in force" and len(t["hunks"]) == 1
+    wrong = world.http.post(world.api(f"/sessions/{sid}/changes/revert"), json={"hunks": [t["hunks"][0]["id"]], "hash": t["hash"], "version_id": 999999})
+    assert wrong.status_code == 400                                                 # not a version of this document

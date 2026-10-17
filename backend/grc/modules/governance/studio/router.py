@@ -654,6 +654,16 @@ def list_revisions(session_id: int, db: Session = Depends(get_db), user: GRCUser
     return {"items": service.revisions(db, s), "base_label": s.base_label}
 
 
+@router.get("/sessions/{session_id}/tracked", dependencies=[Depends(require_studio)])
+def get_tracked(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    """Tracked changes: since the version in force, or the original when the document was never published (``service.tracked``)."""
+    s = _session(db, session_id, user)
+    try:
+        return service.tracked(db, s, user)
+    except service.StudioError as exc:
+        raise _problem(exc)
+
+
 @router.get("/sessions/{session_id}/diff", dependencies=[Depends(require_studio)])
 def get_diff(session_id: int, frm: int = Query(0, alias="from"), to: Optional[int] = None, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """The redline between two revisions; ``from=0`` is the baseline the session started from, ``to`` defaults to the latest."""
@@ -668,6 +678,7 @@ class RevertChangesIn(BaseModel):
     frm: int = 0                                   # the revision the changes are counted from (0 = where the session started)
     hunks: List[int]                               # the changes to take back, by the ids the diff gave them
     hash: Optional[str] = None                     # the diff's fingerprint of the document: a change made meanwhile is refused
+    version_id: Optional[int] = None               # counted from this library version instead (Tracked changes, GET …/tracked)
 
 
 @router.post("/sessions/{session_id}/changes/revert", dependencies=[Depends(require_studio)])
@@ -675,7 +686,7 @@ def revert_changes(session_id: int, body: RevertChangesIn, db: Session = Depends
     """Take chosen changes since a revision back out of the document as it is now (a new revision)."""
     s = _session(db, session_id, user)
     try:
-        return service.revert_changes(db, s, body.frm, body.hunks, user, content_hash=body.hash)
+        return service.revert_changes(db, s, body.frm, body.hunks, user, content_hash=body.hash, version_id=body.version_id)
     except service.StudioError as exc:
         db.rollback()
         raise _problem(exc)

@@ -359,6 +359,48 @@ def diff(db, s, frm: int, to: int) -> Dict[str, Any]:
             "can_revert": to == s.revision_no and frm != to}
 
 
+def tracked(db, s, user) -> Dict[str, Any]:
+    """Tracked changes: the document as it is here against the version everyone else reads (the version in force), or the version it
+    started at when it was never published; when nothing changed since then, what that version itself changed (since the version
+    before it). The shape of ``diff``, with ``label`` and ``from_version_id`` (what a take back counts from, ``revert_changes``).
+    Not in the library, no versions, or someone who may not edit the document: since where this session started."""
+    from ....models import GovernanceDocument, GovernanceDocumentVersion as V
+    from .. import change_chain as C
+    from ..permissions import can_edit
+
+    doc = db.get(GovernanceDocument, s.document_id) if s.document_id else None
+    rows = ([r for r in db.query(V).filter(V.document_id == doc.id).order_by(V.id).all() if r.status != "reverted"]
+            if doc is not None and can_edit(db, user, doc) else [])
+    in_force = getattr(doc, "last_published_version", None) if doc is not None else None
+    base = (next((r for r in reversed(rows) if r.version_number == in_force), None) if in_force else None) or (rows[0] if rows else None)
+    text = C.version_text(base) if base is not None else None
+    if text is None:
+        start = 1 if s.revision_no >= 1 else 0        # revision 1 is where the session started; 0 moves with every save to the library
+        out = diff(db, s, start, s.revision_no)
+        return {**out, "label": "Changes since you opened it" if start else "Changes since the start", "from_version_id": None}
+
+    def against(version, earlier: str) -> Dict[str, Any]:
+        out = C.compare(earlier, s.content)
+        later = [r for r in rows if r.id > version.id]
+        origins = [o for r in later for o in C.origins_of(r.change_set if isinstance(r.change_set, dict) else None)] + session_origins(db, s)
+        for h in out["hunks"]:
+            h["by"] = C.attribute(h, origins)
+        return {"from": None, "to": s.revision_no, "rows": out["rows"], "stats": out["stats"], "hunks": out["hunks"], "hash": out["hash"],
+                "can_revert": True, "from_version_id": version.id}
+
+    out = against(base, text)
+    if not out["hunks"]:            # nothing since: what that version itself changed
+        before = next((r for r in reversed(rows) if r.id < base.id and r.change_type != "signoff"), None)
+        earlier = C.version_text(before) if before is not None else None
+        if earlier is not None:
+            again = against(before, earlier)
+            if again["hunks"]:
+                return {**again, "label": f"What v{base.version_number} changed (since v{before.version_number})"}
+    label = f"Changes since v{base.version_number}" + (", the version in force" if in_force and base.version_number == in_force
+                                                      else " (the original)" if base is rows[0] else "")
+    return {**out, "label": label}
+
+
 def restore(db, s, number: int, user):
     rev = revision_content(db, s, number)
     out = add_revision(db, s, rev, author_type="restore", user_id=user.id, summary=f"Restored revision {number}")
@@ -639,16 +681,26 @@ def session_origins(db, s, since_revision: int = 0) -> List[Dict[str, Any]]:
     return out
 
 
-def revert_changes(db, s, frm: int, hunk_ids: Sequence[int], user, *, content_hash: Optional[str] = None) -> Dict[str, Any]:
-    """Take chosen changes since revision ``frm`` back out of the document as it is now (a new revision)."""
+def revert_changes(db, s, frm: int, hunk_ids: Sequence[int], user, *, content_hash: Optional[str] = None,
+                   version_id: Optional[int] = None) -> Dict[str, Any]:
+    """Take chosen changes since revision ``frm`` (or since the library version ``version_id``, as ``tracked`` counts them) back out
+    of the document as it is now (a new revision)."""
+    from ....models import GovernanceDocumentVersion
     from .. import change_chain as C
 
-    if frm == s.revision_no:
+    if version_id is None and frm == s.revision_no:
         raise StudioError("That is the document as it is now: there is nothing to take back.")
     if content_hash and content_hash != C.content_hash(s.content):
         raise Conflict("The document changed while you were looking at it. Open the changes again.")
-    label = "the start" if frm == 0 else f"version {frm}"
-    earlier = revision_content(db, s, frm)
+    if version_id is not None:
+        row = db.get(GovernanceDocumentVersion, version_id)
+        earlier = C.version_text(row) if row is not None and s.document_id and row.document_id == s.document_id else None
+        if earlier is None:
+            raise StudioError("That version of the document cannot be read.")
+        label = f"v{row.version_number}"
+    else:
+        label = "the start" if frm == 0 else f"version {frm}"
+        earlier = revision_content(db, s, frm)
     try:
         new_md = C.revert(earlier, s.content, hunk_ids)
     except ValueError as exc:
