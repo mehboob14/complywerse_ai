@@ -26,15 +26,11 @@ const ALIASES: Record<string, DocView> = {
   chain: 'versions',
 };
 
-/** The studio view is on for this tenant and the URL did not ask for the classic page (?classic=1). */
-export function inStudio(enabled: boolean | undefined, params: { get(key: string): string | null }): boolean {
-  // Statements and Gap Analysis stay on the classic page (the user's decision): links to them keep opening it
-  const tab = (params.get('tab') ?? '').trim().toLowerCase();
-  return enabled === true && params.get('classic') !== '1' && !CLASSIC_TABS.includes(tab);
+/** The studio view is on for this tenant. There is no way to the classic page (the user, 2026-10-17): links to statements or gap
+ * analysis open the Mappings view (`viewOf`), and ?classic=1 is ignored. */
+export function inStudio(enabled: boolean | undefined): boolean {
+  return enabled === true;
 }
-
-/** The tabs only the classic page has. */
-export const CLASSIC_TABS = ['statements', 'gap-analysis', 'gaps'];
 
 export function viewOf(tab: string | null | undefined): DocView {
   const key = (tab ?? '').trim().toLowerCase();

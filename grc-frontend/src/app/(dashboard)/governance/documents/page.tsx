@@ -18,7 +18,6 @@ import {
   Plus,
   X,
   Edit2,
-  Trash2,
   Eye,
   ChevronLeft,
   ChevronRight,
@@ -219,7 +218,6 @@ export default function GovernanceDocumentsPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('governance:policies:create');
   const canEdit = hasPermission('governance:policies:edit');
-  const canDelete = hasPermission('governance:policies:delete');
   // Current user's numeric id — feeds the workspace's "My documents" scope.
   // /auth/me returns { ..., user: { id } }; degrades gracefully to null.
   const { data: currentUserId } = useQuery({
@@ -474,13 +472,6 @@ export default function GovernanceDocumentsPage() {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: (id: number) => governanceApi.deleteDocument(id),
-    onSuccess: () => {
-      invalidateDocumentQueries();
-    },
-  });
-
   const uploadToDocumentMutation = useMutation({
     mutationFn: ({ documentId, formData }: { documentId: number; formData: FormData }) => 
       governanceApi.uploadFileToDocument(documentId, formData),
@@ -708,12 +699,6 @@ export default function GovernanceDocumentsPage() {
       document.body.removeChild(a);
     } catch {
       toast({ type: 'error', title: 'Download Failed', message: 'Could not download this document.' });
-    }
-  };
-
-  const handleDelete = (doc: DocumentItem) => {
-    if (confirm(`Are you sure you want to delete "${doc.title}"?`)) {
-      deleteMutation.mutate(doc.id);
     }
   };
 

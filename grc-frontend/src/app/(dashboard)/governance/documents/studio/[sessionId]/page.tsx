@@ -12,12 +12,12 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Library, ListChecks, Loader2,
+  AlertTriangle, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Info, Library, ListChecks, Loader2,
   MessageSquare, Pencil, Save, Settings2, Sparkles, Square, X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
-import { DOC_TYPE_LABEL, isConflict, problemOf, studioApi, type AnswerItem, type Attachment, type Issue, type Message, type Session } from '@/lib/studio/api';
+import { isConflict, problemOf, studioApi, type AnswerItem, type Attachment, type Issue, type Message, type Session } from '@/lib/studio/api';
 import { countPlaceholders, countWords, num, plural } from '@/lib/studio/text';
 import StudioEditor, { type EditorMode, type StudioEditorHandle } from '../_components/StudioEditor';
 import ChatPanel from '../_components/ChatPanel';
@@ -27,14 +27,14 @@ import InstructionsPanel from '../_components/InstructionsPanel';
 import ChecksPanel from '../_components/ChecksPanel';
 import HistoryPanel from '../_components/HistoryPanel';
 import ChangesView, { type CompareSpec } from '../_components/ChangesView';
+import type { Focus } from '../_components/RedlineView';
 import FileView from '../_components/FileView';
-import { ExportDialog, MoveToLibraryDialog, SaveTemplateDialog, SaveToDocumentDialog } from '../_components/dialogs';
+import { ExportDialog, MoveToLibraryDialog, SaveTemplateDialog, SaveToDocumentDialog, StudioDetailsDialog } from '../_components/dialogs';
 import type { DocMark } from '../_components/editorExtensions';
-import { titleCase, withCurrent } from '../../_DetailsFields';
 
 type SideTab = 'chat' | 'references' | 'instructions' | 'checks' | 'history';
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
-type Dialog = 'export' | 'move' | 'save' | 'template' | null;
+type Dialog = 'export' | 'move' | 'save' | 'template' | 'details' | null;
 
 const TABS: { key: SideTab; label: string; icon: typeof MessageSquare }[] = [
   { key: 'chat', label: 'Assistant', icon: MessageSquare },
@@ -256,7 +256,6 @@ export default function StudioWorkspacePage() {
         const marked = (r.message.proposal?.ops ?? []).filter((o) => opIds.includes(o.id) && o.status === 'accepted' && o.kind !== 'tidy').length;
         setJustAccepted(marked ? { n: r.accepted, from: r.revision - 1, to: r.revision } : null);
         if (v?.saved) {
-          setTrackFrom((t) => t || r.revision - 1);
           patchSessionCache({ unsaved_in_library: false });
           onSessionChanged();                                                 // its label names the new version
         }
@@ -297,8 +296,6 @@ export default function StudioWorkspacePage() {
   }, [session?.id, session?.source?.in_place]);
   // the changes just accepted, and the revisions they lie between: offered to be seen marked in the document
   const [justAccepted, setJustAccepted] = useState<{ n: number; from: number; to: number } | null>(null);
-  // where Tracked changes starts: the start (0) until an accept saves a library version and so moves the start to its text
-  const [trackFrom, setTrackFrom] = useState(0);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [focusRef, setFocusRef] = useState<string | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -316,10 +313,10 @@ export default function StudioWorkspacePage() {
     setBulk(how);
     try { await (how === 'accept' ? accept(proposal.id, proposalOps) : reject(proposal.id, proposalOps)); } finally { setBulk(null); }
   };
-  /** the document with the changes marked: since the start, or between two revisions (what an accept or one change did) */
-  const showChanges = (range?: { from: number; to: number }) => {
-    setCompare(range ? { type: 'revision', from: range.from, to: range.to, label: `What rev ${range.to} changed` }
-      : { type: 'revision', from: trackFrom, label: trackFrom ? `Changes since rev ${trackFrom}` : session?.base_label ? `Changes since “${session.base_label}”` : 'Changes since the start' });
+  /** the document with the changes marked: Tracked changes (since the version in force, or the original until the document is
+   * published), or between two revisions (what an accept or one change did); `focus`: a card's own change, brought into view */
+  const showChanges = (range?: { from: number; to: number }, focus?: Focus) => {
+    setCompare(range ? { type: 'revision', from: range.from, to: range.to, label: `What rev ${range.to} changed`, focus } : { type: 'tracked', focus });
     setPane('document');
   };
   useEffect(() => {
@@ -327,7 +324,7 @@ export default function StudioWorkspacePage() {
     const t = setTimeout(() => setJustAccepted(null), 20000);
     return () => clearTimeout(t);
   }, [justAccepted]);
-  const tracking = compare?.type === 'revision' && compare.from === trackFrom && compare.to === undefined;
+  const tracking = compare?.type === 'tracked';
 
   useEffect(() => {                                                       // opened from the start page to compare with a document
     const other = Number(search?.get('compare'));
@@ -404,10 +401,6 @@ export default function StudioWorkspacePage() {
     try { const s = await studioApi.patchSession(id, { title }); patchSessionCache({ title: s.title }); }
     catch (e) { toast({ title: 'Could not rename it', message: problemOf(e), type: 'error' }); }
   };
-  const setDocType = async (doc_type: string) => {
-    try { const s = await studioApi.patchSession(id, { doc_type }); patchSessionCache({ doc_type: s.doc_type }); qc.invalidateQueries({ queryKey: ['studio', 'checks', id] }); }
-    catch (e) { toast({ title: 'Could not change the type', message: problemOf(e), type: 'error' }); }
-  };
 
   const words = useMemo(() => countWords(text), [text]);
   const placeholders = useMemo(() => countPlaceholders(text), [text]);
@@ -450,9 +443,11 @@ export default function StudioWorkspacePage() {
           aria-label="Document title"
           className="min-w-[10rem] max-w-[28rem] flex-1 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-[#1f2933] hover:border-[#c5ccd3] focus:border-[#0f766e] focus:bg-white focus:outline-none"
         />
-        <select value={session.doc_type} onChange={(e) => setDocType(e.target.value)} aria-label="Document type" className="rounded-md border border-[#c5ccd3] bg-white px-2 py-1 text-xs text-[#26323d]">
-          {withCurrent(Object.entries(DOC_TYPE_LABEL), session.doc_type, titleCase).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-        </select>
+        <button type="button" onClick={() => setDialog('details')}
+          title={inLibrary ? 'The document’s details: title, type, owner, classification, review cycle and dates, frameworks, description, reviewers and approvers' : 'Its title and type; the other details are asked when it moves to the library'}
+          className="inline-flex items-center gap-1 rounded-md border border-[#c5ccd3] bg-white px-2 py-1 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]">
+          <Info className="h-3.5 w-3.5" /> {maySave ? 'Edit details' : 'Details'}
+        </button>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#586472]" role="status" aria-live="polite">
           <span className={`inline-flex items-center gap-1 font-medium ${saveState === 'saved' ? 'text-[#0a5a38]' : saveState === 'conflict' || saveState === 'error' ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>
             {saveState === 'saving' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : saveState === 'saved' ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertTriangle className="h-3.5 w-3.5" />} {saveLabel}
@@ -489,7 +484,7 @@ export default function StudioWorkspacePage() {
               </button>
             )}
           </div>
-          <button type="button" aria-pressed={tracking} onClick={() => (tracking ? setCompare(null) : showChanges())} title="See every change since the start, marked in the document, and who made it"
+          <button type="button" aria-pressed={tracking} onClick={() => (tracking ? setCompare(null) : showChanges())} title="See every change since the version in force (or the original, until the document is published), marked in the document, and who made each"
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${tracking ? 'border-[#0f4c5c] bg-[#0f4c5c] text-white' : 'border-[#b8c4c8] bg-white text-[#26323d] hover:bg-[#f1f3f5]'}`}>
             <GitCompare className="h-3.5 w-3.5" /> Tracked changes
           </button>
@@ -629,6 +624,8 @@ export default function StudioWorkspacePage() {
       {dialog === 'export' && <ExportDialog session={session} onClose={() => setDialog(null)} flush={flush} />}
       {dialog === 'move' && <MoveToLibraryDialog session={session} onClose={() => setDialog(null)} flush={flush} onDone={() => { setDialog(null); void refreshSession(); }} />}
       {dialog === 'save' && <SaveToDocumentDialog session={session} onClose={() => setDialog(null)} flush={flush} onDone={() => { setDialog(null); void refreshSession(); }} />}
+      {dialog === 'details' && <StudioDetailsDialog session={session} onClose={() => setDialog(null)}
+        onChanged={(p) => { patchSessionCache(p); if (p.doc_type) qc.invalidateQueries({ queryKey: ['studio', 'checks', id] }); }} />}
       {dialog === 'template' && <SaveTemplateDialog session={session} onClose={() => setDialog(null)} getContent={() => (editor.current?.getMarkdown() ?? latest.current)} />}
     </div>
   );

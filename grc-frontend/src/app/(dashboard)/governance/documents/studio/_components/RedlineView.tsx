@@ -5,12 +5,15 @@
  * versions. Used for "what changed since I started", "since revision N", "against another document" and for previewing what
  * accepting the AI's changes would do.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, Undo2 } from 'lucide-react';
 import { shapeOf, type ChainHunk } from '@/lib/documentChain';
 import type { RedlineRow, Segment, Stats } from '@/lib/studio/api';
 import { plural } from '@/lib/studio/text';
+import { focusRows, type Focus } from '@/lib/studio/redlineFocus';
 import Attribution, { originLook } from './ChangeAttribution';
+
+export type { Focus };
 
 function Segments({ segs }: { segs: Segment[] }) {
   return (
@@ -37,7 +40,7 @@ const BAR: Record<string, string> = {
 
 const HEADING = ['', 'text-2xl', 'text-xl', 'text-lg', 'text-base', 'text-base', 'text-sm'];
 
-function Row({ row, number }: { row: RedlineRow; number: number }) {
+function Row({ row, number, focused }: { row: RedlineRow; number: number; focused?: boolean }) {
   const segs: Segment[] = row.segments ?? [];
   let body: React.ReactNode;
   if (row.kind === 'table' && row.table) {
@@ -78,7 +81,8 @@ function Row({ row, number }: { row: RedlineRow; number: number }) {
     body = <div><Segments segs={segs} /></div>;
   }
   return (
-    <div className={`rounded-r px-3 py-1.5 text-[0.9375rem] leading-relaxed text-[#1f2933] ${BAR[row.status]}`}>
+    <div data-focus={focused ? '1' : undefined}
+      className={`rounded-r px-3 py-1.5 text-[0.9375rem] leading-relaxed text-[#1f2933] ${BAR[row.status]} ${focused ? 'relative z-[1] !bg-[#e3f4ef] outline outline-2 outline-offset-2 outline-[#0f766e] shadow-[0_0_0_6px_rgba(15,118,110,0.12)]' : ''}`}>
       {(row.format_only || row.was || row.structure?.length) && (
         <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#8a6100]">
           {row.structure?.length ? row.structure.join(' · ')
@@ -145,8 +149,16 @@ function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChan
   );
 }
 
-export default function RedlineView({ rows, empty = 'Nothing changed.', changes }: { rows: RedlineRow[]; empty?: string; changes?: RedlineChanges }) {
+export default function RedlineView({ rows, empty = 'Nothing changed.', changes, focus }: { rows: RedlineRow[]; empty?: string; changes?: RedlineChanges; focus?: Focus }) {
   const [all, setAll] = useState(false);
+  // the change a card asked to see: highlighted and brought into view, the others around it as they are
+  const focused = useMemo(() => focusRows(rows, focus), [rows, focus]);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!focused.size) return;
+    const t = setTimeout(() => box.current?.querySelector('[data-focus="1"]')?.scrollIntoView({ block: 'center', behavior: 'smooth' }), 80);
+    return () => clearTimeout(t);
+  }, [focused]);
   const changed = useMemo(() => rows.some((r) => r.status !== 'equal'), [rows]);
   // number the ordered items of a list: 1, 2, 3 … restarting after anything else
   const numbered = useMemo(() => {
@@ -177,14 +189,17 @@ export default function RedlineView({ rows, empty = 'Nothing changed.', changes 
       }
       const hunk = changes && row.hunk != null ? byId.get(row.hunk) : undefined;
       if (hunk && (i === 0 || rows[i - 1].hunk !== row.hunk || !shown[i - 1])) out.push(<ChangeHeader key={`h${i}`} hunk={hunk} changes={changes!} />);
-      out.push(<Row key={i} row={row} number={numbered[i]} />);
+      if (focused.has(i) && !focused.has(i - 1)) {
+        out.push(<p key={`fl${i}`} className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-[#0b6b58]">The change you chose</p>);
+      }
+      out.push(<Row key={i} row={row} number={numbered[i]} focused={focused.has(i)} />);
     } else {
       folded += 1;
     }
   });
   if (folded) out.push(<div key="ftail" className="px-3 py-1 text-center text-xs text-[#586472]">… {plural(folded, 'unchanged block')} …</div>);
   return (
-    <div className="space-y-1">
+    <div className="space-y-1" ref={box}>
       <div className="flex justify-end">
         <button type="button" onClick={() => setAll((v) => !v)} className="text-xs font-medium text-[#0b6b58] hover:underline">
           {all ? 'Show only what changed' : 'Show the whole document'}

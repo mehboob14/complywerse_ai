@@ -137,7 +137,9 @@ export type SignoffChoice = { reviewers: Participant[]; approvers: Participant[]
 export const NO_SIGNOFF: SignoffChoice = { reviewers: [], approvers: [] };
 
 /** Who reviews and who approves a document, chosen while it is uploaded or moved into the library. */
-export function ReviewerApproverFields({ value, onChange, tenantId }: { value: SignoffChoice; onChange: (v: SignoffChoice) => void; tenantId?: number }) {
+export function ReviewerApproverFields({ value, onChange, tenantId, note = 'They are asked when the document is sent for review (Submit for review), not before.' }: {
+  value: SignoffChoice; onChange: (v: SignoffChoice) => void; tenantId?: number; note?: string;
+}) {
   const options = useAssigneeOptions(tenantId);
   return (
     <fieldset className="space-y-2">
@@ -146,7 +148,7 @@ export function ReviewerApproverFields({ value, onChange, tenantId }: { value: S
         <AssigneeMultiSelect label="Reviewers" value={value.reviewers} onChange={(reviewers) => onChange({ ...value, reviewers })} options={options} />
         <AssigneeMultiSelect label="Approvers" value={value.approvers} onChange={(approvers) => onChange({ ...value, approvers })} options={options} />
       </div>
-      <p className="text-[11px] text-[#586472]">They are asked when the document is sent for review (Submit for review), not before.</p>
+      <p className="text-[11px] text-[#586472]">{note}</p>
     </fieldset>
   );
 }

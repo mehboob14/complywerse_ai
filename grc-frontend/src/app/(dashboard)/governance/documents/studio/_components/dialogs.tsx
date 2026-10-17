@@ -1,6 +1,6 @@
 'use client';
 
-/** The studio's dialogs: export, move to the library, save into the library document, save as a template. */
+/** The studio's dialogs: export, move to the library, save into the library document, save as a template, the document's details. */
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2 } from 'lucide-react';
@@ -12,6 +12,9 @@ import AssetImage from './AssetImage';
 import { DocumentDetailsFields, useDocumentDetails } from '../../_DetailsFields';
 import { NO_SIGNOFF, ReviewerApproverFields, saveSignoffChoice, type SignoffChoice } from '../../_SignoffControl';
 import { detailsPayload } from '../../_detailsRead';
+import { governanceApi } from '@/lib/api';
+import DetailsDialog from '../../[id]/_DetailsDialog';
+import { titleCase, withCurrent } from '../../_DetailsFields';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -194,6 +197,64 @@ export function SaveToDocumentDialog({ session, onClose, flush, onDone }: { sess
 }
 
 // ── save as a template ───────────────────────────────────────────────────────
+// ── the document's details ──────────────────────────────────────────────────
+/** Edit details: a library document's whole Details (the document page's own dialog, its reviewers and approvers too); a document
+ * not in the library yet has its title and type here, the rest is asked when it moves to the library. */
+export function StudioDetailsDialog({ session, onClose, onChanged }: { session: Session; onClose: () => void; onChanged: (patch: Partial<Session>) => void }) {
+  return session.document_id ? <LibraryDetails session={session} onClose={onClose} onChanged={onChanged} />
+    : <DraftDetails session={session} onClose={onClose} onChanged={onChanged} />;
+}
+
+function LibraryDetails({ session, onClose, onChanged }: { session: Session; onClose: () => void; onChanged: (patch: Partial<Session>) => void }) {
+  const id = session.document_id as number;
+  const docQ = useQuery({ queryKey: ['governance-document', id], queryFn: async () => (await governanceApi.getDocument(id)).data as any });
+  // the studio's own title and type follow the library's
+  const follow = async (patch: Record<string, unknown>) => {
+    const sync = { ...(typeof patch.title === 'string' ? { title: patch.title } : {}), ...(typeof patch.doc_type === 'string' ? { doc_type: patch.doc_type } : {}) };
+    if (!Object.keys(sync).length) return;
+    try {
+      const s = await studioApi.patchSession(session.id, sync);
+      onChanged({ title: s.title, doc_type: s.doc_type });
+    } catch { /* the library has them; the studio shows its own until it is opened again */ }
+  };
+  if (!docQ.data) {
+    return (
+      <AnimatedModal isOpen onClose={onClose} title="Details" size="md">
+        <p className="p-5 text-sm text-[#3f4b58]" role="status">
+          {docQ.isError ? problemOf(docQ.error, 'The details could not be read.') : <><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Reading the details…</>}
+        </p>
+      </AnimatedModal>
+    );
+  }
+  return <DetailsDialog doc={docQ.data} open onClose={onClose} canEdit={session.may_save !== false} onSaved={(p) => void follow(p)} />;
+}
+
+function DraftDetails({ session, onClose, onChanged }: { session: Session; onClose: () => void; onChanged: (patch: Partial<Session>) => void }) {
+  const { toast } = useToast();
+  const [title, setTitle] = useState(session.title);
+  const [docType, setDocType] = useState(session.doc_type);
+  const save = useMutation({
+    mutationFn: () => studioApi.patchSession(session.id, { title: title.trim(), doc_type: docType }),
+    onSuccess: (s) => { onChanged({ title: s.title, doc_type: s.doc_type }); toast({ title: 'Details saved', type: 'success' }); onClose(); },
+    onError: (e) => toast({ title: 'Not saved', message: problemOf(e), type: 'error' }),
+  });
+  const types = withCurrent(Object.entries(DOC_TYPE_LABEL), docType, titleCase);
+  return (
+    <AnimatedModal isOpen onClose={onClose} title="Details" subtitle={session.title} size="md"
+      footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
+        <button type="button" className={primary} disabled={!title.trim() || save.isPending || (title.trim() === session.title && docType === session.doc_type)}
+          onClick={() => save.mutate()}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Save</button></div>}>
+      <div className="space-y-3 p-5">
+        <label className="block"><span className="text-xs font-semibold text-[#26323d]">Title</span><input value={title} onChange={(e) => setTitle(e.target.value)} className={`${input} mt-1`} /></label>
+        <label className="block"><span className="text-xs font-semibold text-[#26323d]">Type</span>
+          <select value={docType} onChange={(e) => setDocType(e.target.value)} className={`${input} mt-1`}>{types.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+        <p className="flex gap-2 rounded-lg bg-[#f1f5fb] px-2.5 py-2 text-xs text-[#33475e]"><Info className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>Its owner, classification, review cycle, dates, description, reviewers and approvers are asked when you move it to the library (Move to the library).</span></p>
+      </div>
+    </AnimatedModal>
+  );
+}
+
 export function SaveTemplateDialog({ session, onClose, getContent }: { session: Session; onClose: () => void; getContent: () => string }) {
   const { toast } = useToast();
   const own = session.template_id?.startsWith('tenant:') ? Number(session.template_id.split(':')[1]) : null;

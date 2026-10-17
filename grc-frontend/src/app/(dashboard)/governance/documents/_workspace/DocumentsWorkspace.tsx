@@ -15,7 +15,6 @@ import { FolderTree, Table2, KanbanSquare, Plus, Sparkles, LayoutTemplate, Searc
 import { MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
 import { assetsApi, governanceApi } from '@/lib/api';
 import SignDialog from '@/components/governance/SignDialog';
-import { usePermissions } from '@/hooks/usePermissions';
 import { parseUtc } from '@/lib/serverTime';
 import type { GovDoc, GovDocNode } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
@@ -80,8 +79,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const router = useRouter();
   const qc = useQueryClient();
   const { toast } = useToast();
-  // deleting has its own permission (the server also lets the owner and the author delete their own document)
-  const canDelete = usePermissions().hasPermission('governance:policies:delete');
   const mine = (d: GovDoc) => currentUserId != null && (d.owner_id === currentUserId || d.author_id === currentUserId);
 
   const [view, setView] = useState<ViewMode>('table');
@@ -258,12 +255,13 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       toast({ title: 'Download failed', message: 'Could not export this document.', type: 'error' });
     }
   };
-  const onDeleteDoc = async (doc: GovDoc) => {
-    if (!window.confirm(`Delete "${doc.title}"? This cannot be undone.`)) return;
-    try { await governanceApi.deleteDocument(doc.id); toast({ title: 'Document deleted', type: 'success' }); refreshAll(); }
+  // documents are archived, never deleted (the user, 2026-10-17)
+  const onArchiveDoc = async (doc: GovDoc) => {
+    if (!window.confirm(`Archive "${doc.title}"? It is no longer in force; its versions and history are kept.`)) return;
+    try { await bulkArchive([doc.id]); toast({ title: 'Document archived', type: 'success' }); refreshAll(); }
     catch (e: any) {
-      const detail = e?.response?.data?.detail;  // e.g. "Cannot delete document with 2 child documents…"
-      toast({ title: 'Delete failed', message: typeof detail === 'string' ? detail : undefined, type: 'error' });
+      const detail = e?.response?.data?.detail;
+      toast({ title: 'Not archived', message: typeof detail === 'string' ? detail : undefined, type: 'error' });
     }
   };
 
@@ -372,16 +370,15 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               onOpenDoc={openDoc}
               onEdit={onEditDoc}
               onDownload={onDownloadDoc}
-              onDelete={onDeleteDoc}
+              onArchive={onArchiveDoc}
               onBulkApprove={onBulkApprove}
               onBulkPublish={onBulkPublish}
               onBulkArchive={onBulkArchive}
               onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
               onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
               canEdit={canEdit}
-              canDelete={canDelete}
               canEditRow={(d) => canEdit || mine(d)}
-              canDeleteRow={(d) => canDelete || mine(d)}
+              canArchiveRow={(d) => (canEdit || mine(d)) && d.status !== 'archived'}
             />
           ) : (
             <LifecycleBoard docs={filteredDocs} onOpenDoc={openDoc} />

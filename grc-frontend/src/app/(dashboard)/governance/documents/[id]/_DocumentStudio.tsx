@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertCircle, ArrowLeft, ChevronDown, Download, FileText, Info, Link2, Loader2, MoreHorizontal, PenLine, Send, Sparkles, Trash2, XCircle,
+  AlertCircle, Archive, ArrowLeft, ChevronDown, Download, FileText, Info, Link2, Loader2, MoreHorizontal, PenLine, Send, Sparkles, XCircle,
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { documentApi, type DraftOpened } from '@/lib/studio/documentApi';
@@ -28,6 +28,7 @@ import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPan
 import GovernanceMappingsPage from '../../mappings/page';
 import { SIGNOFF_STATUS, SignOffControlTab, SignoffAction, StatusChip, useSignoff } from '../_SignoffControl';
 import { LifecycleHover } from '../_workspace/LifecycleHover';
+import { bulkArchive } from '../_workspace/api';
 import LifecycleTab, { AckAction, SettingsCard } from './_LifecycleTab';
 import ChainTab from './_ChainTab';
 import { DocumentSignoffPanel, DocumentVersionHistoryPanel, DocumentViewerTab } from './_DocumentViewer';
@@ -41,7 +42,7 @@ import { inForceLine, lastAcknowledged, primaryAction, publishLine, rejectionOf,
 const TYPE_LABEL: Record<string, string> = {
   policy: 'Policy', standard: 'Standard', procedure: 'Procedure', guideline: 'Guideline', charter: 'Charter', framework: 'Framework',
 };
-type Popup = 'details' | 'submit' | 'sign' | 'ack' | 'publish' | 'stale' | 'control' | 'settings' | 'history' | 'delete';
+type Popup = 'details' | 'submit' | 'sign' | 'ack' | 'publish' | 'stale' | 'control' | 'settings' | 'history' | 'archive';
 const FULL_ON_PHONE = 'max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none';
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
 const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -143,21 +144,21 @@ export default function DocumentStudio() {
     onSuccess: () => { setRestoring(null); refreshAll(); toast({ type: 'success', title: 'Restored', message: 'That version is the document again, as a new version; the later ones are kept.' }); },
     onError: (e) => toast({ type: 'error', title: 'Not restored', message: problemOf(e) }),
   });
-  // deleting: the owner, the author or governance:policies:delete (the server decides; the menu only offers it to them)
   const { hasPermission, isLoading: permsLoading } = usePermissions();
   // the library (its lists, the Mappings view, the way back to the documents): any governance:policies right; while the rights are
   // still loading it is shown, so a library reader is not sent off ?tab=mappings (the server decides anyway)
   const library = permsLoading || hasPermission('governance:policies:*');
   useEffect(() => { if (!library && view === 'mappings') setViewState('document'); }, [library, view]);
-  const remove = useMutation({
-    mutationFn: () => governanceApi.deleteDocument(id),
+  // documents are archived, never deleted (the user, 2026-10-17): every version, signature and the history are kept
+  const archive = useMutation({
+    mutationFn: () => bulkArchive([id]),
     onSuccess: () => {
       setPopup(null);
-      // the library's lists, the register's own keys included (DocumentsWorkspace.refreshAll), so it is gone from them at once
+      // the library's lists, the register's own keys included (DocumentsWorkspace.refreshAll), so they show it archived at once
       for (const key of ['governance-documents', 'governance-documents-for-compare', 'gov-docs-workspace', 'gov-docs-hierarchy', 'gov-docs-summary',
         'gov-docs-overdue', 'gov-docs-mypending', 'gov-docs-coverage']) qc.invalidateQueries({ queryKey: [key] });
-      toast({ type: 'success', title: 'Document deleted' });
-      router.push('/governance/documents');
+      refreshAll();
+      toast({ type: 'success', title: 'Document archived', message: 'It is no longer in force; its versions and history are kept.' });
     },
   });
 
@@ -201,9 +202,8 @@ export default function DocumentStudio() {
   const draft = access?.draft ?? null;
   const pendingApprovals = lc?.approvals.filter((r) => r.status === 'pending').length ?? 0;
   const meId = lc?.me?.id;
-  // a server that does not say can_delete yet: the same rule as the server's (owner, author, governance:policies:delete)
-  const canDelete = (access as { can_delete?: boolean } | undefined)?.can_delete
-    ?? (hasPermission('governance:policies:delete') || (meId != null && (doc.owner_id === meId || doc.author_id === meId)));
+  // archiving needs edit rights, as the server's bulk-archive does
+  const canArchive = canEdit && doc.status !== 'archived';
   // a rejection is of the version on its way: not shown to someone reading the published one (`newer_version`)
   const rejected = lc && !doc.newer_version ? rejectionOf(doc.status, lc.approvals) : null;
   // remarks: editors, auditors and the sign-off's people (the server's ensure_annotator); unknown to an older server: shown
@@ -314,8 +314,7 @@ export default function DocumentStudio() {
                   {canTyped && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('control'); }}>Document control…</button>}
                   {lifecycleOn && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('settings'); }}>Due dates and escalation…</button>}
                   {!lifecycleOn && <Link role="menuitem" href="/governance/workflows" className={ITEM} onClick={close}>Older approval requests</Link>}
-                  {canEdit && <Link role="menuitem" href={`/governance/documents/${id}?classic=1&tab=statements`} className={ITEM} onClick={close}>Statements and gap analysis (classic view)</Link>}
-                  {canDelete && <button type="button" role="menuitem" className={ITEM_DANGER} onClick={() => { close(); remove.reset(); setPopup('delete'); }}><Trash2 className="h-4 w-4" /> Delete…</button>}
+                  {canArchive && <button type="button" role="menuitem" className={ITEM_DANGER} onClick={() => { close(); archive.reset(); setPopup('archive'); }}><Archive className="h-4 w-4" /> Archive document…</button>}
                 </>
               )}
             </Menu>
@@ -434,19 +433,19 @@ export default function DocumentStudio() {
         )}>
         <p className="px-5 py-4 text-sm text-[#26323d]">{publishLine(version, lifecycleOn)}</p>
       </AnimatedModal>
-      <AnimatedModal isOpen={popup === 'delete'} onClose={() => setPopup(null)} size="md" title={`Delete “${doc.title}”?`}
+      <AnimatedModal isOpen={popup === 'archive'} onClose={() => setPopup(null)} size="md" title={`Archive “${doc.title}”?`}
         footer={(
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setPopup(null)} className={BTN}>Cancel</button>
-            <button type="button" onClick={() => remove.mutate()} disabled={remove.isPending}
+            <button type="button" onClick={() => archive.mutate()} disabled={archive.isPending}
               className="inline-flex items-center gap-1.5 rounded-lg bg-[#b42318] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
-              {remove.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />} Delete
+              {archive.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />} Archive
             </button>
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
-          <p className="text-sm text-[#26323d]">It is removed from the library for everyone. This cannot be undone.</p>
-          {remove.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not deleted: {problemOf(remove.error)}</p>}
+          <p className="text-sm text-[#26323d]">It is no longer in force, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it as Archived.</p>
+          {archive.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not archived: {problemOf(archive.error)}</p>}
         </div>
       </AnimatedModal>
       <AnimatedModal isOpen={popup === 'stale' && !!stale} onClose={() => setPopup(null)} size="md" title="Your draft is out of date"

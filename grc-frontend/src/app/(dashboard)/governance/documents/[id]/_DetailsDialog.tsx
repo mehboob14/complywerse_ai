@@ -1,7 +1,8 @@
 'use client';
 
 // The document's Details popup: title, code, type, classification, owner, department, review cycle and dates, frameworks, parent,
-// tags and description. Read-only for people who cannot edit; otherwise Save sends only what changed (PUT /governance/documents/{id}).
+// tags, description, and who reviews and approves it. Read-only for people who cannot edit; otherwise Save sends only what changed
+// (PUT /governance/documents/{id}; the reviewers and approvers to …/signoff/participants, while it is a draft or on its way).
 // The lists share their React Query keys (and shapes) with the document pages, so they come from one cache.
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +14,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { personOf } from '@/lib/people';
 import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
 import { addMonths } from '../_detailsRead';
+import { ReviewerApproverFields, useSignoff, type Participant, type SignoffChoice } from '../_SignoffControl';
 
 const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const TRIGGER = 'w-full !h-[34px] !border-[#b8c4c8] !text-sm';
@@ -86,17 +88,30 @@ function Value({ label, wide, mono, children }: { label: string; wide?: boolean;
   );
 }
 
-export default function DetailsDialog({ doc, open, onClose, canEdit }: { doc: any; open: boolean; onClose: () => void; canEdit: boolean }) {
+export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: {
+  doc: any; open: boolean; onClose: () => void; canEdit: boolean;
+  /** after a save, with what changed (the AI Studio keeps its own title and type in step) */
+  onSaved?: (patch: Record<string, unknown>) => void;
+}) {
   const qc = useQueryClient();
   const { toast } = useToast();
   const [base, setBase] = useState<Form>(() => fromDoc(doc));
   const [form, setForm] = useState<Form>(() => fromDoc(doc));
+  // who reviews and approves it: changed here while it is a draft or on its way (the server refuses it once approved)
+  const signoffQ = useSignoff(doc?.id);
+  const peopleEditable = canEdit && ['draft', 'pending_review', 'pending_approval'].includes(doc?.status);
+  const serverPeople = useMemo<SignoffChoice>(() => {
+    const keep = (l?: Participant[]) => (l ?? []).map(({ target_type, target_id, display }) => ({ target_type, target_id, display }));
+    return { reviewers: keep(signoffQ.data?.participants.reviewer), approvers: keep(signoffQ.data?.participants.approver) };
+  }, [signoffQ.data]);
+  const [people, setPeople] = useState<SignoffChoice | null>(null);          // null: as the server has them
 
   useEffect(() => {
     if (!open) return;
     const f = fromDoc(doc);
     setBase(f);
     setForm(f);
+    setPeople(null);
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only when the popup opens
 
   const tenantId: number | undefined = doc?.tenant_id;
@@ -169,14 +184,28 @@ export default function DetailsDialog({ doc, open, onClose, canEdit }: { doc: an
   }, [others, form.tags]);
 
   const patch = useMemo(() => changes(base, form), [base, form]);
-  const dirty = Object.keys(patch).length > 0;
+  const keyOf = (l: Participant[]) => l.map((p) => `${p.target_type}:${p.target_id}`).sort().join(',');
+  const peopleChanged = people !== null
+    && (keyOf(people.reviewers) !== keyOf(serverPeople.reviewers) || keyOf(people.approvers) !== keyOf(serverPeople.approvers));
+  const dirty = Object.keys(patch).length > 0 || peopleChanged;
 
   const save = useMutation({
-    mutationFn: async () => governanceApi.updateDocument(doc.id, patch as any),
+    mutationFn: async () => {
+      if (Object.keys(patch).length) await governanceApi.updateDocument(doc.id, patch as any);
+      if (peopleChanged && people) {
+        const ids = (l: Participant[]) => l.map(({ target_type, target_id }) => ({ target_type, target_id }));
+        // the participants are replaced as a whole: prepared-by is sent back as it is
+        await governanceApi.setSignoffParticipants(doc.id, { prepared_by: ids(signoffQ.data?.participants.prepared_by ?? []),
+                                                             reviewers: ids(people.reviewers), approvers: ids(people.approvers) });
+      }
+    },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['governance-document', doc.id] });
       qc.invalidateQueries({ queryKey: ['document-access', doc.id] });
       qc.invalidateQueries({ queryKey: ['studio', 'setup'] });
+      qc.invalidateQueries({ queryKey: ['doc-signoff', doc.id] });
+      qc.invalidateQueries({ queryKey: ['document-lifecycle'] });
+      onSaved?.(patch);
       toast({ type: 'success', title: 'Details saved' });
       onClose();
     },
@@ -258,6 +287,15 @@ export default function DetailsDialog({ doc, open, onClose, canEdit }: { doc: an
     row('Description', form.description,
       <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={3} className={INPUT} />,
       { wide: true }),
+    peopleEditable ? (
+      <div key="people" className="sm:col-span-2">
+        <ReviewerApproverFields value={people ?? serverPeople} onChange={setPeople} tenantId={tenantId}
+          note={doc?.status === 'draft' ? undefined : 'Saving asks anyone you add at the current step, and cancels the request of anyone you remove.'} />
+      </div>
+    ) : [
+      <Value key="reviewers" label="Reviewers">{serverPeople.reviewers.map((p) => p.display || `${p.target_type} ${p.target_id}`).join(', ')}</Value>,
+      <Value key="approvers" label="Approvers">{serverPeople.approvers.map((p) => p.display || `${p.target_type} ${p.target_id}`).join(', ')}</Value>,
+    ],
   ];
 
   const footer = canEdit ? (

@@ -5,20 +5,11 @@ import assert from 'node:assert/strict';
 
 import { VIEWS, inStudio, viewOf } from './docRoute.ts';
 
-test('links to statements or gap analysis open the classic page, where those tabs are', () => {
-  for (const tab of ['statements', 'gap-analysis', 'GAPS ']) assert.equal(inStudio(true, new URLSearchParams({ tab })), false);
-  assert.equal(inStudio(true, new URLSearchParams({ tab: 'lifecycle' })), true);
-});
-
-const params = (q: string) => new URLSearchParams(q);
-
-test('inStudio needs the switch on and no ?classic=1', () => {
-  assert.equal(inStudio(true, params('')), true);
-  assert.equal(inStudio(true, params('tab=chain')), true);
-  assert.equal(inStudio(true, params('classic=0')), true);
-  assert.equal(inStudio(true, params('classic=1')), false);
-  assert.equal(inStudio(false, params('')), false);
-  assert.equal(inStudio(undefined, params('')), false);
+test('the AI Studio view is the only one: it needs the switch on, whatever the link asks for', () => {
+  assert.equal(inStudio(true), true);
+  assert.equal(inStudio(false), false);
+  assert.equal(inStudio(undefined), false);
+  for (const tab of ['statements', 'gap-analysis', 'gaps']) assert.equal(viewOf(tab), 'mappings');   // they open Mappings, not the classic page
 });
 
 test('viewOf maps every old tab and every new view', () => {

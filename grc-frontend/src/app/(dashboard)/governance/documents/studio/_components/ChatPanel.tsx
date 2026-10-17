@@ -12,6 +12,7 @@ import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight
 import { problemOf, studioApi, type AnswerItem, type Attachment, type Message, type Op, type Question, type ReferenceUsed, type Session } from '@/lib/studio/api';
 import { num, plural, wordDiff } from '@/lib/studio/text';
 import LiveTurn from './LiveTurn';
+import type { Focus } from './RedlineView';
 import { SetupCard } from './SetupFields';
 
 /** how the server ends a request sent with files (service.ATTACHED): the bubble shows the files as chips instead */
@@ -31,7 +32,8 @@ export interface ChatPanelProps {
   /** take a change that was accepted back out of the document */
   onRevertOp: (messageId: number, opId: string) => Promise<void>;
   /** show the document with the changes marked: since the start, or between two revisions (what one accepted change did) */
-  onShowChanges: (range?: { from: number; to: number }) => void;
+  /** the changes marked in the document; `focus`: the card's own change, brought into view and highlighted */
+  onShowChanges: (range?: { from: number; to: number }, focus?: Focus) => void;
   onOpenTab: (tab: 'references' | 'instructions') => void;
   onShowReference: (key: string) => void;
   /** answer Comply Agent's questions on a message: the options chosen and own words per question; ``decide`` leaves them all to it */
@@ -206,7 +208,8 @@ function Proposal({ message, props }: { message: Message; props: ChatPanelProps 
             onAccept={(override) => props.onAccept(message.id, [op.id], override !== undefined ? { [op.id]: override } : undefined)}
             onReject={() => props.onReject(message.id, [op.id])}
             onRevert={() => props.onRevertOp(message.id, op.id)}
-            onShow={() => props.onShowChanges(op.revision ? { from: op.revision - 1, to: op.revision } : undefined)} />
+            onShow={() => props.onShowChanges(op.revision ? { from: op.revision - 1, to: op.revision } : undefined,
+              { after: op.after.map((a) => a.text), before: op.before.map((b) => b.text) })} />
         ))}
       </ul>
     </div>

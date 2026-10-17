@@ -312,7 +312,10 @@ export interface RedlineRow {
 export interface Redline {
   rows: RedlineRow[];
   stats: Stats;
-  from?: number;
+  from?: number | null;
+  /** Tracked changes (GET …/tracked): what it is counted from ("Changes since v1.0 (the original)") and that library version */
+  label?: string;
+  from_version_id?: number | null;
   to?: number;
   other_title?: string;
   ai_message?: Message;
@@ -490,7 +493,7 @@ export const studioApi = {
   revertOp: (id: number, messageId: number, opId: string) =>
     post<{ content: string; revision: number; message: Message; library_version?: LibraryVersion | null }>(`/sessions/${id}/messages/${messageId}/ops/${opId}/revert`),
   /** take chosen changes since a revision back out of the document as it is now */
-  revertChanges: (id: number, body: { frm: number; hunks: number[]; hash?: string }) => post<{ content: string; revision: number }>(`/sessions/${id}/changes/revert`, body),
+  revertChanges: (id: number, body: { frm: number; hunks: number[]; hash?: string; version_id?: number | null }) => post<{ content: string; revision: number }>(`/sessions/${id}/changes/revert`, body),
   preview: (id: number, messageId: number) => get<Redline>(`/sessions/${id}/messages/${messageId}/redline`),
 
   checks: (id: number, ai = false) => post<{ revision: number; issues: Issue[]; summary: { total: number; by_kind: Record<string, number>; by_severity: Record<string, number>; must_fill: number }; ai_message?: Message }>(`/sessions/${id}/checks`, {}, { ai }),
@@ -502,6 +505,8 @@ export const studioApi = {
 
   revisions: (id: number) => get<{ items: Revision[]; base_label: string | null }>(`/sessions/${id}/revisions`),
   diff: (id: number, from: number, to?: number) => get<Redline>(`/sessions/${id}/diff`, { from, to }),
+  /** Tracked changes: since the version in force, or the original until the document is published */
+  tracked: (id: number) => get<Redline>(`/sessions/${id}/tracked`),
   restore: (id: number, number: number) => post<{ revision: number; content: string }>(`/sessions/${id}/restore/${number}`),
   compare: (id: number, body: { document_id?: number; revision?: number; reference_id?: number; ai?: boolean }) =>
     post<Redline>(`/sessions/${id}/compare`, body),

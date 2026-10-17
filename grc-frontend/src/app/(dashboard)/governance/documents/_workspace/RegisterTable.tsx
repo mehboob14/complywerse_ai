@@ -6,7 +6,7 @@
  * Owner · Frameworks · Ver · Actions. The shell owns filtering/data + action handlers.
  */
 
-import { CheckCircle2, Send, UserPlus, CalendarClock, Archive, FileText, Eye, Download, Trash2, Pencil } from 'lucide-react';
+import { CheckCircle2, Send, UserPlus, CalendarClock, Archive, FileText, Eye, Download, Pencil } from 'lucide-react';
 import {
   DataTable,
   type ColumnDef,
@@ -33,17 +33,17 @@ export interface RegisterTableProps {
   onOpenDoc: (id: number) => void;
   onEdit: (doc: GovDoc) => void;
   onDownload: (doc: GovDoc) => void;
-  onDelete: (doc: GovDoc) => void;
+  /** documents are archived, never deleted */
+  onArchive: (doc: GovDoc) => void;
   onBulkApprove: (ids: number[]) => void;
   onBulkPublish: (ids: number[]) => void;
   onBulkArchive: (ids: number[]) => void;
   onBulkAssignOwner: (ids: number[]) => void;
   onBulkSetReviewDate: (ids: number[]) => void;
   canEdit?: boolean;
-  canDelete?: boolean;
-  /** per row: the owner and the author may change or delete their own document without the role permission */
+  /** per row: the owner and the author may change or archive their own document without the role permission */
   canEditRow?: (d: GovDoc) => boolean;
-  canDeleteRow?: (d: GovDoc) => boolean;
+  canArchiveRow?: (d: GovDoc) => boolean;
   loading?: boolean;
 }
 
@@ -55,16 +55,15 @@ export function RegisterTable({
   onOpenDoc,
   onEdit,
   onDownload,
-  onDelete,
+  onArchive,
   onBulkApprove,
   onBulkPublish,
   onBulkArchive,
   onBulkAssignOwner,
   onBulkSetReviewDate,
   canEdit = false,
-  canDelete = false,
   canEditRow,
-  canDeleteRow,
+  canArchiveRow,
   loading = false,
 }: RegisterTableProps) {
   const nameMap = useFrameworkNames();
@@ -140,7 +139,7 @@ export function RegisterTable({
               { key: 'open', label: 'Open', icon: Eye, onClick: () => onOpenDoc(d.id) },
               { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(d), hidden: !(canEditRow ? canEditRow(d) : canEdit) },
               { key: 'download', label: 'Download', icon: Download, onClick: () => onDownload(d) },
-              { key: 'delete', label: 'Delete', icon: Trash2, onClick: () => onDelete(d), variant: 'danger', hidden: !(canDeleteRow ? canDeleteRow(d) : canDelete) },
+              { key: 'archive', label: 'Archive', icon: Archive, onClick: () => onArchive(d), variant: 'danger', hidden: !(canArchiveRow ? canArchiveRow(d) : canEdit) },
             ]}
           />
         </div>

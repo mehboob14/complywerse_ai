@@ -11,10 +11,12 @@ import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 import type { ChainHunk } from '@/lib/documentChain';
 import { problemOf, studioApi, type Message, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
-import RedlineView, { StatsLine } from './RedlineView';
+import RedlineView, { StatsLine, type Focus } from './RedlineView';
 
 export type CompareSpec =
-  | { type: 'revision'; from: number; to?: number; label: string }
+  | { type: 'revision'; from: number; to?: number; label: string; focus?: Focus }
+  // since the version in force, or the original until the document is published (GET …/tracked)
+  | { type: 'tracked'; focus?: Focus }
   | { type: 'document'; id: number; title: string }
   | { type: 'reference'; id: number; title: string }              // a file the person uploaded (kept with the session as a reference)
   | { type: 'preview'; messageId: number };
@@ -34,11 +36,21 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
   const [ai, setAi] = useState<Message | null>(null);
   const [asking, setAsking] = useState(false);
 
-  const key = ['studio', 'changes', session.id, session.revision, JSON.stringify(spec)];
+  // the change to bring into view is not part of what is compared
+  const { focus, ...shape } = spec as CompareSpec & { focus?: Focus };
+  const key = ['studio', 'changes', session.id, session.revision, JSON.stringify(shape)];
   const redline = useQuery({
     queryKey: key,
     queryFn: async () => {
       if (spec.type === 'preview') return studioApi.preview(session.id, spec.messageId);
+      if (spec.type === 'tracked') {
+        try {
+          return await studioApi.tracked(session.id);
+        } catch (e) {     // a server from before GET …/tracked: since where the session started
+          if ((e as { response?: { status?: number } })?.response?.status !== 404) throw e;
+          return { ...(await studioApi.diff(session.id, 0, session.revision)), label: session.base_label ? `Changes since “${session.base_label}”` : 'Changes since the start' };
+        }
+      }
       if (spec.type === 'document') return studioApi.compare(session.id, { document_id: spec.id });
       if (spec.type === 'reference') return studioApi.compare(session.id, { reference_id: spec.id });
       return studioApi.diff(session.id, spec.from, spec.to ?? session.revision);
@@ -49,7 +61,8 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
   const takeBack = useMutation({
     mutationFn: async (h: ChainHunk) => {
       await flush?.();
-      return studioApi.revertChanges(session.id, { frm: spec.type === 'revision' ? spec.from : 0, hunks: [h.id], hash: redline.data?.hash });
+      return studioApi.revertChanges(session.id, { frm: spec.type === 'revision' ? spec.from : redline.data?.from ?? 0, hunks: [h.id], hash: redline.data?.hash,
+                                                    version_id: spec.type === 'tracked' ? redline.data?.from_version_id ?? undefined : undefined });
     },
     onSuccess: (r) => {
       onContent?.(r.content, r.revision);
@@ -94,7 +107,8 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
   };
 
   const other = spec.type === 'document' || spec.type === 'reference';
-  const title = spec.type === 'preview' ? 'What accepting Comply Agent’s changes would do' : other ? `This document compared with “${spec.title}”` : spec.label;
+  const title = spec.type === 'preview' ? 'What accepting Comply Agent’s changes would do' : other ? `This document compared with “${spec.title}”`
+    : spec.type === 'tracked' ? redline.data?.label ?? 'Tracked changes' : spec.label;
   const hint = other ? 'Green is in this document and not in the other; red is in the other and not here.' : spec.type === 'preview' ? 'Nothing is changed until you accept.' : 'Green was added, red was removed.';
   const diffs = ai?.status === 'done' ? ai.proposal?.differences ?? [] : [];
 
@@ -141,8 +155,8 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
             {redline.isLoading && <p className="text-sm text-[#586472]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Comparing…</p>}
             {redline.isError && <p className="text-sm text-[#8a1c1c]" role="alert">{problemOf(redline.error)}</p>}
             {redline.data && (
-              <RedlineView rows={redline.data.rows} empty={other ? 'The two documents have the same blocks.' : 'Nothing changed.'}
-                changes={redline.data.hunks && spec.type === 'revision' ? {
+              <RedlineView rows={redline.data.rows} empty={other ? 'The two documents have the same blocks.' : 'Nothing changed.'} focus={focus}
+                changes={redline.data.hunks && (spec.type === 'revision' || spec.type === 'tracked') ? {
                   hunks: redline.data.hunks, canRevert: !!redline.data.can_revert && !!onContent, whyNot: redline.data.can_revert ? null : 'Only changes since an earlier version of the document as it is now can be taken back.',
                   busyId: takeBack.isPending ? takeBack.variables?.id ?? null : null, onRevert: (h) => takeBack.mutate(h), onShowSource,
                 } : undefined} />
