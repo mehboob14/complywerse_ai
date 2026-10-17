@@ -20,6 +20,7 @@ import {
   FrameworkPills,
   AttestCell,
   useFrameworkNames,
+  inForceNote,
 } from './lib';
 import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
@@ -40,6 +41,9 @@ export interface RegisterTableProps {
   onBulkSetReviewDate: (ids: number[]) => void;
   canEdit?: boolean;
   canDelete?: boolean;
+  /** per row: the owner and the author may change or delete their own document without the role permission */
+  canEditRow?: (d: GovDoc) => boolean;
+  canDeleteRow?: (d: GovDoc) => boolean;
   loading?: boolean;
 }
 
@@ -59,6 +63,8 @@ export function RegisterTable({
   onBulkSetReviewDate,
   canEdit = false,
   canDelete = false,
+  canEditRow,
+  canDeleteRow,
   loading = false,
 }: RegisterTableProps) {
   const nameMap = useFrameworkNames();
@@ -117,7 +123,10 @@ export function RegisterTable({
       header: 'Ver',
       minWidth: '60px',
       render: (d) => (
-        <span className="text-sm text-slate-600">{d.current_version || '—'}</span>
+        <span className="text-sm text-slate-600">
+          {d.current_version || '—'}
+          {inForceNote(d) && <span className="block text-[11px] text-[#586472]">{inForceNote(d)}</span>}
+        </span>
       ),
     },
     {
@@ -129,9 +138,9 @@ export function RegisterTable({
           <RowActionsMenu
             actions={[
               { key: 'open', label: 'Open', icon: Eye, onClick: () => onOpenDoc(d.id) },
-              { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(d), hidden: !canEdit },
+              { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(d), hidden: !(canEditRow ? canEditRow(d) : canEdit) },
               { key: 'download', label: 'Download', icon: Download, onClick: () => onDownload(d) },
-              { key: 'delete', label: 'Delete', icon: Trash2, onClick: () => onDelete(d), variant: 'danger', hidden: !canDelete },
+              { key: 'delete', label: 'Delete', icon: Trash2, onClick: () => onDelete(d), variant: 'danger', hidden: !(canDeleteRow ? canDeleteRow(d) : canDelete) },
             ]}
           />
         </div>

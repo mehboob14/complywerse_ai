@@ -12,6 +12,7 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { parseUtc } from '@/lib/serverTime';
 
 // ─── Shared document types ───────────────────────────────────────────────────
 export interface GovDoc {
@@ -26,6 +27,8 @@ export interface GovDoc {
   classification: string;
   parent_document_id: number | null;
   current_version: string;
+  /** the version everyone else reads while a newer one is on its way (the published one); none when never published */
+  version_in_force?: string | null;
   status: string;
   owner_id: number | null;
   owner_name: string | null;
@@ -175,9 +178,9 @@ export interface ReviewInfo {
 }
 
 export function reviewInfo(nextReviewDate: string | null | undefined): ReviewInfo {
-  if (!nextReviewDate) return { label: '—', tone: 'muted', days: null };
+  const due = parseUtc(nextReviewDate);
+  if (!due) return { label: '—', tone: 'muted', days: null };
   const now = new Date();
-  const due = new Date(nextReviewDate);
   const days = Math.ceil((due.getTime() - now.getTime()) / 86_400_000);
   if (days < 0) {
     const over = Math.abs(days);
@@ -365,4 +368,9 @@ export function AttestCell({ pct }: { pct: number | null | undefined }) {
 export function verLabel(v: string | null | undefined): string {
   if (!v) return '—';
   return v.startsWith('v') ? v : `v${v}`;
+}
+
+/** "v1.0 in force" while a newer version than the one in force is on its way; null otherwise. */
+export function inForceNote(d: { version_in_force?: string | null; current_version?: string | null }): string | null {
+  return d.version_in_force && d.version_in_force !== d.current_version ? `${verLabel(d.version_in_force)} in force` : null;
 }

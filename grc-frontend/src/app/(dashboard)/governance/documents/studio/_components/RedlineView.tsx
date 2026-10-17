@@ -106,6 +106,8 @@ export interface RedlineChanges {
   hunks: ChainHunk[];
   /** false: the changes are only shown (an old version, a file, a document someone else changed meanwhile) */
   canRevert: boolean;
+  /** the person may not change the document at all: no Take back button (a reader) */
+  readOnly?: boolean;
   whyNot?: string | null;
   busyId?: number | null;
   onRevert: (hunk: ChainHunk) => void;
@@ -114,7 +116,7 @@ export interface RedlineChanges {
 
 function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChanges }) {
   const busy = changes.busyId === hunk.id;
-  const blocked = !(hunk.can_revert ?? changes.canRevert) || hunk.locked;
+  const blocked = !changes.canRevert || hunk.can_revert === false || hunk.locked;      // the person's right first, then the text's
   const why = hunk.locked ? 'A sign-off record is stamped by the sign-off and cannot be taken back.' : blocked ? changes.whyNot || undefined : undefined;
   const look = originLook(hunk.by?.origin ?? 'unknown');
   const Icon = look.icon;
@@ -131,10 +133,10 @@ function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChan
           </>
         )}
         {hunk.locked && <span className="rounded-full bg-[#ecfdf3] px-2 py-0.5 text-[10px] font-semibold text-[#067647] ring-1 ring-inset ring-[#abefc6]">Sign-off record</span>}
-        <button type="button" disabled={blocked || busy} title={why} onClick={() => changes.onRevert(hunk)}
+        {!changes.readOnly && <button type="button" disabled={blocked || busy} title={why} onClick={() => changes.onRevert(hunk)}
           className="ml-auto inline-flex items-center gap-1 rounded-lg border border-[#c5ccd3] bg-white px-2.5 py-1 font-semibold text-[#3f4b58] hover:border-[#d97706] hover:bg-[#fffbeb] hover:text-[#92400e] disabled:cursor-not-allowed disabled:opacity-50">
           {busy ? <Loader2 className="h-3 w-3 animate-spin" aria-hidden /> : <Undo2 className="h-3 w-3" aria-hidden />} Take back
-        </button>
+        </button>}
       </div>
       {hunk.by
         ? <div className="border-t border-[#eef2f6] bg-white px-3 py-2"><Attribution by={hunk.by} onShowSource={changes.onShowSource} /></div>

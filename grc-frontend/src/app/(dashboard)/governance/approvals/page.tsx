@@ -6,7 +6,7 @@ import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 import { GovernanceActionReviewItem } from '@/types';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel } from '@/components/ui';
+import { SearchInput, RightSlidePanel } from '@/components/ui';
 import {
   CheckCircle,
   XCircle,
@@ -31,11 +31,10 @@ const ASKS = [
   { kind: 'acknowledgement', title: 'To acknowledge', verb: 'Acknowledge', icon: FileCheck2 },
 ] as const;
 
-type StatusFilter = 'all' | 'pending' | 'approved' | 'rejected';
-
+// the server's times are naive UTC (parseUtc), not the viewer's local time
 const formatDate = (dateString?: string) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
+  const date = parseUtc(dateString);
+  if (!date) return '-';
   return date.toLocaleDateString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -44,8 +43,8 @@ const formatDate = (dateString?: string) => {
 };
 
 const formatDateTime = (dateString?: string) => {
-  if (!dateString) return '-';
-  const date = new Date(dateString);
+  const date = parseUtc(dateString);
+  if (!date) return '-';
   return date.toLocaleString('en-US', {
     year: 'numeric',
     month: 'short',
@@ -294,7 +293,6 @@ function DocumentPreviewModal({ isOpen, onClose, item, onApprove, onReject, onDe
 
 export default function ApprovalsPage() {
   const queryClient = useQueryClient();
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedItem, setSelectedItem] = useState<GovernanceActionReviewItem | null>(null);
   const [showPreview, setShowPreview] = useState(false);
@@ -309,7 +307,7 @@ export default function ApprovalsPage() {
   }>({ isOpen: false, item: null });
 
   const { data: pendingApprovals, isLoading, error } = useQuery({
-    queryKey: ['my-pending-approvals', statusFilter],
+    queryKey: ['my-pending-approvals'],
     queryFn: async () => {
       // Use the new endpoint that gets items needing approval by current user
       const response = await governanceApi.getMyPendingApprovals({});
@@ -520,26 +518,13 @@ export default function ApprovalsPage() {
         <h3 className="pt-1 text-sm font-semibold text-black">Other approval requests</h3>
       )}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        {/* no Status filter: the endpoint returns only what waits for you (the old one changed nothing and showed "Pending 1") */}
         <div className="flex-1">
           <SearchInput
             value={searchQuery}
             onChange={setSearchQuery}
             placeholder="Search documents..."
             size="md"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <MultiSelectDropdown
-            title="Status"
-            items={[
-              { value: 'pending', label: 'Pending' },
-              { value: 'approved', label: 'Approved' },
-              { value: 'rejected', label: 'Rejected' },
-              { value: 'all', label: 'All' },
-            ]}
-            selectedValues={[statusFilter]}
-            onApply={(vals) => setStatusFilter((vals[0] as StatusFilter) || 'pending')}
-            multiSelect={false}
           />
         </div>
       </div>
@@ -586,8 +571,8 @@ export default function ApprovalsPage() {
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {filteredItems.map((item: GovernanceActionReviewItem) => {
-                  const actionDate = new Date(item.action_date);
-                  const isRecent = (Date.now() - actionDate.getTime()) / (1000 * 60 * 60 * 24) < 7; // Less than 7 days
+                  const actionDate = parseUtc(item.action_date);
+                  const isRecent = !!actionDate && (Date.now() - actionDate.getTime()) / (1000 * 60 * 60 * 24) < 7; // Less than 7 days
                   
                   return (
                     <tr

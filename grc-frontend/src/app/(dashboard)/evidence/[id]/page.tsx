@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useQueries, useMutation, useQueryClient } from '@tanstack/react-query';
-import apiClient from '@/lib/api';
+import apiClient, { governanceApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { InlineLinkPicker, PageLoader, AnimatedModal, RightSlidePanel, useToast } from '@/components/ui';
 import {
@@ -396,7 +396,7 @@ export default function EvidenceDetailPage() {
   }>({
     queryKey: ['governance-documents-for-evidence-link'],
     queryFn: async () => {
-      const response = await apiClient.get('/governance/documents', { params: { limit: 500 } });
+      const response = await governanceApi.getDocumentsBrief({ limit: 500 });   // titles: also for people without a governance right
       const data = response.data;
       // The backend returns either a list or a paginated envelope; normalise.
       const docs = Array.isArray(data) ? data : (data?.items || data?.documents || []);
@@ -2613,12 +2613,19 @@ function PolicyStatementPicker({
 
   const { data: statementsForDoc, isLoading: statementsLoading } = useQuery<{
     statements?: Array<{ id: number; statement_code?: string | null; statement_summary?: string | null; statement_text?: string | null; category?: string | null }>;
+    refused?: boolean;
   }>({
     queryKey: ['policy-statements-by-doc', selectedDocId],
     queryFn: async () => {
       if (!selectedDocId) return { statements: [] };
-      const res = await apiClient.get(`/governance/documents/${selectedDocId}/policy-statements`);
-      return res.data;
+      try {
+        const res = await apiClient.get(`/governance/documents/${selectedDocId}/policy-statements`);
+        return res.data;
+      } catch (e: any) {
+        // a document listed by title whose statements the person may not open: an empty list that says so, not asked again
+        if (e?.response?.status === 403) return { statements: [], refused: true };
+        throw e;
+      }
     },
     enabled: !!selectedDocId,
   });
@@ -2794,7 +2801,9 @@ function PolicyStatementPicker({
                     </div>
                   ) : filteredStatements.length === 0 ? (
                     <p className="px-4 py-8 text-center text-sm text-slate-500">
-                      {(statementsForDoc?.statements || []).length === 0
+                      {statementsForDoc?.refused
+                        ? 'You may not open this document’s statements. Its owner or a governance administrator can give you access.'
+                        : (statementsForDoc?.statements || []).length === 0
                         ? 'This document has no parsed policy statements yet. Run the policy parser on the document first.'
                         : 'No statements match your search.'}
                     </p>

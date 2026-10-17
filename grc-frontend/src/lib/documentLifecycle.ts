@@ -12,7 +12,12 @@ export interface DocumentLifecycle {
   enabled: true;
   document: { id: number; title: string; status: string; version: string; owner: string | null; author: string | null };
   approvals: LifecycleRow[];
-  acknowledgements: { total: number; done: number; pending: number; overdue: number; percent: number; people: LifecycleRow[] };
+  acknowledgements: {
+    total: number; done: number; pending: number; overdue: number; percent: number; people: LifecycleRow[];
+    /** acknowledgements given before each person's newest row (1.0 once 2.0 asks again), with their e-signatures; a server from
+     *  before it was added leaves it out */
+    history?: LifecycleRow[];        // acknowledgements of earlier versions (a major version asks again)
+  };
   mine: LifecycleRow[];
   /** who is asking (a server from before it was added does not send it) */
   me?: { id: number };

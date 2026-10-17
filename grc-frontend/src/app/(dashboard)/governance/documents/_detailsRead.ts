@@ -12,14 +12,15 @@ export interface Details {
   title: string; doc_type: string; classification: string; description: string;
   owner_id: number | null; department_id: number | null; review_cycle_months: number;
   effective_date: string; next_review_date: string;      // YYYY-MM-DD, '' when not set
+  parent_document_id: number | null;                     // the library document it sits under (never read from the file)
 }
 export type DetailKey = keyof Details;
 export const DETAIL_KEYS: DetailKey[] = ['title', 'doc_type', 'classification', 'description', 'owner_id', 'department_id',
-  'review_cycle_months', 'effective_date', 'next_review_date'];
+  'review_cycle_months', 'effective_date', 'next_review_date', 'parent_document_id'];
 
 export const EMPTY_DETAILS: Details = {
   title: '', doc_type: 'policy', classification: 'internal', description: '', owner_id: null, department_id: null,
-  review_cycle_months: 12, effective_date: '', next_review_date: '',
+  review_cycle_months: 12, effective_date: '', next_review_date: '', parent_document_id: null,
 };
 
 /** YYYY-MM-DD plus whole months, the day clamped to the month's end (31 Jan + 1 = 28/29 Feb). */

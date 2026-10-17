@@ -18,7 +18,7 @@ import {
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DOC_TYPE_LABEL, isConflict, problemOf, studioApi, type AnswerItem, type Attachment, type Issue, type Message, type Session } from '@/lib/studio/api';
-import { countPlaceholders, countWords, plural } from '@/lib/studio/text';
+import { countPlaceholders, countWords, num, plural } from '@/lib/studio/text';
 import StudioEditor, { type EditorMode, type StudioEditorHandle } from '../_components/StudioEditor';
 import ChatPanel from '../_components/ChatPanel';
 import { useLiveProgress } from '../_components/useLiveProgress';
@@ -30,6 +30,7 @@ import ChangesView, { type CompareSpec } from '../_components/ChangesView';
 import FileView from '../_components/FileView';
 import { ExportDialog, MoveToLibraryDialog, SaveTemplateDialog, SaveToDocumentDialog } from '../_components/dialogs';
 import type { DocMark } from '../_components/editorExtensions';
+import { titleCase, withCurrent } from '../../_DetailsFields';
 
 type SideTab = 'chat' | 'references' | 'instructions' | 'checks' | 'history';
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
@@ -59,6 +60,7 @@ export default function StudioWorkspacePage() {
   const status = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 60_000 });
   const sessionQuery = useQuery({ queryKey: ['studio', 'session', id], queryFn: () => studioApi.session(id), enabled: Number.isFinite(id) && !!status.data?.enabled, staleTime: Infinity, refetchOnWindowFocus: false });
   const session = sessionQuery.data;
+  useEffect(() => { if (session?.id) studioApi.opened(session.id).catch(() => undefined); }, [session?.id]);   // once per opening: the GET only reads
 
   // ── the document and its saving ────────────────────────────────────────────
   const editor = useRef<StudioEditorHandle>(null);
@@ -84,7 +86,7 @@ export default function StudioWorkspacePage() {
     setText(content);
     setPushed((p) => ({ value: content, version: p.version + 1 }));
     setSaveState('saved');
-    patchSessionCache({ revision: rev, content });
+    patchSessionCache({ revision: rev, content, unsaved_in_library: true });       // a change in the studio; a save to the library refetches the session
   }, [patchSessionCache]);
 
   useEffect(() => {
@@ -106,7 +108,7 @@ export default function StudioWorkspacePage() {
         const r = await studioApi.saveContent(id, content, revision.current);
         revision.current = r.revision;
         saved.current = content;
-        patchSessionCache({ revision: r.revision, words: r.words });
+        patchSessionCache({ revision: r.revision, words: r.words, unsaved_in_library: true });
         setSaveState(latest.current.trim() === content.trim() ? 'saved' : 'dirty');
       } catch (e) {
         setSaveState(isConflict(e) ? 'conflict' : 'error');
@@ -143,8 +145,8 @@ export default function StudioWorkspacePage() {
 
   const reload = useCallback(async () => {
     const fresh = await studioApi.session(id);
-    qc.setQueryData(['studio', 'session', id], fresh);
     applyServerContent(fresh.content ?? '', fresh.revision);
+    qc.setQueryData(['studio', 'session', id], fresh);                // after: the server's own unsaved_in_library
   }, [id, qc, applyServerContent]);
 
   const keepMine = async () => {
@@ -244,9 +246,17 @@ export default function StudioWorkspacePage() {
       if (r.accepted) {
         const v = r.library_version;
         toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success',
-                message: v?.saved ? `Saved as version ${v.version}${v.change ? ` (${v.change} change)` : ''}; the version before is kept in the history.` : v?.why });
-        setJustAccepted((r.message.proposal?.ops ?? []).filter((o) => opIds.includes(o.id) && o.status === 'accepted' && o.kind !== 'tidy').length);   // text to mark
-        if (v?.saved) onSessionChanged();                                     // its label names the new version
+                message: v?.saved ? `Saved as version ${v.version}${v.change ? ` (${v.change} change)` : ''}; the version before is kept in the history.` : session?.may_save !== false ? v?.why : undefined });   // `why` speaks of saving to the library
+        // marked from the revision before this accept (its own revision is the one after): a saved version has moved the
+        // session's starting point to the accepted text, so "since the start" would show nothing
+        // (offered when some can be marked: a spacing tidy is not in the text; the count is the toast's, all that were accepted)
+        const marked = (r.message.proposal?.ops ?? []).filter((o) => opIds.includes(o.id) && o.status === 'accepted' && o.kind !== 'tidy').length;
+        setJustAccepted(marked ? { n: r.accepted, from: r.revision - 1, to: r.revision } : null);
+        if (v?.saved) {
+          setTrackFrom((t) => t || r.revision - 1);
+          patchSessionCache({ unsaved_in_library: false });
+          onSessionChanged();                                                 // its label names the new version
+        }
       }
     } catch (e) { toast({ title: 'Could not accept', message: problemOf(e), type: 'error' }); }
   };
@@ -257,7 +267,11 @@ export default function StudioWorkspacePage() {
       applyServerContent(r.content, r.revision);
       setMessage(r.message);
       qc.invalidateQueries({ queryKey: ['studio', 'changes', id] });
-      toast({ title: 'Change taken back', message: 'It is saved as a new version, so nothing is lost.', type: 'success' });
+      const v = r.library_version;
+      toast({ title: 'Change taken back', type: 'success',
+              message: v?.saved ? `Saved as version ${v.version}; the version before is kept in the history.`
+                : session?.document_id && session.may_save !== false ? 'Taken back in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
+      void onSessionChanged();
     } catch (e) { toast({ title: 'Could not take it back', message: problemOf(e), type: 'error' }); }
   };
   const reject = async (messageId: number, opIds: string[]) => {
@@ -278,30 +292,39 @@ export default function StudioWorkspacePage() {
   useEffect(() => {                                                  // a Word file opens as Word lays it out, once per document
     if (session?.source?.in_place && openedAsFile.current !== session.id) { openedAsFile.current = session.id; setAsFile(true); }
   }, [session?.id, session?.source?.in_place]);
-  const [justAccepted, setJustAccepted] = useState(0);                          // how many changes were just accepted: offered to be seen marked in the document
+  // the changes just accepted, and the revisions they lie between: offered to be seen marked in the document
+  const [justAccepted, setJustAccepted] = useState<{ n: number; from: number; to: number } | null>(null);
+  // where Tracked changes starts: the start (0) until an accept saves a library version and so moves the start to its text
+  const [trackFrom, setTrackFrom] = useState(0);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [focusRef, setFocusRef] = useState<string | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
   const previewing = compare?.type === 'preview' ? compare.messageId : null;
   // Comply Agent's latest answer that still has changes waiting: decided from the bar on the document side
   const proposal = [...items].reverse().find((m) => m.role === 'assistant' && m.kind === 'chat' && (m.proposal?.ops ?? []).some((o) => o.status === 'pending')) ?? null;
-  const proposalOps = (proposal?.proposal?.ops ?? []).filter((o) => o.status === 'pending').map((o) => o.id);
+  const pendingOps = (proposal?.proposal?.ops ?? []).filter((o) => o.status === 'pending');
+  const proposalOps = pendingOps.map((o) => o.id);
+  // the words of the changes still waiting (not of those already accepted or rejected)
+  const pendingAdded = pendingOps.reduce((n, o) => n + (o.words_added || 0), 0);
+  const pendingRemoved = pendingOps.reduce((n, o) => n + (o.words_removed || 0), 0);
   const [bulk, setBulk] = useState<'accept' | 'reject' | null>(null);
   const decideAll = async (how: 'accept' | 'reject') => {
     if (!proposal) return;
     setBulk(how);
     try { await (how === 'accept' ? accept(proposal.id, proposalOps) : reject(proposal.id, proposalOps)); } finally { setBulk(null); }
   };
-  const showChanges = () => {
-    setCompare({ type: 'revision', from: 0, label: session?.base_label ? `Changes since “${session.base_label}”` : 'Changes since the start' });
+  /** the document with the changes marked: since the start, or between two revisions (what an accept or one change did) */
+  const showChanges = (range?: { from: number; to: number }) => {
+    setCompare(range ? { type: 'revision', from: range.from, to: range.to, label: `What rev ${range.to} changed` }
+      : { type: 'revision', from: trackFrom, label: trackFrom ? `Changes since rev ${trackFrom}` : session?.base_label ? `Changes since “${session.base_label}”` : 'Changes since the start' });
     setPane('document');
   };
   useEffect(() => {
     if (!justAccepted) return;
-    const t = setTimeout(() => setJustAccepted(0), 20000);
+    const t = setTimeout(() => setJustAccepted(null), 20000);
     return () => clearTimeout(t);
   }, [justAccepted]);
-  const tracking = compare?.type === 'revision' && compare.from === 0;
+  const tracking = compare?.type === 'revision' && compare.from === trackFrom && compare.to === undefined;
 
   useEffect(() => {                                                       // opened from the start page to compare with a document
     const other = Number(search?.get('compare'));
@@ -319,6 +342,10 @@ export default function StudioWorkspacePage() {
       qc.setQueryData(['studio', 'session', id], (old: Session | undefined) => (old ? { ...old, ...fresh, content: old.content } : fresh));
     } catch { /* ignore */ }
   }, [id, qc]);
+  // what Comply Agent attaches by itself while it works (the frameworks a request or an answer names) is counted as it happens,
+  // not only once the answer is finished: the session is read again at each step
+  const workingStage = items.find((m) => m.status === 'working' && m.kind === 'chat')?.stage ?? null;
+  useEffect(() => { if (workingStage) void onSessionChanged(); }, [workingStage, onSessionChanged]);
 
   // marks in the text for the checks' findings
   const onIssues = useCallback((list: Issue[]) => {
@@ -398,6 +425,9 @@ export default function StudioWorkspacePage() {
 
   const aiConfigured = !!status.data?.ai_configured;
   const inLibrary = !!session.document_id;
+  // someone who may only read the library document (a comparison opened by a reader): no saving or moving (a server that does not say: allowed)
+  const maySave = session.may_save !== false;
+  const shownMode: EditorMode = maySave ? mode : 'view';
   const pendingCount = items.reduce((n, m) => n + (m.proposal?.ops ?? []).filter((o) => o.status === 'pending').length, 0);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warnCount = issues.filter((i) => i.severity === 'warning').length;
@@ -418,7 +448,7 @@ export default function StudioWorkspacePage() {
           className="min-w-[10rem] max-w-[28rem] flex-1 truncate rounded-md border border-transparent bg-transparent px-2 py-1 text-base font-semibold text-[#1f2933] hover:border-[#c5ccd3] focus:border-[#0f766e] focus:bg-white focus:outline-none"
         />
         <select value={session.doc_type} onChange={(e) => setDocType(e.target.value)} aria-label="Document type" className="rounded-md border border-[#c5ccd3] bg-white px-2 py-1 text-xs text-[#26323d]">
-          {Object.entries(DOC_TYPE_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          {withCurrent(Object.entries(DOC_TYPE_LABEL), session.doc_type, titleCase).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[#586472]" role="status" aria-live="polite">
           <span className={`inline-flex items-center gap-1 font-medium ${saveState === 'saved' ? 'text-[#0a5a38]' : saveState === 'conflict' || saveState === 'error' ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>
@@ -427,15 +457,24 @@ export default function StudioWorkspacePage() {
           <span title="The studio's revision of this text (each save and each accepted change is one)">rev {session.revision}</span>
           <span>{plural(words, 'word')}</span>
           {placeholders > 0 && <button type="button" onClick={() => editor.current?.nextPlaceholder()} className="rounded bg-[#fff2a8] px-1.5 py-0.5 font-semibold text-[#6b5400] hover:bg-[#ffe97a]">{plural(placeholders, 'placeholder')} to fill in</button>}
-          {inLibrary ? <span className="inline-flex items-center gap-1 text-[#0b6b58]"><Library className="h-3.5 w-3.5" /> In the library{session.document_version ? `, version ${session.document_version}` : ''}</span> : <span>Not in the library yet</span>}
+          {inLibrary ? (
+            <>
+              <Link href={`/governance/documents/${session.document_id}`} onClick={() => void flush()} title="Open the document in the library: its newest version, with its changes marked"
+                className="inline-flex items-center gap-1 text-[#0b6b58] hover:underline"><Library className="h-3.5 w-3.5" /> In the library{session.document_version ? `, version ${session.document_version}` : ''}</Link>
+              {session.unsaved_in_library && maySave && (
+                <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} title="Saved here in the studio; the library still holds the version before"
+                  className="font-semibold text-[#8a6100] hover:underline">Changes not saved to the library yet · Save to the library</button>
+              )}
+            </>
+          ) : <span>Not in the library yet</span>}
           {session.source?.in_place && <span title="Your Word file is edited in place: only your changes are written into it, so its fonts, styles, header and footer stay" className="inline-flex items-center gap-1 rounded-full bg-[#e3f1f1] px-2 py-0.5 font-medium text-[#0f4c5c]"><FileText className="h-3.5 w-3.5" /> Word file kept</span>}
           {session.source?.kind === 'pdf' && <span title="A PDF cannot be edited: what you save is a Word copy built from its text" className="inline-flex items-center gap-1 rounded-full bg-[#eef1f4] px-2 py-0.5 font-medium text-[#3f4b58]"><FileText className="h-3.5 w-3.5" /> Read from a PDF</span>}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
           <div className="inline-flex rounded-lg border border-[#c5ccd3] bg-white p-0.5" role="group" aria-label="View">
-            {MODES.map((m) => (
-              <button key={m.key} type="button" aria-pressed={mode === m.key && !compare && !asFile} onClick={() => { setCompare(null); setAsFile(false); setMode(m.key); }}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${mode === m.key && !compare && !asFile ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
+            {MODES.filter((m) => maySave || m.key !== 'edit').map((m) => (
+              <button key={m.key} type="button" aria-pressed={shownMode === m.key && !compare && !asFile} onClick={() => { setCompare(null); setAsFile(false); setMode(m.key); }}
+                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${shownMode === m.key && !compare && !asFile ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
                 <m.icon className="h-3.5 w-3.5" /> {m.label}
               </button>
             ))}
@@ -452,8 +491,8 @@ export default function StudioWorkspacePage() {
             <GitCompare className="h-3.5 w-3.5" /> Tracked changes
           </button>
           <button type="button" onClick={() => setDialog('export')} className="inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]"><Download className="h-3.5 w-3.5" /> Export</button>
-          {inLibrary ? (
-            <button type="button" onClick={() => setDialog('save')} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Save className="h-3.5 w-3.5" /> Save to the library</button>
+          {!maySave ? null : inLibrary ? (
+            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Save className="h-3.5 w-3.5" /> Save to the library</button>
           ) : (
             <button type="button" onClick={() => setDialog('move')} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Library className="h-3.5 w-3.5" /> Move to the library</button>
           )}
@@ -465,6 +504,13 @@ export default function StudioWorkspacePage() {
           </details>
         </div>
       </div>
+
+      {!maySave && (
+        <div className="flex items-center gap-2 border-b border-[#d5dbe1] bg-[#f3f6f8] px-4 py-1.5 text-xs text-[#3f4b58]" role="status">
+          <Eye className="h-4 w-4 shrink-0" aria-hidden />
+          <span>You can compare and try changes here; only the document’s owner, author or editors can save them to the library.</span>
+        </div>
+      )}
 
       {(saveState === 'conflict' || saveState === 'error') && (
         <div className="flex flex-wrap items-center gap-3 border-b border-[#f1b5b5] bg-[#fdf3f3] px-4 py-2 text-sm text-[#8a1c1c]" role="alert">
@@ -490,7 +536,7 @@ export default function StudioWorkspacePage() {
               <Sparkles className="h-4 w-4 shrink-0 text-[#0b6b58]" aria-hidden />
               <span className="min-w-0 flex-1">
                 <span className="font-semibold">Comply Agent proposes {plural(proposalOps.length, 'change')}</span>
-                {proposal.proposal?.stats ? <> · +{proposal.proposal.stats.words_added} / −{proposal.proposal.stats.words_removed} words</> : null}
+                {pendingAdded || pendingRemoved ? <> · +{num(pendingAdded)} / −{num(pendingRemoved)} words</> : null}
                 {previewing === proposal.id ? ' · nothing changes until you accept' : ''}
               </span>
               {(proposal.proposal?.ops ?? []).some((o) => o.status === 'pending' && o.kind !== 'tidy') && (
@@ -523,22 +569,22 @@ export default function StudioWorkspacePage() {
               </button>
             </div>
           )}
-          {justAccepted > 0 && !compare && (
+          {justAccepted && !compare && (
             <div className="flex shrink-0 items-center gap-2 border-b border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs text-[#0a5a38]" role="status">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1">{plural(justAccepted, 'change')} accepted and written into the document.</span>
-              <button type="button" onClick={() => { setJustAccepted(0); showChanges(); }} className="font-semibold underline">Show {justAccepted === 1 ? 'it' : 'them'} marked in the document</button>
-              <button type="button" onClick={() => setJustAccepted(0)} aria-label="Dismiss" className="rounded p-0.5 hover:bg-[#d4f2e0]"><X className="h-3.5 w-3.5" /></button>
+              <span className="min-w-0 flex-1">{plural(justAccepted.n, 'change')} accepted and written into the document.</span>
+              <button type="button" onClick={() => { setJustAccepted(null); showChanges(justAccepted); }} className="font-semibold underline">Show {justAccepted.n === 1 ? 'it' : 'them'} marked in the document</button>
+              <button type="button" onClick={() => setJustAccepted(null)} aria-label="Dismiss" className="rounded p-0.5 hover:bg-[#d4f2e0]"><X className="h-3.5 w-3.5" /></button>
             </div>
           )}
           <div className="min-h-0 flex-1">
             {/* kept mounted under a preview, a comparison, the document being written or the file view: it holds the person's typing and undo history */}
             <div className={compare || writing || asFile ? 'hidden' : 'h-full'}>
-              <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={mode} onChange={onType} />
+              <StudioEditor ref={editor} value={pushed.value} version={pushed.version} mode={shownMode} onChange={onType} />
             </div>
             {compare ? (
               <ChangesView session={session} spec={compare} aiConfigured={aiConfigured} onClose={() => setCompare(null)} flush={flush}
-                onContent={(c, r) => applyServerContent(c, r)} onShowSource={(k) => { setFocusRef(k); setTab('references'); }} />
+                onContent={(c, r) => { applyServerContent(c, r); void onSessionChanged(); }} onShowSource={(k) => { setFocusRef(k); setTab('references'); }} />
             ) : writing ? (
               <StudioEditor value={writing.markdown} version={writing.seq} mode="view" onChange={() => undefined} />
             ) : asFile ? <FileView session={session} /> : null}
@@ -570,9 +616,9 @@ export default function StudioWorkspacePage() {
             {tab === 'references' && <ReferencesPanel session={session} onChanged={onSessionChanged} focusKey={focusRef} />}
             {tab === 'instructions' && <InstructionsPanel session={session} onChanged={onSessionChanged} />}
             <div className={`h-full ${tab === 'checks' ? 'block' : 'hidden'}`}>
-              <ChecksPanel session={session} aiConfigured={aiConfigured} flush={flush} onContent={(c, r) => applyServerContent(c, r)} onGoTo={goTo} onIssues={onIssues} onNextPlaceholder={() => editor.current?.nextPlaceholder()} />
+              <ChecksPanel session={session} aiConfigured={aiConfigured} flush={flush} onContent={(c, r) => { applyServerContent(c, r); void onSessionChanged(); }} onGoTo={goTo} onIssues={onIssues} onNextPlaceholder={() => editor.current?.nextPlaceholder()} />
             </div>
-            {tab === 'history' && <HistoryPanel session={session} flush={flush} onCompare={(c) => { setCompare(c); setPane('document'); }} onContent={(c, r) => { applyServerContent(c, r); setCompare(null); }} onSessionChanged={onSessionChanged} />}
+            {tab === 'history' && <HistoryPanel session={session} flush={flush} onCompare={(c) => { setCompare(c); setPane('document'); }} onContent={(c, r) => { applyServerContent(c, r); setCompare(null); void onSessionChanged(); }} onSessionChanged={onSessionChanged} />}
           </div>
         </aside>
       </div>

@@ -106,14 +106,15 @@ function Many({ label, items, value, onChange, create = true, disabled }: {
 }) {
   const known = new Set(items.map((i) => i.value));
   const all = [...items, ...value.filter((v) => !known.has(v)).map((v) => ({ value: v, label: v, subLabel: 'Your own' }))];
-  // the dropdown reports a choice while it renders: take it after, or React warns about updating another component
+  const take = onChange;
+  const chosen = all.filter((i) => value.includes(i.value)).map((i) => i.label);
   return (
     <Field label={label}>
-      <MultiSelectDropdown title={label} items={all} selectedValues={value} onApply={(v) => queueMicrotask(() => onChange(v))} triggerVariant="input" size="sm" showAvatars={false}
+      <MultiSelectDropdown title={label} items={all} selectedValues={value} onApply={take} triggerVariant="input" size="sm" showAvatars={false}
         forceSearch placeholder="Choose…" searchPlaceholder={create ? 'Search or type your own' : 'Search'} className="w-full" triggerClassName="w-full"
         onCreate={create ? (t) => onChange([...value, t]) : undefined} disabled={disabled} />
-      {value.length > 0 && <p className="mt-1 truncate text-[11px] text-[#3f4b58]" title={all.filter((i) => value.includes(i.value)).map((i) => i.label).join('; ')}>
-        {all.filter((i) => value.includes(i.value)).map((i) => i.label).join(' · ')}</p>}
+      {/* one choice is named on the button; several are counted there and named here */}
+      {chosen.length > 1 && <p className="mt-1 truncate text-[11px] text-[#3f4b58]" title={chosen.join('; ')}>{chosen.join(' · ')}</p>}
     </Field>
   );
 }
@@ -184,7 +185,8 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
       : Object.entries(o.regulators).flatMap(([c, names]) => names.map((r) => ({ value: r, label: r, subLabel: c })))),
   ].filter((item, i, all) => all.findIndex((x) => x.value === item.value) === i);
   const frameworks = [...o.frameworks].sort((a, b) => Number(!!b.of_document) - Number(!!a.of_document));
-  const attachedIds = session.references.filter((r) => r.kind === 'framework' && r.source_id != null).map((r) => String(r.source_id));
+  // each framework once, though it may be attached twice (another selection of it, or an older double click)
+  const attachedIds = Array.from(new Set(session.references.filter((r) => r.kind === 'framework' && r.source_id != null).map((r) => String(r.source_id))));
   const applyFrameworks = async (next: string[]) => {
     setFwBusy(true);
     try {
@@ -205,6 +207,8 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
     if (!list('regulators').length && d.regulators.length && (!country || country === d.country)) fill.regulators = d.regulators;
   }
   const lengthOn = session.kind === 'new' || !!draft.length;          // a length chosen earlier can still be seen and cleared
+  // none chosen: a new document is written at full length (setup.length_factor), so that one shows as chosen
+  const length = draft.length || (session.kind === 'new' ? 'comprehensive' : '');
   const open = (i: number) => allOpen || (firstOpen && i === 0);
 
   const fillButton = Object.keys(fill).length > 0 && (
@@ -225,9 +229,9 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
     <Field label="Length">
       <div className="grid grid-cols-3 gap-1 rounded-lg border border-[#b8c4c8] bg-white p-0.5" role="radiogroup" aria-label="Length">
         {o.lengths.map((l) => {
-          const on = draft.length === l.value;
+          const on = length === l.value;
           return (
-            <button key={l.value} type="button" role="radio" aria-checked={on} title={l.detail} onClick={() => change({ length: on ? '' : l.value }, true)}
+            <button key={l.value} type="button" role="radio" aria-checked={on} title={l.detail} onClick={() => change({ length: on && session.kind !== 'new' ? '' : l.value }, true)}
               className={`rounded-md px-2 py-1 text-xs font-semibold ${on ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>{l.label}</button>
           );
         })}
@@ -298,7 +302,7 @@ export function SetupFields({ session, draft, change, onReferencesChanged, first
       </Section>
 
       <Section title="Scope and reader" open={open(2)} summary={joined(count(list('domains').length, 'subject area'), count(list('departments').length, 'department'),
-        text('audience'), !doc && text('classification'), !doc && text('review_cycle'), lengthOn && o.lengths.find((l) => l.value === draft.length)?.label)}>
+        text('audience'), !doc && text('classification'), !doc && text('review_cycle'), lengthOn && o.lengths.find((l) => l.value === length)?.label)}>
         <Many label="Subject areas it must cover" items={plain(o.domains)} value={list('domains')} onChange={(v) => change({ domains: v }, true)} />
         <Many label="Departments and units it applies to" items={plain(o.departments)} value={list('departments')} onChange={(v) => change({ departments: v }, true)} />
         <One label="Audience" value={text('audience')} options={plain(o.audiences)} onChange={(v) => change({ audience: v }, true)} />

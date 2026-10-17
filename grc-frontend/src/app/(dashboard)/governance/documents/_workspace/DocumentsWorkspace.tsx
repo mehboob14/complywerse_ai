@@ -15,6 +15,8 @@ import { FolderTree, Table2, KanbanSquare, Plus, Sparkles, LayoutTemplate, Searc
 import { MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
 import { assetsApi, governanceApi } from '@/lib/api';
 import SignDialog from '@/components/governance/SignDialog';
+import { usePermissions } from '@/hooks/usePermissions';
+import { parseUtc } from '@/lib/serverTime';
 import type { GovDoc, GovDocNode } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
@@ -78,6 +80,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const router = useRouter();
   const qc = useQueryClient();
   const { toast } = useToast();
+  // deleting has its own permission (the server also lets the owner and the author delete their own document)
+  const canDelete = usePermissions().hasPermission('governance:policies:delete');
+  const mine = (d: GovDoc) => currentUserId != null && (d.owner_id === currentUserId || d.author_id === currentUserId);
 
   const [view, setView] = useState<ViewMode>('table');
   const [library, setLibrary] = useState<LibraryKey>('all');
@@ -272,7 +277,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const updatedLabel = useMemo(() => {
     const latest = allDocs.reduce((m, d) => (d.updated_at > m ? d.updated_at : m), '');
     if (!latest) return 'up to date';
-    const mins = Math.round((Date.now() - new Date(latest).getTime()) / 60000);
+    const at = parseUtc(latest);     // the server's times are naive UTC
+    if (!at) return 'up to date';
+    const mins = Math.round((Date.now() - at.getTime()) / 60000);
     if (mins < 1) return 'updated just now';
     if (mins < 60) return `updated ${mins}m ago`;
     const hrs = Math.round(mins / 60);
@@ -372,7 +379,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
               onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
               canEdit={canEdit}
-              canDelete={canEdit}
+              canDelete={canDelete}
+              canEditRow={(d) => canEdit || mine(d)}
+              canDeleteRow={(d) => canDelete || mine(d)}
             />
           ) : (
             <LifecycleBoard docs={filteredDocs} onOpenDoc={openDoc} />

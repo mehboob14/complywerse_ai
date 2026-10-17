@@ -15,7 +15,7 @@ import RedlineView from '../studio/_components/RedlineView';
 import { originLook } from '../studio/_components/ChangeAttribution';
 import { dateTime, day } from '@/lib/documentLifecycle';
 import { InitialsAvatar } from '../_workspace/lib';
-import { defaultBaseline, versionOrigin, versionPill, versionsBetween } from '../_view/trackedChanges';
+import { approvedVersionId, compareLine, defaultBaseline, versionOrigin, versionPill, versionsBetween } from '../_view/trackedChanges';
 
 const MUTED = 'text-[#586472]';
 
@@ -74,11 +74,10 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
       toast({ type: r.notes?.length ? 'warning' : 'success', title: 'Change taken back',
         message: `Saved as version ${r.version}.${r.status === 'pending_review' ? ' The document goes back to review.' : ''}${r.notes?.length ? ` ${r.notes.join(' ')}` : ''}` });
     },
-    onError: (e) => {
-      qc.invalidateQueries({ queryKey: ['document-chain-redline', documentId] });
-      toast({ type: 'error', title: 'That change could not be taken back', message: problemOf(e) });
-    },
+    // the refusal is said inside the prompt (it stays open to Cancel); the comparison is read again in case the document moved on
+    onError: () => { qc.invalidateQueries({ queryKey: ['document-chain-redline', documentId] }); },
   });
+  const ask = (h: ChainHunk | null) => { takeBack.reset(); setAsking(h); setReason(''); };
 
   if (chain.isLoading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>;
   const data = redline.data;
@@ -91,10 +90,18 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
   const baseNumber = versions.find((v) => v.id === baseline)?.number;
   const range = versionsBetween(versions, baseline, to);           // the versions this comparison covers: a take back or a restore shows even when it left no difference
   const onlyStamp = !!data?.hunks.length && data.hunks.every((h) => h.locked);
+  const line = compareLine(versions, baseline, to, approvedVersionId(versions, chain.data?.events ?? []));
+  // people who may not change the document: every change says who made it, none can be taken back (the server's per-change
+  // can_revert only says whether the text allows it). `readOnly` hides the button once RedlineView reads it.
+  const changes = data && {
+    hunks: canTakeBack ? data.hunks : data.hunks.map((h) => ({ ...h, can_revert: false })), canRevert: data.can_revert && canTakeBack,
+    whyNot: canTakeBack ? data.why_not : null, busyId: takeBack.isPending ? asking?.id ?? null : null, onRevert: ask, readOnly: !canTakeBack,
+  };
 
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-card">
+        {line && <p className="mb-2 text-sm font-semibold text-[#1f2933]">{line}</p>}
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <label className="flex min-w-0 items-center gap-2 text-sm">
             <GitCompare className="h-4 w-4 shrink-0 text-[#0b6b58]" aria-hidden />
@@ -151,7 +158,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
         )}
       </div>
 
-      {asking && (
+      {asking && canTakeBack && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950 shadow-card" role="alertdialog" aria-label="Take back this change">
           <div className="flex items-start gap-3">
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-amber-700 ring-1 ring-inset ring-amber-200"><Undo2 className="h-4 w-4" aria-hidden /></span>
@@ -161,14 +168,18 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
                 It becomes a new version made by you; the text goes back to what version {redline.data?.from.number} had. Nothing else changes.
                 {resets ? ' This document is approved, so it goes back to review.' : ''}
               </p>
+              <label className="mt-3 block">
+                <span className="text-xs font-semibold text-amber-950">Why <span className="font-normal">(optional, kept with the new version)</span></span>
+                <input type="text" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="e.g. This wording was agreed with Legal" autoFocus
+                  className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
+              </label>
+              {takeBack.isError && <p className="mt-2 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs text-rose-800" role="alert">Not taken back: {problemOf(takeBack.error)}</p>}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why (recorded in the document's history)"
-                  className="min-w-[14rem] flex-1 rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
                 <button type="button" disabled={takeBack.isPending} onClick={() => takeBack.mutate()}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
                   {takeBack.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Take it back
                 </button>
-                <button type="button" onClick={() => setAsking(null)} className="rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-sm font-semibold text-[#334155] hover:bg-[#f8fafc]">Cancel</button>
+                <button type="button" onClick={() => ask(null)} className="rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-sm font-semibold text-[#334155] hover:bg-[#f8fafc]">Cancel</button>
               </div>
             </div>
           </div>
@@ -181,7 +192,7 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
         {onlyStamp && <p className="mb-2 text-xs font-semibold text-[#26323d]">Only the sign-off record changed.</p>}
         {data && (
           <RedlineView rows={data.rows} empty={range.length ? `The text is the same as in v${data.from.number}.` : 'Nothing changed since that version.'}
-            changes={{ hunks: data.hunks, canRevert: data.can_revert && canTakeBack, whyNot: canTakeBack ? data.why_not : null, busyId: takeBack.isPending ? asking?.id ?? null : null, onRevert: (h) => setAsking(h) }} />
+            changes={changes} />
         )}
       </div>
     </div>

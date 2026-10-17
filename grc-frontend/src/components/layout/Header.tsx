@@ -8,6 +8,10 @@ import Link from 'next/link';
 import { apiClient, searchApi } from '@/lib/api';
 import { GuideToggle } from '@/components/guide';
 import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
+import { usePermissions } from '@/hooks/usePermissions';
+import { parseUtc } from '@/lib/serverTime';
+
+const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge' };
 
 const navIconProps = {
   size: 18,
@@ -113,7 +117,7 @@ export default function Header() {
     enabled: !!currentUser,
   });
 
-  const notifications: Array<{id: number; subject: string; message: string; notification_type: string; is_read: boolean; created_at: string}> =
+  const notifications: Array<{id: number; subject: string; message: string; notification_type: string; is_read: boolean; created_at: string; link?: string | null; url?: string | null}> =
     notifData?.items ?? [];
   const unreadCount = notifications.filter((n) => !n.is_read).length;
 
@@ -131,7 +135,18 @@ export default function Header() {
   }> = Array.isArray(pendingApprovalsData?.pending_approvals)
     ? pendingApprovalsData.pending_approvals
     : Array.isArray(pendingApprovalsData) ? pendingApprovalsData : [];
-  const pendingApprovalCount = pendingApprovalItems.length;
+  // Documents waiting for the person to review, approve or acknowledge (same query and key as My Approvals)
+  const { data: docRequests } = useQuery({
+    queryKey: ['my-document-requests'],
+    queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
+      enabled: boolean; items?: Array<{ id: number; kind: string; document_id: number; title: string; due_date: string | null; overdue: boolean }>;
+    },
+    refetchInterval: 60000,
+    enabled: !!currentUser,
+  });
+  const docRequestItems = docRequests?.enabled ? docRequests.items ?? [] : [];
+  const canSeeGovernance = usePermissions().hasPermission('governance:policies:*');
+  const pendingApprovalCount = pendingApprovalItems.length + docRequestItems.length;
 
   const markAllRead = async () => {
     try {
@@ -190,8 +205,9 @@ export default function Header() {
     <header className="top-nav flex h-12 items-center justify-between px-4 lg:px-5">
       <div className="flex flex-1 min-w-0 self-stretch items-center px-1">
         {(() => {
-          // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take
-          if (inDocumentsArea(pathname)) return <DocumentsTabs />;
+          // The Documents area's tabs live up here (the open tab names the page), so its pages get the row they used to take;
+          // they are the library's, so someone only asked about a document (no library right) gets none
+          if (inDocumentsArea(pathname)) return canSeeGovernance ? <DocumentsTabs /> : null;
           const info = PAGE_TITLES[pathname ?? ''];
           // Asset detail pages (/assets/<id>) have no static entry — show the
           // section breadcrumb here so the page needs no second bar of its own.
@@ -282,7 +298,25 @@ export default function Header() {
                 )}
               </div>
               <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-                {pendingApprovalItems.length === 0 ? (
+                {docRequestItems.slice(0, 12).map((it) => (
+                  <Link
+                    key={`doc-${it.id}`}
+                    href={`/governance/documents/${it.document_id}?tab=lifecycle`}
+                    onClick={() => setApprovalsOpen(false)}
+                    className="flex gap-3 px-4 py-3 text-xs hover:bg-amber-50/60"
+                  >
+                    <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium leading-snug truncate text-gray-800">{it.title}</p>
+                      <p className="mt-0.5 text-gray-400">
+                        {DOC_ASK[it.kind] || it.kind}
+                        {it.due_date ? ` · due ${parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) ?? ''}` : ''}
+                        {it.overdue ? ' · overdue' : ''}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+                {pendingApprovalCount === 0 ? (
                   <div className="px-4 py-6 text-center text-xs text-gray-400">Nothing awaiting your approval.</div>
                 ) : (
                   pendingApprovalItems.slice(0, 12).map((item) => (
@@ -308,13 +342,17 @@ export default function Header() {
                   ))
                 )}
               </div>
-              <Link
-                href="/compliance/assessments/approvals"
-                onClick={() => setApprovalsOpen(false)}
-                className="block border-t border-gray-100 px-4 py-2.5 text-center text-xs font-medium text-blue-600 hover:bg-gray-50"
-              >
-                Open approvals queue →
-              </Link>
+              <div className="flex border-t border-gray-100 text-center text-xs font-medium text-blue-600">
+                {/* without governance access each document above still opens; the page itself is theirs only with access */}
+                {canSeeGovernance && (
+                  <Link href="/governance/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                    My Approvals →
+                  </Link>
+                )}
+                <Link href="/compliance/assessments/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                  Assessment approvals →
+                </Link>
+              </div>
             </div>
           )}
         </div>
@@ -357,7 +395,12 @@ export default function Header() {
                     <div
                       key={n.id}
                       className={`flex gap-3 px-4 py-3 text-xs cursor-pointer ${!n.is_read ? 'bg-blue-50' : 'bg-white'}`}
-                      onClick={() => !n.is_read && markOneRead(n.id)}
+                      onClick={() => {
+                        if (!n.is_read) markOneRead(n.id);
+                        // opens what it is about (e.g. the document); only a path inside the app, never another site
+                        const to = n.link || n.url;
+                        if (to && /^\/(?![/\\])/.test(to)) { setNotifOpen(false); router.push(to); }
+                      }}
                     >
                       <span className={`mt-0.5 h-2 w-2 flex-shrink-0 rounded-full ${
                         n.notification_type === 'error' ? 'bg-red-500' :

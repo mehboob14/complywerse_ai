@@ -2,7 +2,7 @@
 
 // The document's "Change chain": every version from the original (the uploaded file, or the first version written here) to the
 // document as it is now, with who changed what, from what to what, on whose request and from which sources, the approvals in
-// between, each version's file to download, and the whole chain as a table that exports to Excel, PDF and CSV. The next person
+// between, each version's size (major or minor), file to download and text to read as it was, and the whole chain as a table that exports to Excel, PDF and CSV. The next person
 // to review reads what each person before them changed. Backend: governance/change_chain.py.
 //
 // Colours are explicit values where the platform shell repaints slate classes (see the design system): teal for the AI, amber
@@ -10,11 +10,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-  BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
+  BookOpen, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
   ListTree, Loader2, Send, ShieldCheck, Sparkles, Table2, Users, XCircle, type LucideIcon,
   RotateCcw,
 } from 'lucide-react';
-import { documentChainApi, ORIGIN_LABEL, shapeOf, type ChainEvent, type ChainItem, type ChainVersion, type ExportFormat } from '@/lib/documentChain';
+import { documentChainApi, ORIGIN_LABEL, shapeOf, sourceLabel, type ChainEvent, type ChainItem, type ChainSource, type ChainVersion, type ExportFormat } from '@/lib/documentChain';
+import { isApprovalEvent } from '../_view/trackedChanges';
 import { problemOf, saveBlob, type Segment } from '@/lib/studio/api';
 import { ago, plural, wordDiff } from '@/lib/studio/text';
 import { dateTime } from '@/lib/documentLifecycle';
@@ -35,6 +36,12 @@ const STAGE_DOT: Record<string, string> = {
   expired: 'bg-rose-500', archived: 'bg-[#94a3b8]', exception_applied: 'bg-amber-500',
 };
 const SLATE = 'bg-[#f1f5f9] text-[#475569] ring-[#e2e8f0]';
+/** the version's kind (its change_type): a major change raises 1.x to 2.0, a minor one 1.1 to 1.2 */
+const SIZE: Record<string, { label: string; tone: string }> = {
+  major: { label: 'Major', tone: 'bg-rose-50 text-rose-800 ring-rose-200' },
+  minor: { label: 'Minor', tone: 'bg-primary-50 text-[#0b6b58] ring-primary-100' },
+  patch: { label: 'Patch', tone: SLATE },
+};
 const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> = {
   created: { label: 'Created', icon: FileText, tone: SLATE },
   sent_for_review: { label: 'Sent for review', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
@@ -47,6 +54,11 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   review_completed: { label: 'Review completed', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   version_rollback: { label: 'Earlier version restored', icon: History, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
 };
+
+/** sources with nothing to name them by (a change made on the person's request) are labelled by what they rest on, not "Source" */
+const named = (sources: ChainSource[]) => (sources ?? []).map((s) => (s.ref || s.title || s.locator ? s : { ...s, title: sourceLabel(s) }));
+/** how a change reshaped the outline ("Paragraph → Heading 2"), or "Formatting only"; null when it is told by its words */
+const tagOf = (it: ChainItem) => (it.structure?.length ? it.structure.join(' · ') : shapeOf(it));
 
 const originLabel = (v: ChainVersion, isFirst: boolean) => (isFirst && v.origin === 'initial' ? 'The original'
   : v.restored_from ? `Restored v${v.restored_from}` : ORIGIN_LABEL[v.origin] ?? v.origin_label);
@@ -103,7 +115,7 @@ function Diff({ item }: { item: ChainItem }) {
 function ItemCard({ item, version }: { item: ChainItem; version: string }) {
   const kind = KIND[item.status] ?? KIND.modified;
   const shape = shapeOf(item);                                      // no word changed: say how the outline or formatting changed
-  const tag = item.structure?.length ? item.structure.join(' · ') : shape;
+  const tag = tagOf(item);
   return (
     <li className="rounded-xl border border-slate-200 bg-white shadow-card">
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-[#eef2f6] px-3 py-2">
@@ -120,20 +132,24 @@ function ItemCard({ item, version }: { item: ChainItem; version: string }) {
         <OriginBadge origin={item.origin} by={item.by} coverage={item.coverage} at={item.at} />
         {item.request && <p className="mt-1.5 border-l-2 border-primary-100 pl-2 text-[12px] italic text-[#475569]">“{item.request}”</p>}
         {item.reason && <p className="mt-1 text-[12px] text-[#334155]">{item.origin === 'ai' ? <span className="font-medium text-[#0b6b58]">Why: </span> : null}{item.reason}</p>}
-        <SourceChips sources={item.sources} />
+        <SourceChips sources={named(item.sources)} />
       </div>
     </li>
   );
 }
 
-function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, downloading, onRestore }: {
+function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, downloading, onRestore, onRead }: {
   v: ChainVersion; isFirst: boolean; current: boolean; open: boolean; onToggle: () => void; onShow: () => void; onDownload: () => void; downloading: boolean;
   /** make this version the document again, as a new version (editors only) */
   onRestore?: () => void;
+  /** read this version as it was, in the Document view */
+  onRead?: () => void;
 }) {
   const look = originLook(isFirst && v.origin === 'initial' ? 'initial' : v.origin);
   const Icon = look.icon;
-  const quote = v.reason && v.reason !== v.summary ? `“${v.reason}”` : v.summary;
+  // the summary holds the "Major change: why" line; the person's own reason is shown under it when it says something else
+  const reason = v.reason && !v.summary.includes(v.reason) ? `“${v.reason}”` : '';
+  const size = SIZE[v.kind ?? ''];
   const canShow = !isFirst && v.origin !== 'initial' && v.comparable;
   return (
     <div className={`rounded-xl border bg-white shadow-card ${current ? 'border-primary-600/50 ring-1 ring-primary-100' : 'border-slate-200'}`} data-version-id={v.id}>
@@ -143,6 +159,7 @@ function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, 
             <span className="text-[15px] font-semibold text-slate-900">v{v.number}</span>
             {current && <span className="rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#0b6b58] ring-1 ring-inset ring-primary-100">Current</span>}
             <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${look.pill}`}><Icon className="h-3 w-3" aria-hidden /> {originLabel(v, isFirst)}</span>
+            {size && !isFirst && <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${size.tone}`} title="How big the change was: a major change raises the first number of the version">{size.label}</span>}
             {!v.comparable && <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 ring-1 ring-inset ring-amber-200">text not readable</span>}
           </div>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
@@ -160,6 +177,12 @@ function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, 
               {downloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileDown className="h-3.5 w-3.5" />} File
             </button>
           )}
+          {onRead && !current && (
+            <button type="button" onClick={onRead} title={`Read version ${v.number} as it was`}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-semibold text-[#334155] hover:border-primary-600 hover:bg-primary-50">
+              <BookOpen className="h-3.5 w-3.5" /> Read
+            </button>
+          )}
           <button type="button" onClick={onShow} disabled={!canShow} title={canShow ? "See this version's changes marked in the document" : 'The original has nothing before it to compare with'}
             className="inline-flex items-center gap-1 rounded-lg border border-[#cbd5e1] bg-white px-2 py-1 text-[11px] font-semibold text-[#334155] hover:border-primary-600 hover:bg-primary-50 disabled:cursor-not-allowed disabled:opacity-40">
             <GitCompare className="h-3.5 w-3.5" /> Show in the document
@@ -172,7 +195,12 @@ function VersionCard({ v, isFirst, current, open, onToggle, onShow, onDownload, 
           )}
         </div>
       </div>
-      {quote && <p className="mx-4 mb-2.5 border-l-2 border-[#cbd5e1] pl-3 text-[13px] text-[#475569]">{quote}</p>}
+      {(v.summary || reason) && (
+        <div className="mx-4 mb-2.5 border-l-2 border-[#cbd5e1] pl-3 text-[13px] text-[#475569]">
+          {v.summary && <p className="text-[13px] text-[#475569]">{v.summary}</p>}
+          {reason && <p className="text-[13px] italic text-[#475569]">{reason}</p>}
+        </div>
+      )}
       {v.approved_by && (
         <p className="mx-4 mb-2.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-200">
           <CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Approved by {v.approved_by}{v.approved_at ? `, ${dateTime(v.approved_at)}` : ''}
@@ -279,6 +307,7 @@ function ChangesTable({ versions }: { versions: ChainVersion[] }) {
           {rows.map(({ v, it }) => {
             const kind = KIND[it.status] ?? KIND.modified;
             const look = originLook(it.origin);
+            const tag = tagOf(it);
             return (
               <tr key={`${v.id}-${it.n}`} className="border-t border-[#eef2f6] align-top hover:bg-[#f8fafc]">
                 <td className="whitespace-nowrap px-2.5 py-2 font-mono text-[#334155]">{v.number}.{it.n}</td>
@@ -286,13 +315,16 @@ function ChangesTable({ versions }: { versions: ChainVersion[] }) {
                 <td className="px-2.5 py-2"><span className="inline-flex items-center gap-1.5 text-[#334155]"><InitialsAvatar name={it.by || v.by} size="sm" /> {it.by || v.by}</span></td>
                 <td className="whitespace-nowrap px-2.5 py-2"><Stage stage={v.stage} label={v.stage_label} /></td>
                 <td className="px-2.5 py-2 text-[#334155]">{it.section || '—'}</td>
-                <td className="whitespace-nowrap px-2.5 py-2"><span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${kind.tone}`}>{kind.label}</span></td>
+                <td className="px-2.5 py-2">
+                  <span className={`whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${kind.tone}`}>{kind.label}</span>
+                  {tag && <span className="mt-1 block whitespace-nowrap text-[11px] font-medium text-[#8a6100]">{tag}</span>}
+                </td>
                 <td className="max-w-[16rem] bg-rose-50/40 px-2.5 py-2 text-rose-900"><span className="line-clamp-4 whitespace-pre-wrap" title={it.before_text}>{it.before_text || '—'}</span></td>
                 <td className="max-w-[16rem] bg-emerald-50/40 px-2.5 py-2 text-emerald-950"><span className="line-clamp-4 whitespace-pre-wrap" title={it.after_text}>{it.after_text || '—'}</span></td>
-                <td className="whitespace-nowrap px-2.5 py-2"><Words added={it.words_added} removed={it.words_removed} /></td>
+                <td className="whitespace-nowrap px-2.5 py-2">{shapeOf(it) ? <span className={`text-[11px] ${MUTED}`} title="No word changed">—</span> : <Words added={it.words_added} removed={it.words_removed} />}</td>
                 <td className="whitespace-nowrap px-2.5 py-2"><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${look.pill}`}><look.icon className="h-3 w-3" aria-hidden />{ORIGIN_LABEL[it.origin] ?? 'Changed'}</span></td>
                 <td className="max-w-[14rem] px-2.5 py-2 text-[#334155]">{[it.request && `“${it.request}”`, it.reason].filter(Boolean).join(' — ') || '—'}</td>
-                <td className="max-w-[16rem] px-2.5 py-2"><SourceChips sources={it.sources} /></td>
+                <td className="max-w-[16rem] px-2.5 py-2"><SourceChips sources={named(it.sources)} /></td>
               </tr>
             );
           })}
@@ -302,12 +334,41 @@ function ChangesTable({ versions }: { versions: ChainVersion[] }) {
   );
 }
 
-export default function ChainTab({ documentId, currentVersion, onShowInDocument, onRestore, focusVersionId }: {
+/** The "Approvals" filter as a table: the reviews, approvals, signatures, rejections and publications, newest first. */
+function ApprovalsTable({ events }: { events: ChainEvent[] }) {
+  if (!events.length) return <p className={`rounded-xl border border-dashed border-[#cbd5e1] bg-white p-8 text-center text-sm ${MUTED}`}>No approvals yet.</p>;
+  return (
+    <div className="relative overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-card">
+      <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+        <thead className="bg-[#f8fafc] text-[10px] uppercase tracking-wide text-[#475569]">
+          <tr>{['Date', 'What', 'By', 'Details'].map((h) => <th key={h} className="whitespace-nowrap px-2.5 py-2.5 font-semibold">{h}</th>)}</tr>
+        </thead>
+        <tbody>
+          {events.map((e, i) => {
+            const meta = EVENT[e.kind] ?? { label: e.kind.replace(/_/g, ' '), icon: FileText, tone: SLATE };
+            return (
+              <tr key={i} className="border-t border-[#eef2f6] align-top hover:bg-[#f8fafc]">
+                <td className="whitespace-nowrap px-2.5 py-2 text-[#334155]">{dateTime(e.at)}</td>
+                <td className="whitespace-nowrap px-2.5 py-2"><span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${meta.tone}`}><meta.icon className="h-3 w-3" aria-hidden />{meta.label}</span></td>
+                <td className="px-2.5 py-2">{e.actor ? <span className="inline-flex items-center gap-1.5 text-[#334155]"><InitialsAvatar name={e.actor} size="sm" /> {e.actor}</span> : <span className={MUTED}>—</span>}</td>
+                <td className="px-2.5 py-2 text-[#334155]">{e.detail || '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function ChainTab({ documentId, currentVersion, onShowInDocument, onRestore, onRead, focusVersionId }: {
   documentId: number;
   /** a version to open and scroll to once the chain is read (a link from the library tree) */
   focusVersionId?: number;
   /** editors: make a version the document again (asks first) */
   onRestore?: (v: { id: number; number: string }) => void;
+  /** read an earlier version as it was, in the Document view */
+  onRead?: (v: { id: number; number: string }) => void;
   currentVersion?: string | null;
   /** open the Document Viewer with the changes of one version marked (from the version before it, to it) */
   onShowInDocument: (range: { from: number; to: number }) => void;
@@ -326,10 +387,13 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
   const versions = useMemo(() => [...oldestFirst].reverse(), [oldestFirst]);        // newest first
   const firstId = oldestFirst[0]?.id;
   const people = useMemo(() => Array.from(new Set([...(data?.versions ?? []).map((v) => v.by), ...(data?.events ?? []).map((e) => e.actor ?? '')].filter(Boolean))).sort(), [data]);
+  // newest first, the person filter applied
+  const approvals = useMemo(() => (data?.events ?? []).filter((e) => isApprovalEvent(e) && (!person || e.actor === person))
+    .sort((a, b) => ((a.at ?? '') < (b.at ?? '') ? 1 : (a.at ?? '') > (b.at ?? '') ? -1 : 0)), [data, person]);
   const counts = useMemo(() => ({
     ai: versions.filter((v) => v.items.some((i) => i.origin === 'ai')).length,
     manual: versions.filter((v) => v.items.some((i) => i.origin === 'manual') || v.origin === 'manual').length,
-    approvals: data?.events.length ?? 0,
+    approvals: (data?.events ?? []).filter(isApprovalEvent).length,
   }), [versions, data]);
   const shown = useMemo(() => versions.filter((v) => {
     if (person && v.by !== person && !v.items.some((i) => i.by === person)) return false;
@@ -338,13 +402,14 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
     return true;
   }), [versions, filter, person]);
   const timeline = useMemo(() => {
-    const rows: Array<{ at: string; kind: 'v'; v: ChainVersion } | { at: string; kind: 'e'; e: ChainEvent }> = shown.map((v) => ({ at: v.at ?? '', kind: 'v' as const, v }));
-    if (filter === 'all' || filter === 'approvals') {
+    type TimelineRow = { at: string; kind: 'v'; v: ChainVersion } | { at: string; kind: 'e'; e: ChainEvent };
+    if (filter === 'approvals') return approvals.map((e): TimelineRow => ({ at: e.at ?? '', kind: 'e', e }));
+    const rows: TimelineRow[] = shown.map((v) => ({ at: v.at ?? '', kind: 'v' as const, v }));
+    if (filter === 'all') {
       for (const e of data?.events ?? []) if (!person || e.actor === person) rows.push({ at: e.at ?? '', kind: 'e', e });
     }
-    if (filter === 'approvals') return rows.filter((r) => r.kind === 'e');
     return rows.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
-  }, [shown, data, filter, person]);
+  }, [shown, data, filter, person, approvals]);
 
   const newest = timeline.find((r): r is { at: string; kind: 'v'; v: ChainVersion } => r.kind === 'v')?.v.id;
   const open = opened ?? new Set<number>(newest != null && filter !== 'approvals' ? [newest] : []);
@@ -459,9 +524,9 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
         )}
       </div>
 
-      {view === 'table' ? <ChangesTable versions={shown} /> : (
+      {view === 'table' ? (filter === 'approvals' ? <ApprovalsTable events={approvals} /> : <ChangesTable versions={shown} />) : (
         <ol className="relative space-y-3 before:absolute before:bottom-4 before:left-[19px] before:top-4 before:w-px before:bg-[#dbe3ea]" aria-label="Versions and approvals, newest first">
-          {timeline.length === 0 && <li className={`relative rounded-xl border border-dashed border-[#cbd5e1] bg-white p-8 text-center text-sm ${MUTED}`}>Nothing matches these filters.</li>}
+          {timeline.length === 0 && <li className={`relative rounded-xl border border-dashed border-[#cbd5e1] bg-white p-8 text-center text-sm ${MUTED}`}>{filter === 'approvals' && !person ? 'No approvals yet.' : 'Nothing matches these filters.'}</li>}
           {timeline.map((row, i) => {
             if (row.kind === 'e') return <EventRow key={`e${i}`} e={row.e} />;
             const v = row.v;
@@ -473,6 +538,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
                 <span className={`absolute left-0 top-3 inline-flex h-10 w-10 items-center justify-center rounded-full ring-1 ring-inset shadow-card ${look.node}`} aria-hidden><Icon className="h-4 w-4" /></span>
                 <VersionCard v={v} isFirst={isFirst} current={v.number === latest} open={open.has(v.id)} onToggle={() => toggle(v.id)}
                   downloading={fetching === v.id} onDownload={() => downloadVersion(v)} onRestore={onRestore ? () => onRestore({ id: v.id, number: v.number }) : undefined}
+                  onRead={onRead ? () => onRead({ id: v.id, number: v.number }) : undefined}
                   onShow={() => {
                     const idx = oldestFirst.findIndex((x) => x.id === v.id);
                     const before = idx > 0 ? oldestFirst[idx - 1] : null;

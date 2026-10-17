@@ -10,7 +10,8 @@ import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
 import { useToast } from '@/components/ui/ToastProvider';
-import { CLASSES, CYCLES, DOC_TYPES as TYPES, titleCase, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
+import { personOf } from '@/lib/people';
+import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
 import { addMonths } from '../_detailsRead';
 
 const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -122,22 +123,13 @@ export default function DetailsDialog({ doc, open, onClose, canEdit }: { doc: an
     enabled: open,
     staleTime: 5 * 60 * 1000,
   });
-  // Same key and query as the document page's compare list.
-  const docsQ = useQuery({
-    queryKey: ['governance-documents-for-compare'],
-    queryFn: async () => {
-      const response = await governanceApi.getDocuments({ skip: 0, limit: 1000, sort_by: 'title', sort_order: 'asc' } as any);
-      const payload = response.data as any;
-      return (payload?.items || []) as Array<{ id: number; title: string; doc_type: string }>;
-    },
-    enabled: open && canEdit,
-    staleTime: 60 * 1000,
-  });
+  const docsQ = useLibraryDocuments(open && canEdit);
 
   const ownerItems = useMemo<Item[]>(() => {
-    const out: Item[] = (usersQ.data || []).map((u: any) => ({
-      value: String(u.id), label: u.display_name || u.username || u.email || `User ${u.id}`, subLabel: u.email || undefined,
-    }));
+    const out: Item[] = (usersQ.data || []).map((u: any) => {
+      const p = personOf(u);           // the person (user_id), never the membership row's own id
+      return { value: String(p.id), label: p.name, subLabel: p.email };
+    });
     if (form.owner_id != null && !out.some((i) => i.value === String(form.owner_id))) {
       out.unshift({ value: String(form.owner_id), label: doc?.owner_name || `User ${form.owner_id}` });
     }
@@ -160,22 +152,19 @@ export default function DetailsDialog({ doc, open, onClose, canEdit }: { doc: an
   }, [frameworks, form.applicable_framework_ids]);
 
   const others = docsQ.data || [];
-  // ponytail: excludes this document and its direct children only; a deeper descendant can still be picked (a cycle).
-  const childIds = useMemo(() => new Set<number>((doc?.child_documents || []).map((c: any) => c.id)), [doc?.child_documents]);
-  const parentItems = useMemo<Item[]>(() => {
-    const out: Item[] = others
-      .filter((d) => d.id !== doc?.id && !childIds.has(d.id))
-      .map((d) => ({ value: String(d.id), label: d.title || `Document ${d.id}`, subLabel: d.doc_type ? titleCase(d.doc_type) : undefined }));
-    const p = doc?.parent_document;
-    if (form.parent_document_id != null && !out.some((i) => i.value === String(form.parent_document_id))) {
-      out.unshift({ value: String(form.parent_document_id), label: p?.id === form.parent_document_id ? p.title : `Document ${form.parent_document_id}` });
+  // the document and everything under it, at any depth: the server refuses any of them as the parent (a cycle)
+  const notParents = useMemo(() => {
+    const out = new Set<number>([doc?.id]);
+    for (let size = 0; size !== out.size;) {
+      size = out.size;
+      for (const d of others) if (d.parent_document_id != null && out.has(d.parent_document_id)) out.add(d.id);
     }
     return out;
-  }, [others, doc?.id, doc?.parent_document, childIds, form.parent_document_id]);
+  }, [doc?.id, others]);
 
   const tagItems = useMemo<Item[]>(() => {
     const all = new Set<string>(form.tags);
-    for (const d of others as any[]) for (const t of d.tags || []) if (typeof t === 'string' && t.trim()) all.add(t.trim());
+    for (const d of others) for (const t of d.tags || []) if (typeof t === 'string' && t.trim()) all.add(t.trim());
     return Array.from(all).sort((a, b) => a.localeCompare(b)).map((t) => ({ value: t, label: t }));
   }, [others, form.tags]);
 
@@ -256,9 +245,8 @@ export default function DetailsDialog({ doc, open, onClose, canEdit }: { doc: an
         multiSelect triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="Choose frameworks" triggerClassName={TRIGGER} />,
       { wide: true }),
     row('Parent document', doc?.parent_document?.title || '',
-      <MultiSelectDropdown title="Parent document" items={parentItems} selectedValues={one(form.parent_document_id)}
-        onApply={(v) => set({ parent_document_id: toId(v) })}
-        multiSelect={false} triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="None" triggerClassName={TRIGGER} />),
+      <ParentPicker value={form.parent_document_id} onChange={(id) => set({ parent_document_id: id })} exclude={notParents} enabled={open}
+        title={doc?.parent_document?.id === form.parent_document_id ? doc?.parent_document?.title : undefined} />),
     row('Tags', form.tags.length ? (
       <span className="flex flex-wrap gap-1">
         {form.tags.map((t) => <span key={t} className="rounded-full border border-[#d5dbe1] px-2 py-0.5 text-[11px] text-[#26323d]">{t}</span>)}

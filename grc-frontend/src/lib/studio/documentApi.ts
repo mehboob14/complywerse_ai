@@ -12,6 +12,8 @@ export interface DocumentAccess {
   can_edit: boolean;
   /** governance:policies:publish, administrators */
   can_publish: boolean;
+  /** may post remarks: editors, auditors and the document's sign-off people (absent on an older server) */
+  can_annotate?: boolean;
   /** the organisation has the approvals and acknowledgements life cycle */
   lifecycle: boolean;
   /** the AI Studio can open it; `reason` says why not */

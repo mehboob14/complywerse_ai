@@ -52,3 +52,4 @@ test('the two editors of one session share one queue', () => {
   assert.equal(queueFor(7), queueFor(7));
   assert.notEqual(queueFor(7), queueFor(8));
 });
+

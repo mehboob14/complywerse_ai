@@ -56,7 +56,8 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
       qc.invalidateQueries({ queryKey: ['studio', 'changes', session.id] });
       qc.invalidateQueries({ queryKey: ['studio', 'revisions', session.id] });
       qc.invalidateQueries({ queryKey: ['studio', 'messages', session.id] });          // the cards of the changes that were taken back
-      toast({ title: 'Change taken back', message: 'It is a new version, so nothing is lost.', type: 'success' });
+      toast({ title: 'Change taken back', type: 'success',
+              message: session.document_id && session.may_save !== false ? 'Taken back in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
     },
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ['studio', 'changes', session.id] });

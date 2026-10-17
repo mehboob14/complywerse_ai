@@ -10,7 +10,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, FileText, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Paperclip, Pencil, Send, Sparkles, Square, Undo2, Wand2, X, XCircle } from 'lucide-react';
 import { problemOf, studioApi, type AnswerItem, type Attachment, type Message, type Op, type Question, type ReferenceUsed, type Session } from '@/lib/studio/api';
-import { plural, wordDiff } from '@/lib/studio/text';
+import { num, plural, wordDiff } from '@/lib/studio/text';
 import LiveTurn from './LiveTurn';
 import { SetupCard } from './SetupFields';
 
@@ -30,8 +30,8 @@ export interface ChatPanelProps {
   onReject: (messageId: number, opIds: string[]) => Promise<void>;
   /** take a change that was accepted back out of the document */
   onRevertOp: (messageId: number, opId: string) => Promise<void>;
-  /** show the document with the changes marked (since the start) */
-  onShowChanges: () => void;
+  /** show the document with the changes marked: since the start, or between two revisions (what one accepted change did) */
+  onShowChanges: (range?: { from: number; to: number }) => void;
   onOpenTab: (tab: 'references' | 'instructions') => void;
   onShowReference: (key: string) => void;
   /** answer Comply Agent's questions on a message: the options chosen and own words per question; ``decide`` leaves them all to it */
@@ -87,7 +87,7 @@ function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
       <div className="flex flex-wrap items-center gap-2 text-xs">
         <span className="rounded bg-[#e3f1f1] px-1.5 py-0.5 font-semibold text-[#0f4c5c]">{KIND_LABEL[op.kind]}</span>
         {where && <span className="text-[#586472]">{where}</span>}
-        <span className="text-[#586472]">{op.words_added || op.words_removed ? `+${op.words_added} / −${op.words_removed} words` : ''}</span>
+        <span className="text-[#586472]">{op.words_added || op.words_removed ? `+${num(op.words_added)} / −${num(op.words_removed)} words` : ''}</span>
         {op.status === 'accepted' && <span className="ml-auto inline-flex items-center gap-1 font-medium text-[#0a5a38]"><CheckCircle2 className="h-3.5 w-3.5" /> Accepted</span>}
         {op.status === 'rejected' && <span className="ml-auto inline-flex items-center gap-1 font-medium text-[#586472]"><XCircle className="h-3.5 w-3.5" /> Rejected</span>}
         {op.status === 'reverted' && <span className="ml-auto inline-flex items-center gap-1 font-medium text-[#586472]"><Undo2 className="h-3.5 w-3.5" /> Taken back</span>}
@@ -120,7 +120,7 @@ function OpCard({ op, onAccept, onReject, onRevert, onShow, disabled }: {
               <GitCompare className="h-3.5 w-3.5" /> Show it in the document
             </button>
           )}
-          <button type="button" disabled={disabled || working !== null} onClick={() => run('revert', onRevert)} title="Put back what this change replaced. It is a new version, so nothing is lost."
+          <button type="button" disabled={disabled || working !== null} onClick={() => run('revert', onRevert)} title="Put back what this change replaced. It is a new revision, so nothing is lost."
             className="inline-flex items-center gap-1 rounded-md border border-[#b8c4c8] bg-white px-2.5 py-1 text-xs font-semibold text-[#3f4b58] hover:bg-[#f1f3f5] disabled:opacity-50">
             {working === 'revert' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Undo2 className="h-3.5 w-3.5" />} Take back
           </button>
@@ -197,7 +197,7 @@ function Proposal({ message, props }: { message: Message; props: ChatPanelProps 
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2 text-xs text-[#586472]">
         <span className="font-semibold text-[#26323d]">{plural(ops.length, 'proposed change')}</span>
-        {stats && <span>+{stats.words_added} / −{stats.words_removed} words</span>}
+        {stats && <span>+{num(stats.words_added)} / −{num(stats.words_removed)} words</span>}
         {pending.length > 0 && <span className="w-full text-[11px]">Shown in the document: accept or reject them all there, or one by one here.</span>}
       </div>
       <ul className="mt-2 space-y-2">
@@ -205,7 +205,8 @@ function Proposal({ message, props }: { message: Message; props: ChatPanelProps 
           <OpCard key={op.id} op={op} disabled={props.busy}
             onAccept={(override) => props.onAccept(message.id, [op.id], override !== undefined ? { [op.id]: override } : undefined)}
             onReject={() => props.onReject(message.id, [op.id])}
-            onRevert={() => props.onRevertOp(message.id, op.id)} onShow={props.onShowChanges} />
+            onRevert={() => props.onRevertOp(message.id, op.id)}
+            onShow={() => props.onShowChanges(op.revision ? { from: op.revision - 1, to: op.revision } : undefined)} />
         ))}
       </ul>
     </div>
@@ -636,7 +637,7 @@ export default function ChatPanel(props: ChatPanelProps) {
           )}
         </div>
         <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-[#586472]">
-          <button type="button" onClick={() => props.onOpenTab('references')} className="hover:underline">{plural(session.references.filter((r) => r.include).length, 'reference')} attached</button>
+          <button type="button" onClick={() => props.onOpenTab('references')} className="hover:underline">{plural(session.references.length, 'reference')} attached{session.references.some((r) => !r.include) ? ` · ${num(session.references.filter((r) => !r.include).length)} paused` : ''}</button>
           {session.instructions.entity_name ? <button type="button" onClick={() => props.onOpenTab('instructions')} className="hover:underline">Entity: {session.instructions.entity_name}</button> : null}
           {chat.length > 0 && aiConfigured && <button type="button" onClick={() => setIdeasOpen((v) => !v)} aria-expanded={ideasOpen} className="hover:underline">{ideasOpen ? 'Hide ideas' : 'Ideas'}</button>}
           <span className="ml-auto">Attach or drop any file · Enter to send · Shift+Enter for a new line</span>

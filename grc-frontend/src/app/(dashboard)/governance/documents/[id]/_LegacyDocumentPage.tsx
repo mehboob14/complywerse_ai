@@ -12,6 +12,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { SearchInput, MultiSelectDropdown, PageLoader, RightSlidePanel } from '@/components/ui';
 import RichTextEditor from '../_RichTextEditor';
 import { SignOffControlTab } from '../_SignoffControl';
+import { useLibraryDocuments } from '../_DetailsFields';
 import GovernanceMappingsPage from '../../mappings/page';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import DocumentSyncPanel from './_DocumentSyncPanel';
@@ -21,6 +22,7 @@ import TrackedChanges, { SinceApproved } from './_TrackedChanges';
 import { DocumentViewerTab, formatDate } from './_DocumentViewer';
 import ReviewHistory from './_ReviewHistory';
 import { documentApi } from '@/lib/studio/documentApi';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft,
@@ -301,25 +303,15 @@ export default function LegacyDocumentPage() {
       return response.data as any;
     },
     enabled: !!id,
+    retry: (n, e: any) => ![403, 404].includes(e?.response?.status) && n < 3,
   });
+  // the way back to the library: for people who read it (any governance:policies right; shown while the rights load)
+  const { hasPermission, isLoading: permsLoading } = usePermissions();
+  const library = permsLoading || hasPermission('governance:policies:*');
 
-  // All platform documents for the compare-modal "Other Document" picker.
+  // All platform documents for the compare-modal "Other Document" picker (titles only, the cache the details pickers share).
   // Fetched lazily — only when the gap-analysis tab is active.
-  const { data: allDocumentsForCompare = [] } = useQuery({
-    queryKey: ['governance-documents-for-compare'],
-    queryFn: async () => {
-      const response = await governanceApi.getDocuments({
-        skip: 0,
-        limit: 1000,
-        sort_by: 'title',
-        sort_order: 'asc',
-      } as any);
-      const payload = response.data as any;
-      return (payload?.items || []) as Array<{ id: number; title: string; doc_type: string }>;
-    },
-    enabled: !!id && activeTab === 'gap-analysis',
-    staleTime: 60 * 1000,
-  });
+  const { data: allDocumentsForCompare = [] } = useLibraryDocuments(!!id && activeTab === 'gap-analysis');
 
   const { data: htmlContent, isLoading: htmlLoading } = useQuery({
     queryKey: ['document-view-html', id],
@@ -603,12 +595,14 @@ export default function LegacyDocumentPage() {
     ) => governanceApi.applyGapFix(findingId, data),
     onSuccess: (response: any) => {
       const v = response?.data?.applied_version_number;
+      const st = response?.data?.document_status as string | undefined;
+      const where = st === 'pending_review' ? 'It is in review again, with its reviewers.'
+        : st === 'pending_approval' ? 'It is waiting for its approvers again.'
+        : st === 'draft' ? 'The document is a draft; send it for review when it is ready.' : '';
       toast({
         type: 'success',
-        title: 'Clause applied — pending approval',
-        message: v
-          ? `Saved to the document as version ${v} (prior content archived). The gap stays in progress until the document's reviewer and approver approve.`
-          : "Saved to the document. The gap stays in progress until the reviewer and approver approve."
+        title: 'Clause applied',
+        message: `${v ? `Saved to the document as version ${v} (the version before is kept).` : 'Saved to the document.'} ${where}`.trim(),
       });
       // Refresh findings (status=closed), document content (new clause),
       // and version-history list.
@@ -812,10 +806,11 @@ export default function LegacyDocumentPage() {
 
   if (docError || !document) {
     return (
-      <div className="flex h-64 flex-col items-center justify-center gap-4 text-red-400">
+      <div className="flex h-64 flex-col items-center justify-center gap-4 px-4 text-center text-red-400">
         <AlertCircle className="h-12 w-12" />
-        <p>Failed to load document</p>
-        <button onClick={() => router.back()} className="text-primary-400 hover:underline">Go Back</button>
+        {/* the server's own sentence (who may open it, or that it is not there) */}
+        <p className="max-w-lg">{(docError as any)?.response?.data?.detail || 'Failed to load document'}</p>
+        {library && <button onClick={() => router.back()} className="text-primary-400 hover:underline">Go Back</button>}
       </div>
     );
   }
@@ -849,12 +844,14 @@ export default function LegacyDocumentPage() {
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
-          <button
-            onClick={() => router.push('/governance/documents')}
-            className="mt-1 rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </button>
+          {library && (
+            <button
+              onClick={() => router.push('/governance/documents')} aria-label="Back to the documents"
+              className="mt-1 rounded-lg border border-slate-300 bg-white p-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5" />
+            </button>
+          )}
           <div>
             <div className="flex items-center gap-3 mb-1">
               <h1 className="text-lg font-semibold text-slate-900">{document.title}</h1>

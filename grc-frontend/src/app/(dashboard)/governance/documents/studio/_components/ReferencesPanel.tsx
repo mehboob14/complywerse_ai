@@ -106,7 +106,8 @@ function Attached({ session, reference, onChanged, open, onToggleOpen }: { sessi
             <Icon className="h-3 w-3" /> {KIND_LABEL[reference.kind]}
             {reference.label ? <span>· {reference.label}</span> : null}
             <span>· {size(reference.chars)}</span>
-            {reference.scope?.mode && reference.scope.mode !== 'all' ? <span>· {reference.scope.mode === 'domains' ? plural(reference.scope.domains?.length ?? 0, 'domain') : reference.scope.mode}</span> : null}
+            {reference.scope?.mode && reference.scope.mode !== 'all' ? <span>· {reference.scope.mode === 'domains' ? plural(reference.scope.domains?.length ?? 0, 'domain')
+              : reference.scope.mode === 'query' ? (reference.scope.query ? `about “${reference.scope.query}”` : 'about a topic') : reference.scope.mode}</span> : null}
           </p>
           {reference.truncated && <p className="mt-0.5 text-[11px] text-[#8a6100]">Too long: only the start was given to Comply Agent. Narrow it to the parts that matter.</p>}
           {reference.notes.map((n, i) => <p key={i} className="mt-0.5 text-[11px] text-[#8a6100]">{n}</p>)}

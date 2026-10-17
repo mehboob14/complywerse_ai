@@ -255,6 +255,11 @@ export default function DocumentAnnotationPanel({
             Save remark
           </button>
         </div>
+        {createMutation.isError && (
+          <p role="alert" className="text-[11px] text-rose-700">
+            {(createMutation.error as any)?.response?.data?.detail || 'The remark could not be saved.'}
+          </p>
+        )}
       </form>
     </div>
   );

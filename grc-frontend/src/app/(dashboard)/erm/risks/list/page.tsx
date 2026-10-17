@@ -2435,7 +2435,7 @@ function RiskModal({
     queryKey: ['governance-documents-for-onelink'],
     queryFn: async () => {
       try {
-        const response = await governanceApi.getDocuments({ limit: 500 });
+        const response = await governanceApi.getDocumentsBrief({ limit: 500 });   // titles: also for people without a governance right
         const data: any = response.data;
         return (Array.isArray(data) ? data : data?.items || []) as Array<{ id: number; title?: string }>;
       } catch {

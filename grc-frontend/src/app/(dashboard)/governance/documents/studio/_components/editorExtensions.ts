@@ -24,8 +24,10 @@ const NO_SPANS = {
 };
 
 const cellKeys = {
-  // a new line inside a cell is a line break, not a second paragraph (a cell holds one paragraph)
-  Enter: ({ editor }: { editor: { commands: { setHardBreak: () => boolean } } }) => editor.commands.setHardBreak(),
+  // a new line inside a cell is a line break, not a second paragraph (a cell holds one paragraph). A keymap is the whole editor's,
+  // so outside a table Enter is left to the editor: a new paragraph
+  Enter: ({ editor }: { editor: { isActive: (name: string) => boolean; commands: { setHardBreak: () => boolean } } }) =>
+    (editor.isActive('tableCell') || editor.isActive('tableHeader')) && editor.commands.setHardBreak(),
 };
 
 export const StudioCell = TableCell.extend({

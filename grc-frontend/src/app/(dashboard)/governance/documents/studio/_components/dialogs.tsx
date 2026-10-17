@@ -1,12 +1,13 @@
 'use client';
 
 /** The studio's dialogs: export, move to the library, save into the library document, save as a template. */
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2, Search } from 'lucide-react';
+import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2 } from 'lucide-react';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioApi, type ExportNote, type ExportOptions, type MoveToLibrary, type Session } from '@/lib/studio/api';
+import { saveWarning, savedNote } from '@/lib/studio/text';
 import AssetImage from './AssetImage';
 import { DocumentDetailsFields, useDocumentDetails } from '../../_DetailsFields';
 import { detailsPayload } from '../../_detailsRead';
@@ -115,28 +116,27 @@ const REVIEW_MONTHS: Record<string, number> = { 'Every 6 months': 6, 'Every year
 
 export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { session: Session; onClose: () => void; flush: () => Promise<void>; onDone: (docId: number) => void }) {
   const { toast } = useToast();
-  // what the setup chose, so the library document starts as the person set it up; the owner starts as the person
+  // what the setup chose, so the library document starts as the person set it up (the parent chosen when it was started, too);
+  // the owner starts as the person
   const chosen = String(session.instructions.classification ?? '').toLowerCase();
   const details = useDocumentDetails({
     title: session.title,
     doc_type: session.doc_type === 'other' ? 'policy' : session.doc_type,
     classification: (CLASSIFICATIONS as readonly string[]).includes(chosen) ? chosen : 'internal',
     review_cycle_months: REVIEW_MONTHS[String(session.instructions.review_cycle ?? '')] ?? 12,
+    parent_document_id: session.references.find((r) => r.kind === 'parent_document')?.source_id ?? null,
   });
-  const [parent, setParent] = useState<number | null>(null);
-  const [q, setQ] = useState('');
-  const [frameworks, setFrameworks] = useState<number[]>([]);
-  const docs = useQuery({ queryKey: ['studio', 'documents', q], queryFn: () => studioApi.documents(q, 10), staleTime: 30_000 });
+  // the frameworks it was written against (its framework references) start ticked
+  const [frameworks, setFrameworks] = useState<number[]>(() => Array.from(new Set(session.references.flatMap((r) => (r.kind === 'framework' && r.source_id != null ? [r.source_id] : [])))));
   const fws = useQuery({ queryKey: ['studio', 'frameworks'], queryFn: studioApi.frameworks, staleTime: 120_000 });
   const move = useMutation({
     mutationFn: async () => {
       await flush();
-      return studioApi.moveToLibrary(session.id, { ...(detailsPayload(details.form) as Partial<MoveToLibrary>), parent_document_id: parent, framework_ids: frameworks });
+      return studioApi.moveToLibrary(session.id, { ...(detailsPayload(details.form) as Partial<MoveToLibrary>), framework_ids: frameworks });
     },
     onSuccess: (r) => { toast({ title: 'Moved to the document library', message: `${r.title} is a draft, version ${r.version}.`, type: 'success' }); onDone(r.document_id); },
     onError: (e) => toast({ title: 'Could not move it', message: problemOf(e), type: 'error' }),
   });
-  const parentTitle = useMemo(() => docs.data?.items.find((d) => d.id === parent)?.title, [docs.data, parent]);
   return (
     <AnimatedModal isOpen onClose={onClose} title="Move to the document library" size="lg"
       subtitle={session.kind === 'upload' && session.source.name
@@ -146,17 +146,6 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
         <button type="button" className={primary} disabled={!details.form.title.trim() || move.isPending} onClick={() => move.mutate()}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
       <div className="space-y-4 p-5">
         <DocumentDetailsFields d={details} />
-        <div>
-          <p className="text-xs font-semibold text-[#26323d]">Parent document (optional)</p>
-          {parent ? (
-            <p className="mt-1 flex items-center gap-2 rounded-lg bg-[#f3fbf9] px-3 py-2 text-sm text-[#1f2933]">{parentTitle ?? `Document ${parent}`}<button type="button" onClick={() => setParent(null)} className="ml-auto text-xs font-semibold text-[#0b6b58] hover:underline">Remove</button></p>
-          ) : (
-            <>
-              <label className="relative mt-1 block"><span className="sr-only">Search the library</span><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[#7b8794]" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the document library" className={`${input} pl-8`} /></label>
-              <ul className="mt-1.5 max-h-32 space-y-1 overflow-y-auto">{docs.data?.items.map((d) => <li key={d.id}><button type="button" onClick={() => setParent(d.id)} className="w-full truncate rounded border border-[#e1e5e9] px-2.5 py-1.5 text-left text-sm hover:bg-[#f3fbf9]">{d.title} <span className="text-[11px] text-[#586472]">· {d.doc_type}</span></button></li>)}</ul>
-            </>
-          )}
-        </div>
         {fws.data && fws.data.items.length > 0 && (
           <fieldset>
             <legend className="text-xs font-semibold text-[#26323d]">Frameworks this document must comply with (optional)</legend>
@@ -179,16 +168,18 @@ export function SaveToDocumentDialog({ session, onClose, flush, onDone }: { sess
   const [conflict, setConflict] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: async (force: boolean) => { await flush(); return studioApi.saveToDocument(session.id, { change_reason: reason || undefined, force }); },
-    onSuccess: (r) => { toast({ title: `Saved as version ${r.version}`, message: r.status === 'pending_review' ? 'The document went back to review because its text changed.' : undefined, type: 'success' }); onDone(); },
+    onSuccess: (r) => { toast({ ...savedNote(r, session.document_status), type: 'success' }); onDone(); },
     onError: (e) => { if (isConflict(e)) setConflict(problemOf(e)); else toast({ title: 'Could not save', message: problemOf(e), type: 'error' }); },
   });
+  // the version everyone else reads until this one is published (GET /studio/sessions/{id}: document_version_in_force)
+  const warning = saveWarning(session.document_status, session.document_version_in_force);
   return (
-    <AnimatedModal isOpen onClose={onClose} title="Save to the library document" subtitle={`${session.title} — saved as its next version`} size="md"
+    <AnimatedModal isOpen onClose={onClose} title="Save to the library" subtitle={`${session.title} — saved as its next version`} size="md"
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
         <button type="button" className={primary} disabled={save.isPending} onClick={() => save.mutate(!!conflict)}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {conflict ? 'Save anyway' : 'Save as a new version'}</button></div>}>
       <div className="space-y-3 p-5">
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">What changed (optional)</span><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Updated the password rules to match the new standard" className={`${input} mt-1`} /></label>
-        <p className="text-xs text-[#586472]">If the document is approved or published, saving changed text sends it back to review.</p>
+        {warning && <p className="flex gap-1.5 rounded-lg bg-[#fffbed] px-2.5 py-2 text-xs text-[#6b4e00]"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> {warning}</p>}
         {conflict && <p className="rounded-lg border border-[#f0cf7a] bg-[#fffbed] p-3 text-sm text-[#6b4e00]" role="alert">{conflict}</p>}
       </div>
     </AnimatedModal>

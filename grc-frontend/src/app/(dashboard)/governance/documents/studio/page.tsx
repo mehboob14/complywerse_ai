@@ -19,7 +19,7 @@ import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryD
 import { ago, plural } from '@/lib/studio/text';
 import { documentApi } from '@/lib/studio/documentApi';
 import { FrameworkList } from './_components/ReferencesPanel';
-import { DocumentDetailsFields, useDocumentDetails } from '../_DetailsFields';
+import { DocumentDetailsFields, titleCase, useDocumentDetails } from '../_DetailsFields';
 import { detailsPayload } from '../_detailsRead';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -296,7 +296,7 @@ function YourWork({ sessions, loading, onOpen, onDelete }: { sessions: Session[]
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5"><span className="truncate text-[13px] font-semibold text-[#1f2933]">{s.title}</span>
                       {s.document_id ? <span title="In the library" aria-label="In the library" className="shrink-0 text-[#0f766e]"><Library className="h-3.5 w-3.5" /></span> : null}</span>
-                    <span className="block truncate text-[11px] text-[#586472]">{DOC_TYPE_LABEL[s.doc_type] ?? s.doc_type} · {plural(s.words, 'word')} · v{s.revision}{!s.document_id && s.source?.name ? ` · ${s.source.name}` : ''}</span>
+                    <span className="block truncate text-[11px] text-[#586472]">{DOC_TYPE_LABEL[s.doc_type] ?? titleCase(s.doc_type)} · {plural(s.words, 'word')} · rev {s.revision}{!s.document_id && s.source?.name ? ` · ${s.source.name}` : ''}</span>
                   </span>
                   <span className="shrink-0 text-[11px] text-[#586472]">{ago(s.updated_at)}</span>
                 </button>

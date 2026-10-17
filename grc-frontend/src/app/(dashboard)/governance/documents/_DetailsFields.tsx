@@ -1,14 +1,15 @@
 'use client';
 
 // The details a new document is asked for - title, type, classification, description, owner, department, review cycle, effective
-// date and next review - shared by the library's New Document, the AI Studio's Upload and Move to the library. Choosing a file
+// date, next review and parent - shared by the library's New Document, the AI Studio's Upload and Move to the library. Choosing a file
 // reads them from it (POST /governance/documents/read-details) into the fields the person has not touched, each saying where its
 // value came from. The lists share their React Query keys (and shapes) with the document pages, so they come from one cache.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
-import apiClient, { tenantApi } from '@/lib/api';
+import apiClient, { governanceApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
+import { personOf } from '@/lib/people';
 import { EMPTY_DETAILS, applyRead, change, type DetailKey, type Details, type Origin, type ReadResult } from './_detailsRead';
 
 export const DOC_TYPES: [string, string][] = [
@@ -52,6 +53,39 @@ export function useOrgDepartments(enabled = true) {
     enabled,
     staleTime: 5 * 60 * 1000,
   });
+}
+
+/** The library's documents by title, without their text (also the document page's compare list). */
+export function useLibraryDocuments(enabled = true) {
+  return useQuery({
+    queryKey: ['governance-documents-for-compare'],
+    queryFn: async () => {
+      const payload: any = (await governanceApi.getDocumentsBrief({ skip: 0, limit: 1000, sort_by: 'title', sort_order: 'asc' })).data;
+      return (Array.isArray(payload) ? payload : payload?.items || []) as Array<{ id: number; title: string; doc_type: string; tags?: string[]; parent_document_id?: number | null }>;
+    },
+    enabled,
+    staleTime: 0,                                    // a document created a moment ago must be offered; the cached list shows meanwhile
+  });
+}
+
+/** One library document to sit under (none: at the top). `exclude`: the document itself and its children; `title`: the chosen one's
+ *  title when the list does not hold it. */
+export function ParentPicker({ value, onChange, exclude, title, enabled = true }: {
+  value: number | null; onChange: (id: number | null) => void; exclude?: ReadonlySet<number>; title?: string; enabled?: boolean;
+}) {
+  const docsQ = useLibraryDocuments(enabled);
+  const items = useMemo<Item[]>(() => {
+    const out: Item[] = (docsQ.data || [])
+      .filter((d) => !exclude?.has(d.id))
+      .map((d) => ({ value: String(d.id), label: d.title || `Document ${d.id}`, subLabel: d.doc_type ? titleCase(d.doc_type) : undefined }));
+    if (value != null && !out.some((i) => i.value === String(value))) out.unshift({ value: String(value), label: title || `Document ${value}` });
+    if (value != null) out.unshift({ value: '', label: 'None', subLabel: 'At the top, under no other document' });   // to undo a choice
+    return out;
+  }, [docsQ.data, exclude, value, title]);
+  return (
+    <MultiSelectDropdown title="Parent document" items={items} selectedValues={value == null ? [] : [String(value)]} onApply={(v) => onChange(v[0] ? Number(v[0]) : null)}
+      multiSelect={false} triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="None" triggerClassName={TRIGGER} />
+  );
 }
 
 /** The form's state: the owner starts as the person; `read(file)` fills what the person has not touched. */
@@ -131,9 +165,10 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
   const deptQ = useOrgDepartments();
 
   const ownerItems = useMemo<Item[]>(() => {
-    const out: Item[] = (usersQ.data || []).map((u: any) => ({
-      value: String(u.id), label: u.display_name || u.username || u.email || `User ${u.id}`, subLabel: u.email || undefined,
-    }));
+    const out: Item[] = (usersQ.data || []).map((u: any) => {
+      const p = personOf(u);           // the person (user_id), never the membership row's own id
+      return { value: String(p.id), label: p.name, subLabel: p.email };
+    });
     if (form.owner_id != null && !out.some((i) => i.value === String(form.owner_id))) out.unshift({ value: String(form.owner_id), label: `User ${form.owner_id}` });
     return out;
   }, [usersQ.data, form.owner_id]);
@@ -190,6 +225,9 @@ export function DocumentDetailsFields({ d, tenantId }: { d: DocumentDetails; ten
       </Field>
       <Field label="Next review" note={tag('next_review_date') || (!form.next_review_date && <span className="mt-0.5 block text-[11px] text-[#586472]">Left empty: today plus the review cycle</span>)}>
         <input type="date" value={form.next_review_date} onChange={(e) => set({ next_review_date: e.target.value })} className={INPUT} />
+      </Field>
+      <Field label="Parent document (optional)">
+        <ParentPicker value={form.parent_document_id} onChange={(id) => set({ parent_document_id: id })} />
       </Field>
       <Field label="Description" wide note={tag('description')}>
         <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={2} className={INPUT} />

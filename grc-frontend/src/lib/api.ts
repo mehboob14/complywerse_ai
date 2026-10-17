@@ -285,6 +285,15 @@ export const risksApi = {
   },
 };
 
+/** A document as GET /governance/documents/{id} serves it. While a new version of a published document is on its way, the published
+ *  one stays in force: `version_in_force` and `in_force_version_id` name it (for everyone); someone who reads that one gets its text,
+ *  file and number, and `newer_version` names the version on its way. */
+export type ServedDocument = GovernanceDocument & {
+  version_in_force?: string | null;
+  in_force_version_id?: number | null;
+  newer_version?: { number: string; status: string } | null;
+};
+
 export const governanceApi = {
   getObjectives: () => apiClient.get<GovernanceObjective[]>('/governance/objectives'),
   getObjectiveById: (id: string) => apiClient.get<GovernanceObjective>(`/governance/objectives/${id}`),
@@ -300,9 +309,19 @@ export const governanceApi = {
 
   getDocuments: (params?: { doc_type?: string; status?: string; owner_id?: number; search?: string; sort_by?: string; sort_order?: string; skip?: number; limit?: number }) =>
     apiClient.get<GovernanceDocument[]>('/governance/documents', { params }),
+  /** The documents a picker offers, without their text (`brief=1`; people without a governance right get the ones in force).
+   *  The rows: an array, or `{ items }`. A backend that refuses `brief` (400/422) answers the full list instead. */
+  getDocumentsBrief: async (params?: { sort_by?: string; sort_order?: string; skip?: number; limit?: number }) => {
+    try {
+      return await apiClient.get('/governance/documents', { params: { ...params, brief: 1 } });
+    } catch (e: any) {
+      if (![400, 422].includes(e?.response?.status)) throw e;
+      return apiClient.get('/governance/documents', { params });
+    }
+  },
   getDocumentHierarchy: (params?: { tenant_id?: number; parent_id?: number }) =>
     apiClient.get('/governance/documents/hierarchy', { params }),
-  getDocument: (id: number) => apiClient.get<GovernanceDocument>(`/governance/documents/${id}`),
+  getDocument: (id: number) => apiClient.get<ServedDocument>(`/governance/documents/${id}`),
   createDocument: (data: Partial<GovernanceDocument>) =>
     apiClient.post<GovernanceDocument>('/governance/documents', data),
   updateDocument: (id: number, data: Partial<GovernanceDocument>) =>

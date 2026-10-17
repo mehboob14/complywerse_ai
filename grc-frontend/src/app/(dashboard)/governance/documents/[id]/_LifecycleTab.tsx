@@ -2,7 +2,7 @@
 
 // The document's "Approvals & Acknowledgements" tab (organisations with the document life cycle): where the document stands
 // (its stages), what the person reading is asked to do — sign, or acknowledge — first, then each reviewer and approver with
-// where they are, who reviews and approves (and sending it), who has acknowledged, the life cycle, the due-date settings and
+// where they are, who reviews and approves (and sending it), who has acknowledged which version (with their drawn signature), the life cycle, the due-date settings and
 // the discussion. Backend: governance/doc_lifecycle.py (requests, acknowledgements, timeline) and routers/document_signoff.py
 // (participants and signatures).
 import { useState } from 'react';
@@ -17,6 +17,9 @@ import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPan
 import { SIGNOFF_STATUS, SignoffAction, SignoffParticipants, StatusChip, useSignoff, type Signoff } from '../_SignoffControl';
 
 interface LifecycleSettings { approval_days: number; ack_days: number; remind_days: number; admin_after_days: number; email: boolean }
+/** a row's own drawn signature (servers from before it was sent leave the field out) */
+type Esign = { id: number; image_sha256?: string | null } | null;
+const ownEsign = (r: Row): Esign | undefined => ('esign' in r ? (r as Row & { esign: Esign }).esign : undefined);
 
 // ── small pieces ─────────────────────────────────────────────────────────────
 const initials = (name: string | null) =>
@@ -95,12 +98,18 @@ export function AckAction({ base, row, onDone, open: startOpen = false, version,
   onCancel?: () => void;
 }) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [open, setOpen] = useState(startOpen);
   const [comment, setComment] = useState('');
   const [signature, setSignature] = useState<string | null>(null);
   const acknowledge = useMutation({
     mutationFn: async () => (await apiClient.post(`${base}/acknowledge`, { comment: comment.trim() || null, signature_image: signature, version })).data,
-    onSuccess: () => { setOpen(false); setComment(''); setSignature(null); onDone(); toast({ type: 'success', title: 'Acknowledged', message: 'Your acknowledgement was recorded.' }); },
+    // the toast first: onDone closes the popup this form is in
+    onSuccess: () => {
+      toast({ type: 'success', title: 'Acknowledged', message: `You acknowledged${version ? ` version ${version}` : ' it'}; it is recorded with the document.` });
+      queryClient.invalidateQueries({ queryKey: ['my-document-requests'] });     // the top bar's and My Approvals' "waiting for you"
+      setOpen(false); setComment(''); setSignature(null); onDone();
+    },
     onError: (e: any) => toast({ type: 'error', title: 'Not acknowledged', message: e?.response?.data?.detail || 'Could not record the acknowledgement.' }),
   });
   return (
@@ -161,7 +170,9 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">{step.title}</p>
             <ul className="space-y-3">
               {list.map((r) => {
-                const sig = [...signatures].reverse().find((s) => s.signer_user_id === r.user_id && s.role_type === step.role);
+                // the row's own signature (each round is its own row); a server without it: this person's latest in the role
+                const own = ownEsign(r);
+                const sig = own !== undefined ? own : [...signatures].reverse().find((s) => s.signer_user_id === r.user_id && s.role_type === step.role)?.esign;
                 return (
                   <li key={r.id} className="flex items-start gap-3">
                     <Avatar name={r.user} />
@@ -176,7 +187,7 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
                           : r.status === 'rejected' && r.done_at ? `Rejected ${dateTime(r.done_at)}` : ''}
                       </p>
                       {r.comment && <p className="mt-0.5 text-xs italic text-gray-700">“{r.comment}”</p>}
-                      {r.status === 'done' && sig?.esign && <SignatureSeal id={sig.esign.id} fingerprint={sig.esign.image_sha256} />}
+                      {r.status === 'done' && sig && <SignatureSeal id={sig.id} fingerprint={sig.image_sha256 ?? ''} />}
                     </div>
                   </li>
                 );
@@ -206,6 +217,9 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
     (filter === 'all' || (filter === 'done' ? p.status === 'done' : filter === 'overdue' ? p.status === 'pending' && p.overdue : p.status === 'pending'))
     && (!q.trim() || (p.user || '').toLowerCase().includes(q.trim().toLowerCase()));
   const people = acks.people.filter(matches);
+  // what each person acknowledged before their newest row (a major version asks again; the earlier ones and their seals stay shown)
+  const earlier = new Map<number, Row[]>();
+  for (const r of acks.history ?? []) earlier.set(r.user_id, [...(earlier.get(r.user_id) ?? []), r]);
   const FILTERS: [Filter, string][] = [['waiting', `Waiting · ${acks.pending}`], ['overdue', `Overdue · ${acks.overdue}`], ['done', `Acknowledged · ${acks.done}`], ['all', 'Everyone']];
   const empty = { waiting: 'Nobody is waiting: everyone has acknowledged.', overdue: 'Nobody is overdue.', done: 'Nobody has acknowledged yet.', all: 'Nobody matches.' }[filter];
 
@@ -223,7 +237,7 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
       </div>
       {acks.total === 0 ? (
         <p className="px-4 py-3 text-xs text-gray-600">
-          {data.document.status === 'published' ? 'Nobody has been asked yet.' : 'Once the document is published, everyone in the organisation is asked to read and acknowledge it, once.'}
+          {data.document.status === 'published' ? 'Nobody has been asked yet.' : 'Once the document is published, everyone in the organisation is asked to read and acknowledge it; each new major version (2.0, 3.0) asks everyone again.'}
         </p>
       ) : (
         <div className="space-y-3 px-4 py-3">
@@ -246,14 +260,32 @@ function Acknowledgements({ data, meId, base, canRemind = true }: { data: Lifecy
             </label>
           </div>
           <ul className="max-h-80 divide-y divide-gray-100 overflow-auto">
-            {people.map((p) => (
-              <li key={p.id} className="flex items-center gap-3 py-2">
-                <Avatar name={p.user} />
-                <span className="min-w-0 flex-1 truncate text-sm text-gray-900">{p.user || 'Someone'}{p.user_id === meId && <You />}</span>
-                <Badge row={p} doneLabel="Acknowledged" />
-                <span className="w-36 shrink-0 text-right text-xs text-gray-600">{p.status === 'done' ? dateTime(p.done_at) : `due ${day(p.due_date)}`}</span>
-              </li>
-            ))}
+            {people.map((p) => {
+              const seal = p.status === 'done' ? ownEsign(p) : null;
+              return (
+                <li key={p.id} className="flex items-center gap-3 py-2">
+                  <Avatar name={p.user} />
+                  <div className="min-w-0 flex-1">
+                    <span className="block truncate text-sm text-gray-900">
+                      {p.user || 'Someone'}{p.user_id === meId && <You />}
+                      {p.version && <span className="ml-2 text-[11px] text-gray-500" title={p.status === 'done' ? 'The version this person acknowledged' : 'The version this person is asked to acknowledge'}>version {p.version}</span>}
+                    </span>
+                    {seal && <SignatureSeal id={seal.id} fingerprint={seal.image_sha256 ?? ''} />}
+                    {(earlier.get(p.user_id) ?? []).map((e) => {
+                      const s = ownEsign(e);
+                      return (
+                        <div key={e.id} className="mt-1 border-l-2 border-emerald-200 pl-2 text-[11px] text-gray-600">
+                          Acknowledged version {e.version || '-'} on {day(e.done_at)}
+                          {s && <SignatureSeal id={s.id} fingerprint={s.image_sha256 ?? ''} thumb={false} />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <Badge row={p} doneLabel="Acknowledged" />
+                  <span className="w-36 shrink-0 text-right text-xs text-gray-600">{p.status === 'done' ? dateTime(p.done_at) : `due ${day(p.due_date)}`}</span>
+                </li>
+              );
+            })}
             {people.length === 0 && <li className="py-3 text-xs text-gray-600">{empty}</li>}
           </ul>
         </div>
@@ -361,10 +393,12 @@ export function SettingsCard() {
 }
 
 // ── the tab ──────────────────────────────────────────────────────────────────
-export default function LifecycleTab({ documentId, doc, canEdit = true, settings = true, ownSteps = true }: {
+export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnotate = true, settings = true, ownSteps = true }: {
   documentId: number; doc: any;
   /** who may change the document: participants, Send and Remind */
   canEdit?: boolean;
+  /** who may post remarks (editors, auditors, the sign-off's people): the Discussion is theirs, hidden from the others */
+  canAnnotate?: boolean;
   /** the organisation-wide due-date settings (the AI Studio's view keeps them behind its ⋯ menu) */
   settings?: boolean;
   /** the person's own sign / acknowledge step (the AI Studio's view asks for those in its own popups) */
@@ -408,7 +442,8 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, settings
       </section>
 
       {ownSteps && <SignoffAction documentId={documentId} due={mySign?.due_date} />}
-      {ownSteps && myAck && <AckAction base={base} row={myAck} onDone={refresh} version={data.document.version} />}
+      {/* the version the request names: while a new version is on its way it is the one in force, not the newest */}
+      {ownSteps && myAck && <AckAction base={base} row={myAck} onDone={refresh} version={myAck.version || data.document.version} />}
 
       <ReviewAndApproval rows={data.approvals} signoff={signoff} meId={meId} />
       <SignoffParticipants documentId={documentId} doc={doc} readOnly={!canEdit} />
@@ -416,11 +451,13 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, settings
       <Timeline events={data.timeline} />
       {settings && <SettingsCard />}
 
-      <section className="rounded-xl border border-gray-200 bg-white p-4">
-        <h3 className="mb-1 text-sm font-semibold text-gray-900">Discussion</h3>
-        <p className="mb-3 text-xs text-gray-500">Everyone involved (the author, reviewers and approvers) can comment here.</p>
-        <DocumentAnnotationPanel documentId={documentId} />
-      </section>
+      {canAnnotate && (
+        <section className="rounded-xl border border-gray-200 bg-white p-4">
+          <h3 className="mb-1 text-sm font-semibold text-gray-900">Discussion</h3>
+          <p className="mb-3 text-xs text-gray-500">Everyone involved (the author, reviewers and approvers) can comment here.</p>
+          <DocumentAnnotationPanel documentId={documentId} />
+        </section>
+      )}
     </div>
   );
 }

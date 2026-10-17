@@ -23,6 +23,7 @@ import {
   useFrameworkNames,
   docTypeStyle,
   verLabel,
+  inForceNote,
 } from './lib';
 import { PageLoader } from '@/components/ui';
 import { LifecycleHover } from './LifecycleHover';
@@ -106,6 +107,7 @@ export function WorkspaceList({
                 headerDoc.document_code || null,
                 docTypeStyle(headerDoc.doc_type).label,
                 verLabel(headerDoc.current_version),
+                inForceNote(headerDoc),
               ]
                 .filter(Boolean)
                 .join(' · ')}
@@ -174,6 +176,7 @@ export function WorkspaceList({
                       doc.document_code || null,
                       docTypeStyle(doc.doc_type).label,
                       verLabel(doc.current_version),
+                      inForceNote(doc),
                     ]
                       .filter(Boolean)
                       .join(' · ')}

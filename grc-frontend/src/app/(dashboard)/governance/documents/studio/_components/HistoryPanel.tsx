@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Versions of the working document: every save, every accepted AI change, the file as it was opened. Any version can be read
+ * Revisions of the working document ("rev N", not the library's versions): every save, every accepted AI change, the file as it was opened. Any revision can be read
  * as a redline against the next, against the current text, or restored; the document can also be compared with any other
  * document of the library.
  */
@@ -44,14 +44,18 @@ export default function HistoryPanel({ session, flush, onCompare, onContent, onS
   const docs = useQuery({ queryKey: ['studio', 'documents', q], queryFn: () => studioApi.documents(q, 12), staleTime: 30_000 });
   const restore = useMutation({
     mutationFn: async (n: number) => { await flush(); return studioApi.restore(session.id, n); },
-    onSuccess: (r) => { onContent(r.content, r.revision); toast({ title: 'Version restored', message: 'It is saved as a new version, so nothing is lost.', type: 'success' }); },
+    onSuccess: (r) => {
+      onContent(r.content, r.revision);
+      toast({ title: 'Revision restored', type: 'success',
+              message: session.document_id ? 'Restored in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
+    },
     onError: (e) => toast({ title: 'Could not restore it', message: problemOf(e), type: 'error' }),
   });
   const base = revisions.data?.base_label ?? session.base_label;
 
   return (
     <div className="h-full overflow-y-auto p-3">
-      <h3 className="text-sm font-semibold text-[#1f2933]">Changes and versions</h3>
+      <h3 className="text-sm font-semibold text-[#1f2933]">Changes and revisions</h3>
       <div className="mt-2 space-y-1.5">
         <button type="button" onClick={() => onCompare({ type: 'revision', from: 0, label: base ? `Changes since “${base}”` : 'Changes since the start' })}
           className="flex w-full items-center gap-2 rounded-lg border border-[#c5ccd3] bg-white px-3 py-2 text-left text-sm hover:border-[#0f766e] hover:bg-[#f3fbf9]">
@@ -97,7 +101,7 @@ export default function HistoryPanel({ session, flush, onCompare, onContent, onS
         </ul>
       </div>
 
-      <h4 className="mb-1.5 mt-5 text-xs font-semibold uppercase tracking-wide text-[#586472]">Versions {revisions.data ? `(${revisions.data.items.length})` : ''}</h4>
+      <h4 className="mb-1.5 mt-5 text-xs font-semibold uppercase tracking-wide text-[#586472]">Studio revisions {revisions.data ? `(${revisions.data.items.length})` : ''}</h4>
       {revisions.isLoading && <p className="text-xs text-[#586472]"><Loader2 className="mr-1 inline h-3.5 w-3.5 animate-spin" /> Loading…</p>}
       <ol className="space-y-1.5">
         {revisions.data?.items.map((r) => {
@@ -106,7 +110,7 @@ export default function HistoryPanel({ session, flush, onCompare, onContent, onS
           return (
             <li key={r.number} className={`rounded-lg border bg-white p-2.5 ${current ? 'border-[#0f766e]' : 'border-[#e1e5e9]'}`}>
               <div className="flex items-center gap-2 text-xs">
-                <span className="rounded bg-[#e3f1f1] px-1.5 py-0.5 font-bold text-[#0f4c5c]">v{r.number}</span>
+                <span className="rounded bg-[#e3f1f1] px-1.5 py-0.5 font-bold text-[#0f4c5c]">rev {r.number}</span>
                 <span className="inline-flex items-center gap-1 text-[#3f4b58]">{r.author_type === 'user' ? <User className="h-3 w-3" /> : <a.icon className="h-3 w-3" />} {r.author_type === 'user' && r.author ? r.author : a.label}</span>
                 {current && <span className="rounded-full bg-[#d6f3ec] px-1.5 py-0.5 text-[10px] font-semibold text-[#0b6b58]">current</span>}
                 <span className="ml-auto text-[#586472]">{ago(r.created_at)}</span>
@@ -115,11 +119,11 @@ export default function HistoryPanel({ session, flush, onCompare, onContent, onS
               <p className="mt-0.5 text-[11px] text-[#586472]">{plural(r.words, 'word')}{r.stats && (r.stats.words_added || r.stats.words_removed) ? ` · +${r.stats.words_added} / −${r.stats.words_removed}` : ''}</p>
               <div className="mt-1.5 flex flex-wrap gap-1">
                 {r.number > 1 && (
-                  <button type="button" onClick={() => onCompare({ type: 'revision', from: r.number - 1, to: r.number, label: `What v${r.number} changed` })} className="rounded px-2 py-0.5 text-[11px] font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]">What it changed</button>
+                  <button type="button" onClick={() => onCompare({ type: 'revision', from: r.number - 1, to: r.number, label: `What rev ${r.number} changed` })} className="rounded px-2 py-0.5 text-[11px] font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]">What it changed</button>
                 )}
                 {!current && (
                   <>
-                    <button type="button" onClick={() => onCompare({ type: 'revision', from: r.number, label: `Changes since v${r.number}` })} className="rounded px-2 py-0.5 text-[11px] font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]">Since then</button>
+                    <button type="button" onClick={() => onCompare({ type: 'revision', from: r.number, label: `Changes since rev ${r.number}` })} className="rounded px-2 py-0.5 text-[11px] font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]">Since then</button>
                     <button type="button" disabled={restore.isPending} onClick={() => restore.mutate(r.number)} className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[11px] font-semibold text-[#8a6100] hover:bg-[#fff2a8] disabled:opacity-50"><RotateCcw className="h-3 w-3" /> Restore</button>
                   </>
                 )}

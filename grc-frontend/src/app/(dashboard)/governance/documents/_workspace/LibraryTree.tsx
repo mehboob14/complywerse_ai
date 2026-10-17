@@ -12,7 +12,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { FileText, Clock, User, ChevronRight, ChevronDown } from 'lucide-react';
 import { parseUtc } from '@/lib/serverTime';
-import { DocTypeTile, verLabel } from './lib';
+import { DocTypeTile, inForceNote, verLabel } from './lib';
 import type { GovDocNode, TreeVersion } from './lib';
 import type { DashboardSummary } from './api';
 
@@ -61,6 +61,7 @@ function LibraryRow({
 function versionKind(v: TreeVersion, isBase: boolean): string {
   if (isBase) return 'Base';
   if ((v.summary || '').toLowerCase().startsWith('rollback to')) return 'Restored';
+  if ((v.summary || '').toLowerCase().startsWith('took back')) return 'Taken back';     // its kind is now major or minor by the rule
   const kind = (v.kind || '').toLowerCase();
   if (kind === 'major') return 'Major';
   if (kind === 'signoff') return 'Sign-off';
@@ -162,6 +163,7 @@ function TreeNode({
           <span className="min-w-0 flex-1 truncate text-left">{node.title}</span>
           {hasChildren && <span className="shrink-0 text-xs text-slate-400 tabular-nums">{children.length}</span>}
         </button>
+        {inForceNote(node) && <span className="shrink-0 px-1 text-[11px] tabular-nums text-[#586472]">{inForceNote(node)}</span>}
         {versions.length > 0 ? (
           <button
             type="button"

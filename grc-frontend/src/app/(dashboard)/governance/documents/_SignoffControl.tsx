@@ -12,6 +12,7 @@ import { governanceApi, adminApi, teamsApi, tenantApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { parseUtc } from '@/lib/serverTime';
+import { personOf } from '@/lib/people';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import {
@@ -63,6 +64,7 @@ function useRefreshAll(documentId: number) {
     qc.invalidateQueries({ queryKey: ['doc-signoff', documentId] });
     qc.invalidateQueries({ queryKey: ['governance-document', documentId] });
     qc.invalidateQueries({ queryKey: ['document-lifecycle'] });
+    qc.invalidateQueries({ queryKey: ['my-document-requests'] });     // the top bar's and My Approvals' "waiting for you"
   };
 }
 
@@ -89,8 +91,9 @@ export function useAssigneeOptions(tenantId?: number): Option[] {
   });
   return useMemo(() => {
     const out: Option[] = [];
-    for (const u of usersQ.data || []) {
-      out.push({ value: `user:${u.id}`, label: u.display_name || u.username || u.email || `User ${u.id}`, subLabel: u.email || undefined });
+    for (const row of usersQ.data || []) {
+      const p = personOf(row);
+      out.push({ value: `user:${p.id}`, label: p.name, subLabel: p.email });
     }
     for (const r of rolesQ.data || []) {
       out.push({ value: `role:${r.id}`, label: `Role · ${r.name}`, subLabel: r.user_count != null ? `${r.user_count} users` : undefined });

@@ -9,7 +9,7 @@
  * teal, an edit by hand is neutral, taking back and restoring are amber, a sign-off is emerald, the original is outlined.
  */
 import { AlertTriangle, CheckCircle2, FileSignature, FileUp, Flag, GitCommitVertical, History, Minus, PencilLine, Sparkles, Undo2, type LucideIcon } from 'lucide-react';
-import { byLine, type ChainSource, type ChangeBy } from '@/lib/documentChain';
+import { byLine, sourceLabel, type ChainSource, type ChangeBy } from '@/lib/documentChain';
 import { ago } from '@/lib/studio/text';
 
 export interface OriginLook {
@@ -53,11 +53,11 @@ export function SourceChips({ sources, onShow }: { sources: ChainSource[]; onSho
   return (
     <ul className="mt-1.5 flex flex-wrap gap-1" aria-label="Sources this change rests on">
       {sources.map((s, i) => {
-        const label = [s.ref, s.title || (s.basis === 'general_knowledge' ? 'General knowledge' : ''), s.locator].filter(Boolean).join(' · ');
+        const label = sourceLabel(s);
         const title = [s.quote ? `“${s.quote}”` : '', s.how || ''].filter(Boolean).join(' — ');
         const body = (
           <>
-            {label || 'Source'}
+            {label}
             {s.basis === 'reference' && s.verified === true && <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-600" aria-label="The quoted words were found in the source" />}
             {s.basis === 'reference' && s.verified === false && <AlertTriangle className="h-3 w-3 shrink-0 text-amber-600" aria-label="The quoted words were not found in the source" />}
           </>

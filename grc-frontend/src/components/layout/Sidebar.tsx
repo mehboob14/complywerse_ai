@@ -123,6 +123,7 @@ const navigation: NavEntry[] = [
     items: [
       { name: 'Overview', href: '/governance', icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
       { name: 'Documents', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
+      { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
       { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
       { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
       { name: 'KPI Report', href: '/governance/kpi-report', icon: Target, requiredPermissions: ['erm:kris:*'] },

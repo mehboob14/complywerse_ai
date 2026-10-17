@@ -3,9 +3,10 @@
 /**
  * A governance document as people read it (Word as Word lays it out, a PDF, Markdown with '+ Draft' on the documents it refers to,
  * otherwise cleaned HTML), with its version history, the typed-name sign-off and document control fields, and its details. Used
- * by the AI Studio's document view (variant 'studio': the document at full height) and by the classic document page.
+ * by the AI Studio's document view (variant 'studio': the document at full height, its newest changes marked when it opens, or
+ * an earlier version read as it was) and by the classic document page.
  */
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { problemOf as studioProblem, saveBlob } from '@/lib/studio/api';
@@ -13,7 +14,9 @@ import { documentChainApi } from '@/lib/documentChain';
 import { useToast } from '@/components/ui/ToastProvider';
 import { PageLoader, RightSlidePanel } from '@/components/ui';
 import RichTextEditor from '../_RichTextEditor';
+import { SIGNOFF_STATUS } from '../_SignoffControl';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
+import { ackBaseline, openingBaseline } from '../_view/trackedChanges';
 import WordView from '@/components/governance/WordView';
 import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
 import { useRouter } from 'next/navigation';
@@ -139,11 +142,13 @@ const childrenToText = (node: React.ReactNode): string => {
 // Document CONTENT version history — timeline + diff + restore, mirroring the
 // statement version modal but for the whole document body (item #3a).
 export function DocumentVersionHistoryPanel({
-  documentId, isOpen, onClose, onRestored, onCompare, canRestore = true,
+  documentId, isOpen, onClose, onRestored, onCompare, canRestore = true, status,
 }: {
   documentId: number; isOpen: boolean; onClose: () => void; onRestored: () => void;
   /** people who may not change the document see the versions and their files, without Restore */
   canRestore?: boolean;
+  /** the document's status: restoring an approved or published document sends it back to review (Restore says so first) */
+  status?: string;
   /** organisations with the change chain: compare a version with the document as it is now in the tracked-changes view (files too) */
   onCompare?: (versionId: number) => void;
 }) {
@@ -179,9 +184,11 @@ export function DocumentVersionHistoryPanel({
     queryFn: async () => (await governanceApi.compareDocumentVersions(compareId as number, currentRow.id)).data as any,
   });
 
+  // Restore asks first: why (kept with the new version), and that an approved document goes back to review
+  const [restoring, setRestoring] = useState<{ id: number; why: string } | null>(null);
   const rollbackMutation = useMutation({
-    mutationFn: async (versionId: number) => governanceApi.rollbackDocumentVersion(documentId, versionId),
-    onSuccess: () => { refetch(); onRestored(); },
+    mutationFn: async (r: { id: number; why: string }) => governanceApi.rollbackDocumentVersion(documentId, r.id, r.why),
+    onSuccess: () => { setRestoring(null); refetch(); onRestored(); },
     onError: (e) => toast({ type: 'error', title: 'Not restored', message: studioProblem(e) }),
   });
 
@@ -229,7 +236,7 @@ export function DocumentVersionHistoryPanel({
                       </button>
                     )}
                     {!isCurrent && canRestore && (
-                      <button onClick={() => rollbackMutation.mutate(v.id)} disabled={rollbackMutation.isPending} className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[11px] text-amber-700 hover:bg-amber-50 disabled:opacity-50">
+                      <button onClick={() => setRestoring({ id: v.id, why: '' })} disabled={rollbackMutation.isPending || restoring?.id === v.id} className="inline-flex items-center gap-1 rounded-md border border-amber-300 px-2 py-1 text-[11px] text-amber-700 hover:bg-amber-50 disabled:opacity-50">
                         <RotateCcw className="h-3 w-3" /> Restore
                       </button>
                     )}
@@ -240,7 +247,29 @@ export function DocumentVersionHistoryPanel({
                   <Clock className="h-3 w-3 ml-1" />{v.created_at ? new Date(v.created_at).toLocaleString() : ''}
                 </div>
                 {v.has_file && v.file_name && <p className="mt-1 inline-flex items-center gap-1 text-[11px] text-slate-500"><FileText className="h-3 w-3" /> {v.file_name}</p>}
+                {v.change_summary && v.change_summary !== v.change_reason && <p className="mt-1 text-xs text-slate-600">{v.change_summary}</p>}
                 {v.change_reason && <p className="mt-1 text-xs text-slate-600 italic">“{v.change_reason}”</p>}
+                {restoring && restoring.id === v.id && (
+                  <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2.5" role="alertdialog" aria-label={`Restore version ${v.version_number}`}>
+                    <p className="text-xs text-amber-950">
+                      Version {v.version_number} becomes the document again, as a new version; the versions after it are kept.
+                      {['approved', 'published'].includes(status ?? '') ? ' It is approved, so it goes back to review.' : ''}
+                    </p>
+                    <label className="mt-2 block">
+                      <span className="text-[11px] font-semibold text-amber-950">Why <span className="font-normal">(optional)</span></span>
+                      <input type="text" value={restoring.why} maxLength={500} placeholder="e.g. The last edit was made in error" autoFocus
+                        onChange={(e) => setRestoring({ id: v.id, why: e.target.value })}
+                        className="mt-1 w-full rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
+                    </label>
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button type="button" onClick={() => setRestoring(null)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">Cancel</button>
+                      <button type="button" onClick={() => rollbackMutation.mutate(restoring)} disabled={rollbackMutation.isPending}
+                        className="inline-flex items-center gap-1 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
+                        {rollbackMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} Restore
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {compareId === v.id && (
                   <div className="mt-2 rounded-md bg-slate-50 border border-slate-200 p-2">
                     {diffQuery.isLoading ? (
@@ -414,18 +443,22 @@ export function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
   );
 }
 
-export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange, variant, canTakeBack = true }: any) {
+export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, ackedVersion }: any) {
   // variant 'studio': the AI Studio's document view draws the document at full height; its actions are in the view's top bar
   const studio = variant === 'studio';
+  // reading ({id, number}): an earlier version shown as it was, its file as Word or the PDF draws it, else its text
+  const versionQ = useQuery({ queryKey: ['document-version', reading?.id], queryFn: () => documentChainApi.version(reading.id), enabled: !!reading, staleTime: 60_000 });
+  const shown: any = reading ? versionQ.data : doc;
   // Detect if doc.content is markdown (AI-generated docs always are).
   // Markdown rendering + normalization is delegated to
   // GovernanceDocumentMarkdown — see _src/components/governance/_ for the
   // normalization pipeline (heading-space, GFM table-separator inject,
   // orphan-bullet merge, blank-line collapse). Keeping it in one place is
   // how the doc viewer and the NCA preview stay visually identical.
-  const rawContent: string = doc?.content || '';
-  const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent);
-  const renderedHtml = useMemo(() => sanitizeDocumentHtml(htmlContent?.html), [htmlContent?.html]);
+  const rawContent: string = shown?.content || '';
+  // an earlier version's text is drawn as Markdown even when it does not look like it (raw HTML in it is shown as text, never run)
+  const isMarkdown = /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(rawContent) || (!!reading && !!rawContent.trim());
+  const renderedHtml = useMemo(() => (reading ? '' : sanitizeDocumentHtml(htmlContent?.html)), [htmlContent?.html, reading]);
   const router = useRouter();
   const { toast } = useToast();
 
@@ -440,18 +473,42 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   const [showDetails, setShowDetails] = useState(false);
   const [showFullViewer, setShowFullViewer] = useState(false);
   const canEdit = isMarkdown && !doc?.has_file && canTakeBack;      // canTakeBack: this person may change the document
-  // organisations with the document life cycle can see the document with its changes marked, and take one back
-  const [tracking, setTracking] = useState(!!trackedRange);
+  // organisations with the document life cycle can see the document with its changes marked, and take one back. The AI Studio's
+  // view opens with them marked when the newest version changed the text (since the last approved version, else the one before).
+  // The document shows as it is until the chain answers (not retried: a failing chain only leaves the changes unmarked)
+  const chainQ = useQuery({ queryKey: ['document-chain', doc?.id], queryFn: () => documentChainApi.chain(doc.id), enabled: studio && !!chainOn && !!doc?.id, staleTime: 15_000, retry: false });
+  // ackedVersion (studio): the version the person last acknowledged when they are asked again (null: none; undefined: not known
+  // yet); the view then opens on the changes since that version
+  const opening = useMemo(() => {
+    if (!chainQ.data?.enabled) return null;
+    const acked = ackBaseline(chainQ.data.versions, ackedVersion);
+    return acked != null ? { id: acked, approved: false } : openingBaseline(chainQ.data.versions, chainQ.data.events);
+  }, [chainQ.data, ackedVersion]);
+  const ackKnown = !studio || ackedVersion !== undefined;
+  // the baseline the view opened with, kept: a refetch of the chain (after a take back) must not move a baseline the person picked
+  const firstOpening = useRef<number | null>(null);
+  if (firstOpening.current == null && opening && ackKnown) firstOpening.current = opening.id;
+  // picked: the person switched them on or off themselves (null: not yet)
+  const [picked, setPicked] = useState<boolean | null>(trackedRange ? true : null);
+  const tracking = !reading && (picked ?? (studio && !!opening && ackKnown));
+  const deciding = studio && !!chainOn && !reading && picked === null && (chainQ.isLoading || !ackKnown);
   const [sinceRange, setSinceRange] = useState<{ from: number; to: number | null } | null>(null);
-  useEffect(() => { if (trackedRange) { setTracking(true); setSinceRange(null); } }, [trackedRange]);
+  useEffect(() => { if (trackedRange) { setPicked(true); setSinceRange(null); } }, [trackedRange]);
+
+  // the file shown: the document's own, or the file of the version being read
+  const fetchFile = async (): Promise<Blob> => {
+    if (reading) return (await documentChainApi.versionFile(doc.id, reading.id, shown?.file_name || 'document', reading.number)).blob;
+    const res = await governanceApi.downloadDocumentFile(doc.id);
+    return res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart]);
+  };
 
   // If the document is a file-backed PDF, render the *exact* original file in
   // an iframe rather than the markdown/HTML re-parse (which distorts tables,
   // spacing and page layout). Fetch it once as a blob → object URL and revoke
   // on unmount so we don't leak. Non-PDF files (docx/xlsx) fall through to the
   // parsed view below, since browsers can't render those inline.
-  const isPdfFile = !!doc?.has_file && (
-    String(doc?.file_type || '').toLowerCase() === 'pdf' || /\.pdf$/i.test(String(doc?.file_name || ''))
+  const isPdfFile = !!shown?.has_file && (
+    String(shown?.file_type || '').toLowerCase() === 'pdf' || /\.pdf$/i.test(String(shown?.file_name || ''))
   );
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
   const [pdfError, setPdfError] = useState(false);
@@ -460,11 +517,10 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
     let cancelled = false;
     let objectUrl: string | null = null;
     setPdfError(false);
-    governanceApi.downloadDocumentFile(doc.id)
-      .then((res) => {
+    fetchFile()
+      .then((blob) => {
         if (cancelled) return;
-        const blob = res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart], { type: 'application/pdf' });
-        objectUrl = URL.createObjectURL(blob);
+        objectUrl = URL.createObjectURL(blob.type === 'application/pdf' ? blob : new Blob([blob], { type: 'application/pdf' }));
         setPdfUrl(objectUrl);
       })
       .catch(() => { if (!cancelled) setPdfError(true); });
@@ -472,12 +528,13 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
       cancelled = true;
       if (objectUrl) URL.revokeObjectURL(objectUrl);
     };
-  }, [isPdfFile, doc?.id, doc?.current_version]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPdfFile, doc?.id, doc?.current_version, reading?.id]);
 
   // A Word file is drawn as Word draws it (docx-preview): its own numbering (1.3.1.1, I., a.), headings, tables where they are,
   // headers and footers. The old text conversion below stays as the fallback when it cannot be drawn.
-  const isWordFile = !!doc?.has_file && !isPdfFile && (
-    String(doc?.file_type || '').toLowerCase() === 'docx' || /\.docx$/i.test(String(doc?.file_name || ''))
+  const isWordFile = !!shown?.has_file && !isPdfFile && (
+    String(shown?.file_type || '').toLowerCase() === 'docx' || /\.docx$/i.test(String(shown?.file_name || ''))
   );
   const [wordFile, setWordFile] = useState<Blob | null>(null);
   const [wordError, setWordError] = useState(false);
@@ -486,11 +543,12 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
     let cancelled = false;
     setWordError(false);
     setWordFile(null);
-    governanceApi.downloadDocumentFile(doc.id)
-      .then((res) => { if (!cancelled) setWordFile(res.data instanceof Blob ? res.data : new Blob([res.data as BlobPart])); })
+    fetchFile()
+      .then((blob) => { if (!cancelled) setWordFile(blob); })
       .catch(() => { if (!cancelled) setWordError(true); });
     return () => { cancelled = true; };
-  }, [isWordFile, doc?.id, doc?.current_version]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWordFile, doc?.id, doc?.current_version, reading?.id]);
 
   const openEditor = () => { startEdit(); setShowFullViewer(true); };
   const closeFullViewer = () => { setShowFullViewer(false); if (editing) setEditing(false); };
@@ -572,34 +630,38 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   // The read-only document body (markdown / sanitized HTML / empty), rendered
   // both as the collapsed inline preview and inside the full-view popup.
   const renderReadBody = (full = false) => (
-    tracking && chainOn ? (
-      <TrackedChanges documentId={doc.id} status={doc.status} initial={sinceRange ?? trackedRange} canTakeBack={canTakeBack}
+    reading && versionQ.isLoading ? (
+      <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
+    ) : reading && !shown ? (
+      <p className="py-10 text-center text-sm text-rose-700" role="alert">Version {reading.number} could not be read. {studioProblem(versionQ.error)}</p>
+    ) : tracking && chainOn ? (
+      <TrackedChanges documentId={doc.id} status={doc.status} initial={sinceRange ?? trackedRange ?? (firstOpening.current != null ? { from: firstOpening.current, to: null } : null)} canTakeBack={canTakeBack}
         onChanged={() => { for (const key of ['governance-document', 'document-access']) queryClient.invalidateQueries({ queryKey: [key] }); }} />
     ) : isPdfFile ? (
       pdfError ? (
         <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
           <FileText className="h-12 w-12" />
           <p className="text-sm text-slate-700">Couldn&rsquo;t load the file preview.</p>
-          <p className="text-sm text-slate-600">{studio ? 'Use Download, This version, at the top to open it.' : <>Use &ldquo;Download File&rdquo; above to view it.</>}</p>
+          <p className="text-sm text-slate-600">{reading ? 'Use File on its card in Versions to download it.' : studio ? 'Use Download, This version, at the top to open it.' : <>Use &ldquo;Download File&rdquo; above to view it.</>}</p>
         </div>
       ) : pdfUrl ? (
         <iframe
           src={pdfUrl}
-          title={doc?.file_name || doc?.title || 'Document'}
+          title={shown?.file_name || doc?.title || 'Document'}
           className={`w-full rounded-lg border border-slate-200 bg-white ${full || studio ? 'h-[calc(100vh-9rem)] min-h-[420px]' : 'h-[340px]'}`}
         />
       ) : (
         <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
       )
     ) : isWordFile && !wordError ? (
-      <WordView file={wordFile} height={full || studio ? undefined : 340} label={doc?.file_name || doc?.title || 'Document'} />
-    ) : htmlLoading ? (
+      <WordView file={wordFile} height={full || studio ? undefined : 340} label={shown?.file_name || doc?.title || 'Document'} />
+    ) : htmlLoading && !reading ? (
       <div className="flex h-48 items-center justify-center"><PageLoader size="md" /></div>
     ) : isMarkdown ? (
       <GovernanceDocumentMarkdown
         content={rawContent}
         references={referenceItems}
-        onDraftReference={canTakeBack ? handleDraftReference : undefined}
+        onDraftReference={canTakeBack && !reading ? handleDraftReference : undefined}
         parentTitle={doc?.title || ''}
         cleanReferenceLine={cleanReferenceLine}
       />
@@ -626,7 +688,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
       <div className="flex h-48 flex-col items-center justify-center gap-3 text-slate-600">
         <FileText className="h-12 w-12" />
         <p className="text-sm text-slate-700">No viewable content available</p>
-        {doc.has_file && <p className="text-sm">Download the file to view its contents</p>}
+        {shown?.has_file && <p className="text-sm text-slate-600">Download the file to view its contents{reading ? ' (File on its card in Versions)' : ''}</p>}
       </div>
     )
   );
@@ -659,12 +721,25 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   if (studio) {
     return (
       <div className="space-y-3">
-        {chainOn && !tracking && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setTracking(true); }} />}
-        {chainOn && (
+        {reading && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5" role="status">
+            <span className="min-w-0 flex-1 text-sm text-amber-950">
+              {reading.id === doc?.in_force_version_id
+                ? <><span className="font-semibold">Reading v{reading.number}</span>, the published version in force. The current version is v{doc?.current_version || '1.0'}{SIGNOFF_STATUS[doc?.status] ? `, ${SIGNOFF_STATUS[doc.status].label.toLowerCase()}` : ''}.</>
+                : <><span className="font-semibold">Reading v{reading.number}</span> - not the current version (v{doc?.current_version || '1.0'}).</>}
+            </span>
+            <button type="button" onClick={onStopReading}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-sm font-semibold text-amber-900 hover:bg-amber-100">
+              Back to the current version
+            </button>
+          </div>
+        )}
+        {chainOn && !reading && !tracking && !deciding && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setPicked(true); }} />}
+        {chainOn && !reading && (
           <div className="flex justify-end">
-            <button onClick={() => { setTracking((v) => !v); setSinceRange(null); }} aria-pressed={tracking} title="Show the document with its changes marked, who made each"
+            <button onClick={() => { setPicked(!tracking); setSinceRange(null); }} aria-pressed={tracking} title="Show the document with its changes marked, who made each"
               className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-50 font-semibold text-[#0b6b58]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
-              <GitCompare className="h-3.5 w-3.5" /> {tracking ? 'Hide tracked changes' : 'Tracked changes'}
+              <GitCompare className="h-3.5 w-3.5" /> {tracking ? 'Hide changes' : 'Tracked changes'}
             </button>
           </div>
         )}
@@ -704,8 +779,9 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
             for (const key of ['governance-document', 'document-chain', 'document-chain-redline', 'document-lifecycle']) queryClient.invalidateQueries({ queryKey: [key] });
             toast({ type: 'success', title: 'Restored', message: 'The selected version is the document again, as a new version; the versions after it are kept.' });
           }}
-          onCompare={chainOn ? (versionId) => { setShowHistory(false); setSinceRange({ from: versionId, to: null }); setTracking(true); } : undefined}
+          onCompare={chainOn ? (versionId) => { setShowHistory(false); setSinceRange({ from: versionId, to: null }); setPicked(true); } : undefined}
           canRestore={canTakeBack}
+          status={doc.status}
         />
       )}
       {doc?.id && (
@@ -720,7 +796,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
         />
       )}
       <DocumentDetailsPanel doc={doc} docType={docType} isOpen={showDetails} onClose={() => setShowDetails(false)} />
-      {chainOn && !tracking && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setTracking(true); }} />}
+      {chainOn && !tracking && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setPicked(true); }} />}
       <div className="rounded-xl border border-slate-300 bg-white overflow-hidden">
         <div className="border-b border-slate-300 bg-white/50 px-6 py-3 flex items-center justify-between gap-2">
           <h3 className="font-medium text-slate-900">Document Content</h3>
@@ -729,7 +805,7 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
               <Info className="h-3.5 w-3.5" /> Details
             </button>
             {chainOn && (
-              <button onClick={() => setTracking((v) => !v)} aria-pressed={tracking} title="Show the document with its changes marked, who made each, and take one back"
+              <button onClick={() => setPicked(!tracking)} aria-pressed={tracking} title="Show the document with its changes marked, who made each, and take one back"
                 className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-50 font-semibold text-[#0b6b58]' : 'border-slate-300 text-slate-700 hover:bg-slate-50'}`}>
                 <GitCompare className="h-3.5 w-3.5" /> Tracked changes
               </button>

@@ -41,3 +41,13 @@ test('a second file starts the untouched fields again; a changed cycle moves a s
     { title: 'Acceptable Use Policy', doc_type: 'policy', classification: 'internal', owner_id: 1, review_cycle_months: 24,
       effective_date: '2026-09-24', next_review_date: '2028-09-24' });
 });
+
+test('a chosen parent is sent and survives reading another file; none is left out', () => {
+  const initial = { ...EMPTY_DETAILS, owner_id: 1, parent_document_id: 7 };          // e.g. the studio session's parent reference
+  const read1 = applyRead(initial, initial, new Set(), read).form;
+  assert.equal(read1.parent_document_id, 7);
+  const picked = change(read1, { parent_document_id: 12 });
+  assert.equal(applyRead(initial, picked, new Set(['parent_document_id']), read).form.parent_document_id, 12);
+  assert.equal(detailsPayload(picked).parent_document_id, 12);
+  assert.equal('parent_document_id' in detailsPayload({ ...picked, parent_document_id: null }), false);
+});

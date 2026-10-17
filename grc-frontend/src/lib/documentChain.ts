@@ -172,7 +172,13 @@ export function byLine(origin: string, by: string, coverage = 1): string {
 export const shapeOf = (c: { structure?: string[]; format_only: boolean; words_added: number; words_removed: number }): string | null =>
   c.words_added || c.words_removed ? null : c.structure?.length ? c.structure.join(' · ') : c.format_only ? 'Formatting only' : null;
 
-const filenameOf = (disposition: string | undefined, fallback: string): string => {
+/** A source in a few words: its reference code, title and place in it; without those, what it rests on ("The request",
+ *  "General knowledge") or the start of its quote. Never just "Source" when the source says anything. */
+export const sourceLabel = (s: Pick<ChainSource, 'ref' | 'title' | 'locator' | 'basis' | 'quote'>): string =>
+  [s.ref, s.title || (s.basis === 'general_knowledge' ? 'General knowledge' : ''), s.locator].filter(Boolean).join(' · ')
+  || (s.basis === 'instruction' ? 'The request' : s.quote ? `“${s.quote.length > 40 ? `${s.quote.slice(0, 40)}…` : s.quote}”` : 'Source');
+
+const filenameOf =(disposition: string | undefined, fallback: string): string => {
   const m = /filename="?([^";]+)"?/i.exec(disposition || '');
   return m ? decodeURIComponent(m[1]) : fallback;
 };
@@ -199,6 +205,10 @@ export const documentChainApi = {
   exportFile: async (id: number, format: ExportFormat): Promise<{ blob: Blob; filename: string }> => {
     const res = await apiClient.get(`/governance/documents/${id}/change-chain/export`, { params: { format }, responseType: 'blob' });
     return { blob: res.data as Blob, filename: filenameOf(res.headers?.['content-disposition'], `change-chain.${format}`) };
+  },
+  /** one version as it was: its text, or (has_file) its file, read with versionFile */
+  version: async (versionId: number) => (await apiClient.get(`/governance/versions/${versionId}`)).data as {
+    id: number; version_number: string; content: string | null; has_file: boolean; file_name: string | null; file_type: string | null;
   },
   /** the file of one version (the original upload, or a later file), named with its version: "policy v1.0.docx" */
   versionFile: async (id: number, versionId: number, name: string, number: string): Promise<{ blob: Blob; filename: string }> => {

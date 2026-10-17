@@ -75,7 +75,8 @@ export interface Reference {
   chars: number;
   truncated: boolean;
   include: boolean;
-  scope: { mode?: string; domains?: string[]; count?: number; total?: number } | null;
+  /** `query`: the topic of a "controls about a topic" selection (a server that keeps it) */
+  scope: { mode?: string; domains?: string[]; count?: number; total?: number; query?: string } | null;
   notes: string[];
 }
 
@@ -88,6 +89,14 @@ export interface Session {
   document_id: number | null;
   /** the library document's own version (the one its file states, then major or minor by each change) */
   document_version?: string | null;
+  /** the library document's status (draft, pending_review, pending_approval, approved, published …) */
+  document_status?: string | null;
+  /** the studio's text differs from the library version it is based on: Save to the library makes it the next version */
+  unsaved_in_library?: boolean;
+  /** the version everyone else reads while this one is on its way (null: none or the same) */
+  document_version_in_force?: string | null;
+  /** the person may save it back to the library (Save to the library, Move to the library); missing: allowed */
+  may_save?: boolean;
   revision: number;
   base_label: string | null;
   instructions: Instructions;
@@ -432,7 +441,7 @@ export const studioApi = {
   createSession: (body: { kind: 'new' | 'library'; title?: string; doc_type?: string; template_id?: string | null; document_id?: number | null; instructions?: Instructions }) =>
     post<Session>('/sessions', body),
   /** `details`: what the library document is created with (classification, description, owner_id, department_id,
-   *  review_cycle_months, effective_date, next_review_date), as the person confirmed them. */
+   *  review_cycle_months, effective_date, next_review_date, parent_document_id), as the person confirmed them. */
   uploadSession: async (file: File, docType: string, title = '', details: Record<string, string | number> = {}): Promise<Session> => {
     const form = new FormData();
     form.append('file', file);
@@ -442,6 +451,8 @@ export const studioApi = {
     return (await apiClient.post(`${base}/sessions/upload`, form, { headers: { 'Content-Type': 'multipart/form-data' } })).data;
   },
   session: (id: number) => get<Session>(`/sessions/${id}`),
+  /** the person opened the workspace (the GET only reads) */
+  opened: (id: number) => post<{ ok: boolean }>(`/sessions/${id}/opened`),
   patchSession: (id: number, body: { title?: string; doc_type?: string; instructions?: Instructions; settings?: { auto_apply?: boolean } }) =>
     patch<Session>(`/sessions/${id}`, body),
   deleteSession: (id: number) => del<{ deleted: boolean }>(`/sessions/${id}`),
@@ -475,8 +486,9 @@ export const studioApi = {
   accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
     post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message; library_version?: LibraryVersion | null }>(`/sessions/${id}/messages/${messageId}/accept`, body),
   reject: (id: number, messageId: number, body: { op_ids?: string[] } = {}) => post<{ message: Message }>(`/sessions/${id}/messages/${messageId}/reject`, body),
-  /** take a change that was accepted back out of the document (a new revision) */
-  revertOp: (id: number, messageId: number, opId: string) => post<{ content: string; revision: number; message: Message }>(`/sessions/${id}/messages/${messageId}/ops/${opId}/revert`),
+  /** take a change that was accepted back out of the document (a new revision; `library_version` only if a server saves it too) */
+  revertOp: (id: number, messageId: number, opId: string) =>
+    post<{ content: string; revision: number; message: Message; library_version?: LibraryVersion | null }>(`/sessions/${id}/messages/${messageId}/ops/${opId}/revert`),
   /** take chosen changes since a revision back out of the document as it is now */
   revertChanges: (id: number, body: { frm: number; hunks: number[]; hash?: string }) => post<{ content: string; revision: number }>(`/sessions/${id}/changes/revert`, body),
   preview: (id: number, messageId: number) => get<Redline>(`/sessions/${id}/messages/${messageId}/redline`),
@@ -496,7 +508,7 @@ export const studioApi = {
 
   moveToLibrary: (id: number, body: MoveToLibrary) => post<{ document_id: number; title: string; version: string }>(`/sessions/${id}/move-to-library`, body),
   saveToDocument: (id: number, body: { change_reason?: string; force?: boolean } = {}) =>
-    post<{ document_id: number; version: string; status: string }>(`/sessions/${id}/save-to-document`, body),
+    post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null }>(`/sessions/${id}/save-to-document`, body),
 
   assets: () => get<{ items: Asset[] }>('/assets'),
   uploadAsset: async (file: File, makeDefault = false): Promise<Asset> => {

@@ -124,6 +124,22 @@ export function MultiSelectDropdown({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [selectedValues]);
 
+  // Escape closes the open list and nothing else, wherever focus is (a click on the list's padding leaves it on <body>, where the
+  // list's own key handler never saw it and the dialog around the picker closed instead): caught before anything else hears it.
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen(false);
+      setQuery('');
+      triggerRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
 
@@ -188,26 +204,21 @@ export function MultiSelectDropdown({
   const hasAppliedFilter = selectedValues.length > 0;
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1280;
 
+  // the choice is worked out first and reported once: a state updater may run twice (React does so while it renders in
+  // development), and one reporting from inside it attached a framework twice
   const toggleDraftValue = (value: string) => {
     if (!multiSelect) {
-      setDraftValues((current) => {
-        const next = current[0] === value ? [] : [value];
-        onApply(next);
-        // Single-select: commit + close so the picker feels instant.
-        setIsOpen(false);
-        setQuery('');
-        return next;
-      });
+      const next = draftValues[0] === value ? [] : [value];
+      setDraftValues(next);
+      onApply(next);
+      // Single-select: commit + close so the picker feels instant.
+      setIsOpen(false);
+      setQuery('');
       return;
     }
-
-    setDraftValues((current) => {
-      const next = current.includes(value)
-        ? current.filter((entry) => entry !== value)
-        : [...current, value];
-      onApply(next);
-      return next;
-    });
+    const next = draftValues.includes(value) ? draftValues.filter((entry) => entry !== value) : [...draftValues, value];
+    setDraftValues(next);
+    onApply(next);
   };
 
   // Suppress unused-prop warning. autoApply is always-on now; prop kept for compatibility.
@@ -229,9 +240,6 @@ export function MultiSelectDropdown({
         ref={triggerRef}
         type="button"
         onClick={() => { if (!disabled) setIsOpen((current) => !current); }}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape' && isOpen) { event.preventDefault(); event.stopPropagation(); setIsOpen(false); setQuery(''); }
-        }}
         disabled={disabled}
         aria-label={triggerVariant === 'input' ? `${title}: ${triggerLabel}` : undefined}
         aria-haspopup="listbox"
@@ -276,10 +284,6 @@ export function MultiSelectDropdown({
       {isOpen && dropdownStyle && createPortal(
         <div
           ref={dropdownRef}
-          onKeyDown={(event) => {
-            // Escape closes the list, not a popup the picker is in
-            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setIsOpen(false); setQuery(''); triggerRef.current?.focus(); }
-          }}
           className={clsx(
             'fixed z-[9999] max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl',
             'animate-fade-in',

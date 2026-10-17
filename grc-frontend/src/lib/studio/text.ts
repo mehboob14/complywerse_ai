@@ -77,8 +77,34 @@ export function wordDiff(a: string, b: string): Segment[] {
   return out;
 }
 
+/** What Save to the library does to a library document in this status (doc_lifecycle.changed_after_review); none for a draft.
+ *  `undefined`: a server that does not send the status yet. `inForce`: the version everyone else reads meanwhile (the published one). */
+export function saveWarning(status: string | null | undefined, inForce?: string | null): string | null {
+  const warning = status === undefined ? 'If the document is approved or published, saving changed text sends it back to review.'
+    : status === 'pending_review' || status === 'pending_approval' ? 'Saving makes a new version and everyone signs again from the start; signatures so far no longer count.'
+    : status === 'approved' || status === 'published' || status === 'exception_applied' ? 'It goes back to review with the same reviewers and approvers; with nobody set it becomes a draft again.'
+    : null;
+  const keeps = inForce ? `Everyone else keeps reading the published version v${inForce} until this one is approved and published.` : null;
+  return [warning, keeps].filter(Boolean).join(' ') || null;
+}
+
+/** The toast after Save to the library: the version, major or minor, and where the document is now (`before`: its status before). */
+export function savedNote(r: { version: string; change?: 'major' | 'minor' | null; status?: string }, before?: string | null): { title: string; message?: string } {
+  const title = `Saved as version ${r.version}${r.change ? ` (${r.change} change)` : ''}`;
+  const message = r.status === 'pending_review' ? 'It is in review again: everyone signs from the start.'
+    : r.status === 'pending_approval' ? 'It is waiting for approval: the approvers sign from the start.'
+    : r.status === 'draft' && before && before !== 'draft' ? 'It is a draft again: choose its reviewers and send it for review.'
+    : undefined;
+  return { title, message };
+}
+
+/** A count as the screens write it: 16,278 (not 16278). */
+export function num(n: number): string {
+  return n.toLocaleString('en');
+}
+
 export function plural(n: number, one: string, many = `${one}s`): string {
-  return `${n} ${n === 1 ? one : many}`;
+  return `${num(n)} ${n === 1 ? one : many}`;
 }
 
 export function ago(iso: string | null | undefined): string {
