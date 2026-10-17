@@ -104,6 +104,9 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
     old_title, old_version, old_status = doc.title, doc.current_version or "1.0", doc.status
     name = current_user.display_name or current_user.username or "A user"
     notes: List[str] = []
+    # not published yet: the take back goes into the one pending version, which keeps who made each change it holds
+    pending = doc_version.pending_row(db, doc)
+    held = dict(pending.change_set) if pending is not None and isinstance(pending.change_set, dict) else None
     if is_file:
         # the file is the document: a Word file gets the change written into it (its fonts, header and footer stay), a PDF becomes a
         # Word copy; the file it replaces stays as the earlier version, so the original is never lost
@@ -119,7 +122,17 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
         db.flush()
         row = (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id, GovernanceDocumentVersion.version_number == new_version)
                .order_by(GovernanceDocumentVersion.id.desc()).first())
-    if row is not None:
+    if row is not None and pending is not None and row.id == pending.id:
+        before = doc_version.before_pending(db, doc, row)
+        maker = db.get(GRCUser, row.created_by) if row.created_by else None
+        cs = C.fold(C.version_text(before) if before is not None else "", old_content, new_content, held, kind="revert", by=name,
+                    by_id=current_user.id, at=datetime.utcnow().isoformat(), version=new_version, reason=reason,
+                    held_by=(maker.display_name or maker.username) if maker is not None else "", held_by_id=row.created_by,
+                    held_at=row.created_at.isoformat() if row.created_at else None)
+        if cs is not None:
+            cs.update({"reverts": {"since_version": base_v.version_number, "changes": n}, "stage_before": old_status})
+            row.change_set = cs
+    elif row is not None:
         cs = C.build_change_set(old_content, new_content, [], default_kind="revert", by=name, by_id=current_user.id, at=datetime.utcnow().isoformat(),
                                 extra={"reverts": {"since_version": base_v.version_number, "changes": n}, "stage_before": old_status})
         for item in cs["items"]:

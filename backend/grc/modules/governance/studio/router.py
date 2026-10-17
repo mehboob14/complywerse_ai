@@ -752,12 +752,18 @@ def move_to_library(session_id: int, body: MoveIn, db: Session = Depends(get_db)
 @router.post("/sessions/{session_id}/save-to-document", dependencies=[Depends(require_studio)])
 def save_to_document(session_id: int, body: SaveIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     s = _session(db, session_id, user)
+    from .. import doc_version
+    from ....models import GovernanceDocument
+
+    linked = db.get(GovernanceDocument, s.document_id) if s.document_id else None
+    in_place = linked is not None and doc_version.pending_row(db, linked) is not None      # not published yet: the same version
     try:
         doc = service.save_to_document(db, s, user, change_reason=body.change_reason, force=body.force)
     except service.StudioError as exc:
         raise _problem(exc)
     row = service._version_row(db, doc, doc.current_version)
-    return {"document_id": doc.id, "version": doc.current_version, "status": doc.status, "change": row.change_type if row is not None else None}
+    return {"document_id": doc.id, "version": doc.current_version, "status": doc.status, "change": row.change_type if row is not None else None,
+            "in_place": in_place}
 
 
 # ── logos ────────────────────────────────────────────────────────────────────

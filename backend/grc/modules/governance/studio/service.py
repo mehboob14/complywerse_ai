@@ -1009,19 +1009,40 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
     return doc
 
 
-def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str]) -> None:
-    """Keep on a version what it changed and where each change came from (see ``change_chain``). The save never fails over it."""
+def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str],
+                       earlier=None) -> None:
+    """Keep on a version what it changed and where each change came from (see ``change_chain``). The save never fails over it.
+    ``earlier``: the origins of what the version already held (a pending version collecting another save; ``old_text`` is then
+    the version before it - ``change_chain.carried_origins``), whose changes keep their authors."""
     from .. import change_chain as C
 
     try:
         origins = session_origins(db, s, since_revision=int((s.settings or {}).get("saved_revision") or 0))
         for o in origins:
             o["version"] = version_row.version_number
+        origins = list(earlier or []) + origins
         version_row.change_set = C.build_change_set(old_text or "", new_text or "", origins, default_kind="manual", by=user_name(user), by_id=user.id,
                                                     at=_now().isoformat(), extra={"session_id": s.id, "stage_before": stage_before, "stage_after": stage_after})
     except Exception:       # noqa: BLE001 - the chain is derived from the two texts when this is missing
         logger.warning("could not record the change set of version %s of studio session %s", getattr(version_row, "version_number", "?"), s.id, exc_info=True)
     s.settings = {**(s.settings or {}), "saved_revision": s.revision_no}
+
+
+def _carried(db, pending, before, held_text: Optional[str]) -> list:
+    """The origins of what a pending version already holds (its stored change set, else its changes against the version before
+    it, credited to whoever made it), so a save into it keeps every change's author."""
+    from ....models import GRCUser
+    from .. import change_chain as C
+
+    try:
+        maker = db.get(GRCUser, pending.created_by) if pending.created_by else None
+        return C.carried_origins(C.version_text(before) if before is not None else "", held_text,
+                                 pending.change_set if isinstance(pending.change_set, dict) else None,
+                                 by=user_name(maker) if maker is not None else "", by_id=pending.created_by,
+                                 at=pending.created_at.isoformat() if pending.created_at else None)
+    except Exception:       # noqa: BLE001 - the version is saved without them
+        logger.warning("could not read who made the changes version %s holds", getattr(pending, "version_number", "?"), exc_info=True)
+        return []
 
 
 def _version_row(db, doc, number: str):
@@ -1051,6 +1072,11 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     from ..doc_version import decide, summary_of
 
     old_content, old_title, old_version, old_status = doc.content, doc.title, doc.current_version or "1.0", doc.status
+    from .. import doc_version
+
+    pending = doc_version.pending_row(db, doc)            # not published yet: this save goes into that one version
+    before = doc_version.before_pending(db, doc, pending) if pending is not None else None
+    earlier = _carried(db, pending, before, old_content) if pending is not None else None
     decision = decide(old_content or "", s.content, title=doc.title)
     doc.content, doc.updated_at = s.content, _now()
     new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
@@ -1065,7 +1091,11 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     row = _version_row(db, doc, new_version)
     if row is not None:
-        _record_change_set(db, s, row, old_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
+        from .. import change_chain as _C
+
+        base_text = _C.version_text(before) if pending is not None and before is not None else None
+        _record_change_set(db, s, row, base_text if base_text is not None else (old_content or ""), s.content, user,
+                           stage_before=old_status, stage_after=doc.status, earlier=earlier)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
     s.settings = {k: v for k, v in (s.settings or {}).items() if k != "version_read"}       # it holds the newest version now
     db.commit()
@@ -1087,6 +1117,9 @@ def version_after_accept(db, s, user, accepted: int) -> Optional[Dict[str, Any]]
         state = {"pending_review": "in review", "pending_approval": "waiting for approval"}.get(doc.status, doc.status.replace("_", " "))
         return {"saved": False, "why": f"The document is {state}, so this change stays in the studio. Save to library makes the next "
                                        "version when you are ready; it starts the review again."}
+    from .. import doc_version
+
+    in_place = doc is not None and doc_version.pending_row(db, doc) is not None      # not published yet: the same version
     reason = f"Accepted {accepted} change{'' if accepted == 1 else 's'} from Comply Agent"
     try:        # the person's request, as the change set of this version keeps it, is the version's why
         since = int((s.settings or {}).get("saved_revision") or 0)
@@ -1106,7 +1139,8 @@ def version_after_accept(db, s, user, accepted: int) -> Optional[Dict[str, Any]]
         logger.warning("studio session %s: the accepted changes could not be saved as a new library version", s.id, exc_info=True)
         return {"saved": False, "why": "The changes are in the document, but its new library version could not be made. Use Save to library to try again."}
     row = _version_row(db, doc, doc.current_version)
-    return {"saved": True, "version": doc.current_version, "change": row.change_type if row is not None else None, "status": doc.status}
+    return {"saved": True, "version": doc.current_version, "change": row.change_type if row is not None else None, "status": doc.status,
+            "in_place": in_place}
 
 
 def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary: str, reason: Optional[str], done: str, ext: str = "docx",
@@ -1129,6 +1163,21 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
         f.write(data)
     old_version, old_status = doc.current_version or "1.0", doc.status
     versions = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id)
+    from .. import doc_version
+
+    number, pending = doc_version.target(db, doc, change_type) if versions.count() else (None, None)
+    if pending is not None:              # not published yet: the new file goes into the one pending version
+        doc_version.update_pending(pending, number, change_type, title=doc.title, summary=summary, reason=reason,
+                                   files={"file_name": new_name, "file_path": new_path, "file_size": len(data), "file_type": ext})
+        db.flush()
+        doc.file_name, doc.file_path, doc.file_size, doc.file_type = new_name, new_path, len(data), ext
+        doc.current_version, doc.updated_at = number, _now()
+        doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"{done} (version {number}), so it needs approving again")
+        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action=audit_action,
+                         action_details=f"{done}; version {number} (not published yet) now holds it" + (f". {reason}" if reason else "")
+                         + doc_lifecycle.outcome(old_status, doc.status),
+                         field_changed="current_version", old_value=old_version, new_value=number)
+        return pending, number, old_status
     if versions.count() == 0:
         db.add(GovernanceDocumentVersion(document_id=doc.id, version_number=old_version, change_type="baseline", title=doc.title, file_name=old_name,
                                          file_path=old_path, file_size=old_size, file_type=old_type, change_summary="Original document, before it was changed",
@@ -1206,10 +1255,17 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
     from ..doc_version import decide, summary_of
 
     decision = decide(s.base_content or "", s.content, title=doc.title)
+    from .. import change_chain as _C, doc_version
+
+    pending = doc_version.pending_row(db, doc)            # not published yet: this save goes into that one version
+    before = doc_version.before_pending(db, doc, pending) if pending is not None else None
+    earlier = _carried(db, pending, before, _C.version_text(pending)) if pending is not None else None
+    base_text = (_C.version_text(before) if before is not None else None) if pending is not None else None
     data, _notes = export_file(db, s, "docx", export_settings(db, s))
     row, new_version, old_status = write_file_version(db, doc, user, data, change_type=decision["change"], reason=change_reason, done="Edited in the AI Studio",
                                                       summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
-    _record_change_set(db, s, row, s.base_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
+    _record_change_set(db, s, row, base_text if base_text is not None else (s.base_content or ""), s.content, user,
+                       stage_before=old_status, stage_after=doc.status, earlier=earlier)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
     s.settings = {**{k: v for k, v in (s.settings or {}).items() if k not in ("file_changed", "version_read")}, "library_file": doc.file_path}
     db.commit()

@@ -195,28 +195,35 @@ def create_version(
             content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
             file_type=document.file_type, change_summary="Baseline snapshot (before first edit)", status="superseded",
             created_by=current_user.id, created_at=datetime.utcnow()))
-    db.query(GovernanceDocumentVersion).filter(
-        GovernanceDocumentVersion.document_id == document_id,
-        GovernanceDocumentVersion.status == "current"
-    ).update({"status": "superseded"})
-    
-    new_version_number = increment_version(document.current_version or "1.0", version_data.change_type)
-    
-    new_version = GovernanceDocumentVersion(
-        document_id=document_id,
-        version_number=new_version_number,
-        change_type=version_data.change_type,
-        title=version_data.title or document.title,
-        content=version_data.content or document.content,
-        # the document's file stays its file: the row holds it too, so it is still there once a later version replaces it
-        file_name=document.file_name, file_path=document.file_path, file_size=document.file_size, file_type=document.file_type,
-        change_summary=version_data.change_summary,
-        change_reason=version_data.change_reason,
-        status="current",
-        created_by=current_user.id,
-        created_at=datetime.utcnow()
-    )
-    db.add(new_version)
+    from .. import doc_version
+
+    new_version_number, new_version = doc_version.target(db, document, version_data.change_type)
+    if new_version is not None:          # not published yet: the change goes into the one pending version
+        doc_version.update_pending(new_version, new_version_number, version_data.change_type, title=version_data.title or document.title,
+                                   content=version_data.content or document.content, summary=version_data.change_summary,
+                                   reason=version_data.change_reason,
+                                   files={"file_name": document.file_name, "file_path": document.file_path,
+                                          "file_size": document.file_size, "file_type": document.file_type})
+    else:
+        db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.document_id == document_id,
+            GovernanceDocumentVersion.status == "current"
+        ).update({"status": "superseded"})
+        new_version = GovernanceDocumentVersion(
+            document_id=document_id,
+            version_number=new_version_number,
+            change_type=version_data.change_type,
+            title=version_data.title or document.title,
+            content=version_data.content or document.content,
+            # the document's file stays its file: the row holds it too, so it is still there once a later version replaces it
+            file_name=document.file_name, file_path=document.file_path, file_size=document.file_size, file_type=document.file_type,
+            change_summary=version_data.change_summary,
+            change_reason=version_data.change_reason,
+            status="current",
+            created_by=current_user.id,
+            created_at=datetime.utcnow()
+        )
+        db.add(new_version)
     
     old_version = document.current_version
     document.current_version = new_version_number
@@ -432,26 +439,31 @@ def rollback_to_version(
             "status": document.status,
         }
 
-    db.query(GovernanceDocumentVersion).filter(
-        GovernanceDocumentVersion.document_id == document_id,
-        GovernanceDocumentVersion.status == "current"
-    ).update({"status": "superseded"})
-    
-    new_version_number = increment_version(document.current_version, kind)
-    
-    new_version = GovernanceDocumentVersion(
-        document_id=document_id,
-        version_number=new_version_number,
-        change_type=kind,
-        title=target_version.title,
-        content=target_version.content,
-        change_summary=change_summary,
-        change_reason=rollback_reason or f"Rollback from version {document.current_version} to version {target_version.version_number}",
-        status="current",
-        created_by=current_user.id,
-        created_at=datetime.utcnow()
-    )
-    db.add(new_version)
+    from .. import doc_version
+
+    why = rollback_reason or f"Rollback from version {document.current_version} to version {target_version.version_number}"
+    new_version_number, new_version = doc_version.target(db, document, kind)
+    if new_version is not None:          # not published yet: the restored text goes into the one pending version
+        doc_version.update_pending(new_version, new_version_number, kind, title=target_version.title, content=target_version.content,
+                                   summary=change_summary, reason=why)
+    else:
+        db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.document_id == document_id,
+            GovernanceDocumentVersion.status == "current"
+        ).update({"status": "superseded"})
+        new_version = GovernanceDocumentVersion(
+            document_id=document_id,
+            version_number=new_version_number,
+            change_type=kind,
+            title=target_version.title,
+            content=target_version.content,
+            change_summary=change_summary,
+            change_reason=why,
+            status="current",
+            created_by=current_user.id,
+            created_at=datetime.utcnow()
+        )
+        db.add(new_version)
     
     old_version = document.current_version
     document.current_version = new_version_number

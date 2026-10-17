@@ -9,6 +9,10 @@
   configured, refused, or not within ``AI_SECONDS`` - a rule decides: a section added or removed, or more than a fifth of the
   words changed, is major; anything else is minor. ``by_rule`` is that rule on its own (a restore, a take back).
 * ``next_version`` - the number after the current one for that change.
+* ``target`` - the version a change goes into (the user's rule of 2026-10-17): until the document is published, every change
+  goes into ONE pending version, one step up from the version published last (never published: from the version it started
+  at) - a minor step, or the next major once any change is major. Its row is updated in place; the change chain still says
+  who made each change. After a publication the next change starts the next version.
 """
 from __future__ import annotations
 
@@ -235,6 +239,72 @@ def next_version(current: str, change: str) -> str:
     from .routers.versions import increment_version
 
     return increment_version(current or "1.0", "major" if change == "major" else "minor")
+
+
+def start_number(db, doc) -> Optional[str]:
+    """The version a document started at: its first version row (the upload or the first snapshot). None without rows."""
+    from ...models import GovernanceDocumentVersion as V
+
+    row = db.query(V.version_number).filter(V.document_id == doc.id).order_by(V.id).first()
+    return row[0] if row else None
+
+
+def pending_row(db, doc):
+    """The version the document is preparing, when it has one: its current row, while the document is not published at it and
+    it is above the version published last (never published: above the version it started at). None otherwise - the next change
+    then makes the next version."""
+    from ...models import GovernanceDocumentVersion as V
+
+    current = doc.current_version or "1.0"
+    base = getattr(doc, "last_published_version", None) or start_number(db, doc)
+    if doc.status == "published" or not base or current == base or _safe_key(current) <= _safe_key(base):
+        return None
+    return (db.query(V).filter(V.document_id == doc.id, V.version_number == current, V.status == "current")
+            .order_by(V.id.desc()).first())
+
+
+def target(db, doc, change: str):
+    """``(number, row)``: the version a change of kind ``change`` goes into, and the pending row to update in place (None: make a
+    new row with that number). A pending minor step becomes the next major when a major change comes."""
+    current = doc.current_version or "1.0"
+    row = pending_row(db, doc)
+    if row is None:
+        return next_version(current, change), None
+    base = getattr(doc, "last_published_version", None) or start_number(db, doc) or current
+    if change == "major" and _safe_key(current)[:1] == _safe_key(base)[:1]:
+        return next_version(base, "major"), row
+    return current, row
+
+
+def before_pending(db, doc, row):
+    """The version row just before a pending one (what the pending version is compared with), or None."""
+    from ...models import GovernanceDocumentVersion as V
+
+    return (db.query(V).filter(V.document_id == doc.id, V.id < row.id, V.status != "reverted")
+            .order_by(V.id.desc()).first())
+
+
+def update_pending(row, number: str, change: str, *, title=None, content=None, summary=None, reason=None, files=None) -> None:
+    """Put a change into the pending version: its number (a minor step may have become major), its text or file, and its why
+    (the reasons of the changes it holds, newest last)."""
+    row.version_number = number
+    if change == "major" or (row.change_type or "") not in ("major", "minor"):
+        row.change_type = "major" if change == "major" else (row.change_type if row.change_type in ("major", "minor") else "minor")
+    if title is not None:
+        row.title = title
+    if content is not None:
+        row.content = content
+    for k, v in (files or {}).items():
+        setattr(row, k, v)
+    if summary:
+        row.change_summary = summary
+    if reason:                           # the newest reason first, then the earlier ones while they fit
+        kept, size = [reason], len(reason)
+        for r in (row.change_reason or "").split(" · "):
+            if r and r != reason and size + len(r) + 3 <= 2000:
+                kept.append(r)
+                size += len(r) + 3
+        row.change_reason = " · ".join(kept)[:2000]
 
 
 def verdict(decision: Dict[str, str]) -> str:

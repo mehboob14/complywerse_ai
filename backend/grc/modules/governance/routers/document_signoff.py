@@ -51,6 +51,7 @@ class ParticipantsUpdate(BaseModel):
 
 class SignRequest(BaseModel):
     version: Optional[str] = None          # the version the signer was shown; 409 when the document has moved on since
+    round_at: Optional[str] = None         # the review round the signer was shown (GET /signoff round_at); 409 when a newer one began
     comment: Optional[str] = None
     signature_text: Optional[str] = None   # typed name of record (defaults to display name)
     signature_image: Optional[str] = None  # PNG data URL drawn on screen: a formal sign-off is signed electronically
@@ -59,11 +60,21 @@ class SignRequest(BaseModel):
 class RejectRequest(BaseModel):
     comment: str
     version: Optional[str] = None
+    round_at: Optional[str] = None
 
 
-def check_version(db: Session, doc: GovernanceDocument, shown: Optional[str]) -> None:
+def _round(doc: GovernanceDocument) -> Optional[str]:
+    return doc.signoff_round_at.isoformat() if doc.signoff_round_at else None
+
+
+def check_version(db: Session, doc: GovernanceDocument, shown: Optional[str], round_at: Optional[str] = None) -> None:
     """A decision is about the version the person was shown: refused when the document changed since (older callers send none).
-    Versions that only stamped someone's sign-off into its table are not a change to what was read."""
+    Versions that only stamped someone's sign-off into its table are not a change to what was read. A change before the
+    document is published keeps its number (one pending version), but it starts a new round: a page from an earlier round is
+    refused too."""
+    if round_at and _round(doc) and round_at != _round(doc):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="The document changed since you opened it. Reload it and read it again.")
     current = doc.current_version or "1.0"
     if not shown or shown == current:
         return
@@ -231,6 +242,7 @@ def get_signoff(
     return {
         "document_id": document_id,
         "status": doc.status,
+        "round_at": _round(doc),           # sent back with a decision: a newer round means the document changed
         "participants": {
             rt: [_part_out(a) for a in assignments if a.role_type == rt] for rt in _ROLE_TYPES
         },
@@ -338,7 +350,7 @@ def sign_document(
     advances the document status when the stage completes."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
-    check_version(db, doc, body.version)
+    check_version(db, doc, body.version, body.round_at)
     signatures = _signatures(db, document_id)
     role_type = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
     if not role_type:
@@ -436,7 +448,7 @@ def reject_document(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A reason is required to reject.")
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
-    check_version(db, doc, body.version)
+    check_version(db, doc, body.version, body.round_at)
     signatures = _signatures(db, document_id)
     role_type = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
     if not role_type:

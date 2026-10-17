@@ -31,11 +31,11 @@ def _versions(db, doc_id):
     return [(r.version_number, r.status) for r in rows]
 
 
-def test_each_accept_on_a_draft_makes_the_next_version_minor_then_major(world):
+def test_accepts_on_a_draft_go_into_one_next_version_minor_until_a_change_is_major(world):
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 11}).json()
     msg = _ask(world, s["id"], [change("replace", "B3", markdown="Accounts shall be reviewed monthly.", reason="monthly")])
     out = _accept(world, s["id"], msg, "minor")
-    assert out["accepted"] == 1 and out["library_version"] == {"saved": True, "version": "1.1", "change": "minor", "status": "draft"}
+    assert out["accepted"] == 1 and out["library_version"] == {"saved": True, "version": "1.1", "change": "minor", "status": "draft", "in_place": False}
     doc = world.db.get(m.GovernanceDocument, 11)
     assert doc.current_version == "1.1" and "reviewed monthly" in doc.content
     assert _versions(world.db, 11)[-1] == ("1.1", "current") and ("1.0", "superseded") in _versions(world.db, 11)   # 1.0 is kept
@@ -43,7 +43,12 @@ def test_each_accept_on_a_draft_makes_the_next_version_minor_then_major(world):
     msg = _ask(world, s["id"], [change("insert", "B3", markdown="## 2. Exceptions\n\nExceptions need the CISO's approval.", reason="exceptions")])
     out = _accept(world, s["id"], msg, "major")
     assert out["library_version"]["version"] == "2.0" and out["library_version"]["change"] == "major"
-    assert [v for v, st in _versions(world.db, 11) if st == "current"] == ["2.0"]
+    assert out["library_version"]["in_place"] is True                       # not published yet: the same version, now major
+    assert [v for v, st in _versions(world.db, 11)] == ["1.0", "2.0"]        # one version up from 1.0, not 1.1 and 2.0
+
+    msg = _ask(world, s["id"], [change("replace", "B3", markdown="Accounts shall be reviewed every month.", reason="wording")])
+    out = _accept(world, s["id"], msg, "minor")
+    assert out["library_version"]["version"] == "2.0" and [v for v, st in _versions(world.db, 11)] == ["1.0", "2.0"]
 
 
 
@@ -59,8 +64,10 @@ def test_the_persons_request_is_the_reason_of_the_version_it_makes(world):
     msg = _ask(world, s["id"], [change("insert", "B3", markdown="## 2. Exceptions\n\nExceptions need the CISO's approval.", reason="exceptions")], text=long_ask)
     _accept(world, s["id"], msg, "major")
     row = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=11, version_number="2.0").one()
-    request = row.change_reason.split(": ", 1)[1]
-    assert row.change_reason.startswith("Accepted 1 change from Comply Agent: Add an exceptions section") and len(request) == 150 and request.endswith("…")
+    newest = row.change_reason.split(" · ")[0]                                # the version holds both changes: newest reason first
+    request = newest.split(": ", 1)[1]
+    assert newest.startswith("Accepted 1 change from Comply Agent: Add an exceptions section") and len(request) == 150 and request.endswith("…")
+    assert row.change_reason.endswith("Make the account reviews monthly, as the auditors asked.")
 
 
 def test_a_published_document_waits_for_save_to_library(world):
@@ -90,7 +97,7 @@ def test_a_word_draft_gets_a_new_file_and_its_original_stays_as_the_earlier_vers
     old = s["content"].split("\n\n")[block - 1]
     msg = _ask(world, s["id"], [change("replace", f"B{block}", markdown=old.replace("every year", "every six months"), reason="cycle")])
     out = _accept(world, s["id"], msg, "minor")
-    assert out["library_version"] == {"saved": True, "version": "1.1", "change": "minor", "status": "draft"}
+    assert out["library_version"] == {"saved": True, "version": "1.1", "change": "minor", "status": "draft", "in_place": False}
     doc = world.db.get(m.GovernanceDocument, 20)
     world.db.refresh(doc)
     assert doc.file_path != original and open(original, "rb").read() == before                     # the original file is untouched
@@ -123,7 +130,7 @@ def test_a_request_to_format_offers_a_tidy_that_becomes_the_next_version_and_can
 
     out = _accept(world, s["id"], msg, "minor")
     assert out["accepted"] == 1 and out["revision"] == s["revision"] + 1
-    assert out["library_version"] == {"saved": True, "version": "1.1", "change": "minor", "status": "draft"}               # only the file changed
+    assert out["library_version"] == {"saved": True, "version": "1.1", "change": "minor", "status": "draft", "in_place": False}  # only the file changed
     doc = world.db.get(m.GovernanceDocument, 20)
     world.db.refresh(doc)
     texts = [p.text for p in Document(doc.file_path).paragraphs]

@@ -868,6 +868,24 @@ def get_document(
     return result
 
 
+def _fold_change(db: Session, document: GovernanceDocument, row, held_text, new_text, user_id: int, kind: str, reason) -> None:
+    """Keep on ``row`` (a version that takes one more change) who made each change it holds (see ``change_chain.fold``)."""
+    from .. import change_chain as C, doc_version
+
+    try:
+        before = doc_version.before_pending(db, document, row)
+        names = {u.id: (u.display_name or u.username) for u in db.query(GRCUser).filter(GRCUser.id.in_({user_id, row.created_by} - {None}))}
+        folded = C.fold(C.version_text(before) if before is not None else "", held_text or "", new_text or "",
+                        row.change_set if isinstance(row.change_set, dict) else None, kind=kind, by=names.get(user_id, ""), by_id=user_id,
+                        at=datetime.utcnow().isoformat(), version=row.version_number, reason=reason or "",
+                        held_by=names.get(row.created_by, ""), held_by_id=row.created_by,
+                        held_at=row.created_at.isoformat() if row.created_at else None)
+        if folded is not None:
+            row.change_set = folded
+    except Exception:       # noqa: BLE001 - the chain is derived from the texts when this is missing
+        logger.warning("could not record who made the change to version %s of document %s", row.version_number, document.id, exc_info=True)
+
+
 def _snapshot_content_version(
     db: Session, document: GovernanceDocument, *, old_content, old_title, old_version,
     change_type: str, change_reason, user_id: int, summary: Optional[str] = None,
@@ -878,9 +896,27 @@ def _snapshot_content_version(
     document.current_version: the major number for a "major" change, else the
     minor one. Returns the new version number."""
     from .versions import increment_version
+    from .. import doc_version
+
     existing = db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.document_id == document.id
     ).count()
+    if existing and change_type == "signoff":
+        # a sign-off stamp is not a new version: it is written into the version being signed (the user's rule, 2026-10-17)
+        stamped = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == document.id,
+                                                             GovernanceDocumentVersion.status == "current").order_by(GovernanceDocumentVersion.id.desc()).first()
+        if stamped is not None:
+            _fold_change(db, document, stamped, old_content, document.content, user_id, "signoff", change_reason)
+            stamped.content, stamped.title = document.content, document.title
+            return document.current_version or old_version
+    if existing:
+        number, pending = doc_version.target(db, document, change_type)
+        if pending is not None:          # not published yet: the change goes into the one pending version
+            _fold_change(db, document, pending, old_content, document.content, user_id, "manual", change_reason)
+            doc_version.update_pending(pending, number, change_type, title=document.title, content=document.content,
+                                       summary=summary or f"{change_type} update".strip(), reason=change_reason)
+            document.current_version = number
+            return number
     if existing == 0:
         db.add(GovernanceDocumentVersion(
             document_id=document.id, version_number=old_version, change_type="baseline",
@@ -1936,39 +1972,47 @@ async def upload_document_file(
         new_version, change_type, decided = doc_version.for_new_file(
             current_ver, document.file_path, document.file_name, file_path, file.filename,
             old_content=document.content, title=document.title)
-        if current_row is None:         # an older document with no row for its number: what it held is kept first, as that version
-            db.add(V(document_id=document_id, version_number=current_ver, change_type="baseline", title=document.title,
-                     content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
-                     file_type=document.file_type, change_summary="Original document, before it was changed", status="superseded",
-                     created_by=current_user.id))
-        elif not current_row.file_path and document.file_path:      # its file was put in place before its row held it
-            current_row.file_name, current_row.file_path = document.file_name, document.file_path
-            current_row.file_size, current_row.file_type = document.file_size, document.file_type
+        number, pending = doc_version.target(db, document, change_type)
+        if pending is not None:          # not published yet: the new file goes into the one pending version
+            doc_version.update_pending(pending, number, change_type, title=document.title,
+                                       summary=change_summary or f"File updated: {file.filename}. {decided}", reason=change_reason,
+                                       files={"file_name": file.filename, "file_path": file_path, "file_size": file_size, "file_type": file_ext})
+            new_version = number
+            document.current_version = new_version
+        else:
+            if current_row is None:         # an older document with no row for its number: what it held is kept first, as that version
+                db.add(V(document_id=document_id, version_number=current_ver, change_type="baseline", title=document.title,
+                         content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
+                         file_type=document.file_type, change_summary="Original document, before it was changed", status="superseded",
+                         created_by=current_user.id))
+            elif not current_row.file_path and document.file_path:      # its file was put in place before its row held it
+                current_row.file_name, current_row.file_path = document.file_name, document.file_path
+                current_row.file_size, current_row.file_type = document.file_size, document.file_type
         
-        existing_versions = db.query(GovernanceDocumentVersion).filter(
-            GovernanceDocumentVersion.document_id == document_id,
-            GovernanceDocumentVersion.status == "current"
-        ).all()
-        for v in existing_versions:
-            v.status = "superseded"
+            existing_versions = db.query(GovernanceDocumentVersion).filter(
+                GovernanceDocumentVersion.document_id == document_id,
+                GovernanceDocumentVersion.status == "current"
+            ).all()
+            for v in existing_versions:
+                v.status = "superseded"
         
-        version = GovernanceDocumentVersion(
-            document_id=document_id,
-            version_number=new_version,
-            change_type=change_type,
-            title=document.title,
-            content=document.content,
-            file_name=file.filename,
-            file_path=file_path,
-            file_size=file_size,
-            file_type=file_ext,
-            change_summary=change_summary or f"File updated: {file.filename}. {decided}",
-            change_reason=change_reason,
-            status="current",
-            created_by=current_user.id
-        )
-        db.add(version)
-        document.current_version = new_version
+            version = GovernanceDocumentVersion(
+                document_id=document_id,
+                version_number=new_version,
+                change_type=change_type,
+                title=document.title,
+                content=document.content,
+                file_name=file.filename,
+                file_path=file_path,
+                file_size=file_size,
+                file_type=file_ext,
+                change_summary=change_summary or f"File updated: {file.filename}. {decided}",
+                change_reason=change_reason,
+                status="current",
+                created_by=current_user.id
+            )
+            db.add(version)
+            document.current_version = new_version
     else:       # the same version with another file: the row of that version holds it (made when there is none)
         if current_row is None:
             db.query(V).filter(V.document_id == document_id, V.status == "current").update({"status": "superseded"})

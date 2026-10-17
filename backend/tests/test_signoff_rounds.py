@@ -170,3 +170,36 @@ def test_a_gap_fix_while_in_review_starts_a_new_round_and_asks_every_reviewer_ag
     asked = db.query(m.DocumentObligation).filter_by(document_id=5, kind="review", status="pending").all()
     assert sorted(o.user_id for o in asked) == [4, 6]
     assert db.query(m.DocumentAuditLog).filter_by(document_id=5, action="status_changed", new_value="pending_review").count() == 1
+
+
+def test_a_sign_off_stamp_keeps_the_number_and_a_decision_from_an_earlier_round_is_refused(db):
+    from datetime import datetime, timedelta
+
+    doc = db.get(m.GovernanceDocument, 5)
+    db.add(m.GovernanceDocumentVersion(document_id=5, version_number="1.2", change_type="minor", title=doc.title, content=doc.content,
+                                       status="current", created_by=3))
+    db.add(m.GRCUser(id=4, username="omar", email="omar@bank.example", display_name="Omar Shah"))
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="approver", target_type="user", target_id=4, added_by=3))
+    doc.signoff_round_at = datetime.utcnow() - timedelta(hours=1)
+    db.commit()
+    shown = _view(db)["round_at"]
+    assert _sign(db, version="1.2")["status"] == "pending_approval"            # Sara signs: her stamp goes into 1.2, no new number
+    rows = db.query(m.GovernanceDocumentVersion).filter_by(document_id=5).all()
+    assert doc.current_version == "1.2" and len(rows) == 1 and rows[0].content == doc.content and "Sara Khan" in doc.content
+
+    doc.content += "\nA new clause."                                          # changed in approval: still 1.2, but a new round
+    doc_lifecycle.changed_after_review(db, doc, "pending_approval", 3, "Edited in the AI Studio (version 1.2), so it needs approving again")
+    db.commit()
+    assert doc.current_version == "1.2" and _view(db)["round_at"] != shown
+    omar = db.get(m.GRCUser, 4)
+    for decide in (lambda: signoff.sign_document(document_id=5, body=signoff.SignRequest(signature_image=_png(), version="1.2", round_at=shown),
+                                                 request=_request(), db=db, current_user=omar),
+                   lambda: signoff.reject_document(document_id=5, body=signoff.RejectRequest(comment="No", version="1.2", round_at=shown),
+                                                   db=db, current_user=omar)):
+        with pytest.raises(HTTPException) as stale:
+            decide()
+        assert stale.value.status_code == 409 and "changed since you opened it" in stale.value.detail
+    now = signoff.get_signoff(document_id=5, db=db, current_user=omar)["round_at"]
+    out = signoff.sign_document(document_id=5, body=signoff.SignRequest(signature_image=_png(), version="1.2", round_at=now),
+                                request=_request(), db=db, current_user=omar)
+    assert out["status"] == "pending_approval"                                 # Omar signed this round; Sara is asked again

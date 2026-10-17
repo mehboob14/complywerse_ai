@@ -322,6 +322,44 @@ def build_change_set(old_text: str, new_text: str, origins: Sequence[Dict[str, A
             "words_added": sum(i["words_added"] for i in items), "words_removed": sum(i["words_removed"] for i in items), **(extra or {})}
 
 
+def origins_of(change_set: Optional[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The origins kept in a stored change set (its attributed changes), oldest first: so a version that collects several saves
+    still says who made each change when it is described again."""
+    out = []
+    for it in (change_set or {}).get("items") or []:
+        if not isinstance(it, dict) or it.get("origin") in (None, "unknown"):
+            continue
+        out.append(make_origin(it.get("origin") or "manual", by=it.get("by") or "", by_id=it.get("by_id"), at=it.get("at"),
+                               version=it.get("version"), request=it.get("request") or "", reason=it.get("reason") or "",
+                               sources=it.get("sources") or [], after=it.get("after_digests") or [], before=it.get("before_digests") or [],
+                               ref=it.get("ref") or {}))
+    return out
+
+
+def carried_origins(base_text: Optional[str], held_text: Optional[str], change_set: Optional[Dict[str, Any]], *, by: str, by_id: Optional[int],
+                    at: Optional[str]) -> List[Dict[str, Any]]:
+    """The origins of what a version already holds: its stored change set, else its changes against the version before it,
+    credited to whoever made the version (``by``)."""
+    olds = origins_of(change_set)
+    if olds or base_text is None or held_text is None:
+        return olds
+    return [make_origin("manual", by=by, by_id=by_id, at=at, after=h["after_digests"], before=h["before_digests"])
+            for h in hunks_of(base_text, held_text)]
+
+
+def fold(base_text: Optional[str], held_text: Optional[str], new_text: str, change_set: Optional[Dict[str, Any]], *, kind: str, by: str,
+         by_id: Optional[int], at: Optional[str], version: Optional[str] = None, reason: str = "",
+         held_by: str = "", held_by_id: Optional[int] = None, held_at: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """The change set of a version after one more change (``held_text`` -> ``new_text``, made by ``by``) went into it: every change
+    against the version before it (``base_text``), each credited to whoever made it. None when the texts cannot be read."""
+    if base_text is None or held_text is None:
+        return None
+    carried = carried_origins(base_text, held_text, change_set, by=held_by or by, by_id=held_by_id, at=held_at)
+    new = [make_origin(kind, by=by, by_id=by_id, at=at, version=version, reason=reason, after=h["after_digests"], before=h["before_digests"])
+           for h in hunks_of(held_text, new_text)]
+    return build_change_set(base_text, new_text, carried + new, default_kind="manual", by=by, by_id=by_id, at=at)
+
+
 def _default_kind(version) -> str:
     kind = (version.change_type or "").lower()
     summary = (version.change_summary or "").lower()

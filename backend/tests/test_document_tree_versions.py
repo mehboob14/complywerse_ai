@@ -87,8 +87,9 @@ def test_restoring_a_version_keeps_the_persons_why_as_its_reason(world, monkeypa
     out = version_routes.rollback_to_version(document_id=11, version_id=first.id, rollback_data=version_routes.VersionRollback(rollback_reason="  The edit was wrong  "),
                                              db=db, current_user=me)
     row = db.get(m.GovernanceDocumentVersion, out["new_version"]["id"])
-    assert (row.version_number, row.change_reason, row.change_summary) == ("1.2", "The edit was wrong", "Rollback to version 1.0: The edit was wrong")
+    # 1.1 is not published: the restore goes into it (one version up from 1.0 until it is published)
+    assert (row.version_number, row.change_reason, row.change_summary) == ("1.1", "The edit was wrong", "Rollback to version 1.0: The edit was wrong")
     assert "every year" in db.get(m.GovernanceDocument, 11).content
 
     out = version_routes.rollback_to_version(document_id=11, version_id=first.id, rollback_data=None, db=db, current_user=me)      # no why given
-    assert db.get(m.GovernanceDocumentVersion, out["new_version"]["id"]).change_reason == "Rollback from version 1.2 to version 1.0"
+    assert db.get(m.GovernanceDocumentVersion, out["new_version"]["id"]).change_reason.startswith("Rollback from version 1.1 to version 1.0")
