@@ -363,12 +363,16 @@ def _names(db, ids: Iterable[Optional[int]]) -> Dict[int, str]:
     return {u.id: (u.display_name or u.username or f"User {u.id}") for u in db.query(GRCUser).filter(GRCUser.id.in_(wanted)).all()}
 
 
-def chain(db, doc) -> Dict[str, Any]:
-    """The document's versions oldest to newest with what each changed, and the approvals between them. Reads only."""
+def chain(db, doc, upto=None) -> Dict[str, Any]:
+    """The document's versions oldest to newest with what each changed, and the approvals between them. Reads only. ``upto``: the
+    version row in force, for someone who reads that one - the chain ends there."""
     from ...models import DocumentAuditLog, GovernanceDocumentVersion
+    from .permissions import in_force_number
 
-    versions = (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id)
-                .order_by(GovernanceDocumentVersion.created_at.asc(), GovernanceDocumentVersion.id.asc()).all())
+    query = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id)
+    if upto is not None:
+        query = query.filter(GovernanceDocumentVersion.id <= upto.id)
+    versions = query.order_by(GovernanceDocumentVersion.created_at.asc(), GovernanceDocumentVersion.id.asc()).all()
     audit = (db.query(DocumentAuditLog).filter(DocumentAuditLog.document_id == doc.id)
              .order_by(DocumentAuditLog.performed_at.asc(), DocumentAuditLog.id.asc()).all())
     names = _names(db, [v.created_by for v in versions] + [v.approved_by for v in versions] + [a.performed_by for a in audit]
@@ -430,7 +434,8 @@ def chain(db, doc) -> Dict[str, Any]:
     people = {v["by"] for v in out_versions if v["by"]} | {e["actor"] for e in events if e["actor"]}
     return {
         "enabled": True,
-        "document": {"id": doc.id, "title": doc.title, "code": doc.document_code, "version": doc.current_version, "status": doc.status,
+        "document": {"id": doc.id, "title": doc.title, "code": doc.document_code, "status": doc.status, "in_force": in_force_number(doc),
+                     "version": upto.version_number if upto is not None else doc.current_version,
                      "stage_label": STAGE_LABEL.get(doc.status, doc.status), "owner": names.get(doc.owner_id), "author": names.get(doc.author_id),
                      "approved_by": names.get(doc.approved_by), "approved_at": _iso(doc.approved_at), "doc_type": doc.doc_type,
                      "is_file": bool(doc.file_path) and not (doc.content or "").strip(), "file_type": doc.file_type},

@@ -21,7 +21,7 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from ....schemas import ConvertStatementsRequest, InternalControlFromStatementResponse
 from ....services.ai_gateway.errors import AIBlocked
 from ..action_logger import log_governance_action
-from ..permissions import require_doc_editor
+from ..permissions import require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/documents", tags=["Governance - Policy Parser"])
 
@@ -857,7 +857,7 @@ def _create_version_snapshot(db: Session, statement: PolicyStatement, change_typ
     return version
 
 
-@router.get("/{document_id}/parse-status")
+@router.get("/{document_id}/parse-status", dependencies=[Depends(require_doc_reader)])
 def get_parse_status(
     document_id: int,
     request: Request,
@@ -1182,7 +1182,7 @@ def _parse_policy_background(document_id: int, user_id: int, tenant_slug: str):
         db.close()
 
 
-@router.post("/{document_id}/parse-policy")
+@router.post("/{document_id}/parse-policy", dependencies=[Depends(require_doc_editor)])
 def parse_policy_document(
     document_id: int,
     request: Request,
@@ -1355,7 +1355,7 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
         return False
 
 
-@router.get("/{document_id}/policy-statements")
+@router.get("/{document_id}/policy-statements", dependencies=[Depends(require_doc_reader)])
 def get_document_policy_statements(
     document_id: int,
     category: Optional[str] = None,
@@ -1434,7 +1434,7 @@ def get_document_policy_statements(
     }
 
 
-@router.post("/{document_id}/statements")
+@router.post("/{document_id}/statements", dependencies=[Depends(require_doc_editor)])
 def add_policy_statement(
     document_id: int,
     request: CreatePolicyStatementRequest,
@@ -1523,7 +1523,7 @@ def add_policy_statement(
     return serialize_statement(statement, compliance_record.id)
 
 
-@router.put("/{document_id}/statements/{statement_id}")
+@router.put("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_editor)])
 def update_policy_statement(
     document_id: int,
     statement_id: int,
@@ -1582,7 +1582,7 @@ def update_policy_statement(
     return serialize_statement(statement, compliance.id if compliance else None)
 
 
-@router.get("/{document_id}/statements/{statement_id}/versions")
+@router.get("/{document_id}/statements/{statement_id}/versions", dependencies=[Depends(require_doc_reader)])
 def get_statement_versions(
     document_id: int,
     statement_id: int,
@@ -1642,7 +1642,7 @@ def get_statement_versions(
     }
 
 
-@router.post("/{document_id}/statements/{statement_id}/rollback")
+@router.post("/{document_id}/statements/{statement_id}/rollback", dependencies=[Depends(require_doc_editor)])
 def rollback_statement(
     document_id: int,
     statement_id: int,
@@ -1728,7 +1728,7 @@ def rollback_statement(
     }
 
 
-@router.get("/{document_id}/statements/{statement_id}/diff")
+@router.get("/{document_id}/statements/{statement_id}/diff", dependencies=[Depends(require_doc_reader)])
 def compare_versions(
     document_id: int,
     statement_id: int,
@@ -1741,6 +1741,10 @@ def compare_versions(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     validate_document_access(current_user, document, db)
+    # the statement must be this document's, else its history would be read through any document the person may open
+    if not db.query(PolicyStatement.id).filter(PolicyStatement.id == statement_id,
+                                               PolicyStatement.document_id == document_id).first():
+        raise HTTPException(status_code=404, detail="Statement not found")
 
     va = db.query(PolicyStatementVersion).filter(
         PolicyStatementVersion.id == version_a,
@@ -1789,7 +1793,7 @@ def compare_versions(
     }
 
 
-@router.get("/{document_id}/reparse-proposals")
+@router.get("/{document_id}/reparse-proposals", dependencies=[Depends(require_doc_reader)])
 def get_reparse_proposals(
     document_id: int,
     request: Request,
@@ -1808,7 +1812,7 @@ def get_reparse_proposals(
     return {"document_id": document_id, **proposals}
 
 
-@router.post("/{document_id}/reparse-proposals/apply")
+@router.post("/{document_id}/reparse-proposals/apply", dependencies=[Depends(require_doc_editor)])
 def apply_reparse_proposals(
     document_id: int,
     request: ApplyReparseProposalsRequest,
@@ -1974,7 +1978,7 @@ def _sync_target(db: Session, document_id: int, current_user: GRCUser):
     return document
 
 
-@router.get("/{document_id}/document-sync")
+@router.get("/{document_id}/document-sync", dependencies=[Depends(require_doc_reader)])
 def get_document_sync(document_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     """Statements edited since the file was last written, and how well statements match the file. Tenants without
     document sync get ``{"enabled": false}``."""
@@ -1984,7 +1988,7 @@ def get_document_sync(document_id: int, db: Session = Depends(get_db), current_u
     return doc_sync.state(db, document) if doc_sync.enabled(db) else {"enabled": False}
 
 
-@router.post("/{document_id}/document-sync/check")
+@router.post("/{document_id}/document-sync/check", dependencies=[Depends(require_doc_editor)])
 def check_document_sync(document_id: int, again: bool = False, db: Session = Depends(get_db),
                         current_user: GRCUser = Depends(require_auth)):
     """Match the statements to the document's file (statements already matched are kept unless ``again``)."""
@@ -2016,7 +2020,7 @@ def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
-@router.delete("/{document_id}/statements/{statement_id}")
+@router.delete("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_editor)])
 def delete_policy_statement(
     document_id: int,
     statement_id: int,
@@ -2056,7 +2060,7 @@ def delete_policy_statement(
     return {"message": "Statement deleted"}
 
 
-@router.post("/{document_id}/statements/convert-to-controls", response_model=List[InternalControlFromStatementResponse])
+@router.post("/{document_id}/statements/convert-to-controls", dependencies=[Depends(require_doc_editor)], response_model=List[InternalControlFromStatementResponse])
 def convert_statements_to_controls(
     document_id: int,
     request: ConvertStatementsRequest,

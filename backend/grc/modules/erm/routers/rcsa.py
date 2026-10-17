@@ -221,7 +221,7 @@ from ....schemas import (
     RCSADashboardSummary, RCSAFindingsBySeverity, RCSABUProgress, RCSAAISuggestionResponse,
     EvidenceRecommendation, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin
 from ....services import evidence_review
 
 router = APIRouter(prefix="/rcsa", tags=["RCSA - Risk and Control Self-Assessment"])
@@ -1546,35 +1546,12 @@ def list_assessments(
         return []
 
     # Default visibility: non-admin users only see assessments they're
-    # assigned to. Tenant admins (Administrator role, primary contact,
-    # or superadmin) keep seeing every row. Frontends can override
+    # assigned to. Tenant admins (auth_router.is_tenant_admin) keep
+    # seeing every row. Frontends can override
     # either way by passing `mine=true` or `mine=false` explicitly —
     # backwards-compatible with any caller that already sets the flag.
     if mine is None:
-        from ....models import UserRole, Role, Tenant as _Tenant
-        is_admin = bool(getattr(current_user, "is_superadmin", False))
-        if not is_admin:
-            role_ids = [
-                ur.role_id for ur in db.query(UserRole).filter(
-                    UserRole.user_id == current_user.id
-                ).all()
-            ]
-            if role_ids:
-                role_names = {
-                    r.name for r in db.query(Role).filter(Role.id.in_(role_ids)).all()
-                }
-                if "Administrator" in role_names:
-                    is_admin = True
-            if not is_admin:
-                primary_email = (
-                    db.query(_Tenant.primary_contact_email)
-                    .filter(_Tenant.id.in_(user_tenants))
-                    .first()
-                )
-                if primary_email and primary_email[0] and current_user.email \
-                        and primary_email[0].lower() == current_user.email.lower():
-                    is_admin = True
-        mine = not is_admin
+        mine = not is_tenant_admin(db, current_user)
 
     query = db.query(RCSAAssessment).options(
         joinedload(RCSAAssessment.business_unit),

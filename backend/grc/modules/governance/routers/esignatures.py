@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from ....models import ElectronicSignature, GovernanceDocument, GRCUser, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from ....services import esign
+from ..permissions import ensure_reader
 
 router = APIRouter(prefix="/esignatures", tags=["Governance - Electronic signatures"])
 
@@ -16,6 +17,9 @@ def _own(db: Session, signature_id: int, user: GRCUser) -> ElectronicSignature:
     ).first()
     if not sig:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Signature not found")
+    document = db.get(GovernanceDocument, sig.document_id) if sig.document_id else None
+    if document is not None:
+        ensure_reader(db, user, document)          # a signature on a document is shown to whoever may read the document
     return sig
 
 

@@ -330,6 +330,7 @@ class WorkflowNotification(Base):
     notification_type = Column(String(50), default="info")  # info, success, warning, error
     subject = Column(String(500), nullable=False)
     message = Column(Text, nullable=False)
+    link = Column(String(500), nullable=True)            # the page the bell opens ("/governance/documents/5?tab=lifecycle")
     is_read = Column(Boolean, default=False, index=True)
     read_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -148,6 +148,29 @@ def test_a_library_word_file_is_opened_edited_and_saved_as_the_next_version_file
     assert again["base_label"] == "Uploaded Policy v1.1"
 
 
+def test_a_word_file_saved_while_in_review_is_signed_again_from_the_start_by_its_reviewers(world, lib):
+    from datetime import datetime
+
+    make_library_doc(world, lib, status="pending_review")
+    world.db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=20, role_type="reviewer", target_type="user", target_id=1, added_by=1))
+    world.db.get(m.GovernanceDocument, 20).signoff_round_at = datetime(2026, 1, 1)
+    world.db.commit()
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 20}).json()
+    assert (s["document_status"], s["unsaved_in_library"]) == ("pending_review", False)
+    world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"].replace("Review it every year.", "Review it every six months."),
+                                                                     "base_revision": s["revision"]})
+    assert world.http.get(world.api(f"/sessions/{s['id']}")).json()["unsaved_in_library"] is True
+    saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={}).json()
+    assert (saved["version"], saved["status"], saved["change"]) == ("1.1", "pending_review", "minor")
+    doc = world.db.get(m.GovernanceDocument, 20)
+    world.db.refresh(doc)
+    assert doc.signoff_round_at > datetime(2026, 1, 1)
+    assert world.db.query(m.DocumentObligation).filter_by(document_id=20, kind="review", user_id=1, status="pending").count() == 1
+    row = world.db.query(m.DocumentAuditLog).filter_by(document_id=20, action="content_edited").one()
+    assert row.action_details.endswith("; signed again from the start by its reviewers")
+    assert world.http.get(world.api(f"/sessions/{s['id']}")).json()["unsaved_in_library"] is False
+
+
 def test_saving_over_a_library_file_that_was_replaced_is_a_conflict_unless_forced(world, lib):
     make_library_doc(world, lib, status="draft")
     s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 20}).json()

@@ -31,7 +31,7 @@ from ....schemas import (
     RegulatoryChangeClosureReadinessResponse, RegulatoryChangeCloseResponse,
     IncompleteTaskDetail
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import PLATFORM_GRANT, require_auth, get_user_tenants, get_user_primary_tenant
 
 from .. import regulatory_engine, regulatory_tasks
 
@@ -143,7 +143,8 @@ def check_user_has_admin_access(user: GRCUser, tenant_id: int, db: Session) -> b
     admin_role_names = ["admin", "grc_admin", "administrator", "super_admin", "tenant_admin"]
     user_roles = db.query(UserRole).join(Role).filter(
         UserRole.user_id == user.id,
-        UserRole.tenant_id == tenant_id
+        UserRole.tenant_id == tenant_id,
+        PLATFORM_GRANT,
     ).all()
     for user_role in user_roles:
         if user_role.role and user_role.role.name.lower() in admin_role_names:

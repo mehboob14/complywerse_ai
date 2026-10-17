@@ -12,6 +12,7 @@ from ....models import (
     PolicyStatementVersion, AttestationCampaign, AttestationRequest, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..permissions import require_doc_reader, require_library_reader
 
 router = APIRouter(prefix="/reports", tags=["Reports & Export"])
 
@@ -39,6 +40,7 @@ def export_gap_report(
     ).first()
     if not run:
         raise HTTPException(status_code=404, detail="Gap analysis run not found")
+    require_doc_reader(run.document_id, db, current_user)
 
     findings = db.query(PolicyGapFinding).filter(
         PolicyGapFinding.analysis_run_id == run_id
@@ -70,7 +72,7 @@ def export_gap_report(
     return _csv_response(output, filename)
 
 
-@router.get("/compliance-summary/csv")
+@router.get("/compliance-summary/csv", dependencies=[Depends(require_library_reader)])
 def export_compliance_summary(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
@@ -111,7 +113,7 @@ def export_compliance_summary(
     return _csv_response(output, f"compliance_summary_{datetime.utcnow().strftime('%Y%m%d')}.csv")
 
 
-@router.get("/audit-log/csv")
+@router.get("/audit-log/csv", dependencies=[Depends(require_library_reader)])
 def export_audit_log(
     days: int = 90,
     db: Session = Depends(get_db),
@@ -139,7 +141,7 @@ def export_audit_log(
     return _csv_response(output, f"audit_log_{datetime.utcnow().strftime('%Y%m%d')}.csv")
 
 
-@router.get("/policy-statements/{document_id}/csv")
+@router.get("/policy-statements/{document_id}/csv", dependencies=[Depends(require_doc_reader)])
 def export_policy_statements(
     document_id: int,
     db: Session = Depends(get_db),

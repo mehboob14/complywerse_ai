@@ -386,10 +386,25 @@ def schedule(doc) -> None:
         doc.next_review_date = add_months(start, doc.review_cycle_months or 12)
 
 
-def check_details(db, *, owner_id=None, department_id=None, review_cycle_months=None) -> None:
-    """The details a save is given, checked before any file is written: ValueError with a sentence when one is not usable."""
-    from ...models import GRCDepartment, GRCUser
+def check_details(db, *, owner_id=None, department_id=None, review_cycle_months=None, parent_document_id=None, document_id=None) -> None:
+    """The details a save is given, checked before any file is written: ValueError with a sentence when one is not usable.
+    ``document_id`` is the document being changed, which may not be its own parent nor be filed under its parent."""
+    from ...models import GovernanceDocument, GRCDepartment, GRCUser, Tenant
 
+    if parent_document_id is not None:
+        if document_id is not None and int(parent_document_id) == int(document_id):
+            raise ValueError("A document cannot be its own parent.")
+        q = db.query(GovernanceDocument).filter(GovernanceDocument.id == int(parent_document_id))
+        tenant = db.query(Tenant).first()
+        parent = (q.filter(GovernanceDocument.tenant_id == tenant.id) if tenant else q).first()
+        if parent is None:
+            raise ValueError("The parent document was not found.")
+        seen = set()
+        while document_id is not None and parent is not None and parent.id not in seen:      # walk up: no loop
+            if parent.parent_document_id == int(document_id):
+                raise ValueError("The parent chosen is filed under this document, so it cannot also be its parent.")
+            seen.add(parent.id)
+            parent = db.get(GovernanceDocument, parent.parent_document_id) if parent.parent_document_id else None
     if owner_id is not None:
         owner = db.get(GRCUser, int(owner_id))
         if owner is None or not owner.is_active:

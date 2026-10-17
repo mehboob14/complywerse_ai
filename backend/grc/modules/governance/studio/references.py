@@ -22,6 +22,10 @@ class ReferenceProblem(ValueError):
     """A reference that cannot be used; the message is for the person."""
 
 
+class Refused(ReferenceProblem):
+    """The person may not read that library document (``permissions.can_read``)."""
+
+
 def natural_key(text: str) -> List[Any]:
     return [int(p) if p.isdigit() else p.lower() for p in re.split(r"(\d+)", text or "")]
 
@@ -34,16 +38,33 @@ def _cut(text: str, limit: int) -> Tuple[str, bool]:
 
 
 # ── sources ──────────────────────────────────────────────────────────────────
-def library_text(db, doc) -> Tuple[str, List[str]]:
-    """The text of a library document: its Markdown, else the text of its file."""
-    if (doc.content or "").strip():
-        return doc.content, []
-    if doc.file_path and os.path.exists(doc.file_path):
+def read_as(db, doc, user) -> Tuple[Any, str]:
+    """What ``user`` reads of a library document, and its number. Refused unless they may read it (``permissions.can_read``); while
+    a newer version is on its way that they do not see, the version in force (``permissions.version_for``), else the document."""
+    from ..permissions import DRAFT_REFUSED, READ_REFUSED, can_read, can_read_library, version_for
+
+    if user is None or not can_read(db, user, doc):
+        raise Refused(DRAFT_REFUSED if user is not None and can_read_library(db, user) else READ_REFUSED)
+    row = version_for(db, user, doc)
+    return (row, row.version_number) if row is not None else (doc, doc.current_version or "1.0")
+
+
+def text_of(src) -> Tuple[str, List[str]]:
+    """The text of a library document or one of its versions: its Markdown, else the text of its file."""
+    if (src.content or "").strip():
+        return src.content, []
+    if src.file_path and os.path.exists(src.file_path):
         from .importers import import_file
 
-        imported = import_file(doc.file_path, doc.file_name or doc.file_path)
+        imported = import_file(src.file_path, src.file_name or src.file_path)
         return imported.markdown, imported.notes
     raise ReferenceProblem("This document has no text to use as a reference.")
+
+
+def library_text(db, doc, user) -> Tuple[str, List[str], str]:
+    """The text of a library document as ``user`` reads it (``read_as``), its notes and the number of the version read."""
+    src, number = read_as(db, doc, user)
+    return (*text_of(src), number)
 
 
 def framework_text(db, framework, scope: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
@@ -56,16 +77,16 @@ def framework_text(db, framework, scope: Dict[str, Any]) -> Tuple[str, Dict[str,
     mode = scope.get("mode", "all")
     domains = {d.strip().lower() for d in scope.get("domains", []) if d}
     wanted = {r.strip().lower() for r in scope.get("control_refs", []) if r}
-    query = [w for w in re.findall(r"\w+", (scope.get("query") or "").lower()) if len(w) > 3]
+    topic = " ".join((scope.get("query") or "").split())[:300]
+    matched = _about(rows, topic) if mode == "query" else set()
     picked = []
     for c in rows:
         ref = (c.original_reference or c.control_id or "").strip()
-        hay = f"{c.title} {c.description or ''} {c.domain or ''}".lower()
         if mode == "domains" and (c.domain or "").strip().lower() not in domains:
             continue
         if mode == "controls" and ref.lower() not in wanted and (c.control_id or "").lower() not in wanted:
             continue
-        if mode == "query" and not any(w in hay for w in query):
+        if mode == "query" and c.id not in matched:
             continue
         picked.append((ref, c))
     if not picked:
@@ -81,7 +102,19 @@ def framework_text(db, framework, scope: Dict[str, Any]) -> Tuple[str, Dict[str,
         body = re.sub(r"\s+", " ", (c.description or c.full_text or "")).strip()
         lines.append(f"[{ref}] {c.title.strip()}" + (f" — {body[:450]}" + ("…" if len(body) > 450 else "") if body else ""))
     return "\n".join(lines), {"mode": mode, "domains": sorted(domains), "count": len(picked), "total": len(rows),
-                              "refs": [ref for ref, _ in picked][:2000]}
+                              "refs": [ref for ref, _ in picked][:2000], **({"query": topic} if mode == "query" else {})}
+
+
+def _about(rows: Sequence[Any], topic: str) -> set:
+    """The ids of the controls about a topic: those with a word of it (or a longer form: "access" finds "accessed") in their title,
+    text or domain. A word most of the framework's controls have ("control", "security") says nothing about the topic and is left
+    out, unless every word of the topic is like that."""
+    # ponytail: words, not meaning; a semantic match when people ask for topics the words of the controls do not use
+    words = {w for w in re.findall(r"\w+", topic.lower()) if len(w) > 3}
+    tokens = {c.id: set(re.findall(r"\w+", f"{c.title} {c.description or ''} {c.domain or ''}".lower())) for c in rows}
+    has = {w: {cid for cid, t in tokens.items() if any(x.startswith(w) for x in t)} for w in words}
+    telling = [w for w in words if len(has[w]) <= len(rows) / 2] or sorted(words, key=lambda w: len(has[w]))[:1]
+    return set().union(*(has[w] for w in telling))
 
 
 def available_frameworks(db) -> List[Tuple[Any, int]]:
@@ -125,7 +158,7 @@ def attach(db, session, kind: str, *, source_id: Optional[int] = None, scope: Op
            upload: Optional[Tuple[str, bytes]] = None, template_id: Optional[str] = None):
     """Resolve a reference to text and keep it with the session. Returns the ``StudioReference`` (an existing one when the same
     source and selection is already attached)."""
-    from ....models import GovernanceDocument, StudioReference
+    from ....models import GovernanceDocument, GRCUser, StudioReference
     from . import templates
     from ....services.licence_guard import find_restricted
 
@@ -142,9 +175,9 @@ def attach(db, session, kind: str, *, source_id: Optional[int] = None, scope: Op
         doc = db.get(GovernanceDocument, source_id) if source_id else None
         if doc is None:
             raise ReferenceProblem("That document was not found." if source_id else "This document has no parent document.")
-        text, notes = library_text(db, doc)
+        text, notes, number = library_text(db, doc, db.get(GRCUser, session.created_by))      # read as the session's person reads it
         title = doc.title
-        label = " · ".join(x for x in (doc.document_code, f"v{doc.current_version}" if doc.current_version else None, doc.doc_type) if x)
+        label = " · ".join(x for x in (doc.document_code, f"v{number}", doc.doc_type) if x)
     elif kind == "framework":
         fw = _framework_for(db, int(source_id or 0))
         text, meta = framework_text(db, fw, scope)
@@ -182,7 +215,7 @@ def attach(db, session, kind: str, *, source_id: Optional[int] = None, scope: Op
                                                  StudioReference.source_id == source_id).all() if source_id else [])
     for r in existing:
         if (r.scope or {}).get("mode") == meta.get("mode") and (r.scope or {}).get("domains") == meta.get("domains") \
-                and (r.scope or {}).get("count") == meta.get("count"):
+                and (r.scope or {}).get("count") == meta.get("count") and (r.scope or {}).get("query") == meta.get("query"):
             r.include = True
             return r
     text, truncated = _cut(text, MAX_REF_CHARS)

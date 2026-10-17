@@ -128,7 +128,16 @@ def verify(sig: ElectronicSignature, document: Any = None) -> Dict[str, Any]:
     seal_ok = any(hmac.compare_digest(_seal(sig, k), sig.seal or "") for k in _keys())
     changed = None
     if document is not None and sig.record_type != "document_signoff":   # signing a sign-off stamps the document itself
-        changed = document_fingerprint(document) != sig.content_sha256
+        signed = document
+        if sig.record_type == "document_acknowledgement":    # the version acknowledged, while it is still the one in force
+            from sqlalchemy.orm import object_session
+
+            from ..modules.governance import permissions
+
+            db = object_session(document)
+            if db is not None and sig.document_version and sig.document_version == permissions.in_force_number(document):
+                signed = permissions.in_force_row(db, document) or document
+        changed = document_fingerprint(signed) != sig.content_sha256
     return {"valid": image_ok and seal_ok, "image_ok": image_ok, "seal_ok": seal_ok, "document_changed_since": changed}
 
 

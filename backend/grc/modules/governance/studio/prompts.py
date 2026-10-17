@@ -142,6 +142,7 @@ class TurnInput:
     history: Sequence[Tuple[str, str]] = field(default_factory=list)       # (role, text), oldest first
     format_notes: Sequence[str] = field(default_factory=list)              # facts about the file the text comes from
     numbers: Sequence[Optional[str]] = field(default_factory=list)         # the number Word shows in front of each block, if any
+    research: str = ""                                                     # what was found on the internet for the request (an <internet_research> block)
 
 
 def instructions_text(ins: Dict[str, Any]) -> str:
@@ -195,6 +196,8 @@ def render_user(t: TurnInput) -> str:
         for r in t.references if r.include)
     if refs:
         parts.append(f"<references>\n{refs}\n</references>")
+    if t.research:
+        parts.append(t.research)
     body = listing(t.blocks, t.protected, t.numbers) if t.blocks else "(the document is empty)"
     parts.append(f'<document revision="{t.revision}" blocks="{len(t.blocks)}">\n{body}\n</document>')
     if t.history:

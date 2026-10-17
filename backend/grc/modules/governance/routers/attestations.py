@@ -14,6 +14,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ....services import esign
+from ..permissions import require_doc_reader, require_library_reader
 
 router = APIRouter(prefix="/attestations", tags=["Policy Attestations"])
 
@@ -262,7 +263,7 @@ async def complete_attestation(
     }
 
 
-@router.get("/document/{document_id}")
+@router.get("/document/{document_id}", dependencies=[Depends(require_doc_reader)])
 async def get_document_attestations(
     document_id: int,
     status_filter: Optional[str] = None,
@@ -337,7 +338,7 @@ async def get_document_attestations(
     }
 
 
-@router.get("/coverage-map")
+@router.get("/coverage-map", dependencies=[Depends(require_library_reader)])
 async def get_attestation_coverage_map(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
@@ -459,7 +460,7 @@ async def get_attestation_history(
     return result
 
 
-@router.get("/stats")
+@router.get("/stats", dependencies=[Depends(require_library_reader)])
 async def get_attestation_statistics(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)

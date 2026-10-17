@@ -59,7 +59,9 @@ from ..models import (
 from .auth_router import (
     SECRET_KEY as APP_SIGNING_SECRET,
     ALGORITHM,
+    SOURCE_SSO,
     create_access_token,
+    has_tenant_permission,
     set_auth_cookie,
     _resolve_cookie_domain,
 )
@@ -73,7 +75,6 @@ router = APIRouter(prefix="/sso", tags=["SSO / Identity Providers"])
 entra_router = APIRouter(prefix="/auth/entra", tags=["SSO / Identity Providers"])
 
 PROVIDER_ENTRA = "entra_id"
-SOURCE_SSO = "sso"
 SCOPE = "openid profile email User.Read"
 APP_SCOPE = "https://graph.microsoft.com/.default"
 
@@ -168,10 +169,7 @@ def _require_admin(
     cookie_token: Optional[str],
     authz: Optional[str],
 ) -> GRCUser:
-    """Mirror admin_router.check_permission: primary-contact bypass +
-    Administrator role bypass, otherwise admin:integrations_sso:manage."""
-    from ..models import Permission, RolePermission  # local import (cycle)
-
+    """An administrator (auth_router.is_tenant_admin), otherwise admin:integrations_sso:manage."""
     token = _resolve_token(cookie_token, authz)
     if not token:
         raise HTTPException(status_code=401, detail="Not authenticated")
@@ -186,29 +184,7 @@ def _require_admin(
     if not user:
         raise HTTPException(status_code=401, detail="User not found in this tenant")
 
-    tenant_row = tenant_db.query(Tenant).first()
-    if (
-        tenant_row
-        and tenant_row.primary_contact_email
-        and user.email
-        and tenant_row.primary_contact_email.lower() == user.email.lower()
-    ):
-        return user
-
-    role_ids = [ur.role_id for ur in tenant_db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-    if not role_ids:
-        raise HTTPException(status_code=403, detail="Permission denied")
-
-    if tenant_db.query(Role).filter(Role.id.in_(role_ids), Role.name == "Administrator").first():
-        return user
-
-    perm = tenant_db.query(Permission).filter(Permission.name == "admin:integrations_sso:manage").first()
-    if not perm:
-        raise HTTPException(status_code=403, detail="Permission denied")
-    if not tenant_db.query(RolePermission).filter(
-        RolePermission.role_id.in_(role_ids),
-        RolePermission.permission_id == perm.id,
-    ).first():
+    if not has_tenant_permission(tenant_db, user, "admin:integrations_sso:manage"):
         raise HTTPException(status_code=403, detail="Permission denied")
     return user
 

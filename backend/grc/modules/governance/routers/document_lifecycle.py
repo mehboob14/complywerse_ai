@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ....models import DocumentObligation, GRCUser, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import doc_lifecycle
-from ..permissions import is_admin, require_doc_editor
+from ..permissions import in_force_number, is_admin, require_doc_editor, require_doc_reader
 from .document_signoff import _doc_or_404, check_version
 
 router = APIRouter(prefix="/documents", tags=["Governance - Lifecycle"])
@@ -24,7 +24,7 @@ class AcknowledgeIn(BaseModel):
     signature_image: Optional[str] = None     # optional PNG data URL; sealed like a sign-off when given
 
 
-@router.get("/{document_id}/lifecycle")
+@router.get("/{document_id}/lifecycle", dependencies=[Depends(require_doc_reader)])
 def get_lifecycle(document_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     if not doc_lifecycle.enabled(db):
@@ -32,13 +32,23 @@ def get_lifecycle(document_id: int, db: Session = Depends(get_db), current_user:
     return doc_lifecycle.state(db, doc, current_user)
 
 
-@router.post("/{document_id}/lifecycle/acknowledge")
+@router.post("/{document_id}/lifecycle/acknowledge", dependencies=[Depends(require_doc_reader)])
 def acknowledge(document_id: int, body: AcknowledgeIn, request: Request, db: Session = Depends(get_db),
                 current_user: GRCUser = Depends(require_auth)):
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     if not doc_lifecycle.enabled(db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Acknowledgements are not enabled for this organisation")
-    check_version(db, doc, body.version)
+    number = in_force_number(doc)
+    asked = db.query(DocumentObligation.document_version).filter(        # the version the person's waiting request names
+        DocumentObligation.document_id == doc.id, DocumentObligation.kind == "acknowledgement", DocumentObligation.user_id == current_user.id,
+        DocumentObligation.status == "pending").order_by(DocumentObligation.id.desc()).limit(1).scalar()
+    if not body.version or body.version in (number, asked):          # what they read, or what they were asked for (a request not moved up)
+        pass
+    elif doc.status == "published":
+        check_version(db, doc, body.version)
+    elif number:                                                     # a new version is on its way: the one in force is acknowledged
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"The version in force changed since you opened it (now version {number}). Reload it and read it again.")
     try:
         doc_lifecycle.acknowledge(db, doc, current_user, body.comment, body.signature_image, request)
     except ValueError as exc:
@@ -64,7 +74,7 @@ def remind(document_id: int, db: Session = Depends(get_db), current_user: GRCUse
         ids = [o.user_id for o in pending if o.kind == kind]
         doc_lifecycle._notify(db, doc, ids, f"Reminder: {doc_lifecycle._VERB[kind]} {doc.title}",
                               f"{current_user.display_name or current_user.username} reminds you to "
-                              f"{doc_lifecycle._VERB[kind].lower()} \"{doc.title}\".", "warning", email=True)
+                              f"{doc_lifecycle._VERB[kind].lower()} \"{doc.title}\".", "warning", email=True, link=doc_lifecycle._link(doc, kind))
     db.commit()
     return {"reminded": len({o.user_id for o in pending})}
 

@@ -23,7 +23,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from ....models import GRCUser, TPRAAuditLog, TPRAStageInstance, Vendor, get_db
-from ....routers.auth_router import get_user_tenants, require_auth
+from ....routers.auth_router import PLATFORM_GRANT, get_user_tenants, require_auth
 from . import customisation, intake, rbac, service
 from .bootstrap import get_tiering_config
 from .engine_tiering import compute_inherent_tier
@@ -75,7 +75,7 @@ def _may_edit(db: Session, user: GRCUser, v: Vendor) -> bool:
 def _roles(db: Session, user: GRCUser) -> List[str]:
     from ....models import Role, UserRole
     return [name for (name,) in db.query(Role.name).join(UserRole, UserRole.role_id == Role.id)
-            .filter(UserRole.user_id == user.id)]
+            .filter(UserRole.user_id == user.id, PLATFORM_GRANT)]
 
 
 def _custom(db: Session, tenant_id: int) -> dict:

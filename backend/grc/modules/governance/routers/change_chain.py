@@ -15,8 +15,8 @@ from sqlalchemy.orm import Session
 from ....models import GovernanceDocumentVersion, GRCUser, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import change_chain as C
-from .. import change_chain_export, doc_lifecycle
-from ..permissions import require_doc_editor
+from .. import change_chain_export, doc_lifecycle, doc_version
+from ..permissions import require_doc_editor, require_doc_reader, version_for
 from .document_signoff import _doc_or_404
 from .documents import _snapshot_content_version, create_audit_log
 
@@ -28,29 +28,35 @@ def _enabled_or_404(db: Session) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The change chain is not enabled for this organisation")
 
 
-@router.get("/{document_id}/change-chain")
+@router.get("/{document_id}/change-chain", dependencies=[Depends(require_doc_reader)])
 def get_chain(document_id: int, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     if not doc_lifecycle.enabled(db):
         return {"enabled": False}
-    return C.chain(db, doc)
+    return C.chain(db, doc, upto=version_for(db, current_user, doc))       # ends at the version in force for who reads that one
 
 
-@router.get("/{document_id}/change-chain/redline")
+@router.get("/{document_id}/change-chain/redline", dependencies=[Depends(require_doc_reader)])
 def get_redline(document_id: int, from_version: int = Query(..., alias="from"), to: Optional[int] = None,
                 db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     """The document as it changed from version ``from`` to version ``to`` (the document as it is now when ``to`` is left out):
-    rows to read, the changes with who made each and on whose request, and whether they can be taken back here."""
+    rows to read, the changes with who made each and on whose request, and whether they can be taken back here. Someone who reads
+    the version in force compares with that one, never with a newer version."""
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     if not doc_lifecycle.enabled(db):
         return {"enabled": False}
+    in_force = version_for(db, current_user, doc)
+    if in_force is not None:
+        if from_version > in_force.id or (to or 0) > in_force.id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="That version was not found for this document.")
+        to = to or in_force.id
     try:
         out = C.redline(db, doc, from_version, to)
     except LookupError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    out["versions"] = C.baseline_options(db, doc)
+    out["versions"] = [v for v in C.baseline_options(db, doc) if in_force is None or v["id"] <= in_force.id]
     return out
 
 
@@ -91,7 +97,10 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing would change.")
 
     n = len(wanted)
-    reason = (body.reason or "").strip() or f"Took back {n} change{'' if n == 1 else 's'} made since version {base_v.version_number}"
+    done = f"Took back {n} change{'' if n == 1 else 's'} made since version {base_v.version_number}"
+    why = (body.reason or "").strip()[:2000]          # the person's why
+    reason, summary = why or done, f"{done}: {why}" if why else done
+    kind = doc_version.by_rule(old_content, new_content)        # major or minor, as any version (the rule: no AI call)
     old_title, old_version, old_status = doc.title, doc.current_version or "1.0", doc.status
     name = current_user.display_name or current_user.username or "A user"
     notes: List[str] = []
@@ -101,17 +110,15 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
         from ..studio import service as studio
 
         data, notes = studio.file_bytes(db, doc, new_content)
-        row, new_version, _ = studio.write_file_version(db, doc, current_user, data, change_type="revert", summary=reason, reason=reason,
+        row, new_version, _ = studio.write_file_version(db, doc, current_user, data, change_type=kind, summary=summary, reason=reason,
                                                         done="Changes were taken back")
     else:
         doc.content, doc.updated_at = new_content, datetime.utcnow()
         new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
-                                                change_type="revert", change_reason=reason, user_id=current_user.id)
+                                                change_type=kind, change_reason=reason, user_id=current_user.id, summary=summary)
         db.flush()
         row = (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id, GovernanceDocumentVersion.version_number == new_version)
                .order_by(GovernanceDocumentVersion.id.desc()).first())
-        if row is not None:
-            row.change_summary = reason
     if row is not None:
         cs = C.build_change_set(old_content, new_content, [], default_kind="revert", by=name, by_id=current_user.id, at=datetime.utcnow().isoformat(),
                                 extra={"reverts": {"since_version": base_v.version_number, "changes": n}, "stage_before": old_status})
@@ -119,18 +126,18 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
             item["reason"] = reason
         row.change_set = cs
     if not is_file:               # (a file's status and history are written with its new version)
-        sent = doc_lifecycle.changed_after_review(db, doc, old_status, current_user.id,
-                                                  f"Changes were taken back (version {new_version}), so it needs approving again")
+        doc_lifecycle.changed_after_review(db, doc, old_status, current_user.id,
+                                           f"Changes were taken back (version {new_version}), so it needs approving again")
         create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="content_edited", field_changed="current_version",
                          old_value=old_version, new_value=new_version, action_details=f"{reason}; version {new_version}"
-                         + ("; sent back to review" if sent else "; it is a draft again" if doc.status != old_status else ""))
+                         + doc_lifecycle.outcome(old_status, doc.status))
     db.commit()
     if is_file:
         studio.reanchor(db, doc, current_user.id)
     return {"version": new_version, "status": doc.status, "changes_taken_back": n, "notes": notes}
 
 
-@router.get("/{document_id}/change-chain/export")
+@router.get("/{document_id}/change-chain/export", dependencies=[Depends(require_doc_reader)])
 def export_chain(document_id: int, format: str = "xlsx", db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     """The whole chain as one file: Excel (a sheet each for versions, changes, sources and approvals), PDF or CSV."""
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
@@ -138,5 +145,6 @@ def export_chain(document_id: int, format: str = "xlsx", db: Session = Depends(g
     fmt = (format or "xlsx").lower()
     if fmt not in ("xlsx", "pdf", "csv"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose xlsx, pdf or csv.")
-    data, media_type, filename = change_chain_export.build(C.chain(db, doc), fmt, current_user.display_name or current_user.username or "a user")
+    data, media_type, filename = change_chain_export.build(C.chain(db, doc, upto=version_for(db, current_user, doc)), fmt,
+                                                           current_user.display_name or current_user.username or "a user")
     return Response(content=data, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})

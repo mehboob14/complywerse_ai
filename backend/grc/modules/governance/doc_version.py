@@ -7,7 +7,7 @@
 * ``decide`` - whether a new version is a major or a minor change. Comply Agent reads what changed (the changed blocks
   before and after, never the whole document) and says which, and why in one sentence. When it cannot answer - not
   configured, refused, or not within ``AI_SECONDS`` - a rule decides: a section added or removed, or more than a fifth of the
-  words changed, is major; anything else is minor.
+  words changed, is major; anything else is minor. ``by_rule`` is that rule on its own (a restore, a take back).
 * ``next_version`` - the number after the current one for that change.
 """
 from __future__ import annotations
@@ -191,6 +191,15 @@ def _rule(n: Dict[str, int]) -> Dict[str, str]:
     if n["changed_words"] > n["words"] / 5:
         return {"change": "major", "reason": "More than a fifth of the document's words changed.", "by": "rule"}
     return {"change": "minor", "reason": "A limited change to the wording.", "by": "rule"}
+
+
+def by_rule(old_text: Optional[str], new_text: Optional[str]) -> str:
+    """"major" or "minor" by the rule alone, no AI: for a restore or a take back, which put back text the document had before.
+    Minor when nothing changed or either text cannot be read."""
+    if old_text is None or new_text is None:
+        return "minor"
+    _text, n = changes(old_text, new_text)
+    return _rule(n)["change"] if n["blocks"] else "minor"
 
 
 def decide(old_text: str, new_text: str, *, title: str = "") -> Dict[str, str]:

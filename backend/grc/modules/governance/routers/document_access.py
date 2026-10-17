@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from ....models import GovernanceDocument, GRCUser, StudioReference, StudioSession, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import doc_lifecycle
-from ..permissions import can_edit, can_publish, require_doc_editor  # noqa: F401  (can_edit/can_publish are imported from here too)
+from ..permissions import can_delete, can_edit, can_publish, require_doc_editor, require_doc_reader  # noqa: F401  (can_edit/can_publish are imported from here too)
 from ..studio import references as refs
 from ..studio import service, setup
 from ..studio.importers import ALLOWED_EXTENSIONS, ImportProblem
@@ -47,16 +47,22 @@ def _draft(db: Session, doc: GovernanceDocument, user: GRCUser) -> Optional[Stud
             .order_by(StudioSession.updated_at.desc(), StudioSession.id.desc()).first())
 
 
+def _unsaved(s: StudioSession) -> bool:
+    """The draft has work not in the library: its text (or, for a Word file, the tidied file) differs from what it is based on.
+    Equal text needs no normalising (a parse and a render of the whole document, twice)."""
+    if (s.settings or {}).get("file_master") and (s.settings or {}).get("file_changed"):
+        return True
+    return (s.content or "") != (s.base_content or "") and service._norm_doc(s.content) != service._norm_doc(s.base_content)
+
+
 def _state(doc: GovernanceDocument, s: StudioSession) -> Tuple[bool, bool]:
     """(behind: the library changed since the draft was opened or last saved, unsaved: the draft has work not in the library)."""
     settings = s.settings or {}
     if settings.get("file_master"):
         behind = doc.file_path != settings.get("library_file")
-        unsaved = service._norm_doc(s.content) != service._norm_doc(s.base_content) or bool(settings.get("file_changed"))
     else:
         behind = service._norm_doc(doc.content or "") != service._norm_doc(s.base_content)
-        unsaved = service._norm_doc(s.content) != service._norm_doc(s.base_content)
-    return behind, unsaved
+    return behind, _unsaved(s)
 
 
 def _draft_view(doc: GovernanceDocument, s: Optional[StudioSession]) -> Optional[Dict[str, Any]]:
@@ -67,14 +73,27 @@ def _draft_view(doc: GovernanceDocument, s: Optional[StudioSession]) -> Optional
             "updated_at": s.updated_at.isoformat() if s.updated_at else None}
 
 
-@router.get("/documents/{document_id}/access", dependencies=[Depends(require_studio)])
+@router.get("/documents/{document_id}/access", dependencies=[Depends(require_studio), Depends(require_doc_reader)])
 def document_access(document_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """Reads only: what this person may do with the document, and their draft of it."""
     doc = _doc_or_404(document_id, get_user_tenants(user, db), db)
     openable, reason = _openable(doc)
     return {"document_id": doc.id, "status": doc.status, "version": doc.current_version or "1.0",
-            "can_edit": can_edit(db, user, doc), "can_publish": can_publish(db, user), "lifecycle": doc_lifecycle.enabled(db),
+            "can_edit": can_edit(db, user, doc), "can_publish": can_publish(db, user), "can_delete": can_delete(db, user, doc),
+            "can_annotate": _may_annotate(db, user, doc),
+            "lifecycle": doc_lifecycle.enabled(db),
             "openable": openable, "reason": reason, "draft": _draft_view(doc, _draft(db, doc, user))}
+
+
+def _may_annotate(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
+    """Remarks: its editors, auditors and the people taking part in its sign-off (``permissions.ensure_annotator``)."""
+    from ..permissions import ensure_annotator
+
+    try:
+        ensure_annotator(db, user, doc)
+        return True
+    except HTTPException:
+        return False
 
 
 class DraftIn(BaseModel):

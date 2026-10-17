@@ -393,11 +393,13 @@ USE_CASES: Tuple[UseCase, ...] = (
         "services/ai_gateway/claude_client.py:_stream_final",
         entry=("modules/governance/studio/drafting.py:run_draft", "modules/governance/studio/drafting.py:run_scoping"),
         apis=("anthropic",)),
-    _uc("governance.studio_research", "Look up the rules a new document must follow",
+    _uc("governance.studio_research", "Look up on the internet the rules that apply",
         "Searches the internet for the laws, regulations and standards that apply to a new document's subject in your sector and country, "
-        "so you can choose them before it is written.",
+        "so you can choose them before it is written, and for a chat request that asks for the internet, the latest or a link, or names a "
+        "law or standard the platform does not hold, listing the sources under the answer.",
         "Governance › Documents › AI Studio", "click", "DOC", "L3", ("document",),
-        "services/ai_gateway/claude_client.py:_stream_final", entry=("modules/governance/studio/drafting.py:run_scoping",),
+        "services/ai_gateway/claude_client.py:_stream_final",
+        entry=("modules/governance/studio/drafting.py:run_scoping", "modules/governance/studio/engine.py:run_chat_turn"),
         apis=("anthropic",)),
     _uc("governance.studio_checks", "Check a document's language and requirements",
         "Finds spelling, grammar and wording problems and checks your requirements against the document.",

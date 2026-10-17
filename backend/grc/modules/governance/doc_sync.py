@@ -353,6 +353,9 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
             file_type=old_type, change_summary="Original document, before statement edits were written back",
             status="superseded", created_by=user.id, created_at=datetime.utcnow()))
     else:
+        replaced = versions.filter(GovernanceDocumentVersion.version_number == old_version).order_by(GovernanceDocumentVersion.id.desc()).first()
+        if replaced is not None and not replaced.file_path and old_path:      # its file was put in place before its row held it
+            replaced.file_name, replaced.file_path, replaced.file_size, replaced.file_type = old_name, old_path, document.file_size, old_type
         versions.filter(GovernanceDocumentVersion.status == "current").update({"status": "superseded"})
     # major or minor, as Comply Agent reads what changed in the document's text (doc_version)
     from .doc_version import decide, next_version, verdict
@@ -393,7 +396,7 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id,
                      action="statements_written_to_document",
                      action_details=f"{len(edits)} statement edit(s) written into the document; version {new_version} created"
-                                    + ("; sent back to review" if sent else "; it is a draft again" if document.status != old_status else ""),
+                                    + doc_lifecycle.outcome(old_status, document.status),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     db.commit()
     return {"version": new_version, "version_id": row.id, "updated": len(edits), "conflicts": conflicts,

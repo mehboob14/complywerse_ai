@@ -13,6 +13,7 @@ Matching is by words, not by meaning, and errs on the side of not attaching. A f
 * the initials of its name when they spell a word of four letters or more ("GDPR", "PDPL", "HIPAA").
 An issuer alone ("NIST", "ISO") never attaches a framework. A document is named by its title (two words or more) or its code.
 What is attached is said in the turn's notes, and the person can remove it from References.
+A law or standard a request names that the platform does not hold (``rules_named``, ``held``) is looked up on the internet first.
 """
 from __future__ import annotations
 
@@ -119,6 +120,46 @@ def frameworks_named(text: str, frameworks: Sequence[Any]) -> List[Any]:
     return out
 
 
+# the names of laws and standards in a request, as it writes them; like the rest, by words, erring on the side of finding none.
+# Capitals that are a role, a team, a format or a word of a policy do not start one.
+# ponytail: word patterns and a short stop-list; a false hit costs one web search, a miss answers from what Comply Agent knows. Widen
+# the patterns (or the stop-list) from what people really type.
+_NOT_A_RULE = (r"(?!(?:IT|HR|ICT|OT|IS|CEO|CFO|CIO|CISO|CTO|CRO|COO|CCO|CSO|CPO|CDO|CAE|CHRO|BISO|DPO|MLRO|EVP|SVP|AVP|BOD|RACI|ISMS|SOP|SLA|KPI|KRI|"
+               r"BCP|DRP|BIA|PDF|URL|FAQ|TOC|NDA|MFA)\b)")
+_ACRONYM = _NOT_A_RULE + r"[A-Z][A-Z0-9&]{2,}\b(?![-/]\d)(?:\s+(?:[A-Z][\w&]*|v?\d[\w.:/-]*))*"       # "DORA", "PCI DSS v4.0", "SOC 2"
+_RULE_NAMES = (
+    # a standard by its body and number: "ISO/IEC 42001", "NIST SP 800-207", "IEC 62443", "FIPS 140-3"
+    re.compile(r"\b(?:ISO(?:\s*/\s*IEC)?|IEC|NIST(?:\s+SP)?|FIPS|IEEE|ETSI|BS|RFC)\s*[-:]?\s*\d{2,}(?:[-.:/]\d+)*"),
+    # an issuer's acronym before what it issues: "SBP circular", "the SBP's cloud circular", "EBA guidelines", "FCA rules"
+    re.compile(r"\b" + _NOT_A_RULE + r"[A-Z][A-Z0-9&]+(?:'s)?(?:\s+[\w&-]+){0,3}?\s+(?i:circulars?|regulations?|directives?|guidelines|rules|rulebook|handbook|notifications?)\b"),
+    # capitalised words ending in a law: "Data Protection Act 2018", "EU AI Act", "Electronic Transactions Ordinance"
+    re.compile(r"\b" + _NOT_A_RULE + r"(?:[A-Z][\w&'-]*\s+(?:(?:of|and|for|on|the)\s+)?){1,6}(?:Acts?|Laws?|Regulations?|Directives?|Circulars?|Ordinances?|Decrees?|Bills?|Statutes?)\b"),
+    # acronyms the request is to follow: "align this policy with DORA", "a gap analysis against FFIEC and GLBA", "per PCI DSS v4.0" (not a code like POL-007)
+    re.compile(r"\b(?i:against|(?:align\w*|compl\w*|conform\w*|consistent|in line|in accordance|map\w*)\s+(?:\w+\s+){0,3}?(?:with|to|against)|according to|"
+               r"required by|per|under|follow\w*|meet\w*|based on)\s+(?:the\s+)?((?:" + _ACRONYM + r")(?:(?:\s*,\s*|\s+(?:and|or|&)\s+)(?:the\s+)?" + _ACRONYM + r")*)"),
+)
+_LAW_GENERIC = _GENERIC | {"acts", "laws", "directive", "directives", "circular", "circulars", "ordinance", "ordinances", "decree", "decrees",
+                           "bill", "bills", "statute", "statutes", "rulebook", "handbook", "notification", "notifications"}
+
+
+def rules_named(text: str) -> List[str]:
+    """The laws, regulations and standards ``text`` names (see the patterns above), as it writes them, each once."""
+    out: List[str] = []
+    for pattern in _RULE_NAMES:
+        for m in pattern.finditer(text or ""):
+            for name in re.split(r"\s*,\s*|\s+(?:and|or|&)\s+(?:the\s+)?", m.group(1)) if pattern.groups else [m.group(0)]:
+                name = re.sub(r"'s\b", "", name).strip()
+                if name and not all(w in _LAW_GENERIC for w in _words(name)) and name not in out:
+                    out.append(name)
+    return out
+
+
+def held(name: str, names: Sequence[str]) -> bool:
+    """Whether the law or standard ``name`` (as a request writes it) is one of ``names``: it names one, or is part of one's name
+    ("SBP circular" of "SBP Circular No. 5 of 2026")."""
+    return any(named(name, n) or _has_run(_words(n), _words(name)) for n in names)
+
+
 def documents_named(text: str, documents: Sequence[Any], *, exclude: Sequence[int] = ()) -> List[Any]:
     """The library documents ``text`` names: by a title of two words or more (three when every word is generic, as in "Information
     Security Policy"), or by document code. The longest title wins when one title is part of another."""
@@ -146,7 +187,8 @@ def attach_named(db, session, text: str) -> List[Dict[str, Any]]:
     """Attach to ``session`` what ``text`` names and is not attached yet: platform frameworks (whole) and library documents that have
     text. Returns what was attached ({key, title, kind}) and what could not be ({title, kind, skipped: why}). Never raises: a request
     is never refused over an attachment it did not ask for in so many words."""
-    from ....models import GovernanceDocument, StudioReference
+    from ....models import GovernanceDocument, GRCUser, StudioReference
+    from ..permissions import visible_filter
 
     try:
         present = db.query(StudioReference).filter(StudioReference.session_id == session.id).all()
@@ -156,7 +198,11 @@ def attach_named(db, session, text: str) -> List[Dict[str, Any]]:
         for f in frameworks_named(text, [f for f, _count in refs.available_frameworks(db)]):
             if ("framework", f.id) not in have:
                 wanted.append(("framework", f))
-        docs = (db.query(GovernanceDocument).filter(GovernanceDocument.tenant_id == session.tenant_id).all() if session.tenant_id else [])
+        query = db.query(GovernanceDocument).filter(GovernanceDocument.tenant_id == session.tenant_id)
+        visible = visible_filter(db, db.get(GRCUser, session.created_by))
+        if visible is not None:                 # only what the person may read is matched: a skipped note would name the others
+            query = query.filter(visible)
+        docs = query.all() if session.tenant_id else []
         docs = [d for d in docs if (d.content or "").strip() or d.file_path]
         own = (session.title or "").strip().lower()
         for d in documents_named(text, docs, exclude=[session.document_id] if session.document_id else []):

@@ -45,7 +45,7 @@ def client(monkeypatch):
                                  description="The entity restricts logical access to information assets."),
     ])
     doc = m.GovernanceDocument(id=11, tenant_id=1, title="Access Management Policy", doc_type="policy",
-                               framework_ids=[1], applicable_framework_ids=[2])
+                               framework_ids=[1], applicable_framework_ids=[2], owner_id=7)     # its owner maps it
     db.add(doc)
     db.flush()
     db.add(m.PolicyStatement(tenant_id=1, document_id=11, statement_code="PS-0011-001", status="active",

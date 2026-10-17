@@ -38,12 +38,11 @@ from sqlalchemy.orm import Session
 
 from ..models import (
     CriticalTask, Evidence, GovernanceDocument, GRCUser, InternalControl, Issue, ITAsset,
-    MetricSnapshot, MetricTarget, Permission, ReportDefinition, Risk, Role,
-    RolePermission, Tenant, UserRole, Vendor, Vulnerability, get_db,
+    MetricSnapshot, MetricTarget, ReportDefinition, Risk, Tenant, Vendor, Vulnerability, get_db,
 )
 from ..services import metric_catalog, metric_snapshots
 from ..services import report_linkages, report_open_catalog
-from .auth_router import get_user_primary_tenant, get_user_tenants, require_auth
+from .auth_router import get_user_primary_tenant, get_user_tenants, is_tenant_admin, require_auth, tenant_permission_names
 
 router = APIRouter(prefix="/reporting", tags=["Reporting Engine"])
 
@@ -293,22 +292,7 @@ SERVER_DATASETS: Dict[str, DatasetSpec] = {
 def _user_perm_names(user: Any, db: Session) -> set:
     """The permission strings granted to a user, or {'*:*:*'} for admins /
     primary contact — mirrors how /auth/me resolves permissions."""
-    tenant = db.query(Tenant).first()
-    if tenant and getattr(tenant, "primary_contact_email", None) and user.email \
-            and tenant.primary_contact_email.lower() == user.email.lower():
-        return {"*:*:*"}
-    role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-    if not role_ids:
-        return set()
-    if db.query(Role).filter(Role.id.in_(role_ids), Role.name == "Administrator").first():
-        return {"*:*:*"}
-    perms = (
-        db.query(Permission)
-        .join(RolePermission, RolePermission.permission_id == Permission.id)
-        .filter(RolePermission.role_id.in_(role_ids))
-        .all()
-    )
-    return {p.name for p in perms if p.name}
+    return {"*:*:*"} if is_tenant_admin(db, user) else tenant_permission_names(db, user)
 
 
 def _satisfies(granted: set, required: str) -> bool:

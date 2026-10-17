@@ -485,6 +485,97 @@ def test_saving_over_a_library_document_that_changed_is_a_conflict_and_approved_
     assert forced["status"] == "pending_review" and "every month" in world.db.get(m.GovernanceDocument, 10).content
 
 
+def test_a_save_in_review_or_in_force_starts_the_round_again_and_the_history_says_what_happened(world):
+    from datetime import datetime
+
+    from grc.modules.governance.routers.document_signoff import _signatures
+
+    db = world.db
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    for n, (status, roles, after, words) in enumerate([
+            ("pending_review", ["reviewer"], "pending_review", "; signed again from the start by its reviewers"),
+            ("pending_approval", ["approver"], "pending_approval", "; signed again from the start by its approvers"),
+            ("published", ["reviewer"], "pending_review", "; sent back to its reviewers"),
+            ("approved", [], "draft", "; it is a draft again")]):
+        db.query(m.DocumentSignoffAssignment).delete()
+        for role in roles:
+            db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=10, role_type=role, target_type="user", target_id=1, added_by=1))
+        doc = db.get(m.GovernanceDocument, 10)
+        doc.status = status
+        db.commit()
+        doc.signoff_round_at = datetime(2026, 1, 1)
+        db.add(m.DocumentSignature(tenant_id=1, document_id=10, signer_user_id=1, role_type=(roles or ["reviewer"])[0], decision="signed",
+                                   signed_at=datetime(2026, 1, 2)))                    # given in the round so far
+        db.commit()
+        cur = world.http.get(world.api(f"/sessions/{s['id']}")).json()
+        world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": cur["content"] + f"\nOne more line {n}.\n", "base_revision": cur["revision"]})
+        saved = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={}).json()
+        assert saved["status"] == after and saved["change"] in ("major", "minor"), (status, saved)
+        row = db.query(m.DocumentAuditLog).filter_by(document_id=10, action="content_edited").order_by(m.DocumentAuditLog.id.desc()).first()
+        assert row.action_details.endswith(words), (status, row.action_details)
+        db.refresh(doc)
+        assert doc.signoff_round_at > datetime(2026, 1, 2) and _signatures(db, 10) == []      # the signatures so far no longer count
+        if roles:                                                                           # the same person is asked again
+            assert db.query(m.DocumentObligation).filter_by(document_id=10, kind=roles[0].replace("reviewer", "review").replace("approver", "approval"),
+                                                            user_id=1, status="pending").count() == 1
+
+
+def test_the_session_says_the_library_documents_status_and_whether_it_has_work_not_in_the_library(world):
+    new = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "Memo", "template_id": "builtin:blank", "doc_type": "policy"}).json()
+    assert (new["document_status"], new["unsaved_in_library"]) == (None, False)
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 11}).json()
+    assert (s["document_status"], s["unsaved_in_library"]) == ("draft", False)
+    world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": s["content"] + "\nA new rule.\n", "base_revision": s["revision"]})
+    assert world.http.get(world.api(f"/sessions/{s['id']}")).json()["unsaved_in_library"] is True
+    listed = {i["id"]: i for i in world.http.get(world.api("/sessions")).json()["items"]}
+    assert listed[s["id"]]["document_status"] == "draft" and "unsaved_in_library" not in listed[s["id"]]   # not worked out per row
+    world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={})
+    assert world.http.get(world.api(f"/sessions/{s['id']}")).json()["unsaved_in_library"] is False
+
+
+def test_reading_a_session_writes_nothing_and_the_page_says_when_it_was_opened(world):
+    from datetime import datetime
+
+    from sqlalchemy import event
+
+    s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    row = world.db.get(m.StudioSession, s["id"])
+    row.last_opened_at = datetime(2026, 1, 1)
+    world.db.commit()
+    writes = []
+    listen = lambda *a: writes.append(1)          # noqa: E731
+    event.listen(world.db, "after_flush", listen)
+    event.listen(world.db, "after_commit", listen)
+    try:
+        assert world.http.get(world.api(f"/sessions/{s['id']}")).status_code == 200
+    finally:
+        event.remove(world.db, "after_flush", listen)
+        event.remove(world.db, "after_commit", listen)
+    assert writes == [] and row.last_opened_at == datetime(2026, 1, 1)
+    assert world.http.post(world.api(f"/sessions/{s['id']}/opened")).json() == {"ok": True}
+    world.db.refresh(row)
+    assert row.last_opened_at > datetime(2026, 1, 1)
+    world.me["id"] = 2
+    assert world.http.post(world.api(f"/sessions/{s['id']}/opened")).status_code == 404     # only the person's own session
+
+
+def test_moving_to_the_library_without_a_classification_or_review_cycle_takes_them_from_the_setup(world, monkeypatch):
+    monkeypatch.setattr("grc.modules.governance.routers.policy_parser.maybe_autoparse_document", lambda *a, **k: False)
+
+    def moved(instructions):
+        s = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "Retention Policy", "template_id": "builtin:blank", "doc_type": "policy"}).json()
+        world.http.put(world.api(f"/sessions/{s['id']}/content"), json={"content": "# Retention Policy\n\nKeep records.\n", "base_revision": 1})
+        if instructions:
+            world.http.patch(world.api(f"/sessions/{s['id']}"), json={"instructions": instructions})
+        out = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={})
+        assert out.status_code == 200, out.text
+        doc = world.db.get(m.GovernanceDocument, out.json()["document_id"])
+        return doc.classification, doc.review_cycle_months
+
+    assert moved({"classification": "Restricted", "review_cycle": "Every 6 months"}) == ("restricted", 6)
+    assert moved(None) == ("internal", 12)
+
+
 # ── templates ────────────────────────────────────────────────────────────────
 def test_a_document_is_saved_as_a_template_and_becomes_the_default_for_new_documents(world):
     s = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "CFSB Policy", "template_id": "builtin:blank", "doc_type": "policy"}).json()
@@ -519,3 +610,63 @@ def test_only_an_administrator_makes_a_template_the_default_and_only_its_maker_o
     assert world.http.put(world.api(f"/templates/{mine_id}"), json={"name": "Renamed by the administrator", "make_default": False}).status_code == 200      # an administrator may change anyone's
     world.me["id"] = 2
     assert world.http.delete(world.api(f"/templates/{mine_id}")).json() == {"deleted": True}                                                              # and its maker may remove it
+
+
+# ── the end-to-end test's findings (2026-10-17) ──────────────────────────────
+def test_save_to_library_is_offered_only_to_whoever_may_change_the_document(world):
+    mine = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    new = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "Draft"}).json()
+    assert mine["may_save"] is True and new["may_save"] is True
+    world.me["id"] = 2                                                                    # Sam only reads document 10
+    assert world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).status_code == 403      # not before he may
+    world.db.add_all([m.Role(id=12, tenant_id=1, name="Readers"), m.UserRole(user_id=2, role_id=12, tenant_id=1),
+                      m.Permission(id=12, name="governance:policies:view", resource="governance:policies", action="view"),
+                      m.RolePermission(role_id=12, permission_id=12)])
+    world.db.commit()
+    theirs = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    assert theirs["may_save"] is False and world.http.get(world.api(f"/sessions/{theirs['id']}")).json()["may_save"] is False
+    assert ["may_save" in i for i in world.http.get(world.api("/sessions")).json()["items"]] == [False]    # the list does not work it out per row
+
+
+def test_a_framework_is_attached_once_and_controls_about_a_topic_are_those_that_talk_about_it(world):
+    sid = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "T", "template_id": "builtin:blank", "doc_type": "other"}).json()["id"]
+    # "information" is in most of the framework's controls, so it says nothing about the topic: only privileged access is
+    fw = world.http.post(world.api(f"/sessions/{sid}/references"), json={"kind": "framework", "source_id": 1,
+                                                                        "scope": {"mode": "query", "query": "privileged access to information"}}).json()
+    assert fw["scope"] == {"mode": "query", "domains": [], "count": 1, "total": 3, "query": "privileged access to information"}
+    assert "[A.8.2]" in world.http.get(world.api(f"/sessions/{sid}/references/{fw['id']}")).json()["text"]
+    attach = lambda scope: world.http.post(world.api(f"/sessions/{sid}/references"),  # noqa: E731
+                                           json={"kind": "framework", "source_id": 1, "scope": scope})
+    again = attach({"mode": "query", "query": "privileged access to information"})               # the same choice, in use
+    assert again.status_code == 409 and again.json()["detail"] == "This framework is already attached."
+    whole = attach({"mode": "all"})                                                               # another part of it: that reference's choice
+    assert whole.status_code == 200 and (whole.json()["id"], whole.json()["key"]) == (fw["id"], fw["key"])
+    assert whole.json()["scope"]["count"] == 3 and whole.json()["include"] is True
+    world.http.patch(world.api(f"/sessions/{sid}/references/{fw['id']}"), params={"include": False})
+    paused = attach({"mode": "all"})                                                              # the same choice, paused: used again
+    assert paused.status_code == 200 and paused.json()["id"] == fw["id"] and paused.json()["include"] is True
+    assert attach({"mode": "all"}).status_code == 409
+    assert len(world.http.get(world.api(f"/sessions/{sid}")).json()["references"]) == 1
+
+
+def test_an_uploaded_or_library_document_is_not_held_to_a_templates_sections(world):
+    lib_s = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    assert not [i for i in world.http.post(world.api(f"/sessions/{lib_s['id']}/checks")).json()["issues"] if i["rule"] == "section_missing"]
+    new = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "Policy", "doc_type": "policy"}).json()      # from the policy template
+    world.http.put(world.api(f"/sessions/{new['id']}/content"), json={"content": "# Policy\n\nText.\n", "base_revision": new["revision"]})
+    assert [i for i in world.http.post(world.api(f"/sessions/{new['id']}/checks")).json()["issues"] if i["rule"] == "section_missing"]
+
+
+def test_the_internet_searches_and_sources_are_listed_once():
+    from grc.modules.governance.studio import drafting
+
+    assert drafting._unique_searches(["SBP work from home circular", "sbp  work from home circular", "SBP outsourcing"]) == [
+        "SBP work from home circular", "SBP outsourcing"]
+    found = [{"url": "https://www.sbp.org.pk/", "title": "State Bank of Pakistan"},
+             {"url": "http://sbp.org.pk", "title": "SBP home"},                                          # the same page
+             {"url": "https://www.sbp.org.pk/circulars/08-2020", "title": "State Bank of Pakistan"},     # another page with the site's title
+             {"url": "https://www.sbp.org.pk/bprd/2017/C5.htm", "title": "BPRD Circular 5 of 2017"},
+             {"url": "https://sbp.org.pk/bprd/2017/C5.htm/#top", "title": "BPRD Circular 5 of 2017"},  # the same page again
+             {"url": "https://example.com/a", "title": "State Bank of Pakistan"}]                       # another site may say it too
+    assert [s["url"] for s in drafting._unique_sources(found)] == ["https://www.sbp.org.pk/", "https://www.sbp.org.pk/circulars/08-2020",
+                                                                   "https://www.sbp.org.pk/bprd/2017/C5.htm", "https://example.com/a"]

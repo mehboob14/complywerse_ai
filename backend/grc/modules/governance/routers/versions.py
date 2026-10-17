@@ -11,9 +11,18 @@ from ....models import (
     GRCUser, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
-from ..permissions import require_doc_editor
+from .. import permissions
+from ..permissions import require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/versions", tags=["Governance - Document Versions"])
+
+
+def _hide_newer(db: Session, user: GRCUser, doc: GovernanceDocument, *versions: GovernanceDocumentVersion):
+    """The version row in force for someone who reads that one (None: they see every version); a version after it is not found."""
+    row = permissions.version_for(db, user, doc)
+    if row is not None and any(v.id > row.id for v in versions):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Version not found")
+    return row
 
 
 class VersionCreate(BaseModel):
@@ -108,7 +117,7 @@ def serialize_version(version: GovernanceDocumentVersion) -> dict:
     }
 
 
-@router.get("/document/{document_id}")
+@router.get("/document/{document_id}", dependencies=[Depends(require_doc_reader)])
 def list_versions(
     document_id: int,
     skip: int = 0,
@@ -134,6 +143,9 @@ def list_versions(
     ).filter(
         GovernanceDocumentVersion.document_id == document_id
     )
+    in_force = _hide_newer(db, current_user, document)
+    if in_force is not None:
+        query = query.filter(GovernanceDocumentVersion.id <= in_force.id)
     
     total = query.count()
     versions = query.order_by(
@@ -146,7 +158,7 @@ def list_versions(
         "skip": skip,
         "limit": limit,
         "document_id": document_id,
-        "current_version": document.current_version
+        "current_version": in_force.version_number if in_force is not None else document.current_version
     }
 
 
@@ -176,12 +188,19 @@ def create_version(
             detail="change_type must be one of: major, minor, patch"
         )
     
+    if db.query(GovernanceDocumentVersion.id).filter(GovernanceDocumentVersion.document_id == document_id).first() is None:
+        # an older document with no versions yet: what it holds now is kept first, as its own version (the version in force)
+        db.add(GovernanceDocumentVersion(
+            document_id=document_id, version_number=document.current_version or "1.0", change_type="baseline", title=document.title,
+            content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
+            file_type=document.file_type, change_summary="Baseline snapshot (before first edit)", status="superseded",
+            created_by=current_user.id, created_at=datetime.utcnow()))
     db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.document_id == document_id,
         GovernanceDocumentVersion.status == "current"
     ).update({"status": "superseded"})
     
-    new_version_number = increment_version(document.current_version, version_data.change_type)
+    new_version_number = increment_version(document.current_version or "1.0", version_data.change_type)
     
     new_version = GovernanceDocumentVersion(
         document_id=document_id,
@@ -189,6 +208,8 @@ def create_version(
         change_type=version_data.change_type,
         title=version_data.title or document.title,
         content=version_data.content or document.content,
+        # the document's file stays its file: the row holds it too, so it is still there once a later version replaces it
+        file_name=document.file_name, file_path=document.file_path, file_size=document.file_size, file_type=document.file_type,
         change_summary=version_data.change_summary,
         change_reason=version_data.change_reason,
         status="current",
@@ -208,6 +229,8 @@ def create_version(
 
         doc_lifecycle.changed_after_review(db, document, old_status, current_user.id,
                                            f"New version {new_version_number}, so it needs approving again")
+    if document.status == "published":          # a new number for the same published text: the one in force
+        document.published_version = new_version_number
     document.updated_at = datetime.utcnow()
     
     create_audit_log(
@@ -254,6 +277,7 @@ def get_version(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this tenant's data"
         )
+    _hide_newer(db, current_user, require_doc_reader(version.document_id, db, current_user), version)
     
     return serialize_version(version)
 
@@ -298,6 +322,7 @@ def compare_versions(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Cannot compare versions from different documents"
         )
+    _hide_newer(db, current_user, require_doc_reader(version_1.document_id, db, current_user), version_1, version_2)
     
     content_1 = (version_1.content or "").splitlines(keepends=True)
     content_2 = (version_2.content or "").splitlines(keepends=True)
@@ -329,6 +354,19 @@ def compare_versions(
             "new_title": version_2.title if title_changed else None
         }
     }
+
+
+def _restore_kind(db: Session, document: GovernanceDocument, target: GovernanceDocumentVersion) -> str:
+    """A restore is major when it undoes a major version, else by the rule (``doc_version.by_rule``) on the text now and the
+    text it brings back. No AI call."""
+    from .. import change_chain, doc_version
+
+    undone = db.query(GovernanceDocumentVersion.id).filter(GovernanceDocumentVersion.document_id == document.id,
+                                                           GovernanceDocumentVersion.id > target.id,
+                                                           GovernanceDocumentVersion.change_type == "major").first()
+    if undone is not None:
+        return "major"
+    return doc_version.by_rule(change_chain.document_text(document), change_chain.version_text(target))
 
 
 @router.post("/document/{document_id}/rollback/{version_id}", status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_doc_editor)])
@@ -367,6 +405,7 @@ def rollback_to_version(
     change_summary = f"Rollback to version {target_version.version_number}"
     if rollback_reason:
         change_summary += f": {rollback_reason}"
+    kind = _restore_kind(db, document, target_version)
 
     if not (target_version.content or "").strip() and target_version.file_path and os.path.exists(target_version.file_path):
         # a version that is a file (an uploaded Word or PDF, the original or a later one): that file becomes the document's file
@@ -378,7 +417,7 @@ def rollback_to_version(
         ext = (target_version.file_type or os.path.splitext(target_version.file_path)[1]).lower().lstrip(".") or "docx"
         old_version = document.current_version
         row, new_version_number, _ = studio.write_file_version(
-            db, document, current_user, data, change_type="minor", summary=change_summary, reason=rollback_reason, ext=ext,
+            db, document, current_user, data, change_type=kind, summary=change_summary, reason=rollback_reason, ext=ext,
             done=f"Version {target_version.version_number} restored", audit_action="version_rollback")
         row.change_reason = rollback_reason or f"Rollback from version {old_version} to version {target_version.version_number}"
         document.content = None
@@ -398,12 +437,12 @@ def rollback_to_version(
         GovernanceDocumentVersion.status == "current"
     ).update({"status": "superseded"})
     
-    new_version_number = increment_version(document.current_version, "minor")
+    new_version_number = increment_version(document.current_version, kind)
     
     new_version = GovernanceDocumentVersion(
         document_id=document_id,
         version_number=new_version_number,
-        change_type="minor",
+        change_type=kind,
         title=target_version.title,
         content=target_version.content,
         change_summary=change_summary,
@@ -449,7 +488,7 @@ def rollback_to_version(
     }
 
 
-@router.get("/document/{document_id}/history")
+@router.get("/document/{document_id}/history", dependencies=[Depends(require_doc_reader)])
 def get_version_history(
     document_id: int,
     skip: int = 0,
@@ -478,6 +517,9 @@ def get_version_history(
     ).filter(
         GovernanceDocumentVersion.document_id == document_id
     )
+    in_force = _hide_newer(db, current_user, document)
+    if in_force is not None:
+        query = query.filter(GovernanceDocumentVersion.id <= in_force.id)
     
     if change_type:
         if change_type not in ["major", "minor", "patch"]:
@@ -517,6 +559,6 @@ def get_version_history(
             "id": document.id,
             "title": document.title,
             "document_code": document.document_code,
-            "current_version": document.current_version
+            "current_version": in_force.version_number if in_force is not None else document.current_version
         }
     }

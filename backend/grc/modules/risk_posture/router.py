@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from grc.models import GRCUser, ITAsset, get_db
-from grc.routers.auth_router import get_user_primary_tenant, require_auth
+from grc.routers.auth_router import PLATFORM_GRANT, get_user_primary_tenant, require_auth
 
 from .service import compute_asset_risk, compute_tenant_posture
 
@@ -41,7 +41,7 @@ def _is_owner_scoped(current_user: GRCUser, tenant_id: int, db: Session) -> bool
             r[0] for r in (
                 db.query(Role.name)
                 .join(UserRole, UserRole.role_id == Role.id)
-                .filter(UserRole.user_id == current_user.id)
+                .filter(UserRole.user_id == current_user.id, PLATFORM_GRANT)
                 .all()
             )
         ]

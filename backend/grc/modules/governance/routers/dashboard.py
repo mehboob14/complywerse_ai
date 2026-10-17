@@ -9,8 +9,22 @@ from ....models import (
     DocumentRegulatoryLink, GRCUser, Framework, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from ..permissions import ON_ITS_WAY, in_force_number, require_library_reader, visible_filter
 
-router = APIRouter(prefix="/dashboard", tags=["Governance Dashboard"])
+# the whole library's dashboard: for those allowed to read the document library
+router = APIRouter(prefix="/dashboard", tags=["Governance Dashboard"], dependencies=[Depends(require_library_reader)])
+
+
+def _in_force():
+    """A document with a version in force (permissions.in_force_number): published, or a new version on its way after one was."""
+    return or_(GovernanceDocument.status == "published",
+               and_(GovernanceDocument.published_version.isnot(None), GovernanceDocument.status.in_(ON_ITS_WAY)))
+
+
+def _visible(query, db: Session, user: GRCUser):
+    """Only the documents the person may read: never-published drafts stay with whoever may see them (permissions.visible_filter)."""
+    visible = visible_filter(db, user)
+    return query if visible is None else query.filter(visible)
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -159,6 +173,7 @@ def get_expiring_soon(
         GovernanceDocument.expiry_date.isnot(None),
         GovernanceDocument.expiry_date >= now
     )
+    query = _visible(query, db, current_user)
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -218,6 +233,7 @@ def get_pending_approvals(
         GovernanceDocument.tenant_id.in_(user_tenants),
         DocumentApprovalStep.status == "pending"
     )
+    query = _visible(query, db, current_user)
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -272,8 +288,9 @@ def get_overdue_reviews(
         GovernanceDocument.tenant_id.in_(user_tenants),
         GovernanceDocument.next_review_date.isnot(None),
         GovernanceDocument.next_review_date < now,
-        GovernanceDocument.status.in_(["approved", "published"])
+        or_(GovernanceDocument.status == "approved", _in_force())
     )
+    query = _visible(query, db, current_user)
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -320,7 +337,7 @@ def get_recently_published(
     
     query = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id.in_(user_tenants),
-        GovernanceDocument.status == "published",
+        _in_force(),
         GovernanceDocument.published_at.isnot(None)
     )
     
@@ -608,12 +625,12 @@ def get_upcoming_reviews_dashboard(
     now = datetime.utcnow()
     cutoff = now + timedelta(days=90)
 
-    documents = db.query(GovernanceDocument).filter(
+    documents = _visible(db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id.in_(user_tenants),
         GovernanceDocument.next_review_date != None,
         GovernanceDocument.next_review_date <= cutoff,
         GovernanceDocument.status != "retired"
-    ).order_by(GovernanceDocument.next_review_date.asc()).limit(10).all()
+    ), db, current_user).order_by(GovernanceDocument.next_review_date.asc()).limit(10).all()
 
     results = []
     for doc in documents:
@@ -750,6 +767,7 @@ def get_documents_overview(
         GovernanceDocument.expiry_date, GovernanceDocument.framework_ids,
         GovernanceDocument.file_path,
         GovernanceDocument.content.isnot(None).label("has_content"),
+        GovernanceDocument.current_version, GovernanceDocument.published_version,       # in_force_number
     ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
 
     try:
@@ -771,7 +789,7 @@ def get_documents_overview(
     active_docs = [d for d in docs if (d.status or "draft") != "archived"]
     active_count = len(active_docs)
     active_ids = {d.id for d in active_docs}
-    published_docs = [d for d in docs if d.status == "published"]
+    published_docs = [d for d in docs if in_force_number(d)]          # a version in force, also while a new one is on its way
     published_count = len(published_docs)
     published_ids = {d.id for d in published_docs}
 
@@ -880,7 +898,7 @@ def get_documents_overview(
     ar_pending = sum(1 for r in ar_open if r.review_status == "pending_review")
 
     # ---- reviews ----------------------------------------------------------
-    review_pool = [d for d in docs if d.status in ("approved", "published")]
+    review_pool = [d for d in docs if d.status == "approved" or in_force_number(d)]
     review_universe = [d for d in review_pool if d.next_review_date]
     overdue_reviews = sum(1 for d in review_universe if d.next_review_date < now)
     due_30 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=30))
@@ -1297,7 +1315,7 @@ def get_documents_overview(
             "counts": {"total": total_docs, "active": active_count, "published": published_count,
                        "by_status": by_status, "by_type": by_type,
                        "by_classification": by_classification,
-                       "expiring_30d": sum(1 for d in docs if d.status in ("approved", "published")
+                       "expiring_30d": sum(1 for d in docs if (d.status == "approved" or in_force_number(d))
                                            and d.expiry_date and now <= d.expiry_date <= now + timedelta(days=30))},
         },
         "mappings": {

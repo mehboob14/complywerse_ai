@@ -11,7 +11,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..models import PolicyException, PolicyExceptionComment, GovernanceDocument, GRCUser, get_db
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin
 from ..services import exception_posture
 
 router = APIRouter(prefix="/policy-exceptions", tags=["Policy Exceptions"])
@@ -231,6 +231,17 @@ def _make_snippet(text: str, term: str, width: int = 180) -> str:
     end = min(len(text), idx + len(term) + width // 2)
     snippet = text[start:end].strip()
     return ("… " if start > 0 else "") + snippet + (" …" if end < len(text) else "")
+
+
+def _as_read(db: Session, user: GRCUser, d: GovernanceDocument):
+    """The document as this person reads it: while a newer version is on its way, the text of the version in force for whoever
+    reads that one (title and description as the document page shows them)."""
+    from types import SimpleNamespace
+    from ..modules.governance.permissions import version_for
+
+    row = version_for(db, user, d)
+    return d if row is None else SimpleNamespace(id=d.id, title=d.title, doc_type=d.doc_type, description=d.description,
+                                                 content=row.content)
 
 
 def _fallback_candidate_exceptions(documents) -> list:
@@ -590,8 +601,10 @@ def suggest_exception_content(
     ).first()
     if not doc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    from ..modules.governance.permissions import ensure_reader
+    ensure_reader(db, current_user, doc)
 
-    suggestion = _generate_exception_suggestion(title, doc)
+    suggestion = _generate_exception_suggestion(title, _as_read(db, current_user, doc))
     return {
         "title": title,
         "document_id": doc.id,
@@ -624,8 +637,15 @@ def search_policies(
     like = f"%{term}%"
     results = []
     seen_docs = set()
+    from ..models import GovernanceDocumentVersion
+    from ..modules.governance.permissions import visible_filter
 
-    # 1) Document-level matches (title / description / full content)
+    # only documents the person may read (never-published drafts stay with whoever may see them)
+    visible = visible_filter(db, current_user)
+    readable = [visible] if visible is not None else []
+
+    # 1) Document-level matches (title / description / full content). The content of any version can match here; what is
+    # shown is checked below against the text this person reads (the version in force while a newer one is on its way).
     docs = (
         db.query(GovernanceDocument)
         .filter(
@@ -635,7 +655,10 @@ def search_policies(
                 GovernanceDocument.title.ilike(like),
                 GovernanceDocument.description.ilike(like),
                 GovernanceDocument.content.ilike(like),
+                GovernanceDocument.id.in_(db.query(GovernanceDocumentVersion.document_id)
+                                          .filter(GovernanceDocumentVersion.content.ilike(like))),
             ),
+            *readable,
         )
         .order_by(GovernanceDocument.updated_at.desc())
         .limit(limit)
@@ -648,7 +671,9 @@ def search_policies(
         elif tl in (d.description or "").lower():
             field, src = "description", d.description or ""
         else:
-            field, src = "content", d.content or ""
+            field, src = "content", _as_read(db, current_user, d).content or ""
+            if tl not in src.lower():
+                continue                    # only an older or a newer version holds the words
         results.append({
             "document_id": d.id,
             "document_title": d.title,
@@ -672,6 +697,7 @@ def search_policies(
                     GovernanceDocument.tenant_id.in_(user_tenants),
                     GovernanceDocument.doc_type.ilike("policy"),
                     PolicyStatement.statement_text.ilike(like),
+                    *readable,
                 )
                 .limit((limit - len(results)) * 2)
                 .all()
@@ -709,6 +735,8 @@ def suggest_candidate_exceptions(
     if not user_tenants:
         return {"source": "template", "candidates": []}
 
+    from ..modules.governance.permissions import ensure_reader, visible_filter
+
     focus = None
     if document_id:
         focus = db.query(GovernanceDocument).filter(
@@ -721,22 +749,26 @@ def suggest_candidate_exceptions(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Policy not found — exceptions can only be raised against policy documents",
             )
+        ensure_reader(db, current_user, focus)
         documents = [focus]
     else:
         # Exceptions can ONLY be raised against policies — never scan procedures,
-        # standards, guidelines, charters or other document types.
+        # standards, guidelines, charters or other document types. Only those the person may read.
+        visible = visible_filter(db, current_user)
         documents = (
             db.query(GovernanceDocument)
             .filter(
                 GovernanceDocument.tenant_id.in_(user_tenants),
                 GovernanceDocument.doc_type.ilike("policy"),
+                *([visible] if visible is not None else []),
             )
             .order_by(GovernanceDocument.updated_at.desc())
             .limit(25)
             .all()
         )
 
-    return _generate_candidate_exceptions(documents, focus, limit)
+    documents = [_as_read(db, current_user, d) for d in documents]
+    return _generate_candidate_exceptions(documents, documents[0] if focus is not None else None, limit)
 
 
 @router.get("/{exception_id}")
@@ -851,41 +883,10 @@ def _is_tenant_administrator(user: GRCUser, db: Session) -> bool:
     """True when the user has the Administrator system role OR is the
     tenant's primary contact. Used to bypass separation-of-duties
     checks on tenants where the same person both raised and approves
-    a request (typical single-admin SaaS deployments).
-
-    `db` is already bound to the user's tenant DB (we're inside a
-    request that resolved tenant context), so:
-      * Role lookup goes through UserRole rows in the tenant DB.
-      * Primary-contact lookup uses the tenant's self-row (every
-        tenant DB carries one Tenant row describing itself).
+    a request (typical single-admin SaaS deployments). The shared rule:
+    auth_router.is_tenant_admin.
     """
-    from ..models import Role, UserRole, Tenant
-    # Administrator role bypass
-    try:
-        admin_role_rows = (
-            db.query(UserRole)
-            .join(Role, Role.id == UserRole.role_id)
-            .filter(UserRole.user_id == user.id, Role.name == "Administrator")
-            .all()
-        )
-        if admin_role_rows:
-            return True
-    except Exception:
-        pass
-    # Primary-contact bypass. Per-tenant DB normally has exactly one
-    # Tenant row (its own self-row). The match is case-insensitive.
-    try:
-        tenant_row = db.query(Tenant).first()
-        if (
-            tenant_row
-            and tenant_row.primary_contact_email
-            and user.email
-            and tenant_row.primary_contact_email.lower() == user.email.lower()
-        ):
-            return True
-    except Exception:
-        pass
-    return False
+    return is_tenant_admin(db, user)
 
 
 @router.post("/{exception_id}/approve")

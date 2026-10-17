@@ -22,6 +22,7 @@ import time
 from dataclasses import dataclass, field, replace
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from urllib.parse import urlsplit
 
 from ....services.ai_gateway import claude_client
 from ....services.ai_gateway.errors import AIBlocked
@@ -33,18 +34,20 @@ from . import checks, live, prompts, setup
 from . import draft_prompts as P
 from . import references as refs
 from . import templates
-from .engine import TurnProblem, _op_view, _stage, friendly, questions_of, sanitize_markdown
+from .engine import _LINK, TurnProblem, _op_view, _stage, friendly, questions_of, sanitize_markdown
 
 logger = logging.getLogger(__name__)
 
 PARALLEL = max(1, int(os.environ.get("DOCUMENT_STUDIO_DRAFT_PARALLEL", "5") or 5))
-SECTION_MAX_TOKENS = 16000
-PLAN_MAX_TOKENS = 12000
+# ceilings, not targets (only what is written is paid for): a 12-part plan cut off at 12,000 in the 2026-10-17 live test
+SECTION_MAX_TOKENS = 32000
+PLAN_MAX_TOKENS = 32000
 RETRY_WAITS = (6, 20, 45)                 # seconds before another try of a call the provider said may work later
 USE_CASE = "governance.studio_draft"
 RESEARCH_USE_CASE = "governance.studio_research"
 WEB_SEARCH = {"type": "web_search_20260209", "name": "web_search", "max_uses": 6}
-RESEARCH_MAX_TOKENS = 6000
+WEB_FETCH = {"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 3, "max_content_tokens": 40000}     # opens a link the request gives
+RESEARCH_MAX_TOKENS = 16000                # a named rule is researched clause by clause in a chat turn
 RESEARCH_CHARS = 12000                    # of the findings kept for the questions and the draft
 SCOPE_MAX_TOKENS = 8000
 PREVIEW_EVERY = 1.5                       # seconds between two saves of the document shown while it is written
@@ -521,10 +524,12 @@ def asked_before(db, session_id: int, before_id: int) -> bool:
     return _asking(db, session_id, before_id) is not None
 
 
-def _research_block(text: str) -> str:
-    return ("<internet_research>\nWhat Comply Agent found on the internet about the laws, regulations and standards that apply (official titles, issuers, "
-            "editions). Use it for their names and editions; what the person chose decides which of them apply.\n" + text[:RESEARCH_CHARS]
-            + "\n</internet_research>") if text.strip() else ""
+def _research_block(text: str, chat: bool = False) -> str:
+    what = ("What Comply Agent found on the internet for this request: the requirements to analyse against, or what applies; cite their clause "
+            "numbers as given here." if chat else
+            "What Comply Agent found on the internet about the laws, regulations and standards that apply (official titles, issuers, "
+            "editions). Use it for their names and editions; what the person chose decides which of them apply.")
+    return f"<internet_research>\n{what}\n{text[:RESEARCH_CHARS]}\n</internet_research>" if text.strip() else ""
 
 
 def _research_of(db, session_id: int, before_id: int) -> str:
@@ -544,16 +549,67 @@ def _sources_text(sources: Sequence[Dict[str, str]]) -> str:
     return "**Found on the internet:** " + " · ".join(links[:8]) if links else ""
 
 
-def _research_progress(db, msg):
+def _unique_searches(searches: Sequence[str]) -> List[str]:
+    """Each query once (the same words in another case or spacing are the same query), in the order searched."""
+    seen: set = set()
+    out: List[str] = []
+    for q in searches:
+        key = " ".join(str(q).lower().split())
+        if key and key not in seen:
+            seen.add(key)
+            out.append(q)
+    return out
+
+
+def _unique_sources(sources: Sequence[Dict[str, str]]) -> List[Dict[str, str]]:
+    """Each page once: the same address (http or https, www., a trailing slash or a #part aside). Not by title: many sites give
+    every page the site's own name."""
+    seen: set = set()
+    out: List[Dict[str, str]] = []
+    for s in sources:
+        p = urlsplit(str(s.get("url") or ""))
+        key = ((p.hostname or "").removeprefix("www."), p.path.rstrip("/"), p.query)
+        if key not in seen:
+            seen.add(key)
+            out.append(s)
+    return out
+
+
+def _research_progress(db, msg, label: str):
     """Shows the web search as it happens: what is searched for, then what was found as it is written down."""
     def show(p: claude_client.Progress) -> None:
         writing = p.phase == "writing" and bool(p.text.strip())
-        live.stage(db, msg, "Searching the internet for the rules that apply", step=False,
+        searches = _unique_searches(p.searches)
+        live.stage(db, msg, label, step=False,
                    detail={"reading": "Comply Agent is reading your request", "thinking": "Comply Agent is deciding what to look up",
                            "searching": "Searching", "writing": "Writing down what it found"}.get(p.phase),
-                   groups=[{"label": "Searched the internet for", "items": [q[:160] for q in p.searches[-10:]]}] if p.searches else None,
+                   groups=[{"label": "Searched the internet for", "items": [q[:160] for q in searches[-10:]]}] if searches else None,
                    tail=live.tail(p.text) if writing else None, tail_label="What it found" if writing else None)
     return show
+
+
+def web_research(db, msg, task: str, *, label: str, should_stop: Optional[Callable[[], bool]] = None,
+                 system: str = P.RESEARCH_SYSTEM) -> Tuple[str, List[Dict[str, str]], Optional[claude_client.Result]]:
+    """Search the internet for ``task`` (``P.research_task``) through the guarded client, shown on ``msg`` under ``label`` as it happens;
+    a link in it is opened as well. Returns what was found, its sources and the call (for its cost); ``("", [], None)`` when the search
+    failed, so the turn goes on from what Comply Agent knows. A problem that would stop every call (credentials, the data-protection
+    check, a licence) ends the turn."""
+    _stage(db, msg, label)
+    tools = [WEB_SEARCH, WEB_FETCH] if _LINK.search(task) else [WEB_SEARCH]
+    try:
+        found = claude_client.complete(use_case=RESEARCH_USE_CASE, system=system, tools=tools, max_tokens=RESEARCH_MAX_TOKENS, effort="medium",
+                                       messages=[{"role": "user", "content": task}], on_progress=_research_progress(db, msg, label), should_stop=should_stop)
+    except claude_client.ClaudeStopped:
+        raise
+    except Exception as exc:        # noqa: BLE001 - the turn goes on from what Comply Agent knows
+        if _fatal(exc):
+            raise Fatal(friendly(exc)) from exc
+        logger.warning("a web search of the studio failed: %s", exc)
+        return "", [], None
+    sources, searched = _unique_sources(found.sources)[:12], len(_unique_searches(found.searches))
+    live.stage(db, msg, label, step=False, detail=f"{searched} search{'' if searched == 1 else 'es'} · {len(sources)} source{'' if len(sources) == 1 else 's'}",
+               tail=None, tail_label=None)          # what it found is written down: the queries stay listed, the text stops scrolling
+    return found.text.strip()[:RESEARCH_CHARS], sources, found
 
 
 def run_scoping(db, session_id: int, message_id: int) -> None:
@@ -577,22 +633,11 @@ def run_scoping(db, session_id: int, message_id: int) -> None:
         total = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "calls": 0}
         notes: List[str] = []
 
-        _stage(db, msg, "Searching the internet for the rules that apply")
-        research, sources = "", []
-        try:
-            found = claude_client.complete(use_case=RESEARCH_USE_CASE, system=P.RESEARCH_SYSTEM, tools=[WEB_SEARCH], max_tokens=RESEARCH_MAX_TOKENS, effort="medium",
-                                           messages=[{"role": "user", "content": P.research_task(label=label, title=session.title, instructions=ins,
-                                                                                                  request=brief.split(service.ATTACHED)[0], ctx=ctx)}],
-                                           on_progress=_research_progress(db, msg), should_stop=stopped)
+        research, sources, found = web_research(db, msg, P.research_task(label=label, title=session.title, instructions=ins, request=brief.split(service.ATTACHED)[0], ctx=ctx),
+                                                label="Searching the internet for the rules that apply", should_stop=stopped)
+        if found is not None:
             _usage(total, found)
-            research, sources = found.text.strip()[:RESEARCH_CHARS], found.sources[:12]
-            live.note(db, msg, f"{len(found.searches)} search{'' if len(found.searches) == 1 else 'es'} · {len(sources)} source{'' if len(sources) == 1 else 's'}")
-        except claude_client.ClaudeStopped:
-            raise
-        except Exception as exc:        # noqa: BLE001 - the questions still come, from what Comply Agent knows
-            if _fatal(exc):
-                raise Fatal(friendly(exc)) from exc
-            logger.warning("the web research before a draft failed: %s", exc)
+        else:                           # the questions still come, from what Comply Agent knows
             notes.append("Comply Agent could not search the internet just now, so the laws and standards below come from what it already knows. "
                          "Check their editions before you rely on them.")
 

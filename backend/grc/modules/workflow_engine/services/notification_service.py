@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import html
 import logging
+import os
 from typing import Iterable, List, Sequence
 
 from ....models import GRCUser, Role, UserRole, WorkflowNotification
@@ -8,6 +10,13 @@ from .email_service import _notification_html, send_email
 
 
 logger = logging.getLogger(__name__)
+
+
+def _platform_grant():
+    """Holders the platform gave the role, not links an access-review connector imported."""
+    from ....routers.auth_router import PLATFORM_GRANT
+
+    return PLATFORM_GRANT
 
 
 def _normalize_ids(values: Iterable) -> list[int]:
@@ -33,6 +42,7 @@ def resolve_user_ids_from_roles(db, tenant_id: int, role_ids: Sequence[int]) -> 
         .filter(
             UserRole.tenant_id == int(tenant_id),
             Role.id.in_(normalized_role_ids),
+            _platform_grant(),
         )
         .distinct()
         .all()
@@ -73,8 +83,19 @@ def send_workflow_notification(
     role_ids: Sequence[int] | None = None,
     channels: Sequence[str] | None = None,
     notification_type: str = "info",
+    link: str | None = None,
 ) -> dict:
+    """``link``: a page of the app ("/governance/documents/5"); an email gets it as a button, made absolute with FRONTEND_URL when set."""
     target_user_ids = resolve_target_user_ids(db, tenant_id, user_ids or [], role_ids or [])
+    url, path = "", ""
+    if link:
+        base = (os.environ.get("FRONTEND_URL") or os.environ.get("NEXT_PUBLIC_APP_URL") or "").rstrip("/")
+        if not link.startswith("/"):
+            url = link
+        elif base:
+            url = f"{base}{link}"
+        else:
+            path = link             # no address of the app is set: a mail client cannot open a bare path, so it is named as text
     if not target_user_ids:
         return {"notified_users": 0, "channels": _normalize_channels(channels), "results": []}
 
@@ -95,6 +116,7 @@ def send_workflow_notification(
                     notification_type=notification_type,
                     subject=subject,
                     message=message,
+                    link=(link or None) if (link or "").startswith("/") else None,     # only a page of the app
                 )
             )
 
@@ -105,8 +127,9 @@ def send_workflow_notification(
                 tenant_id=tenant_id,
                 to=user.email,
                 subject=subject,
-                body_html=_notification_html(subject, message),
-                body_text=message,
+                body_html=_notification_html(subject, message + (f"<p>In the app: {html.escape(path)}</p>" if path else ""), url,
+                                             "Open it" if url else ""),
+                body_text=message + (f"\n\nIn the app: {path}" if path else ""),
             )
 
         results.append(

@@ -339,7 +339,9 @@ def escalation_users(db: Session, targets: Sequence[str]) -> List[int]:
             name = target[5:].strip()
             role_ids = [r.id for r in db.query(Role).filter(Role.name == name)]
             if role_ids:
-                users.extend(u.user_id for u in db.query(UserRole).filter(UserRole.role_id.in_(role_ids)))
+                from ....routers.auth_router import PLATFORM_GRANT  # holders the platform gave the role, not connector-imported links
+
+                users.extend(u.user_id for u in db.query(UserRole).filter(UserRole.role_id.in_(role_ids), PLATFORM_GRANT))
     return list(dict.fromkeys(users))
 
 

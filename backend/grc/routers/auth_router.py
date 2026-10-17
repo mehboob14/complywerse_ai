@@ -2,12 +2,13 @@
 import os
 import re
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import Optional, List, Set
 
 import bcrypt
 from fastapi import APIRouter, Cookie, Depends, Header, HTTPException, Request, status
 from fastapi.responses import JSONResponse
 from jose import JWTError, jwt
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from ..db import open_tenant_session
@@ -172,6 +173,51 @@ def get_user_primary_tenant(user: GRCUser, db: Session) -> Optional[int]:
 
 
 # ---------------------------------------------------------------------------
+# Who is an administrator and which permissions a user holds. Every admin or
+# permission check routes through these.
+# ---------------------------------------------------------------------------
+
+SOURCE_SSO = "sso"
+ADMIN_ROLE = "Administrator"
+# A role the platform gave: by hand (source NULL) or by an SSO group mapping. An access-review connector imports a
+# connected app's groups by reusing the platform's role row of the same name, with its provider as the source; such a
+# link must not make anyone an administrator or carry that role's permissions.
+PLATFORM_GRANT = or_(UserRole.source.is_(None), UserRole.source == SOURCE_SSO)
+
+
+def platform_role_ids(db: Session, user: GRCUser) -> List[int]:
+    """The roles the platform gave this user; none for a deactivated user."""
+    if not getattr(user, "is_active", True):
+        return []
+    return [rid for (rid,) in db.query(UserRole.role_id).filter(UserRole.user_id == user.id, PLATFORM_GRANT)]
+
+
+def is_tenant_admin(db: Session, user: GRCUser) -> bool:
+    """An active user who is the organisation's primary contact or holds the platform-given role named exactly "Administrator"."""
+    if not getattr(user, "is_active", True):
+        return False
+    tenant = db.query(Tenant).first()
+    if tenant and tenant.primary_contact_email and getattr(user, "email", None) and tenant.primary_contact_email.lower() == user.email.lower():
+        return True
+    return db.query(UserRole.id).join(Role, Role.id == UserRole.role_id).filter(
+        UserRole.user_id == user.id, Role.name == ADMIN_ROLE, PLATFORM_GRANT).first() is not None
+
+
+def tenant_permission_names(db: Session, user: GRCUser) -> Set[str]:
+    """The permissions the user's platform-given roles hold (an administrator holds every one: ask is_tenant_admin)."""
+    ids = platform_role_ids(db, user)
+    if not ids:
+        return set()
+    return {name for (name,) in db.query(Permission.name).join(RolePermission, RolePermission.permission_id == Permission.id)
+            .filter(RolePermission.role_id.in_(ids)) if name}
+
+
+def has_tenant_permission(db: Session, user: GRCUser, *names: str) -> bool:
+    """An administrator, or a platform-given role holds one of the permissions."""
+    return is_tenant_admin(db, user) or bool(tenant_permission_names(db, user) & set(names))
+
+
+# ---------------------------------------------------------------------------
 # Authentication dependencies
 # ---------------------------------------------------------------------------
 
@@ -257,8 +303,7 @@ def _tenant_features(db: Session) -> List[str]:
 def require_tenant_permission(permission_name: str):
     """Dependency factory: confirms current user has the named permission within the tenant DB.
 
-    Administrator role is granted everything. Primary contact email also gets
-    administrator-grade access (matches prior behaviour).
+    Administrators (is_tenant_admin) are granted everything; a deactivated user nothing.
     """
     def permission_checker(
         request: Request,
@@ -285,33 +330,9 @@ def require_tenant_permission(permission_name: str):
         from ..services.ai_usage import bind_request_context
         bind_request_context(request, user)
 
-        # Primary contact bypass
-        tenant_row = db.query(Tenant).first()
-        if (
-            tenant_row
-            and tenant_row.primary_contact_email
-            and user.email
-            and tenant_row.primary_contact_email.lower() == user.email.lower()
-        ):
-            return True
-
-        role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-        if not role_ids:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-
-        admin_role = db.query(Role).filter(Role.id.in_(role_ids), Role.name == "Administrator").first()
-        if admin_role:
-            return True
-
-        permission = db.query(Permission).filter(Permission.name == permission_name).first()
-        if not permission:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
-
-        has_perm = db.query(RolePermission).filter(
-            RolePermission.role_id.in_(role_ids),
-            RolePermission.permission_id == permission.id,
-        ).first()
-        if not has_perm:
+        if not user.is_active:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+        if not has_tenant_permission(db, user, permission_name):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
         return True
@@ -627,17 +648,9 @@ def get_me(
         return {"authenticated": False, "user": None}
 
     tenant = db.query(Tenant).first()
-    role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
+    role_ids = platform_role_ids(db, user)
     roles = db.query(Role).filter(Role.id.in_(role_ids)).all() if role_ids else []
-    role_names = [r.name for r in roles]
-
-    is_primary_contact = bool(
-        tenant
-        and tenant.primary_contact_email
-        and user.email
-        and tenant.primary_contact_email.lower() == user.email.lower()
-    )
-    is_admin = is_primary_contact or any(name == "Administrator" for name in role_names)
+    is_admin = is_tenant_admin(db, user)
 
     if is_admin:
         permissions = ["*:*:*"]
@@ -648,17 +661,10 @@ def get_me(
             "critical_tasks", "bcm",
         ]
     else:
-        perms = []
-        if role_ids:
-            perms = db.query(Permission).join(
-                RolePermission, RolePermission.permission_id == Permission.id
-            ).filter(RolePermission.role_id.in_(role_ids)).all()
-        permissions = sorted({p.name for p in perms})
+        permissions = sorted(tenant_permission_names(db, user))
         # Permission rows store name as "module:submodule:action" — there's no
         # dedicated `module` column on the model, so derive it from the name.
-        allowed_modules = sorted({
-            p.name.split(":", 1)[0] for p in perms if p.name and ":" in p.name
-        })
+        allowed_modules = sorted({name.split(":", 1)[0] for name in permissions if ":" in name})
 
     response_data = {
         "authenticated": True,
@@ -688,7 +694,7 @@ def get_me(
         },
     }
 
-    if should_refresh_token(payload):
+    if should_refresh_token(payload) and user.is_active:
         new_token = create_access_token({
             "sub": user.username,
             "tenant_slug": payload.get("tenant_slug"),

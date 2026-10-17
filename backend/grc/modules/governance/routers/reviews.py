@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session, joinedload
-from sqlalchemy import or_, and_, func, extract
+from sqlalchemy import or_, and_, func, extract, select
 from pydantic import BaseModel
 
 from ....models import (
@@ -11,7 +11,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ..action_logger import update_action_review_status
-from ..permissions import require_doc_editor
+from ..permissions import require_doc_editor, require_doc_reader, require_library_reader, visible_filter
 
 router = APIRouter(prefix="/reviews", tags=["Governance - Reviews"])
 
@@ -104,7 +104,7 @@ def serialize_review_document(doc: GovernanceDocument) -> dict:
     }
 
 
-@router.get("/upcoming")
+@router.get("/upcoming", dependencies=[Depends(require_library_reader)])
 def get_upcoming_reviews(
     days: int = Query(30, ge=1, le=365, description="Number of days to look ahead"),
     tenant_id: Optional[int] = None,
@@ -140,6 +140,9 @@ def get_upcoming_reviews(
         query = query.filter(GovernanceDocument.doc_type == doc_type)
     if owner_id:
         query = query.filter(GovernanceDocument.owner_id == owner_id)
+    visible = visible_filter(db, current_user)
+    if visible is not None:
+        query = query.filter(visible)
     
     total = query.count()
     documents = query.order_by(GovernanceDocument.next_review_date.asc()).offset(skip).limit(limit).all()
@@ -153,7 +156,7 @@ def get_upcoming_reviews(
     }
 
 
-@router.get("/overdue")
+@router.get("/overdue", dependencies=[Depends(require_library_reader)])
 def get_overdue_reviews(
     tenant_id: Optional[int] = None,
     doc_type: Optional[str] = None,
@@ -186,6 +189,9 @@ def get_overdue_reviews(
         query = query.filter(GovernanceDocument.doc_type == doc_type)
     if owner_id:
         query = query.filter(GovernanceDocument.owner_id == owner_id)
+    visible = visible_filter(db, current_user)
+    if visible is not None:
+        query = query.filter(visible)
     
     total = query.count()
     documents = query.order_by(GovernanceDocument.next_review_date.asc()).offset(skip).limit(limit).all()
@@ -357,7 +363,7 @@ def get_reviews_due_by_user(
     }
 
 
-@router.get("/calendar")
+@router.get("/calendar", dependencies=[Depends(require_library_reader)])
 def get_review_calendar(
     year: int = Query(None, ge=2020, le=2100),
     month: Optional[int] = Query(None, ge=1, le=12),
@@ -397,6 +403,9 @@ def get_review_calendar(
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(GovernanceDocument.tenant_id == tenant_id)
+    visible = visible_filter(db, current_user)
+    if visible is not None:
+        query = query.filter(visible)
     
     documents = query.order_by(GovernanceDocument.next_review_date.asc()).all()
     
@@ -559,7 +568,7 @@ def skip_review(
     }
 
 
-@router.get("/statistics")
+@router.get("/statistics", dependencies=[Depends(require_library_reader)])
 def get_review_statistics(
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -592,6 +601,9 @@ def get_review_statistics(
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         base_query = base_query.filter(GovernanceDocument.tenant_id == tenant_id)
+    visible = visible_filter(db, current_user)
+    if visible is not None:
+        base_query = base_query.filter(visible)
     
     total_documents = base_query.count()
     
@@ -663,7 +675,7 @@ def get_review_statistics(
     }
 
 
-@router.get("/{document_id}/history")
+@router.get("/{document_id}/history", dependencies=[Depends(require_doc_reader)])
 def get_review_history(
     document_id: int,
     skip: int = 0,
@@ -720,7 +732,26 @@ def get_review_history(
         "limit": limit
     }
 
-@router.get("/governance-actions/pending")
+def _readable_actions(query, db: Session, user: GRCUser):
+    """Leave out the actions on documents the person may not read (never-published drafts): rows on a document, on one of its
+    statements or on one of its gap findings."""
+    visible = visible_filter(db, user)
+    if visible is None:
+        return query
+    from ....models import PolicyGapFinding, PolicyStatement
+
+    A = GovernanceActionReview
+    seen = select(GovernanceDocument.id).where(visible)
+    return query.filter(or_(
+        A.entity_type.notin_(("governance_document", "policy_statement", "policy_gap_finding")),
+        and_(A.entity_type == "governance_document", A.entity_id.in_(seen)),
+        and_(A.entity_type == "policy_statement",
+             A.entity_id.in_(select(PolicyStatement.id).where(PolicyStatement.document_id.in_(seen)))),
+        and_(A.entity_type == "policy_gap_finding",
+             A.entity_id.in_(select(PolicyGapFinding.id).where(PolicyGapFinding.document_id.in_(seen))))))
+
+
+@router.get("/governance-actions/pending", dependencies=[Depends(require_library_reader)])
 def get_pending_governance_actions(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -736,16 +767,17 @@ def get_pending_governance_actions(
         GovernanceActionReview.tenant_id.in_(user_tenants),
         GovernanceActionReview.review_status == "pending_review"
     )
-    
+
     if action_type:
         query = query.filter(GovernanceActionReview.action_type == action_type)
-    
+
     if entity_type:
         query = query.filter(GovernanceActionReview.entity_type == entity_type)
-    
+    query = _readable_actions(query, db, current_user)
+
     total = query.count()
     reviews = query.order_by(GovernanceActionReview.action_date.desc()).offset(skip).limit(limit).all()
-    
+
     return {
         "total": total,
         "skip": skip,
@@ -773,7 +805,7 @@ def get_pending_governance_actions(
     }
 
 
-@router.get("/governance-actions")
+@router.get("/governance-actions", dependencies=[Depends(require_library_reader)])
 def get_all_governance_actions(
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=500),
@@ -794,10 +826,11 @@ def get_all_governance_actions(
     
     if action_type:
         query = query.filter(GovernanceActionReview.action_type == action_type)
-    
+    query = _readable_actions(query, db, current_user)
+
     total = query.count()
     reviews = query.order_by(GovernanceActionReview.action_date.desc()).offset(skip).limit(limit).all()
-    
+
     return {
         "total": total,
         "skip": skip,
@@ -825,7 +858,7 @@ def get_all_governance_actions(
     }
 
 
-@router.put("/governance-actions/{review_id}")
+@router.put("/governance-actions/{review_id}", dependencies=[Depends(require_library_reader)])
 def update_governance_action_review(
     review_id: int,
     request: UpdateActionReviewRequest,

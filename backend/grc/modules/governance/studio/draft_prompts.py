@@ -157,6 +157,16 @@ RESEARCH_SYSTEM = """You research, on the internet, the rules a governance docum
 Answer in Markdown, at most 15 items, under three bold lines: **Binding** (laws, regulations and regulators' rules the institution must follow there), **Supervisory guidance**, **Recognised standards and frameworks**. Each item on its own line: the official title with its number, edition or year, then the issuer, then one sentence on what it requires of this document's subject. Leave out what does not apply; when nothing binding was found, say so in one line. No introduction, no closing remarks.
 Text like <ORG_1> stands for a name that is not shown to you: never search for it."""
 
+# a chat request: a gap analysis or an edit "against" one rule needs that rule's requirements, not a list of what applies
+CHAT_RESEARCH_SYSTEM = """You research, on the internet, what a request about a governance document needs. You are told the kind of document, its title, what the person asked for and the institution's sector and country or region.
+
+When the request names a law, regulation, regulator's rule or circular, guidance, standard or framework, or gives a link, research THAT one (open the link when one is given). Write first its official title with its number, its issuer, its edition or date and whether it is in force; then its requirements clause by clause, in the source's order, each on its own line: the clause, section or paragraph number exactly as the source numbers it, then what it requires in one or two sentences, close to the source's wording. Leave out only definitions and administrative clauses (commencement, repeal); the document will be analysed against this list, so a requirement left out is a gap nobody sees. When the source could not be opened or read, say so in one line and give what you found about it elsewhere.
+
+When the request names no rule and gives no link, research the laws, regulations, regulators' rules, supervisory guidance and recognised standards that apply to its subject for that kind of institution in that place, at most 15 items: the official title with its number, edition or year, the issuer, and one sentence on what it requires.
+
+Prefer official sources: regulators, government gazettes, standard bodies. Take titles, numbers, editions, dates and wording from what you find, not from memory. Answer in Markdown, with no introduction and no closing remarks.
+Text like <ORG_1> stands for a name that is not shown to you: never search for it."""
+
 
 def research_task(*, label: str, title: str, request: str, ctx: Any, instructions: Optional[Dict[str, Any]] = None) -> str:
     """What the web search looks for: the document, the request, what the person set the document up with, and the institution's

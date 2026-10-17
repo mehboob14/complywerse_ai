@@ -31,7 +31,7 @@ from .. import feature_map
 OrganizationProfile = Tenant
 
 from ..permissions import get_permission_matrix_for_ui, get_all_permissions
-from .auth_router import decode_token, require_auth, get_current_user
+from .auth_router import PLATFORM_GRANT, decode_token, has_tenant_permission, require_auth, get_current_user
 
 
 def _generate_audit_description(
@@ -294,6 +294,8 @@ def get_current_tenant_user(
 
     if not user:
         raise HTTPException(status_code=401, detail="User not found in this tenant")
+    if not user.is_active:
+        raise HTTPException(status_code=403, detail="User account is deactivated")
 
     from ..services.ai_usage import bind_request_context
     bind_request_context(request, user)
@@ -342,40 +344,9 @@ def _get_or_create_permission(tenant_db: Session, perm_name: str) -> Optional[Pe
 
 
 def check_permission(user: TenantUser, tenant_db: Session, required_permission: str) -> bool:
-    # Primary-contact bypass: the email registered as the tenant's primary
-    # contact gets administrator-grade access without needing a UserRole row.
-    # Mirrors auth_router.require_tenant_permission so admin endpoints work
-    # for the founding admin before any RBAC is configured.
-    tenant_row = tenant_db.query(Tenant).first()
-    if (
-        tenant_row
-        and tenant_row.primary_contact_email
-        and getattr(user, "email", None)
-        and tenant_row.primary_contact_email.lower() == user.email.lower()
-    ):
-        return True
-
-    user_roles = tenant_db.query(UserRole).filter(UserRole.user_id == user.id).all()
-    if not user_roles:
-        return False
-    role_ids = [ur.role_id for ur in user_roles]
-
-    admin_role = tenant_db.query(Role).filter(
-        Role.id.in_(role_ids),
-        Role.name == "Administrator",
-    ).first()
-    if admin_role:
-        return True
-
-    permission = tenant_db.query(Permission).filter(Permission.name == required_permission).first()
-    if not permission:
-        return False
-
-    has_perm = tenant_db.query(RolePermission).filter(
-        RolePermission.role_id.in_(role_ids),
-        RolePermission.permission_id == permission.id,
-    ).first()
-    return has_perm is not None
+    # The same rule as auth_router.require_tenant_permission: an administrator (the primary contact, or the
+    # platform-given Administrator role), else a platform-given role holding the permission.
+    return has_tenant_permission(tenant_db, user, required_permission)
 
 
 def require_permission(permission: str):
@@ -770,7 +741,8 @@ def list_users(
 
     result = []
     for u in users:
-        roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == u.id).all()
+        # Only platform-given roles: a connector-imported entitlement sent back by the users page would become a manual role.
+        roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == u.id, PLATFORM_GRANT).all()
         
         result.append({
             "id": u.id,
@@ -795,7 +767,7 @@ def get_user(
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == target_user.id).all()
+    roles = tenant_db.query(Role).join(UserRole).filter(UserRole.user_id == target_user.id, PLATFORM_GRANT).all()
     
     return {
         "id": target_user.id,
@@ -913,17 +885,15 @@ def update_user(
         target_user.is_active = data.is_active
 
     if data.role_ids is not None:
-        tenant_db.query(UserRole).filter(UserRole.user_id == user_id).delete()
-        for role_id in data.role_ids:
-            role = tenant_db.query(Role).filter(Role.id == role_id).first()
-            if role:
-                user_role = UserRole(
-                    tenant_id=local_tenant_id,
-                    user_id=user_id,
-                    role_id=role_id,
-                    assigned_by=user.id,
-                )
-                tenant_db.add(user_role)
+        # The ticked roles are the ones the platform gives this person. A role still ticked keeps the links it has (by hand or
+        # through SSO); one no longer ticked loses them (an SSO group mapping gives it back at the next sign-in, as before); one
+        # not held yet is added by hand. Links an access-review connector imported are never touched.
+        keep = {rid for (rid,) in tenant_db.query(Role.id).filter(Role.id.in_(list(data.role_ids)))}
+        tenant_db.query(UserRole).filter(UserRole.user_id == user_id, PLATFORM_GRANT,
+                                         ~UserRole.role_id.in_(list(keep))).delete(synchronize_session=False)
+        held = {rid for (rid,) in tenant_db.query(UserRole.role_id).filter(UserRole.user_id == user_id, PLATFORM_GRANT)}
+        for role_id in sorted(keep - held):
+            tenant_db.add(UserRole(tenant_id=local_tenant_id, user_id=user_id, role_id=role_id, assigned_by=user.id))
 
     tenant_db.commit()
     return {"message": "User updated successfully"}
@@ -961,7 +931,7 @@ def list_roles(
         perms = tenant_db.query(Permission).join(RolePermission).filter(
             RolePermission.role_id == role.id
         ).all()
-        user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id).count()
+        user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role.id, PLATFORM_GRANT).count()
         
         result.append({
             "id": role.id,
@@ -1091,9 +1061,14 @@ def delete_role(
     if role.is_system_role:
         raise HTTPException(status_code=400, detail="Cannot delete system role")
 
-    user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role_id).count()
+    user_count = tenant_db.query(UserRole).filter(UserRole.role_id == role_id, PLATFORM_GRANT).count()
     if user_count > 0:
         raise HTTPException(status_code=400, detail=f"Role is assigned to {user_count} users. Unassign first.")
+    imported = tenant_db.query(UserRole).filter(UserRole.role_id == role_id).count()
+    if imported:        # the links an access-review connector imported are managed there (deleting the role would drop them)
+        raise HTTPException(status_code=400, detail=f"An access-review connector gave this role to {imported} "
+                                                    f"{'person' if imported == 1 else 'people'}; that access is managed in Access "
+                                                    "Reviews, so the role cannot be deleted here.")
     
     tenant_db.delete(role)
     tenant_db.commit()
@@ -1409,7 +1384,7 @@ def list_role_members(
     rows = (
         tenant_db.query(UserRole, TenantUser)
         .join(TenantUser, TenantUser.id == UserRole.user_id)
-        .filter(UserRole.role_id == role_id)
+        .filter(UserRole.role_id == role_id, PLATFORM_GRANT)
         .order_by(UserRole.assigned_at.desc().nullslast(), TenantUser.email.asc())
         .all()
     )

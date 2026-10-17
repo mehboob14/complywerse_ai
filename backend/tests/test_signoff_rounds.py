@@ -131,3 +131,42 @@ def test_a_new_version_while_in_approval_is_signed_again_by_the_same_people(db):
     assert sent and doc.status == "pending_approval"                           # nobody reviews it: straight back to its approvers
     assert _view(db)["my_actionable_role"] == "approver" and _view(db)["progress"]["approver"] == {"required": 2, "signed": 0}
     assert not doc_lifecycle.changed_after_review(db, db.get(m.GovernanceDocument, 5), "draft", 3, "a draft stays a draft")
+
+
+def test_the_history_says_what_a_new_version_did_to_the_review():
+    out = doc_lifecycle.outcome
+    assert out("pending_review", "pending_review") == "; signed again from the start by its reviewers"
+    assert out("pending_review", "pending_approval") == "; signed again from the start by its approvers"
+    assert out("pending_approval", "pending_approval") == "; signed again from the start by its approvers"
+    assert out("published", "pending_review") == "; sent back to its reviewers"
+    assert out("approved", "pending_approval") == "; sent back to its approvers"
+    assert out("published", "draft") == "; it is a draft again" and out("draft", "draft") == ""
+
+
+def test_a_gap_fix_while_in_review_starts_a_new_round_and_asks_every_reviewer_again(db, monkeypatch):
+    from datetime import datetime, timedelta
+
+    from grc.modules.governance.routers import gap_analysis as gaps
+
+    monkeypatch.setattr(gaps, "get_user_tenants", lambda user, session: [1])
+    for uid, name in ((4, "rana"), (6, "omar")):
+        db.add(m.GRCUser(id=uid, username=name, email=f"{name}@bank.example", display_name=name.title()))
+        db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="reviewer", target_type="user", target_id=uid, added_by=3))
+    doc = db.get(m.GovernanceDocument, 5)
+    doc.owner_id, doc.status = 3, "pending_review"
+    db.commit()
+    doc.signoff_round_at = datetime.utcnow() - timedelta(hours=1)
+    db.commit()
+    signoff.sign_document(document_id=5, body=signoff.SignRequest(signature_image=_png()), request=_request(), db=db, current_user=db.get(m.GRCUser, 4))
+    db.query(m.DocumentSignature).update({"signed_at": datetime.utcnow() - timedelta(minutes=1)})     # Rana signed; Omar has not yet
+    db.commit()
+    assert db.get(m.GovernanceDocument, 5).status == "pending_review" and len(signoff._signatures(db, 5)) == 1
+    db.add(m.PolicyGapAnalysisRun(id=1, tenant_id=1, document_id=5))
+    db.add(m.PolicyGapFinding(id=1, tenant_id=1, analysis_run_id=1, document_id=5, framework_name="ISO/IEC 27001", clause_reference="A.5.15"))
+    db.commit()
+    out = gaps.apply_finding_fix(finding_id=1, body=gaps.ApplyFixRequest(proposed_text="Access rights are reviewed every quarter."), db=db, current_user=_user(db))
+    assert out["document_status"] == "pending_review"                          # not straight to approval: Omar has not reviewed it
+    assert signoff._signatures(db, 5) == []                                    # Rana's signature was on the text before the fix
+    asked = db.query(m.DocumentObligation).filter_by(document_id=5, kind="review", status="pending").all()
+    assert sorted(o.user_id for o in asked) == [4, 6]
+    assert db.query(m.DocumentAuditLog).filter_by(document_id=5, action="status_changed", new_value="pending_review").count() == 1

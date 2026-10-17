@@ -193,12 +193,15 @@ class StepExecutor:
     def _resolve_role_user_ids(db, tenant_id: int, role_ids: list[int]) -> list[int]:
         if not role_ids:
             return []
+        from ....routers.auth_router import PLATFORM_GRANT  # holders the platform gave the role, not connector-imported links
+
         users = (
             db.query(UserRole.user_id)
             .join(Role, Role.id == UserRole.role_id)
             .filter(
                 UserRole.tenant_id == tenant_id,
                 Role.id.in_(role_ids),
+                PLATFORM_GRANT,
             )
             .distinct()
             .all()

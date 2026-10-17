@@ -248,7 +248,8 @@ def _execute_drafting(
                 #   2. Raise the parent-content cap to 20 KB (still bounded).
                 #   3. Emit a single structured block that the Stage A / B
                 #      prompts both treat as authoritative.
-                excerpt = (parent.content or "").strip()
+                # the text the person reads (the version in force while a newer one is in review), passed by the route
+                excerpt = ((request_payload.get("parent_content") if "parent_content" in request_payload else parent.content) or "").strip()
                 if len(excerpt) > 20000:
                     excerpt = excerpt[:20000] + "\n...[truncated for prompt size]"
 

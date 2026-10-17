@@ -36,7 +36,7 @@ from ....models import (
     ParsedFrameworkControl, UploadedFramework, Evidence, EvidenceControlMapping,
     Risk, RiskControlLink,
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, is_tenant_admin
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/workbench", tags=["Control Library - Workbench"])
@@ -142,23 +142,7 @@ def _set_scope(db: Session, tenant_id: int, framework_ids, updated_by=None) -> d
     return cfg
 
 
-def _is_admin(db, user) -> bool:
-    """Mirror auth_router's /me logic: admin = has the 'Administrator' role, or is
-    the tenant's primary contact."""
-    try:
-        from ....models import UserRole, Role
-        role_ids = [ur.role_id for ur in db.query(UserRole).filter(UserRole.user_id == user.id).all()]
-        if role_ids:
-            names = [r.name for r in db.query(Role).filter(Role.id.in_(role_ids)).all()]
-            if any(n == "Administrator" for n in names):
-                return True
-        t = db.query(Tenant).first()
-        pce = getattr(t, "primary_contact_email", None) if t else None
-        if pce and getattr(user, "email", None) and pce.lower() == user.email.lower():
-            return True
-    except Exception:  # noqa: BLE001
-        pass
-    return False
+_is_admin = is_tenant_admin  # the shared admin rule (auth_router)
 
 
 def _scope_framework_ids(db: Session, tids):

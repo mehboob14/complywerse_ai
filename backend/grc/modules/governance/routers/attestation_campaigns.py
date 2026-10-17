@@ -21,7 +21,7 @@ from ....schemas import (
     AttestationCompleteRequest, AttestationDashboardStats, AttestationReminderResponse,
     AttestationEscalateResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import PLATFORM_GRANT, require_auth, get_user_tenants, get_user_primary_tenant
 from ....services import esign
 
 router = APIRouter(prefix="/attestation-campaigns", tags=["Attestation & Certification Management"])
@@ -397,7 +397,8 @@ def activate_campaign(
         if campaign.target_role_ids:
             user_roles = db.query(UserRole).filter(
                 UserRole.tenant_id == campaign.tenant_id,
-                UserRole.role_id.in_(campaign.target_role_ids)
+                UserRole.role_id.in_(campaign.target_role_ids),
+                PLATFORM_GRANT,                 # not links an access-review connector imported
             ).all()
             for ur in user_roles:
                 target_user_ids.add(ur.user_id)

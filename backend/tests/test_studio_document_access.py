@@ -102,6 +102,11 @@ def test_who_may_change_and_publish(world):
     _wire(world)
     db = world.db
     world.me["id"] = 2                                                          # Sam: not the owner or the author, no permission
+    assert world.http.get(world.api("/documents/10/access")).status_code == 403   # he may not even read it
+    db.add_all([m.Role(id=12, tenant_id=1, name="Readers"), m.UserRole(user_id=2, role_id=12, tenant_id=1),
+                m.Permission(id=12, name="governance:policies:view", resource="governance:policies", action="view"),
+                m.RolePermission(role_id=12, permission_id=12)])
+    db.commit()                                                                 # now he reads the library
     assert (_access(world)["can_edit"], _access(world)["can_publish"]) == (False, False)
     assert _draft(world).status_code == 403
     db.get(m.GovernanceDocument, 10).author_id = 2                              # the author may change it

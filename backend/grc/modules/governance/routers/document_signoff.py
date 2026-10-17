@@ -27,7 +27,7 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from ....services import esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
 from .. import doc_lifecycle
-from ..permissions import require_doc_editor
+from ..permissions import require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/documents", tags=["Governance - Sign-off"])
 
@@ -96,8 +96,10 @@ def _resolve_target_users(db: Session, tenant_ids: List[int], target_type: str, 
     if target_type == "user":
         return {int(target_id)}
     if target_type == "role":
+        from ....routers.auth_router import PLATFORM_GRANT  # holders the platform gave the role, not connector-imported links
+
         rows = db.query(UserRole.user_id).filter(
-            UserRole.role_id == target_id, UserRole.tenant_id.in_(tenant_ids)
+            UserRole.role_id == target_id, UserRole.tenant_id.in_(tenant_ids), PLATFORM_GRANT
         ).all()
         return {r[0] for r in rows}
     if target_type == "team":
@@ -188,7 +190,7 @@ def _user_actionable_role(db: Session, tenant_ids: List[int], doc: GovernanceDoc
 
 
 # ── endpoints ────────────────────────────────────────────────────────────
-@router.get("/{document_id}/signoff")
+@router.get("/{document_id}/signoff", dependencies=[Depends(require_doc_reader)])
 def get_signoff(
     document_id: int,
     db: Session = Depends(get_db),
@@ -322,7 +324,7 @@ def send_for_review(
     return get_signoff(document_id, db, current_user)
 
 
-@router.post("/{document_id}/signoff/sign")
+@router.post("/{document_id}/signoff/sign", dependencies=[Depends(require_doc_reader)])
 def sign_document(
     document_id: int,
     body: SignRequest,
@@ -421,7 +423,7 @@ def sign_document(
     return get_signoff(document_id, db, current_user)
 
 
-@router.post("/{document_id}/signoff/reject")
+@router.post("/{document_id}/signoff/reject", dependencies=[Depends(require_doc_reader)])
 def reject_document(
     document_id: int,
     body: RejectRequest,
@@ -452,7 +454,7 @@ def reject_document(
     create_audit_log(
         db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id,
         action="rejected", field_changed="status", old_value=None, new_value="draft",
-        action_details=f"Rejected at {role_label}: {body.comment}",
+        action_details=f"Rejected at {'review' if role_type == 'reviewer' else 'approval'}: {body.comment}",
     )
     db.flush()
     doc_lifecycle.on_rejected(db, doc, current_user.id, role_type, body.comment)

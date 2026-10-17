@@ -302,6 +302,9 @@ _COLUMN_ADDS = [
     ("grc_governance_documents", "mapping_framework_ids", "JSON DEFAULT '[]'::json", None),
     ("grc_governance_documents", "signoff_round_at", "TIMESTAMP", None),     # doc_lifecycle.start_round
     ("grc_governance_documents", "acks_everyone_at", "TIMESTAMP", None),     # doc_lifecycle._add_joiners
+    ("grc_governance_documents", "published_version", "VARCHAR(50)", None),  # governance/permissions.in_force_number
+    ("grc_governance_documents", "last_published_version", "VARCHAR(50)", None),  # governance/permissions.in_force_row
+    ("grc_workflow_notifications", "link", "VARCHAR(500)", None),          # the page a bell notification opens
     # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
     # a stage's numbers/actions unlock only after the previous stage is stamped.
     ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),
@@ -1170,6 +1173,25 @@ def _backfill_audit_register_source_type(engine: Engine) -> None:
                          getattr(engine.url, "database", "?"))
 
 
+def _backfill_published_version(engine: Engine) -> None:
+    """A document published before published_version existed: its published version is the one in force and the one published
+    last. Fills only those new columns, only where they are empty (the user's approval of 2026-10-17)."""
+    try:
+        if not inspect(engine).has_table("grc_governance_documents"):
+            return
+        with engine.begin() as conn:
+            conn.execute(text(
+                "UPDATE grc_governance_documents SET published_version = COALESCE(current_version, '1.0') "
+                "WHERE status = 'published' AND published_version IS NULL"
+            ))
+            conn.execute(text(        # the version published last, likewise (never cleared afterwards)
+                "UPDATE grc_governance_documents SET last_published_version = COALESCE(published_version, current_version, '1.0') "
+                "WHERE last_published_version IS NULL AND (status = 'published' OR published_version IS NOT NULL)"
+            ))
+    except Exception:
+        logger.exception("published_version backfill failed on %s", getattr(engine.url, "database", "?"))
+
+
 def _backfill_regulatory_task_twins(engine: Engine) -> None:
     """Every regulatory implementation task without a Task Management twin gets one."""
     try:
@@ -1382,6 +1404,9 @@ def _ensure_for_engine(engine: Engine) -> None:
 
         # Committee action items show in Task Management too, the same way.
         _backfill_committee_task_twins(engine)
+
+        # Documents published before the version in force was recorded. Idempotent.
+        _backfill_published_version(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

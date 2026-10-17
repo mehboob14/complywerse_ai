@@ -231,6 +231,7 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
         "classification": doc.classification,
         "parent_document_id": doc.parent_document_id,
         "current_version": doc.current_version,
+        "version_in_force": permissions.in_force_number(doc),
         "status": doc.status,
         "owner_id": doc.owner_id,
         "owner_name": doc.owner.display_name if doc.owner else None,
@@ -287,6 +288,28 @@ def serialize_document(doc: GovernanceDocument, db: Session = None) -> dict:
     return result
 
 
+def _in_force_for(db: Session, user: GRCUser, sees_every_draft: bool):
+    """For a list: per document, the version row in force this person reads instead of it (None: the document itself). The rights
+    are read once by the caller (``sees_every_draft``: ``visible_filter`` gave None); only a document not published now that holds
+    a newer number than the one published last is looked at, for its owner, its author and its sign-off (``permissions.sees_draft``
+    without the rights part)."""
+    def row_of(doc: GovernanceDocument):
+        last = permissions.published_last(doc)
+        if (sees_every_draft or doc.status == "published" or not last or last == doc.current_version
+                or user.id in (doc.owner_id, doc.author_id) or permissions.participant(db, user, doc.id)):
+            return None
+        return permissions.in_force_row(db, doc)
+    return row_of
+
+
+def _serve_in_force(result: dict, row: Optional[GovernanceDocumentVersion]) -> dict:
+    """A serialized document with the text and the file of the version in force ``row`` (when the person reads that one)."""
+    if row is not None:
+        result.update(content=row.content, file_name=row.file_name, file_size=row.file_size, file_type=row.file_type,
+                      has_file=bool(row.file_path))
+    return result
+
+
 @router.get("")
 def list_documents(
     tenant_id: Optional[int] = None,
@@ -302,16 +325,27 @@ def list_documents(
     sort_order: str = "desc",
     skip: int = 0,
     limit: int = 100,
+    brief: bool = False,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    """The documents the person may read, with their text. ``brief=1`` is the list for pickers in other modules (linking a risk,
+    an issue, evidence or another document): only ``id``, ``title``, ``doc_type``, ``status`` and ``current_version`` (the number
+    the person reads), no text, file or description; for someone outside the library it holds the documents in force as well as
+    their own and those they are asked about, for a library reader what the library shows them."""
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return {"items": [], "total": 0, "skip": skip, "limit": limit}
-    
+
     query = db.query(GovernanceDocument).options(
         joinedload(GovernanceDocument.owner)
     ).filter(GovernanceDocument.tenant_id.in_(user_tenants))
+    # only what the person may read (in the body, not a dependency: the six type lists below call this function)
+    visible = permissions.visible_filter(db, current_user)
+    if brief and visible is not None and not permissions.can_read_library(db, current_user):
+        visible = or_(GovernanceDocument.published_version.isnot(None), GovernanceDocument.status == "published", visible)
+    if visible is not None:
+        query = query.filter(visible)
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -349,9 +383,17 @@ def list_documents(
         query = query.order_by(sort_column.desc())
     
     documents = query.offset(skip).limit(limit).all()
-    
+    in_force = _in_force_for(db, current_user, visible is None)
+    if brief:
+        def item(doc):
+            row = in_force(doc)
+            return {"id": doc.id, "title": doc.title, "doc_type": doc.doc_type, "status": doc.status,
+                    "current_version": row.version_number if row is not None else doc.current_version,
+                    "document_code": doc.document_code, "parent_document_id": doc.parent_document_id, "tags": doc.tags or []}
+        return {"items": [item(doc) for doc in documents], "total": total, "skip": skip, "limit": limit}
+
     return {
-        "items": [serialize_document(doc, db) for doc in documents],
+        "items": [_serve_in_force(serialize_document(doc, db), in_force(doc)) for doc in documents],
         "total": total,
         "skip": skip,
         "limit": limit
@@ -595,7 +637,7 @@ def get_framework_documents(
     )
 
 
-@router.get("/hierarchy")
+@router.get("/hierarchy", dependencies=[Depends(permissions.require_library_reader)])
 def get_document_hierarchy(
     tenant_id: Optional[int] = None,
     parent_id: Optional[int] = None,
@@ -606,9 +648,14 @@ def get_document_hierarchy(
     if not user_tenants:
         return []
     
+    # ponytail: a document under a draft the person may not see is left out with it; lift it to the top if that ever matters
+    visible = permissions.visible_filter(db, current_user)
+    in_force = _in_force_for(db, current_user, visible is None)
     query = db.query(GovernanceDocument).options(
         joinedload(GovernanceDocument.owner)
     ).filter(GovernanceDocument.tenant_id.in_(user_tenants))
+    if visible is not None:
+        query = query.filter(visible)
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -640,12 +687,13 @@ def get_document_hierarchy(
                    "reason": (r.change_reason or "")[:300], "summary": (r.change_summary or "")[:200], "has_file": bool(r.file_path)})
 
     def build_hierarchy(doc):
-        result = serialize_document(doc, db)
-        vs = versions_of.get(doc.id, [])
+        row = in_force(doc)
+        result = _serve_in_force(serialize_document(doc, db), row)
+        vs = [v for v in versions_of.get(doc.id, []) if row is None or v["id"] <= row.id]   # never the newer version's card
         result["version_count"] = len(vs)
         result["versions"] = vs if len(vs) <= 6 else [vs[0]] + vs[-5:]       # the base and the newest five
         children = db.query(GovernanceDocument).filter(
-            GovernanceDocument.parent_document_id == doc.id
+            GovernanceDocument.parent_document_id == doc.id, *([visible] if visible is not None else [])
         ).order_by(GovernanceDocument.doc_type, GovernanceDocument.title, GovernanceDocument.id).all()
         result["children"] = [build_hierarchy(child) for child in children]
         return result
@@ -653,7 +701,7 @@ def get_document_hierarchy(
     return [build_hierarchy(doc) for doc in documents]
 
 
-@router.get("/reviews/upcoming")
+@router.get("/reviews/upcoming", dependencies=[Depends(permissions.require_library_reader)])
 def get_upcoming_reviews(
     days: int = 90,
     db: Session = Depends(get_db),
@@ -662,12 +710,14 @@ def get_upcoming_reviews(
     user_tenants = get_user_tenants(current_user, db)
     now = datetime.utcnow()
     cutoff = now + timedelta(days=days)
+    visible = permissions.visible_filter(db, current_user)
     
     documents = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id.in_(user_tenants),
         GovernanceDocument.next_review_date != None,
         GovernanceDocument.next_review_date <= cutoff,
-        GovernanceDocument.status != "retired"
+        GovernanceDocument.status != "retired",
+        *([visible] if visible is not None else [])
     ).order_by(GovernanceDocument.next_review_date.asc()).all()
     
     results = []
@@ -704,7 +754,7 @@ def get_upcoming_reviews(
     }
 
 
-@router.get("/{document_id}")
+@router.get("/{document_id}", dependencies=[Depends(permissions.require_doc_reader)])
 def get_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -732,6 +782,15 @@ def get_document(
         )
     
     result = serialize_document(document, db)
+    # while a new version is on its way the published one stays in force: whoever may not change, publish or sign off the
+    # document reads that one (its text, file and number; the newer one is only named), everyone else the newest
+    in_force = permissions.in_force_row(db, document)
+    row = in_force if in_force is not None and not permissions.sees_draft(db, current_user, document) else None
+    result["in_force_version_id"] = in_force.id if in_force is not None else None
+    if row is not None:
+        _serve_in_force(result, row)
+        result["current_version"] = row.version_number
+        result["newer_version"] = {"number": document.current_version, "status": document.status}
     
     result["versions"] = [
         {
@@ -748,7 +807,7 @@ def get_document(
             "approved_by": v.approved_by,
             "approved_at": v.approved_at.isoformat() if v.approved_at else None,
         }
-        for v in document.versions
+        for v in document.versions if row is None or v.id <= row.id
     ]
     
     result["reviewers"] = [
@@ -792,9 +851,10 @@ def get_document(
             "doc_type": document.parent_document.doc_type,
         }
     
+    visible = permissions.visible_filter(db, current_user)
     child_documents = db.query(GovernanceDocument).filter(
-        GovernanceDocument.parent_document_id == document_id
-    ).all()
+        GovernanceDocument.parent_document_id == document_id, *([visible] if visible is not None else [])
+    ).order_by(GovernanceDocument.id).all()
     result["child_documents"] = [
         {
             "id": c.id,
@@ -932,8 +992,16 @@ def update_document(
         )
     
     update_data = document_update.model_dump(exclude_unset=True)
-    if update_data.get("status") in ("approved", "published") and update_data["status"] != document.status:
+    if "status" in update_data and update_data["status"] == document.status:
+        update_data.pop("status")       # not a status change: an edit of a published text is reviewed again (changed_after_review)
+    if update_data.get("status") in ("approved", "published"):
         permissions.ensure_publisher(db, current_user)
+    if update_data.get("parent_document_id") is not None and update_data["parent_document_id"] != document.parent_document_id:
+        from ..doc_details import check_details
+        try:
+            check_details(db, parent_document_id=update_data["parent_document_id"], document_id=document.id)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     # change_reason is edit metadata, not a document column — pull it out so the
     # field loop doesn't try to setattr/getattr a non-existent attribute.
     change_reason = update_data.pop("change_reason", None)
@@ -970,6 +1038,8 @@ def update_document(
         if "status" not in update_data:          # the new text is reviewed again, as an AI Studio save is
             doc_lifecycle.changed_after_review(db, document, old_status, current_user.id,
                                                f"Content edited (version {document.current_version}), so it needs approving again")
+        if document.status == "published":       # published and edited in one request: the new number is the one in force
+            document.published_version = document.current_version
 
     def _preview(v):
         s = "" if v is None else str(v)
@@ -1078,6 +1148,8 @@ def signoff_document(
             old_version=old_version, change_type="signoff", change_reason=reason,
             user_id=current_user.id,
         )
+        if document.status == "published":       # the stamp is a new number of the published text: the one in force
+            document.published_version = document.current_version
     document.updated_at = datetime.utcnow()
     create_audit_log(
         db=db, document_id=document_id, tenant_id=document.tenant_id,
@@ -1214,7 +1286,7 @@ def delete_document(
     return None
 
 
-@router.get("/{document_id}/review-history")
+@router.get("/{document_id}/review-history", dependencies=[Depends(permissions.require_doc_reader)])
 def get_review_history(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1758,7 +1830,7 @@ def publish_document(
     return serialize_document(document, db)
 
 
-@router.get("/{document_id}/audit-logs")
+@router.get("/{document_id}/audit-logs", dependencies=[Depends(permissions.require_doc_reader)])
 def get_document_audit_logs(
     document_id: int,
     skip: int = 0,
@@ -1784,6 +1856,8 @@ def get_document_audit_logs(
     ).filter(
         DocumentAuditLog.document_id == document_id
     ).order_by(DocumentAuditLog.performed_at.desc()).offset(skip).limit(limit).all()
+    # the text before and after an edit is the newest version's: not for someone who reads the version in force
+    hide = not permissions.sees_draft(db, current_user, document)
     
     return [
         {
@@ -1791,8 +1865,8 @@ def get_document_audit_logs(
             "action": log.action,
             "action_details": log.action_details,
             "field_changed": log.field_changed,
-            "old_value": log.old_value,
-            "new_value": log.new_value,
+            "old_value": None if hide and log.field_changed == "content" else log.old_value,
+            "new_value": None if hide and log.field_changed == "content" else log.new_value,
             "performed_by": log.performed_by,
             "performer_name": log.user.display_name if log.user else None,
             "performed_at": log.performed_at.isoformat() if log.performed_at else None,
@@ -1850,13 +1924,26 @@ async def upload_document_file(
         f.write(content)
     
     old_file_name = document.file_name
+    old_status = document.status
     
     current_ver = document.current_version or "1.0"
-    if create_new_version and document.file_name:
+    V = GovernanceDocumentVersion
+    current_row = (db.query(V).filter(V.document_id == document_id, V.version_number == current_ver)
+                   .order_by(V.id.desc()).first())
+    # the version in force (or published last) is never written over: a file for it is a new version, whatever the form asked
+    if (create_new_version and document.file_name) or current_ver in (permissions.in_force_number(document), permissions.published_last(document)):
         from .. import doc_version
         new_version, change_type, decided = doc_version.for_new_file(
             current_ver, document.file_path, document.file_name, file_path, file.filename,
             old_content=document.content, title=document.title)
+        if current_row is None:         # an older document with no row for its number: what it held is kept first, as that version
+            db.add(V(document_id=document_id, version_number=current_ver, change_type="baseline", title=document.title,
+                     content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
+                     file_type=document.file_type, change_summary="Original document, before it was changed", status="superseded",
+                     created_by=current_user.id))
+        elif not current_row.file_path and document.file_path:      # its file was put in place before its row held it
+            current_row.file_name, current_row.file_path = document.file_name, document.file_path
+            current_row.file_size, current_row.file_type = document.file_size, document.file_type
         
         existing_versions = db.query(GovernanceDocumentVersion).filter(
             GovernanceDocumentVersion.document_id == document_id,
@@ -1882,12 +1969,23 @@ async def upload_document_file(
         )
         db.add(version)
         document.current_version = new_version
+    else:       # the same version with another file: the row of that version holds it (made when there is none)
+        if current_row is None:
+            db.query(V).filter(V.document_id == document_id, V.status == "current").update({"status": "superseded"})
+            current_row = V(document_id=document_id, version_number=current_ver, change_type="major", title=document.title,
+                            content=document.content, change_summary=change_summary or f"File uploaded: {file.filename}",
+                            change_reason=change_reason, status="current", created_by=current_user.id)
+            db.add(current_row)
+        current_row.file_name, current_row.file_path, current_row.file_size, current_row.file_type = file.filename, file_path, file_size, file_ext
     
     document.file_name = file.filename
     document.file_path = file_path
     document.file_size = file_size
     document.file_type = file_ext
     document.updated_at = datetime.utcnow()
+    # a new file is a new version: a reviewed document is reviewed again from the start, as every other new version is
+    doc_lifecycle.changed_after_review(db, document, old_status, current_user.id,
+                                       f"A new file was uploaded (version {document.current_version}), so it needs approving again")
     
     create_audit_log(
         db=db,
@@ -1895,7 +1993,7 @@ async def upload_document_file(
         tenant_id=document.tenant_id,
         user_id=current_user.id,
         action="file_uploaded",
-        action_details=f"File uploaded: {file.filename} ({file_size} bytes)",
+        action_details=f"File uploaded: {file.filename} ({file_size} bytes)" + doc_lifecycle.outcome(old_status, document.status),
         field_changed="file_name",
         old_value=old_file_name,
         new_value=file.filename
@@ -1938,7 +2036,7 @@ async def upload_document_file(
     }
 
 
-@router.get("/{document_id}/download-file")
+@router.get("/{document_id}/download-file", dependencies=[Depends(permissions.require_doc_reader)])
 def download_document_file(
     document_id: int,
     version_id: Optional[int] = None,
@@ -1958,6 +2056,7 @@ def download_document_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    in_force = permissions.version_for(db, current_user, document)      # someone who reads the version in force: its file
     
     if version_id:
         version = db.query(GovernanceDocumentVersion).filter(
@@ -1965,7 +2064,7 @@ def download_document_file(
             GovernanceDocumentVersion.document_id == document_id
         ).first()
         
-        if not version:
+        if not version or (in_force is not None and version.id > in_force.id):     # never a newer version than the one in force
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Version not found"
@@ -1982,21 +2081,22 @@ def download_document_file(
             filename=version.file_name or f"document_{document_id}_v{version.version_number}",
             media_type=ALLOWED_FILE_TYPES.get(version.file_type, "application/octet-stream")
         )
+    src = in_force or document
     
-    if not document.file_path or not os.path.exists(document.file_path):
+    if not src.file_path or not os.path.exists(src.file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No file attached to this document"
         )
     
     return FileResponse(
-        path=document.file_path,
-        filename=document.file_name or f"document_{document_id}",
-        media_type=ALLOWED_FILE_TYPES.get(document.file_type, "application/octet-stream")
+        path=src.file_path,
+        filename=src.file_name or f"document_{document_id}",
+        media_type=ALLOWED_FILE_TYPES.get(src.file_type, "application/octet-stream")
     )
 
 
-@router.get("/{document_id}/export")
+@router.get("/{document_id}/export", dependencies=[Depends(permissions.require_doc_reader)])
 def export_document(
     document_id: int,
     db: Session = Depends(get_db),
@@ -2023,19 +2123,20 @@ def export_document(
             detail="Document not found"
         )
 
+    src = permissions.version_for(db, current_user, document) or document      # the version in force, for who reads that one
     # Prefer the native uploaded file when present on disk.
-    if document.file_path and os.path.exists(document.file_path):
+    if src.file_path and os.path.exists(src.file_path):
         return FileResponse(
-            path=document.file_path,
-            filename=document.file_name or f"document_{document_id}",
-            media_type=ALLOWED_FILE_TYPES.get(document.file_type, "application/octet-stream")
+            path=src.file_path,
+            filename=src.file_name or f"document_{document_id}",
+            media_type=ALLOWED_FILE_TYPES.get(src.file_type, "application/octet-stream")
         )
 
     # Content-only document: render its markdown content to a PDF.
-    if document.content:
+    if src.content:
         from grc.routers._artifact_export import build_export  # local import: heavy libs
         title = document.title or "document"
-        data, media_type, ext = build_export("pdf", title=title, content=document.content or "")
+        data, media_type, ext = build_export("pdf", title=title, content=src.content or "")
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", title.strip())[:80] or "document"
         return StreamingResponse(
             io.BytesIO(data),
@@ -3108,17 +3209,20 @@ def generate_policy_ai_draft(
 
     # Validate parent document up-front so the user gets immediate
     # feedback rather than a failed job 60s later.
+    parent_content = None
     if request.parent_document_id:
         user_tenants = get_user_tenants(current_user, db)
-        parent_exists = db.query(GovernanceDocument.id).filter(
+        parent = db.query(GovernanceDocument).filter(
             GovernanceDocument.id == request.parent_document_id,
             GovernanceDocument.tenant_id.in_(user_tenants),
         ).first()
-        if not parent_exists:
+        if not parent:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Parent document not found",
             )
+        permissions.ensure_reader(db, current_user, parent)      # its text goes into the prompt: only for who may read it
+        parent_content = (permissions.version_for(db, current_user, parent) or parent).content     # as the person reads it
 
     from ....tasks.ai_drafting import create_job
 
@@ -3131,6 +3235,7 @@ def generate_policy_ai_draft(
         "description": request.description,
         "framework_ids": request.framework_ids or [],
         "parent_document_id": request.parent_document_id,
+        "parent_content": parent_content,           # tasks/ai_drafting drafts from this text, not the parent's newest
         "include_sections": request.include_sections or [],
     }
     job_id = create_job(
@@ -3200,7 +3305,7 @@ class CompareWithDocumentBody(BaseModel):
     target_document_id: int
 
 
-@router.post("/{document_id}/compare-with-document")
+@router.post("/{document_id}/compare-with-document", dependencies=[Depends(permissions.require_doc_reader)])
 def compare_with_document(
     document_id: int,
     body: CompareWithDocumentBody,
@@ -3231,11 +3336,14 @@ def compare_with_document(
     if not target:
         raise HTTPException(status_code=404, detail="Target document not found")
 
+    permissions.ensure_reader(db, current_user, target)
+
     if source.id == target.id:
         raise HTTPException(status_code=400, detail="Cannot compare a document with itself")
 
-    source_content = (source.content or "").strip() or "(empty document)"
-    target_content = (target.content or "").strip() or "(empty document)"
+    # each side as this person reads it: the version in force, for someone who may not see a newer one
+    source_content = ((permissions.version_for(db, current_user, source) or source).content or "").strip() or "(empty document)"
+    target_content = ((permissions.version_for(db, current_user, target) or target).content or "").strip() or "(empty document)"
 
     gap_analysis = None
     if AI_INTEGRATIONS_OPENAI_API_KEY:
@@ -3296,7 +3404,7 @@ Return strict JSON with keys:
     }
 
 
-@router.get("/{document_id}/view-html")
+@router.get("/{document_id}/view-html", dependencies=[Depends(permissions.require_doc_reader)])
 def get_document_html(
     document_id: int,
     db: Session = Depends(get_db),
@@ -3312,16 +3420,17 @@ def get_document_html(
     
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    src = permissions.version_for(db, current_user, document) or document      # the version in force, for who reads that one
     
     # If document has a file, always prefer file-based conversion (better HTML)
-    if document.file_path and os.path.exists(document.file_path):
+    if src.file_path and os.path.exists(src.file_path):
         html_content = ""
-        file_type = document.file_type or ""
+        file_type = src.file_type or ""
         
         try:
             if file_type == "pdf":
                 from PyPDF2 import PdfReader
-                reader = PdfReader(document.file_path)
+                reader = PdfReader(src.file_path)
                 sections = []
                 for i, page in enumerate(reader.pages):
                     page_text = page.extract_text()
@@ -3344,7 +3453,7 @@ def get_document_html(
             
             elif file_type in ("docx", "doc"):
                 from docx import Document as DocxDocument
-                doc = DocxDocument(document.file_path)
+                doc = DocxDocument(src.file_path)
                 parts = []
                 for para in doc.paragraphs:
                     text = para.text.strip()
@@ -3392,8 +3501,8 @@ def get_document_html(
         except HTTPException:
             raise
         except Exception as e:
-            if document.content:
-                lines = document.content.split('\n')
+            if src.content:
+                lines = src.content.split('\n')
                 html_parts = []
                 for line in lines:
                     stripped = line.strip()
@@ -3405,7 +3514,7 @@ def get_document_html(
                     "title": document.title,
                     "content_type": "html",
                     "html": "".join(html_parts),
-                    "file_type": document.file_type
+                    "file_type": src.file_type
                 }
             raise HTTPException(status_code=500, detail=f"Error converting document: {str(e)}")
         
@@ -3418,8 +3527,8 @@ def get_document_html(
         }
     
     # Fall back to content field if no file
-    if document.content:
-        lines = document.content.split('\n')
+    if src.content:
+        lines = src.content.split('\n')
         html_parts = []
         for line in lines:
             stripped = line.strip()
@@ -3436,7 +3545,7 @@ def get_document_html(
             "title": document.title,
             "content_type": "html",
             "html": "".join(html_parts),
-            "file_type": document.file_type
+            "file_type": src.file_type
         }
 
     raise HTTPException(status_code=404, detail="Document file not found")
@@ -3494,7 +3603,7 @@ def _assert_doc_access(document_id: int, user_tenants: List[int], db: Session) -
     return doc
 
 
-@router.get("/{document_id}/annotations")
+@router.get("/{document_id}/annotations", dependencies=[Depends(permissions.require_doc_reader)])
 def list_document_annotations(
     document_id: int,
     db: Session = Depends(get_db),
@@ -3515,7 +3624,7 @@ def list_document_annotations(
     }
 
 
-@router.post("/{document_id}/annotations", status_code=status.HTTP_201_CREATED)
+@router.post("/{document_id}/annotations", status_code=status.HTTP_201_CREATED, dependencies=[Depends(permissions.require_doc_reader)])
 def create_document_annotation(
     document_id: int,
     payload: AnnotationCreateRequest,
@@ -3524,6 +3633,7 @@ def create_document_annotation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     doc = _assert_doc_access(document_id, user_tenants, db)
+    permissions.ensure_annotator(db, current_user, doc)
     annotation = DocumentAnnotation(
         tenant_id=doc.tenant_id,
         document_id=doc.id,
@@ -3539,7 +3649,7 @@ def create_document_annotation(
     return _serialize_annotation(annotation, {current_user.id: current_user})
 
 
-@router.put("/{document_id}/annotations/{annotation_id}")
+@router.put("/{document_id}/annotations/{annotation_id}", dependencies=[Depends(permissions.require_doc_reader)])
 def update_document_annotation(
     document_id: int,
     annotation_id: int,
@@ -3549,6 +3659,7 @@ def update_document_annotation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     doc = _assert_doc_access(document_id, user_tenants, db)
+    permissions.ensure_annotator(db, current_user, doc)
     annotation = db.query(DocumentAnnotation).filter(
         DocumentAnnotation.id == annotation_id,
         DocumentAnnotation.document_id == doc.id,
@@ -3570,7 +3681,8 @@ def update_document_annotation(
     return _serialize_annotation(annotation, {annotation.user_id: user} if user else {})
 
 
-@router.delete("/{document_id}/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{document_id}/annotations/{annotation_id}", status_code=status.HTTP_204_NO_CONTENT,
+               dependencies=[Depends(permissions.require_doc_reader)])
 def delete_document_annotation(
     document_id: int,
     annotation_id: int,
@@ -3579,6 +3691,7 @@ def delete_document_annotation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     doc = _assert_doc_access(document_id, user_tenants, db)
+    permissions.ensure_annotator(db, current_user, doc)
     annotation = db.query(DocumentAnnotation).filter(
         DocumentAnnotation.id == annotation_id,
         DocumentAnnotation.document_id == doc.id,

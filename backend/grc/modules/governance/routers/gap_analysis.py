@@ -27,7 +27,7 @@ from ....routers.auth_router import require_auth, get_user_tenants, get_user_pri
 from ....services.ai_gateway.errors import AIBlocked
 from .policy_parser import extract_text_from_file, _create_version_snapshot
 from ..action_logger import log_governance_action
-from ..permissions import ensure_editor
+from ..permissions import ensure_editor, require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/gap-analysis", tags=["Policy Gap Analysis"])
 
@@ -568,6 +568,7 @@ def run_gap_analysis(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found or access denied"
         )
+    ensure_editor(db, current_user, document)
 
     policy_text = get_document_text(document)
     if not policy_text or not policy_text.strip():
@@ -678,7 +679,7 @@ def run_gap_analysis(
     }
 
 
-@router.get("/runs/{document_id}")
+@router.get("/runs/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_analysis_runs(
     document_id: int,
     db: Session = Depends(get_db),
@@ -727,7 +728,7 @@ def get_analysis_runs(
     }
 
 
-@router.get("/findings/document/{document_id}")
+@router.get("/findings/document/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_document_findings(
     document_id: int,
     compliance_status: Optional[str] = None,
@@ -817,6 +818,7 @@ def get_run_findings(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Analysis run not found or access denied"
         )
+    require_doc_reader(run.document_id, db, current_user)
 
     query = db.query(PolicyGapFinding).filter(
         PolicyGapFinding.analysis_run_id == run_id
@@ -1067,6 +1069,7 @@ def generate_finding_fix(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Source document not found"
         )
+    ensure_editor(db, current_user, document)
 
     drafted = _generate_clause_fix(document, finding)
     finding.suggested_clause_text = drafted["proposed_text"]
@@ -1341,14 +1344,13 @@ def apply_finding_fix(
 
     document.content = new_content
     document.current_version = new_version_label
-    # Applying a remediation edits the document, so it must be re-approved:
-    # route it into the approval queue for its assigned reviewer/approver.
-    document.status = "pending_approval"
+    # Applying a remediation edits the document, so a reviewed one is reviewed again from the start by the same people (a new
+    # round, also while in review or approval), as every other new version is; a draft stays a draft.
     document.updated_at = datetime.utcnow()
-    if original_status not in ("pending_review", "pending_approval"):
-        from .. import doc_lifecycle
+    from .. import doc_lifecycle
 
-        doc_lifecycle.on_status_changed(db, document, original_status, "pending_approval", current_user.id)     # a new round, the approvers asked
+    doc_lifecycle.changed_after_review(db, document, original_status, current_user.id,
+                                       f"Gap remediation applied (version {new_version_label}), so it needs approving again")
 
     now = datetime.utcnow()
     finding.applied_clause_text = proposed_text
@@ -1413,6 +1415,7 @@ def update_finding(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Finding not found or access denied"
         )
+    require_doc_editor(finding.document_id, db, current_user)
 
     if update.assigned_owner_id is not None:
         finding.assigned_owner_id = update.assigned_owner_id
@@ -1453,6 +1456,7 @@ def override_finding(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Finding not found or access denied"
         )
+    require_doc_editor(finding.document_id, db, current_user)
 
     valid_statuses = ["fully_compliant", "partially_compliant", "not_addressed", "not_applicable"]
     if override.override_status not in valid_statuses:
@@ -1543,6 +1547,7 @@ def accept_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Finding not found or access denied"
         )
+    require_doc_editor(finding.document_id, db, current_user)
 
     # Update finding with risk acceptance
     finding.risk_accepted = True
@@ -1646,7 +1651,7 @@ def accept_risk(
     return serialize_finding(finding, db)
 
 
-@router.get("/compliance-summary/{document_id}")
+@router.get("/compliance-summary/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_compliance_summary(
     document_id: int,
     db: Session = Depends(get_db),
@@ -1954,7 +1959,7 @@ def _recommend_for_finding(
     return [candidates[0]]
 
 
-@router.get("/document/{document_id}/recommended-controls")
+@router.get("/document/{document_id}/recommended-controls", dependencies=[Depends(require_doc_reader)])
 def get_gap_recommended_controls(
     document_id: int,
     db: Session = Depends(get_db),
@@ -2046,7 +2051,7 @@ class GapRecommendedControlLinkRequest(BaseModel):
     finding_id: Optional[int] = None
 
 
-@router.post("/document/{document_id}/recommended-controls/link")
+@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_editor)])
 def link_gap_recommended_control(
     document_id: int,
     body: GapRecommendedControlLinkRequest,
@@ -2217,7 +2222,7 @@ def link_gap_recommended_control(
     }
 
 
-@router.get("/export/{document_id}")
+@router.get("/export/{document_id}", dependencies=[Depends(require_doc_reader)])
 def export_findings_csv(
     document_id: int,
     db: Session = Depends(get_db),

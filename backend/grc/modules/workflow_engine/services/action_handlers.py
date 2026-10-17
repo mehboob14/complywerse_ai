@@ -621,6 +621,7 @@ def _emails_for_user_ids(db, user_ids: List[int]) -> List[str]:
 def _emails_for_role_ids(db, tenant_id: int, role_ids: List[int]) -> List[str]:
     if not role_ids:
         return []
+    from ....routers.auth_router import PLATFORM_GRANT  # holders the platform gave the role, not connector-imported links
     rows = (
         db.query(GRCUser.email)
         .join(UserRole, UserRole.user_id == GRCUser.id)
@@ -629,6 +630,7 @@ def _emails_for_role_ids(db, tenant_id: int, role_ids: List[int]) -> List[str]:
             UserRole.tenant_id == int(tenant_id),
             Role.id.in_(role_ids),
             GRCUser.is_active.is_(True),
+            PLATFORM_GRANT,
         )
         .distinct()
         .all()
@@ -1555,7 +1557,8 @@ class WorkflowActionHandlers:
         subject = _resolve_template(subject, ctx)
         message = _resolve_template(message, ctx)
 
-        # Collect target user IDs
+        # Collect target user IDs (a role's holders the platform gave it, not connector-imported links)
+        from ....routers.auth_router import PLATFORM_GRANT
         target_user_ids: List[int] = list(user_ids)
         for role_id in role_ids:
             rows = (
@@ -1565,6 +1568,7 @@ class WorkflowActionHandlers:
                     UserRole.tenant_id == instance.tenant_id,
                     UserRole.role_id == role_id,
                     GRCUser.is_active.is_(True),
+                    PLATFORM_GRANT,
                 )
                 .all()
             )

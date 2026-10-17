@@ -280,6 +280,7 @@ def list_in_app_notifications(
                 "notification_type": item.notification_type,
                 "subject": item.subject,
                 "message": item.message,
+                "link": item.link,
                 "is_read": item.is_read,
                 "read_at": _to_utc_iso(item.read_at),
                 "created_at": _to_utc_iso(item.created_at),

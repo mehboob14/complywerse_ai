@@ -93,6 +93,7 @@ def test_sending_for_review_asks_each_reviewer_with_a_task_and_an_alert(world):
         assert all(o.due_date > datetime.utcnow() + timedelta(days=6) for o in rows)
         mine = [t for t in tasks(db) if t.assigned_user_ids == [2]]
         assert len(tasks(db)) == 2 and mine[0].title == "Review: Access policy" and mine[0].source_entity_id == rows[0].id
+        assert "/governance/documents/5?tab=lifecycle" in mine[0].description                  # the task opens the document's Approvals
         assert len(alerts(db, 2)) == 1 and len(alerts(db, 3)) == 1 and alerts(db, 6) == []
 
 
@@ -116,6 +117,9 @@ def test_the_whole_chain_with_different_users_and_who_is_pending_at_each_step(wo
         by_user = {o.user_id: o for o in obligations(db, "approval")}
         assert (by_user[4].status, by_user[5].status) == ("done", "cancelled")
         assert by_user[4].signature_id and by_user[4].esign_id
+        shown = {r["user_id"]: r for r in life.state(db, doc(db), user(db, 1))["approvals"] if r["kind"] == "approval"}
+        seal = db.get(m.ElectronicSignature, by_user[4].esign_id).image_sha256
+        assert shown[4]["esign"] == {"id": by_user[4].esign_id, "image_sha256": seal} and len(seal) == 64 and shown[5]["esign"] is None
         open_tasks = [t for t in tasks(db) if t.status != "Completed"]
         assert open_tasks == []                                                  # Mo's task went with his cancelled request; the rest are completed
         assert alerts(db, 1)[-1].subject.startswith("Approved")
@@ -171,15 +175,50 @@ def test_publishing_asks_every_active_user_once_and_they_acknowledge(world):
         assert {p["user"] for p in view["acknowledgements"]["people"] if p["status"] == "pending"} == {
             "Olivia Owner", "Rafay Reviewer", "Mina Manager", "Mo Manager", "Adam Admin"}
         assert view["mine"] == []
+        people = {p["user_id"]: p for p in view["acknowledgements"]["people"]}
+        assert people[6]["esign"]["id"] == done[6].esign_id and len(people[6]["esign"]["image_sha256"]) == 64     # verifiable, with its seal
+        assert people[2]["esign"] is None
         assert any(e["kind"] == "acknowledged" and e["actor"] == "Uma User" for e in view["timeline"])
 
         life.acknowledge(db, d, user(db, 6))                                     # again: nothing changes
         assert len(obligations(db, "acknowledgement", "done")) == 2
         with pytest.raises(LookupError):
             life.acknowledge(db, d, user(db, 8))                                 # a deactivated user is not asked
-        d.status = "draft"
+        d.status = "archived"                                                    # withdrawn: nothing in force (a draft keeps 1.0 in force)
         with pytest.raises(ValueError):
             life.acknowledge(db, d, user(db, 3))
+
+
+def test_a_major_version_asks_everyone_again_and_a_minor_one_does_not(world):
+    with world.factory() as db:
+        d = doc(db)
+
+        def publish(version):
+            if d.status == "published":                                          # a new version is reviewed first
+                d.status = "approved"
+                life.on_status_changed(db, d, "published", "approved", 1)
+            d.current_version, d.status = version, "published"
+            life.on_status_changed(db, d, "approved", "published", 1)
+            db.commit()
+
+        def pending():
+            return {o.user_id: o.document_version for o in obligations(db, "acknowledgement", "pending")}
+
+        publish("1.0")
+        life.acknowledge(db, d, user(db, 6))
+        publish("1.1")                                                           # minor: Uma acknowledged 1.0, she is not asked again
+        assert pending() == {1: "1.1", 2: "1.1", 3: "1.1", 4: "1.1", 5: "1.1", 7: "1.1"}
+        life.acknowledge(db, d, user(db, 2))
+        acks = life.state(db, d, user(db, 1))["acknowledgements"]
+        assert (acks["total"], acks["done"]) == (7, 2)
+        assert {p["user_id"]: (p["status"], p["version"]) for p in acks["people"]}[6] == ("done", "1.0")     # the version she acknowledged
+
+        publish("2.0")                                                           # major: everyone, Uma and Rana too
+        assert pending() == {uid: "2.0" for uid in (1, 2, 3, 4, 5, 6, 7)}
+        acks = life.state(db, d, user(db, 1))["acknowledgements"]
+        assert (acks["total"], acks["done"], acks["pending"]) == (7, 0, 7)        # one row per person: the newest
+        life.acknowledge(db, d, user(db, 6))
+        assert {o.user_id for o in obligations(db, "acknowledgement", "done")} == {2, 6} and len(obligations(db, "acknowledgement", "done")) == 3
 
 
 def test_a_task_cannot_be_completed_in_task_management_and_deleting_it_leaves_the_request(world):
@@ -296,9 +335,19 @@ def sent_channels(monkeypatch):
 
     def spy(db, **kw):
         calls.append((kw["subject"], tuple(kw["channels"])))
-        return real(db, **{**kw, "channels": ["in_app"]})      # no mail server in a test
+        return real(db, **kw)
     monkeypatch.setattr(ns, "send_workflow_notification", spy)
+    sent_emails(monkeypatch)
     return calls
+
+
+def sent_emails(monkeypatch):
+    """The emails sent, as (to, subject, html); no mail server in a test."""
+    import grc.modules.workflow_engine.services.notification_service as ns
+
+    mails = []
+    monkeypatch.setattr(ns, "send_email", lambda db, **kw: mails.append((kw["to"], kw["subject"], kw["body_html"])) or {"success": True})
+    return mails
 
 
 def test_the_organisation_sets_how_long_people_have_and_when_escalation_starts(world):
@@ -445,3 +494,269 @@ def test_the_hooks_see_their_own_changes_on_a_session_that_does_not_autoflush(wo
         db.commit()
         assert [o.user_id for o in obligations(db, "review", "pending")] == [2]   # the same reviewer is asked again
         assert signoff.get_signoff(5, db, user(db, 2))["my_actionable_role"] == "reviewer"
+
+
+# ── the end-to-end test's findings (2026-10-17) ──────────────────────────────
+def test_requests_and_rejections_are_worded_as_people_say_them_and_alerts_open_the_document(world):
+    with world.factory() as db:
+        participants(db)
+        signoff.send_for_review(5, db, user(db, 1))
+        assert alerts(db, 2)[-1].link == "/governance/documents/5?tab=lifecycle"                           # the bell opens the document
+        sign(db, 2)
+        sign(db, 3)
+        assert alerts(db, 4)[-1].subject == "Approval requested: Access policy"
+        details = [e["detail"] for e in life.state(db, doc(db), user(db, 1))["timeline"]]
+        assert any(d.startswith("Review asked of Rana Reviewer") for d in details) and any(d.startswith("Approval asked of") for d in details)
+        signoff.reject_document(5, signoff.RejectRequest(comment="Name the rotation period"), db, user(db, 4))
+        assert db.query(m.DocumentAuditLog).filter_by(document_id=5, action="rejected").one().action_details == "Rejected at approval: Name the rotation period"
+        d = doc(db)
+        d.status = "published"
+        life.ensure_acknowledgements(db, d, 1)
+        db.commit()
+        assert any(e["detail"].startswith("Acknowledgement asked of") for e in life.state(db, d, user(db, 1))["timeline"])
+        ack = db.query(m.DocumentObligation).filter_by(user_id=6, kind="acknowledgement").one()
+        assert "/governance/documents/5." in db.get(m.CriticalTask, ack.critical_task_id).description                 # the document itself, to read
+        assert alerts(db, 6)[-1].link == "/governance/documents/5" and "Open:" not in alerts(db, 6)[-1].message
+
+
+def test_the_sweep_sends_one_email_per_request_and_counts_the_emails_it_sent(world, monkeypatch):
+    mails = sent_emails(monkeypatch)
+    monkeypatch.setenv("FRONTEND_URL", "https://app.example.test")              # the Open it button needs the app's address
+    with world.factory() as db:
+        d = doc(db)
+        d.status = "published"
+        life.ensure_acknowledgements(db, d, 1)                                   # the whole organisation, in the app only
+        for ob in obligations(db, "acknowledgement"):
+            ob.due_date = datetime.utcnow() + timedelta(days=2)                  # already due soon at the first sweep
+        db.commit()
+        out = life.sweep(db)
+        assert out["reminded"] == 7 and out["emailed"] == len(mails) == 7       # "Due soon" alone, not also "1 document to acknowledge"
+        assert {s for _to, s, _h in mails} == {"Due soon: Acknowledge Access policy"} and len({to for to, _s, _h in mails}) == 7
+        assert all("/governance/documents/5" in h and "Open it" in h for _to, _s, h in mails)
+
+        db.add(m.GovernanceDocument(id=6, tenant_id=1, title="Backup policy", doc_type="policy", status="published", current_version="1.0", owner_id=1))
+        db.flush()
+        life.ensure_acknowledgements(db, db.get(m.GovernanceDocument, 6), 1)
+        db.commit()
+        mails.clear()
+        out = life.sweep(db)                                                      # not due soon: the list of what waits, worded for one
+        assert out["emailed"] == len(mails) == 7 and {s for _to, s, _h in mails} == {"1 document to acknowledge"}
+
+        for ob in obligations(db, "acknowledgement", "pending"):
+            if ob.document_id == 5:
+                ob.due_date = datetime.utcnow() - timedelta(days=1)
+        db.commit()
+        mails.clear()
+        out = life.sweep(db)
+        assert out["owner_told"] == 7 and out["emailed"] == len(mails) == 8     # each person once, and the owner once
+
+
+def test_a_new_round_asks_with_fresh_due_dates(world):
+    with world.factory() as db:
+        participants(db)
+        signoff.send_for_review(5, db, user(db, 1))
+        for ob in obligations(db, "review"):
+            ob.due_date = datetime.utcnow() - timedelta(days=3)                  # the first round's dates have passed
+        db.commit()
+        life.changed_after_review(db, doc(db), "pending_review", 1, "Edited, so it needs approving again")
+        db.commit()
+        fresh = obligations(db, "review", "pending")
+        assert sorted(o.user_id for o in fresh) == [2, 3] and all(o.due_date > datetime.utcnow() + timedelta(days=6) for o in fresh)
+
+
+def test_who_acknowledged_an_earlier_version_is_kept_after_a_major_version_asks_again(world):
+    with world.factory() as db:
+        d = doc(db)
+        d.status = "published"
+        life.ensure_acknowledgements(db, d, 1)
+        db.commit()
+        life.acknowledge(db, d, user(db, 6), signature_image=_png(), request=_request())
+        first = db.query(m.DocumentObligation).filter_by(user_id=6, status="done").one()
+        d.status = "approved"
+        life.on_status_changed(db, d, "published", "approved", 1)
+        d.current_version, d.status = "2.0", "published"
+        life.on_status_changed(db, d, "approved", "published", 1)
+        db.commit()
+        acks = life.state(db, d, user(db, 1))["acknowledgements"]
+        assert {p["user_id"]: (p["status"], p["version"]) for p in acks["people"]}[6] == ("pending", "2.0")
+        seal = db.get(m.ElectronicSignature, first.esign_id).image_sha256
+        assert [(h["user_id"], h["version"], h["status"], h["esign"]) for h in acks["history"]] == [(6, "1.0", "done", {"id": first.esign_id, "image_sha256": seal})]
+        assert acks["history"][0]["done_at"]
+
+
+def test_an_approved_document_is_announced_to_its_owner_and_to_whoever_may_publish_it(world):
+    with world.factory() as db:
+        participants(db, reviewers=(2,))
+        signoff.send_for_review(5, db, user(db, 1))
+        sign(db, 2)
+        sign(db, 4)                                                        # the approvers' role: approved
+        assert doc(db).status == "approved"
+        approved = lambda uid: [a for a in alerts(db, uid) if a.subject == "Approved: Access policy"]     # noqa: E731
+        assert approved(1) and approved(7) and not approved(6)             # nobody holds the right: the administrators are told
+    with world.factory() as db:
+        db.add(m.Role(id=12, tenant_id=1, name="Publishers"))
+        db.add(m.Permission(id=12, name="governance:policies:publish", resource="governance:policies", action="publish"))
+        db.add(m.RolePermission(role_id=12, permission_id=12))
+        db.add(m.UserRole(user_id=6, role_id=12, tenant_id=1))
+        db.add(m.UserRole(user_id=3, role_id=12, tenant_id=1, source="app:salesforce"))       # imported: holds nothing here
+        db.commit()
+        from grc.modules.governance.permissions import publisher_ids
+
+        assert publisher_ids(db) == {6}                                    # the holder, not the administrators any more
+
+
+# ── the published version stays in force while a new one is in review (the user's decisions of 2026-10-17) ──
+@pytest.fixture
+def noflush(world):
+    """Tenant sessions do not autoflush (grc/db.py): what the life cycle changes must be flushed before it looks again."""
+    return sessionmaker(bind=world.factory.kw["bind"], autoflush=False)
+
+
+def in_review(db, number="1.1"):
+    """The Access policy published at 1.0 (its text kept in a version row, everyone asked to acknowledge it), then edited to
+    ``number``, which goes to its reviewers."""
+    participants(db)
+    d = doc(db)
+    d.content = "Version one."
+    db.add(m.GovernanceDocumentVersion(document_id=5, version_number="1.0", title=d.title, content=d.content, status="superseded"))
+    d.status = "published"
+    life.on_status_changed(db, d, "approved", "published", 1)
+    db.commit()
+    d.content, d.current_version = "Version one, with a new rule.", number
+    db.add(m.GovernanceDocumentVersion(document_id=5, version_number=number, title=d.title, content=d.content, status="current"))
+    life.changed_after_review(db, d, "published", 1, f"Content edited (version {number})")
+    db.commit()
+    return d
+
+
+def test_a_new_version_in_review_keeps_the_published_one_acknowledgeable(noflush):
+    from grc.services import esign
+
+    with noflush() as db:
+        d = in_review(db)
+        assert (d.status, d.published_version) == ("pending_review", "1.0")
+        waiting = obligations(db, "acknowledgement", "pending")
+        assert len(waiting) == 7 and {o.document_version for o in waiting} == {"1.0"}           # the re-review withdrew nothing
+        assert all(db.get(m.CriticalTask, o.critical_task_id).status == "Open" for o in waiting)
+        life.acknowledge(db, d, user(db, 6), signature_image=_png(), request=_request())
+        ob = db.query(m.DocumentObligation).filter_by(user_id=6, kind="acknowledgement").one()
+        sig = db.get(m.ElectronicSignature, ob.esign_id)
+        in_force = db.query(m.GovernanceDocumentVersion).filter_by(version_number="1.0").one()
+        assert (ob.status, ob.document_version, sig.document_version) == ("done", "1.0", "1.0")
+        assert sig.content_sha256 == esign.document_fingerprint(in_force) != esign.document_fingerprint(doc(db))   # the text in force
+        assert db.query(m.DocumentAuditLog).filter_by(action="acknowledged").one().action_details == "Acknowledged version 1.0"
+        assert life.state(db, doc(db), user(db, 6))["document"]["in_force"] == "1.0"
+        signoff.reject_document(5, signoff.RejectRequest(comment="Not yet"), db, user(db, 3))
+        assert doc(db).status == "draft" and len(obligations(db, "acknowledgement", "pending")) == 6     # nor did the rejection
+        life.acknowledge(db, doc(db), user(db, 2))
+        assert db.query(m.DocumentObligation).filter_by(user_id=2, kind="acknowledgement").one().document_version == "1.0"
+
+
+def test_publishing_a_minor_version_keeps_the_waiting_people_and_their_due_dates(noflush):
+    with noflush() as db:
+        d = in_review(db)
+        life.acknowledge(db, d, user(db, 6))                                    # Uma acknowledged 1.0
+        late = db.query(m.DocumentObligation).filter_by(user_id=4, kind="acknowledgement").one()
+        late.due_date, late.escalation_level = datetime.utcnow() - timedelta(days=2), 1
+        db.commit()
+        late_id, due, told = late.id, late.due_date, len(alerts(db, 4))
+        d = doc(db)
+        d.status = "published"
+        life.on_status_changed(db, d, "pending_review", "published", 1)
+        db.commit()
+        assert {o.user_id: o.document_version for o in obligations(db, "acknowledgement", "pending")} == {u: "1.1" for u in (1, 2, 3, 4, 5, 7)}
+        late = db.get(m.DocumentObligation, late_id)
+        assert (late.status, late.due_date, late.escalation_level) == ("pending", due, 1)      # the same request, date and escalation
+        assert len(obligations(db, "acknowledgement")) == 7 and len(alerts(db, 4)) == told        # nobody asked again, no new alert
+
+
+def test_publishing_a_major_version_asks_the_waiting_people_again(noflush):
+    with noflush() as db:
+        in_review(db, "2.0")
+        first = db.query(m.DocumentObligation).filter_by(user_id=6, kind="acknowledgement").one()
+        first.due_date = datetime.utcnow() - timedelta(days=2)
+        db.commit()
+        d = doc(db)
+        d.status = "published"
+        life.on_status_changed(db, d, "pending_review", "published", 1)
+        db.commit()
+        rows = db.query(m.DocumentObligation).filter_by(user_id=6, kind="acknowledgement").order_by(m.DocumentObligation.id).all()
+        assert [(o.status, o.document_version) for o in rows] == [("cancelled", "1.0"), ("pending", "2.0")]
+        assert rows[0].critical_task_id is None and [t.source_entity_id for t in tasks(db) if t.assigned_user_ids == [6]] == [rows[1].id]
+        assert rows[1].due_date > datetime.utcnow() + timedelta(days=13)          # asked again from today
+        assert {o.user_id for o in obligations(db, "acknowledgement", "pending")} == {1, 2, 3, 4, 5, 6, 7}
+
+
+def test_archiving_ends_the_acknowledgements(noflush):
+    with noflush() as db:
+        d = in_review(db)
+        d.status = "archived"
+        life.on_status_changed(db, d, "pending_review", "archived", 1)
+        db.commit()
+        assert obligations(db, "acknowledgement", "pending") == [] and [t for t in tasks(db) if t.status == "Open"] == []
+        with pytest.raises(ValueError):
+            life.acknowledge(db, doc(db), user(db, 6))
+
+
+def test_people_who_join_during_a_review_are_asked_for_the_version_in_force(noflush):
+    with noflush() as db:
+        in_review(db)
+        db.add(m.GRCUser(id=9, username="new", email="new@cfsb.test", display_name="New Joiner"))
+        db.commit()
+        assert life.sweep(db)["asked"] == 1
+        assert db.query(m.DocumentObligation).filter_by(user_id=9, kind="acknowledgement").one().document_version == "1.0"
+
+
+def test_people_who_do_not_read_drafts_see_no_text_of_a_content_edit_in_the_timeline(noflush):
+    from grc.modules.governance.routers.versions import create_audit_log
+
+    with noflush() as db:
+        d = in_review(db)
+        create_audit_log(db=db, document_id=5, tenant_id=1, user_id=1, action="content_edited", field_changed="content",
+                         old_value="Version one.", new_value=d.content, action_details="Content edited")
+        db.commit()
+
+        def edit(uid):
+            return [(e["from"], e["to"]) for e in life.state(db, doc(db), user(db, uid))["timeline"] if e["kind"] == "content_edited"]
+        assert edit(6) == [(None, None)]                                        # Uma reads the version in force only
+        assert edit(1) == edit(2) == [("Version one.", "Version one, with a new rule.")]       # the owner, a reviewer
+
+
+def test_the_acknowledge_route_takes_the_version_in_force(noflush):
+    from grc.models import get_db
+    from grc.modules.governance.routers.document_lifecycle import router
+
+    app = FastAPI()
+    app.include_router(router)
+    db = noflush()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: user(db, 6)
+    client = TestClient(app)
+    in_review(db)
+    seen = client.get("/documents/5/lifecycle").json()
+    assert seen["document"]["in_force"] == "1.0" and [r["version"] for r in seen["mine"]] == ["1.0"]
+    newest = client.post("/documents/5/lifecycle/acknowledge", json={"version": "1.1"})
+    assert newest.status_code == 409 and "version in force" in newest.json()["detail"]
+    assert client.post("/documents/5/lifecycle/acknowledge", json={"version": "1.0"}).json()["mine"] == []
+    db.close()
+
+
+def test_an_attestation_campaign_shows_and_seals_the_version_in_force(noflush, monkeypatch, tmp_path):
+    from grc.modules.governance.routers import document_attestations as external
+    from grc.services import esign
+
+    monkeypatch.setattr(external, "_SIG_DIR", str(tmp_path))
+    with noflush() as db:
+        in_review(db)
+        db.add(m.DocumentAttestationCampaign(id=1, tenant_id=1, document_id=5, name="Access policy", status="active",
+                                             public_token="tok", allowed_email_domain="cfsb.test"))
+        db.commit()
+        req = SimpleNamespace(**vars(_request()), state=SimpleNamespace())
+        shown = external.public_get_by_token(token="tok", request=req, db=db)["document"]
+        assert (shown["version"], shown["title"], shown["doc_type"]) == ("1.0", "Access policy", "policy")
+        assert "Version one." in shown["html"] and "new rule" not in shown["html"]
+        body = external.PublicAckSubmit(name="Ali Raza", email="ali@cfsb.test", designation="Analyst", signature_data=_png())
+        external.public_acknowledge(token="tok", body=body, request=req, db=db)
+        sig = db.query(m.ElectronicSignature).filter_by(record_type="doc_attestation_ack").one()
+        in_force = db.query(m.GovernanceDocumentVersion).filter_by(version_number="1.0").one()
+        assert (sig.document_version, sig.content_sha256) == ("1.0", esign.document_fingerprint(in_force))

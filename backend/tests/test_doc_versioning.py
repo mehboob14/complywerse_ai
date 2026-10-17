@@ -149,6 +149,26 @@ def test_a_file_uploaded_to_the_library_starts_at_its_own_version_and_a_new_file
     assert doc.current_version == "5.1" and _versions(library.db, doc.id)[-1] == ("5.1", "minor", "current")
 
 
+def test_a_new_file_for_a_published_document_sends_it_back_to_review_in_a_new_round(library):
+    from datetime import datetime
+
+    first, later = word(library.tmp / "a.docx", paragraphs=["Revision: 1.0"]), word(library.tmp / "b.docx", paragraphs=["Revision: 2.0"])
+    library.db.add(m.GovernanceDocument(id=8, tenant_id=1, title="Access Policy", doc_type="policy", status="published", current_version="1.0",
+                                        file_name="a.docx", file_path=first, file_type="docx", owner_id=1, content=None))
+    library.db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=8, role_type="reviewer", target_type="user", target_id=1, added_by=1))
+    library.db.commit()
+    doc = library.db.get(m.GovernanceDocument, 8)
+    doc.signoff_round_at = datetime(2026, 1, 1)
+    library.db.commit()
+    with open(later, "rb") as f:
+        out = library.http.post("/documents/8/upload-file", files={"file": ("b.docx", f.read(), DOCX)})
+    assert out.status_code == 200, out.text
+    library.db.refresh(doc)
+    assert (doc.current_version, doc.status) == ("2.0", "pending_review") and doc.signoff_round_at > datetime(2026, 1, 1)
+    assert library.db.query(m.DocumentObligation).filter_by(document_id=8, kind="review", user_id=1, status="pending").count() == 1
+    assert library.db.query(m.DocumentAuditLog).filter_by(document_id=8, action="file_uploaded").one().action_details.endswith("; sent back to its reviewers")
+
+
 def test_editing_a_documents_text_in_the_library_is_numbered_by_the_change(library):
     library.db.add(m.GovernanceDocument(id=7, tenant_id=1, title="Access Policy", doc_type="policy", status="draft", current_version="1.4", content=RULES, owner_id=1))
     library.db.commit()

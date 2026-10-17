@@ -76,9 +76,10 @@ def test_a_short_history_is_shown_whole_in_the_order_it_was_made(world, monkeypa
 def test_restoring_a_version_keeps_the_persons_why_as_its_reason(world, monkeypatch):
     db = world.db
     doc = db.get(m.GovernanceDocument, 11)
-    first = _version(db, 11, "1.0", T0, content="# Access Control Standard\n\nThe first text.\n")
-    _version(db, 11, "1.1", T0 + timedelta(hours=1), status="current", content="# Access Control Standard\n\nA wrong edit.\n")
-    doc.current_version, doc.content = "1.1", "# Access Control Standard\n\nA wrong edit.\n"
+    first = _version(db, 11, "1.0", T0, content="# Access Control Standard\n\nAccess to systems is reviewed every year by the system owner and the CISO.\n")
+    wrong = "# Access Control Standard\n\nAccess to systems is reviewed every month by the system owner and the CISO.\n"     # a small change: minor
+    _version(db, 11, "1.1", T0 + timedelta(hours=1), status="current", content=wrong)
+    doc.current_version, doc.content = "1.1", wrong
     db.commit()
     monkeypatch.setattr(version_routes, "get_user_tenants", lambda user, db: [1])
     me = db.get(m.GRCUser, 1)
@@ -87,7 +88,7 @@ def test_restoring_a_version_keeps_the_persons_why_as_its_reason(world, monkeypa
                                              db=db, current_user=me)
     row = db.get(m.GovernanceDocumentVersion, out["new_version"]["id"])
     assert (row.version_number, row.change_reason, row.change_summary) == ("1.2", "The edit was wrong", "Rollback to version 1.0: The edit was wrong")
-    assert "The first text." in db.get(m.GovernanceDocument, 11).content
+    assert "every year" in db.get(m.GovernanceDocument, 11).content
 
     out = version_routes.rollback_to_version(document_id=11, version_id=first.id, rollback_data=None, db=db, current_user=me)      # no why given
     assert db.get(m.GovernanceDocumentVersion, out["new_version"]["id"]).change_reason == "Rollback from version 1.2 to version 1.0"

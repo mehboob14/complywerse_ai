@@ -1347,6 +1347,23 @@ def _sql_failure_answer(question: str) -> str:
     )
 
 
+# Governance documents for someone outside the document library (governance/permissions.can_read_library): no document or
+# statement hits, no SQL over the document tables. ponytail: a source-type and table-name match, and ComplyChat ignores every other
+# module's rights too; a per-module rights review is its own task.
+_DOCUMENT_SOURCES = ("governance_document", "policy_statement")
+_DOCUMENT_TABLES = re.compile(r"\bgrc_(?:governance_document|document_|policy_statement|policy_gap|policy_attestation|studio_)", re.IGNORECASE)
+
+
+def _readable_hits(hits: List[Dict[str, Any]], library: bool) -> List[Dict[str, Any]]:
+    if library:
+        return hits
+    return [h for h in hits if not str((h.get("payload") or {}).get("source_type") or "").startswith(_DOCUMENT_SOURCES)]
+
+
+def _touches_documents(sql: str) -> bool:
+    return bool(_DOCUMENT_TABLES.search(sql or ""))
+
+
 # ============================================================================
 # QDRANT VECTOR RAG HELPERS
 # ============================================================================
@@ -2652,6 +2669,7 @@ def try_qdrant_rag_answer(
     context_summary: str,
     uploaded_context: str,
     uploaded_files: Optional[List[Dict[str, Any]]] = None,
+    library: bool = True,
 ) -> Optional[Tuple[str, List[ChatSource]]]:
     if request_mode in {"framework_progress", "evidence_gaps"}:
         return None
@@ -2725,6 +2743,7 @@ def try_qdrant_rag_answer(
             limit=8,
             source_types=None,
         )
+    hits = _readable_hits(hits, library)
     if not hits:
         return None
 
@@ -2877,6 +2896,8 @@ async def ask_compliance_question(
             )
 
         tenant_ids = get_user_tenants(current_user, db)
+        from ..governance.permissions import can_read_library
+        library = can_read_library(db, current_user)
 
         if _is_policy_count_question(request.message):
             answer = _policy_count_answer(db, tenant_ids)
@@ -2931,6 +2952,7 @@ async def ask_compliance_question(
                 context_summary=context_summary,
                 uploaded_context=uploaded_context,
                 uploaded_files=uploaded_files,
+                library=library,
             )
         if vector_rag_result is not None:
             answer, vector_sources = vector_rag_result
@@ -3127,6 +3149,13 @@ Generate new SQL using ONLY the column names listed above.
                     current_offset=0
                 )
         
+        if not library and _touches_documents(sql_query):
+            logger.info("[SAFE-FAIL] SQL over governance documents for someone outside the document library")
+            answer = _sql_failure_answer(request.message)
+            store_chat_exchange(current_user.id, session_id, request.message, answer, offset=request.offset)
+            return ChatResponse(answer=answer, sources=[], framework_filter=request.framework, timestamp=datetime.utcnow().isoformat(),
+                                has_more=False, total_count=0, current_offset=0)
+
         # [SEARCH] STEP 3: Execute SQL query
         logger.info(f"[SEARCH] Executing SQL: {sql_query[:200]}...")
         
@@ -3278,7 +3307,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                             limit=request.limit
                         )
                     
-                    if retry_result and retry_result.get('sql'):
+                    if retry_result and retry_result.get('sql') and (library or not _touches_documents(retry_result['sql'])):
                         retry_sql = retry_result['sql']
                         logger.info(f"[REFRESH] RETRY SQL: {retry_sql[:150]}...")
                         

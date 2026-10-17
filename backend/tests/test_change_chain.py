@@ -193,6 +193,7 @@ def test_the_chain_lists_every_version_with_who_changed_what_the_stage_and_the_a
     _edit(db, 10, stamp, user_id=3, reason="Reviewed by: Rana", change_type="signoff", at=t0 + timedelta(hours=3, minutes=1))
     _audit(db, 10, 3, "signed", t0 + timedelta(hours=5), status="approved", old="pending_approval", details="Signed as Approved by")
 
+    library.me["id"] = 1                                                # Sam may not read the document; Olivia administers
     c = library.chain()
     assert c["enabled"] is True
     assert [v["number"] for v in c["versions"]] == ["1.0", "1.1", "1.2", "1.3"]
@@ -268,6 +269,27 @@ def test_the_redline_against_an_earlier_version_says_who_made_each_change(librar
     assert library.lib.get("/governance/documents/10/change-chain/redline?from=9999").status_code == 404
 
 
+def test_someone_who_reads_the_version_in_force_gets_the_chain_and_the_redline_up_to_it(library):
+    db = library.db
+    versions = _three_versions(db)                              # published at 1.0, then 1.1 and 1.2 written
+    doc = db.get(m.GovernanceDocument, 10)
+    doc.status = "pending_review"                               # the new version is on its way: 1.0 stays in force
+    db.add(m.Role(id=12, tenant_id=1, name="Document readers"))
+    db.add(m.Permission(id=12, name="governance:policies:view", resource="governance:policies", action="view"))
+    db.add(m.RolePermission(role_id=12, permission_id=12))
+    db.add(m.UserRole(user_id=2, role_id=12, tenant_id=1))       # Sam reads the library
+    db.commit()
+    assert doc.published_version == "1.0"
+    library.me["id"] = 2
+    c = library.chain()
+    assert [v["number"] for v in c["versions"]] == ["1.0"] and (c["document"]["version"], c["document"]["in_force"]) == ("1.0", "1.0")
+    red = library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[0].id}").json()
+    assert (red["to"]["id"], red["hunks"], [v["id"] for v in red["versions"]]) == (versions[0].id, [], [versions[0].id])
+    assert library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[0].id}&to={versions[2].id}").status_code == 404
+    library.me["id"] = 1
+    assert [v["number"] for v in library.chain()["versions"]] == ["1.0", "1.1", "1.2"]
+
+
 def test_the_changes_of_one_version_are_taken_back_from_the_document_as_it_is_now_unless_a_later_version_changed_them_again(library):
     db = library.db
     versions = _three_versions(db)                              # 1.0 baseline, 1.1 quarterly (Olivia), 1.2 scope (Sam)
@@ -302,15 +324,51 @@ def test_one_change_is_taken_back_as_a_new_version_and_a_published_document_goes
     doc = db.get(m.GovernanceDocument, 10)
     assert "All employees and contractors." in doc.content and "every quarter" in doc.content and "third parties" not in doc.content
     row = db.query(m.GovernanceDocumentVersion).filter_by(document_id=10, version_number="1.3").one()
-    assert row.change_type == "revert" and row.change_reason == "Scope was not agreed" and row.created_by == library.me["id"]
+    assert row.change_type == "minor" and row.change_reason == "Scope was not agreed" and row.created_by == library.me["id"]     # a kind, by the rule
+    assert row.change_summary == "Took back 1 change made since version 1.0: Scope was not agreed"
     assert row.change_set["items"][0]["origin"] == "revert" and row.change_set["reverts"]["since_version"] == "1.0"
     chain = library.chain()
     assert chain["versions"][-1]["origin_label"] == "Taken back" and chain["events"][-1]["kind"] == "status_changed"
     assert chain["versions"][-1]["reverts"] == {"since_version": "1.0", "changes": 1} and chain["versions"][-1]["restored_from"] is None
     assert db.query(m.DocumentAuditLog).filter_by(document_id=10, action="status_changed", new_value="pending_review").count() == 1
+    assert db.query(m.DocumentAuditLog).filter_by(document_id=10, action="content_edited", new_value="1.3").one().action_details.endswith(
+        "; sent back to its reviewers")
     # the same request again: the document was edited meanwhile, so it is refused
     stale = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[0].id, "hunks": [scope["id"]], "hash": red["hash"]})
     assert stale.status_code == 409
+
+
+def test_a_restore_and_a_take_back_are_major_or_minor_by_the_rule_and_keep_the_persons_reason(library, monkeypatch):
+    from grc.modules.governance.routers import versions as version_routes
+
+    db = library.db
+    versions = _three_versions(db)                              # 1.0, 1.1 quarterly, 1.2 scope (both minor)
+    monkeypatch.setattr(version_routes, "get_user_tenants", lambda user, db: [1])
+    me = db.get(m.GRCUser, library.me["id"])
+
+    def number(n):
+        return db.query(m.GovernanceDocumentVersion).filter_by(document_id=10, version_number=n).one()
+
+    # restoring 1.1 undoes a minor version and a few words: minor
+    out = version_routes.rollback_to_version(document_id=10, version_id=versions[1].id, db=db, current_user=me,
+                                             rollback_data=version_routes.VersionRollback(rollback_reason="Scope was not agreed"))
+    assert (out["new_version"]["version_number"], out["new_version"]["change_type"], out["new_version"]["change_reason"]) == ("1.3", "minor", "Scope was not agreed")
+
+    # a section is added (a major version), then taken back: removing a section is major too, with the person's why
+    _edit(db, 10, db.get(m.GovernanceDocument, 10).content + "\n## 5. Exceptions\n\nNo exception is allowed.\n", user_id=1, reason="Exceptions", change_type="major")
+    red = library.lib.get(f"/governance/documents/10/change-chain/redline?from={number('1.3').id}").json()
+    added = next(h for h in red["hunks"] if h["status"] == "inserted")
+    back = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": number("1.3").id, "hunks": [added["id"]],
+                                                                                  "hash": red["hash"], "reason": "Exceptions are in their own policy"})
+    assert back.status_code == 200 and back.json()["version"] == "3.0"
+    row = number("3.0")
+    assert (row.change_type, row.change_reason) == ("major", "Exceptions are in their own policy")
+    assert row.change_summary == "Took back 1 change made since version 1.3: Exceptions are in their own policy"
+    assert library.chain()["versions"][-1]["origin_label"] == "Taken back"                  # the chain still says how it was made
+
+    # restoring 2.0 undoes the take back, a major version: major, numbered as one
+    out = version_routes.rollback_to_version(document_id=10, version_id=number("2.0").id, db=db, current_user=me)
+    assert (out["new_version"]["version_number"], out["new_version"]["change_type"]) == ("4.0", "major")
 
 
 def test_a_sign_off_record_is_not_taken_back_and_a_file_that_cannot_be_read_cannot_be_taken_back_into(library):
@@ -384,7 +442,7 @@ def test_an_uploaded_word_original_keeps_its_history_and_a_change_is_taken_back_
     assert open(original, "rb").read() == before                              # the uploaded file is untouched
     rows = {v.version_number: v for v in db.query(m.GovernanceDocumentVersion).filter_by(document_id=20)}
     assert rows["1.0"].file_path == original and rows["1.1"].file_path == first_edit_file and rows["1.2"].file_path == doc.file_path
-    assert (rows["1.2"].status, rows["1.1"].status, rows["1.2"].change_type, rows["1.2"].change_reason) == ("current", "superseded", "revert", "The cycle was not agreed")
+    assert (rows["1.2"].status, rows["1.1"].status, rows["1.2"].change_type, rows["1.2"].change_reason) == ("current", "superseded", "minor", "The cycle was not agreed")
     assert rows["1.2"].change_set["items"][0]["origin"] == "revert" and rows["1.2"].change_set["reverts"]["since_version"] == "1.0"
     assert db.query(m.DocumentAuditLog).filter_by(document_id=20, action="status_changed", new_value="pending_review").count() == 2     # the studio save and this
 

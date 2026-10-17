@@ -117,7 +117,7 @@ def serialize_pending_approval(step: DocumentApprovalStep, document: GovernanceD
     }
 
 
-@router.get("/pending")
+@router.get("/pending", dependencies=[Depends(permissions.require_library_reader)])
 def list_pending_approvals(
     tenant_id: Optional[int] = None,
     include_delegated: bool = True,
@@ -165,7 +165,7 @@ def list_pending_approvals(
     }
 
 
-@router.get("/documents/{document_id}/steps")
+@router.get("/documents/{document_id}/steps", dependencies=[Depends(permissions.require_doc_reader)])
 def get_approval_steps(
     document_id: int,
     db: Session = Depends(get_db),
@@ -671,7 +671,7 @@ def escalate_approval(
     }
 
 
-@router.get("/documents/{document_id}/history")
+@router.get("/documents/{document_id}/history", dependencies=[Depends(permissions.require_doc_reader)])
 def get_workflow_history(
     document_id: int,
     action_filter: Optional[str] = None,
@@ -730,7 +730,7 @@ def get_workflow_history(
     }
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", dependencies=[Depends(permissions.require_library_reader)])
 def get_workflow_dashboard(
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -802,7 +802,7 @@ def get_workflow_dashboard(
     }
 
 
-@router.get("/overdue")
+@router.get("/overdue", dependencies=[Depends(permissions.require_library_reader)])
 def list_overdue_approvals(
     tenant_id: Optional[int] = None,
     skip: int = 0,
@@ -905,9 +905,12 @@ def get_approvers_for_step(step: WorkflowStep, document: GovernanceDocument, db:
             approver_user_ids.append(document.owner_id)
         elif approver.approver_type == "role" and approver.role_id:
             from ....models import UserRole
+            from ....routers.auth_router import PLATFORM_GRANT  # holders the platform gave the role, not connector-imported links
+
             role_users = db.query(UserRole).filter(
                 UserRole.role_id == approver.role_id,
-                UserRole.tenant_id == document.tenant_id
+                UserRole.tenant_id == document.tenant_id,
+                PLATFORM_GRANT,
             ).all()
             for ru in role_users:
                 approver_user_ids.append(ru.user_id)
@@ -1066,7 +1069,7 @@ def start_workflow(
     }
 
 
-@router.get("/documents/{document_id}/status")
+@router.get("/documents/{document_id}/status", dependencies=[Depends(permissions.require_doc_reader)])
 def get_workflow_status(
     document_id: int,
     db: Session = Depends(get_db),

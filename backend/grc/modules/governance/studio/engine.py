@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import re
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ....services.ai_gateway import claude_client, patterns
 from ....services.ai_gateway.errors import AIBlocked
@@ -323,6 +323,43 @@ def _asked(db, request) -> str:
     return request.content or ""
 
 
+# a request that asks for the internet in so many words, for the latest rule, or gives a link ("internet banking", "posting on the
+# internet", "the latest edits" and "online" alone do not)
+_LINK = re.compile(r"https?://|\bwww\.\w", re.I)
+_RULE_NOUN = r"(?:circulars?|guidance|guidelines?|regulations?|rules?|laws?|acts?|standards?|editions?|requirements?|frameworks?|directives?|notices?)"
+_WEB = re.compile(r"\b(?:internet|online|web)[- ](?:search\w*|research|sources?)\b"
+                  r"|\b(?:search\w*|look\w*|find|research\w*)\s+(?:(?:it|this|that|them|up|for it|on)\s+){0,2}(?:the\s+)?(?:internet|web|online)"
+                  r"(?=\s*(?:[.,;:!?)]|$)|\s+(?:for|about|and|to|if|whether|what|which)\b)"
+                  r"|\blatest\s+(?:[\w&'/.-]+\s+){0,3}?" + _RULE_NOUN + r"\b"
+                  r"|\bcurrent(?:ly)?\s+(?:in force|edition|version of (?:the\s+)?(?:law|act|regulation|standard|framework|circular|guidelines?))\b", re.I)
+_FROM_WEB = re.compile(r"\b(?:on|from|in|via|using)\s+the\s+(?:internet|web)\b(?!-)", re.I)       # counts only with a search or analysis
+_SEARCHING = re.compile(r"\b(?:search\w*|look\w*(?:\s+\w+)?\s+up|find|research\w*|gap analys[ie]s|against|compar\w*)\b", re.I)
+
+
+def _own_names(db, tenant_id: Optional[int]) -> List[str]:
+    """The organisation's own names (its name, legal entity and slug): a request that names it names no law."""
+    from ....models import Tenant
+
+    tenant = db.get(Tenant, tenant_id) if tenant_id else None
+    return [n for n in (tenant.name, tenant.legal_entity, tenant.slug) if n] if tenant is not None else []
+
+
+def wants_web(text: str, held: Callable[[], Sequence[str]]) -> bool:
+    """Whether a request is answered after a web search: it asks for the internet or the latest rule, gives a link, or names a law or
+    standard that is none of ``held()`` (the platform's frameworks, the session's references and the organisation's own names). Words
+    only, no AI call: every other request costs what it did."""
+    text = text or ""
+    if _LINK.search(text) or _WEB.search(text) or (_FROM_WEB.search(text) and _SEARCHING.search(text)):
+        return True
+    from . import auto_refs
+
+    named = auto_refs.rules_named(text)
+    if not named:
+        return False
+    names = held()
+    return not all(auto_refs.held(n, names) for n in named)
+
+
 def run_chat_turn(db, session_id: int, message_id: int) -> None:
     """Fill in the assistant message ``message_id`` of a session. Never raises: a failure is written on the message."""
     from ....models import StudioMessage, StudioReference, StudioSession
@@ -340,7 +377,8 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         from . import auto_refs, drafting
 
         # the platform frameworks and library documents the request names (in its own words: not the names of the files sent with it)
-        attached = auto_refs.attach_named(db, session, request.content.split(service.ATTACHED)[0])
+        own = request.content.split(service.ATTACHED)[0]
+        attached = auto_refs.attach_named(db, session, own)
         if attached:
             _stage(db, msg, "Attaching what you named from the platform", detail=auto_refs.summary(attached))
         answering = drafting.answers_a_draft(db, request)
@@ -360,6 +398,24 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
             raise TurnProblem("This document is too large to work on in one go. Open the part you want to change as its own document, or work on one section at a time.")
         if refs.total_chars(references) > refs.MAX_TOTAL_CHARS:
             raise TurnProblem("The references are too large together. Remove one, or narrow a framework to the parts you need.")
+        # the internet first when the request asks for it (only its own words are searched for: never the document or a reference);
+        # answers to Comply Agent's questions use what was found when they were asked
+        research, found, web_notes = {}, None, []
+        if request.answers:
+            asked = drafting._asked_message(db, request)
+            research = dict((asked.proposal or {}).get("research") or {}) if asked is not None else {}
+        elif wants_web(own, lambda: [f.name for f, _count in refs.available_frameworks(db)] + [r.title for r in references] + _own_names(db, session.tenant_id)):
+            from ..ai_drafting.tenant_context import build_tenant_context
+            from . import draft_prompts
+
+            task = draft_prompts.research_task(label=session.doc_type if session.doc_type in templates.DOC_TYPES else "document", title=session.title,
+                                               request=own, ctx=build_tenant_context(session.tenant_id, db), instructions=session.instructions or {})
+            text, sources, found = drafting.web_research(db, msg, task, label="Searching the internet", should_stop=stopped, system=draft_prompts.CHAT_RESEARCH_SYSTEM)
+            if found is not None:
+                research = {"text": text, "sources": sources}
+            else:
+                web_notes.append("Comply Agent could not search the internet just now, so this answer comes from what it already knows. "
+                                 "Check the editions of the laws and standards it names before you rely on them.")
         # the required sections steer a new document and one started from a template; an uploaded document is not held to them
         structure = templates.structure_for(db, session.doc_type, session.template_id) if (B.is_blank(blocks) or session.template_id) else None
         protected = protected_blocks(blocks)
@@ -379,7 +435,7 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         turn = prompts.TurnInput(kind=session.kind, doc_type=session.doc_type, title=session.title, instructions=session.instructions or {},
                                  blocks=blocks, request=request.content, references=references, structure=structure,
                                  protected=protected, revision=session.revision_no, history=_history(db, session, request.id), format_notes=file_notes,
-                                 numbers=numbers)
+                                 numbers=numbers, research=drafting._research_block(str(research.get("text") or ""), chat=True))
         big = B.is_blank(blocks) or bool(_GENERATE.search(request.content))
         result = claude_client.complete(
             use_case="governance.studio_chat", system=prompts.SYSTEM, messages=[{"role": "user", "content": prompts.render_user(turn)}],
@@ -392,21 +448,25 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
         offer = tidy_offer(session) if not asking and _FORMATTING.search(_asked(db, request)) else None
         if offer:
             out["ops"].append(offer)
-        if attached:
-            out["notes"].insert(0, auto_refs.note(attached))
+        out["notes"][:0] = ([auto_refs.note(attached)] if attached else []) + web_notes
         if result.truncated:
             out["notes"].append("The answer reached its length limit: the last change may be incomplete. Ask for the rest in a follow-up.")
         if not live.still_working(db, msg):
             raise claude_client.ClaudeStopped()
-        msg.content = out["reply"] or ("Before I change anything, a few choices decide what I write." if asking
-                                       else "I made changes for you to review." if out["ops"] else "")
+        # the pages it found are listed under the answer, as they are under the questions before a new document is written
+        msg.content = "\n\n".join(t for t in (out["reply"] or ("Before I change anything, a few choices decide what I write." if asking
+                                                                else "I made changes for you to review." if out["ops"] else ""),
+                                              drafting._sources_text(research.get("sources") or [])) if t)
         msg.proposal = {"ops": out["ops"], "base_revision": session.revision_no, "stats": out["stats"],
-                        "placeholders": len(out["placeholders"]), "requirements": out["requirements"], **({"ask_first": "chat"} if asking else {})}
+                        "placeholders": len(out["placeholders"]), "requirements": out["requirements"], **({"ask_first": "chat"} if asking else {}),
+                        **({"research": research} if research else {})}
         msg.references_used, msg.questions, msg.notes = out["references_used"], out["questions"], out["notes"]
         msg.base_revision = session.revision_no
-        msg.usage = {"input_tokens": result.usage.get("input_tokens", 0) + result.usage.get("cache_read_input_tokens", 0)
-                     + result.usage.get("cache_creation_input_tokens", 0), "output_tokens": result.usage.get("output_tokens", 0),
-                     "cached_tokens": result.usage.get("cache_read_input_tokens", 0)}
+        total = {"input_tokens": 0, "output_tokens": 0, "cached_tokens": 0, "calls": 0}
+        for call in (found, result):
+            if call is not None:
+                drafting._usage(total, call)
+        msg.usage = {k: total[k] for k in ("input_tokens", "output_tokens", "cached_tokens")}
         msg.status, msg.stage, msg.error, msg.updated_at = "done", None, None, datetime.utcnow()
         db.commit()
         if out["ops"] and (B.is_blank(blocks) or (session.settings or {}).get("auto_apply")):

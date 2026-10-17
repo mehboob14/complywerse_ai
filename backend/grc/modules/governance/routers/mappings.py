@@ -13,6 +13,8 @@ from ....models import (
     ParsedFrameworkControl, NormalizedControl, NormalizedControlLink, UploadedFramework,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
+from .. import permissions
+from ..permissions import require_doc_editor, require_doc_reader, require_library_reader
 from ..statement_auto_map import framework_scope
 
 router = APIRouter(prefix="/mappings", tags=["Governance - Mappings"])
@@ -82,6 +84,31 @@ def get_document_or_404(document_id: int, user_tenants: List[int], db: Session) 
             detail="Document not found"
         )
     return document
+
+
+# the right to change the record a document is linked to (the risk page asks risks:risk_register:edit, the risk list erm:risks:edit)
+_LINK_RIGHTS = {
+    "control": ("controls:control_library:edit",),
+    "risk": ("risks:risk_register:edit", "erm:risks:edit"),
+    "regulatory": ("compliance:frameworks:edit",),
+    "asset": ("assets:asset_inventory:edit",),
+}
+LINK_REFUSED = ("Only the document's owner, its author, someone allowed to edit documents or someone allowed to change the "
+                "linked record can change this document's links.")
+
+
+def ensure_may_link(db: Session, user: GRCUser, document: GovernanceDocument, kind: str) -> None:
+    """Link a document to a record or take the link off: who may change the document, or who may change that kind of record
+    (wildcards count, as in the menu) when they may read the document or it has a version in force."""
+    if permissions.can_edit(db, user, document):
+        return
+    from ....routers.reporting_router import _satisfies, _user_perm_names
+
+    granted = _user_perm_names(user, db)
+    if not any(_satisfies(granted, r) for r in _LINK_RIGHTS[kind]):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=LINK_REFUSED)
+    if not permissions.in_force_number(document):
+        permissions.ensure_reader(db, user, document)
 
 
 def _recommended_controls_for_document(
@@ -256,7 +283,7 @@ def _recommended_controls_for_document(
     return out
 
 
-@router.get("/document/{document_id}")
+@router.get("/document/{document_id}", dependencies=[Depends(require_doc_reader)])
 def get_document_mappings(
     document_id: int,
     db: Session = Depends(get_db),
@@ -352,7 +379,7 @@ def get_document_mappings(
     }
 
 
-@router.get("/document/{document_id}/coverage")
+@router.get("/document/{document_id}/coverage", dependencies=[Depends(require_doc_reader)])
 def get_document_control_coverage(
     document_id: int,
     framework_ids: Optional[str] = Query(
@@ -477,7 +504,7 @@ def _run_state(request: Request, document_id: int) -> dict:
     return state
 
 
-@router.post("/document/{document_id}/run")
+@router.post("/document/{document_id}/run", dependencies=[Depends(require_doc_editor)])
 def run_document_mapping(
     document_id: int,
     body: MappingRun,
@@ -541,7 +568,7 @@ def run_document_mapping(
     return {"status": "queued", "task_id": task_id, "statements": statements, "framework_scope_ids": scope["all"]}
 
 
-@router.get("/document/{document_id}/run-status")
+@router.get("/document/{document_id}/run-status", dependencies=[Depends(require_doc_reader)])
 def document_mapping_run_status(
     document_id: int,
     request: Request,
@@ -560,7 +587,7 @@ class RecommendedControlLink(BaseModel):
     link: bool = True  # True = confirm/lock the mapping; False = unlink/unlock
 
 
-@router.post("/document/{document_id}/recommended-controls/link")
+@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_editor)])
 def link_recommended_control(
     document_id: int,
     body: RecommendedControlLink,
@@ -616,7 +643,8 @@ def link_document_to_control(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "control")
+
     control = db.query(InternalControl).filter(
         InternalControl.id == link_data.internal_control_id,
         InternalControl.tenant_id.in_(user_tenants)
@@ -644,6 +672,8 @@ def link_document_to_control(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Control is already linked to '{existing_title}'"
             )
+        if existing_document is not None:             # moving it takes the link off the other document
+            ensure_may_link(db, current_user, existing_document, "control")
 
     relinked_from_document_id = None
     if control.source_document_id and control.source_document_id != link_data.document_id:
@@ -690,6 +720,7 @@ def unlink_document_from_control(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
+    ensure_may_link(db, current_user, document, "control")
 
     control.source_document_id = None
     control.updated_at = datetime.utcnow()
@@ -705,7 +736,8 @@ def link_document_to_risk(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "risk")
+
     risk = db.query(Risk).filter(
         Risk.id == link_data.risk_id,
         Risk.tenant_id.in_(user_tenants)
@@ -767,13 +799,14 @@ def unlink_document_from_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Risk link not found"
         )
-    
+
     if link.document.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
-    
+    ensure_may_link(db, current_user, link.document, "risk")
+
     db.delete(link)
     db.commit()
     return None
@@ -787,7 +820,8 @@ def link_document_to_regulatory(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "regulatory")
+
     framework = None
     framework_control = None
     
@@ -864,13 +898,14 @@ def unlink_document_from_regulatory(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Regulatory link not found"
         )
-    
+
     if link.document.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
-    
+    ensure_may_link(db, current_user, link.document, "regulatory")
+
     db.delete(link)
     db.commit()
     return None
@@ -884,7 +919,8 @@ def link_document_to_asset(
 ):
     user_tenants = get_user_tenants(current_user, db)
     document = get_document_or_404(link_data.document_id, user_tenants, db)
-    
+    ensure_may_link(db, current_user, document, "asset")
+
     asset = db.query(ITAsset).filter(
         ITAsset.id == link_data.asset_id,
         ITAsset.tenant_id.in_(user_tenants)
@@ -947,13 +983,14 @@ def unlink_document_from_asset(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Asset link not found"
         )
-    
+
     if link.document.tenant_id not in user_tenants:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this document"
         )
-    
+    ensure_may_link(db, current_user, link.document, "asset")
+
     db.delete(link)
     db.commit()
     return None
@@ -1169,7 +1206,7 @@ def get_documents_by_framework(
     }
 
 
-@router.get("/statistics")
+@router.get("/statistics", dependencies=[Depends(require_library_reader)])
 def get_mapping_statistics(
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),

@@ -126,7 +126,8 @@ def test_an_edited_statement_is_written_into_the_word_file_and_makes_the_next_ve
         assert [(v.version_number, v.status) for v in versions] == [("1.0", "superseded"), ("1.1", "current")]
         assert versions[0].file_path == world.path and versions[1].file_path == doc.file_path
         assert "PS-0005-001" in versions[1].change_summary and versions[1].change_reason.startswith("Annual")
-        assert db.query(m.DocumentAuditLog).filter_by(document_id=5, action="statements_written_to_document").count() == 1
+        assert db.query(m.DocumentAuditLog).filter_by(document_id=5, action="statements_written_to_document").one().action_details.endswith(
+            "; sent back to its reviewers")
 
         assert doc_sync.state(db, doc)["pending"] == []                           # in step again, and still found in the new file
         assert statement(db, "PS-0005-001").source_match == "exact"

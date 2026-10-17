@@ -141,7 +141,7 @@ class _Watcher:
         kind = getattr(event, "type", "")
         if kind == "content_block_start":
             block = getattr(getattr(event, "content_block", None), "type", "")
-            phase = ("thinking" if block in ("thinking", "redacted_thinking") else "searching" if block in ("server_tool_use", "web_search_tool_result")
+            phase = ("thinking" if block in ("thinking", "redacted_thinking") else "searching" if block in ("server_tool_use",) + _WEB_RESULTS
                      else "writing")
             if phase != self.phase:
                 self.report(phase, stream)
@@ -159,20 +159,25 @@ def _query(block) -> Optional[str]:
     return str(given.get("query") or "").strip() or None
 
 
+_WEB_RESULTS = ("web_search_tool_result", "web_fetch_tool_result")
+
+
 def _found(content) -> List[Dict[str, str]]:
-    """The pages a web-searched answer cites, else the pages its searches returned: {url, title}, each once."""
-    cited, returned = [], []
+    """The pages a web-fetched answer opened, then the pages it cites, else the pages its searches returned: {url, title}, each once."""
+    fetched, cited, returned = [], [], []
     for b in content:
         kind = getattr(b, "type", "")
         if kind == "text":
-            cited += [c for c in getattr(b, "citations", None) or [] if getattr(c, "url", None)]
+            cited += [(c.url, getattr(c, "title", "")) for c in getattr(b, "citations", None) or [] if getattr(c, "url", None)]
         elif kind == "web_search_tool_result" and isinstance(getattr(b, "content", None), list):
-            returned += [r for r in b.content if getattr(r, "url", None)]
+            returned += [(r.url, getattr(r, "title", "")) for r in b.content if getattr(r, "url", None)]
+        elif kind == "web_fetch_tool_result" and getattr(getattr(b, "content", None), "type", "") == "web_fetch_result":
+            fetched.append((b.content.url, getattr(getattr(b.content, "content", None), "title", "")))      # an error block opened nothing
     out, seen = [], set()
-    for page in cited or returned:
-        if page.url not in seen:
-            seen.add(page.url)
-            out.append({"url": page.url, "title": (getattr(page, "title", "") or page.url).strip()})
+    for url, title in fetched + (cited or returned):
+        if url not in seen:
+            seen.add(url)
+            out.append({"url": url, "title": (title or url).strip()})
     return out
 
 
@@ -306,7 +311,7 @@ def complete(*, use_case: str, system: Union[str, List[dict], None], messages: L
     """One guarded call. ``system`` is text or text blocks, ``messages`` are Messages-API turns whose content is text.
     ``schema`` (a JSON schema) makes the answer structured and is returned parsed in ``Result.data``.
     ``on_progress`` is called on this thread while the answer arrives (see ``Progress``): to show it, never to act on it.
-    ``tools`` are the provider's own tools (web search): ``Result.text`` is then the answer written after the last search, with
+    ``tools`` are the provider's own tools (web search, web fetch): ``Result.text`` is then the answer written after the last search, with
     ``searches`` and ``sources``. A schema cannot go with them (citations and structured answers do not mix).
     ``should_stop`` is asked before the call and at every event of the answer; True abandons the call (``ClaudeStopped``).
 
@@ -358,8 +363,8 @@ def complete(*, use_case: str, system: Union[str, List[dict], None], messages: L
         _record(response=message, model=model, started_at=started, gw=gw, payload=_payload(gw, kwargs, as_written))
         raise ClaudeRefused(category)
     content = list(message.content)
-    if tools:       # the answer is what was written after the last search ("I'll search for …" before it is not)
-        last = max((i for i, b in enumerate(content) if getattr(b, "type", "") == "web_search_tool_result"), default=-1)
+    if tools:       # the answer is what was written after the last search or page opened ("I'll search for …" before it is not)
+        last = max((i for i, b in enumerate(content) if getattr(b, "type", "") in _WEB_RESULTS), default=-1)
         content = [b for b in content[last + 1:] if getattr(b, "type", None) == "text"] or content
     text = "".join(getattr(b, "text", "") for b in content if getattr(b, "type", None) == "text")
     truncated = stop == "max_tokens"        # a "pause_turn" (the provider's own search loop reached its limit) keeps what was written

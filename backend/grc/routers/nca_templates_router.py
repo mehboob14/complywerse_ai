@@ -838,9 +838,12 @@ def compare_with_document(
     ).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    from ..modules.governance.permissions import ensure_reader, version_for
 
+    ensure_reader(db, user, doc)
     template_content = _extract_template_text(template_id)
-    document_content = (doc.content or "").strip() or "(empty document)"
+    # as the person reads it: staff the version in force while a newer one is on its way
+    document_content = ((version_for(db, user, doc) or doc).content or "").strip() or "(empty document)"
 
     gap_analysis: Optional[Dict[str, Any]] = None
 

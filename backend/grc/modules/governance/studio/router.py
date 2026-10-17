@@ -14,7 +14,7 @@ from ....models import (GRCUser, GovernanceDocument, StudioAsset, StudioMessage,
                         UploadedFramework, get_db)
 from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
-from ..permissions import is_admin as _is_admin
+from ..permissions import is_admin as _is_admin, visible_filter
 from . import blocks as B
 from . import assets, checks, exporters, gate, jobs, service, templates
 from . import references as refs
@@ -43,8 +43,8 @@ def _message(db: Session, s: StudioSession, message_id: int) -> StudioMessage:
 
 
 def _problem(exc: Exception) -> HTTPException:
-    code = (status.HTTP_409_CONFLICT if isinstance(exc, service.Conflict) else status.HTTP_403_FORBIDDEN if isinstance(exc, service.Forbidden)
-            else status.HTTP_400_BAD_REQUEST)
+    code = (status.HTTP_409_CONFLICT if isinstance(exc, service.Conflict)
+            else status.HTTP_403_FORBIDDEN if isinstance(exc, (service.Forbidden, refs.Refused)) else status.HTTP_400_BAD_REQUEST)
     return HTTPException(status_code=code, detail=str(exc))
 
 
@@ -121,13 +121,13 @@ class CompareIn(BaseModel):
 class MoveIn(BaseModel):
     title: Optional[str] = None
     doc_type: Optional[str] = None
-    classification: str = "internal"
+    classification: Optional[str] = None           # the session's setup, else internal, when not given
     parent_document_id: Optional[int] = None
     framework_ids: Optional[List[int]] = None
     description: Optional[str] = None
     owner_id: Optional[int] = None                 # the person moving it, when not given
     department_id: Optional[int] = None
-    review_cycle_months: int = 12
+    review_cycle_months: Optional[int] = None      # the session's setup, else 12, when not given
     effective_date: Optional[datetime] = None
     next_review_date: Optional[datetime] = None    # the effective date (or today) + the review cycle, when not given
 
@@ -178,8 +178,11 @@ def get_status(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
 
 @router.get("/documents", dependencies=[Depends(require_studio)])
 def pick_documents(q: str = "", limit: int = Query(30, le=100), db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    """Library documents to use as a reference or to open."""
+    """Library documents to use as a reference or to open (those the person may read)."""
     query = db.query(GovernanceDocument).filter(GovernanceDocument.status != "archived")
+    visible = visible_filter(db, user)
+    if visible is not None:
+        query = query.filter(visible)
     if q.strip():
         query = query.filter(GovernanceDocument.title.ilike(f"%{q.strip()}%"))
     rows = query.order_by(GovernanceDocument.updated_at.desc()).limit(limit).all()
@@ -277,7 +280,7 @@ def delete_template(template_id: int, db: Session = Depends(get_db), user: GRCUs
 def list_sessions(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     rows = (db.query(StudioSession).filter(StudioSession.created_by == user.id, StudioSession.status != "archived")
             .order_by(StudioSession.updated_at.desc()).limit(100).all())
-    return {"items": [service.session_view(db, s, content=False) for s in rows]}
+    return {"items": [service.session_view(db, s, content=False, user=user) for s in rows]}
 
 
 @router.post("/sessions", dependencies=[Depends(require_studio)])
@@ -289,7 +292,7 @@ def create_session(body: SessionIn, db: Session = Depends(get_db), user: GRCUser
                                    document_id=body.document_id, instructions=body.instructions)
     except service.StudioError as exc:
         raise _problem(exc)
-    return service.session_view(db, s)          # a new document waits for the person's request: nothing is written on its own
+    return service.session_view(db, s, user=user)          # a new document waits for the person's request: nothing is written on its own
 
 
 @router.post("/sessions/upload", dependencies=[Depends(require_studio)])
@@ -297,39 +300,45 @@ async def create_session_from_file(file: UploadFile = File(...), title: str = Fo
                                    classification: str = Form("internal"), description: Optional[str] = Form(None),
                                    owner_id: Optional[int] = Form(None), department_id: Optional[int] = Form(None),
                                    review_cycle_months: int = Form(12), effective_date: Optional[datetime] = Form(None),
-                                   next_review_date: Optional[datetime] = Form(None),
+                                   next_review_date: Optional[datetime] = Form(None), parent_document_id: Optional[int] = Form(None),
                                    db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """A file opened in the studio goes into the library at once, with the details the person confirmed (read from the file first:
     POST /governance/documents/read-details)."""
     from ..doc_details import check_details
 
     try:
-        check_details(db, owner_id=owner_id, department_id=department_id, review_cycle_months=review_cycle_months)
+        check_details(db, owner_id=owner_id, department_id=department_id, review_cycle_months=review_cycle_months,
+                      parent_document_id=parent_document_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     data = await file.read()
     details = {"classification": classification, "description": description, "owner_id": owner_id, "department_id": department_id,
-               "review_cycle_months": review_cycle_months, "effective_date": effective_date, "next_review_date": next_review_date}
+               "review_cycle_months": review_cycle_months, "effective_date": effective_date, "next_review_date": next_review_date,
+               "parent_document_id": parent_document_id}
     try:
         s = service.create_session(db, user, kind="upload", title=title, doc_type=doc_type, upload=(file.filename or "document", data), details=details)
     except service.StudioError as exc:
         raise _problem(exc)
-    return service.session_view(db, s)
+    return service.session_view(db, s, user=user)
 
 
 @router.get("/sessions/{session_id}", dependencies=[Depends(require_studio)])
 def get_session(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    s = _session(db, session_id, user)
-    s.last_opened_at = service._now()
+    return service.session_view(db, _session(db, session_id, user), user=user)     # reads only: the page says it was opened (POST …/opened)
+
+
+@router.post("/sessions/{session_id}/opened", dependencies=[Depends(require_studio)])
+def session_opened(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
+    _session(db, session_id, user).last_opened_at = service._now()
     db.commit()
-    return service.session_view(db, s)
+    return {"ok": True}
 
 
 @router.patch("/sessions/{session_id}", dependencies=[Depends(require_studio)])
 def patch_session(session_id: int, body: SessionPatch, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     s = _session(db, session_id, user)
     service.update_session(db, s, body.model_dump(exclude_none=True))
-    return service.session_view(db, s, content=False)
+    return service.session_view(db, s, content=False, user=user)
 
 
 @router.get("/sessions/{session_id}/setup", dependencies=[Depends(require_studio)])
@@ -361,8 +370,24 @@ def put_content(session_id: int, body: ContentIn, db: Session = Depends(get_db),
 @router.post("/sessions/{session_id}/references", dependencies=[Depends(require_studio)])
 def add_reference(session_id: int, body: ReferenceIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     s = _session(db, session_id, user)
+    # a framework is attached once: the same choice again is refused while it is in use, another part of it (say controls about a
+    # topic after setup attached all of it) becomes that reference's choice
+    olds = (db.query(StudioReference).filter(StudioReference.session_id == s.id, StudioReference.kind == "framework",
+                                             StudioReference.source_id == body.source_id).order_by(StudioReference.id).all()
+            if body.kind == "framework" and body.source_id else [])
+    included = {r.id: r.include for r in olds}
     try:
         ref = refs.attach(db, s, body.kind, source_id=body.source_id, scope=body.scope, template_id=body.template_id)
+        if included.get(ref.id):
+            db.rollback()
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="This framework is already attached.")
+        if olds and ref.id not in included:
+            old = olds[0]
+            for field in ("title", "source_label", "scope", "text", "char_count", "truncated"):
+                setattr(old, field, getattr(ref, field))
+            old.include = True
+            db.delete(ref)
+            ref = old
         db.commit()
     except refs.ReferenceProblem as exc:
         db.rollback()
@@ -535,7 +560,8 @@ def _check_context(db: Session, s: StudioSession) -> Dict[str, Any]:
 
     ins = s.instructions or {}
     logo_ok = bool(ins.get("logo_asset_id") and db.get(StudioAsset, ins["logo_asset_id"]))
-    return {"structure": templates.structure_for(db, s.doc_type, s.template_id) if (s.template_id or s.doc_type in templates.DOC_TYPES) else None,
+    # the required sections are those of the template the document was started from: an uploaded or library document has its own
+    return {"structure": templates.structure_for(db, s.doc_type, s.template_id) if s.template_id else None,
             "instructions": ins, "title": s.title, "logo_ok": logo_ok}
 
 
@@ -680,7 +706,7 @@ def compare(session_id: int, body: CompareIn, db: Session = Depends(get_db), use
         if doc is None:
             raise HTTPException(status_code=404, detail="Document not found")
         try:
-            other, _ = refs.library_text(db, doc)
+            other, _, _ = refs.library_text(db, doc, user)        # refused unless the person may read it; as they read it
         except refs.ReferenceProblem as exc:
             raise _problem(exc)
         title = doc.title
@@ -730,7 +756,8 @@ def save_to_document(session_id: int, body: SaveIn, db: Session = Depends(get_db
         doc = service.save_to_document(db, s, user, change_reason=body.change_reason, force=body.force)
     except service.StudioError as exc:
         raise _problem(exc)
-    return {"document_id": doc.id, "version": doc.current_version, "status": doc.status}
+    row = service._version_row(db, doc, doc.current_version)
+    return {"document_id": doc.id, "version": doc.current_version, "status": doc.status, "change": row.change_type if row is not None else None}
 
 
 # ── logos ────────────────────────────────────────────────────────────────────

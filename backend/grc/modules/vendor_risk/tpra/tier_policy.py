@@ -26,6 +26,7 @@ from ....models import (
     Evidence, Role, TPRAEvidenceLink, TPRAMonitoringSignal, UserRole, Vendor, VendorAssessment,
     VendorQuestionnaireResponse, VendorQuestionnaireTemplate,
 )
+from ....routers.auth_router import PLATFORM_GRANT
 from . import customisation
 from . import intake as intake_answers
 from .builtin_templates import TIER_SUGGESTED_TEMPLATES
@@ -150,7 +151,7 @@ def approver_problem(db: Session, user, tier: str, policy: Dict[str, dict], is_a
     if not role or is_admin:
         return None
     holds = (db.query(UserRole.id).join(Role, Role.id == UserRole.role_id)
-             .filter(UserRole.user_id == user.id, Role.name == role).first())
+             .filter(UserRole.user_id == user.id, Role.name == role, PLATFORM_GRANT).first())
     return None if holds else f"A {_tier(tier)}-tier vendor must be approved by someone with the {role} role"
 
 

@@ -756,12 +756,15 @@ class WorkflowRuntime:
                         except Exception:
                             continue
                     if role_ids:
+                        from ....routers.auth_router import PLATFORM_GRANT  # holders the platform gave the role, not connector-imported links
+
                         role_users = (
                             db.query(UserRole.user_id)
                             .join(Role, Role.id == UserRole.role_id)
                             .filter(
                                 UserRole.tenant_id == instance.tenant_id,
                                 Role.id.in_(role_ids),
+                                PLATFORM_GRANT,
                             )
                             .distinct()
                             .all()

@@ -82,17 +82,26 @@ def ref_view(r) -> Dict[str, Any]:
     scope = r.scope or {}
     return {"id": r.id, "key": r.ref_key, "kind": r.kind, "title": r.title, "label": r.source_label, "source_id": r.source_id,
             "chars": r.char_count, "truncated": r.truncated, "include": r.include,
-            "scope": {k: scope.get(k) for k in ("mode", "domains", "count", "total") if k in scope} or None, "notes": scope.get("notes", [])}
+            "scope": {k: scope.get(k) for k in ("mode", "domains", "count", "total", "query") if k in scope} or None, "notes": scope.get("notes", [])}
 
 
-def session_view(db, s, *, content: bool = True) -> Dict[str, Any]:
+def session_view(db, s, *, content: bool = True, user=None) -> Dict[str, Any]:
     from ....models import GovernanceDocument, StudioReference
+    from ..permissions import can_edit, in_force_number
+    from ..routers.document_access import _unsaved
 
     rows = db.query(StudioReference).filter(StudioReference.session_id == s.id).order_by(StudioReference.id).all()
     blocks = B.parse(s.content)
     doc = db.get(GovernanceDocument, s.document_id) if s.document_id else None
     out = {"id": s.id, "title": s.title, "kind": s.kind, "doc_type": s.doc_type, "status": s.status, "document_id": s.document_id,
            "document_version": doc.current_version if doc is not None else None,          # the library document's own version
+           "document_status": doc.status if doc is not None else None,
+           # the version everyone else reads until the next one is published (the Save warning says so)
+           "document_version_in_force": in_force_number(doc) if doc is not None else None,
+           # only on the session's own page (not each row of the list): Save to library is for someone who may change that document
+           # (a reader's comparison is theirs to read, not to save), and the work (or a tidied Word file) Save to library would keep
+           **({"may_save": doc is None or user is None or can_edit(db, user, doc),
+               "unsaved_in_library": _unsaved(s) if doc is not None else False} if content else {}),
            "revision": s.revision_no, "base_label": s.base_label, "instructions": s.instructions or {}, "settings": s.settings or {},
            "template_id": s.template_id, "source": {"kind": s.source_kind, "name": s.source_name, "in_place": bool(s.source_kind == "docx" and s.native_map)},
            "references": [ref_view(r) for r in rows], "reference_chars": refs.total_chars(rows),
@@ -181,29 +190,35 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
         doc = db.get(GovernanceDocument, document_id) if document_id else None
         if doc is None:
             raise StudioError("That document was not found.")
+        try:
+            src, number = refs.read_as(db, doc, user)          # who may not read it is refused; staff get the version in force
+        except refs.Refused as exc:
+            raise Forbidden(str(exc)) from exc
         s.title, s.doc_type, s.document_id = doc.title, doc.doc_type or "policy", doc.id
-        file_type = (doc.file_type or "").lower().lstrip(".")
-        if not (doc.content or "").strip() and doc.file_path and os.path.exists(doc.file_path) and file_type in ("docx", "pdf"):
+        file_type = (src.file_type or "").lower().lstrip(".")
+        if not (src.content or "").strip() and src.file_path and os.path.exists(src.file_path) and file_type in ("docx", "pdf"):
             # a document that is its file (an uploaded Word or PDF): the studio works on a copy of the file, a Word file is edited in place
-            copy = _copy_into_studio(db, doc.file_path, doc.file_name or f"document.{file_type}")
+            copy = _copy_into_studio(db, src.file_path, src.file_name or f"document.{file_type}")
             try:
-                imported = import_file(copy, doc.file_name or copy, twin=True)
+                imported = import_file(copy, src.file_name or copy, twin=True)
             except ImportProblem as exc:
                 os.unlink(copy)
                 raise StudioError(str(exc)) from exc
             content, base = imported.markdown, imported.base_markdown if imported.base_markdown is not None else imported.markdown
-            s.source_kind, s.source_name, s.source_original_path, s.source_path = imported.kind, doc.file_name, copy, copy
+            s.source_kind, s.source_name, s.source_original_path, s.source_path = imported.kind, src.file_name, copy, copy
             if imported.native:
                 s.native_map, s.source_path = imported.native.get("map"), imported.native.get("path") or copy
-            s.settings = {"file_master": True, "library_file": doc.file_path}
-            base_label = f"{doc.title} v{doc.current_version or '1.0'}" + ("" if imported.base_markdown is None else " before its tracked changes")
-            summary = f"Opened from the library (v{doc.current_version or '1.0'})" + "".join(f" ({n})" for n in imported.notes[:1])
+            s.settings = {"file_master": True, "library_file": src.file_path}
+            base_label = f"{doc.title} v{number}" + ("" if imported.base_markdown is None else " before its tracked changes")
+            summary = f"Opened from the library (v{number})" + "".join(f" ({n})" for n in imported.notes[:1])
         else:
             try:
-                content, notes = refs.library_text(db, doc)
+                content, _notes = refs.text_of(src)
             except refs.ReferenceProblem as exc:
                 raise StudioError(str(exc)) from exc
-            base, base_label, summary = content, f"{doc.title} v{doc.current_version or '1.0'}", f"Opened from the library (v{doc.current_version or '1.0'})"
+            base, base_label, summary = content, f"{doc.title} v{number}", f"Opened from the library (v{number})"
+        if src is not doc:          # the version in force, read instead of a newer one: an export names its number
+            s.settings = {**(s.settings or {}), "version_read": number}
     elif kind == "upload":
         if not upload:
             raise StudioError("Choose a file to open.")
@@ -260,7 +275,7 @@ def _register_upload(db, s, user, path: str, name: str, content: str, details: O
     doc = GovernanceDocument(tenant_id=tenant.id, title=s.title, doc_type=s.doc_type or "policy", classification=d.get("classification") or "internal",
                              description=d.get("description") or None, owner_id=d.get("owner_id") or user.id, author_id=user.id,
                              department_id=d.get("department_id"), review_cycle_months=d.get("review_cycle_months") or 12,
-                             effective_date=d.get("effective_date"), next_review_date=d.get("next_review_date"),
+                             effective_date=d.get("effective_date"), next_review_date=d.get("next_review_date"), parent_document_id=d.get("parent_document_id"),
                              framework_ids=[], applicable_framework_ids=[], status="draft", current_version=version,
                              content=None if is_file else content, **files)
     schedule(doc)
@@ -897,16 +912,20 @@ def _keep_original(upload: Tuple[str, str], folder: str) -> Dict[str, Any]:
     return {"file_name": name, "file_path": kept, "file_size": os.path.getsize(kept), "file_type": os.path.splitext(name)[1].lstrip(".").lower() or "docx"}
 
 
-def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optional[str] = None, classification: str = "internal",
+def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optional[str] = None, classification: Optional[str] = None,
                     parent_document_id: Optional[int] = None, framework_ids: Optional[List[int]] = None, description: Optional[str] = None,
-                    owner_id: Optional[int] = None, department_id: Optional[int] = None, review_cycle_months: int = 12,
+                    owner_id: Optional[int] = None, department_id: Optional[int] = None, review_cycle_months: Optional[int] = None,
                     effective_date: Optional[datetime] = None, next_review_date: Optional[datetime] = None):
-    """Make the session's document a library document (draft, version 1.0). The session then edits that document."""
+    """Make the session's document a library document (draft, version 1.0). The session then edits that document. The classification
+    and review cycle not given are the session's setup (else internal, every 12 months)."""
     from ..doc_details import schedule
     from ....models import GovernanceDocument
     from ..action_logger import log_governance_action
     from ..routers.versions import create_audit_log
+    from .setup import review_months
 
+    classification = classification or str((s.instructions or {}).get("classification") or "").strip().lower() or "internal"
+    review_cycle_months = review_cycle_months or review_months(s.instructions)
     if s.document_id:
         raise StudioError("This document is already in the library.")
     if not (s.content or "").strip():
@@ -1039,15 +1058,16 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
                                             summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
     db.flush()
     # edited text is reviewed again: approved or published, and also while in review or approval (a new round)
-    sent = doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"Edited in the AI Studio (version {new_version}), so it needs approving again")
+    doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"Edited in the AI Studio (version {new_version}), so it needs approving again")
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="content_edited",
                      action_details=f"Edited in the AI Studio; version {new_version}" + (f". {change_reason}" if change_reason else "")
-                     + ("; sent back to review" if sent else "; it is a draft again" if doc.status != old_status else ""),
+                     + doc_lifecycle.outcome(old_status, doc.status),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     row = _version_row(db, doc, new_version)
     if row is not None:
         _record_change_set(db, s, row, old_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
+    s.settings = {k: v for k, v in (s.settings or {}).items() if k != "version_read"}       # it holds the newest version now
     db.commit()
     return doc
 
@@ -1092,7 +1112,8 @@ def version_after_accept(db, s, user, accepted: int) -> Optional[Dict[str, Any]]
 def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary: str, reason: Optional[str], done: str, ext: str = "docx",
                        audit_action: str = "content_edited"):
     """Make ``data`` (a Word file, or a file of type ``ext``) the next version of a document that is its file, and its file. The file it
-    replaces stays as the earlier version, and the original is kept first when the document has no versions yet. An approved or
+    replaces stays as the earlier version (put into its row when that row holds no file), and the original is kept first when the
+    document has no versions yet. An approved or
     published document goes back to review. ``done`` is what happened, as the history says it ("Edited in the AI Studio"). Does not
     commit. Returns ``(version row, version number, status before)``."""
     from ....models import GovernanceDocumentVersion
@@ -1113,6 +1134,9 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
                                          file_path=old_path, file_size=old_size, file_type=old_type, change_summary="Original document, before it was changed",
                                          status="superseded", created_by=user.id))
     else:
+        replaced = versions.filter(GovernanceDocumentVersion.version_number == old_version).order_by(GovernanceDocumentVersion.id.desc()).first()
+        if replaced is not None and not replaced.file_path and old_path:      # its file was put in place before its row held it
+            replaced.file_name, replaced.file_path, replaced.file_size, replaced.file_type = old_name, old_path, old_size, old_type
         versions.filter(GovernanceDocumentVersion.status == "current").update({"status": "superseded"})
     new_version = increment_version(old_version, "major" if change_type == "major" else "minor")
     row = GovernanceDocumentVersion(document_id=doc.id, version_number=new_version, change_type=change_type, title=doc.title, file_name=new_name, file_path=new_path,
@@ -1121,10 +1145,10 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
     db.flush()
     doc.file_name, doc.file_path, doc.file_size, doc.file_type = new_name, new_path, len(data), ext
     doc.current_version, doc.updated_at = new_version, _now()
-    sent = doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"{done} (version {new_version}), so it needs approving again")
+    doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"{done} (version {new_version}), so it needs approving again")
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action=audit_action,
                      action_details=f"{done}; the file was replaced by version {new_version}" + (f". {reason}" if reason else "")
-                     + ("; sent back to review" if sent else "; it is a draft again" if doc.status != old_status else ""),
+                     + doc_lifecycle.outcome(old_status, doc.status),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     return row, new_version, old_status
 
@@ -1187,7 +1211,7 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
                                                       summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
     _record_change_set(db, s, row, s.base_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
-    s.settings = {**{k: v for k, v in (s.settings or {}).items() if k != "file_changed"}, "library_file": doc.file_path}
+    s.settings = {**{k: v for k, v in (s.settings or {}).items() if k not in ("file_changed", "version_read")}, "library_file": doc.file_path}
     db.commit()
     reanchor(db, doc, user.id)
     return doc
@@ -1248,16 +1272,18 @@ def export_file(db, s, fmt: str, settings: Dict[str, Any], *, highlight: bool = 
     return exporters.export(s.content, fmt, highlight_placeholders=highlight, **settings), notes
 def export_settings(db, s, overrides: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """What the exporters need besides the Markdown: the entity name and logo from the session's instructions (the person may
-    override either for one export), and the document code, version and classification when the session is a library document."""
+    override either for one export), and the document code, version and classification when the session is a library document
+    (the version the session was read at: for staff the one in force, not a newer one on its way)."""
     from ....models import GovernanceDocument, StudioAsset
     from . import assets
 
     ins = {**(s.instructions or {}), **{k: v for k, v in (overrides or {}).items() if v is not None}}
     doc = db.get(GovernanceDocument, s.document_id) if s.document_id else None
     logo = db.get(StudioAsset, ins["logo_asset_id"]) if ins.get("logo_asset_id") and not ins.get("no_logo") else None
+    read = (getattr(s, "settings", None) or {}).get("version_read")
     return {"title": s.title, "entity_name": str(ins.get("entity_name") or ""), "logo_path": assets.path_of(logo) if logo else None,
             "logo_position": ins.get("logo_position") or "header-left", "doc_code": (doc.document_code if doc else "") or "",
-            "version": (doc.current_version if doc else "") or "", "classification": ((doc.classification if doc else ins.get("classification")) or ""),
+            "version": (read or (doc.current_version if doc else "")) or "", "classification": ((doc.classification if doc else ins.get("classification")) or ""),
             "watermark": watermark_text(ins)}
 
 

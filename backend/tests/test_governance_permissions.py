@@ -108,8 +108,9 @@ def test_every_route_that_changes_a_document_refuses_someone_who_may_not_change_
     d = doc(world)
     assert (d.title, d.status, d.content) == ("Access policy", "draft", TEXT)
     assert world.db.query(m.DocumentSignoffAssignment).count() == 0 and world.db.query(m.DocumentApprovalStep).count() == 0
-    # a reader may open a library document in the AI Studio to read and compare it; saving it back is refused (below)
-    assert world.http.post("/governance/studio/sessions", json={"kind": "library", "document_id": 5}).status_code == 200
+    # someone who may not read it cannot open it in the AI Studio either (the read rules are tested below)
+    r = world.http.post("/governance/studio/sessions", json={"kind": "library", "document_id": 5})
+    assert r.status_code == 403 and r.json()["detail"] == permissions.READ_REFUSED
     assert world.http.put("/governance/documents/404", json={"title": "x"}).status_code == 404       # a document that is not there
 
 
@@ -318,4 +319,89 @@ def test_the_details_a_save_is_given_are_checked_before_any_file_is_written(worl
     r = world.http.post("/governance/documents/upload-with-file", data={"title": "T", "doc_type": "policy", "owner_id": "999"},
                         files={"file": ("../../evil.pdf", b"%PDF-1.4", "application/pdf")})
     assert r.status_code == 400 and "owner" in r.json()["detail"]
+
+
+# ── who may read: the life cycle, the sign-off, the studio's access, signatures and attestation campaigns (2026-10-17) ──
+def _grant(db, uid, perm, rid=40):
+    db.add(m.Role(id=rid, tenant_id=1, name=f"Holders of {perm}"))
+    db.add(m.Permission(id=rid, name=perm, resource=perm.rsplit(":", 1)[0], action=perm.rsplit(":", 1)[1]))
+    db.add(m.RolePermission(role_id=rid, permission_id=rid))
+    db.add(m.UserRole(user_id=uid, role_id=rid, tenant_id=1))
+    db.commit()
+
+
+# every route of these routers that reads or acts on document 5 (signing and acknowledging keep their own checks after this one)
+DOCUMENT_READS = [
+    ("get", "/governance/documents/5/lifecycle", {}),
+    ("post", "/governance/documents/5/lifecycle/acknowledge", {"json": {}}),
+    ("get", "/governance/documents/5/signoff", {}),
+    ("post", "/governance/documents/5/signoff/sign", {"json": {"signature_image": "x"}}),
+    ("post", "/governance/documents/5/signoff/reject", {"json": {"comment": "no"}}),
+    ("get", "/governance/studio/documents/5/access", {}),
+]
+CAMPAIGNS = [
+    ("get", "/governance/document-attestations/coverage-map", {}),
+    ("get", "/governance/document-attestations/campaigns", {}),
+    ("post", "/governance/document-attestations/campaigns", {"json": {"document_id": 5}}),
+    ("get", "/governance/document-attestations/campaigns/1", {}),
+    ("patch", "/governance/document-attestations/campaigns/1", {"json": {"name": "Renamed"}}),
+    ("get", "/governance/document-attestations/campaigns/1/acknowledgments/1/signature", {}),
+    ("delete", "/governance/document-attestations/campaigns/1", {}),
+]
+
+
+def _signature_on(db, document):
+    from grc.services import esign
+    from test_esignature import _png
+
+    sig = esign.record(db, tenant_id=1, record_type="document_signoff", record_id=1, signature_image=_png(), meaning="Approved",
+                       signer_name="Ada Admin", content_sha256="0" * 64, document=document)
+    db.commit()
+    return sig.id
+
+
+def test_someone_who_may_not_read_a_document_gets_none_of_its_life_cycle_sign_off_or_signatures(world):
+    db = world.db
+    signed, loose = _signature_on(db, doc(world)), _signature_on(db, None)
+    for method, path, kw in DOCUMENT_READS + [("get", f"/governance/esignatures/{signed}", {}), ("get", f"/governance/esignatures/{signed}/image", {})]:
+        r = getattr(world.http, method)(path, **kw)
+        assert r.status_code == 403 and r.json()["detail"] == permissions.READ_REFUSED, (path, r.status_code, r.text)
+    assert world.http.get("/governance/documents/404/lifecycle").status_code == 404           # a missing document first
+    assert world.http.get(f"/governance/esignatures/{loose}").status_code == 200              # a signature on no document: its tenant
+    for path in ("/governance/documents/lifecycle/mine", "/governance/documents/signoff/my-pending", "/governance/documents/lifecycle/settings"):
+        assert world.http.get(path).status_code == 200, path                                   # personal queues stay open
+    assert db.query(m.DocumentObligation).count() == 0 and db.query(m.DocumentSignature).count() == 0
+
+
+def test_a_sign_off_naming_the_person_opens_the_life_cycle_the_sign_off_and_its_signatures(world):
+    db = world.db
+    signed = _signature_on(db, doc(world))
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="reviewer", target_type="user", target_id=SAM, added_by=OWNER))
+    db.commit()
+    for path in ("/governance/documents/5/lifecycle", "/governance/documents/5/signoff", "/governance/studio/documents/5/access",
+                 f"/governance/esignatures/{signed}"):
+        assert world.http.get(path).status_code == 200, path
+    assert world.http.get("/governance/documents/5/lifecycle").json()["document"]["in_force"] is None      # never published
+
+
+def test_attestation_campaigns_are_for_library_readers_and_a_draft_never_published_stays_hidden_from_them(world):
+    db = world.db
+    db.add(m.DocumentAttestationCampaign(id=1, tenant_id=1, document_id=5, name="Access policy", status="active",
+                                         public_token="tok", allowed_email_domain="cfsb.test"))
+    db.commit()
+    for method, path, kw in CAMPAIGNS:
+        r = getattr(world.http, method)(path, **kw)
+        assert r.status_code == 403 and r.json()["detail"] == permissions.LIBRARY_REFUSED, (path, r.status_code, r.text)
+    assert world.http.get("/governance/document-attestations/public/tok").status_code == 200          # the public link is untouched
+    _grant(db, SAM, "governance:policies:view")
+    assert world.http.get("/governance/document-attestations/campaigns").json()["count"] == 1
+    assert world.http.get("/governance/documents/5/lifecycle").status_code == 403                     # a draft that was never published
+    d = doc(world)
+    d.status = "published"
+    db.commit()
+    d.current_version, d.status = "1.1", "pending_review"                                             # a new version on its way
+    db.commit()
+    seen = world.http.get("/governance/documents/5/lifecycle")
+    assert seen.status_code == 200 and seen.json()["document"]["in_force"] == "1.0"
+    assert world.http.get("/governance/documents/5/signoff").status_code == 200
 

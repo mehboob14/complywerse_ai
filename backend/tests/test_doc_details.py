@@ -162,3 +162,31 @@ def test_the_studio_upload_and_move_to_the_library_save_the_details(world, monke
     moved = world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={"doc_type": "policy", "review_cycle_months": 6, "owner_id": 2}).json()
     doc = world.db.get(m.GovernanceDocument, moved["document_id"])
     assert (doc.owner_id, doc.review_cycle_months, doc.next_review_date) == (2, 6, _today() + relativedelta(months=6))
+
+
+def test_a_studio_upload_is_filed_under_the_parent_chosen_and_a_parent_that_does_not_exist_is_refused(world, monkeypatch):
+    monkeypatch.setattr("grc.modules.governance.routers.policy_parser.maybe_autoparse_document", lambda *a, **k: False)
+    file = ("retention.md", b"# Retention Standard\n\nKeep records.\n", "text/markdown")
+    up = world.http.post(world.api("/sessions/upload"), files={"file": file}, data={"doc_type": "standard", "parent_document_id": "10"})
+    assert up.status_code == 200, up.text
+    assert world.db.get(m.GovernanceDocument, up.json()["document_id"]).parent_document_id == 10
+    missing = world.http.post(world.api("/sessions/upload"), files={"file": file}, data={"doc_type": "standard", "parent_document_id": "999"})
+    assert missing.status_code == 400 and missing.json()["detail"] == "The parent document was not found."
+
+
+def test_a_documents_parent_must_exist_and_cannot_be_itself_or_filed_under_it(library):
+    ids = []
+    for title, parent in (("Policy", None), ("Standard", 0), ("Procedure", 1)):          # Procedure under Standard under Policy
+        made = library.http.post("/documents", json={"title": title, "doc_type": "policy", "content": f"# {title}\n",
+                                                     "parent_document_id": ids[parent] if parent is not None else None})
+        assert made.status_code == 201, made.text
+        ids.append(made.json()["id"])
+    policy, standard, procedure = ids
+    for parent, words in ((policy, "its own parent"), (standard, "filed under this document"), (procedure, "filed under this document"),
+                          (999, "parent document was not found")):
+        r = library.http.put(f"/documents/{policy}", json={"parent_document_id": parent})
+        assert r.status_code == 400 and words in r.json()["detail"], (parent, r.text)
+    assert library.db.get(m.GovernanceDocument, policy).parent_document_id is None
+    assert library.http.put(f"/documents/{procedure}", json={"parent_document_id": policy}).status_code == 200
+    assert library.http.put(f"/documents/{standard}", json={"parent_document_id": None, "title": "Standard"}).status_code == 200
+    assert library.db.get(m.GovernanceDocument, procedure).parent_document_id == policy

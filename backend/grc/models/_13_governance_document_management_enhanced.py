@@ -66,6 +66,12 @@ class GovernanceDocument(Base):
     signoff_round_at = Column(DateTime, nullable=True)
     # when everyone was asked to acknowledge it (published with the life cycle on): only then are people who join later asked too
     acks_everyone_at = Column(DateTime, nullable=True)
+    # the version published last: it stays in force while a newer one is on its way (modules/governance/permissions.in_force_number).
+    # Set by _stamp_published below whenever the document is published.
+    published_version = Column(String(50), nullable=True)
+    # the version published last, never cleared (a withdrawal clears only published_version): whoever does not see drafts reads it
+    # whenever the document is not published now and holds a newer number (permissions.in_force_row). Set by _remember_published.
+    last_published_version = Column(String(50), nullable=True)
 
     tenant = relationship("Tenant", back_populates="governance_documents")
     owner = relationship("GRCUser", back_populates="owned_gov_documents", foreign_keys=[owner_id])
@@ -109,6 +115,24 @@ def _new_signoff_round(doc, value, old, _initiator):
     back from approval to review starts one too (the reviewers who signed are asked again)."""
     if (value in _PENDING_SIGNOFF and old not in _PENDING_SIGNOFF) or (value == "pending_review" and old == "pending_approval"):
         doc.signoff_round_at = datetime.utcnow()
+
+
+@_event.listens_for(GovernanceDocument.status, "set")
+def _stamp_published(doc, value, _old, _initiator):
+    """Published by any path (Publish, bulk publish, a status set by hand, the older approvals engines, a workflow): that version is
+    the one in force until the next publication. A version not set yet is the column's default, 1.0."""
+    if value == "published":
+        doc.published_version = doc.current_version or "1.0"
+    elif value in ("archived", "expired", "exception_applied"):        # withdrawn: nothing is in force; reviving it starts clean
+        doc.published_version = None
+
+
+@_event.listens_for(GovernanceDocument.published_version, "set")
+def _remember_published(doc, value, _old, _initiator):
+    """Every number put in force (a publication by any path, or a new number of the published text) is the version published last;
+    it stays when a withdrawal clears what is in force, so a once-published document never serves newer, unapproved text."""
+    if value:
+        doc.last_published_version = value
 
 
 class GovernanceDocumentVersion(Base):
