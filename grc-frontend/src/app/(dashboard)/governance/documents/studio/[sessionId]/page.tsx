@@ -246,7 +246,10 @@ export default function StudioWorkspacePage() {
       if (r.accepted) {
         const v = r.library_version;
         toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success',
-                message: v?.saved ? `Saved as version ${v.version}${v.change ? ` (${v.change} change)` : ''}; the version before is kept in the history.` : session?.may_save !== false ? v?.why : undefined });   // `why` speaks of saving to the library
+                message: v?.saved ? (v.in_place
+                  ? `Saved in version ${v.version}${v.change ? ` (${v.change} change)` : ''}: it stays ${v.version} until it is published.`
+                  : `Saved as version ${v.version}${v.change ? ` (${v.change} change)` : ''}; the version before is kept in the history.`)
+                  : session?.may_save !== false ? v?.why : undefined });   // `why` speaks of saving to the library
         // marked from the revision before this accept (its own revision is the one after): a saved version has moved the
         // session's starting point to the accepted text, so "since the start" would show nothing
         // (offered when some can be marked: a spacing tidy is not in the text; the count is the toast's, all that were accepted)

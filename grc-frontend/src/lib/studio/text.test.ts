@@ -35,4 +35,8 @@ test('the toast after saving says the version, major or minor, and where the doc
   assert.match(savedNote({ version: '1.1', status: 'pending_approval' }, 'pending_approval').message!, /waiting for approval/);
   assert.match(savedNote({ version: '1.1', status: 'draft' }, 'pending_review').message!, /a draft again/);
   assert.equal(savedNote({ version: '1.1', status: 'published' }, 'published').message, undefined);
+  // not published yet: the change went into the version already on its way, which keeps its number
+  assert.deepEqual(savedNote({ version: '1.1', change: 'minor', status: 'draft', in_place: true }, 'draft'),
+    { title: 'Saved in version 1.1 (minor change)', message: 'It stays version 1.1 until it is published: changes made before then go into this version.' });
+  assert.match(savedNote({ version: '2.0', status: 'pending_review', in_place: true }, 'pending_review').message!, /in review again/);
 });

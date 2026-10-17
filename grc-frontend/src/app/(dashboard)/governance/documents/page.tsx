@@ -51,8 +51,6 @@ import type { RecommendedDoc } from './_recommendedDocsCatalog';
 import RichTextEditor from './_RichTextEditor';
 import { buildTemplateContent, buildArtifactContent } from './_templateContent';
 import { DocumentsWorkspace } from './_workspace/DocumentsWorkspace';
-import { DocumentDetailsFields, useDocumentDetails } from './_DetailsFields';
-import { detailsPayload } from './_detailsRead';
 
 interface TenantUser {
   id: number;
@@ -237,7 +235,6 @@ export default function GovernanceDocumentsPage() {
   const [statusFilter, setStatusFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [uploadingToDocumentId, setUploadingToDocumentId] = useState<number | null>(null);
   const [editingDocument, setEditingDocument] = useState<DocumentItem | null>(null);
   const [viewingDocument, setViewingDocument] = useState<DocumentItem | null>(null);
@@ -481,14 +478,6 @@ export default function GovernanceDocumentsPage() {
     mutationFn: (id: number) => governanceApi.deleteDocument(id),
     onSuccess: () => {
       invalidateDocumentQueries();
-    },
-  });
-
-  const uploadWithFileMutation = useMutation({
-    mutationFn: (formData: FormData) => governanceApi.uploadDocumentWithFile(formData),
-    onSuccess: () => {
-      invalidateDocumentQueries();
-      setIsUploadModalOpen(false);
     },
   });
 
@@ -791,7 +780,7 @@ export default function GovernanceDocumentsPage() {
         canCreate={canCreate}
         canEdit={canEdit}
         currentUserId={currentUserId}
-        onNewDocument={() => setIsUploadModalOpen(true)}
+        onNewDocument={() => router.push('/governance/documents/studio')}     // the AI Studio: upload, write, edit, compare
         onAIDraft={() => setAIDraftRequested(true)}
         onTemplates={() => setIsRecommendedOpen(true)}
         onEditDocument={(doc) => handleEdit(doc as unknown as DocumentItem)}
@@ -815,14 +804,6 @@ export default function GovernanceDocumentsPage() {
             }
           }}
           isLoading={createMutation.isPending || updateMutation.isPending}
-        />
-      )}
-
-      {isUploadModalOpen && (
-        <UploadDocumentModal
-          onClose={() => setIsUploadModalOpen(false)}
-          onSubmit={(formData) => uploadWithFileMutation.mutate(formData)}
-          isLoading={uploadWithFileMutation.isPending}
         />
       )}
 
@@ -1044,285 +1025,6 @@ export default function GovernanceDocumentsPage() {
       )}
 
     </div>
-  );
-}
-
-interface UploadDocumentModalProps {
-  onClose: () => void;
-  onSubmit: (formData: FormData) => void;
-  isLoading: boolean;
-}
-
-function UploadDocumentModal({ onClose, onSubmit, isLoading }: UploadDocumentModalProps) {
-  // title, type, classification, description, owner, department, review cycle and dates: read from the file when it is chosen
-  const details = useDocumentDetails();
-  const [formData, setFormData] = useState({
-    framework_ids: [] as number[],
-    applicable_framework_ids: [] as number[],
-  });
-  const [file, setFile] = useState<File | null>(null);
-  const take = (chosen: File) => {
-    if (!validateFile(chosen)) return;
-    setFile(chosen);
-    details.read(chosen);
-  };
-  const [dragActive, setDragActive] = useState(false);
-  const [fileError, setFileError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  const { data: frameworkOptions } = useQuery({
-    queryKey: ['document-modal-frameworks'],
-    queryFn: async () => {
-      const response = await apiClient.get('/framework-upload/upload');
-      const data = response.data;
-      const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
-      const filtered = (items as any[]).filter((f) =>
-        f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status),
-      );
-      // Dedup by name — global + tenant copies (or repeat uploads) otherwise
-      // show the same framework twice. Keep the most recent (highest id).
-      const byName = new Map<string, any>();
-      for (const f of filtered) {
-        const key = String(f.name || '').trim().toLowerCase();
-        const existing = byName.get(key);
-        if (!existing || (f.id || 0) > (existing.id || 0)) byName.set(key, f);
-      }
-      return Array.from(byName.values());
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  const validateFile = (file: File): boolean => {
-    const ext = file.name.split('.').pop()?.toLowerCase();
-    if (!ext || !ALLOWED_FILE_TYPES.includes(ext)) {
-      setFileError('Only PDF, Word (.doc, .docx), and Excel (.xls, .xlsx) files are allowed');
-      return false;
-    }
-    if (file.size > 50 * 1024 * 1024) {
-      setFileError('File size must be less than 50MB');
-      return false;
-    }
-    setFileError(null);
-    return true;
-  };
-
-  const handleDrag = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  }, []);
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      take(e.dataTransfer.files[0]);
-    }
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      take(e.target.files[0]);
-    }
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!file) {
-      setFileError('Please select a file');
-      return;
-    }
-
-    const data = new FormData();
-    data.append('file', file);
-    // title, doc_type, classification, description, owner_id, department_id, review_cycle_months, effective_date, next_review_date
-    for (const [key, value] of Object.entries(detailsPayload(details.form))) data.append(key, String(value));
-    if (formData.framework_ids.length > 0) {
-      // JSON-encoded so the backend can rehydrate the list with one
-      // parse call (more reliable than repeated form keys here).
-      data.append('framework_ids', JSON.stringify(formData.framework_ids));
-    }
-    // Left empty, the document is audited against its linked frameworks.
-    if (formData.applicable_framework_ids.length > 0) {
-      data.append('applicable_framework_ids', JSON.stringify(formData.applicable_framework_ids));
-    }
-
-    onSubmit(data);
-  };
-
-  const FileIcon = file ? getFileIcon(file.name.split('.').pop() || null) : Upload;
-
-  return (
-    <RightSlidePanel
-      isOpen={true}
-      onClose={onClose}
-      title="New Document"
-      width="w-full max-w-4xl"
-      footer={
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="upload-document-form"
-            disabled={isLoading || !file}
-            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Uploading...
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4" />
-                Create Document
-              </>
-            )}
-          </button>
-        </div>
-      }
-    >
-      <form id="upload-document-form" onSubmit={handleSubmit} className="space-y-4">
-        <div
-          className={`relative border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
-            dragActive
-              ? 'border-primary-500 bg-primary-500/10'
-              : file
-              ? 'border-green-500 bg-green-500/10'
-              : fileError
-              ? 'border-red-500 bg-red-500/10'
-              : 'border-[var(--color-border)] hover:border-[var(--color-base)]'
-          }`}
-          onDragEnter={handleDrag}
-          onDragLeave={handleDrag}
-          onDragOver={handleDrag}
-          onDrop={handleDrop}
-        >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.doc,.docx,.xls,.xlsx"
-              onChange={handleFileChange}
-              className="hidden"
-            />
-            
-            {file ? (
-              <div className="flex flex-col items-center gap-2">
-                <FileIcon className={`h-12 w-12 ${getFileTypeColor(file.name.split('.').pop() || null)}`} />
-                <p className="cw-text font-medium">{file.name}</p>
-                <p className="text-sm cw-text-muted">{formatFileSize(file.size)}</p>
-                <button
-                  type="button"
-                  onClick={() => setFile(null)}
-                  className="mt-2 text-sm text-red-400 hover:text-red-300"
-                >
-                  Remove file
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-col items-center gap-2">
-                <Upload className="h-12 w-12 cw-text-muted" />
-                <p className="cw-text font-medium">Drag and drop your file here</p>
-                <p className="text-sm cw-text-muted">or</p>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="cw-btn-primary"
-                >
-                  Browse Files
-                </button>
-                <p className="mt-2 text-xs cw-text-muted">
-                  Supported: PDF, Word (.doc, .docx), Excel (.xls, .xlsx) • Max 50MB
-                </p>
-              </div>
-            )}
-          </div>
-          
-          {fileError && (
-            <div className="flex items-center gap-2 text-red-400 text-sm">
-              <AlertCircle className="h-4 w-4" />
-              {fileError}
-            </div>
-          )}
-
-          <DocumentDetailsFields d={details} />
-
-          {/* Optional framework linkage — same field as the AI-draft and
-              manual-create flows so uploaded docs also surface in the
-              auditor portal under each linked framework. */}
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">
-              Linked Frameworks <span className="text-xs font-normal text-gray-500">(optional)</span>
-            </label>
-            <MultiSelectDropdown
-              title="Linked Frameworks"
-              items={(frameworkOptions || []).map((f: any) => ({
-                value: String(f.id),
-                label: f.name || `Framework ${f.id}`,
-              }))}
-              selectedValues={formData.framework_ids.map(String)}
-              onApply={(vals) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
-                }))
-              }
-              multiSelect={true}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              placeholder="Link to one or more frameworks…"
-              size="md"
-              forceSearch
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Linked documents appear under each framework&apos;s Documents tab in the auditor portal.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">
-              Applicable Frameworks <span className="text-xs font-normal text-gray-500">— audited against (optional)</span>
-            </label>
-            <MultiSelectDropdown
-              title="Applicable Frameworks"
-              items={(frameworkOptions || []).map((f: any) => ({
-                value: String(f.id),
-                label: f.name || `Framework ${f.id}`,
-              }))}
-              selectedValues={formData.applicable_framework_ids.map(String)}
-              onApply={(vals) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  applicable_framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
-                }))
-              }
-              multiSelect={true}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              placeholder="Frameworks this document must comply with…"
-              size="md"
-              forceSearch
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              The document&apos;s statements are mapped against these and the linked frameworks. Left empty, the
-              linked frameworks are used.
-            </p>
-          </div>
-
-      </form>
-    </RightSlidePanel>
   );
 }
 

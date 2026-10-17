@@ -372,6 +372,7 @@ export default function DocumentStudio() {
         {view === 'document' && (
           <DocumentViewerTab document={doc} htmlContent={htmlQ.data} htmlLoading={htmlQ.isLoading} docType={{ label: TYPE_LABEL[doc.doc_type] ?? doc.doc_type }}
             chainOn={lifecycleOn} trackedRange={trackedRange} variant="studio" canTakeBack={canEdit} reading={reading} onStopReading={() => setReading(null)}
+            onRead={(v: { id: number; number: string }) => { setTrackedRange(null); setReading(v); }}
             ackedVersion={ackedVersion} />
         )}
         {view === 'approvals' && (

@@ -443,7 +443,7 @@ export function DocumentDetailsPanel({ doc, docType, isOpen, onClose }: any) {
   );
 }
 
-export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, ackedVersion }: any) {
+export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, docType, chainOn, trackedRange, variant, canTakeBack = true, reading, onStopReading, onRead, ackedVersion }: any) {
   // variant 'studio': the AI Studio's document view draws the document at full height; its actions are in the view's top bar
   const studio = variant === 'studio';
   // reading ({id, number}): an earlier version shown as it was, its file as Word or the PDF draws it, else its text
@@ -490,8 +490,9 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   if (firstOpening.current == null && opening && ackKnown) firstOpening.current = opening.id;
   // picked: the person switched them on or off themselves (null: not yet)
   const [picked, setPicked] = useState<boolean | null>(trackedRange ? true : null);
-  const tracking = !reading && (picked ?? (studio && !!opening && ackKnown));
-  const deciding = studio && !!chainOn && !reading && picked === null && (chainQ.isLoading || !ackKnown);
+  // the document itself first; its changes are shown when the person asks for them (Tracked changes, See them marked)
+  const tracking = !reading && (picked ?? false);
+  const deciding = false;
   const [sinceRange, setSinceRange] = useState<{ from: number; to: number | null } | null>(null);
   useEffect(() => { if (trackedRange) { setPicked(true); setSinceRange(null); } }, [trackedRange]);
 
@@ -735,12 +736,30 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
           </div>
         )}
         {chainOn && !reading && !tracking && !deciding && doc?.id && <SinceApproved documentId={doc.id} onShow={(from) => { setSinceRange({ from, to: null }); setPicked(true); }} />}
-        {chainOn && !reading && (
-          <div className="flex justify-end">
-            <button onClick={() => { setPicked(!tracking); setSinceRange(null); }} aria-pressed={tracking} title="Show the document with its changes marked, who made each"
+        {chainOn && (
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {(chainQ.data?.versions?.length ?? 0) > 1 && (
+              <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+                Version
+                <select value={reading?.id ? String(reading.id) : 'current'} aria-label="Read a version of the document"
+                  onChange={(e) => {
+                    const pick = e.target.value;
+                    if (pick === 'current') { onStopReading?.(); return; }
+                    const v = chainQ.data?.versions.find((x: any) => String(x.id) === pick);
+                    if (v) { setPicked(false); onRead?.({ id: v.id, number: v.number }); }
+                  }}
+                  className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800">
+                  <option value="current">v{doc?.current_version || '1.0'} (current)</option>
+                  {[...(chainQ.data?.versions ?? [])].slice(0, -1).reverse().map((v: any) => (
+                    <option key={v.id} value={String(v.id)}>v{v.number}{v.kind === 'baseline' || v.origin === 'initial' ? ' (the original)' : ''}</option>
+                  ))}
+                </select>
+              </label>
+            )}
+            {!reading && <button onClick={() => { setPicked(!tracking); setSinceRange(null); }} aria-pressed={tracking} title="Show the document with its changes marked, who made each"
               className={`inline-flex items-center gap-1 rounded-md border px-2.5 py-1 text-xs ${tracking ? 'border-primary-600 bg-primary-50 font-semibold text-[#0b6b58]' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'}`}>
-              <GitCompare className="h-3.5 w-3.5" /> {tracking ? 'Hide changes' : 'Tracked changes'}
-            </button>
+              <GitCompare className="h-3.5 w-3.5" /> {tracking ? 'Hide changes' : 'Show changes'}
+            </button>}
           </div>
         )}
         <div className="rounded-xl border border-slate-200 bg-white p-4 sm:p-8">{renderReadBody(true)}</div>

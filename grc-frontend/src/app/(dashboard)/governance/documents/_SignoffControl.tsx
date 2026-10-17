@@ -27,6 +27,8 @@ export type SignoffSignature = {
 };
 export type Signoff = {
   status: string;
+  /** the review round shown; sent back with a decision, a newer round means the document changed */
+  round_at?: string | null;
   participants: { prepared_by?: Participant[]; reviewer?: Participant[]; approver?: Participant[] };
   signatures: SignoffSignature[];
   progress: { reviewer?: { signed: number; required: number }; approver?: { signed: number; required: number } };
@@ -131,6 +133,31 @@ export function AssigneeMultiSelect({
   );
 }
 
+export type SignoffChoice = { reviewers: Participant[]; approvers: Participant[] };
+export const NO_SIGNOFF: SignoffChoice = { reviewers: [], approvers: [] };
+
+/** Who reviews and who approves a document, chosen while it is uploaded or moved into the library. */
+export function ReviewerApproverFields({ value, onChange, tenantId }: { value: SignoffChoice; onChange: (v: SignoffChoice) => void; tenantId?: number }) {
+  const options = useAssigneeOptions(tenantId);
+  return (
+    <fieldset className="space-y-2">
+      <legend className="text-xs font-semibold text-[#26323d]">Who reviews and approves it</legend>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <AssigneeMultiSelect label="Reviewers" value={value.reviewers} onChange={(reviewers) => onChange({ ...value, reviewers })} options={options} />
+        <AssigneeMultiSelect label="Approvers" value={value.approvers} onChange={(approvers) => onChange({ ...value, approvers })} options={options} />
+      </div>
+      <p className="text-[11px] text-[#586472]">They are asked when the document is sent for review (Submit for review), not before.</p>
+    </fieldset>
+  );
+}
+
+/** Saves the reviewers and approvers chosen for a new library document (nothing when none were chosen). */
+export async function saveSignoffChoice(documentId: number, v: SignoffChoice): Promise<void> {
+  if (!v.reviewers.length && !v.approvers.length) return;
+  const ids = (l: Participant[]) => l.map(({ target_type, target_id }) => ({ target_type, target_id }));
+  await governanceApi.setSignoffParticipants(documentId, { reviewers: ids(v.reviewers), approvers: ids(v.approvers) });
+}
+
 const ROLES = [
   { key: 'prepared_by', label: 'Prepared by', icon: PenLine },
   { key: 'reviewer', label: 'Reviewers', icon: UserCheck },
@@ -155,12 +182,12 @@ export function SignoffAction({ documentId, due, version: shown }: {
   const [reason, setReason] = useState('');
 
   const sign = useMutation({
-    mutationFn: async () => governanceApi.signDocumentOff(documentId, { comment: comment || undefined, signature_image: signature || undefined, version: shown ?? data?.version }),
+    mutationFn: async () => governanceApi.signDocumentOff(documentId, { comment: comment || undefined, signature_image: signature || undefined, version: shown ?? data?.version, round_at: data?.round_at }),
     onSuccess: () => { toast({ type: 'success', title: 'Signed', message: 'Your electronic signature was recorded on the document.' }); setComment(''); setSignature(null); refresh(); },
     onError: (e: any) => toast({ type: 'error', title: 'Not signed', message: e?.response?.data?.detail || 'Could not sign.' }),
   });
   const reject = useMutation({
-    mutationFn: async () => governanceApi.rejectDocumentSignoff(documentId, { comment: reason, version: shown ?? data?.version }),
+    mutationFn: async () => governanceApi.rejectDocumentSignoff(documentId, { comment: reason, version: shown ?? data?.version, round_at: data?.round_at }),
     onSuccess: () => { toast({ type: 'success', title: 'Rejected', message: 'The document went back to draft with your reason.' }); setRejectMode(false); setReason(''); refresh(); },
     onError: (e: any) => toast({ type: 'error', title: 'Not rejected', message: e?.response?.data?.detail || 'Could not reject.' }),
   });

@@ -10,6 +10,7 @@ import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioA
 import { saveWarning, savedNote } from '@/lib/studio/text';
 import AssetImage from './AssetImage';
 import { DocumentDetailsFields, useDocumentDetails } from '../../_DetailsFields';
+import { NO_SIGNOFF, ReviewerApproverFields, saveSignoffChoice, type SignoffChoice } from '../../_SignoffControl';
 import { detailsPayload } from '../../_detailsRead';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -129,10 +130,15 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   // the frameworks it was written against (its framework references) start ticked
   const [frameworks, setFrameworks] = useState<number[]>(() => Array.from(new Set(session.references.flatMap((r) => (r.kind === 'framework' && r.source_id != null ? [r.source_id] : [])))));
   const fws = useQuery({ queryKey: ['studio', 'frameworks'], queryFn: studioApi.frameworks, staleTime: 120_000 });
+  const [signoff, setSignoff] = useState<SignoffChoice>(NO_SIGNOFF);
   const move = useMutation({
     mutationFn: async () => {
       await flush();
-      return studioApi.moveToLibrary(session.id, { ...(detailsPayload(details.form) as Partial<MoveToLibrary>), framework_ids: frameworks });
+      const r = await studioApi.moveToLibrary(session.id, { ...(detailsPayload(details.form) as Partial<MoveToLibrary>), framework_ids: frameworks });
+      try { await saveSignoffChoice(r.document_id, signoff); } catch (e) {
+        toast({ title: 'The reviewers and approvers were not saved', message: `${problemOf(e)} Choose them in Submit for review.`, type: 'error' });
+      }
+      return r;
     },
     onSuccess: (r) => { toast({ title: 'Moved to the document library', message: `${r.title} is a draft, version ${r.version}.`, type: 'success' }); onDone(r.document_id); },
     onError: (e) => toast({ title: 'Could not move it', message: problemOf(e), type: 'error' }),
@@ -146,6 +152,7 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
         <button type="button" className={primary} disabled={!details.form.title.trim() || move.isPending} onClick={() => move.mutate()}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
       <div className="space-y-4 p-5">
         <DocumentDetailsFields d={details} />
+        <ReviewerApproverFields value={signoff} onChange={setSignoff} />
         {fws.data && fws.data.items.length > 0 && (
           <fieldset>
             <legend className="text-xs font-semibold text-[#26323d]">Frameworks this document must comply with (optional)</legend>

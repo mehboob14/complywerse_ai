@@ -89,8 +89,13 @@ export function saveWarning(status: string | null | undefined, inForce?: string 
 }
 
 /** The toast after Save to the library: the version, major or minor, and where the document is now (`before`: its status before). */
-export function savedNote(r: { version: string; change?: 'major' | 'minor' | null; status?: string }, before?: string | null): { title: string; message?: string } {
-  const title = `Saved as version ${r.version}${r.change ? ` (${r.change} change)` : ''}`;
+export function savedNote(r: { version: string; change?: 'major' | 'minor' | null; status?: string; in_place?: boolean }, before?: string | null): { title: string; message?: string } {
+  // a document not published yet collects every change in one version: it stays that number until it is published
+  const title = r.in_place ? `Saved in version ${r.version}${r.change ? ` (${r.change} change)` : ''}`
+    : `Saved as version ${r.version}${r.change ? ` (${r.change} change)` : ''}`;
+  if (r.in_place && (r.status === 'draft' || !r.status)) {
+    return { title, message: `It stays version ${r.version} until it is published: changes made before then go into this version.` };
+  }
   const message = r.status === 'pending_review' ? 'It is in review again: everyone signs from the start.'
     : r.status === 'pending_approval' ? 'It is waiting for approval: the approvers sign from the start.'
     : r.status === 'draft' && before && before !== 'draft' ? 'It is a draft again: choose its reviewers and send it for review.'

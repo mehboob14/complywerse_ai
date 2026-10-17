@@ -508,7 +508,7 @@ export const studioApi = {
 
   moveToLibrary: (id: number, body: MoveToLibrary) => post<{ document_id: number; title: string; version: string }>(`/sessions/${id}/move-to-library`, body),
   saveToDocument: (id: number, body: { change_reason?: string; force?: boolean } = {}) =>
-    post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null }>(`/sessions/${id}/save-to-document`, body),
+    post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null; in_place?: boolean }>(`/sessions/${id}/save-to-document`, body),
 
   assets: () => get<{ items: Asset[] }>('/assets'),
   uploadAsset: async (file: File, makeDefault = false): Promise<Asset> => {
@@ -541,7 +541,7 @@ export const studioApi = {
 export interface BlockLook { label?: string; left?: number; hang?: number; body?: boolean; locked?: boolean }
 
 /** An accept that made the library document's next version (`change`: major is +1.0, minor +0.1), or why it did not */
-export interface LibraryVersion { saved: boolean; version?: string; change?: 'major' | 'minor' | null; status?: string; why?: string }
+export interface LibraryVersion { saved: boolean; version?: string; change?: 'major' | 'minor' | null; status?: string; why?: string; in_place?: boolean }
 
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);

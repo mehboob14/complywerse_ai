@@ -360,9 +360,9 @@ export const governanceApi = {
   }) => apiClient.put(`/governance/documents/${documentId}/signoff/participants`, data),
   sendDocumentForReview: (documentId: number) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/send-for-review`, {}),
-  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string; signature_image?: string; version?: string }) =>
+  signDocumentOff: (documentId: number, data: { comment?: string; signature_text?: string; signature_image?: string; version?: string; round_at?: string | null }) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/sign`, data),
-  rejectDocumentSignoff: (documentId: number, data: { comment: string; version?: string }) =>
+  rejectDocumentSignoff: (documentId: number, data: { comment: string; version?: string; round_at?: string | null }) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/reject`, data),
   getMySignoffPending: () =>
     apiClient.get('/governance/documents/signoff/my-pending'),

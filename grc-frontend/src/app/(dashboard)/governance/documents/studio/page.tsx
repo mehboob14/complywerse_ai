@@ -20,6 +20,7 @@ import { ago, plural } from '@/lib/studio/text';
 import { documentApi } from '@/lib/studio/documentApi';
 import { FrameworkList } from './_components/ReferencesPanel';
 import { DocumentDetailsFields, titleCase, useDocumentDetails } from '../_DetailsFields';
+import { NO_SIGNOFF, ReviewerApproverFields, saveSignoffChoice, type SignoffChoice } from '../_SignoffControl';
 import { detailsPayload } from '../_detailsRead';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -165,8 +166,17 @@ function UploadDialog({ onClose, onOpen, maxMb }: { onClose: () => void; onOpen:
   const [chosen, setChosen] = useState<File | null>(null);
   const [over, setOver] = useState(false);
   const details = useDocumentDetails();
+  const [signoff, setSignoff] = useState<SignoffChoice>(NO_SIGNOFF);
   const upload = useMutation({
-    mutationFn: () => studioApi.uploadSession(chosen!, details.form.doc_type, details.form.title, detailsPayload(details.form)),
+    mutationFn: async () => {
+      const s = await studioApi.uploadSession(chosen!, details.form.doc_type, details.form.title, detailsPayload(details.form));
+      if (s.document_id) {
+        try { await saveSignoffChoice(s.document_id, signoff); } catch (e) {
+          toast({ title: 'The reviewers and approvers were not saved', message: `${problemOf(e)} Choose them in Submit for review.`, type: 'error' });
+        }
+      }
+      return s;
+    },
     onSuccess: onOpen,
     onError: (e) => toast({ title: 'That file could not be opened', message: problemOf(e), type: 'error' }),
   });
@@ -196,6 +206,7 @@ function UploadDialog({ onClose, onOpen, maxMb }: { onClose: () => void; onOpen:
           </div>
         )}
         {chosen && <DocumentDetailsFields d={details} />}
+        {chosen && <ReviewerApproverFields value={signoff} onChange={setSignoff} />}
       </div>
     </AnimatedModal>
   );
