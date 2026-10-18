@@ -52,7 +52,7 @@ def get_dashboard_summary(
             "by_classification": {}
         }
     
-    query = db.query(GovernanceDocument).filter(GovernanceDocument.tenant_id.in_(user_tenants))
+    query = _visible(db.query(GovernanceDocument).filter(GovernanceDocument.tenant_id.in_(user_tenants)), db, current_user)
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)

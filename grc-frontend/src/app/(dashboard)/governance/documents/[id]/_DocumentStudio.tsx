@@ -504,7 +504,7 @@ export default function DocumentStudio() {
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
-          <p className="text-sm text-[#26323d]">It is no longer in force, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can restore it as a draft.</p>
+          <p className="text-sm text-[#26323d]">It is no longer in force, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can restore it as a draft.</p>
           {archive.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not archived: {problemOf(archive.error)}</p>}
         </div>
       </AnimatedModal>

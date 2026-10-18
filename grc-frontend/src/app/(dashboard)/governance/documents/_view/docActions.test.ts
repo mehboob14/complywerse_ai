@@ -35,7 +35,7 @@ test('the line about the version in force says who reads which version', () => {
   assert.equal(inForceLine({ status: 'draft', current: '1.0', inForce: '1.0' }), null);             // set back to draft, no new version
   assert.equal(inForceLine({ status: 'draft', current: '1.0', inForce: null }), null);              // never published
   assert.equal(inForceLine({ status: 'archived', current: '1.1', inForce: null }), null);
-  // staff read the version published last of an archived document: no "it replaces this one" line
+  // an auditor reads the version published last of an archived document (staff no longer open it): no "it replaces this one" line
   assert.equal(inForceLine({ status: 'archived', current: '1.0', inForce: null, newer: { number: '1.1', status: 'archived' } }), null);
 });
 
