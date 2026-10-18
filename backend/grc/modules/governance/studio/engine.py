@@ -417,7 +417,7 @@ def run_chat_turn(db, session_id: int, message_id: int) -> None:
                 web_notes.append("Comply Agent could not search the internet just now, so this answer comes from what it already knows. "
                                  "Check the editions of the laws and standards it names before you rely on them.")
         # the required sections steer a new document and one started from a template; an uploaded document is not held to them
-        structure = templates.structure_for(db, session.doc_type, session.template_id) if (B.is_blank(blocks) or session.template_id) else None
+        structure = templates.structure_for(db, session.doc_type, session.template_id, session) if (B.is_blank(blocks) or session.template_id) else None
         protected = protected_blocks(blocks)
         file_notes = []
         if (session.native_map or {}).get("auto_numbered"):

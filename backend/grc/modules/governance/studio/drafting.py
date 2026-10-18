@@ -134,7 +134,7 @@ def sections_for(db, session) -> Tuple[List[Section], Any, Optional[Dict[str, An
     """The parts of the session's document in order: from the platform's scaffold for its type, or from the headings of the
     organisation's own template. Returns ``(sections, scaffold, tenant_template)``."""
     scaffold = scaffolds.get_scaffold(session.doc_type)
-    template = templates.resolve(db, session.template_id or "default", session.doc_type)
+    template = templates.started_from(db, session) or templates.resolve(db, session.template_id or "default", session.doc_type)
     custom = template if template and not template.get("builtin") else None
     out: List[Section] = []
     core_taken = False
@@ -499,7 +499,9 @@ def _shared_text(session, ins: Dict[str, Any], org: str, custom: Optional[Dict[s
     if text:
         parts.append(f"<instructions>\n{text}\n</instructions>")
     if custom:
-        parts.append("<template>\nThe organisation's own template for this kind of document. Follow its sections, their order and its house style:\n" + (custom.get("content") or "")[:20000] + "\n</template>")
+        whose = (f"The template this document was started from ({custom.get('name')})" if custom.get("id") == templates.CATALOGUE
+                 else "The organisation's own template for this kind of document")
+        parts.append(f"<template>\n{whose}. Follow its sections, their order and its house style:\n" + (custom.get("content") or "")[:20000] + "\n</template>")
     return "\n\n".join(parts)
 
 

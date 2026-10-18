@@ -165,17 +165,25 @@ def add_revision(db, s, content: str, *, author_type: str, user_id: Optional[int
 
 def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: str = "policy", template_id: Optional[str] = None,
                    document_id: Optional[int] = None, upload: Optional[tuple] = None, instructions: Optional[Dict[str, Any]] = None,
-                   details: Optional[Dict[str, Any]] = None):
+                   details: Optional[Dict[str, Any]] = None, markdown: Optional[str] = None, template_name: Optional[str] = None):
     """Start a session: a new document (from a template or blank), a library document, or an uploaded file (``details``: what the
-    library document is created with - classification, description, owner, department, review cycle and dates)."""
+    library document is created with - classification, description, owner, department, review cycle and dates). A new document
+    can start from ``markdown``, a template of the platform's catalogue named ``template_name`` (it stays a studio draft)."""
     from ....models import GovernanceDocument, StudioSession
 
-    s = StudioSession(tenant_id=(_tenant(db).id if _tenant(db) else 1), created_by=user.id, title=(title or "Untitled document").strip()[:500],
+    s = StudioSession(tenant_id=(_tenant(db).id if _tenant(db) else 1), created_by=user.id, title=(title or template_name or "Untitled document").strip()[:500],
                       kind=kind, doc_type=doc_type or "policy", instructions={}, settings={}, status="active", last_opened_at=_now())
     summary, content, base, base_label = "", "", "", None
     registered = None
-    if kind == "new":
+    if kind == "new" and markdown is not None:
+        try:
+            template = templates.from_markdown(markdown, title=s.title, name=template_name or s.title, doc_type=s.doc_type)
+        except ValueError as exc:
+            raise StudioError(str(exc)) from exc
+        s.settings = {"template_name": template["name"]}
+    elif kind == "new":
         template = templates.resolve(db, template_id or "default", s.doc_type)
+    if kind == "new":
         content = (template["content"] if template else "")
         if template and title:
             content = content.replace("[[Document title]]", title.strip(), 1)
