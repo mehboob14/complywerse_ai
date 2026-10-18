@@ -1156,7 +1156,8 @@ def _take_back(text: str, finding: PolicyGapFinding) -> Optional[str]:
     back; an added clause goes, with the heading it was added under when that heading holds nothing else. None when the clause
     is not in the text as it was applied (it was edited since)."""
     clause = (finding.applied_clause_text or "").strip()
-    at = text.find(clause) if clause else -1
+    # an added clause went in after everything the document held then: its last copy (an earlier one was there already)
+    at = (text.rfind(clause) if finding.replacement_mode != "replace" else text.find(clause)) if clause else -1
     if at < 0:
         return None
     if finding.replacement_mode == "replace":
@@ -1498,7 +1499,7 @@ def override_finding(
     # If this finding's remediation clause was applied to the document, an override is an UNDO: that fix's text is taken back
     # out of the document, every other change kept, as a take back is saved (D28: into the pending version while there is one),
     # and the applied audit trail is cleared before the override is recorded.
-    taken_back, refiled = None, None
+    taken_back, refiled, left = None, None, False
     if finding.applied_at:
         document = db.query(GovernanceDocument).filter(
             GovernanceDocument.id == finding.document_id,
@@ -1510,11 +1511,10 @@ def override_finding(
             old_text = C.document_text(document)
             new_text = _take_back(old_text, finding) if old_text is not None else None
             if new_text is None:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="The clause this fix put into the document has been changed since, so it cannot be taken back here. "
-                           "Change it in the document (Edit in AI Studio), then override the finding.")
-            if new_text != old_text:
+                # its clause was changed or removed in the document since: that edit stands, so the document (and the statement
+                # that follows it) is left as it is - the reply says so - and the finding is overridden
+                left = True
+            elif new_text != old_text:
                 gap = _gap_name(finding)
                 why = (override.override_justification or "").strip()
                 reason = f"Gap fix for {gap} taken back" + (f": {why}" if why else "")
@@ -1524,7 +1524,7 @@ def override_finding(
                 refiled = document if is_file else None
         # Revert the statement change too: restore the prior text (replace) or
         # retract the statement that was created (append).
-        if finding.applied_statement_id:
+        if finding.applied_statement_id and not left:
             stmt = db.query(PolicyStatement).filter(
                 PolicyStatement.id == finding.applied_statement_id,
                 PolicyStatement.tenant_id.in_(user_tenants),
@@ -1561,8 +1561,9 @@ def override_finding(
         studio.reanchor(db, refiled, current_user.id)
     db.refresh(finding)
 
-    # taken_back_version: the version the document is at after its fix was taken back (None: no fix was in the document)
-    return {**serialize_finding(finding, db), "taken_back_version": taken_back}
+    # taken_back_version: the version the document is at after its fix was taken back (None: no fix was taken back);
+    # fix_left_in_document: its fix's clause was changed in the document since, so the document was left as it is
+    return {**serialize_finding(finding, db), "taken_back_version": taken_back, "fix_left_in_document": left}
 
 
 @router.put("/findings/{finding_id}/accept-risk")

@@ -251,7 +251,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       governanceApi.overrideGapFinding(findingId, data),
     onSuccess: (response: any) => {
       const back = response?.data?.taken_back_version as string | undefined;
-      toast({ type: 'success', title: 'Override saved', message: back ? `The fix was taken back out of the document (version ${back}); every other change stays.` : undefined });
+      const left = !!response?.data?.fix_left_in_document;
+      toast({ type: 'success', title: 'Override saved', message: back ? `The fix was taken back out of the document (version ${back}); every other change stays.`
+        : left ? 'Its clause was changed in the document since, so the document was left as it is. Change it there if it should go.' : undefined });
       if (back) refreshDocument();
       else refreshFindings();
       setEditingRow(null);
@@ -442,8 +444,14 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
         ) : findings.length === 0 ? (
           <div className="flex h-48 flex-col items-center justify-center gap-2 px-4 text-center">
             <BarChart3 className="h-10 w-10 text-[#7b8794]" aria-hidden />
-            <p className="text-sm font-medium text-[#1f2933]">No findings yet</p>
-            <p className="text-sm text-[#586472]">{canEdit ? 'Run a gap analysis to check the document against frameworks.' : 'Its editors run a gap analysis to check it against frameworks.'}</p>
+            {gapFilters.framework_name || gapFilters.compliance_status || gapFilters.risk_severity || gapFilters.remediation_status ? (
+              <p className="text-sm font-medium text-[#1f2933]">No finding matches these filters</p>
+            ) : (
+              <>
+                <p className="text-sm font-medium text-[#1f2933]">No findings yet</p>
+                <p className="text-sm text-[#586472]">{canEdit ? 'Run a gap analysis to check the document against frameworks.' : 'Its editors run a gap analysis to check it against frameworks.'}</p>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -877,7 +885,7 @@ function GapFindingRow({
                       <div className="space-y-3 rounded-lg border border-[#99d5cc] bg-[#effaf8] p-3" onClick={(e) => e.stopPropagation()}>
                         {finding.applied_at && (
                           <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
-                            Its fix is in the document. Overriding takes that fix back out; every other change to the document stays.
+                            Its fix is in the document. Overriding takes that fix back out; every other change to the document stays. If its clause was changed since, the document is left as it is.
                           </p>
                         )}
                         <label className="block">

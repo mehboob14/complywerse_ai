@@ -3,7 +3,6 @@ version. Override takes one fix back out on its own - every other change kept, i
 open again. A document that is its Word file gets the fix, and its take back, written into a new file."""
 import pytest
 from docx import Document
-from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
@@ -104,15 +103,24 @@ def test_after_a_publication_a_fix_makes_the_next_number_and_the_next_fix_joins_
     assert second["in_place"] is True and _versions(db) == [("1.0", "superseded"), ("2.0", "current")]   # a section added: major
 
 
-def test_an_undo_is_refused_when_the_fix_was_edited_since(db):
+def test_an_undo_leaves_a_fix_edited_since_in_the_document_and_still_overrides_the_finding(db):
     _add(db)
     doc = db.get(m.GovernanceDocument, 5)
     doc.content = doc.content.replace("every quarter", "every month")
     db.commit()
-    with pytest.raises(HTTPException) as refused:
-        _undo(db)
-    assert refused.value.status_code == 409 and "changed since" in refused.value.detail
-    assert db.get(m.PolicyGapFinding, 1).applied_at is not None
+    edited, versions = doc.content, _versions(db)
+    out = _undo(db)                                    # no dead end: the person's edit stands, the reply says so
+    assert out["fix_left_in_document"] is True and out["taken_back_version"] is None
+    assert db.get(m.GovernanceDocument, 5).content == edited and _versions(db) == versions
+    assert out["applied_at"] is None and out["remediation_status"] == "open" and out["compliance_status"] == "not_addressed"
+    finding = db.get(m.PolicyGapFinding, 1)
+    assert finding.is_overridden and finding.applied_statement_id is None
+
+
+def test_undoing_an_added_clause_takes_back_its_own_copy_not_an_earlier_one(db):
+    _add(db, text=YEARLY)                              # the same words as the rule already in the document
+    out = _undo(db)
+    assert db.get(m.GovernanceDocument, 5).content == TEXT and out["fix_left_in_document"] is False
 
 
 def test_a_document_that_is_its_word_file_gets_the_fix_and_its_take_back_in_a_new_file(db, tmp_path):

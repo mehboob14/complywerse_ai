@@ -326,6 +326,16 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     queryFn: async () => (await governanceApi.getReparseProposals(documentId)).data as any,
     enabled: !!parseStatus?.has_proposals || parseStatus?.status === 'review_required',
   });
+  // a parse that ends after this view was left and opened again (its own polling stopped with it): the list is read again
+  const parseRunning = parseStatus?.status === 'parsing' || parseStatus?.status === 'queued';
+  const wasRunning = useRef(parseRunning);
+  useEffect(() => {
+    if (wasRunning.current && !parseRunning) {
+      onChanged();
+      queryClient.invalidateQueries({ queryKey: ['reparse-proposals', documentId] });
+    }
+    wasRunning.current = parseRunning;
+  }, [parseRunning]); // eslint-disable-line react-hooks/exhaustive-deps
   const applyProposalsMutation = useMutation({
     mutationFn: (decisions: Array<{ index: number; action: string }>) => governanceApi.applyReparseProposals(documentId, decisions),
     onSuccess: (res: any) => {
