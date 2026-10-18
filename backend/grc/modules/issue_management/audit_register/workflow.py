@@ -51,7 +51,7 @@ def _notify(db: Session, tenant_id: int, user_ids: Iterable[Optional[int]], subj
     sent = send_workflow_notification(db, tenant_id=tenant_id, subject=subject[:500],
                                       message=message, workflow_instance_id=None, user_ids=ids,
                                       channels=["in_app", "email"] if email else ["in_app"],
-                                      notification_type=kind)
+                                      notification_type=kind, link="/auditor-portal/issue-register")
     return sent.get("notified_users", 0)
 
 

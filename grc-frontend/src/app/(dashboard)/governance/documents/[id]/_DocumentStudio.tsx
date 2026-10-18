@@ -110,6 +110,14 @@ export default function DocumentStudio() {
     q.delete('version');
     router.replace(`/governance/documents/${id}?${q.toString()}`, { scroll: false });
   };
+  // a link to this same document with another ?tab= (the top bar's Pending approvals, a notification) does not load the page again:
+  // the view follows the URL
+  const tabAsked = search?.get('tab') ?? null;
+  useEffect(() => {
+    const v = viewOf(tabAsked);
+    setViewState(v);
+    if (v !== 'document') setReading(null);
+  }, [tabAsked]);
 
   // a refusal or a missing document is the answer: not asked again
   const docQ = useQuery({ queryKey: ['governance-document', id], queryFn: async () => (await governanceApi.getDocument(id)).data as any, enabled: valid,
