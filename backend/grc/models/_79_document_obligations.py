@@ -31,6 +31,7 @@ class DocumentObligation(Base):
     escalation_level = Column(Integer, nullable=False, default=0)    # 0 none, 1 owner told, 2 tenant administrators told
     escalated_at = Column(DateTime, nullable=True)
     emailed_at = Column(DateTime, nullable=True)                  # when the person was emailed about it, if email is on
+    overdue_at = Column(DateTime, nullable=True)                  # when the person was told it is overdue
 
     __table_args__ = (
         Index("ix_doc_obligation_doc_kind", "document_id", "kind", "status"),

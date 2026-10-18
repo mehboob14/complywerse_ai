@@ -93,7 +93,8 @@ def test_sending_for_review_asks_each_reviewer_with_a_task_and_an_alert(world):
         assert all(o.due_date > datetime.utcnow() + timedelta(days=6) for o in rows)
         mine = [t for t in tasks(db) if t.assigned_user_ids == [2]]
         assert len(tasks(db)) == 2 and mine[0].title == "Review: Access policy" and mine[0].source_entity_id == rows[0].id
-        assert "/governance/documents/5?tab=lifecycle" in mine[0].description                  # the task opens the document's Approvals
+        assert mine[0].description.startswith('Review "Access policy" (version 1.0) by ')          # plain words, no bare path
+        assert life.task_values(db, rows[0], doc(db))["link"] == "/governance/documents/5?tab=lifecycle"     # {link}: its Approvals
         assert len(alerts(db, 2)) == 1 and len(alerts(db, 3)) == 1 and alerts(db, 6) == []
 
 
@@ -515,7 +516,8 @@ def test_requests_and_rejections_are_worded_as_people_say_them_and_alerts_open_t
         db.commit()
         assert any(e["detail"].startswith("Acknowledgement asked of") for e in life.state(db, d, user(db, 1))["timeline"])
         ack = db.query(m.DocumentObligation).filter_by(user_id=6, kind="acknowledgement").one()
-        assert "/governance/documents/5." in db.get(m.CriticalTask, ack.critical_task_id).description                 # the document itself, to read
+        assert life.task_values(db, ack, d)["link"] == "/governance/documents/5"                 # {link}: the document itself, to read
+        assert "/governance/" not in db.get(m.CriticalTask, ack.critical_task_id).description
         assert alerts(db, 6)[-1].link == "/governance/documents/5" and "Open:" not in alerts(db, 6)[-1].message
 
 

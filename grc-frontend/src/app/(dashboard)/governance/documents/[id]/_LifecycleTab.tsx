@@ -6,17 +6,18 @@
 // the discussion. Backend: governance/doc_lifecycle.py (requests, acknowledgements, timeline) and routers/document_signoff.py
 // (participants and signatures).
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, ChevronRight, Clock, FileCheck2, Loader2, Search } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { dateTime, day, eventLabel, type DocumentLifecycle as Lifecycle, type LifecycleRow as Row } from '@/lib/documentLifecycle';
+import type { SettingsAnswer } from '@/lib/governanceSettings';
 import { useToast } from '@/components/ui/ToastProvider';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import { SIGNOFF_STATUS, SignoffAction, SignoffParticipants, StatusChip, useSignoff, type Signoff } from '../_SignoffControl';
 
-interface LifecycleSettings { approval_days: number; ack_days: number; remind_days: number; admin_after_days: number; email: boolean }
 /** a row's own drawn signature (servers from before it was sent leave the field out) */
 type Esign = { id: number; image_sha256?: string | null } | null;
 const ownEsign = (r: Row): Esign | undefined => ('esign' in r ? (r as Row & { esign: Esign }).esign : undefined);
@@ -338,56 +339,39 @@ function Timeline({ events }: { events: Lifecycle['timeline'] }) {
   );
 }
 
-// ── due dates and escalation ─────────────────────────────────────────────────
+// ── due dates and escalation: the organisation's settings, changed in Governance > Settings (one source) ──
 export function SettingsCard() {
-  const queryClient = useQueryClient();
-  const { toast } = useToast();
-  const [open, setOpen] = useState(false);
-  const [draft, setDraft] = useState<LifecycleSettings | null>(null);
-  const { data } = useQuery<{ enabled: boolean; settings: LifecycleSettings; can_edit: boolean }>({
+  const { data } = useQuery<SettingsAnswer>({
     queryKey: ['document-lifecycle-settings'],
     queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/settings')).data,
   });
-  const save = useMutation({
-    mutationFn: async () => (await apiClient.put('/governance/documents/lifecycle/settings', draft)).data,
-    onSuccess: () => { setOpen(false); setDraft(null); queryClient.invalidateQueries({ queryKey: ['document-lifecycle-settings'] }); toast({ type: 'success', title: 'Saved', message: 'New requests use these settings.' }); },
-    onError: (e: any) => toast({ type: 'error', title: 'Not saved', message: e?.response?.data?.detail || 'Could not save the settings.' }),
-  });
   if (!data?.enabled) return null;
-  const s = draft || data.settings;
-  const field = (key: keyof LifecycleSettings, label: string) => (
-    <label className="flex items-center justify-between gap-3 text-xs text-gray-700">
-      {label}
-      <input type="number" min={key === 'remind_days' ? 0 : 1} max={key === 'remind_days' ? 60 : 365} value={s[key] as number} disabled={!data.can_edit}
-        onChange={(e) => setDraft({ ...s, [key]: Number(e.target.value) })}
-        className="w-20 rounded border border-gray-300 bg-white px-2 py-1 text-right text-gray-900 disabled:opacity-60" />
-    </label>
-  );
+  const s = data.settings;
+  const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
+  const rows: [string, string][] = [
+    ['Review', days(s.review_days ?? s.approval_days)],
+    ['Approval', days(s.approval_days)],
+    ['Acknowledgement', days(s.ack_days)],
+    ['Reminders', (s.remind_days ? `${days(s.remind_days)} before the due date` : 'none before the due date')
+      + (s.remind_every_days ? `, then every ${days(s.remind_every_days)}` : '')],
+    ['When late', `${s.owner_after_days ? `owner told after ${days(s.owner_after_days)}` : 'owner told the same day'}, then `
+      + `${s.escalate_role_id ? (data.escalate_role_name || 'the chosen role') : 'the administrators'} after ${days(s.admin_after_days)}`],
+  ];
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-4">
-      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 text-left">
-        <ChevronRight className={`h-4 w-4 text-gray-500 transition-transform ${open ? 'rotate-90' : ''}`} aria-hidden />
-        <span className="text-sm font-semibold text-gray-900">Due dates and escalation</span>
-        {!open && (
-          <span className="text-xs text-gray-600">
-            approvals {data.settings.approval_days} days · acknowledgements {data.settings.ack_days} days · owner told when overdue, administrators {data.settings.admin_after_days} days later
-          </span>
-        )}
-      </button>
-      {open && (
-        <div className="mt-3 max-w-md space-y-2 pl-6">
-          {field('approval_days', 'Days to review or approve')}
-          {field('ack_days', 'Days to acknowledge')}
-          {field('remind_days', 'Remind this many days before the due date')}
-          {field('admin_after_days', 'Tell the administrators this many days after it is overdue')}
-          <label className="flex items-center gap-2 text-xs text-gray-700">
-            <input type="checkbox" checked={s.email} disabled={!data.can_edit} onChange={(e) => setDraft({ ...s, email: e.target.checked })} /> Also send email (where email is set up)
-          </label>
-          {data.can_edit
-            ? <button type="button" onClick={() => save.mutate()} disabled={save.isPending || !draft} className="rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50">Save</button>
-            : <p className="text-xs text-gray-500">Only an administrator can change these.</p>}
-        </div>
-      )}
+      <h3 className="text-sm font-semibold text-gray-900">Due dates and escalation</h3>
+      <p className="mt-0.5 text-xs text-gray-600">The same for every document in the organisation.</p>
+      <dl className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-[max-content_1fr]">
+        {rows.map(([label, value]) => (
+          <div key={label} className="contents">
+            <dt className="text-xs font-medium text-gray-700">{label}</dt>
+            <dd className="text-xs text-gray-900">{value}</dd>
+          </div>
+        ))}
+      </dl>
+      <Link href="/governance/settings" className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-[#0f766e] hover:underline">
+        {data.can_edit ? 'Change these in Governance settings' : 'See all in Governance settings'} <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+      </Link>
     </section>
   );
 }

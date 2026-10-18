@@ -1,0 +1,64 @@
+// node --test src/lib/governanceSettings.test.ts
+
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+
+import { changes, courseOf, renderTemplate, sampleValues, templateProblem, validate, type GovernanceSettings } from './governanceSettings.ts';
+
+const base: GovernanceSettings = {
+  review_days: 7, approval_days: 7, ack_days: 14, remind_days: 3, remind_every_days: 0, owner_after_days: 0, admin_after_days: 7,
+  escalate_role_id: null, email: true,
+  notify: { request: 'both', reminder: 'both', overdue: 'both', escalation: 'both', approved: 'both', published: 'both', rejected: 'both' },
+  task_create: { review: true, approval: true, acknowledgement: true },
+  task_priority: { review: 'High', approval: 'High', acknowledgement: 'Medium' },
+  task_title: '{action}: {document}',
+  task_description: '{action} "{document}" (version {version}) by {due_date}. This task closes by itself when you do it in the document.',
+};
+
+test('the defaults are valid', () => {
+  assert.deepEqual(validate(base), {});
+});
+
+test('numbers out of range, and escalation not after the owner, are named in the person\'s words', () => {
+  const errors = validate({ ...base, review_days: 0, remind_every_days: 2.5, owner_after_days: 9 });
+  assert.equal(errors.review_days, 'Days to review must be a whole number from 1 to 365.');
+  assert.equal(errors.remind_every_days, 'Days between reminders must be a whole number from 0 to 60.');
+  assert.match(errors.admin_after_days ?? '', /^Escalate further later than the owner is told/);
+  assert.deepEqual(validate({ ...base, owner_after_days: 6 }), {});
+});
+
+test('templates: unknown placeholders, open braces and empty text are refused like the server does', () => {
+  assert.equal(templateProblem('Task title', '{doc}', 200), 'Task title: {doc} is not a placeholder. Use {action}, {document}, {version}, {due_date}, {owner}, {link}.');
+  assert.match(templateProblem('Task title', '{document.__class__}', 200) ?? '', /is not a placeholder/);
+  assert.match(templateProblem('Task title', '{document!r}', 200) ?? '', /is not a placeholder/);
+  assert.equal(templateProblem('Task description', 'Read {document', 2000), 'Task description: a { or } is not closed. Placeholders look like {document}.');
+  assert.equal(templateProblem('Task description', 'a } b', 2000), 'Task description: a { or } is not closed. Placeholders look like {document}.');
+  assert.equal(templateProblem('Task title', '   ', 200), 'Task title cannot be empty.');
+  assert.equal(templateProblem('Task title', 'x'.repeat(201), 200), 'Task title is too long (at most 200 characters).');
+  assert.equal(templateProblem('Task title', 'Use {{braces}} for {document}', 200), null);
+  assert.equal(validate({ ...base, task_title: '{who}' }).task_title?.startsWith('Task title: {who}'), true);
+});
+
+test('the preview fills every placeholder and keeps literal braces', () => {
+  const today = new Date(Date.UTC(2026, 9, 18, 12));
+  const values = sampleValues('acknowledgement', base, today);
+  assert.equal(values.due_date, '01 Nov 2026');
+  assert.equal(renderTemplate(base.task_title, values), 'Acknowledge: Acceptable Use Policy');
+  assert.equal(renderTemplate(base.task_description, values),
+    'Acknowledge "Acceptable Use Policy" (version 1.2) by 01 Nov 2026. This task closes by itself when you do it in the document.');
+  assert.equal(renderTemplate('{{x}} {owner} {link}', sampleValues('review', base, today)), '{x} Sara Khan /governance/documents/3?tab=lifecycle');
+  assert.equal(sampleValues('review', { ...base, review_days: 2 }, today).due_date, '20 Oct 2026');
+});
+
+test('only what changed is sent, a map whole, never the derived email switch', () => {
+  assert.deepEqual(changes(base, base), {});
+  const draft = { ...base, review_days: 3, email: false, notify: { ...base.notify, rejected: 'off' as const } };
+  assert.deepEqual(changes(base, draft), { review_days: 3, notify: draft.notify });
+});
+
+test('a request\'s course: first reminder, due date, owner told, escalated', () => {
+  const today = new Date(Date.UTC(2026, 9, 18, 12));
+  assert.deepEqual(courseOf('review', { ...base, owner_after_days: 1, admin_after_days: 5 }, today),
+    { due: '25 Oct 2026', firstReminder: '22 Oct 2026', owner: '26 Oct 2026', further: '30 Oct 2026' });
+  assert.equal(courseOf('review', { ...base, remind_days: 0 }, today).firstReminder, null);
+});
