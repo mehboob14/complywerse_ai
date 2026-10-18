@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { DocumentTaskCard, useMyUserId } from '@/components/governance/DocumentTaskActions';
-import { canDeleteTask, dayOf, isDocumentTask, plainDescription, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
+import { canDeleteTask, dayOf, isDocumentTask, plainDescription, withCurrent, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, Plus, X,
@@ -823,7 +823,7 @@ export default function TaskDetailPage() {
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source</label>
                   <select value={(editForm.source as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, source: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm">
-                    {SOURCES.map(s => <option key={s} value={s}>{s}</option>)}
+                    {withCurrent(SOURCES, editForm.source).map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
                 <div>
@@ -837,7 +837,7 @@ export default function TaskDetailPage() {
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Category</label>
                   <select value={(editForm.category as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm">
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {withCurrent(CATEGORIES, editForm.category).map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>

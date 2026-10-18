@@ -178,10 +178,11 @@ export default function DocumentStudio() {
   useEffect(() => { if (popup === 'sign' && signoff.data && !myRole) setPopup(null); }, [popup, myRole, signoff.data]);
 
   // ?act=ack / ?act=sign (a task's button in Task Management, My Approvals): the person's own step opens at once, or a note says
-  // why there is none; the parameter then goes, so a reload does not ask again
+  // why there is none; the parameter then goes, so a reload does not ask again. It waits for the fresh answers, not a cached
+  // one from an earlier visit (made before the person was asked)
   const actAsked = actOf(search?.get('act'));
   useEffect(() => {
-    if (!actAsked || !docQ.data || lifecycleQ.isLoading || signoff.isLoading) return;
+    if (!actAsked || !docQ.data || lifecycleQ.isFetching || signoff.isFetching) return;
     const lcd = lifecycleQ.data && lifecycleQ.data.enabled ? lifecycleQ.data : null;
     const kinds = actAsked === 'ack' ? ['acknowledgement'] : ['review', 'approval'];
     const doneOn = (lcd ? [...lcd.approvals, ...lcd.acknowledgements.people] : [])
@@ -193,7 +194,7 @@ export default function DocumentStudio() {
     const q = new URLSearchParams(search?.toString() ?? '');
     q.delete('act');
     router.replace(`/governance/documents/${id}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
-  }, [actAsked, docQ.data, lifecycleQ.isLoading, signoff.isLoading]);
+  }, [actAsked, docQ.data, lifecycleQ.isFetching, signoff.isFetching]);
 
   if (!valid) return <NotFound library={library} />;
   // a backend from before the AI Studio's document view (not restarted, or not deployed yet): the classic page

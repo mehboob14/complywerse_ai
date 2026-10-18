@@ -73,6 +73,13 @@ export function withoutLocked<T extends Record<string, unknown>>(t: TaskLike, pa
   return out as Partial<T>;
 }
 
+/** A dropdown's choices plus the task's own value when it is not one of them (a document task's "Governance document" source,
+ *  or a category typed in Governance > Settings), so the edit form shows what the task has instead of the first choice. */
+export function withCurrent(choices: readonly string[], current: unknown): string[] {
+  const v = typeof current === 'string' ? current : '';
+  return v && !choices.includes(v) ? [v, ...choices] : [...choices];
+}
+
 /** Tasks made before the buttons say where to go as a path ("Open it at /governance/documents/3 (its Approvals)."): the
  *  buttons do that now, so the sentence is left out. */
 export function plainDescription(text: string | null | undefined): string {

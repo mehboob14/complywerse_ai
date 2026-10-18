@@ -151,7 +151,10 @@ def test_who_when_and_done_follow_the_request_and_cannot_be_changed_in_task_mana
     for change, words in [({"assigned_user_ids": [2]}, "The person on this task is the one asked"),
                           ({"assigned_owner_id": 2}, "The person on this task is the one asked"),
                           ({"due_date": "2030-01-01T00:00:00"}, "The due date follows the request"),
-                          ({"source_entity_id": 999}, "This task belongs to a document request")]:
+                          ({"source_entity_id": 999}, "This task belongs to a document request"),
+                          # nor unlinked from its request, which would let anyone delete it
+                          ({"source_module": None}, "This task belongs to a document request"),
+                          ({"source_entity_type": "risk"}, "This task belongs to a document request")]:
         r = http.put(f"/critical-tasks/{t.id}", json=change)
         assert r.status_code == 400 and r.json()["detail"].startswith(words), change
     same = {"assigned_owner_id": 6, "assigned_user_ids": [6], "priority": "Critical", "category": "Policy"}
@@ -170,3 +173,4 @@ def test_who_when_and_done_follow_the_request_and_cannot_be_changed_in_task_mana
     db.expire_all()
     assert (db.get(m.CriticalTask, t.id).status, db.get(m.CriticalTask, other.id).status) == ("Open", "In Progress")
     assert http.put(f"/critical-tasks/{other.id}", json={"assigned_owner_id": 2}).json()["assigned_owner_id"] == 2   # others: as before
+    assert http.post(f"/critical-tasks/{other.id}/transition", json={"new_status": "Under Review"}).json()["status"] == "Under Review"

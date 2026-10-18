@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  actOf, actOutcome, actionHref, canDeleteTask, closesWhen, isDocumentTask, plainDescription, requestLine, taskButtons, withoutLocked,
+  actOf, actOutcome, actionHref, canDeleteTask, closesWhen, isDocumentTask, plainDescription, requestLine, taskButtons, withCurrent, withoutLocked,
   type DocumentRequest,
 } from './documentTasks.ts';
 
@@ -49,6 +49,14 @@ test('the edit form never sends who, when or status for a document task', () => 
   const payload = { title: 'x', priority: 'High', assigned_owner_id: 2, due_date: '2026-11-01', source_module: 'document_lifecycle', source_entity_type: 'DocumentObligation' };
   assert.deepEqual(withoutLocked(docTask, payload), { title: 'x', priority: 'High' });
   assert.deepEqual(withoutLocked({ source_module: null }, payload), payload);
+});
+
+test('the edit form keeps the task\'s own category and source selectable, not the first choice', () => {
+  const cats = ['Remediation', 'Review', 'Other'];
+  assert.deepEqual(withCurrent(cats, 'Compliance'), ['Compliance', 'Remediation', 'Review', 'Other']);   // a document task's default
+  assert.deepEqual(withCurrent(cats, 'Review'), cats);
+  assert.deepEqual(withCurrent(cats, ''), cats);
+  assert.deepEqual(withCurrent(cats, undefined), cats);
 });
 
 test('an older task drops its "Open it at /path" sentence; the buttons do that now', () => {
