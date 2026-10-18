@@ -352,7 +352,10 @@ def setup_options(session_id: int, db: Session = Depends(get_db), user: GRCUser 
 
 @router.delete("/sessions/{session_id}", dependencies=[Depends(require_studio)])
 def delete_session(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    service.delete_session(db, _session(db, session_id, user))
+    try:
+        service.delete_session(db, _session(db, session_id, user))
+    except service.StudioError as exc:
+        raise _problem(exc)
     return {"deleted": True}
 
 

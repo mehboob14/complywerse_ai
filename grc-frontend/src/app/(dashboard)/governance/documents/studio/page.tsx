@@ -287,7 +287,7 @@ function Panel({ title, count, info, tools, children }: { title: string; count?:
   );
 }
 
-function YourWork({ sessions, loading, onOpen, onDelete }: { sessions: Session[]; loading: boolean; onOpen: (id: number) => void; onDelete: (s: Session) => void }) {
+function YourWork({ sessions, loading, onOpen, onDiscard }: { sessions: Session[]; loading: boolean; onOpen: (id: number) => void; onDiscard: (s: Session) => void }) {
   const [q, setQ] = useState('');
   const rows = useMemo(() => sessions.filter((s) => !q.trim() || s.title.toLowerCase().includes(q.trim().toLowerCase())), [sessions, q]);
   const search = sessions.length > 5 && (
@@ -311,7 +311,9 @@ function YourWork({ sessions, loading, onOpen, onDelete }: { sessions: Session[]
                   </span>
                   <span className="shrink-0 text-[11px] text-[#586472]">{ago(s.updated_at)}</span>
                 </button>
-                <button type="button" onClick={() => onDelete(s)} aria-label={`Delete ${s.title}`} title="Delete this work (a library document is not affected)" className="rounded p-1 text-[#7b8794] hover:bg-[#fdf3f3] hover:text-[#9b1c1c]"><Trash2 className="h-3.5 w-3.5" /></button>
+                {/* a library document (an upload is one) is archived in the library, never removed here; only a draft can be discarded */}
+                {s.document_id ? <span aria-hidden className="w-[22px] shrink-0" />
+                  : <button type="button" onClick={() => onDiscard(s)} aria-label={`Discard draft ${s.title}`} title="Discard this draft (it was never in the library)" className="shrink-0 rounded p-1 text-[#7b8794] hover:bg-[#fdf3f3] hover:text-[#9b1c1c] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]"><Trash2 className="h-3.5 w-3.5" /></button>}
               </li>
             ))}
           </ul>
@@ -364,7 +366,7 @@ export default function StudioHomePage() {
   const del = useMutation({
     mutationFn: (s: Session) => studioApi.deleteSession(s.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio', 'sessions'] }),
-    onError: (e) => toast({ title: 'Could not delete it', message: problemOf(e), type: 'error' }),
+    onError: (e) => toast({ title: 'Could not discard it', message: problemOf(e), type: 'error' }),
   });
   const useTemplate = useMutation({
     mutationFn: (t: TemplateItem) => studioApi.createSession({ kind: 'new', title: t.name.replace(/ \(standard structure\)$/, ''), doc_type: t.doc_type, template_id: t.id }),
@@ -398,7 +400,7 @@ export default function StudioHomePage() {
       </div>
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <YourWork sessions={sessions.data?.items ?? []} loading={sessions.isLoading} onOpen={(id) => router.push(`/governance/documents/studio/${id}`)}
-          onDelete={(s) => { if (window.confirm(`Delete “${s.title}” from the studio? A document already in the library is not affected.`)) del.mutate(s); }} />
+          onDiscard={(s) => { if (window.confirm(`Discard the draft “${s.title}”? It was never in the library, so it cannot be brought back.`)) del.mutate(s); }} />
         <Templates onUse={(t) => useTemplate.mutate(t)} />
       </div>
 
