@@ -51,3 +51,8 @@ test('the toast uses no colour class the platform CSS repaints', () => {
   ];
   for (const src of sources) assert.doesNotMatch(src, repainted);
 });
+
+test('the cyber-assurance re-export is not a client boundary (Next refuses `export *` in one)', () => {
+  const src = readFileSync(new URL('../../cyber-assurance/components/ui/Toast.tsx', import.meta.url), 'utf8');
+  if (/export \*/.test(src)) assert.doesNotMatch(src, /^\s*['"]use client['"]/m);
+});
