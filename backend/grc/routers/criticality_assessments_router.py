@@ -578,9 +578,11 @@ def list_users_for_assignment(
     `/critical-tasks/tenant-users` pattern. Includes the caller as a
     fallback so the list is never empty for a brand-new tenant.
     """
+    from .auth_router import platform_account
+
     users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True), platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )

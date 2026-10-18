@@ -115,8 +115,11 @@ def get_tenant_users(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Get all users in the current tenant DB for owner selection."""
-    users = db.query(GRCUser).filter(GRCUser.is_active == True).all()
+    """Get all users in the current tenant DB for owner selection (not accounts an access review imported)."""
+    from .auth_router import platform_account
+
+    users = (db.query(GRCUser).filter(GRCUser.is_active == True, platform_account())
+             .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc()).all())
     return [
         {
             "id": u.id,

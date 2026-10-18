@@ -116,7 +116,9 @@ def lookup_records(
     tenant_id = get_user_primary_tenant(current_user, db)
 
     if entity == "user":
-        query = db.query(GRCUser).filter(GRCUser.is_active.is_(True))
+        from ....routers.auth_router import platform_account
+
+        query = db.query(GRCUser).filter(GRCUser.is_active.is_(True), platform_account())
         if q:
             query = query.filter(
                 GRCUser.username.ilike(f"%{q}%")
@@ -291,10 +293,12 @@ def list_actor_users(
 
     # Per-tenant DB: every active grc_users row is a tenant member.
     # Joining through grc_tenant_users would silently drop users created
-    # via /admin/users (which doesn't backfill that join table).
+    # via /admin/users (which doesn't backfill that join table). Accounts an access review imported are not actors.
+    from ....routers.auth_router import platform_account
+
     query = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True), platform_account())
     )
 
     if search:

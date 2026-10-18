@@ -152,7 +152,9 @@ def list_tenant_users(
     ).all()
     real_by_user_id = {tl.user_id: tl for tl in real_links}
 
-    users = db.query(GRCUser).filter(GRCUser.is_active == True).all()
+    from .auth_router import platform_account
+
+    users = db.query(GRCUser).filter(GRCUser.is_active == True, platform_account()).order_by(GRCUser.id).all()
     result = []
     for u in users:
         link = real_by_user_id.get(u.id)

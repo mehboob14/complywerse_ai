@@ -1777,8 +1777,10 @@ def config_directory(db: Session = Depends(get_db), user: GRCUser = Depends(requ
     tids = _tids(user, db)
     roles = sorted({r.name for r in db.query(Role).filter(or_(Role.tenant_id.in_(tids), Role.tenant_id.is_(None)))
                     if (r.name or "").strip()}, key=str.lower)
+    from ....routers.auth_router import platform_account
+
     people = [{"id": u.id, "name": u.display_name or u.username or u.email}
-              for u in db.query(GRCUser).filter(GRCUser.is_active.is_(True))
+              for u in db.query(GRCUser).filter(GRCUser.is_active.is_(True), platform_account())
               .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())]
     return {"roles": roles, "people": people}
 

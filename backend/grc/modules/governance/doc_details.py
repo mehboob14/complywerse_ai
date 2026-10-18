@@ -211,11 +211,12 @@ def _names(text: Optional[str]) -> set:
 
 def _owner(db, stated: Optional[str]):
     from ...models import GRCUser
+    from ...routers.auth_router import platform_account
 
     if not stated:
         return None
     want = _names(stated)
-    hits = [u for u in db.query(GRCUser).filter(GRCUser.is_active.isnot(False)).order_by(GRCUser.id).all()
+    hits = [u for u in db.query(GRCUser).filter(GRCUser.is_active.isnot(False), platform_account()).order_by(GRCUser.id).all()
             if want & (_names(u.designation) | ({_norm(u.display_name)} if u.display_name else set()))]
     return hits[0] if len(hits) == 1 else None             # two people with that designation: the person chooses
 
@@ -409,6 +410,11 @@ def check_details(db, *, owner_id=None, department_id=None, review_cycle_months=
         owner = db.get(GRCUser, int(owner_id))
         if owner is None or not owner.is_active:
             raise ValueError("The owner chosen is not an active user.")
+        from ...routers.auth_router import imported_account_problem
+
+        problem = imported_account_problem(db, [owner.id])
+        if problem:
+            raise ValueError(problem)
     if department_id is not None and db.get(GRCDepartment, int(department_id)) is None:
         raise ValueError("The department chosen does not exist.")
     if review_cycle_months is not None and not 1 <= int(review_cycle_months) <= 60:

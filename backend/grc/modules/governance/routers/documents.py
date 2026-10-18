@@ -452,7 +452,10 @@ def create_document(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Parent document not found"
             )
-    
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [document.owner_id, document.author_id])
+
     db_document = GovernanceDocument(
         tenant_id=tenant_id,
         document_code=document.document_code,
@@ -1038,6 +1041,9 @@ def update_document(
             check_details(db, parent_document_id=update_data["parent_document_id"], document_id=document.id)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [update_data.get(k) for k in ("owner_id", "author_id") if update_data.get(k) != getattr(document, k)])
     # change_reason is edit metadata, not a document column — pull it out so the
     # field loop doesn't try to setattr/getattr a non-existent attribute.
     change_reason = update_data.pop("change_reason", None)
@@ -1608,6 +1614,9 @@ def bulk_assign_owner(
         )
 
     permissions.ensure_all_editable(db, current_user, documents)
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [bulk_request.owner_id])
     updated_count = 0
     for doc in documents:
         old_owner = doc.owner_id

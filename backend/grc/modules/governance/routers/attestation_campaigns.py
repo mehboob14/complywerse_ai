@@ -378,8 +378,10 @@ def activate_campaign(
         # Per-tenant DB: every active grc_users row is a tenant member.
         # The previous query through grc_tenant_users would silently miss
         # users created via /admin/users (which doesn't backfill that table).
+        from ....routers.auth_router import platform_account
+
         active_users = db.query(GRCUser.id).filter(
-            GRCUser.is_active.is_(True)
+            GRCUser.is_active.is_(True), platform_account()
         ).all()
         for (uid,) in active_users:
             target_user_ids.add(uid)

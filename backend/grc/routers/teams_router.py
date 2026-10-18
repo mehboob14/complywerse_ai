@@ -324,6 +324,9 @@ def add_member(
     user = db.query(GRCUser).filter(GRCUser.id == payload.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found.")
+    from .auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [user.id])
 
     # Idempotent — duplicate add returns the existing row instead of 400.
     existing = (

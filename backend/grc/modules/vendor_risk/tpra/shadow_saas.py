@@ -558,7 +558,10 @@ def onboard(app_id: int, body: DecisionIn = DecisionIn(), db: Session = Depends(
         raise HTTPException(status.HTTP_409_CONFLICT, f"{existing.name} is already on record (ID {existing.id})")
     owner = None
     if app.owner_email:
-        owner = db.query(GRCUser.id).filter(func.lower(GRCUser.email) == app.owner_email, GRCUser.is_active.is_(True)).scalar()
+        from ....routers.auth_router import platform_account
+
+        owner = db.query(GRCUser.id).filter(func.lower(GRCUser.email) == app.owner_email, GRCUser.is_active.is_(True),
+                                            platform_account()).scalar()
     answers = _intake(app)
     v = Vendor(tenant_id=app.tenant_id, name=app.name, website=f"https://{app.domain}" if app.domain else None, tier="medium",
                status="requested", intake_status="draft", requested_by=user.id, owner_id=owner or user.id,

@@ -102,8 +102,14 @@ def _doc_or_404(document_id: int, user_tenants: List[int], db: Session) -> Gover
 
 
 def _resolve_target_users(db: Session, tenant_ids: List[int], target_type: str, target_id: int) -> Set[int]:
-    """Expand a participant target to its distinct member user ids."""
+    """Expand a participant target to its distinct member user ids (of a role or a team, the platform accounts only: an account an
+    access review imported is never asked to sign)."""
     from ....models import UserRole
+    from ....routers.auth_router import platform_account
+
+    def people(ids: Set[int]) -> Set[int]:
+        return {uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.id.in_(ids), platform_account())} if ids else set()
+
     if target_type == "user":
         return {int(target_id)}
     if target_type == "role":
@@ -112,7 +118,7 @@ def _resolve_target_users(db: Session, tenant_ids: List[int], target_type: str, 
         rows = db.query(UserRole.user_id).filter(
             UserRole.role_id == target_id, UserRole.tenant_id.in_(tenant_ids), PLATFORM_GRANT
         ).all()
-        return {r[0] for r in rows}
+        return people({r[0] for r in rows})
     if target_type == "team":
         try:
             from ....models import TeamMember, Team
@@ -123,7 +129,7 @@ def _resolve_target_users(db: Session, tenant_ids: List[int], target_type: str, 
         team = db.query(Team).filter(Team.id == target_id).first()
         if team and getattr(team, "lead_user_id", None):
             out.add(team.lead_user_id)
-        return out
+        return people(out)
     return set()
 
 
@@ -277,6 +283,13 @@ def set_participants(
     if doc.status not in ("draft", "pending_review", "pending_approval"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Participants can only be edited before the document is approved.")
+    from ....routers.auth_router import refuse_imported_accounts
+
+    # a person newly named must use the platform; one already named is sent back as it is (prepared-by is, by the details dialog)
+    had = {(a.role_type, a.target_id) for a in _assignments(db, document_id) if a.target_type == "user"}
+    refuse_imported_accounts(db, [it.target_id for role_type, items in (("prepared_by", body.prepared_by), ("reviewer", body.reviewers),
+                                                                        ("approver", body.approvers))
+                                  for it in (items or []) if it.target_type == "user" and (role_type, it.target_id) not in had])
 
     db.query(DocumentSignoffAssignment).filter(
         DocumentSignoffAssignment.document_id == document_id

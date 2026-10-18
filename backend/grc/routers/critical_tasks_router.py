@@ -17,6 +17,7 @@ from ..models import (
     CriticalTaskTemplate, CriticalTaskApproval, NotificationPreference
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
+from .auth_router import platform_account, refuse_imported_accounts
 from ..services.ai_gateway.field_policies import AliasBook, ai_view
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ def _validate_tenant_user(db: Session, user_id: Optional[int], user_tenants: Lis
     ).first()
     if not user:
         raise HTTPException(status_code=400, detail=f"User {user_id} does not belong to your tenant")
+    refuse_imported_accounts(db, [user_id])
 
 
 def _normalize_assignee_list(db: Session, raw_ids) -> List[int]:
@@ -70,6 +72,7 @@ def _normalize_assignee_list(db: Session, raw_ids) -> List[int]:
             status_code=400,
             detail=f"Users {missing} do not belong to your tenant",
         )
+    refuse_imported_accounts(db, cleaned)
     return cleaned
 
 
@@ -621,7 +624,7 @@ def get_tenant_users(
     """
     users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active == True)
+        .filter(GRCUser.is_active == True, platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )

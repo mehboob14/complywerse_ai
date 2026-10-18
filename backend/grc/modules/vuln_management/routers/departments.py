@@ -351,7 +351,10 @@ def add_department_member(
     user = db.query(GRCUser).filter(GRCUser.id == request.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [user.id])
+
     existing = db.query(GRCDepartmentMember).filter(
         GRCDepartmentMember.department_id == dept_id,
         GRCDepartmentMember.user_id == request.user_id

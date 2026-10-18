@@ -99,9 +99,12 @@ def send_workflow_notification(
     if not target_user_ids:
         return {"notified_users": 0, "channels": _normalize_channels(channels), "results": []}
 
+    from ....routers.auth_router import platform_account
+
     users = db.query(GRCUser).filter(
         GRCUser.id.in_(target_user_ids),
         GRCUser.is_active.is_(True),
+        platform_account(),         # an account an access review imported is never alerted or emailed
     ).all()
 
     channels_normalized = _normalize_channels(channels)

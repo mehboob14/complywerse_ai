@@ -711,9 +711,11 @@ def list_tenant_users_for_assignment(
     though users exist. The simple query below is correct for the per-tenant
     DB model used here.
     """
+    from ....routers.auth_router import platform_account
+
     users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active == True)
+        .filter(GRCUser.is_active == True, platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )

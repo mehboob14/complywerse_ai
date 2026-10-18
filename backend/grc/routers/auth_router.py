@@ -218,6 +218,49 @@ def has_tenant_permission(db: Session, user: GRCUser, *names: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Who uses this platform. An access-review connector (DigitalOcean, Okta, Google, SailPoint, LDAP/AD, the Entra directory sync)
+# imports the accounts it reviews into grc_users; they belong to Access Reviews only: never listed or picked as people, never an
+# owner, signer or assignee, and they cannot sign in. Every list of people, assignment check and sign-in routes through these.
+# ---------------------------------------------------------------------------
+
+def platform_account():
+    """SQL filter on grc_users: accounts made here (no external provider) or by the organisation's SSO (an Entra account the
+    directory sync did not stamp), anyone who has signed in, and an imported account an administrator gave a role by hand (a
+    person the platform added before a connector matched them by email)."""
+    from sqlalchemy import and_, select
+
+    from .sso_router import PROVIDER_ENTRA
+
+    return or_(GRCUser.external_provider.is_(None), GRCUser.last_login.isnot(None),
+               and_(GRCUser.external_provider == PROVIDER_ENTRA, GRCUser.access_synced_at.is_(None)),
+               GRCUser.id.in_(select(UserRole.user_id).where(UserRole.source.is_(None), UserRole.assigned_by.isnot(None))))
+
+
+def is_platform_account(db: Session, user: Optional[GRCUser]) -> bool:
+    """The rule of ``platform_account`` for one stored user."""
+    return user is not None and db.query(GRCUser.id).filter(GRCUser.id == user.id, platform_account()).first() is not None
+
+
+def imported_account_problem(db: Session, user_ids) -> Optional[str]:
+    """A sentence naming the first of ``user_ids`` that an access review imported (None when all are platform accounts or unknown)."""
+    ids = {int(i) for i in (user_ids or []) if i}
+    if not ids:
+        return None
+    row = db.query(GRCUser).filter(GRCUser.id.in_(ids), ~platform_account()).order_by(GRCUser.id).first()
+    if row is None:
+        return None
+    return (f"{row.display_name or row.username} is an account an access review imported, not a user of this platform. "
+            "Choose someone who signs in here.")
+
+
+def refuse_imported_accounts(db: Session, user_ids) -> None:
+    """HTTP 400 when one of ``user_ids`` is an account an access review imported."""
+    problem = imported_account_problem(db, user_ids)
+    if problem:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=problem)
+
+
+# ---------------------------------------------------------------------------
 # Authentication dependencies
 # ---------------------------------------------------------------------------
 
@@ -531,6 +574,9 @@ def login(
 
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
+        if not is_platform_account(tdb, user):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                                detail="This account was imported by an access review and cannot sign in. Ask your administrator for a user account.")
 
         # Reset counters + bump last_activity on success.
         register_successful_login(user, tdb)

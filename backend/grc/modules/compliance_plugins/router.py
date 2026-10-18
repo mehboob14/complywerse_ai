@@ -416,7 +416,9 @@ def per_user_summary(
     tenant_users: list[dict] = []
 
     # Public grc_users for this tenant — same DB, no cross-tenant leakage
-    # because the per-tenant connection only sees its own rows.
+    # because the per-tenant connection only sees its own rows. Accounts an access review imported are not members.
+    from ...routers.auth_router import platform_account
+
     public_users = {
         u.id: {
             "id": u.id,
@@ -424,7 +426,7 @@ def per_user_summary(
             "email": u.email,
             "display_name": getattr(u, "display_name", None) or u.username,
         }
-        for u in db.query(GRCUser).all()
+        for u in db.query(GRCUser).filter(platform_account()).all()
     }
 
     # Merge by EMAIL (the only stable identity across the public and

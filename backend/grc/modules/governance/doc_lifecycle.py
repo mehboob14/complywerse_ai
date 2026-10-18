@@ -109,28 +109,23 @@ def _safe(fn):
 
 # ── people, alerts, tasks ────────────────────────────────────────────────────
 def _people(db, ids: Optional[Iterable[int]] = None) -> List[int]:
-    """The active users who are people (of ``ids``, or all): local or SSO accounts, or anyone who has signed in."""
-    from sqlalchemy import and_, or_
-
+    """The active users who are people (of ``ids``, or all): platform accounts (auth_router.platform_account), not accounts an
+    access-review connector imported."""
     from ...models import GRCUser
-    from ...routers.sso_router import PROVIDER_ENTRA
+    from ...routers.auth_router import platform_account
 
-    # an Entra account counts before its first sign-in only when SSO made it; the access-review directory sync stamps
-    # access_synced_at on the accounts it imports (mailboxes, service and room accounts among them)
-    q = db.query(GRCUser.id).filter(GRCUser.is_active.is_(True), or_(
-        GRCUser.external_provider.is_(None), GRCUser.last_login.isnot(None),
-        and_(GRCUser.external_provider == PROVIDER_ENTRA, GRCUser.access_synced_at.is_(None))))
+    q = db.query(GRCUser.id).filter(GRCUser.is_active.is_(True), platform_account())
     if ids is not None:
         q = q.filter(GRCUser.id.in_({int(i) for i in ids if i}))
     return [uid for (uid,) in q.order_by(GRCUser.id)]
 
 
 def _members(db, doc, a) -> List[int]:
-    """Who a sign-off participant asks: the chosen user, or the people among a role's or a team's members."""
+    """Who a sign-off participant asks: the people among the chosen user or a role's or a team's members (an account an access
+    review imported that was named before the pickers left such accounts out is not asked; the daily sweep would cancel it)."""
     from .routers.document_signoff import _resolve_target_users
 
-    ids = _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id)
-    return sorted(ids) if a.target_type == "user" else _people(db, ids)
+    return _people(db, _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id))
 
 
 def _names(db, ids: Iterable[int]) -> Dict[int, str]:

@@ -737,7 +737,10 @@ def list_users(
     user: TenantUser = Depends(require_permission("admin:users:view")),
     tenant_db: Session = Depends(get_tenant_db)
 ):
-    users = tenant_db.query(TenantUser).all()
+    from .auth_router import platform_account
+
+    # the users of this platform: accounts an access review imported are listed in Access Reviews only
+    users = tenant_db.query(TenantUser).filter(platform_account()).order_by(TenantUser.id).all()
 
     result = []
     for u in users:
@@ -805,6 +808,11 @@ def create_user(
     ).first()
 
     if existing:
+        from .auth_router import is_platform_account
+
+        if not is_platform_account(tenant_db, existing):       # not on the Users page, so say why the name is taken
+            raise HTTPException(status_code=400, detail="An access review imported an account with this username or email, "
+                                                        "so it cannot be used for a new user.")
         raise HTTPException(status_code=400, detail="Username or email already exists")
 
     # Enforce this tenant's password complexity policy. The admin "Password
