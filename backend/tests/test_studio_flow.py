@@ -369,6 +369,15 @@ def test_only_a_draft_never_in_the_library_can_be_discarded(world):
         assert refused.status_code == 400 and "Archive it from the library" in refused.json()["detail"]
         assert world.http.get(world.api(f"/sessions/{s['id']}")).status_code == 200
     assert world.db.get(m.GovernanceDocument, up["document_id"]) is not None
+    # archiving the document in the library takes its work off the studio's list; restoring it brings the work back
+    listed = lambda: {i["id"] for i in world.http.get(world.api("/sessions")).json()["items"]}
+    assert listed() == {lib["id"], up["id"]}
+    world.db.get(m.GovernanceDocument, up["document_id"]).status = "archived"
+    world.db.commit()
+    assert listed() == {lib["id"]}
+    world.db.get(m.GovernanceDocument, up["document_id"]).status = "draft"
+    world.db.commit()
+    assert listed() == {lib["id"], up["id"]}
 
 
 # ── checks ───────────────────────────────────────────────────────────────────
