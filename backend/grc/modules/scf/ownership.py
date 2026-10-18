@@ -26,6 +26,13 @@ CADENCE_DAYS = {"Quarterly": 90, "Semi-Annual": 180, "Annual": 365}
 _ARTIFACT_WORK_STATUSES = ("draft", "in_review", "planned", "in_progress")
 
 
+def control_link(scf_id: str) -> str:
+    """The control's page, which its notifications open (the bell, the email's button)."""
+    from urllib.parse import quote
+
+    return f"/automation/soc2-controls/{quote(str(scf_id), safe='')}"
+
+
 def compute_next_due(
     last_assessed_at: Optional[datetime],
     conformity_cadence: Optional[str],
@@ -161,6 +168,7 @@ def _notify_ownership(
             workflow_instance_id=None,
             user_ids=ids,
             notification_type="info",
+            link=control_link(scf_id),
         )
     except Exception:
         logger.exception("ownership notify failed for scf_id=%s", scf_id)

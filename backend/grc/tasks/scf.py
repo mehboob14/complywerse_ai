@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 def attestation_reminders_for_tenant(self, tenant_slug: str, db: Session = None) -> dict:
     """Notify owners/assignees for due/overdue SCF control attestations."""
     from grc.models import SCFControlState
-    from grc.modules.scf.ownership import _as_int_list
+    from grc.modules.scf.ownership import _as_int_list, control_link
     from grc.modules.workflow_engine.services.notification_service import (
         send_workflow_notification,
     )
@@ -69,6 +69,7 @@ def attestation_reminders_for_tenant(self, tenant_slug: str, db: Session = None)
                 workflow_instance_id=None,
                 user_ids=sorted(user_ids),
                 notification_type="warning" if overdue else "info",
+                link=control_link(state.scf_id),
             )
             notified += 1
         except Exception:

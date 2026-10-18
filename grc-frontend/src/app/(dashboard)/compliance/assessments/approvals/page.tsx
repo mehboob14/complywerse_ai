@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import apiClient from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { approvalAnchor } from '@/components/layout/headerLinks';
 import {
   ArrowLeft,
   FileText,
@@ -177,6 +178,17 @@ export default function PendingApprovalsPage() {
     },
   });
 
+  // opened from the top bar's Pending approvals (#approval-compliance-12): that item, once the list is in
+  const [focused, setFocused] = useState('');
+  useEffect(() => {
+    const anchor = decodeURIComponent(window.location.hash.slice(1));
+    const el = pendingApprovals && anchor ? document.getElementById(anchor) : null;
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.focus({ preventScroll: true });
+    setFocused(anchor);
+  }, [pendingApprovals]);
+
   const handleAction = (approval: PendingApproval, action: string) => {
     if (action === 'approve') {
       setProcessingId(approval.id);
@@ -249,7 +261,8 @@ export default function PendingApprovalsPage() {
             const isExpanded = expandedId === approval.id;
             
             return (
-              <div key={approval.id} className="card">
+              <div key={approval.id} id={approvalAnchor(approval.source, approval.id)} tabIndex={-1}
+                className={`card outline-none ${focused === approvalAnchor(approval.source, approval.id) ? 'ring-2 ring-[#0f766e]' : ''}`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-3 mb-2">

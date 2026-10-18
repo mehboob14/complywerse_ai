@@ -10,8 +10,11 @@ import { GuideToggle } from '@/components/guide';
 import DocumentsTabs, { inDocumentsArea } from '@/components/governance/DocumentsTabs';
 import { usePermissions } from '@/hooks/usePermissions';
 import { parseUtc } from '@/lib/serverTime';
+import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
 
 const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge' };
+// a dropdown item that opens what it is about (a link: Tab, Enter)
+const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
 
 const navIconProps = {
   size: 18,
@@ -123,7 +126,7 @@ export default function Header() {
 
   // Pending compliance approvals — surfaced as a top-bar quick-action so it's
   // visible from anywhere (it used to be a Compliance sidebar row).
-  const { data: pendingApprovalsData } = useQuery({
+  const { data: pendingApprovalsData, refetch: refetchApprovals } = useQuery({
     queryKey: ['header-pending-approvals'],
     queryFn: () => apiClient.get('/compliance/assessments/pending-approvals').then((r) => r.data),
     refetchInterval: 60000,
@@ -136,7 +139,7 @@ export default function Header() {
     ? pendingApprovalsData.pending_approvals
     : Array.isArray(pendingApprovalsData) ? pendingApprovalsData : [];
   // Documents waiting for the person to review, approve or acknowledge (same query and key as My Approvals)
-  const { data: docRequests } = useQuery({
+  const { data: docRequests, refetch: refetchDocRequests } = useQuery({
     queryKey: ['my-document-requests'],
     queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
       enabled: boolean; items?: Array<{ id: number; kind: string; document_id: number; title: string; due_date: string | null; overdue: boolean }>;
@@ -148,18 +151,27 @@ export default function Header() {
   const canSeeGovernance = usePermissions().hasPermission('governance:policies:*');
   const pendingApprovalCount = pendingApprovalItems.length + docRequestItems.length;
 
+  // shown as read at once (row and badge), then told to the server; the refetch corrects it if that failed
+  const showRead = (id?: number) => {
+    void queryClient.cancelQueries({ queryKey: ['workflow-notifications'] });     // a poll already on its way would show it unread again
+    queryClient.setQueryData(['workflow-notifications'], (old: any) => (Array.isArray(old?.items)
+      ? { ...old, items: old.items.map((n: any) => (id === undefined || n.id === id ? { ...n, is_read: true } : n)) } : old));
+  };
+
   const markAllRead = async () => {
+    showRead();
     try {
       await apiClient.post('/workflow-engine/notifications/in-app/read-all');
-      refetchNotifs();
     } catch {/* ignore */}
+    refetchNotifs();
   };
 
   const markOneRead = async (id: number) => {
+    showRead(id);
     try {
       await apiClient.post(`/workflow-engine/notifications/in-app/${id}/read`);
-      refetchNotifs();
     } catch {/* ignore */}
+    refetchNotifs();
   };
 
   const timeAgo = (iso: string) => {
@@ -277,9 +289,14 @@ export default function Header() {
         <div className="relative" ref={approvalsRef}>
           <button
             type="button"
-            onClick={() => setApprovalsOpen((p) => !p)}
+            onClick={() => {
+              // opened: the list as it is now (an item done a moment ago is gone)
+              if (!approvalsOpen) { refetchApprovals(); refetchDocRequests(); }
+              setApprovalsOpen(!approvalsOpen);
+            }}
             title="Pending approvals"
             aria-label="Pending approvals"
+            aria-expanded={approvalsOpen}
             className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
           >
             <ClipboardCheck size={18} strokeWidth={1.75} />
@@ -301,19 +318,20 @@ export default function Header() {
                 {docRequestItems.slice(0, 12).map((it) => (
                   <Link
                     key={`doc-${it.id}`}
-                    href={`/governance/documents/${it.document_id}?tab=lifecycle`}
+                    href={docRequestHref(it)}
                     onClick={() => setApprovalsOpen(false)}
-                    className="flex gap-3 px-4 py-3 text-xs hover:bg-amber-50/60"
+                    className={ITEM_LINK}
                   >
                     <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
                     <div className="flex-1 min-w-0">
-                      <p className="font-medium leading-snug truncate text-gray-800">{it.title}</p>
-                      <p className="mt-0.5 text-gray-400">
+                      <p className="font-medium leading-snug truncate text-[#1f2933]">{it.title}</p>
+                      <p className={`mt-0.5 ${it.overdue ? 'text-[#9b1c1c]' : 'text-[#586472]'}`}>
                         {DOC_ASK[it.kind] || it.kind}
                         {it.due_date ? ` · due ${parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) ?? ''}` : ''}
                         {it.overdue ? ' · overdue' : ''}
                       </p>
                     </div>
+                    <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
                   </Link>
                 ))}
                 {pendingApprovalCount === 0 ? (
@@ -322,22 +340,23 @@ export default function Header() {
                   pendingApprovalItems.slice(0, 12).map((item) => (
                     <Link
                       key={item.id}
-                      href="/compliance/assessments/approvals"
+                      href={assessmentApprovalHref(item)}
                       onClick={() => setApprovalsOpen(false)}
-                      className="flex gap-3 px-4 py-3 text-xs hover:bg-amber-50/60"
+                      className={ITEM_LINK}
                     >
                       <ClipboardCheck size={14} className="mt-0.5 flex-shrink-0 text-amber-500" />
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium leading-snug truncate text-gray-800">
+                        <p className="font-medium leading-snug truncate text-[#1f2933]">
                           {item.assessment_name || item.evidence_name || item.control_description || `Item #${item.item_number ?? item.id}`}
                         </p>
                         {(item.control_description || item.evidence_name) && (
-                          <p className="mt-0.5 text-gray-500 leading-snug truncate">{item.control_description || item.evidence_name}</p>
+                          <p className="mt-0.5 text-[#26323d] leading-snug truncate">{item.control_description || item.evidence_name}</p>
                         )}
-                        <p className="mt-0.5 text-gray-400">
+                        <p className="mt-0.5 text-[#586472]">
                           {item.status ? String(item.status).replace(/_/g, ' ') : 'pending'}{item.submitted_at ? ` · ${timeAgo(item.submitted_at)}` : ''}
                         </p>
                       </div>
+                      <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
                     </Link>
                   ))
                 )}
@@ -361,9 +380,13 @@ export default function Header() {
         <div className="relative" ref={notifRef}>
           <button
             type="button"
-            onClick={() => setNotifOpen((p) => !p)}
+            onClick={() => {
+              if (!notifOpen) refetchNotifs();
+              setNotifOpen(!notifOpen);
+            }}
             className="relative rounded-md p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-subtle)] hover:text-[var(--color-text)]"
             aria-label="Notifications"
+            aria-expanded={notifOpen}
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -391,29 +414,45 @@ export default function Header() {
                 {notifications.length === 0 ? (
                   <div className="px-4 py-6 text-center text-xs text-gray-400">No notifications</div>
                 ) : (
-                  notifications.map((n) => (
-                    <div
-                      key={n.id}
-                      className={`flex gap-3 px-4 py-3 text-xs cursor-pointer ${!n.is_read ? 'bg-blue-50' : 'bg-white'}`}
-                      onClick={() => {
-                        if (!n.is_read) markOneRead(n.id);
-                        // opens what it is about (e.g. the document); only a path inside the app, never another site
-                        const to = n.link || n.url;
-                        if (to && /^\/(?![/\\])/.test(to)) { setNotifOpen(false); router.push(to); }
-                      }}
-                    >
-                      <span className={`mt-0.5 h-2 w-2 flex-shrink-0 rounded-full ${
-                        n.notification_type === 'error' ? 'bg-red-500' :
-                        n.notification_type === 'warning' ? 'bg-yellow-500' :
-                        n.notification_type === 'success' ? 'bg-green-500' : 'bg-blue-500'
-                      } ${n.is_read ? 'opacity-30' : ''}`} />
-                      <div className="flex-1 min-w-0">
-                        <p className={`font-medium leading-snug truncate ${!n.is_read ? 'text-gray-800' : 'text-gray-500'}`}>{n.subject}</p>
-                        {n.message && <p className="mt-0.5 text-gray-500 leading-snug">{n.message}</p>}
-                        <p className="mt-0.5 text-gray-400">{timeAgo(n.created_at)}</p>
+                  notifications.map((n) => {
+                    // opens what it is about (only a page of the app); nothing to open: plain text
+                    const href = notificationHref(n);
+                    const body = (
+                      <>
+                        <span className={`mt-1 h-2 w-2 flex-shrink-0 rounded-full ${
+                          n.notification_type === 'error' ? 'bg-red-500' :
+                          n.notification_type === 'warning' ? 'bg-yellow-500' :
+                          n.notification_type === 'success' ? 'bg-green-500' : 'bg-blue-500'
+                        } ${n.is_read ? 'opacity-30' : ''}`} />
+                        <div className="flex-1 min-w-0">
+                          <p className={`font-medium leading-snug truncate ${!n.is_read ? 'text-[#1f2933]' : 'text-[#586472]'}`}>{n.subject}</p>
+                          {n.message && <p className="mt-0.5 text-[#586472] leading-snug">{n.message}</p>}
+                          <p className="mt-0.5 text-[#7b8794]">{timeAgo(n.created_at)}</p>
+                        </div>
+                      </>
+                    );
+                    return href ? (
+                      <Link
+                        key={n.id}
+                        href={href}
+                        onClick={() => { if (!n.is_read) markOneRead(n.id); setNotifOpen(false); }}
+                        className={`${ITEM_LINK} ${!n.is_read ? 'bg-blue-50' : ''}`}
+                      >
+                        {body}
+                        <ChevronRight size={14} className="mt-0.5 flex-shrink-0 text-[#7b8794]" aria-hidden />
+                      </Link>
+                    ) : (
+                      <div key={n.id} className={`flex gap-3 px-4 py-3 text-xs ${!n.is_read ? 'bg-blue-50' : ''}`}>
+                        {body}
+                        {!n.is_read && (
+                          <button type="button" onClick={() => markOneRead(n.id)}
+                            className="h-fit flex-shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium text-[#0f766e] hover:bg-[#e6f4f1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]">
+                            Mark read
+                          </button>
+                        )}
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
             </div>
