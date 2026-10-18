@@ -42,7 +42,7 @@ ORIGIN_LABEL = {"ai": "Comply Agent", "manual": "Edited by hand", "mixed": "Comp
                 "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
 # audit entries that matter to the chain (the rest - views, downloads, field edits - do not)
 _EVENT_ACTIONS = {"created", "sent_for_review", "sent_for_approval", "signed", "rejected", "published", "archived", "status_changed",
-                  "review_completed", "version_rollback"}
+                  "review_completed", "version_rollback", "restored"}
 
 
 # ── cutting a difference into changes ────────────────────────────────────────
@@ -587,7 +587,8 @@ def catalog(c: Dict[str, Any]) -> Dict[str, List[List[Any]]]:
                for s in c["sources"]]
     approvals = [[_clock(e["at"]), {"created": "Created", "sent_for_review": "Sent for review", "sent_for_approval": "Sent for approval", "signed": "Signed",
                                      "rejected": "Rejected", "published": "Published", "archived": "Archived", "status_changed": "Status changed",
-                                     "review_completed": "Review completed", "version_rollback": "Earlier version restored"}.get(e["kind"], e["kind"]),
+                                     "review_completed": "Review completed", "version_rollback": "Earlier version restored",
+                                     "restored": "Restored from the archive"}.get(e["kind"], e["kind"]),
                   e["actor"] or "", e["detail"] or ""] for e in c["events"]]
     return {"versions": versions, "changes": changes, "sources": sources, "approvals": approvals}
 

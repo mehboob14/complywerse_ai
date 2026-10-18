@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertCircle, Archive, ArrowLeft, ChevronDown, Download, FileText, Info, Link2, Loader2, MoreHorizontal, PenLine, Send, Sparkles, XCircle,
+  AlertCircle, Archive, ArchiveRestore, ArrowLeft, ChevronDown, Download, FileText, Info, Link2, Loader2, MoreHorizontal, PenLine, Send, Sparkles, XCircle,
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { documentApi, type DraftOpened } from '@/lib/studio/documentApi';
@@ -29,7 +29,7 @@ import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPan
 import GovernanceMappingsPage from '../../mappings/page';
 import { SIGNOFF_STATUS, SignOffControlTab, SignoffAction, StatusChip, useSignoff } from '../_SignoffControl';
 import { LifecycleHover } from '../_workspace/LifecycleHover';
-import { bulkArchive } from '../_workspace/api';
+import { bulkArchive, restoreDocument } from '../_workspace/api';
 import LifecycleTab, { AckAction, SettingsCard } from './_LifecycleTab';
 import ChainTab from './_ChainTab';
 import { DocumentSignoffPanel, DocumentVersionHistoryPanel, DocumentViewerTab } from './_DocumentViewer';
@@ -158,17 +158,29 @@ export default function DocumentStudio() {
   // still loading it is shown, so a library reader is not sent off ?tab=mappings (the server decides anyway)
   const library = permsLoading || hasPermission('governance:policies:*');
   useEffect(() => { if (!library && view === 'mappings') setViewState('document'); }, [library, view]);
+  // the library's lists, the register's own keys included (DocumentsWorkspace.refreshAll), so they show it archived or restored at once
+  const refreshLibrary = () => {
+    for (const key of ['governance-documents', 'governance-documents-for-compare', 'gov-docs-workspace', 'gov-docs-hierarchy', 'gov-docs-summary',
+      'gov-docs-overdue', 'gov-docs-mypending', 'gov-docs-coverage']) qc.invalidateQueries({ queryKey: [key] });
+    refreshAll();
+  };
   // documents are archived, never deleted (the user, 2026-10-17): every version, signature and the history are kept
   const archive = useMutation({
     mutationFn: () => bulkArchive([id]),
     onSuccess: () => {
       setPopup(null);
-      // the library's lists, the register's own keys included (DocumentsWorkspace.refreshAll), so they show it archived at once
-      for (const key of ['governance-documents', 'governance-documents-for-compare', 'gov-docs-workspace', 'gov-docs-hierarchy', 'gov-docs-summary',
-        'gov-docs-overdue', 'gov-docs-mypending', 'gov-docs-coverage']) qc.invalidateQueries({ queryKey: [key] });
-      refreshAll();
+      refreshLibrary();
       toast({ type: 'success', title: 'Document archived', message: 'It is no longer in force; its versions and history are kept.' });
     },
+  });
+  // back as a draft: it is reviewed, approved and published again before it is in force; no version is made by restoring
+  const unarchive = useMutation({
+    mutationFn: () => restoreDocument(id),
+    onSuccess: () => {
+      refreshLibrary();
+      toast({ type: 'success', title: 'Restored as a draft', message: 'Send it for review when it is ready: it is in force again once approved and published.' });
+    },
+    onError: (e) => toast({ type: 'error', title: 'Not restored', message: problemOf(e) }),
   });
 
   // a version asked for by the URL where the life cycle is off: its Versions view is only a button, so the version history opens
@@ -232,6 +244,7 @@ export default function DocumentStudio() {
   const meId = lc?.me?.id;
   // archiving needs edit rights, as the server's bulk-archive does
   const canArchive = canEdit && doc.status !== 'archived';
+  const archived = doc.status === 'archived';
   // a rejection is of the version on its way: not shown to someone reading the published one (`newer_version`)
   const rejected = lc && !doc.newer_version ? rejectionOf(doc.status, lc.approvals) : null;
   // remarks: editors, auditors and the sign-off's people (the server's ensure_annotator); unknown to an older server: shown
@@ -286,9 +299,9 @@ export default function DocumentStudio() {
             <h1 className="min-w-0 truncate text-[15px] font-semibold text-[#1f2933]" title={doc.title}>{doc.title}</h1>
             {doc.document_code && <span className="hidden shrink-0 font-mono text-xs text-[#586472] md:inline">{doc.document_code}</span>}
             {/* the version read is the published one for someone the server sent `newer_version`; the version on its way is a pill */}
-            <LifecycleHover doc={doc} focusable><StatusChip status={doc.newer_version ? 'published' : doc.status} /></LifecycleHover>
+            <LifecycleHover doc={doc} focusable><StatusChip status={doc.newer_version && !archived ? 'published' : doc.status} /></LifecycleHover>
             <span className="shrink-0 text-xs font-semibold text-[#3f4b58]">v{version}</span>
-            {doc.newer_version ? (
+            {doc.newer_version && !archived ? (
               <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">v{doc.newer_version.number} {SIGNOFF_STATUS[doc.newer_version.status]?.label.toLowerCase() ?? 'on its way'}</span>
             ) : inForceNote && (
               <span className="shrink-0 rounded-full border border-[#99d5cc] bg-[#effaf8] px-2 py-0.5 text-[11px] font-medium text-[#0b4f46]">v{doc.version_in_force} in force</span>
@@ -343,6 +356,7 @@ export default function DocumentStudio() {
                   {lifecycleOn && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('settings'); }}>Due dates and escalation…</button>}
                   {!lifecycleOn && <Link role="menuitem" href="/governance/workflows" className={ITEM} onClick={close}>Older approval requests</Link>}
                   {canArchive && <button type="button" role="menuitem" className={ITEM_DANGER} onClick={() => { close(); archive.reset(); setPopup('archive'); }}><Archive className="h-4 w-4" /> Archive document…</button>}
+                  {archived && canEdit && <button type="button" role="menuitem" className={ITEM} disabled={unarchive.isPending} onClick={() => { close(); unarchive.mutate(); }}><ArchiveRestore className="h-4 w-4" /> Restore from the archive</button>}
                 </>
               )}
             </Menu>
@@ -369,6 +383,20 @@ export default function DocumentStudio() {
 
       {/* ── the view ────────────────────────────────────────────────── */}
       <div className="min-h-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-6xl space-y-3 px-3 py-4 sm:px-4">
+        {archived && (
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#c3ccd5] bg-[#eef1f4] px-4 py-2.5" role="status">
+            <Archive className="h-4 w-4 shrink-0 text-[#3f4b58]" aria-hidden />
+            <span className="min-w-0 flex-1 text-sm text-[#26323d]">
+              <span className="font-semibold text-[#1f2933]">Archived{doc.archived_at ? ` on ${day(doc.archived_at)}` : ''}{doc.archived_by_name ? ` by ${doc.archived_by_name}` : ''}.</span>
+              {canEdit ? ' It is not in force. Restore it to work on it again as a draft; it is in force again once approved and published.' : ' It is not in force.'}
+            </span>
+            {canEdit && (
+              <button type="button" onClick={() => unarchive.mutate()} disabled={unarchive.isPending} className={BTN}>
+                {unarchive.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArchiveRestore className="h-4 w-4" />} Restore
+              </button>
+            )}
+          </div>
+        )}
         {personal && view === 'document' && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5" role="status">
             <span className="min-w-0 flex-1 text-sm text-amber-950">
@@ -472,7 +500,7 @@ export default function DocumentStudio() {
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
-          <p className="text-sm text-[#26323d]">It is no longer in force, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it as Archived.</p>
+          <p className="text-sm text-[#26323d]">It is no longer in force, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can restore it as a draft.</p>
           {archive.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not archived: {problemOf(archive.error)}</p>}
         </div>
       </AnimatedModal>
