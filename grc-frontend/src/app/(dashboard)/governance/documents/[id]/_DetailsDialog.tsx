@@ -15,7 +15,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { personOf } from '@/lib/people';
 import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
 import { addMonths } from '../_detailsRead';
-import { MAX_TAGS, addTags, cleanTag, tagSuggestions } from '../_tags';
+import { MAX_TAGS, addTags, leftOut, splitTags, tagSuggestions } from '../_tags';
 import { ReviewerApproverFields, useSignoff, type Participant, type SignoffChoice } from '../_SignoffControl';
 
 const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -90,18 +90,29 @@ function Value({ label, wide, mono, children }: { label: string; wide?: boolean;
 }
 
 /** Chips with a remove button, a box to type a new one (Enter or a comma adds it; Backspace in the empty box removes the last), and
- *  the tags other documents use to pick from. Text left in the box is added when the focus leaves the field, so Save never drops it. */
-function TagField({ value, onChange, used, labelledBy }: { value: string[]; onChange: (tags: string[]) => void; used: string[]; labelledBy: string }) {
-  const [text, setText] = useState('');
-  const wrap = useRef<HTMLDivElement>(null);
+ *  the tags other documents use to pick from. The typed text is the popup's (`text`), so Save adds what is still in the box. */
+function TagField({ value, onChange, text, onText, used, labelledBy }: {
+  value: string[]; onChange: (tags: string[]) => void; text: string; onText: (text: string) => void; used: string[]; labelledBy: string;
+}) {
+  const [left, setLeft] = useState<string[]>([]);                          // typed past the limit, so not added
   const box = useRef<HTMLInputElement>(null);
+  const lastRemove = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
   const full = value.length >= MAX_TAGS;
-  const parts = text.split(',').map(cleanTag).filter(Boolean);             // a comma separates several
+  const parts = splitTags(text);                                           // a comma separates several
   const isNew = parts.some((p) => !value.some((t) => t.toLowerCase() === p.toLowerCase()));
   const hints = full ? [] : tagSuggestions(used, value, text);
-  const commit = (parts: string[]) => { onChange(addTags(value, parts)); setText(''); };
-  const add = (parts: string[]) => { commit(parts); box.current?.focus(); };
-  const remove = (t: string) => { onChange(value.filter((x) => x !== t)); box.current?.focus(); };
+  // after adding or removing, the focus stays in the field: the box, or, when the limit hides it, the last tag's remove button
+  useEffect(() => {
+    if (!refocus.current) return;
+    refocus.current = false;
+    (box.current ?? lastRemove.current)?.focus();
+  });
+  const add = (parts: string[]) => {
+    const tags = addTags(value, parts);
+    onChange(tags); onText(''); setLeft(leftOut(tags, parts)); refocus.current = true;
+  };
+  const remove = (t: string) => { onChange(value.filter((x) => x !== t)); setLeft([]); refocus.current = true; };
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter' || e.key === ',') {
@@ -112,29 +123,34 @@ function TagField({ value, onChange, used, labelledBy }: { value: string[]; onCh
     }
   };
   return (
-    // a press anywhere in the field keeps the typing in the box (a button's click still runs), so picking a tag never adds the half-typed one too;
-    // leaving the field from any of its parts adds what is typed, without pulling the focus back (the next field or Save gets it)
-    <div ref={wrap} onMouseDown={(e) => { if (e.target !== box.current) { e.preventDefault(); box.current?.focus(); } }}
-      onBlur={(e) => { if (parts.length && !wrap.current?.contains(e.relatedTarget as Node | null)) commit(parts); }}>
+    // a press anywhere in the field keeps the typing in the box (a button's click still runs); leaving the field keeps the text in the box
+    <div onMouseDown={(e) => { if (e.target !== box.current) { e.preventDefault(); box.current?.focus(); } }}>
       <div className="flex min-h-[34px] flex-wrap items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2 py-1 focus-within:ring-2 focus-within:ring-[#1ed4b0]">
-        {value.map((t) => (
+        {value.map((t, i) => (
           <span key={t} className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#d5dbe1] bg-[#f3f6f8] py-0.5 pl-2 pr-1 text-xs text-[#26323d]">
             <span className="min-w-0 truncate">{t}</span>
-            <button type="button" onClick={() => remove(t)} aria-label={`Remove tag ${t}`}
+            <button ref={i === value.length - 1 ? lastRemove : undefined} type="button" onClick={() => remove(t)} aria-label={`Remove tag ${t}`}
               className="rounded-full p-0.5 text-[#586472] hover:bg-[#e3e8ec] hover:text-[#1f2933] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
               <X className="h-3 w-3" aria-hidden />
             </button>
           </span>
         ))}
         {!full && (
-          <input ref={box} type="text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown}
+          <input ref={box} type="text" value={text} onChange={(e) => onText(e.target.value)} onKeyDown={onKeyDown}
             aria-labelledby={labelledBy} placeholder={value.length ? 'Add a tag' : 'Type a tag and press Enter'}
             className="min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-0" />
         )}
       </div>
-      {(full || (isNew && !full) || hints.length > 0) && (
+      {/* always there, so a screen reader hears the limit when the focus has moved to a remove button */}
+      <div role="status" className="text-xs text-[#586472]">
+        {full && (
+          <span className="mt-1.5 block break-words">
+            {left.length ? `Not added, as a document has up to ${MAX_TAGS} tags: ${left.join(', ')}. ` : `Up to ${MAX_TAGS} tags. `}Remove one to add another.
+          </span>
+        )}
+      </div>
+      {((isNew && !full) || hints.length > 0) && (
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {full && <span className="text-xs text-[#586472]">Up to {MAX_TAGS} tags. Remove one to add another.</span>}
           {isNew && !full && (
             <button type="button" onClick={() => add(parts)}
               className="max-w-full truncate rounded-full border border-[#0f766e] bg-[#ecf8f5] px-2 py-0.5 text-xs font-semibold text-[#0b6b58] hover:bg-[#d7f0ea] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
@@ -171,6 +187,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     return { reviewers: keep(signoffQ.data?.participants.reviewer), approvers: keep(signoffQ.data?.participants.approver) };
   }, [signoffQ.data]);
   const [people, setPeople] = useState<SignoffChoice | null>(null);          // null: as the server has them
+  const [tagText, setTagText] = useState('');                                 // typed in the tag box, not added yet: Save adds it
 
   useEffect(() => {
     if (!open) return;
@@ -178,6 +195,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     setBase(f);
     setForm(f);
     setPeople(null);
+    setTagText('');
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps -- reset only when the popup opens
 
   const tenantId: number | undefined = doc?.tenant_id;
@@ -246,7 +264,9 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
   const usedTags = useMemo(() => others.filter((d) => d.id !== doc?.id).flatMap((d) => d.tags || []), [others, doc?.id]);
   const tagsLabel = useId();
 
-  const patch = useMemo(() => changes(base, form), [base, form]);
+  const typed = useMemo(() => splitTags(tagText), [tagText]);
+  const saveTags = useMemo(() => addTags(form.tags, typed), [form.tags, typed]);
+  const patch = useMemo(() => changes(base, { ...form, tags: saveTags }), [base, form, saveTags]);
   const keyOf = (l: Participant[]) => l.map((p) => `${p.target_type}:${p.target_id}`).sort().join(',');
   const peopleChanged = people !== null
     && (keyOf(people.reviewers) !== keyOf(serverPeople.reviewers) || keyOf(people.approvers) !== keyOf(serverPeople.approvers));
@@ -269,7 +289,9 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
       qc.invalidateQueries({ queryKey: ['doc-signoff', doc.id] });
       qc.invalidateQueries({ queryKey: ['document-lifecycle'] });
       onSaved?.(patch);
-      toast({ type: 'success', title: 'Details saved' });
+      const notAdded = leftOut(saveTags, typed);                              // typed past the limit
+      toast({ type: 'success', title: 'Details saved',
+              message: notAdded.length ? `Not added, as a document has up to ${MAX_TAGS} tags: ${notAdded.join(', ')}.` : undefined });
       onClose();
     },
     onError: (e: any) => {
@@ -341,7 +363,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     canEdit ? (
       <div key="Tags" className="min-w-0 sm:col-span-2">
         <span id={tagsLabel} className="mb-1 block text-xs font-semibold text-[#26323d]">Tags</span>
-        <TagField value={form.tags} onChange={(tags) => set({ tags })} used={usedTags} labelledBy={tagsLabel} />
+        <TagField value={form.tags} onChange={(tags) => set({ tags })} text={tagText} onText={setTagText} used={usedTags} labelledBy={tagsLabel} />
       </div>
     ) : (
       <Value key="Tags" label="Tags" wide>

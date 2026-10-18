@@ -23,6 +23,24 @@ export function addTags(current: readonly string[], parts: readonly string[]): s
   return out;
 }
 
+/** What is typed in the tag box as tags: split at commas, each cleaned, empty ones left out. */
+export function splitTags(text: string): string[] {
+  return String(text ?? '').split(',').map(cleanTag).filter(Boolean);
+}
+
+/** The `parts` that `tags` does not hold (any case), each once: after addTags, the ones the limit left out. */
+export function leftOut(tags: readonly string[], parts: readonly string[]): string[] {
+  const seen = new Set(tags.map((t) => t.toLowerCase()));
+  const out: string[] = [];
+  for (const part of parts) {
+    const t = cleanTag(part);
+    if (!t || seen.has(t.toLowerCase())) continue;
+    seen.add(t.toLowerCase());
+    out.push(t);
+  }
+  return out;
+}
+
 /** The tags other documents use that are not chosen yet and contain `query`: each once, A to Z, at most `limit`. */
 export function tagSuggestions(used: readonly unknown[], chosen: readonly string[], query = '', limit = 8): string[] {
   const taken = new Set(chosen.map((t) => t.toLowerCase()));

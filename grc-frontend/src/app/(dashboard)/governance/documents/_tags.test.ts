@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { MAX_TAGS, MAX_TAG_LENGTH, addTags, cleanTag, tagSuggestions } from './_tags.ts';
+import { MAX_TAGS, MAX_TAG_LENGTH, addTags, cleanTag, leftOut, splitTags, tagSuggestions } from './_tags.ts';
 
 test('a tag is trimmed, its inner spaces collapsed and cut to the longest a tag may be', () => {
   assert.equal(cleanTag('  ISO   27001 \t'), 'ISO 27001');
@@ -28,4 +28,21 @@ test('suggestions are the tags of other documents not chosen yet, each once, mat
   assert.deepEqual(tagSuggestions(used, [], 'ACC'), ['access']);
   assert.deepEqual(tagSuggestions(used, [], '', 2), ['access', 'ISO 27001']);
   assert.deepEqual(tagSuggestions([], ['x'], 'y'), []);
+});
+
+test('typed text becomes tags: split at commas, cleaned, empty parts left out', () => {
+  assert.deepEqual(splitTags(' Privacy ,, ISO   27001,  '), ['Privacy', 'ISO 27001']);
+  assert.deepEqual(splitTags('   '), []);
+  assert.deepEqual(splitTags(''), []);
+});
+
+test('the parts the limit left out are named, each once; parts already there or added are not', () => {
+  const many = Array.from({ length: MAX_TAGS - 1 }, (_, i) => `t${i}`);
+  const parts = splitTags('x, T0, y, z, Y');
+  const tags = addTags(many, parts);
+  assert.equal(tags.length, MAX_TAGS);
+  assert.deepEqual(leftOut(tags, parts), ['y', 'z']);
+  assert.deepEqual(leftOut(addTags(['a'], ['b']), ['b', 'A']), []);                               // nothing left out under the limit
+  const typed = splitTags(Array.from({ length: MAX_TAGS + 1 }, (_, i) => `p${i}`).join(','));
+  assert.deepEqual(leftOut(addTags([], typed), typed), [`p${MAX_TAGS}`]);                           // the 21st of "p0,...,p20"
 });
