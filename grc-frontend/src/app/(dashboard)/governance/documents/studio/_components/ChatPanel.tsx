@@ -498,7 +498,6 @@ export default function ChatPanel(props: ChatPanelProps) {
   const chat = useMemo(() => messages.filter((m) => m.kind === 'chat'), [messages]);
   const working = chat.some((m) => m.status === 'working');
   const [text, setText] = useState('');
-  const [ideasOpen, setIdeasOpen] = useState(false);              // suggestions: shown while the conversation is empty, on request after
   const end = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const atBottom = useRef(true);                                // follow the answer as it is written, unless the person scrolled up to read
@@ -584,10 +583,10 @@ export default function ChatPanel(props: ChatPanelProps) {
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
         onDrop={(e) => { setDragging(false); if (aiConfigured && e.dataTransfer.files.length) { e.preventDefault(); attach(e.dataTransfer.files); } }}>
         {dragging && <p className="mb-2 text-center text-xs font-semibold text-[#0b6b58]">Drop the files to attach them</p>}
-        {(chat.length === 0 || ideasOpen) && !working && aiConfigured && (
+        {chat.length === 0 && !working && aiConfigured && (
           <div className="mb-2 flex flex-wrap gap-1.5">
             {ideas(session).map((idea) => (
-              <button key={idea} type="button" onClick={() => { setText(idea); setIdeasOpen(false); area.current?.focus(); }}
+              <button key={idea} type="button" onClick={() => { setText(idea); area.current?.focus(); }}
                 className="rounded-full border border-[#c5ccd3] bg-[#f8fafb] px-2.5 py-1 text-left text-[11px] text-[#3f4b58] hover:border-[#0f766e] hover:bg-[#e6f4f1]">{idea}</button>
             ))}
           </div>
@@ -639,12 +638,6 @@ export default function ChatPanel(props: ChatPanelProps) {
             </button>
           )}
         </div>
-        <p className="mt-1 flex flex-wrap gap-x-3 text-[11px] text-[#586472]">
-          <button type="button" onClick={() => props.onOpenTab('references')} className="hover:underline">{plural(session.references.length, 'reference')} attached{session.references.some((r) => !r.include) ? ` · ${num(session.references.filter((r) => !r.include).length)} paused` : ''}</button>
-          {session.instructions.entity_name ? <button type="button" onClick={() => props.onOpenTab('instructions')} className="hover:underline">Entity: {session.instructions.entity_name}</button> : null}
-          {chat.length > 0 && aiConfigured && <button type="button" onClick={() => setIdeasOpen((v) => !v)} aria-expanded={ideasOpen} className="hover:underline">{ideasOpen ? 'Hide ideas' : 'Ideas'}</button>}
-          <span className="ml-auto">Attach or drop any file · Enter to send · Shift+Enter for a new line</span>
-        </p>
       </div>
     </div>
   );
