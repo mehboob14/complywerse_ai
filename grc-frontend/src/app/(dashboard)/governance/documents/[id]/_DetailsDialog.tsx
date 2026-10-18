@@ -1,12 +1,13 @@
 'use client';
 
-// The document's Details popup: title, code, type, classification, owner, department, review cycle and dates, frameworks, parent,
+// The document's Details popup: title, type, classification, owner, department, review cycle and dates, frameworks, parent,
 // tags, description, and who reviews and approves it. Read-only for people who cannot edit; otherwise Save sends only what changed
 // (PUT /governance/documents/{id}; the reviewers and approvers to …/signoff/participants, while it is a draft or on its way).
+// The code (document_code) is neither shown nor sent: a document keeps the one it has.
 // The lists share their React Query keys (and shapes) with the document pages, so they come from one cache.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Loader2 } from 'lucide-react';
+import { Loader2, X } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { MultiSelectDropdown, type MultiSelectDropdownItem as Item } from '@/components/ui/MultiSelectDropdown';
@@ -14,6 +15,7 @@ import { useToast } from '@/components/ui/ToastProvider';
 import { personOf } from '@/lib/people';
 import { CLASSES, CYCLES, DOC_TYPES as TYPES, ParentPicker, titleCase, useLibraryDocuments, useOrgDepartments, useOrgUsers, withCurrent } from '../_DetailsFields';
 import { addMonths } from '../_detailsRead';
+import { MAX_TAGS, addTags, cleanTag, tagSuggestions } from '../_tags';
 import { ReviewerApproverFields, useSignoff, type Participant, type SignoffChoice } from '../_SignoffControl';
 
 const INPUT = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
@@ -22,7 +24,7 @@ const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-4 p
 const SECONDARY = 'rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#26323d] hover:bg-[#f3f6f8]';
 
 type Form = {
-  title: string; document_code: string; doc_type: string; classification: string;
+  title: string; doc_type: string; classification: string;
   owner_id: number | null; department_id: number | null; review_cycle_months: number | null;
   effective_date: string; next_review_date: string; applicable_framework_ids: number[];
   parent_document_id: number | null; tags: string[]; description: string;
@@ -30,7 +32,6 @@ type Form = {
 
 const fromDoc = (doc: any): Form => ({
   title: doc?.title || '',
-  document_code: doc?.document_code || '',
   doc_type: doc?.doc_type || '',
   classification: String(doc?.classification || '').toLowerCase(),
   owner_id: doc?.owner_id ?? null,
@@ -44,7 +45,7 @@ const fromDoc = (doc: any): Form => ({
   description: doc?.description || '',
 });
 
-const NULL_WHEN_EMPTY = new Set<string>(['document_code', 'description', 'effective_date', 'next_review_date']);
+const NULL_WHEN_EMPTY = new Set<string>(['description', 'effective_date', 'next_review_date']);
 
 /** Only the fields that differ from `base`; text trimmed, an emptied optional text or date sent as null. */
 function changes(base: Form, form: Form): Record<string, unknown> {
@@ -84,6 +85,69 @@ function Value({ label, wide, mono, children }: { label: string; wide?: boolean;
       <dd className={`mt-0.5 whitespace-pre-wrap break-words text-sm text-[#1f2933] ${mono ? 'font-mono' : ''}`}>
         {empty ? <span className="text-sm text-[#586472]">—</span> : children}
       </dd>
+    </div>
+  );
+}
+
+/** Chips with a remove button, a box to type a new one (Enter or a comma adds it; Backspace in the empty box removes the last), and
+ *  the tags other documents use to pick from. Text left in the box is added when the box loses focus, so Save never drops it. */
+function TagField({ value, onChange, used, labelledBy }: { value: string[]; onChange: (tags: string[]) => void; used: string[]; labelledBy: string }) {
+  const [text, setText] = useState('');
+  const wrap = useRef<HTMLDivElement>(null);
+  const box = useRef<HTMLInputElement>(null);
+  const full = value.length >= MAX_TAGS;
+  const parts = text.split(',').map(cleanTag).filter(Boolean);             // a comma separates several
+  const isNew = parts.some((p) => !value.some((t) => t.toLowerCase() === p.toLowerCase()));
+  const hints = full ? [] : tagSuggestions(used, value, text);
+  const add = (parts: string[]) => { onChange(addTags(value, parts)); setText(''); box.current?.focus(); };
+  const remove = (t: string) => { onChange(value.filter((x) => x !== t)); box.current?.focus(); };
+  const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();                                     // Enter would also submit the popup's form
+      if (parts.length) add(parts);
+    } else if (e.key === 'Backspace' && !text && value.length) {
+      onChange(value.slice(0, -1));
+    }
+  };
+  return (
+    // a press anywhere in the field keeps the typing in the box (a button's click still runs), so picking a tag never adds the half-typed one too
+    <div ref={wrap} onMouseDown={(e) => { if (e.target !== box.current) { e.preventDefault(); box.current?.focus(); } }}>
+      <div className="flex min-h-[34px] flex-wrap items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2 py-1 focus-within:ring-2 focus-within:ring-[#1ed4b0]">
+        {value.map((t) => (
+          <span key={t} className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#d5dbe1] bg-[#f3f6f8] py-0.5 pl-2 pr-1 text-xs text-[#26323d]">
+            <span className="min-w-0 truncate">{t}</span>
+            <button type="button" onClick={() => remove(t)} aria-label={`Remove tag ${t}`}
+              className="rounded-full p-0.5 text-[#586472] hover:bg-[#e3e8ec] hover:text-[#1f2933] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
+              <X className="h-3 w-3" aria-hidden />
+            </button>
+          </span>
+        ))}
+        {!full && (
+          <input ref={box} type="text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown}
+            onBlur={(e) => { if (parts.length && !wrap.current?.contains(e.relatedTarget as Node | null)) add(parts); }}
+            aria-labelledby={labelledBy} placeholder={value.length ? 'Add a tag' : 'Type a tag and press Enter'}
+            className="min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-0" />
+        )}
+      </div>
+      {(full || (isNew && !full) || hints.length > 0) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {full && <span className="text-xs text-[#586472]">Up to {MAX_TAGS} tags. Remove one to add another.</span>}
+          {isNew && !full && (
+            <button type="button" onClick={() => add(parts)}
+              className="max-w-full truncate rounded-full border border-[#0f766e] bg-[#ecf8f5] px-2 py-0.5 text-xs font-semibold text-[#0b6b58] hover:bg-[#d7f0ea] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
+              + Add “{parts.join(', ')}”
+            </button>
+          )}
+          {hints.length > 0 && <span className="text-xs text-[#586472]">{text.trim() ? 'Matching tags:' : 'Used on other documents:'}</span>}
+          {hints.map((h) => (
+            <button key={h} type="button" onClick={() => add([h])} aria-label={`Add tag ${h}`}
+              className="max-w-full truncate rounded-full border border-dashed border-[#9fb3b8] bg-white px-2 py-0.5 text-xs text-[#26323d] hover:border-[#0f766e] hover:bg-[#ecf8f5] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#1ed4b0]">
+              + {h}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -177,11 +241,8 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     return out;
   }, [doc?.id, others]);
 
-  const tagItems = useMemo<Item[]>(() => {
-    const all = new Set<string>(form.tags);
-    for (const d of others) for (const t of d.tags || []) if (typeof t === 'string' && t.trim()) all.add(t.trim());
-    return Array.from(all).sort((a, b) => a.localeCompare(b)).map((t) => ({ value: t, label: t }));
-  }, [others, form.tags]);
+  const usedTags = useMemo(() => others.flatMap((d) => d.tags || []), [others]);
+  const tagsLabel = useId();
 
   const patch = useMemo(() => changes(base, form), [base, form]);
   const keyOf = (l: Participant[]) => l.map((p) => `${p.target_type}:${p.target_id}`).sort().join(',');
@@ -240,9 +301,6 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     row('Title', form.title,
       <input type="text" value={form.title} onChange={(e) => set({ title: e.target.value })} required aria-invalid={!form.title.trim()} className={INPUT} />,
       { wide: true }),
-    row('Code', form.document_code,
-      <input type="text" value={form.document_code} onChange={(e) => set({ document_code: e.target.value })} placeholder="e.g. POL-001" className={`${INPUT} font-mono`} />,
-      { mono: true }),
     row('Type', labelOf(types, form.doc_type),
       <select value={form.doc_type} onChange={(e) => set({ doc_type: e.target.value })} className={INPUT}>
         {!form.doc_type && <option value="">Choose…</option>}
@@ -268,22 +326,30 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
       <input type="date" value={form.effective_date} onChange={(e) => setSchedule({ effective_date: e.target.value })} className={INPUT} />),
     row('Next review', day(form.next_review_date),
       <input type="date" value={form.next_review_date} onChange={(e) => set({ next_review_date: e.target.value })} className={INPUT} />),
+    // next to Next review, so the half-width fields pair up in two columns
+    row('Parent document', doc?.parent_document?.title || '',
+      <ParentPicker value={form.parent_document_id} onChange={(id) => set({ parent_document_id: id })} exclude={notParents} enabled={open}
+        title={doc?.parent_document?.id === form.parent_document_id ? doc?.parent_document?.title : undefined} />),
     row('Frameworks', form.applicable_framework_ids.map((id) => fwItems.find((i) => i.value === String(id))?.label || `Framework ${id}`).join(', '),
       <MultiSelectDropdown title="Frameworks" items={fwItems} selectedValues={form.applicable_framework_ids.map(String)}
         onApply={(v) => set({ applicable_framework_ids: v.map(Number).filter((n) => !Number.isNaN(n)) })}
         multiSelect triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="Choose frameworks" triggerClassName={TRIGGER} />,
       { wide: true }),
-    row('Parent document', doc?.parent_document?.title || '',
-      <ParentPicker value={form.parent_document_id} onChange={(id) => set({ parent_document_id: id })} exclude={notParents} enabled={open}
-        title={doc?.parent_document?.id === form.parent_document_id ? doc?.parent_document?.title : undefined} />),
-    row('Tags', form.tags.length ? (
-      <span className="flex flex-wrap gap-1">
-        {form.tags.map((t) => <span key={t} className="rounded-full border border-[#d5dbe1] px-2 py-0.5 text-[11px] text-[#26323d]">{t}</span>)}
-      </span>
-    ) : '',
-      <MultiSelectDropdown title="Tags" items={tagItems} selectedValues={form.tags} onApply={(v) => set({ tags: v })}
-        onCreate={(text) => { const t = text.trim(); if (t && !form.tags.includes(t)) set({ tags: [...form.tags, t] }); }}
-        multiSelect triggerVariant="input" size="sm" forceSearch showAvatars={false} placeholder="Add tags" triggerClassName={TRIGGER} />),
+    // not a <label>: one around the chips' remove buttons would press the first of them when "Tags" is clicked
+    canEdit ? (
+      <div key="Tags" className="min-w-0 sm:col-span-2">
+        <span id={tagsLabel} className="mb-1 block text-xs font-semibold text-[#26323d]">Tags</span>
+        <TagField value={form.tags} onChange={(tags) => set({ tags })} used={usedTags} labelledBy={tagsLabel} />
+      </div>
+    ) : (
+      <Value key="Tags" label="Tags" wide>
+        {form.tags.length ? (
+          <span className="flex flex-wrap gap-1">
+            {form.tags.map((t) => <span key={t} className="rounded-full border border-[#d5dbe1] px-2 py-0.5 text-[11px] text-[#26323d]">{t}</span>)}
+          </span>
+        ) : ''}
+      </Value>
+    ),
     row('Description', form.description,
       <textarea value={form.description} onChange={(e) => set({ description: e.target.value })} rows={3} className={INPUT} />,
       { wide: true }),
