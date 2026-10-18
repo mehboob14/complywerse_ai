@@ -295,7 +295,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         </div>
       </div>
 
-      {/* Adaptive layout: Tree = 3-pane workspace (tree · list · attention rail);
+      {/* Adaptive layout: Tree = 2-pane workspace (library tree · the register nested by parent);
           Table/Board = full-width to match the dense-register / pipeline frames. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
         {view === 'tree' && (

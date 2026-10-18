@@ -33,6 +33,12 @@ const PAD = 12;            // the title cell's left padding
 const GAP = 6;             // between the open/close button and the type tile
 const LINE = 'absolute w-px bg-[#c5ced6]';
 const EMPTY = new Set<number>();
+// The tree is wider than its column on most screens: the Actions column stays in view while the details scroll sideways
+// (not on a phone, where it would cover the title). Its cell needs the row's own colour (the platform's zebra: every
+// second row --color-subtle; hover the same).
+const STICKY = 'sm:sticky sm:right-0 sm:z-[1] sm:shadow-[inset_1px_0_0_#dde1e7]';
+const stickyCell = (i: number) =>
+  `${STICKY} ${i % 2 ? 'bg-[var(--color-subtle,#f1f3f5)]' : 'bg-[#fff] group-hover:bg-[var(--color-subtle,#f1f3f5)]'}`;
 
 const REVIEW: ColumnDef<GovDoc> = {
   id: 'review',
@@ -65,7 +71,7 @@ function Guides({ row }: { row: TreeRow<GovDoc> }) {
   );
 }
 
-function TitleCell({ row, onToggle, onOpen }: { row: TreeRow<GovDoc>; onToggle: (id: number) => void; onOpen: (id: number) => void }) {
+function TitleCell({ row, parentTitle, onToggle, onOpen }: { row: TreeRow<GovDoc>; parentTitle?: string; onToggle: (id: number) => void; onOpen: (id: number) => void }) {
   const d = row.doc;
   return (
     <td className="relative py-2 align-middle" style={{ minWidth: 320, paddingLeft: PAD, paddingRight: PAD }}>
@@ -93,6 +99,8 @@ function TitleCell({ row, onToggle, onOpen }: { row: TreeRow<GovDoc>; onToggle: 
           >
             {d.title}
           </button>
+          {/* the lines show the nesting to the eye; this says it to a screen reader */}
+          {parentTitle && <span className="sr-only">, under {parentTitle}</span>}
           {row.childCount > 0 && !row.expanded && (
             <span className="ml-1.5 whitespace-nowrap text-[11px] text-[#586472]">{row.childCount} under it</span>
           )}
@@ -120,8 +128,10 @@ export function DocumentTree({ docs, scope, columns, headerDoc, breadcrumb, tota
   };
 
   const rows = useMemo(() => flattenTree(roots, collapsed), [roots, collapsed]);
+  const titleOf = useMemo(() => new Map(scope.map((d) => [d.id, d.title])), [scope]);
   const context = rows.filter((r) => !r.match).length;
-  const cols = [...columns.filter((c) => c.id !== 'title' && c.id !== 'actions'), REVIEW, ...columns.filter((c) => c.id === 'actions')];
+  const shown = columns.filter((c) => !c.hidden);     // as the Table: a hidden column is not drawn
+  const cols = [...shown.filter((c) => c.id !== 'title' && c.id !== 'actions'), REVIEW, ...shown.filter((c) => c.id === 'actions')];
   const th = 'px-3 py-3 text-left text-[11px] font-bold uppercase tracking-wider text-slate-600';
   const btn = 'inline-flex items-center gap-1.5 rounded-lg border border-[#d5dbe1] bg-white px-2.5 py-1 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
 
@@ -165,7 +175,7 @@ export function DocumentTree({ docs, scope, columns, headerDoc, breadcrumb, tota
               <tr className="border-b-2 border-slate-300 bg-slate-200/70">
                 <th className={th} style={{ minWidth: 320 }}>Title</th>
                 {cols.map((c) => (
-                  <th key={c.id} className={th} style={{ width: c.width, minWidth: c.minWidth }}>{c.header}</th>
+                  <th key={c.id} className={`${th} ${c.id === 'actions' ? `${STICKY} bg-[var(--color-subtle,#f1f3f5)]` : ''}`} style={{ width: c.width, minWidth: c.minWidth }}>{c.header}</th>
                 ))}
               </tr>
             </thead>
@@ -184,11 +194,12 @@ export function DocumentTree({ docs, scope, columns, headerDoc, breadcrumb, tota
                   <tr
                     key={r.doc.id}
                     onClick={() => onOpenDoc(r.doc.id)}
-                    className="cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50"
+                    className="group cursor-pointer border-b border-slate-100 transition-colors hover:bg-slate-50"
                   >
-                    <TitleCell row={r} onToggle={toggle} onOpen={onOpenDoc} />
+                    <TitleCell row={r} parentTitle={r.depth > 0 && r.doc.parent_document_id != null ? titleOf.get(r.doc.parent_document_id) : undefined}
+                      onToggle={toggle} onOpen={onOpenDoc} />
                     {cols.map((c) => (
-                      <td key={c.id} className="px-3 py-2.5 text-sm text-slate-600" style={{ width: c.width, minWidth: c.minWidth }}>
+                      <td key={c.id} className={`px-3 py-2.5 text-sm text-slate-600 ${c.id === 'actions' ? stickyCell(i) : ''}`} style={{ width: c.width, minWidth: c.minWidth }}>
                         {cell(c, r.doc, i)}
                       </td>
                     ))}
