@@ -2,9 +2,9 @@
 
 /**
  * Governance Documents Workspace — the new home of /governance/documents.
- * A persistent left library/hierarchy tree + an adaptive center view
- * (Tree list / Register table / Lifecycle board) + a right "Needs attention"
- * rail (shown on the Tree home). Data + scope/filter/view state live here;
+ * A persistent left library/hierarchy tree (Tree view) + an adaptive center view
+ * (Tree: the register nested by parent / Register table / Lifecycle board).
+ * Data + scope/filter/view state live here;
  * the views are presentational. The existing create/upload/AI-draft/templates
  * modals stay in page.tsx and are opened via the callbacks passed in.
  */
@@ -14,19 +14,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { FolderTree, Table2, KanbanSquare, Plus, Sparkles, LayoutTemplate, Search } from 'lucide-react';
 import { MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
 import { assetsApi, governanceApi } from '@/lib/api';
-import SignDialog from '@/components/governance/SignDialog';
 import { parseUtc } from '@/lib/serverTime';
 import type { GovDoc, GovDocNode } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
-  fetchDocuments, fetchHierarchy, fetchSummary, fetchOverdueReviews, fetchMyPending, fetchCoverageMap,
-  bulkUpdateStatus, bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, signOffDocument,
+  fetchDocuments, fetchHierarchy, fetchSummary, fetchCoverageMap,
+  bulkUpdateStatus, bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish,
 } from './api';
 import { LibraryTree } from './LibraryTree';
-import { WorkspaceList } from './WorkspaceList';
 import { RegisterTable } from './RegisterTable';
 import { LifecycleBoard } from './LifecycleBoard';
-import { AttentionRail } from './AttentionRail';
 
 type ViewMode = 'tree' | 'table' | 'board';
 type LibraryKey = 'all' | 'recent' | 'mine';
@@ -102,8 +99,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // refetched on every visit: a version saved a moment ago shows in the tree at once
   const { data: hierarchy = [] } = useQuery({ queryKey: ['gov-docs-hierarchy'], queryFn: fetchHierarchy, refetchOnMount: 'always' });
   const { data: summary } = useQuery({ queryKey: ['gov-docs-summary'], queryFn: fetchSummary });
-  const { data: overdue } = useQuery({ queryKey: ['gov-docs-overdue'], queryFn: fetchOverdueReviews });
-  const { data: myPending } = useQuery({ queryKey: ['gov-docs-mypending'], queryFn: fetchMyPending });
   const { data: coverageMap = {} } = useQuery({ queryKey: ['gov-docs-coverage'], queryFn: fetchCoverageMap });
   const { data: users = [] } = useQuery({
     queryKey: ['tenant-users-gov'],
@@ -154,12 +149,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     return out;
   }, [scopedDocs, typeFilter, statusFilter, ownerFilter, search, library, selectedNodeId]);
 
-  // list (tree view) sorted by review date (overdue first, nulls last)
-  const listSorted = useMemo(() => {
-    const val = (d: GovDoc) => (d.next_review_date ? new Date(d.next_review_date).getTime() : Number.POSITIVE_INFINITY);
-    return [...filteredDocs].sort((a, b) => val(a) - val(b));
-  }, [filteredDocs]);
-
   const headerDoc = selectedNodeId != null ? allDocs.find((d) => d.id === selectedNodeId) ?? null : null;
   const breadcrumb = useMemo(() => {
     if (selectedNodeId == null) return ['All documents'];
@@ -167,16 +156,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     if (!path || path.length === 0) return ['All documents'];
     return [pluralType(path[0].doc_type), ...path.map((n) => n.title)];
   }, [hierarchy, selectedNodeId]);
-
-  const attestationGaps = useMemo(
-    () =>
-      allDocs
-        .filter((d) => coverageMap[d.id] != null && coverageMap[d.id] < 90)
-        .map((d) => ({ id: d.id, title: d.title, pct: coverageMap[d.id] }))
-        .sort((a, b) => a.pct - b.pct)
-        .slice(0, 6),
-    [allDocs, coverageMap]
-  );
 
   // ── handlers ──
   const openDoc = (id: number) => router.push(`/governance/documents/${id}`);
@@ -200,28 +179,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     if (!reviewDateFor || !reviewDate) return;
     await runBulk(() => bulkSetReviewDate(reviewDateFor, new Date(reviewDate).toISOString()), 'Review date set');
     setReviewDateFor(null); setReviewDate('');
-  };
-
-  // A sign-off is signed electronically: "Approve" in the rail opens the signature box instead of signing blind.
-  const [signing, setSigning] = useState<{ id: number; title: string; stage?: string } | null>(null);
-  const [signBusy, setSignBusy] = useState(false);
-  const onApproveFromRail = (docId: number) => {
-    const item = myPending?.items?.find((i: { document_id: number }) => i.document_id === docId);
-    setSigning({ id: docId, title: item?.title ?? `Document ${docId}`, stage: item?.stage_label });
-  };
-  const doSign = async (signature: string, comment: string) => {
-    if (!signing) return;
-    setSignBusy(true);
-    try {
-      await signOffDocument(signing.id, signature, comment);
-      toast({ title: 'Signed off', type: 'success' });
-      setSigning(null);
-      refreshAll();
-    } catch (e: unknown) {
-      toast({ title: 'Could not sign', message: (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail || 'Try again.', type: 'error' });
-    } finally {
-      setSignBusy(false);
-    }
   };
 
   // ── register row actions ──
@@ -356,13 +313,12 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           </aside>
         )}
 
-        <section className={view === 'tree' ? 'lg:col-span-6' : 'lg:col-span-12'}>
+        <section className={`min-w-0 ${view === 'tree' ? 'lg:col-span-9' : 'lg:col-span-12'}`}>
           {docsLoading ? (
             <div className="card"><PageLoader className="h-96" /></div>
-          ) : view === 'tree' ? (
-            <WorkspaceList docs={listSorted} headerDoc={headerDoc} breadcrumb={breadcrumb} onOpenDoc={openDoc} />
-          ) : view === 'table' ? (
+          ) : view !== 'board' ? (
             <RegisterTable
+              tree={view === 'tree' ? { scope: scopedDocs, headerDoc, breadcrumb } : undefined}
               docs={filteredDocs}
               totalCount={summary?.total_documents ?? allDocs.length}
               updatedLabel={updatedLabel}
@@ -384,26 +340,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             <LifecycleBoard docs={filteredDocs} onOpenDoc={openDoc} />
           )}
         </section>
-
-        {view === 'tree' && (
-          <aside className="lg:col-span-3">
-            <div className="lg:sticky lg:top-4">
-              <AttentionRail
-                overdue={overdue ?? { count: 0, documents: [] }}
-                myPending={myPending ?? { total: 0, items: [] }}
-                attestationGaps={attestationGaps}
-                onOpenDoc={openDoc}
-                onApprove={onApproveFromRail}
-                onReview={openDoc}
-                onAIDraft={onAIDraft}
-                onTemplates={onTemplates}
-              />
-            </div>
-          </aside>
-        )}
       </div>
-
-      <SignDialog open={signing != null} title={signing?.title ?? ''} stage={signing?.stage} busy={signBusy} onClose={() => setSigning(null)} onSign={doSign} />
 
       {/* Bulk: assign owner */}
       <RightSlidePanel isOpen={assignOwnerFor != null} onClose={() => setAssignOwnerFor(null)} title={`Assign owner · ${assignOwnerFor?.length ?? 0} documents`}>
