@@ -70,12 +70,14 @@ def remind(document_id: int, db: Session = Depends(get_db), current_user: GRCUse
                                                   DocumentObligation.status == "pending").all()
     people = set(doc_lifecycle._people(db))
     pending = [o for o in pending if o.user_id in people]                  # never an account that is not a person
+    # the reminder channels; with reminders off, one someone asks for by hand still goes in the app
+    event = "reminder" if doc_lifecycle.channels(doc_lifecycle.settings(db, doc.tenant_id), "reminder") else None
     for kind in {o.kind for o in pending}:
         ids = [o.user_id for o in pending if o.kind == kind]
         doc_lifecycle._notify(db, doc, ids, f"Reminder: {doc_lifecycle._VERB[kind]} {doc.title}",
                               f"{current_user.display_name or current_user.username} reminds you to "
                               f"{doc_lifecycle._VERB[kind].lower()} \"{doc.title}\".", "warning", link=doc_lifecycle._link(doc, kind),
-                              event="reminder")
+                              event=event)
     db.commit()
     return {"reminded": len({o.user_id for o in pending})}
 

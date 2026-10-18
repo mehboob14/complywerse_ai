@@ -183,6 +183,30 @@ def test_each_event_goes_only_where_the_organisation_chose(world, monkeypatch):
         assert ("Due soon: Acknowledge Access policy", ("in_app",)) in calls
 
 
+def test_a_reminder_asked_for_by_hand_still_goes_in_the_app_when_reminders_are_off(world, monkeypatch):
+    from grc.models import get_db
+    from grc.modules.governance.routers.document_lifecycle import router
+
+    calls = sent_channels(monkeypatch)
+    app = FastAPI()
+    app.include_router(router)
+    db = world.factory()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: user(db, 1)
+    client = TestClient(app)
+    life.save_settings(db, 1, {"notify": {"reminder": "off"}}, 1)
+    publish(db)
+    calls.clear()
+    assert client.post("/documents/5/lifecycle/remind").json()["reminded"] == 7
+    assert calls == [("Reminder: Acknowledge Access policy", ("in_app",))]
+    assert alerts(db, 6)[-1].subject == "Reminder: Acknowledge Access policy"
+    life.save_settings(db, 1, {"notify": {"reminder": "email"}}, 1)
+    calls.clear()
+    client.post("/documents/5/lifecycle/remind")
+    assert calls == [("Reminder: Acknowledge Access policy", ("email",))]          # otherwise the organisation's channels
+    db.close()
+
+
 def test_task_creation_can_be_switched_off_per_kind_and_tasks_follow_the_priority_and_templates(world):
     with world.factory() as db:
         life.save_settings(db, 1, {"task_create": {"acknowledgement": False}, "task_priority": {"review": "Critical"},

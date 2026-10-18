@@ -54,6 +54,8 @@ test('only what changed is sent, a map whole, never the derived email switch', (
   assert.deepEqual(changes(base, base), {});
   const draft = { ...base, review_days: 3, email: false, notify: { ...base.notify, rejected: 'off' as const } };
   assert.deepEqual(changes(base, draft), { review_days: 3, notify: draft.notify });
+  // the server's review_days follows approval_days until it is set: a new approval_days pins the review days the form shows
+  assert.deepEqual(changes(base, { ...base, approval_days: 10 }), { approval_days: 10, review_days: 7 });
 });
 
 test('a request\'s course: first reminder, due date, owner told, escalated', () => {
@@ -61,4 +63,5 @@ test('a request\'s course: first reminder, due date, owner told, escalated', () 
   assert.deepEqual(courseOf('review', { ...base, owner_after_days: 1, admin_after_days: 5 }, today),
     { due: '25 Oct 2026', firstReminder: '22 Oct 2026', owner: '26 Oct 2026', further: '30 Oct 2026' });
   assert.equal(courseOf('review', { ...base, remind_days: 0 }, today).firstReminder, null);
+  assert.equal(courseOf('review', { ...base, remind_days: 10 }, today).firstReminder, '18 Oct 2026');     // further ahead: at once
 });

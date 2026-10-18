@@ -117,6 +117,8 @@ export function changes(saved: GovernanceSettings, draft: GovernanceSettings): P
     if (key === 'email') continue;                   // follows the channels on the server
     if (JSON.stringify(saved[key]) !== JSON.stringify(draft[key])) out[key] = draft[key];
   }
+  // the server's review_days follows approval_days until it is set: send it too, so what the form shows is what is saved
+  if ('approval_days' in out) out.review_days = draft.review_days;
   return out as Partial<GovernanceSettings>;
 }
 
@@ -136,7 +138,8 @@ export function sampleValues(kind: Kind, s: GovernanceSettings, today: Date = ne
 export function courseOf(kind: Kind, s: GovernanceSettings, today: Date = new Date()) {
   const days = kind === 'acknowledgement' ? s.ack_days : kind === 'review' ? s.review_days : s.approval_days;
   const due = addDays(today, days);
-  const firstReminder = s.remind_days > 0 && s.remind_days < days ? addDays(due, -s.remind_days) : null;
+  // a reminder further ahead than the request is long goes at once (the next daily run), as the server does
+  const firstReminder = s.remind_days > 0 ? addDays(due, -Math.min(s.remind_days, days)) : null;
   return {
     due: day(due), firstReminder: firstReminder ? day(firstReminder) : null,
     owner: day(addDays(due, s.owner_after_days)), further: day(addDays(due, s.admin_after_days)),
