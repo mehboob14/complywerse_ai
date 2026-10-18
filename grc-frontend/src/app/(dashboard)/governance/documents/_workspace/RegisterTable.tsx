@@ -24,6 +24,7 @@ import {
 } from './lib';
 import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
+import { DocumentTree } from './DocumentTree';
 
 export interface RegisterTableProps {
   docs: GovDoc[];
@@ -45,6 +46,8 @@ export interface RegisterTableProps {
   canEditRow?: (d: GovDoc) => boolean;
   canArchiveRow?: (d: GovDoc) => boolean;
   loading?: boolean;
+  /** the Tree view: the same columns and row actions, each document under its parent (`scope`: the library scope the ancestors come from) */
+  tree?: { scope: GovDoc[]; headerDoc: GovDoc | null; breadcrumb: string[] };
 }
 
 export function RegisterTable({
@@ -65,6 +68,7 @@ export function RegisterTable({
   canEditRow,
   canArchiveRow,
   loading = false,
+  tree,
 }: RegisterTableProps) {
   const nameMap = useFrameworkNames();
   const rows = docs ?? [];
@@ -158,6 +162,13 @@ export function RegisterTable({
         { id: 'archive', label: 'Archive', icon: Archive, variant: 'danger', onClick: (r) => onBulkArchive(ids(r)) },
       ]
     : [];
+
+  if (tree) {
+    return (
+      <DocumentTree docs={rows} scope={tree.scope} columns={columns} headerDoc={tree.headerDoc} breadcrumb={tree.breadcrumb}
+        totalCount={totalCount} updatedLabel={updatedLabel} onOpenDoc={onOpenDoc} />
+    );
+  }
 
   return (
     <section className="space-y-3">
