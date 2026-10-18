@@ -356,6 +356,30 @@ def test_a_session_belongs_to_the_person_who_opened_it(world):
     assert world.http.get(world.api(f"/sessions/{s['id']}")).status_code == 404
 
 
+def test_only_a_draft_never_in_the_library_can_be_discarded(world):
+    draft = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "Draft", "template_id": "builtin:blank", "doc_type": "other"}).json()
+    world.http.put(world.api(f"/sessions/{draft['id']}/content"), json={"content": "# Draft\n\nText.\n", "base_revision": 1})
+    assert world.http.delete(world.api(f"/sessions/{draft['id']}")).json() == {"deleted": True}
+    assert world.db.query(m.StudioRevision).filter_by(session_id=draft["id"]).count() == 0
+    # work on a library document (an upload goes into the library at once) is archived there, never deleted from the studio
+    lib = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    up = world.http.post(world.api("/sessions/upload"), files={"file": ("notes.md", b"# Notes\n\nA paragraph.\n", "text/markdown")}).json()
+    for s in (lib, up):
+        refused = world.http.delete(world.api(f"/sessions/{s['id']}"))
+        assert refused.status_code == 400 and "Archive it from the library" in refused.json()["detail"]
+        assert world.http.get(world.api(f"/sessions/{s['id']}")).status_code == 200
+    assert world.db.get(m.GovernanceDocument, up["document_id"]) is not None
+    # archiving the document in the library takes its work off the studio's list; restoring it brings the work back
+    listed = lambda: {i["id"] for i in world.http.get(world.api("/sessions")).json()["items"]}
+    assert listed() == {lib["id"], up["id"]}
+    world.db.get(m.GovernanceDocument, up["document_id"]).status = "archived"
+    world.db.commit()
+    assert listed() == {lib["id"]}
+    world.db.get(m.GovernanceDocument, up["document_id"]).status = "draft"
+    world.db.commit()
+    assert listed() == {lib["id"], up["id"]}
+
+
 # ── checks ───────────────────────────────────────────────────────────────────
 def test_the_checks_need_no_ai_and_a_simple_fix_is_one_revision(world):
     s = world.http.post(world.api("/sessions"), json={"kind": "new", "title": "Policy", "doc_type": "policy"}).json()

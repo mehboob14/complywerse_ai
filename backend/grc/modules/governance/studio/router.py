@@ -8,6 +8,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from ....models import (GRCUser, GovernanceDocument, StudioAsset, StudioMessage, StudioReference, StudioSession, StudioTemplate, Tenant,
@@ -278,7 +279,10 @@ def delete_template(template_id: int, db: Session = Depends(get_db), user: GRCUs
 # ── sessions ─────────────────────────────────────────────────────────────────
 @router.get("/sessions", dependencies=[Depends(require_studio)])
 def list_sessions(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    rows = (db.query(StudioSession).filter(StudioSession.created_by == user.id, StudioSession.status != "archived")
+    # work on a document archived in the library leaves the list with it (it cannot be removed here); it comes back if the document is restored
+    rows = (db.query(StudioSession).outerjoin(GovernanceDocument, GovernanceDocument.id == StudioSession.document_id)
+            .filter(StudioSession.created_by == user.id, StudioSession.status != "archived",
+                    or_(StudioSession.document_id.is_(None), func.coalesce(GovernanceDocument.status, "") != "archived"))
             .order_by(StudioSession.updated_at.desc()).limit(100).all())
     return {"items": [service.session_view(db, s, content=False, user=user) for s in rows]}
 
@@ -352,7 +356,10 @@ def setup_options(session_id: int, db: Session = Depends(get_db), user: GRCUser 
 
 @router.delete("/sessions/{session_id}", dependencies=[Depends(require_studio)])
 def delete_session(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    service.delete_session(db, _session(db, session_id, user))
+    try:
+        service.delete_session(db, _session(db, session_id, user))
+    except service.StudioError as exc:
+        raise _problem(exc)
     return {"deleted": True}
 
 

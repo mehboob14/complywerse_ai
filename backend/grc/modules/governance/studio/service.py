@@ -1437,8 +1437,11 @@ def export_notes(db, s, fmt: str, settings: Dict[str, Any], pending_changes: int
 
 
 def delete_session(db, s) -> None:
+    """Discards a draft that was never in the library. Work on a library document (an upload is one) is archived there instead."""
     from ....models import StudioMessage, StudioReference, StudioRevision
 
+    if s.document_id:
+        raise StudioError("This document is in the library, so it cannot be deleted here. Archive it from the library instead.")
     for model in (StudioMessage, StudioReference, StudioRevision):
         db.query(model).filter(model.session_id == s.id).delete(synchronize_session=False)
     for path in {s.source_original_path, s.source_path}:
