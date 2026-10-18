@@ -31,6 +31,7 @@ import type { Focus } from '../_components/RedlineView';
 import FileView from '../_components/FileView';
 import { ExportDialog, MoveToLibraryDialog, SaveTemplateDialog, SaveToDocumentDialog, StudioDetailsDialog } from '../_components/dialogs';
 import type { DocMark } from '../_components/editorExtensions';
+import { choose, opensOnFile, pressedKey, switchButtons, type ViewKey } from '../_components/viewSwitch';
 
 type SideTab = 'chat' | 'references' | 'instructions' | 'checks' | 'history';
 type SaveState = 'saved' | 'dirty' | 'saving' | 'conflict' | 'error';
@@ -42,11 +43,6 @@ const TABS: { key: SideTab; label: string; icon: typeof MessageSquare }[] = [
   { key: 'instructions', label: 'Instructions', icon: Settings2 },
   { key: 'checks', label: 'Checks', icon: ListChecks },
   { key: 'history', label: 'Changes', icon: History },
-];
-
-const MODES: { key: EditorMode; label: string; icon: typeof Pencil }[] = [
-  { key: 'edit', label: 'Edit', icon: Pencil },
-  { key: 'view', label: 'View', icon: Eye },
 ];
 
 export default function StudioWorkspacePage() {
@@ -291,9 +287,10 @@ export default function StudioWorkspacePage() {
   const [compare, setCompare] = useState<CompareSpec | null>(null);
   const [asFile, setAsFile] = useState(false);                       // the document as its file shows it (Word, or the PDF)
   const openedAsFile = useRef<number | null>(null);
-  useEffect(() => {                                                  // a Word file opens as Word lays it out, once per document
-    if (session?.source?.in_place && openedAsFile.current !== session.id) { openedAsFile.current = session.id; setAsFile(true); }
-  }, [session?.id, session?.source?.in_place]);
+  const startsOnFile = !!session && opensOnFile(session.source, session.may_save !== false);
+  useEffect(() => {                                   // a Word file opens as Word lays it out (a PDF too, for a reader), once per document
+    if (session && startsOnFile && openedAsFile.current !== session.id) { openedAsFile.current = session.id; setAsFile(true); }
+  }, [session, startsOnFile]);
   // the changes just accepted, and the revisions they lie between: offered to be seen marked in the document
   const [justAccepted, setJustAccepted] = useState<{ n: number; from: number; to: number } | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
@@ -362,11 +359,16 @@ export default function StudioWorkspacePage() {
     handle.setMarks(marks);
   }, []);
 
-  const goTo = (issue: Issue) => {
+  /** the text in the editor, where an issue or a placeholder is shown (the file view and a comparison cover it) */
+  const showText = () => {
     setCompare(null);
     setAsFile(false);
     setMode((m) => (m === 'source' ? 'edit' : m));
     setPane('document');
+  };
+  const nextPlaceholder = () => { showText(); setTimeout(() => editor.current?.nextPlaceholder(), 60); };
+  const goTo = (issue: Issue) => {
+    showText();
     setTimeout(() => {
       const h = editor.current;
       if (!h) return;
@@ -424,6 +426,14 @@ export default function StudioWorkspacePage() {
   // someone who may only read the library document (a comparison opened by a reader): no saving or moving (a server that does not say: allowed)
   const maySave = session.may_save !== false;
   const shownMode: EditorMode = maySave ? mode : 'view';
+  const shownView = compare ? null : pressedKey(session.source, shownMode, asFile);
+  const show = async (key: ViewKey) => {
+    setCompare(null);
+    const next = choose(key, session.source, mode);
+    if (next.asFile && !asFile) await flush();                          // the file view is built from what is saved
+    setMode(next.mode);
+    setAsFile(next.asFile);
+  };
   const pendingCount = items.reduce((n, m) => n + (m.proposal?.ops ?? []).filter((o) => o.status === 'pending').length, 0);
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warnCount = issues.filter((i) => i.severity === 'warning').length;
@@ -454,7 +464,7 @@ export default function StudioWorkspacePage() {
           </span>
           <span title="The studio's revision of this text (each save and each accepted change is one)">rev {session.revision}</span>
           <span>{plural(words, 'word')}</span>
-          {placeholders > 0 && <button type="button" onClick={() => editor.current?.nextPlaceholder()} className="rounded bg-[#fff2a8] px-1.5 py-0.5 font-semibold text-[#6b5400] hover:bg-[#ffe97a]">{plural(placeholders, 'placeholder')} to fill in</button>}
+          {placeholders > 0 && <button type="button" onClick={nextPlaceholder} className="rounded bg-[#fff2a8] px-1.5 py-0.5 font-semibold text-[#6b5400] hover:bg-[#ffe97a]">{plural(placeholders, 'placeholder')} to fill in</button>}
           {inLibrary ? (
             <>
               <Link href={`/governance/documents/${session.document_id}`} onClick={() => void flush()} title="Open the document in the library: its newest version, with its changes marked"
@@ -469,20 +479,16 @@ export default function StudioWorkspacePage() {
           {session.source?.kind === 'pdf' && <span title="A PDF cannot be edited: what you save is a Word copy built from its text" className="inline-flex items-center gap-1 rounded-full bg-[#eef1f4] px-2 py-0.5 font-medium text-[#3f4b58]"><FileText className="h-3.5 w-3.5" /> Read from a PDF</span>}
         </div>
         <div className="ml-auto flex flex-wrap items-center gap-1.5">
-          <div className="inline-flex rounded-lg border border-[#c5ccd3] bg-white p-0.5" role="group" aria-label="View">
-            {MODES.filter((m) => maySave || m.key !== 'edit').map((m) => (
-              <button key={m.key} type="button" aria-pressed={shownMode === m.key && !compare && !asFile} onClick={() => { setCompare(null); setAsFile(false); setMode(m.key); }}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${shownMode === m.key && !compare && !asFile ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
-                <m.icon className="h-3.5 w-3.5" /> {m.label}
-              </button>
-            ))}
-            {(session.source?.in_place || session.source?.kind === 'pdf') && (
-              <button type="button" aria-pressed={asFile && !compare} onClick={async () => { setCompare(null); if (!asFile) await flush(); setAsFile(true); }}
-                title={session.source?.in_place ? 'Your Word file with your changes written in, as Word lays it out' : 'The PDF as it was uploaded'}
-                className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${asFile && !compare ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
-                <FileText className="h-3.5 w-3.5" /> {session.source?.in_place ? 'As in the file' : 'Original PDF'}
-              </button>
-            )}
+          <div className="inline-flex rounded-lg border border-[#c5ccd3] bg-white p-0.5" role="group" aria-label="Edit or view the document">
+            {switchButtons(session.source, maySave).map((b) => {
+              const Icon = b.key === 'edit' ? Pencil : Eye;
+              return (
+                <button key={b.key} type="button" aria-pressed={shownView === b.key} title={b.title} onClick={() => void show(b.key)}
+                  className={`inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-semibold ${shownView === b.key ? 'bg-[#0f4c5c] text-white' : 'text-[#3f4b58] hover:bg-[#eef1f4]'}`}>
+                  <Icon className="h-3.5 w-3.5" aria-hidden /> {b.label}
+                </button>
+              );
+            })}
           </div>
           <button type="button" aria-pressed={tracking} onClick={() => (tracking ? setCompare(null) : showChanges())} title="See every change since the version in force (or the original, until the document is published), marked in the document, and who made each"
             className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${tracking ? 'border-[#0f4c5c] bg-[#0f4c5c] text-white' : 'border-[#b8c4c8] bg-white text-[#26323d] hover:bg-[#f1f3f5]'}`}>
@@ -614,7 +620,7 @@ export default function StudioWorkspacePage() {
             {tab === 'references' && <ReferencesPanel session={session} onChanged={onSessionChanged} focusKey={focusRef} />}
             {tab === 'instructions' && <InstructionsPanel session={session} onChanged={onSessionChanged} />}
             <div className={`h-full ${tab === 'checks' ? 'block' : 'hidden'}`}>
-              <ChecksPanel session={session} aiConfigured={aiConfigured} flush={flush} onContent={(c, r) => { applyServerContent(c, r); void onSessionChanged(); }} onGoTo={goTo} onIssues={onIssues} onNextPlaceholder={() => editor.current?.nextPlaceholder()} />
+              <ChecksPanel session={session} aiConfigured={aiConfigured} flush={flush} onContent={(c, r) => { applyServerContent(c, r); void onSessionChanged(); }} onGoTo={goTo} onIssues={onIssues} onNextPlaceholder={nextPlaceholder} />
             </div>
             {tab === 'history' && <HistoryPanel session={session} flush={flush} onCompare={(c) => { setCompare(c); setPane('document'); }} onContent={(c, r) => { applyServerContent(c, r); setCompare(null); void onSessionChanged(); }} onSessionChanged={onSessionChanged} />}
           </div>
