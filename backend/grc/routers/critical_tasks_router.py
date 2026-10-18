@@ -16,7 +16,7 @@ from ..models import (
     CriticalTaskComment, CriticalTaskHistory, GRCUser, TenantUser,
     CriticalTaskTemplate, CriticalTaskApproval, NotificationPreference
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission, is_tenant_admin
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from ..services.ai_gateway.field_policies import AliasBook, ai_view
 
 logger = logging.getLogger(__name__)
@@ -1184,6 +1184,7 @@ def delete_task(
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
     from ..modules.governance import doc_lifecycle as lifecycle
+    from .auth_router import is_tenant_admin
 
     # a document request's task closes by itself; only an administrator may remove one (the user's choice, 2026-10-19)
     if lifecycle.is_task(task) and not is_tenant_admin(db, current_user):
