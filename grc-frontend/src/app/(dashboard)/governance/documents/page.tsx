@@ -389,7 +389,7 @@ export default function GovernanceDocumentsPage() {
           const text = (res.data as { content?: string })?.content || '';
           await studioApi.uploadReference(session.id, new window.File([text], lawFileName(pick.law), { type: 'text/markdown' }));   // `File` here is the icon
         } catch (e) {
-          toast({ type: 'warning', title: 'The law could not be attached', message: `${problemOf(e)} Attach it under References in the AI Studio.` });
+          toast({ type: 'warning', title: 'The law could not be attached', message: `${problemOf(e)} Attach it under References in the Comply AI Studio.` });
         }
       }
       return session;

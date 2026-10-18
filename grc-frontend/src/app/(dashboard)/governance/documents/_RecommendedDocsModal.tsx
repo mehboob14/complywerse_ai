@@ -187,7 +187,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny, busy 
               </span>
             </h2>
             <p className="mt-0.5 text-xs sm:text-sm text-slate-500 max-w-2xl">
-              A template opens in the AI Studio as a new draft, ready for you and Comply Agent to work on; a reference law starts one with the law attached.
+              A template opens in the Comply AI Studio as a new draft, ready for you and Comply Agent to work on; a reference law starts one with the law attached.
             </p>
           </div>
           <button
@@ -285,11 +285,11 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny, busy 
           {busy ? (
             <p role="status" className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#0b6b58]">
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-              Opening it in the AI Studio…
+              Opening it in the Comply AI Studio…
             </p>
           ) : (
             <p className="text-[11px] text-[#586472]">
-              It stays a draft in the AI Studio until you move it to the library.
+              It stays a draft in the Comply AI Studio until you move it to the library.
             </p>
           )}
           <button
@@ -408,7 +408,7 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
                           {d.doc_type}
                         </span>
                         <span className="text-[10px] font-medium text-slate-400 group-hover:text-primary-700 inline-flex items-center gap-1 transition-colors">
-                          Opens in the AI Studio
+                          Opens in the Comply AI Studio
                           <ChevronRight className="h-3 w-3" />
                         </span>
                       </div>
@@ -520,7 +520,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                       toast({
                         type: 'info',
                         title: 'Opening template',
-                        message: `Opening "${t.title}" in the AI Studio.`,
+                        message: `Opening "${t.title}" in the Comply AI Studio.`,
                       });
                       onPick(t);
                     }}
@@ -544,7 +544,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
             toast({
               type: 'info',
               title: 'Opening template',
-              message: `Opening "${t.title}" in the AI Studio.`,
+              message: `Opening "${t.title}" in the Comply AI Studio.`,
             });
             onPick(t);
           }}
@@ -715,7 +715,7 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
       <div className="space-y-3">
         <p className="text-[11px] text-slate-500">
           {data.total} authoritative law{data.total === 1 ? '' : 's'} / regulation{data.total === 1 ? '' : 's'}. Each starts a new document
-          in the AI Studio with the law attached, for Comply Agent to draft so that it complies with, and cites, the law&apos;s articles.
+          in the Comply AI Studio with the law attached, for Comply Agent to draft so that it complies with, and cites, the law&apos;s articles.
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {filtered.map((law) => (
@@ -782,7 +782,7 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
                   onClick={() => {
                     toast({
                       type: 'info',
-                      title: 'Opening the AI Studio',
+                      title: 'Opening the Comply AI Studio',
                       message: `"${law.short_name || law.name}" is attached for Comply Agent to draft from.`,
                     });
                     onPick(law);
@@ -806,7 +806,7 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
             setPreviewLaw(null);
             toast({
               type: 'info',
-              title: 'Opening the AI Studio',
+              title: 'Opening the Comply AI Studio',
               message: `"${l.short_name || l.name}" is attached for Comply Agent to draft from.`,
             });
             onPick(l);
@@ -1076,7 +1076,7 @@ function ArtifactsTab({
         <div className="flex items-start justify-between gap-2">
           <p className="text-[11px] text-slate-500">
             Every compliance framework&apos;s artifacts, grouped by framework and ordered so
-            generated (Ready) ones surface first. Each opens in the AI Studio as a new draft.
+            generated (Ready) ones surface first. Each opens in the Comply AI Studio as a new draft.
           </p>
           <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
             <Layers className="h-3 w-3" />
@@ -1147,7 +1147,7 @@ function ArtifactsTab({
                             toast({
                               type: 'info',
                               title: 'Opening template',
-                              message: `Opening "${item.name}" (${group.framework}) in the AI Studio.`,
+                              message: `Opening "${item.name}" (${group.framework}) in the Comply AI Studio.`,
                             });
                             onPick(item, group.framework, group.frameworkUploadedId);
                           }}
@@ -1172,7 +1172,7 @@ function ArtifactsTab({
             toast({
               type: 'info',
               title: 'Opening template',
-              message: `Opening "${picked.item.name}" (${picked.frameworkName}) in the AI Studio.`,
+              message: `Opening "${picked.item.name}" (${picked.frameworkName}) in the Comply AI Studio.`,
             });
             onPick(picked.item, picked.frameworkName, picked.frameworkUploadedId);
           }}
@@ -1440,7 +1440,7 @@ function ArtifactDetailsPopup({
 
         <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between gap-3">
           <span className="text-[11px] text-slate-500">
-            Opens the template in the AI Studio as a new draft.
+            Opens the template in the Comply AI Studio as a new draft.
           </span>
           <div className="flex items-center gap-2">
             <button

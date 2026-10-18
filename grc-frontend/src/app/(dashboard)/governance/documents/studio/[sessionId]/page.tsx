@@ -410,13 +410,13 @@ export default function StudioWorkspacePage() {
   // ── gates ──────────────────────────────────────────────────────────────────
   if (status.isLoading || sessionQuery.isLoading) return <PageLoader />;
   if (status.data && !status.data.enabled) {
-    return <p className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">The AI Studio is not enabled for your organisation.</p>;
+    return <p className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">The Comply AI Studio is not enabled for your organisation.</p>;
   }
   if (sessionQuery.isError || !session) {
     return (
       <div className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">
         <p>{problemOf(sessionQuery.error, 'This document could not be opened.')}</p>
-        <Link href="/governance/documents/studio" className="mt-2 inline-block font-semibold text-[#0b6b58] underline">Back to the AI Studio</Link>
+        <Link href="/governance/documents/studio" className="mt-2 inline-block font-semibold text-[#0b6b58] underline">Back to the Comply AI Studio</Link>
       </div>
     );
   }
@@ -444,7 +444,7 @@ export default function StudioWorkspacePage() {
     <div className="-m-[14px] flex h-[calc(100vh-3rem)] min-h-[560px] flex-col bg-[#f4f6f8] lg:-m-4" data-testid="studio-workspace">
       {/* top bar */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-[#d5dbe1] bg-white px-3 py-2 sm:px-4">
-        <Link href="/governance/documents/studio" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]" aria-label="Back to the AI Studio"><ArrowLeft className="h-4 w-4" /> Studio</Link>
+        <Link href="/governance/documents/studio" className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-semibold text-[#0b6b58] hover:bg-[#e6f4f1]" aria-label="Back to the Comply AI Studio"><ArrowLeft className="h-4 w-4" /> Studio</Link>
         <input
           defaultValue={session.title}
           key={session.title}

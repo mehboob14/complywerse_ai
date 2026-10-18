@@ -201,7 +201,7 @@ def test_an_uploaded_word_file_is_in_the_library_at_once_as_the_file_itself_numb
     assert only.change_summary == "Initial version: the uploaded file, version 1.0 as the document states it" and s["base_label"].endswith(" v1.0")
     assert open(doc.file_path, "rb").read() == open(path, "rb").read() and only.file_path == doc.file_path        # the file itself, not a re-saved copy
     assert doc.file_path.startswith(str(lib)) and doc.file_type == "docx" and not (doc.content or "").strip()
-    assert "uploaded into the AI Studio" in world.db.query(m.DocumentAuditLog).filter_by(document_id=doc.id, action="created").one().action_details
+    assert "uploaded into the Comply AI Studio" in world.db.query(m.DocumentAuditLog).filter_by(document_id=doc.id, action="created").one().action_details
     assert world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={}).status_code == 400            # it is there already
 
 
@@ -227,7 +227,7 @@ def test_edits_to_an_uploaded_word_file_save_as_its_next_version_major_or_minor_
     saved2 = world.http.post(world.api(f"/sessions/{s['id']}/save-to-document"), json={"change_reason": "Incident reporting"}).json()
     assert saved2["version"] == "2.0" and "Staff shall report incidents within one day." in "\n".join(p.text for p in Document(world.db.get(m.GovernanceDocument, doc.id).file_path).paragraphs)
     third = world.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id, version_number="2.0").one()
-    assert third.change_type == "major" and third.change_summary == "Edited in the AI Studio: Incident reporting. Major change: Staff must now report incidents within one day."
+    assert third.change_type == "major" and third.change_summary == "Edited in the Comply AI Studio: Incident reporting. Major change: Staff must now report incidents within one day."
     sent = world.wire.requests[-1].body
     assert sent["output_config"]["effort"] == "low" and "Staff shall report incidents within one day." in sent["messages"][0]["content"]
     assert "Review it every quarter" not in sent["messages"][0]["content"]                       # only what changed is read, not the whole document

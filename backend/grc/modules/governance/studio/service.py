@@ -292,7 +292,7 @@ def _register_upload(db, s, user, path: str, name: str, content: str, details: O
     db.add(GovernanceDocumentVersion(document_id=doc.id, version_number=version, change_type="major", title=doc.title, content=None if is_file else content,
                                      change_summary=doc_version.first_summary(version, found_in), status="current", created_by=user.id, **files))
     create_audit_log(db=db, document_id=doc.id, tenant_id=tenant.id, user_id=user.id, action="created",
-                     action_details=f"Document '{doc.title}' created from {name}, uploaded into the AI Studio (version {version})")
+                     action_details=f"Document '{doc.title}' created from {name}, uploaded into the Comply AI Studio (version {version})")
     s.document_id, s.kind = doc.id, "library"
     if is_file:
         s.settings = {**(s.settings or {}), "file_master": True, "library_file": files["file_path"]}
@@ -305,7 +305,7 @@ def _announce_registered(db, doc, user) -> None:
 
     try:
         log_governance_action(db=db, tenant_id=doc.tenant_id, action_type="document_draft_created",
-                              action_description=f"Governance document draft created from a file uploaded into the AI Studio: '{doc.title}' ({doc.doc_type})",
+                              action_description=f"Governance document draft created from a file uploaded into the Comply AI Studio: '{doc.title}' ({doc.doc_type})",
                               entity_type="governance_document", action_user_id=user.id, entity_id=doc.id,
                               action_metadata={"doc_type": doc.doc_type, "version": doc.current_version, "source": "ai_studio_upload"})
         db.commit()
@@ -1038,8 +1038,8 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
                                          change_summary=doc_version.first_summary(start, found_in), status="superseded", created_by=user.id, **kept))
     row_files = file_fields if word or two or kept is None else kept         # an unchanged PDF: its text, with the uploaded file kept on the version
     first = GovernanceDocumentVersion(document_id=doc.id, version_number=number, change_type=decision["change"] if decision else "major", title=doc.title,
-                                      change_summary=(doc_version.summary_of("Changed in the AI Studio", decision) if decision
-                                                      else doc_version.first_summary(start, found_in) if upload else "Initial version (from the AI Studio)"),
+                                      change_summary=(doc_version.summary_of("Changed in the Comply AI Studio", decision) if decision
+                                                      else doc_version.first_summary(start, found_in) if upload else "Initial version (from the Comply AI Studio)"),
                                       status="current", created_by=user.id, content=None if word else s.content, **row_files)
     db.add(first)
     # the changes after the uploaded file, or for a first version every section and what each rests on
@@ -1050,10 +1050,10 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
         s.settings = {k: v for k, v in (s.settings or {}).items() if k not in ("file_master", "library_file")}
     s.settings = {**(s.settings or {}), "saved_revision": s.revision_no}
     create_audit_log(db=db, document_id=doc.id, tenant_id=tenant.id, user_id=user.id, action="created",
-                     action_details=f"Document '{doc.title}' created in the AI Studio" + (f" from the uploaded file {upload[1]}" if upload else ""))
+                     action_details=f"Document '{doc.title}' created in the Comply AI Studio" + (f" from the uploaded file {upload[1]}" if upload else ""))
     db.commit()
     log_governance_action(db=db, tenant_id=tenant.id, action_type="document_draft_created",
-                          action_description=f"Governance document draft created in the AI Studio: '{doc.title}' ({doc.doc_type})",
+                          action_description=f"Governance document draft created in the Comply AI Studio: '{doc.title}' ({doc.doc_type})",
                           entity_type="governance_document", action_user_id=user.id, entity_id=doc.id,
                           action_metadata={"doc_type": doc.doc_type, "classification": classification, "source": "ai_studio"})
     s.document_id, s.kind, s.title, s.doc_type = doc.id, "library", doc.title, doc.doc_type
@@ -1141,12 +1141,12 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     doc.content, doc.updated_at = s.content, _now()
     new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
                                             change_type=decision["change"], change_reason=change_reason, user_id=user.id,
-                                            summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
+                                            summary=summary_of("Edited in the Comply AI Studio" + (": " + change_reason if change_reason else ""), decision))
     db.flush()
     # edited text is reviewed again: approved or published, and also while in review or approval (a new round)
-    doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"Edited in the AI Studio (version {new_version}), so it needs approving again")
+    doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"Edited in the Comply AI Studio (version {new_version}), so it needs approving again")
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="content_edited",
-                     action_details=f"Edited in the AI Studio; version {new_version}" + (f". {change_reason}" if change_reason else "")
+                     action_details=f"Edited in the Comply AI Studio; version {new_version}" + (f". {change_reason}" if change_reason else "")
                      + doc_lifecycle.outcome(old_status, doc.status),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     row = _version_row(db, doc, new_version)
@@ -1208,7 +1208,7 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
     """Make ``data`` (a Word file, or a file of type ``ext``) the next version of a document that is its file, and its file. The file it
     replaces stays as the earlier version (put into its row when that row holds no file), and the original is kept first when the
     document has no versions yet. An approved or
-    published document goes back to review. ``done`` is what happened, as the history says it ("Edited in the AI Studio"). Does not
+    published document goes back to review. ``done`` is what happened, as the history says it ("Edited in the Comply AI Studio"). Does not
     commit. Returns ``(version row, version number, status before)``."""
     from ....models import GovernanceDocumentVersion
     from ..routers.documents import GOVERNANCE_UPLOAD_DIR
@@ -1322,8 +1322,8 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
     earlier = _carried(db, pending, before, _C.version_text(pending)) if pending is not None else None
     base_text = (_C.version_text(before) if before is not None else None) if pending is not None else None
     data, _notes = export_file(db, s, "docx", export_settings(db, s))
-    row, new_version, old_status = write_file_version(db, doc, user, data, change_type=decision["change"], reason=change_reason, done="Edited in the AI Studio",
-                                                      summary=summary_of("Edited in the AI Studio" + (": " + change_reason if change_reason else ""), decision))
+    row, new_version, old_status = write_file_version(db, doc, user, data, change_type=decision["change"], reason=change_reason, done="Edited in the Comply AI Studio",
+                                                      summary=summary_of("Edited in the Comply AI Studio" + (": " + change_reason if change_reason else ""), decision))
     _record_change_set(db, s, row, base_text if base_text is not None else (s.base_content or ""), s.content, user,
                        stage_before=old_status, stage_after=doc.status, earlier=earlier)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()

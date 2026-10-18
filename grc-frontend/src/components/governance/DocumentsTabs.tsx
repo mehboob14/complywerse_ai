@@ -15,7 +15,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 const DOCUMENTS = { name: 'Documents', href: '/governance/documents', icon: FileText };
 const ATTESTATION = { name: 'Attestation', href: '/governance/documents/attestation', icon: ClipboardCheck };
 const EXCEPTIONS = { name: 'Policy Exceptions', href: '/governance/exceptions', icon: AlertTriangle };
-const STUDIO = { name: 'AI Studio', href: '/governance/documents/studio', icon: Sparkles };      // only where the AI Studio is on
+const STUDIO = { name: 'Comply AI Studio', href: '/governance/documents/studio', icon: Sparkles };      // only where the Comply AI Studio is on
 const SETTINGS = { name: 'Settings', href: '/governance/settings', icon: Settings };        // administrators and governance:settings:* holders
 
 /** Whether a page belongs to the Documents area (the pages these tabs lead to). */

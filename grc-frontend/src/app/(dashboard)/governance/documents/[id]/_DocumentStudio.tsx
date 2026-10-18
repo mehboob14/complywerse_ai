@@ -281,7 +281,7 @@ export default function DocumentStudio() {
       toast({ type: 'error', title: 'Not downloaded', message: problemOf(e) });
     } finally { setDownloading(null); }
   };
-  const editLabel = draft?.unsaved ? 'Continue editing' : 'Edit in AI Studio';
+  const editLabel = draft?.unsaved ? 'Continue editing' : 'Edit in Comply AI Studio';
   // the typed-name sign-off writes into the document's own text: only a text document (an uploaded file keeps its own table)
   const canTyped = canEdit && !doc.has_file && /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(doc.content || '');
 
@@ -315,7 +315,7 @@ export default function DocumentStudio() {
           <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
             {canEdit && (
               <button type="button" onClick={() => edit.mutate(false)} disabled={!access?.openable || edit.isPending} className={BTN}
-                title={!access?.openable ? access?.reason ?? '' : draft ? `Your draft${draft.updated_at ? `, ${ago(draft.updated_at)}` : ''}${draft.behind ? ' · the document has changed since' : ''}` : 'Open your draft of this document in the AI Studio'}>
+                title={!access?.openable ? access?.reason ?? '' : draft ? `Your draft${draft.updated_at ? `, ${ago(draft.updated_at)}` : ''}${draft.behind ? ' · the document has changed since' : ''}` : 'Open your draft of this document in the Comply AI Studio'}>
                 {edit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 <span className="hidden md:inline">{editLabel}</span>
               </button>

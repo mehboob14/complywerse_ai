@@ -379,7 +379,7 @@ export default function StudioHomePage() {
 
   if (status.isLoading) return <PageLoader />;
   if (!status.data?.enabled) {
-    return <p className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">The AI Studio is not enabled for your organisation. <Link href="/governance/documents" className="font-semibold text-[#0b6b58] underline">Back to the documents</Link></p>;
+    return <p className="rounded-lg border border-[#d5dbe1] bg-white p-6 text-sm text-[#3f4b58]">The Comply AI Studio is not enabled for your organisation. <Link href="/governance/documents" className="font-semibold text-[#0b6b58] underline">Back to the documents</Link></p>;
   }
   return (
     // one screen: the ways to start, then the two panels filling the rest (each scrolls inside itself) — stacked below lg

@@ -26,7 +26,7 @@ router = APIRouter(prefix="/studio", tags=["Governance - AI Studio"])
 # ── guards ───────────────────────────────────────────────────────────────────
 def require_studio(db: Session = Depends(get_db)) -> None:
     if not gate.enabled(db):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The AI Studio is not enabled for this organisation")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="The Comply AI Studio is not enabled for this organisation")
 
 
 def _session(db: Session, session_id: int, user: GRCUser) -> StudioSession:

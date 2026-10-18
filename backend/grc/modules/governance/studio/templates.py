@@ -176,15 +176,15 @@ def from_markdown(content: str, *, title: str, name: str, doc_type: str) -> Dict
     from .engine import sanitize_markdown
 
     if doc_type not in DOC_TYPES + ("other",):
-        raise ValueError("That kind of document cannot be written in the AI Studio.")
+        raise ValueError("That kind of document cannot be written in the Comply AI Studio.")
     if len(content or "") > 2 * MAX_TEMPLATE_CHARS:
-        raise ValueError("That template is too long to open in the AI Studio.")
+        raise ValueError("That template is too long to open in the Comply AI Studio.")
     md = _CONTROL.sub("", _COMMENTS.sub("", sanitize_markdown(content or "")))
     md = re.sub(r"\n{3,}", "\n\n", md).strip("\n")
     if not md.strip():
         raise ValueError("That template has no text to start from.")
     if len(md) > MAX_TEMPLATE_CHARS:
-        raise ValueError("That template is too long to open in the AI Studio.")
+        raise ValueError("That template is too long to open in the Comply AI Studio.")
     blocks = parse(md)
     heads = [b for b in blocks if b.kind == "heading"]
     h1 = [b for b in heads if b.level == 1]

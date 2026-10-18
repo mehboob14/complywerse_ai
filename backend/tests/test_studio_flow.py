@@ -478,7 +478,7 @@ def test_a_session_moves_into_the_library_and_then_saves_as_new_versions(world, 
     doc = world.db.get(m.GovernanceDocument, moved["document_id"])
     assert (doc.title, doc.status, doc.current_version, doc.parent_document_id, doc.owner_id, doc.doc_type) == ("Access Control Policy", "draft", "1.0", 10, 1, "policy")
     assert "Control access." in doc.content
-    assert world.db.query(m.DocumentAuditLog).filter_by(document_id=doc.id, action="created").one().action_details.endswith("created in the AI Studio")
+    assert world.db.query(m.DocumentAuditLog).filter_by(document_id=doc.id, action="created").one().action_details.endswith("created in the Comply AI Studio")
     session = world.http.get(world.api(f"/sessions/{s['id']}")).json()
     assert session["kind"] == "library" and session["document_id"] == doc.id and session["base_label"] == "Access Control Policy v1.0"
     assert world.http.post(world.api(f"/sessions/{s['id']}/move-to-library"), json={}).status_code == 400

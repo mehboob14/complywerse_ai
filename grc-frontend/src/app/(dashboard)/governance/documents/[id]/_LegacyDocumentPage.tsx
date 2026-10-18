@@ -148,10 +148,10 @@ export default function LegacyDocumentPage() {
   const openInStudio = useMutation({
     mutationFn: () => documentApi.draft(id),          // the person's one draft of this document, reused
     onSuccess: (d) => {
-      if (d.stale) toast({ type: 'info', title: 'Your draft is on an older version', message: `It has changes you have not saved; the document is now version ${d.library_version}. Open the document's AI Studio view to start again from it.` });
+      if (d.stale) toast({ type: 'info', title: 'Your draft is on an older version', message: `It has changes you have not saved; the document is now version ${d.library_version}. Open the document's Comply AI Studio view to start again from it.` });
       router.push(`/governance/documents/studio/${d.session_id}`);
     },
-    onError: (e) => toast({ title: 'Could not open it in the AI Studio', message: studioProblem(e), type: 'error' }),
+    onError: (e) => toast({ title: 'Could not open it in the Comply AI Studio', message: studioProblem(e), type: 'error' }),
   });
 
   // Restore the operator's scroll position after they round-tripped through
@@ -426,7 +426,7 @@ export default function LegacyDocumentPage() {
               className="flex items-center gap-2 rounded-lg border border-primary-200 bg-primary-50 px-4 py-2 text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
             >
               {openInStudio.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-              Edit in AI Studio
+              Edit in Comply AI Studio
             </button>
           )}
           {mayChange && <button

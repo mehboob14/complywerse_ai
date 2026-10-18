@@ -34,10 +34,10 @@ def _openable(doc: GovernanceDocument) -> Tuple[bool, Optional[str]]:
     if (doc.content or "").strip():
         return True, None
     if not doc.file_path or not os.path.exists(doc.file_path):
-        return False, "This document has no text or file yet. Add its text, or upload its file, to work on it in the AI Studio."
+        return False, "This document has no text or file yet. Add its text, or upload its file, to work on it in the Comply AI Studio."
     ext = os.path.splitext(doc.file_name or doc.file_path)[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
-        return False, f"The AI Studio opens Word, PDF, text, Markdown and web files; this one is {ext or 'of an unknown type'}. Download it to work on it."
+        return False, f"The Comply AI Studio opens Word, PDF, text, Markdown and web files; this one is {ext or 'of an unknown type'}. Download it to work on it."
     return True, None
 
 
