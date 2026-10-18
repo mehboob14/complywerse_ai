@@ -250,3 +250,25 @@ def test_the_fix_runs_from_the_tenant_schema_self_heal(w):
     w.db.expire_all()
     assert w.db.get(m.GovernanceDocument, 3).owner_id == AUTHOR
     assert (w.db.query(m.Tenant).first().settings or {}).get(imported_owners.MARK)
+
+
+def test_an_imported_account_is_never_alerted_emailed_asked_or_matched_by_name_or_email(w, monkeypatch):
+    from grc.modules.issue_management.audit_register.service import build_owner_index, match_owner
+    from grc.modules.workflow_engine.services import action_handlers
+    from grc.modules.workflow_engine.services import notification_service as ns
+
+    db, mails = w.db, []
+    monkeypatch.setattr(ns, "send_email", lambda db, **kw: mails.append(kw["to"]) or {"success": True})
+    ns.send_workflow_notification(db, tenant_id=1, subject="Hello", message="A note.", workflow_instance_id=None,
+                                  user_ids=[ARIF, LOCAL], channels=["in_app", "email"])
+    db.flush()
+    assert {n.user_id for n in db.query(m.WorkflowNotification)} == {LOCAL} and "arif@cfsb.test" not in str(mails)
+    assert "arif@cfsb.test" not in action_handlers._get_manager_emails(db, 1)        # a workflow e-mail with nobody named
+    assert match_owner("Lena Local", build_owner_index(db)) == LOCAL                 # the audit register's owner names
+    assert match_owner("Otto Okta", build_owner_index(db)) is None
+    for uid in (ARIF, LOCAL):                                                         # named before the pickers left it out
+        db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=5, role_type="reviewer", target_type="user", target_id=uid))
+    db.commit()
+    life._open_stage(db, db.get(m.GovernanceDocument, 5), "reviewer", CONTACT)
+    db.commit()
+    assert {o.user_id for o in db.query(m.DocumentObligation).filter_by(document_id=5)} == {LOCAL}

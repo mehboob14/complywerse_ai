@@ -553,7 +553,9 @@ async def import_vendors(
     existing = db.query(Vendor).filter(Vendor.tenant_id == tenant_id, Vendor.deleted_at.is_(None)).all()
     by_host = {intake.host(v.website): v for v in existing if intake.host(v.website)}
     by_name = {(v.name or "").lower(): v for v in existing}
-    users = {(u.email or "").lower(): u.id for u in db.query(GRCUser).filter(GRCUser.email.isnot(None))}
+    from ....routers.auth_router import platform_account
+
+    users = {(u.email or "").lower(): u.id for u in db.query(GRCUser).filter(GRCUser.email.isnot(None), platform_account())}
     plan, seen = [], set()
     for number, row in enumerate(rows, start=2):
         item = _plan_row(db, tenant_id, row, by_host, by_name, users)

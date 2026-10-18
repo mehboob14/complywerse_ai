@@ -100,8 +100,10 @@ def build_owner_index(db: Session) -> Dict[str, int]:
     assigning a bank's audit finding to the wrong person is worse than leaving it
     unassigned for someone to set.
     """
+    from ....routers.auth_router import platform_account
+
     index: Dict[str, Any] = {}
-    for user in db.query(GRCUser).all():
+    for user in db.query(GRCUser).filter(platform_account()).all():     # not accounts an access review imported
         for key in _user_keys(user):
             index[key] = user.id if index.get(key) in (None, user.id) else "ambiguous"
     index = {k: v for k, v in index.items() if isinstance(v, int)}

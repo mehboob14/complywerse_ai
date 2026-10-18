@@ -121,11 +121,11 @@ def _people(db, ids: Optional[Iterable[int]] = None) -> List[int]:
 
 
 def _members(db, doc, a) -> List[int]:
-    """Who a sign-off participant asks: the chosen user, or the people among a role's or a team's members."""
+    """Who a sign-off participant asks: the people among the chosen user or a role's or a team's members (an account an access
+    review imported that was named before the pickers left such accounts out is not asked; the daily sweep would cancel it)."""
     from .routers.document_signoff import _resolve_target_users
 
-    ids = _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id)
-    return sorted(ids) if a.target_type == "user" else _people(db, ids)
+    return _people(db, _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id))
 
 
 def _names(db, ids: Iterable[int]) -> Dict[int, str]:

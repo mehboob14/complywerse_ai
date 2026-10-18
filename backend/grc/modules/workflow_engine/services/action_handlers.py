@@ -591,9 +591,11 @@ def _get_manager_emails(db, tenant_id) -> List[str]:
     grc_tenant_users, which is only populated for the bootstrap admin and
     would miss every user created via /admin/users.
     """
+    from ....routers.auth_router import platform_account
+
     tenant_users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True), platform_account())     # not accounts an access review imported
         .all()
     )
     return [u.email for u in tenant_users if u.email]
