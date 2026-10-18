@@ -10,6 +10,9 @@ import TaskReportsPage from './reports/page';
 import ModuleSettingsPanel from '@/components/settings/ModuleSettingsPanel';
 import { TASK_SLA_LABELS, TASK_SLA_ORDER, TaskSLALevel, getTaskSLAConfig } from './slaConfig';
 import { RightSlidePanel, MultiSelectDropdown, SearchInput } from '@/components/ui';
+import { useToast } from '@/components/ui/ToastProvider';
+import { DocumentTaskLink, useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { isDocumentTask, type DocumentRequest } from '@/lib/documentTasks';
 import {
   CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
@@ -36,6 +39,8 @@ interface CriticalTaskItem {
   source_module: string | null;
   /** Set when the task mirrors an implementation task of a regulatory change. */
   linked_regulatory_change_id?: number | null;
+  /** Set on a task made by a document review, approval or acknowledgement request. */
+  document_request?: DocumentRequest | null;
   source_entity_id: number | null;
   source_entity_type: string | null;
   priority: string;
@@ -112,6 +117,8 @@ export default function TaskBoardPage() {
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('critical_tasks:tasks:create');
   const canDelete = hasPermission('critical_tasks:tasks:delete');
+  const { toast } = useToast();
+  const meId = useMyUserId();
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [showCreate, setShowCreate] = useState(false);
@@ -448,7 +455,12 @@ export default function TaskBoardPage() {
 
   const bulkMutation = useMutation({
     mutationFn: (payload: Record<string, unknown>) => criticalTasksApi.bulkAction(payload),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      const left = Number(res?.data?.left_document_tasks) || 0;
+      if (left) {
+        toast({ type: 'info', title: `${left} document task${left === 1 ? '' : 's'} left as ${left === 1 ? 'it was' : 'they were'}`,
+          message: 'Their person and status follow the request: they close when the person does it in the document.' });
+      }
       queryClient.invalidateQueries({ queryKey: ['critical-tasks'] });
       setSelectedTasks([]);
       setShowBulkMenu(false);
@@ -767,6 +779,8 @@ export default function TaskBoardPage() {
                         {task.linked_regulatory_change_id ? (
                           <Link href={`/governance/regulatory-changes/${task.linked_regulatory_change_id}?tab=tasks`}
                             className="text-xs text-primary-700 hover:underline">via regulatory change ↗</Link>
+                        ) : isDocumentTask(task) ? (
+                          <DocumentTaskLink request={task.document_request} meId={meId} />
                         ) : task.source_module && <span className="text-xs text-primary-700/70">via {task.source_module.replace(/_/g, ' ')}</span>}
                       </div>
                     </td>

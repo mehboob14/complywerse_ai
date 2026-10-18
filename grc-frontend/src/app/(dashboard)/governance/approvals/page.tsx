@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
+import { actionHref } from '@/lib/documentTasks';
 import { GovernanceActionReviewItem } from '@/types';
 import { SearchInput, RightSlidePanel } from '@/components/ui';
 import {
@@ -466,7 +467,7 @@ export default function ApprovalsPage() {
                     {list.map((it) => (
                       <a
                         key={it.id}
-                        href={`/governance/documents/${it.document_id}?tab=lifecycle`}
+                        href={actionHref(it.document_id, kind)}
                         className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 transition-colors hover:border-primary-300 hover:bg-primary-50/30"
                       >
                         <div className="min-w-0">

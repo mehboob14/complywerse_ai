@@ -98,6 +98,7 @@ class SettingsIn(BaseModel):
     task_priority: Optional[Dict[str, str]] = None
     task_title: Optional[str] = None
     task_description: Optional[str] = None
+    task_category: Optional[str] = None
 
 
 SETTINGS_RIGHT = "governance:settings:edit"

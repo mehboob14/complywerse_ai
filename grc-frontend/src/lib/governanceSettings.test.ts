@@ -12,7 +12,8 @@ const base: GovernanceSettings = {
   task_create: { review: true, approval: true, acknowledgement: true },
   task_priority: { review: 'High', approval: 'High', acknowledgement: 'Medium' },
   task_title: '{action}: {document}',
-  task_description: '{action} "{document}" (version {version}) by {due_date}. This task closes by itself when you do it in the document.',
+  task_description: 'Please {verb} "{document}", version {version}, by {due_date}.',
+  task_category: 'Compliance',
 };
 
 test('the defaults are valid', () => {
@@ -28,7 +29,7 @@ test('numbers out of range, and escalation not after the owner, are named in the
 });
 
 test('templates: unknown placeholders, open braces and empty text are refused like the server does', () => {
-  assert.equal(templateProblem('Task title', '{doc}', 200), 'Task title: {doc} is not a placeholder. Use {action}, {document}, {version}, {due_date}, {owner}, {link}.');
+  assert.equal(templateProblem('Task title', '{doc}', 200), 'Task title: {doc} is not a placeholder. Use {action}, {verb}, {document}, {version}, {due_date}, {owner}, {link}.');
   assert.match(templateProblem('Task title', '{document.__class__}', 200) ?? '', /is not a placeholder/);
   assert.match(templateProblem('Task title', '{document!r}', 200) ?? '', /is not a placeholder/);
   assert.equal(templateProblem('Task description', 'Read {document', 2000), 'Task description: a { or } is not closed. Placeholders look like {document}.');
@@ -44,10 +45,17 @@ test('the preview fills every placeholder and keeps literal braces', () => {
   const values = sampleValues('acknowledgement', base, today);
   assert.equal(values.due_date, '01 Nov 2026');
   assert.equal(renderTemplate(base.task_title, values), 'Acknowledge: Acceptable Use Policy');
-  assert.equal(renderTemplate(base.task_description, values),
-    'Acknowledge "Acceptable Use Policy" (version 1.2) by 01 Nov 2026. This task closes by itself when you do it in the document.');
+  assert.equal(renderTemplate(base.task_description, values), 'Please acknowledge "Acceptable Use Policy", version 1.2, by 01 Nov 2026.');
+  assert.equal(renderTemplate(base.task_description, sampleValues('approval', base, today)), 'Please approve and sign "Acceptable Use Policy", version 1.2, by 25 Oct 2026.');
   assert.equal(renderTemplate('{{x}} {owner} {link}', sampleValues('review', base, today)), '{x} Sara Khan /governance/documents/3?tab=lifecycle');
   assert.equal(sampleValues('review', { ...base, review_days: 2 }, today).due_date, '20 Oct 2026');
+});
+
+test('a task category is needed, at most 100 characters', () => {
+  assert.equal(validate({ ...base, task_category: '  ' }).task_category, 'Task category must be 1 to 100 characters.');
+  assert.equal(validate({ ...base, task_category: 'x'.repeat(101) }).task_category, 'Task category must be 1 to 100 characters.');
+  assert.deepEqual(validate({ ...base, task_category: 'Governance' }), {});
+  assert.deepEqual(changes(base, { ...base, task_category: 'Governance' }), { task_category: 'Governance' });
 });
 
 test('only what changed is sent, a map whole, never the derived email switch', () => {

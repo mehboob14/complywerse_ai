@@ -236,7 +236,7 @@ def test_a_template_saved_by_hand_that_no_longer_works_falls_back_to_the_default
         db.commit()
         participants(db)
         signoff.send_for_review(5, db, user(db, 1))
-        assert tasks(db)[0].title == "Review: Access policy" and tasks(db)[0].description.startswith('Review "Access policy"')
+        assert tasks(db)[0].title == "Review: Access policy" and tasks(db)[0].description.startswith('Please review and sign "Access policy"')
 
 
 # ── the routes ───────────────────────────────────────────────────────────────

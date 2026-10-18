@@ -17,7 +17,8 @@ least once. An identity an access-review connector imported (a cloud account, a 
 
 Every pending row has a twin in Task Management (``grc_critical_tasks``, source_module ``document_lifecycle``) and an
 in-app alert, so it shows up with the person's other work. The twin cannot be completed from Task Management - signing
-or acknowledging in the document does that. A sweep reminds before the due date (and again every few days, if set), tells
+or acknowledging in the document does that (its buttons open the document there, ``task_request``); its person, due date and
+status are read-only there and only an administrator may delete it (``locked_change``, ``DELETE_REFUSED``). A sweep reminds before the due date (and again every few days, if set), tells
 the person when it is overdue, then the document owner, then the tenant administrators (or a chosen role); the days, the
 channels of every alert and the tasks are the organisation's (Governance > Settings, ``settings``). Nothing here may stop a
 sign-off: the hooks swallow their own errors.
@@ -39,7 +40,7 @@ KINDS = ("review", "approval", "acknowledgement")
 EVENTS = ("request", "reminder", "overdue", "escalation", "approved", "published", "rejected")
 CHANNELS: Dict[str, tuple] = {"in_app": ("in_app",), "email": ("email",), "both": ("in_app", "email"), "off": ()}
 PRIORITIES = ("Critical", "High", "Medium", "Low")              # Task Management's
-PLACEHOLDERS = ("document", "version", "due_date", "action", "owner", "link")
+PLACEHOLDERS = ("document", "version", "due_date", "action", "owner", "link", "verb")
 DEFAULTS: Dict[str, Any] = {
     "approval_days": int(os.getenv("DOCUMENT_APPROVAL_DUE_DAYS", "7")),     # an approver (and a reviewer, unless review_days) is given this long
     "ack_days": int(os.getenv("DOCUMENT_ACK_DUE_DAYS", "14")),              # an acknowledgement is given this long
@@ -54,7 +55,9 @@ DEFAULTS: Dict[str, Any] = {
     "task_create": {k: True for k in KINDS},                                # a Task Management task for each request
     "task_priority": {"review": "High", "approval": "High", "acknowledgement": "Medium"},
     "task_title": "{action}: {document}",
-    "task_description": "{action} \"{document}\" (version {version}) by {due_date}. This task closes by itself when you do it in the document.",
+    # plain words; Task Management shows the links as buttons (task_request), never as a path in the text
+    "task_description": "Please {verb} \"{document}\", version {version}, by {due_date}.",
+    "task_category": "Compliance",                                          # the Task Management category of every request's task
 }
 _LIMITS = {"approval_days": (1, 365), "ack_days": (1, 365), "remind_days": (0, 60), "admin_after_days": (1, 365),
            "review_days": (1, 365), "remind_every_days": (0, 60), "owner_after_days": (0, 365)}
@@ -67,6 +70,9 @@ SOURCE_MODULE = "document_lifecycle"
 SOURCE_TYPE = "DocumentObligation"
 _STAGE_KIND = {"reviewer": "review", "approver": "approval"}
 _VERB = {"review": "Review", "approval": "Approve", "acknowledgement": "Acknowledge"}
+_STEP = {"review": "review and sign", "approval": "approve and sign", "acknowledgement": "acknowledge"}     # {verb}
+ACTION_LABEL = {"review": "Review and sign", "approval": "Approve and sign", "acknowledgement": "Acknowledge"}
+_ACT = {"review": "sign", "approval": "sign", "acknowledgement": "ack"}      # ?act= on the document page opens that popup
 _NOUN = {"review": "Review", "approval": "Approval", "acknowledgement": "Acknowledgement"}
 _PENDING_STAGE = ("pending_review", "pending_approval")
 
@@ -164,6 +170,11 @@ def _valid(db, tenant_id: int, key: str, value: Any, current: Dict[str, Any]) ->
             else:
                 merged[name] = choice
         return merged
+    if key == "task_category":
+        text = str(value or "").strip()
+        if not text or len(text) > 100:
+            raise ValueError("Task category must be 1 to 100 characters.")
+        return text
     label, limit = _TEMPLATES[key]
     text = str(value or "").strip()
     if not text:
@@ -211,6 +222,7 @@ class TaskSettings:
     priority: str
     title: str              # templates with PLACEHOLDERS, rendered by ``render``
     description: str
+    category: str = DEFAULTS["task_category"]
 
 
 def due_days(cfg: Dict[str, Any], kind: str) -> int:
@@ -225,7 +237,7 @@ def channels(cfg: Dict[str, Any], event: str) -> List[str]:
 
 def task_settings(cfg: Dict[str, Any], kind: str) -> TaskSettings:
     return TaskSettings(create=bool(cfg["task_create"].get(kind, True)), priority=cfg["task_priority"].get(kind) or "Medium",
-                        title=cfg["task_title"], description=cfg["task_description"])
+                        title=cfg["task_title"], description=cfg["task_description"], category=cfg["task_category"])
 
 
 def render(template: str, values: Dict[str, Any], fallback: str) -> str:
@@ -243,7 +255,7 @@ def task_values(db, ob, doc, spec: Optional[TaskSettings] = None) -> Dict[str, s
         owner = _names(db, [doc.owner_id]).get(doc.owner_id, "-")
     return {"document": doc.title or "", "version": ob.document_version or doc.current_version or "",
             "due_date": f"{ob.due_date:%d %b %Y}" if ob.due_date else "no date", "action": _VERB[ob.kind],
-            "owner": owner, "link": _link(doc, ob.kind)}
+            "owner": owner, "link": _link(doc, ob.kind), "verb": _STEP[ob.kind]}
 
 
 def _safe(fn):
@@ -339,7 +351,7 @@ def _open_twin(db, ob, doc, by: Optional[int], cfg: Optional[Dict[str, Any]] = N
         tenant_id=ob.tenant_id, title=render(spec.title, values, DEFAULTS["task_title"])[:255],
         description=render(spec.description, values, DEFAULTS["task_description"]),
         source="Governance document", source_module=SOURCE_MODULE, source_entity_type=SOURCE_TYPE,
-        source_entity_id=ob.id, category="Compliance", status="Open",
+        source_entity_id=ob.id, category=spec.category[:100], status="Open",
         priority=spec.priority, due_date=ob.due_date,
         assigned_user_ids=[ob.user_id], assigned_owner_id=ob.user_id, created_by_id=by or doc.owner_id)
     db.add(ct)
@@ -685,6 +697,64 @@ def acknowledge(db, doc, user, comment: Optional[str] = None, signature_image: O
 
 
 # ── Task Management side ─────────────────────────────────────────────────────
+DELETE_REFUSED = ("Only an administrator can delete this task. It comes from a document review, approval or acknowledgement "
+                  "request and closes by itself when the person does it in the document.")
+# what the request decides (who, by when, done or not, which request): read-only in Task Management (critical_tasks_router)
+_LOCKED = {
+    "assigned_owner_id": "The person on this task is the one asked in the document. To ask someone else, change the document's reviewers or approvers.",
+    "assigned_user_ids": "The person on this task is the one asked in the document. To ask someone else, change the document's reviewers or approvers.",
+    "due_date": "The due date follows the request in the document; Governance > Settings sets how many days people have.",
+    "status": "This task closes by itself when the person does it in the document. Open the document to do it.",
+    "source_module": "This task belongs to a document request; what it is linked to cannot be changed.",
+    "source_entity_type": "This task belongs to a document request; what it is linked to cannot be changed.",
+    "source_entity_id": "This task belongs to a document request; what it is linked to cannot be changed.",
+}
+
+
+def is_task(ct) -> bool:
+    """One of our tasks (a review, approval or acknowledgement request's twin)."""
+    return ct is not None and ct.source_module == SOURCE_MODULE and ct.source_entity_type == SOURCE_TYPE
+
+
+def action_href(document_id: int, kind: str) -> str:
+    """The document with the person's own step open (Review and sign / Approve and sign / Acknowledge)."""
+    return f"/governance/documents/{document_id}?act={_ACT[kind]}"
+
+
+def locked_change(ct, changes: Dict[str, Any]) -> Optional[str]:
+    """Why an edit from Task Management may not be made to one of our tasks (it would no longer match the request), or None."""
+    if not is_task(ct):
+        return None
+    current = {"assigned_owner_id": ct.assigned_owner_id, "assigned_user_ids": list(ct.assigned_user_ids or []), "due_date": ct.due_date,
+               "status": ct.status, "source_module": ct.source_module, "source_entity_type": ct.source_entity_type,
+               "source_entity_id": ct.source_entity_id}
+    for key, value in changes.items():
+        if key in _LOCKED and value != current[key]:
+            return _LOCKED[key]
+    return None
+
+
+def task_request(db, ct) -> Optional[Dict[str, Any]]:
+    """What Task Management shows on one of our tasks: the document, the person's step, its due date and where to do it. Read
+    from the request itself, so tasks made before these fields existed show them too and nothing goes stale (a minor version
+    moves a waiting acknowledgement up to the new number). None for other tasks, or when the request is gone."""
+    from ...models import DocumentObligation, GovernanceDocument
+
+    if not is_task(ct) or not ct.source_entity_id:
+        return None
+    row = (db.query(DocumentObligation, GovernanceDocument.title).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
+           .filter(DocumentObligation.id == ct.source_entity_id).first())
+    if row is None:
+        return None
+    ob, title = row
+    pending = ob.status == "pending"
+    return {"request_id": ob.id, "kind": ob.kind, "document_id": ob.document_id, "document_title": title, "version": ob.document_version,
+            "status": ob.status, "user_id": ob.user_id, "due_date": _iso(ob.due_date), "done_at": _iso(ob.done_at),
+            "overdue": bool(pending and ob.due_date and ob.due_date < datetime.utcnow()),
+            "open_href": f"/governance/documents/{ob.document_id}", "action_label": ACTION_LABEL[ob.kind],
+            "action_href": action_href(ob.document_id, ob.kind) if pending else None}
+
+
 def sync_from_critical_task(db, critical_task_id: int, user_id: Optional[int] = None) -> None:
     """Task Management changed one of our tasks. It cannot be completed there (signing or acknowledging in the document
     does that), so an attempt is put back."""

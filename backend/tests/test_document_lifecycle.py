@@ -93,7 +93,7 @@ def test_sending_for_review_asks_each_reviewer_with_a_task_and_an_alert(world):
         assert all(o.due_date > datetime.utcnow() + timedelta(days=6) for o in rows)
         mine = [t for t in tasks(db) if t.assigned_user_ids == [2]]
         assert len(tasks(db)) == 2 and mine[0].title == "Review: Access policy" and mine[0].source_entity_id == rows[0].id
-        assert mine[0].description.startswith('Review "Access policy" (version 1.0) by ')          # plain words, no bare path
+        assert mine[0].description.startswith('Please review and sign "Access policy", version 1.0, by ')   # plain words, no bare path
         assert life.task_values(db, rows[0], doc(db))["link"] == "/governance/documents/5?tab=lifecycle"     # {link}: its Approvals
         assert len(alerts(db, 2)) == 1 and len(alerts(db, 3)) == 1 and alerts(db, 6) == []
 

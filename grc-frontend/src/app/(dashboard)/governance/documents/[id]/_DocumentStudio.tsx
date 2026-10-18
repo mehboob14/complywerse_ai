@@ -20,6 +20,7 @@ import { problemOf, saveBlob } from '@/lib/studio/api';
 import { ago } from '@/lib/studio/text';
 import { documentChainApi, type ExportFormat } from '@/lib/documentChain';
 import { day, type LifecycleReply } from '@/lib/documentLifecycle';
+import { actOf, actOutcome } from '@/lib/documentTasks';
 import { usePermissions } from '@/hooks/usePermissions';
 import { PageLoader } from '@/components/ui';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
@@ -175,6 +176,24 @@ export default function DocumentStudio() {
   // a sign-off done in the popup: the step is gone, so is the popup
   const myRole = signoff.data?.my_actionable_role ?? null;
   useEffect(() => { if (popup === 'sign' && signoff.data && !myRole) setPopup(null); }, [popup, myRole, signoff.data]);
+
+  // ?act=ack / ?act=sign (a task's button in Task Management, My Approvals): the person's own step opens at once, or a note says
+  // why there is none; the parameter then goes, so a reload does not ask again
+  const actAsked = actOf(search?.get('act'));
+  useEffect(() => {
+    if (!actAsked || !docQ.data || lifecycleQ.isLoading || signoff.isLoading) return;
+    const lcd = lifecycleQ.data && lifecycleQ.data.enabled ? lifecycleQ.data : null;
+    const kinds = actAsked === 'ack' ? ['acknowledgement'] : ['review', 'approval'];
+    const doneOn = (lcd ? [...lcd.approvals, ...lcd.acknowledgements.people] : [])
+      .filter((r) => r.user_id === lcd?.me?.id && kinds.includes(r.kind) && r.status === 'done').map((r) => r.done_at ?? '').sort().pop() || null;
+    const out = actOutcome({ act: actAsked, myAck: !!lcd?.mine.some((r) => r.kind === 'acknowledgement' && r.status === 'pending'),
+      myRole: signoff.data?.my_actionable_role, doneOn });
+    if ('popup' in out) setPopup(out.popup);
+    else toast({ type: 'info', title: out.title, message: out.message });
+    const q = new URLSearchParams(search?.toString() ?? '');
+    q.delete('act');
+    router.replace(`/governance/documents/${id}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
+  }, [actAsked, docQ.data, lifecycleQ.isLoading, signoff.isLoading]);
 
   if (!valid) return <NotFound library={library} />;
   // a backend from before the AI Studio's document view (not restarted, or not deployed yet): the classic page

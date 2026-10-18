@@ -3,6 +3,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { criticalTasksApi } from '@/lib/api';
 import Link from 'next/link';
+import { DocumentTaskLink, useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { isDocumentTask, type DocumentRequest } from '@/lib/documentTasks';
 import {
   Clock, CheckCircle2, AlertTriangle, Target, Loader2, ChevronRight,
 } from 'lucide-react';
@@ -26,6 +28,9 @@ interface CriticalTaskItem {
   sla_status: string;
   completed_at: string | null;
   assigned_owner: TaskUser | null;
+  source_entity_type?: string | null;
+  /** Set on a task made by a document review, approval or acknowledgement request. */
+  document_request?: DocumentRequest | null;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -53,8 +58,11 @@ const SLA_COLORS: Record<string, string> = {
 };
 
 const PRIORITY_ORDER = ['Critical', 'High', 'Medium', 'Low'];
+// a document request's task: the person's own step, beside the row (not inside its link)
+const STEP = 'shrink-0 rounded-lg border border-[#99d5cc] bg-[#effaf8] px-2.5 py-2';
 
 export default function MyTasksPage() {
+  const meId = useMyUserId();
   const { data: tasks, isLoading } = useQuery<CriticalTaskItem[]>({
     queryKey: ['my-tasks'],
     queryFn: async () => {
@@ -130,8 +138,9 @@ export default function MyTasksPage() {
           </h2>
           <div className="space-y-2">
             {overdueTasks.map(t => (
-              <Link key={t.id} href={`/tasks/${t.id}`}
-                className="flex items-center justify-between rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 hover:bg-rose-100 transition-colors">
+              <div key={t.id} className="flex items-center gap-2">
+              <Link href={`/tasks/${t.id}`}
+                className="flex min-w-0 flex-1 items-center justify-between rounded-lg border border-rose-200 bg-rose-50 px-4 py-2.5 hover:bg-rose-100 transition-colors">
                 <div className="flex items-center gap-3">
                   <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${PRIORITY_COLORS[t.priority]}`}>
                     {t.priority}
@@ -143,6 +152,8 @@ export default function MyTasksPage() {
                   <ChevronRight size={14} className="text-[var(--color-muted)]" />
                 </div>
               </Link>
+              {isDocumentTask(t) && <DocumentTaskLink request={t.document_request} meId={meId} className={STEP} />}
+              </div>
             ))}
           </div>
         </div>
@@ -161,8 +172,9 @@ export default function MyTasksPage() {
             </h2>
             <div className="space-y-2">
               {items.map(t => (
-                <Link key={t.id} href={`/tasks/${t.id}`}
-                  className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 hover:bg-[var(--color-subtle)] transition-colors">
+                <div key={t.id} className="flex items-center gap-2">
+                <Link href={`/tasks/${t.id}`}
+                  className="flex min-w-0 flex-1 items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 hover:bg-[var(--color-subtle)] transition-colors">
                   <div className="flex items-center gap-3">
                     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[t.status]}`}>
                       {t.status}
@@ -176,6 +188,8 @@ export default function MyTasksPage() {
                     <ChevronRight size={14} className="text-[var(--color-muted)]" />
                   </div>
                 </Link>
+                {isDocumentTask(t) && <DocumentTaskLink request={t.document_request} meId={meId} className={STEP} />}
+                </div>
               ))}
             </div>
           </div>

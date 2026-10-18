@@ -5,6 +5,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
+import { DocumentTaskCard, useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { canDeleteTask, dayOf, isDocumentTask, plainDescription, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, Plus, X,
@@ -56,6 +58,8 @@ interface CriticalTaskDetail {
   source_module: string | null;
   /** Set when the task mirrors an implementation task of a regulatory change. */
   linked_regulatory_change_id?: number | null;
+  /** Set on a task made by a document review, approval or acknowledgement request. */
+  document_request?: DocumentRequest | null;
   source_entity_id: number | null;
   source_entity_type: string | null;
   priority: string;
@@ -142,9 +146,10 @@ export default function TaskDetailPage() {
   const params = useParams();
   const router = useRouter();
   const queryClient = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
   const canEdit = hasPermission('tasks:task_management:edit');
   const canDelete = hasPermission('tasks:task_management:delete');
+  const meId = useMyUserId();
   const taskId = Number(params.id);
 
   const [activeTab, setActiveTab] = useState<'details' | 'subtasks' | 'comments' | 'evidence' | 'history'>('details');
@@ -351,7 +356,8 @@ export default function TaskDetailPage() {
     if (!payload.source_entity_type) payload.source_entity_type = null;
     if (!payload.due_date) payload.due_date = null;
     if (!payload.evidence_notes) payload.evidence_notes = null;
-    updateMutation.mutate(payload);
+    // a document request's task: who, when and its link follow the request and are not sent
+    updateMutation.mutate(task ? withoutLocked(task, payload) : payload);
   };
 
   if (isLoading) {
@@ -371,7 +377,11 @@ export default function TaskDetailPage() {
     );
   }
 
-  const allowedTransitions = VALID_TRANSITIONS[task.status] || [];
+  // a document request's task: completed by doing the step in the document (its card's button), deleted by administrators only
+  const docTask = isDocumentTask(task);
+  const allowedTransitions = docTask ? [] : VALID_TRANSITIONS[task.status] || [];
+  const canDeleteThis = canDeleteTask(task, { isAdmin, hasDeleteRight: canDelete });
+  const description = docTask ? plainDescription(task.description) : task.description;
 
   return (
     <div className="space-y-6 text-[var(--color-text)]">
@@ -391,7 +401,7 @@ export default function TaskDetailPage() {
           </div>
           <p className="text-sm text-[var(--color-muted)] mt-1">
             Task #{task.id} · {task.source} · {task.category}
-            {task.source_module && <span className="text-primary-700/70"> · via {task.source_module.replace(/_/g, ' ')}</span>}
+            {task.source_module && <span className="text-primary-700/70"> · via {docTask ? 'a document request' : task.source_module.replace(/_/g, ' ')}</span>}
             {task.escalation_level > 0 && <span className="text-rose-600"> · Escalation Level {task.escalation_level}</span>}
           </p>
           {/* v2 Issue Management — when this task was promoted from a CAPA
@@ -428,12 +438,16 @@ export default function TaskDetailPage() {
           {canEdit && <button onClick={startEdit} className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Pencil size={14} /> Edit
           </button>}
-          {canDelete && <button onClick={() => { if (confirm('Delete this task?')) deleteMutation.mutate(); }}
+          {canDeleteThis && <button onClick={() => {
+            if (confirm(docTask ? 'Delete this task? The request in the document stays; only the task is removed.' : 'Delete this task?')) deleteMutation.mutate();
+          }}
             className="cw-btn-danger flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Trash2 size={14} /> Delete
           </button>}
         </div>
       </div>
+
+      {docTask && <DocumentTaskCard request={task.document_request} meId={meId} />}
 
       <div className="grid grid-cols-4 gap-4">
         <div className={`rounded-lg border p-3 ${SLA_COLORS[task.sla_status] || ''}`}>
@@ -547,7 +561,7 @@ export default function TaskDetailPage() {
         <div className="cw-card p-6 space-y-4">
           <div>
             <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Description</h3>
-            <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap">{task.description || 'No description provided.'}</p>
+            <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap">{description || 'No description provided.'}</p>
           </div>
           <div className="grid grid-cols-2 gap-6">
             <div>
@@ -835,6 +849,7 @@ export default function TaskDetailPage() {
                     <option value="Medium">Medium</option><option value="Low">Low</option>
                   </select>
                 </div>
+                {!docTask && <>
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Source Module</label>
                   <select value={(editForm.source_module as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, source_module: e.target.value }))}
@@ -853,6 +868,14 @@ export default function TaskDetailPage() {
                     <option value="compliance_gap">Compliance Gap</option>
                   </select>
                 </div>
+                </>}
+                {docTask ? (
+                  <div className="col-span-2 rounded-lg border border-[#d5dbe1] bg-[#f4f6f8] px-3 py-2 text-[13px] text-[#26323d]">
+                    Owner: <b className="font-semibold">{task.assigned_owner?.display_name || task.assigned_owner?.username || 'the person asked'}</b>
+                    {' · '}Due: <b className="font-semibold">{dayOf(task.due_date) ?? 'no date'}</b>.
+                    {' '}They follow the request in the document and cannot be changed here.
+                  </div>
+                ) : (
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Owner</label>
                   <select value={(editForm.assigned_owner_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, assigned_owner_id: e.target.value }))}
@@ -861,6 +884,7 @@ export default function TaskDetailPage() {
                     {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
                   </select>
                 </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Reviewer</label>
                   <select value={(editForm.reviewer_id as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, reviewer_id: e.target.value }))}
@@ -869,11 +893,13 @@ export default function TaskDetailPage() {
                     {users.map(u => <option key={u.id} value={u.id}>{u.display_name || u.username}</option>)}
                   </select>
                 </div>
+                {!docTask && (
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">Due Date</label>
                   <input type="date" value={(editForm.due_date as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, due_date: e.target.value }))}
                     className="cw-field w-full px-3 py-2 text-sm" />
                 </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-[var(--color-text)] mb-1">SLA Days</label>
                   <input type="number" value={(editForm.sla_days as string) ?? ''} onChange={e => setEditForm(f => ({ ...f, sla_days: e.target.value }))}

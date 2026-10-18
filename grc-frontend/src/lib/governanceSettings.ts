@@ -22,6 +22,8 @@ export interface GovernanceSettings {
   task_priority: Record<Kind, Priority>;
   task_title: string;
   task_description: string;
+  /** the Task Management category of every request's task */
+  task_category: string;
   email: boolean;
 }
 
@@ -37,6 +39,10 @@ export interface SettingsAnswer {
 export const KINDS: Kind[] = ['review', 'approval', 'acknowledgement'];
 export const KIND_LABEL: Record<Kind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement' };
 export const ACTION: Record<Kind, string> = { review: 'Review', approval: 'Approve', acknowledgement: 'Acknowledge' };
+/** {verb}: what the person is asked to do, in a sentence (the server's doc_lifecycle._STEP) */
+export const VERB: Record<Kind, string> = { review: 'review and sign', approval: 'approve and sign', acknowledgement: 'acknowledge' };
+/** the buttons a task of each kind shows in Task Management (doc_lifecycle.ACTION_LABEL) */
+export const STEP_LABEL: Record<Kind, string> = { review: 'Review and sign', approval: 'Approve and sign', acknowledgement: 'Acknowledge' };
 export const PRIORITIES: Priority[] = ['Critical', 'High', 'Medium', 'Low'];
 export const CHANNELS: { value: Channel; label: string }[] = [
   { value: 'in_app', label: 'In-app' }, { value: 'email', label: 'Email' }, { value: 'both', label: 'Both' }, { value: 'off', label: 'Off' },
@@ -53,6 +59,7 @@ export const EVENTS: { key: GovEvent; label: string; who: string }[] = [
 
 export const PLACEHOLDERS: { key: string; label: string }[] = [
   { key: 'action', label: 'Review, Approve or Acknowledge' },
+  { key: 'verb', label: 'review and sign, approve and sign or acknowledge' },
   { key: 'document', label: 'Document title' },
   { key: 'version', label: 'Version' },
   { key: 'due_date', label: 'Due date' },
@@ -107,6 +114,8 @@ export function validate(s: GovernanceSettings): Partial<Record<keyof Governance
   if (title) out.task_title = title;
   const description = templateProblem('Task description', s.task_description, 2000);
   if (description) out.task_description = description;
+  const category = (s.task_category ?? '').trim();          // (a server from before it was added sends none: nothing to check)
+  if (s.task_category !== undefined && (!category || category.length > 100)) out.task_category = 'Task category must be 1 to 100 characters.';
   return out;
 }
 
@@ -129,7 +138,7 @@ export const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400
 export function sampleValues(kind: Kind, s: GovernanceSettings, today: Date = new Date()): Record<string, string> {
   const days = kind === 'acknowledgement' ? s.ack_days : kind === 'review' ? s.review_days : s.approval_days;
   return {
-    action: ACTION[kind], document: 'Acceptable Use Policy', version: '1.2', due_date: day(addDays(today, days || 0)),
+    action: ACTION[kind], verb: VERB[kind], document: 'Acceptable Use Policy', version: '1.2', due_date: day(addDays(today, days || 0)),
     owner: 'Sara Khan', link: kind === 'acknowledgement' ? '/governance/documents/3' : '/governance/documents/3?tab=lifecycle',
   };
 }

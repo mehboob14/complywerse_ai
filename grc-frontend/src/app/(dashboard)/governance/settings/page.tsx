@@ -6,12 +6,12 @@
 // else reads it. Helpers and rules: lib/governanceSettings.ts; backend: modules/governance/doc_lifecycle.py.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlarmClock, AlertTriangle, Bell, CalendarClock, Check, ChevronRight, Info, ListChecks, Loader2, Lock, Megaphone, RotateCcw } from 'lucide-react';
+import { AlarmClock, AlertTriangle, ArrowUpRight, Bell, CalendarClock, Check, ChevronRight, Info, ListChecks, Loader2, Lock, Megaphone, PenLine, RotateCcw } from 'lucide-react';
 import { clsx } from 'clsx';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
-  CHANNELS, EVENTS, KIND_LABEL, KINDS, PLACEHOLDERS, PRIORITIES, changes, courseOf, renderTemplate, sampleValues, validate,
+  CHANNELS, EVENTS, KIND_LABEL, KINDS, PLACEHOLDERS, PRIORITIES, STEP_LABEL, changes, courseOf, renderTemplate, sampleValues, validate,
   type Channel, type GovernanceSettings, type Kind, type Priority, type SettingsAnswer,
 } from '@/lib/governanceSettings';
 
@@ -22,6 +22,8 @@ const INPUT = 'rounded-lg border bg-white px-2.5 py-1.5 text-sm text-[#1f2933] f
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[13px] font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]/40 disabled:cursor-not-allowed disabled:opacity-50';
 const PRIMARY = `${BTN} bg-[#0f766e] text-white hover:bg-[#0b6b58]`;
 const SECONDARY = `${BTN} border border-[#d5dbe1] bg-white text-[#26323d] hover:bg-[#f4f6f8]`;
+// Task Management's categories (tasks/page.tsx) and the ones the document and committee tasks have used; any other may be typed
+const TASK_CATEGORIES = ['Compliance', 'Governance', 'Review', 'Remediation', 'Implementation', 'Reporting', 'Other'];
 
 // ── small pieces ─────────────────────────────────────────────────────────────
 function Section({ id, icon: Icon, title, hint, children }: { id: string; icon: typeof Info; title: string; hint?: ReactNode; children: ReactNode }) {
@@ -282,14 +284,15 @@ export default function GovernanceSettingsPage() {
       </Section>
 
       <Section id="tasks" icon={ListChecks} title="Task creation"
-        hint="Each request can also become a task in Task Management, assigned to the person, due on the request's due date. It closes by itself when they do it in the document.">
-        <div className="overflow-hidden rounded-lg border border-[#e4e8ec]">
+        hint="Each request can also become a task in Task Management, assigned to the person, due on the request's due date, with a button that opens their step in the document. It closes by itself when they do it there; its person, due date and status follow the request, and only an administrator can delete it.">
+        <div className="overflow-x-auto rounded-lg border border-[#e4e8ec]">
           <table className="w-full text-left">
             <thead className="bg-[#f4f6f8]">
               <tr>
                 <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Request</th>
                 <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Make a task</th>
                 <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Priority</th>
+                <th scope="col" className="px-2 py-2 sm:px-3 text-[12px] font-semibold text-[#26323d]">Due in</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e4e8ec]">
@@ -308,6 +311,12 @@ export default function GovernanceSettingsPage() {
                       onChange={(e) => setMap('task_priority', k, e.target.value as Priority)} className={clsx(INPUT, 'border-[#d5dbe1] py-1 text-[13px]')}>
                       {PRIORITIES.map((p) => <option key={p} value={p}>{p}</option>)}
                     </select>
+                  </td>
+                  <td className="px-2 py-2 sm:px-3 text-[12px] text-[#26323d]">
+                    {/* the request's own due date: the days are set once, under Due dates */}
+                    <a href="#due" className="whitespace-nowrap text-[#0b6b58] underline-offset-2 hover:underline" title="Days from when the person is asked. Change them under Due dates">
+                      {(k === 'acknowledgement' ? s.ack_days : k === 'review' ? s.review_days : s.approval_days) || '?'} days
+                    </a>
                   </td>
                 </tr>
               ))}
@@ -332,6 +341,16 @@ export default function GovernanceSettingsPage() {
                 aria-invalid={!!errors.task_description} aria-describedby={errors.task_description ? 'task_description-err' : undefined}
                 className={clsx(INPUT, 'mt-1 w-full resize-y leading-5', errors.task_description ? 'border-[#b42318]' : 'border-[#d5dbe1]')} />
               {errors.task_description && <p id="task_description-err" className="mt-1 text-[12px] text-[#b42318]">{errors.task_description}</p>}
+            </div>
+            <div>
+              <label htmlFor="task_category" className="block text-[13px] font-medium text-[#26323d]">Task category</label>
+              <input id="task_category" list="task_category-list" value={s.task_category ?? ''} disabled={ro} maxLength={100}
+                onChange={(e) => set({ task_category: e.target.value })}
+                aria-invalid={!!errors.task_category} aria-describedby={errors.task_category ? 'task_category-err' : 'task_category-hint'}
+                className={clsx(INPUT, 'mt-1 w-full sm:w-64', errors.task_category ? 'border-[#b42318]' : 'border-[#d5dbe1]')} />
+              <datalist id="task_category-list">{TASK_CATEGORIES.map((c) => <option key={c} value={c} />)}</datalist>
+              {errors.task_category ? <p id="task_category-err" className="mt-1 text-[12px] text-[#b42318]">{errors.task_category}</p>
+                : <p id="task_category-hint" className="mt-1 text-[12px] text-[#586472]">How Task Management files these tasks. Pick one or type your own.</p>}
             </div>
             {canEdit && (
               <div>
@@ -369,8 +388,13 @@ export default function GovernanceSettingsPage() {
                     <p className="min-w-0 break-words text-[14px] font-semibold text-[#1f2933]">{errors.task_title ? '—' : renderTemplate(s.task_title, values).slice(0, 255)}</p>
                     <span className="shrink-0 rounded-full border border-[#d5dbe1] bg-white px-2 py-0.5 text-[11px] font-medium text-[#26323d]">{s.task_priority[previewKind]}</span>
                   </div>
-                  <p className="mt-1 text-[12px] text-[#586472]">Due {values.due_date} · assigned to the person asked</p>
+                  <p className="mt-1 text-[12px] text-[#586472]">{s.task_category?.trim() || '—'} · due {values.due_date} · assigned to the person asked</p>
                   <p className="mt-2 whitespace-pre-wrap break-words text-[13px] leading-5 text-[#26323d]">{errors.task_description ? '—' : renderTemplate(s.task_description, values)}</p>
+                  {/* the buttons the task shows in Task Management (not links here) */}
+                  <div className="mt-3 flex flex-wrap gap-2" aria-label="Buttons on the task">
+                    <span className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1 text-[12px] font-semibold text-white"><PenLine size={12} aria-hidden /> {STEP_LABEL[previewKind]}</span>
+                    <span className="inline-flex items-center gap-1.5 rounded-lg border border-[#d5dbe1] bg-white px-2.5 py-1 text-[12px] font-medium text-[#26323d]"><ArrowUpRight size={12} aria-hidden /> Open document</span>
+                  </div>
                 </>
               ) : (
                 <p className="text-[13px] text-[#586472]">No task is made for {KIND_LABEL[previewKind].toLowerCase()} requests. People still get the alerts above and see the request on the Approvals page.</p>
