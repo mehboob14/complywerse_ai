@@ -255,7 +255,7 @@ def create_session(db, user, *, kind: str = "new", title: str = "", doc_type: st
     else:
         raise StudioError("Unknown way to start a session.")
     s.instructions = _default_instructions(db, instructions)
-    s.content, s.base_content, s.base_label = content, base, base_label
+    s.content, s.base_content, s.base_label = content, base, base_label and base_label[:200]       # base_label is String(200)
     db.add(s)
     db.flush()
     add_revision(db, s, content, author_type="import" if kind != "new" else "system", user_id=user.id, summary=summary)

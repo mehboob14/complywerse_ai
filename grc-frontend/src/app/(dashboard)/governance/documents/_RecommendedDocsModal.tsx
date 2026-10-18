@@ -1125,12 +1125,6 @@ function ArtifactsTab({
                       </span>
                     ) : null;
                   })()}
-                  {group.frameworkUploadedId && (
-                    <span className="ml-auto text-[10px] text-primary-700 font-medium inline-flex items-center gap-1">
-                      <Sparkles className="h-2.5 w-2.5" />
-                      Auto-links framework
-                    </span>
-                  )}
                 </button>
                 {isOpen && (
                   <div className="border-t border-slate-100 p-3 grid grid-cols-1 lg:grid-cols-2 gap-3 bg-slate-50">
@@ -1446,7 +1440,7 @@ function ArtifactDetailsPopup({
 
         <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between gap-3">
           <span className="text-[11px] text-slate-500">
-            Opens the template in the editor, ready to edit &amp; save.
+            Opens the template in the AI Studio as a new draft.
           </span>
           <div className="flex items-center gap-2">
             <button

@@ -186,14 +186,21 @@ def from_markdown(content: str, *, title: str, name: str, doc_type: str) -> Dict
     if len(md) > MAX_TEMPLATE_CHARS:
         raise ValueError("That template is too long to open in the AI Studio.")
     blocks = parse(md)
-    if sum(1 for b in blocks if b.kind == "heading" and b.level == 1) > 1:
-        for b in blocks:
-            if b.kind == "heading" and b.level < 6 and b.source.lstrip().startswith("#"):
-                b.source = "#" + b.source.lstrip()
-        md, blocks = render(blocks).strip("\n"), []
-    first = blocks[0] if blocks else next(iter(parse(md)), None)
+    heads = [b for b in blocks if b.kind == "heading"]
+    h1 = [b for b in heads if b.level == 1]
+    # One title, a level-1 heading: the template's own when it is its first block, or its first heading and only level-1 one (a
+    # document-control table may stand before it). Other level-1 headings: when its sections start at level 1 (Word's Heading 1)
+    # every heading moves one level down; else they are strays among its sections and become sections, as the checks fix them.
+    own = h1[0] if h1 and (blocks[0] is h1[0] or (len(h1) == 1 and heads[0] is h1[0])) else None
+    rest = [b for b in h1 if b is not own]
+    lower = ([b for b in blocks if b is not own] if [b for b in heads if b is not own][0].level == 1 else rest) if rest else []
+    for b in lower:
+        if b.kind == "heading" and b.level < 6 and b.source.lstrip().startswith("#"):
+            b.source = "#" + b.source.lstrip()
+    if lower:
+        md = render(blocks).strip("\n")
     title = (title or name or "Untitled document").strip()
-    if not (first and first.kind == "heading" and first.level == 1):
+    if own is None:
         md = f"# {escape_inline(title)}\n\n{md}"
     return {"id": CATALOGUE, "name": (name or title).strip()[:200], "doc_type": doc_type, "description": "", "content": md + "\n",
             "structure": derive_structure(md), "builtin": False, "is_default": False}

@@ -91,3 +91,33 @@ def test_a_catalogue_template_with_one_title_keeps_its_headings():
     assert [x["title"] for x in t["structure"]["sections"]] == ["Purpose", "Membership"]
     untitled = templates.from_markdown("## Purpose\n\nWhy.\n", title="Access *Rules*", name="", doc_type="other")
     assert untitled["content"].startswith("# Access \\*Rules\\*\n\n## Purpose") and untitled["name"] == "Access *Rules*"
+
+
+def _titles(md):
+    return [ln for ln in md.splitlines() if ln.startswith("#")]
+
+
+def test_a_catalogue_template_ends_with_one_title_whatever_its_level_1_headings():
+    # DORA's artifacts: a document-control table, then their title, then the sections: the title is not written twice
+    dora = templates.from_markdown("| Document ID | Version |\n|---|---|\n| [[ID]] | 1.0 |\n\n# Annual ICT RMF Review Report\n\n## Purpose\n\nWhy.\n",
+                                   title="Annual ICT RMF Review Report", name="x", doc_type="procedure")
+    assert _titles(dora["content"]) == ["# Annual ICT RMF Review Report", "## Purpose"] and dora["content"].startswith("| Document ID")
+    # an NCA policy with one stray level-1 heading among its level-2 sections: that one becomes a section
+    stray = templates.from_markdown("Review and Audit Policy Template\n\n## Purpose\n\nWhy.\n\n# Policy Statements\n\n## Compliance\n\nHow.\n",
+                                    title="Cybersecurity Review and Audit Policy", name="x", doc_type="policy")
+    assert _titles(stray["content"]) == ["# Cybersecurity Review and Audit Policy", "## Purpose", "## Policy Statements", "## Compliance"]
+    # NCA's awareness programme: level-2 sections, then its last ones at level 1: those join them, the others stay where they are
+    tail = templates.from_markdown("Programme Template\n\n## Purpose\n\nWhy.\n\n## Scope\n\nAll.\n\n# Update and Review\n\nYearly.\n\n# Compliance\n\nHow.\n",
+                                   title="Awareness Program", name="x", doc_type="policy")
+    assert _titles(tail["content"]) == ["# Awareness Program", "## Purpose", "## Scope", "## Update and Review", "## Compliance"]
+    # a title followed by sections written as level-1 headings: the title stays, the sections move down, nothing is duplicated
+    charter = templates.from_markdown("# Board Charter\n\n# Purpose\n\nWhy.\n\n## Quorum\n\nTwo.\n\n# Membership\n\nWho.\n", title="Board Charter",
+                                      name="x", doc_type="charter")
+    assert _titles(charter["content"]) == ["# Board Charter", "## Purpose", "### Quorum", "## Membership"]
+    assert [x["title"] for x in charter["structure"]["sections"]] == ["Purpose", "Membership"]
+
+
+def test_a_long_template_name_still_fits_where_the_document_started(world):
+    s = start(world, title="Policy", doc_type="policy", content="# Policy\n\n## Purpose\n\nWhy.\n", template_name="N" * 400)
+    assert s.status_code == 200, s.text
+    assert len(s.json()["base_label"]) <= 200 and s.json()["base_label"].startswith("Started from NNN")      # base_label is String(200)
