@@ -90,7 +90,7 @@ function Value({ label, wide, mono, children }: { label: string; wide?: boolean;
 }
 
 /** Chips with a remove button, a box to type a new one (Enter or a comma adds it; Backspace in the empty box removes the last), and
- *  the tags other documents use to pick from. Text left in the box is added when the box loses focus, so Save never drops it. */
+ *  the tags other documents use to pick from. Text left in the box is added when the focus leaves the field, so Save never drops it. */
 function TagField({ value, onChange, used, labelledBy }: { value: string[]; onChange: (tags: string[]) => void; used: string[]; labelledBy: string }) {
   const [text, setText] = useState('');
   const wrap = useRef<HTMLDivElement>(null);
@@ -99,7 +99,8 @@ function TagField({ value, onChange, used, labelledBy }: { value: string[]; onCh
   const parts = text.split(',').map(cleanTag).filter(Boolean);             // a comma separates several
   const isNew = parts.some((p) => !value.some((t) => t.toLowerCase() === p.toLowerCase()));
   const hints = full ? [] : tagSuggestions(used, value, text);
-  const add = (parts: string[]) => { onChange(addTags(value, parts)); setText(''); box.current?.focus(); };
+  const commit = (parts: string[]) => { onChange(addTags(value, parts)); setText(''); };
+  const add = (parts: string[]) => { commit(parts); box.current?.focus(); };
   const remove = (t: string) => { onChange(value.filter((x) => x !== t)); box.current?.focus(); };
   const onKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.nativeEvent.isComposing) return;
@@ -111,8 +112,10 @@ function TagField({ value, onChange, used, labelledBy }: { value: string[]; onCh
     }
   };
   return (
-    // a press anywhere in the field keeps the typing in the box (a button's click still runs), so picking a tag never adds the half-typed one too
-    <div ref={wrap} onMouseDown={(e) => { if (e.target !== box.current) { e.preventDefault(); box.current?.focus(); } }}>
+    // a press anywhere in the field keeps the typing in the box (a button's click still runs), so picking a tag never adds the half-typed one too;
+    // leaving the field from any of its parts adds what is typed, without pulling the focus back (the next field or Save gets it)
+    <div ref={wrap} onMouseDown={(e) => { if (e.target !== box.current) { e.preventDefault(); box.current?.focus(); } }}
+      onBlur={(e) => { if (parts.length && !wrap.current?.contains(e.relatedTarget as Node | null)) commit(parts); }}>
       <div className="flex min-h-[34px] flex-wrap items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2 py-1 focus-within:ring-2 focus-within:ring-[#1ed4b0]">
         {value.map((t) => (
           <span key={t} className="inline-flex max-w-full items-center gap-1 rounded-full border border-[#d5dbe1] bg-[#f3f6f8] py-0.5 pl-2 pr-1 text-xs text-[#26323d]">
@@ -125,7 +128,6 @@ function TagField({ value, onChange, used, labelledBy }: { value: string[]; onCh
         ))}
         {!full && (
           <input ref={box} type="text" value={text} onChange={(e) => setText(e.target.value)} onKeyDown={onKeyDown}
-            onBlur={(e) => { if (parts.length && !wrap.current?.contains(e.relatedTarget as Node | null)) add(parts); }}
             aria-labelledby={labelledBy} placeholder={value.length ? 'Add a tag' : 'Type a tag and press Enter'}
             className="min-w-[8rem] flex-1 border-0 bg-transparent px-1 py-0.5 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-0" />
         )}
@@ -241,7 +243,7 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
     return out;
   }, [doc?.id, others]);
 
-  const usedTags = useMemo(() => others.flatMap((d) => d.tags || []), [others]);
+  const usedTags = useMemo(() => others.filter((d) => d.id !== doc?.id).flatMap((d) => d.tags || []), [others, doc?.id]);
   const tagsLabel = useId();
 
   const patch = useMemo(() => changes(base, form), [base, form]);
