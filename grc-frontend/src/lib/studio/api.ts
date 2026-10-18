@@ -441,7 +441,8 @@ export const studioApi = {
   deleteTemplate: (id: number) => del<{ deleted: boolean }>(`/templates/${id}`),
 
   sessions: () => get<{ items: Session[] }>('/sessions'),
-  createSession: (body: { kind: 'new' | 'library'; title?: string; doc_type?: string; template_id?: string | null; document_id?: number | null; instructions?: Instructions }) =>
+  /** `content` + `template_name`: a new document started from a template of the platform's catalogue (its Markdown). */
+  createSession: (body: { kind: 'new' | 'library'; title?: string; doc_type?: string; template_id?: string | null; document_id?: number | null; instructions?: Instructions; content?: string; template_name?: string }) =>
     post<Session>('/sessions', body),
   /** `details`: what the library document is created with (classification, description, owner_id, department_id,
    *  review_cycle_months, effective_date, next_review_date, parent_document_id), as the person confirmed them. */

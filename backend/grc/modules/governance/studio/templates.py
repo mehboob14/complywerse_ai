@@ -154,10 +154,69 @@ def resolve(db, template_id: Optional[str], doc_type: str = "policy") -> Optiona
     return builtin(doc_type) if doc_type in DOC_TYPES else None
 
 
-def structure_for(db, doc_type: str, template_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-    """The required sections for a document: those of its template when it has one with a structure, else its type's."""
-    template = resolve(db, template_id, doc_type)
+def structure_for(db, doc_type: str, template_id: Optional[str] = None, session=None) -> Optional[Dict[str, Any]]:
+    """The required sections for a document: those of its template when it has one with a structure, else its type's.
+    With ``session``, a document started from a catalogue template is held to that template's sections."""
+    template = started_from(db, session) or resolve(db, template_id, doc_type)
     return (template or {}).get("structure") or (builtin(doc_type)["structure"] if doc_type in DOC_TYPES else None)
+
+
+# ── the platform's catalogue (NCA, standard and artifact templates): given as Markdown, kept as the session's first revision ──
+CATALOGUE = "catalogue"                    # ``session.template_id`` of a document started from one
+MAX_TEMPLATE_CHARS = 260_000               # as ``engine.MAX_DOC_CHARS``: a start Comply Agent cannot read whole is no start
+_COMMENTS = re.compile(r"<!--.*?-->", re.S)
+_CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def from_markdown(content: str, *, title: str, name: str, doc_type: str) -> Dict[str, Any]:
+    """A catalogue template to start a document from, made safe as the AI's answers are (``engine.sanitize_markdown``; comments and
+    control characters go too), with one title and its sections at level 2 (a template whose sections are all level-1 headings, as
+    Word's Heading 1 reads, is moved one level down under the title). Raises ``ValueError`` with a sentence for the person."""
+    from .blocks import escape_inline, parse, render
+    from .engine import sanitize_markdown
+
+    if doc_type not in DOC_TYPES + ("other",):
+        raise ValueError("That kind of document cannot be written in the AI Studio.")
+    if len(content or "") > 2 * MAX_TEMPLATE_CHARS:
+        raise ValueError("That template is too long to open in the AI Studio.")
+    md = _CONTROL.sub("", _COMMENTS.sub("", sanitize_markdown(content or "")))
+    md = re.sub(r"\n{3,}", "\n\n", md).strip("\n")
+    if not md.strip():
+        raise ValueError("That template has no text to start from.")
+    if len(md) > MAX_TEMPLATE_CHARS:
+        raise ValueError("That template is too long to open in the AI Studio.")
+    blocks = parse(md)
+    heads = [b for b in blocks if b.kind == "heading"]
+    h1 = [b for b in heads if b.level == 1]
+    # One title, a level-1 heading: the template's own when it is its first block, or its first heading and only level-1 one (a
+    # document-control table may stand before it). Other level-1 headings: when its sections start at level 1 (Word's Heading 1)
+    # every heading moves one level down; else they are strays among its sections and become sections, as the checks fix them.
+    own = h1[0] if h1 and (blocks[0] is h1[0] or (len(h1) == 1 and heads[0] is h1[0])) else None
+    rest = [b for b in h1 if b is not own]
+    lower = ([b for b in blocks if b is not own] if [b for b in heads if b is not own][0].level == 1 else rest) if rest else []
+    for b in lower:
+        if b.kind == "heading" and b.level < 6 and b.source.lstrip().startswith("#"):
+            b.source = "#" + b.source.lstrip()
+    if lower:
+        md = render(blocks).strip("\n")
+    title = (title or name or "Untitled document").strip()
+    if own is None:
+        md = f"# {escape_inline(title)}\n\n{md}"
+    return {"id": CATALOGUE, "name": (name or title).strip()[:200], "doc_type": doc_type, "description": "", "content": md + "\n",
+            "structure": derive_structure(md), "builtin": False, "is_default": False}
+
+
+def started_from(db, session) -> Optional[Dict[str, Any]]:
+    """The catalogue template a session was started from, as a template (``from_markdown``'s shape): the session's first revision,
+    the text it opened with, which never changes. None for any other session."""
+    if session is None or session.template_id != CATALOGUE:
+        return None
+    from ....models import StudioRevision
+
+    rev = db.query(StudioRevision).filter(StudioRevision.session_id == session.id, StudioRevision.number == 1).first()
+    content = rev.content if rev else (session.base_content or "")
+    return {"id": CATALOGUE, "name": (session.settings or {}).get("template_name") or "the template", "doc_type": session.doc_type,
+            "description": "", "content": content, "structure": derive_structure(content), "builtin": False, "is_default": False}
 
 
 def derive_structure(markdown: str) -> Dict[str, Any]:

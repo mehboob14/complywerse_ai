@@ -10,7 +10,7 @@
 //
 // Every source funnels its pick through a single `onPick` so the parent page
 // (governance/documents) only has to wire ONE handler. The pick discriminates
-// on `.kind` so the parent can decide how to seed the AI Draft modal.
+// on `.kind`; the parent opens the pick in the AI Studio as a new draft.
 //
 // Presentation follows the platform charter: one teal brand (primary-*),
 // flat (no gradients), hairline slate borders, semantic-only status chips.
@@ -65,6 +65,8 @@ interface LegacyProps {
    * path fires (legacy behaviour).
    */
   onPickAny?: (pick: DocumentTemplatePick) => void;
+  /** While the picked template is being opened in the AI Studio. */
+  busy?: boolean;
 }
 
 // ─── Source (rail) definitions ──────────────────────────────────────────
@@ -155,7 +157,7 @@ const ARTIFACT_DOC_TYPE_MAP = (artifactType: string): 'policy' | 'standard' | 'p
 const ALL: 'All' = 'All';
 
 // ─── Main ───────────────────────────────────────────────────────────────
-export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: LegacyProps) {
+export default function RecommendedDocsModal({ onClose, onPick, onPickAny, busy = false }: LegacyProps) {
   const [activeTab, setActiveTab] = useState<TabKey>('standard');
   const [search, setSearch] = useState('');
 
@@ -185,7 +187,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
               </span>
             </h2>
             <p className="mt-0.5 text-xs sm:text-sm text-slate-500 max-w-2xl">
-              Standard, NCA Saudi and per-framework artifact templates open in the editor ready to edit and save; reference laws open the AI Draft flow.
+              A template opens in the AI Studio as a new draft, ready for you and Comply Agent to work on; a reference law starts one with the law attached.
             </p>
           </div>
           <button
@@ -232,7 +234,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
                         tab.action === 'ai' ? 'bg-primary-50 text-primary-700' : 'bg-slate-100 text-slate-500'
                       }`}
                     >
-                      {tab.action === 'ai' ? <><Sparkles className="h-2.5 w-2.5" />AI Draft</> : 'Editor'}
+                      {tab.action === 'ai' ? <><Sparkles className="h-2.5 w-2.5" />Comply Agent</> : 'Template'}
                     </span>
                   </span>
                 </button>
@@ -280,9 +282,16 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny }: Leg
 
         {/* Footer */}
         <div className="border-t border-slate-200 px-5 py-3 bg-white flex items-center justify-between gap-3">
-          <p className="text-[11px] text-slate-400">
-            Editor sources open ready to edit &amp; save; reference laws open the AI Draft modal.
-          </p>
+          {busy ? (
+            <p role="status" className="inline-flex items-center gap-1.5 text-[12px] font-medium text-[#0b6b58]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              Opening it in the AI Studio…
+            </p>
+          ) : (
+            <p className="text-[11px] text-[#586472]">
+              It stays a draft in the AI Studio until you move it to the library.
+            </p>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -399,7 +408,7 @@ function StandardTab({ search, onPick }: { search: string; onPick: (doc: Recomme
                           {d.doc_type}
                         </span>
                         <span className="text-[10px] font-medium text-slate-400 group-hover:text-primary-700 inline-flex items-center gap-1 transition-colors">
-                          Opens in editor
+                          Opens in the AI Studio
                           <ChevronRight className="h-3 w-3" />
                         </span>
                       </div>
@@ -511,7 +520,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                       toast({
                         type: 'info',
                         title: 'Opening template',
-                        message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
+                        message: `Opening "${t.title}" in the AI Studio.`,
                       });
                       onPick(t);
                     }}
@@ -535,7 +544,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
             toast({
               type: 'info',
               title: 'Opening template',
-              message: `Loading "${t.title}" into the editor — edit and save as your own document.`,
+              message: `Opening "${t.title}" in the AI Studio.`,
             });
             onPick(t);
           }}
@@ -705,8 +714,8 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
     <>
       <div className="space-y-3">
         <p className="text-[11px] text-slate-500">
-          {data.total} authoritative law{data.total === 1 ? '' : 's'} / regulation{data.total === 1 ? '' : 's'}. Drafting generates a
-          new tenant-specific document (policy, charter, procedure…) that complies with — and cites — the law&apos;s articles.
+          {data.total} authoritative law{data.total === 1 ? '' : 's'} / regulation{data.total === 1 ? '' : 's'}. Each starts a new document
+          in the AI Studio with the law attached, for Comply Agent to draft so that it complies with, and cites, the law&apos;s articles.
         </p>
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {filtered.map((law) => (
@@ -773,15 +782,15 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
                   onClick={() => {
                     toast({
                       type: 'info',
-                      title: 'Opening AI Draft',
-                      message: `Drafting from "${law.short_name || law.name}". Pick the document type and generate.`,
+                      title: 'Opening the AI Studio',
+                      message: `"${law.short_name || law.name}" is attached for Comply Agent to draft from.`,
                     });
                     onPick(law);
                   }}
                   className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100"
                 >
                   <Sparkles className="h-3 w-3" />
-                  AI Draft
+                  Draft from it
                   <ChevronRight className="h-3 w-3" />
                 </button>
               </div>
@@ -797,8 +806,8 @@ function ReferenceLawsTab({ search, onPick }: { search: string; onPick: (law: Re
             setPreviewLaw(null);
             toast({
               type: 'info',
-              title: 'Opening AI Draft',
-              message: `Drafting from "${l.short_name || l.name}". Pick the document type and generate.`,
+              title: 'Opening the AI Studio',
+              message: `"${l.short_name || l.name}" is attached for Comply Agent to draft from.`,
             });
             onPick(l);
           }}
@@ -860,7 +869,7 @@ function ReferenceLawPreviewPopup({
             className="inline-flex items-center gap-1 rounded-md border border-primary-200 bg-primary-50 px-2 py-1 text-[11px] font-medium text-primary-700 hover:bg-primary-100 shrink-0"
           >
             <Sparkles className="h-3 w-3" />
-            AI Draft
+            Draft from it
           </button>
           <button
             onClick={onClose}
@@ -889,7 +898,7 @@ function ReferenceLawPreviewPopup({
         </div>
 
         <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between text-[11px] text-slate-500">
-          <span>Authoritative reference — the AI draft must comply with and cite these articles.</span>
+          <span>Authoritative reference: Comply Agent&apos;s draft must comply with and cite these articles.</span>
           <button
             type="button"
             onClick={onClose}
@@ -1067,8 +1076,7 @@ function ArtifactsTab({
         <div className="flex items-start justify-between gap-2">
           <p className="text-[11px] text-slate-500">
             Every compliance framework&apos;s artifacts, grouped by framework and ordered so
-            generated (Ready) ones surface first. Drafting auto-links the new document back
-            to its source framework when you have a journey for it.
+            generated (Ready) ones surface first. Each opens in the AI Studio as a new draft.
           </p>
           <span className="shrink-0 inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-600">
             <Layers className="h-3 w-3" />
@@ -1117,12 +1125,6 @@ function ArtifactsTab({
                       </span>
                     ) : null;
                   })()}
-                  {group.frameworkUploadedId && (
-                    <span className="ml-auto text-[10px] text-primary-700 font-medium inline-flex items-center gap-1">
-                      <Sparkles className="h-2.5 w-2.5" />
-                      Auto-links framework
-                    </span>
-                  )}
                 </button>
                 {isOpen && (
                   <div className="border-t border-slate-100 p-3 grid grid-cols-1 lg:grid-cols-2 gap-3 bg-slate-50">
@@ -1145,9 +1147,7 @@ function ArtifactsTab({
                             toast({
                               type: 'info',
                               title: 'Opening template',
-                              message: `Loading "${item.name}" (${group.framework}) into the editor — edit and save.${
-                                group.frameworkUploadedId ? ' Framework auto-selected.' : ''
-                              }`,
+                              message: `Opening "${item.name}" (${group.framework}) in the AI Studio.`,
                             });
                             onPick(item, group.framework, group.frameworkUploadedId);
                           }}
@@ -1172,9 +1172,7 @@ function ArtifactsTab({
             toast({
               type: 'info',
               title: 'Opening template',
-              message: `Loading "${picked.item.name}" (${picked.frameworkName}) into the editor — edit and save.${
-                picked.frameworkUploadedId ? ' Framework auto-selected.' : ''
-              }`,
+              message: `Opening "${picked.item.name}" (${picked.frameworkName}) in the AI Studio.`,
             });
             onPick(picked.item, picked.frameworkName, picked.frameworkUploadedId);
           }}
@@ -1228,7 +1226,7 @@ function ArtifactCard({
           <p className={`mt-1 text-[12px] leading-relaxed ${hasDescription ? 'text-slate-600' : 'text-slate-400 italic'}`}>
             {hasDescription
               ? item.description
-              : `No catalogue description for this artifact. AI Draft will work from the title and ${docType} scaffold.`}
+              : `No catalogue description for this artifact. It opens with the standard ${docType} sections.`}
           </p>
         </div>
       </div>
@@ -1442,7 +1440,7 @@ function ArtifactDetailsPopup({
 
         <div className="border-t border-slate-200 bg-white px-5 py-2.5 flex items-center justify-between gap-3">
           <span className="text-[11px] text-slate-500">
-            Opens the template in the editor, ready to edit &amp; save.
+            Opens the template in the AI Studio as a new draft.
           </span>
           <div className="flex items-center gap-2">
             <button

@@ -62,6 +62,8 @@ class SessionIn(BaseModel):
     template_id: Optional[str] = None
     document_id: Optional[int] = None
     instructions: Optional[Dict[str, Any]] = None
+    content: Optional[str] = None                  # a new document's start: a template of the platform's catalogue, as Markdown
+    template_name: Optional[str] = None            # that template's name ("NCA template: ..."), kept as where the document started
 
 
 class SessionPatch(BaseModel):
@@ -293,7 +295,8 @@ def create_session(body: SessionIn, db: Session = Depends(get_db), user: GRCUser
         raise HTTPException(status_code=400, detail="Use the upload route to open a file.")
     try:
         s = service.create_session(db, user, kind=body.kind, title=body.title, doc_type=body.doc_type, template_id=body.template_id,
-                                   document_id=body.document_id, instructions=body.instructions)
+                                   document_id=body.document_id, instructions=body.instructions,
+                                   markdown=body.content if body.kind == "new" else None, template_name=body.template_name)
     except service.StudioError as exc:
         raise _problem(exc)
     return service.session_view(db, s, user=user)          # a new document waits for the person's request: nothing is written on its own
@@ -568,7 +571,7 @@ def _check_context(db: Session, s: StudioSession) -> Dict[str, Any]:
     ins = s.instructions or {}
     logo_ok = bool(ins.get("logo_asset_id") and db.get(StudioAsset, ins["logo_asset_id"]))
     # the required sections are those of the template the document was started from: an uploaded or library document has its own
-    return {"structure": templates.structure_for(db, s.doc_type, s.template_id) if s.template_id else None,
+    return {"structure": templates.structure_for(db, s.doc_type, s.template_id, s) if s.template_id else None,
             "instructions": ins, "title": s.title, "logo_ok": logo_ok}
 
 

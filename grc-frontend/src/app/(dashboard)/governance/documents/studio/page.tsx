@@ -360,7 +360,8 @@ export default function StudioHomePage() {
   const prefill = readPrefill(search);
   const qc = useQueryClient();
   const { toast } = useToast();
-  const [dialog, setDialog] = useState<Start | null>(prefill ? 'new' : null);      // the library's “+ Draft” lands in the new-document popup
+  // the library's “+ Draft” (a prefill) and AI Draft (?new=1) land in the new-document popup
+  const [dialog, setDialog] = useState<Start | null>(prefill || search?.get('new') === '1' ? 'new' : null);
   const status = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 60_000 });
   const sessions = useQuery({ queryKey: ['studio', 'sessions'], queryFn: studioApi.sessions, enabled: !!status.data?.enabled });
   const del = useMutation({
