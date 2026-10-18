@@ -367,9 +367,11 @@ def list_tenant_users_for_assignment(
     `/critical-tasks/tenant-users` so the dropdown picks up users created
     via `POST /admin/users` that aren't in the legacy `grc_tenant_users`
     join."""
+    from ....routers.auth_router import platform_account
+
     users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active.is_(True))
+        .filter(GRCUser.is_active.is_(True), platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )

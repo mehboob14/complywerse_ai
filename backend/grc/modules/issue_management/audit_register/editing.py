@@ -359,7 +359,9 @@ def options(db: Session, tenant_id: int) -> Dict[str, Any]:
         if field in ("lob", "business_unit"):
             values |= {u for u in units if u}
         picks[field] = sorted(values, key=str.lower)
+    from ....routers.auth_router import platform_account
+
     users = [{"id": u.id, "name": getattr(u, "display_name", None) or u.username, "email": u.email}
-             for u in db.query(GRCUser).order_by(GRCUser.id).all()
+             for u in db.query(GRCUser).filter(platform_account()).order_by(GRCUser.id).all()
              if getattr(u, "is_active", True) is not False]
     return {"choices": T.CHOICES, "picks": picks, "users": users}

@@ -1192,6 +1192,23 @@ def _backfill_published_version(engine: Engine) -> None:
         logger.exception("published_version backfill failed on %s", getattr(engine.url, "database", "?"))
 
 
+def _backfill_imported_account_owners(engine: Engine) -> None:
+    """Once per tenant: documents owned by an account an access-review connector imported get their author as owner, and the
+    requests waiting on such accounts end (governance/imported_owners.py; it records that it ran)."""
+    try:
+        insp = inspect(engine)
+        if not all(insp.has_table(t) for t in ("grc_governance_documents", "grc_document_obligations", "grc_users")):
+            return
+        from ..governance.imported_owners import run
+        with Session(bind=engine) as db:
+            out = run(db)
+            db.commit()
+        if any(out.values()):
+            logger.info("Imported-account owners fixed on %s: %s", getattr(engine.url, "database", "?"), out)
+    except Exception:
+        logger.exception("imported-account owner fix failed on %s", getattr(engine.url, "database", "?"))
+
+
 def _backfill_regulatory_task_twins(engine: Engine) -> None:
     """Every regulatory implementation task without a Task Management twin gets one."""
     try:
@@ -1407,6 +1424,9 @@ def _ensure_for_engine(engine: Engine) -> None:
 
         # Documents published before the version in force was recorded. Idempotent.
         _backfill_published_version(engine)
+
+        # Documents owned by accounts an access review imported: the author owns them now. Once per tenant.
+        _backfill_imported_account_owners(engine)
 
         # Metabase / BI semantic layer — reporting_* views (idempotent).
         try:

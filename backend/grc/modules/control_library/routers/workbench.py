@@ -565,7 +565,9 @@ def tenant_users(db: Session = Depends(get_db), current_user: GRCUser = Depends(
     tid = _tenant(current_user, db)
     if not tid:
         return []
-    rows = db.query(GRCUser).filter(GRCUser.is_active == True).all()  # noqa: E712
+    from ....routers.auth_router import platform_account
+
+    rows = db.query(GRCUser).filter(GRCUser.is_active == True, platform_account()).order_by(GRCUser.id).all()  # noqa: E712
     out = []
     seen = set()
     for u in rows:

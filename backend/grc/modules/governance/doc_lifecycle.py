@@ -109,17 +109,12 @@ def _safe(fn):
 
 # ── people, alerts, tasks ────────────────────────────────────────────────────
 def _people(db, ids: Optional[Iterable[int]] = None) -> List[int]:
-    """The active users who are people (of ``ids``, or all): local or SSO accounts, or anyone who has signed in."""
-    from sqlalchemy import and_, or_
-
+    """The active users who are people (of ``ids``, or all): platform accounts (auth_router.platform_account), not accounts an
+    access-review connector imported."""
     from ...models import GRCUser
-    from ...routers.sso_router import PROVIDER_ENTRA
+    from ...routers.auth_router import platform_account
 
-    # an Entra account counts before its first sign-in only when SSO made it; the access-review directory sync stamps
-    # access_synced_at on the accounts it imports (mailboxes, service and room accounts among them)
-    q = db.query(GRCUser.id).filter(GRCUser.is_active.is_(True), or_(
-        GRCUser.external_provider.is_(None), GRCUser.last_login.isnot(None),
-        and_(GRCUser.external_provider == PROVIDER_ENTRA, GRCUser.access_synced_at.is_(None))))
+    q = db.query(GRCUser.id).filter(GRCUser.is_active.is_(True), platform_account())
     if ids is not None:
         q = q.filter(GRCUser.id.in_({int(i) for i in ids if i}))
     return [uid for (uid,) in q.order_by(GRCUser.id)]

@@ -77,7 +77,9 @@ def list_people(
 ):
     """Who a "person" field can name: active users, for anyone who sees the form."""
     _check(module_key, "view", request, token, authorization, db)
-    users = (db.query(GRCUser).filter(GRCUser.is_active.is_(True))
+    from .auth_router import platform_account
+
+    users = (db.query(GRCUser).filter(GRCUser.is_active.is_(True), platform_account())
              .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc()).all())
     return [{"id": u.id, "display_name": u.display_name or u.username} for u in users]
 

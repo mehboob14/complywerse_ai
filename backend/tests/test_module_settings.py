@@ -267,7 +267,7 @@ from sqlalchemy.pool import StaticPool  # noqa: E402
 
 from grc.models import (  # noqa: E402
     AuditLog, Base, GRCUser, ITAsset, ModuleSettings, Tenant, Vulnerability, VulnerabilityAssetLink,
-    VulnerabilityControlLink, VulnerabilitySLAConfig,
+    VulnerabilityControlLink, VulnerabilitySLAConfig, UserRole,
 )
 
 
@@ -275,7 +275,8 @@ from grc.models import (  # noqa: E402
 def db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     tables = [Tenant, GRCUser, ModuleSettings, AuditLog, Vulnerability, VulnerabilitySLAConfig,
-              VulnerabilityAssetLink, VulnerabilityControlLink, ITAsset]
+              VulnerabilityAssetLink, VulnerabilityControlLink, ITAsset,
+              UserRole]                                  # who is a platform account (auth_router.platform_account) reads it
     Base.metadata.create_all(engine, tables=[m.__table__ for m in tables])
     s = sessionmaker(bind=engine)()
     s.add(Tenant(id=1, name="Bank", slug="bank"))

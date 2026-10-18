@@ -62,6 +62,7 @@ from .auth_router import (
     SOURCE_SSO,
     create_access_token,
     has_tenant_permission,
+    is_platform_account,
     set_auth_cookie,
     _resolve_cookie_domain,
 )
@@ -566,6 +567,8 @@ def _upsert_user_from_claims(
     if email:
         user = tenant_db.query(GRCUser).filter(GRCUser.email == email).first()
         if user:
+            if not is_platform_account(tenant_db, user):
+                return None         # an account an access-review connector imported stays in Access Reviews: never adopted by email
             user.external_provider = PROVIDER_ENTRA
             user.external_id = oid
             user.last_login = datetime.utcnow()

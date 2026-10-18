@@ -550,9 +550,11 @@ def list_attention(
     result = queue(db, tenant_id, user.id, scope=scope, view=view)
     result["can_act"] = _can_act(db, user)
     # The people an item can be assigned to — only for those allowed to assign.
+    from ....routers.auth_router import platform_account
+
     result["assignees"] = [
         {"id": u.id, "name": u.display_name or u.username or u.email}
-        for u in db.query(GRCUser).filter(GRCUser.is_active.is_(True)).order_by(GRCUser.display_name)
+        for u in db.query(GRCUser).filter(GRCUser.is_active.is_(True), platform_account()).order_by(GRCUser.display_name)
     ] if result["can_act"] else []
     return result
 

@@ -2383,7 +2383,10 @@ def add_committee_member(
     
     if not committee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
-    
+    from ....routers.auth_router import refuse_imported_accounts
+
+    refuse_imported_accounts(db, [member.user_id])
+
     existing = db.query(CommitteeMember).filter(
         CommitteeMember.committee_id == committee_id,
         CommitteeMember.user_id == member.user_id,

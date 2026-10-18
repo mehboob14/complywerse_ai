@@ -831,10 +831,11 @@ def list_tenant_users(
     if not user_tenants:
         return []
     from ..models import TenantUser
+    from .auth_router import platform_account
     rows = (
         db.query(GRCUser)
         .join(TenantUser, TenantUser.user_id == GRCUser.id)
-        .filter(TenantUser.tenant_id.in_(user_tenants))
+        .filter(TenantUser.tenant_id.in_(user_tenants), platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )

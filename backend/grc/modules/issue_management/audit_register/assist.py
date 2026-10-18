@@ -237,7 +237,10 @@ def suggest(db: Session, tenant_id: int, template_key: str, values: Dict[str, An
                for n in fields if fields[n]["kind"] in _LIST_KINDS}
     asked = [n for n in fields if n in GUIDE and n not in given
              and (fields[n]["kind"] not in _LIST_KINDS or allowed.get(n))]
-    users = [u for u in db.query(GRCUser).order_by(GRCUser.id).all() if getattr(u, "is_active", True) is not False]
+    from ....routers.auth_router import platform_account
+
+    users = [u for u in db.query(GRCUser).filter(platform_account()).order_by(GRCUser.id).all()
+             if getattr(u, "is_active", True) is not False]
     owners = _ownership(db, tenant_id)
     names = {u.id: _name(u) for u in users}
 

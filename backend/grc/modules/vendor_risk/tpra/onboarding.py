@@ -105,8 +105,10 @@ def questions(db: Session = Depends(get_db), user: GRCUser = Depends(require_aut
 def people(db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """Who can own or look after a supplier — for anyone raising a request, who
     may not be allowed to read the admin user list."""
+    from ....routers.auth_router import platform_account
+
     _tids(user, db)
-    rows = (db.query(GRCUser).filter(GRCUser.is_active.is_(True))
+    rows = (db.query(GRCUser).filter(GRCUser.is_active.is_(True), platform_account())
             .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc()))
     return [{"id": u.id, "name": u.display_name or u.username or u.email} for u in rows]
 

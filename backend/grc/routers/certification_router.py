@@ -1854,9 +1854,11 @@ def list_certification_tenant_users(
     when users are explicitly invited across tenants. Includes the current
     user as a fallback so the dropdown is never empty.
     """
+    from .auth_router import platform_account
+
     users = (
         db.query(GRCUser)
-        .filter(GRCUser.is_active == True)
+        .filter(GRCUser.is_active == True, platform_account())
         .order_by(GRCUser.display_name.asc().nullslast(), GRCUser.username.asc())
         .all()
     )
