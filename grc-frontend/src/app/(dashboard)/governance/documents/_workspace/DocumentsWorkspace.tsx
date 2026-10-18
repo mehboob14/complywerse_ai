@@ -20,8 +20,9 @@ import type { GovDoc, GovDocNode } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
   fetchDocuments, fetchHierarchy, fetchSummary, fetchOverdueReviews, fetchMyPending, fetchCoverageMap,
-  bulkUpdateStatus, bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, signOffDocument,
+  bulkUpdateStatus, bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, signOffDocument, restoreDocument,
 } from './api';
+import { libraryCounts, unlessArchivedAsked, withoutArchived } from './archive';
 import { LibraryTree } from './LibraryTree';
 import { WorkspaceList } from './WorkspaceList';
 import { RegisterTable } from './RegisterTable';
@@ -116,10 +117,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     () => users.map((u) => ({ value: String(u.id), label: u.display_name, subLabel: u.email })),
     [users]
   );
-  const myDocsCount = useMemo(
-    () => (currentUserId ? allDocs.filter((d) => d.owner_id === currentUserId).length : 0),
-    [allDocs, currentUserId]
-  );
+  // archived documents count only under Archived, and the tree shows the working library (archive.ts)
+  const counts = useMemo(() => libraryCounts(allDocs, currentUserId), [allDocs, currentUserId]);
+  const workingTree = useMemo(() => withoutArchived(hierarchy), [hierarchy]);
 
   const refreshAll = () => {
     ['gov-docs-workspace', 'gov-docs-hierarchy', 'gov-docs-summary', 'gov-docs-overdue', 'gov-docs-mypending', 'gov-docs-coverage']
@@ -138,7 +138,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   const filteredDocs = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let out = scopedDocs.filter((d) => {
+    let out = unlessArchivedAsked(scopedDocs, statusFilter).filter((d) => {
       if (typeFilter && d.doc_type !== typeFilter) return false;
       if (statusFilter && d.status !== statusFilter) return false;
       if (ownerFilter && String(d.owner_id ?? '') !== ownerFilter) return false;
@@ -180,7 +180,13 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
 
   // ── handlers ──
   const openDoc = (id: number) => router.push(`/governance/documents/${id}`);
-  const selectLibrary = (key: LibraryKey) => { setLibrary(key); setSelectedNodeId(null); };
+  // Archived is the Status filter set to Archived, so it shows in every view; the other entries leave it
+  const selectLibrary = (key: LibraryKey | 'archived') => {
+    setSelectedNodeId(null);
+    if (key === 'archived') { setLibrary('all'); setStatusFilter('archived'); return; }
+    setLibrary(key);
+    if (statusFilter === 'archived') setStatusFilter('');
+  };
   const selectNode = (id: number | null) => { setSelectedNodeId(id); if (id != null) setLibrary('all'); };
 
   const runBulk = async (fn: () => Promise<unknown>, ok: string) => {
@@ -264,6 +270,16 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       toast({ title: 'Not archived', message: typeof detail === 'string' ? detail : undefined, type: 'error' });
     }
   };
+  const onRestoreDoc = async (doc: GovDoc) => {
+    try {
+      await restoreDocument(doc.id);
+      toast({ title: 'Restored as a draft', message: 'Send it for review when it is ready: it is in force again once approved and published.', type: 'success' });
+      refreshAll();
+    } catch (e: any) {
+      const detail = e?.response?.data?.detail;
+      toast({ title: 'Not restored', message: typeof detail === 'string' ? detail : undefined, type: 'error' });
+    }
+  };
 
   // ── toolbar bits ──
   const VIEWS: { key: ViewMode; label: string; icon: typeof FolderTree }[] = [
@@ -345,9 +361,11 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           <aside className="lg:col-span-3">
             <LibraryTree
               summary={summary}
-              hierarchy={hierarchy}
-              myDocsCount={myDocsCount}
-              activeLibrary={library}
+              hierarchy={workingTree}
+              myDocsCount={counts.mine}
+              allCount={counts.all}
+              archivedCount={counts.archived}
+              activeLibrary={statusFilter === 'archived' ? 'archived' : library}
               onSelectLibrary={selectLibrary}
               selectedNodeId={selectedNodeId}
               onSelectNode={selectNode}
@@ -379,6 +397,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               canEdit={canEdit}
               canEditRow={(d) => canEdit || mine(d)}
               canArchiveRow={(d) => (canEdit || mine(d)) && d.status !== 'archived'}
+              onRestore={onRestoreDoc}
+              canRestoreRow={(d) => (canEdit || mine(d)) && d.status === 'archived'}
             />
           ) : (
             <LifecycleBoard docs={filteredDocs} onOpenDoc={openDoc} />

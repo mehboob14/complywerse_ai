@@ -2,7 +2,7 @@
 
 /**
  * LibraryTree — LEFT sidebar of the governance documents workspace.
- * Section 1: LIBRARY quick-filters (All / Recently updated / My documents).
+ * Section 1: LIBRARY quick-filters (All / Recently updated / My documents / Archived).
  * Section 2: BY HIERARCHY — recursive, expandable tree of the policy hierarchy; under each document its versions, base first
  * to the newest, each with who made it and why (a link to that version in the document's Versions view).
  * Presentational: selection + active-library state are owned by the shell.
@@ -10,7 +10,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { FileText, Clock, User, ChevronRight, ChevronDown } from 'lucide-react';
+import { FileText, Clock, User, ChevronRight, ChevronDown, Archive } from 'lucide-react';
 import { parseUtc } from '@/lib/serverTime';
 import { DocTypeTile, inForceNote, verLabel } from './lib';
 import type { GovDocNode, TreeVersion } from './lib';
@@ -20,8 +20,11 @@ export interface LibraryTreeProps {
   summary?: DashboardSummary;
   hierarchy: GovDocNode[];
   myDocsCount: number;
-  activeLibrary: 'all' | 'recent' | 'mine';
-  onSelectLibrary: (key: 'all' | 'recent' | 'mine') => void;
+  /** All documents and Archived counts (archived documents count only there); All falls back to the summary's total */
+  allCount?: number;
+  archivedCount?: number;
+  activeLibrary: 'all' | 'recent' | 'mine' | 'archived';
+  onSelectLibrary: (key: 'all' | 'recent' | 'mine' | 'archived') => void;
   selectedNodeId: number | null;
   onSelectNode: (id: number | null) => void;
   loading?: boolean;
@@ -213,6 +216,8 @@ export function LibraryTree({
   summary,
   hierarchy,
   myDocsCount,
+  allCount,
+  archivedCount,
   activeLibrary,
   onSelectLibrary,
   selectedNodeId,
@@ -242,7 +247,7 @@ export function LibraryTree({
   const toggle = flip(setExpanded);
   const toggleVersions = flip(setVersionsOpen);
 
-  const totalDocs = summary?.total_documents ?? 0;
+  const totalDocs = allCount ?? summary?.total_documents ?? 0;
   const treeSelected = selectedNodeId != null;
   const allActive = activeLibrary === 'all' && !treeSelected;
 
@@ -282,6 +287,16 @@ export function LibraryTree({
           onClick={() => {
             onSelectNode(null);
             onSelectLibrary('mine');
+          }}
+        />
+        <LibraryRow
+          icon={<Archive className="h-4 w-4" strokeWidth={1.75} />}
+          label="Archived"
+          count={archivedCount}
+          active={activeLibrary === 'archived' && !treeSelected}
+          onClick={() => {
+            onSelectNode(null);
+            onSelectLibrary('archived');
           }}
         />
       </div>

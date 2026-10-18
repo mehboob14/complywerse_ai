@@ -791,7 +791,13 @@ def get_document(
         _serve_in_force(result, row)
         result["current_version"] = row.version_number
         result["newer_version"] = {"number": document.current_version, "status": document.status}
-    
+    if document.status == "archived":           # when and by whom, for the document's banner (the newest change to archived)
+        A = DocumentAuditLog
+        last = (db.query(A).filter(A.document_id == document.id, or_(A.action == "archived", and_(A.field_changed == "status", A.new_value == "archived")))
+                .order_by(A.performed_at.desc(), A.id.desc()).first())
+        result["archived_at"] = last.performed_at.isoformat() if last is not None and last.performed_at else None
+        result["archived_by_name"] = last.user.display_name if last is not None and last.user else None
+
     result["versions"] = [
         {
             "id": v.id,
@@ -1812,6 +1818,36 @@ def update_document_status(
     db.commit()
     db.refresh(document)
 
+    return serialize_document(document, db)
+
+
+@router.post("/{document_id}/restore")
+def restore_document(
+    document: GovernanceDocument = Depends(permissions.require_doc_editor),
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth)
+):
+    """An archived document back as a draft (documents are archived, never deleted: D29), by whoever may change it. Nothing comes
+    back in force: it is reviewed, approved and published again. No version is made; its next change makes the next one (D28)."""
+    if document.status != "archived":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only an archived document can be restored.")
+    document.status = "draft"
+    document.updated_at = datetime.utcnow()
+    db.flush()
+    create_audit_log(
+        db=db,
+        document_id=document.id,
+        tenant_id=document.tenant_id,
+        user_id=current_user.id,
+        action="restored",
+        action_details="Restored from the archive: it is a draft again",
+        field_changed="status",
+        old_value="archived",
+        new_value="draft"
+    )
+    doc_lifecycle.on_status_changed(db, document, "archived", "draft", current_user.id)
+    db.commit()
+    db.refresh(document)
     return serialize_document(document, db)
 
 

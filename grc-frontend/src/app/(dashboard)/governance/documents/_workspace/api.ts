@@ -123,6 +123,9 @@ export const bulkUpdateStatus = (document_ids: number[], status: string) =>
 export const bulkArchive = (document_ids: number[]) =>
   apiClient.post('/governance/documents/bulk-archive', { document_ids });
 
+/** An archived document back as a draft (its editors only): it is reviewed, approved and published again before it is in force. */
+export const restoreDocument = (id: number) => apiClient.post(`/governance/documents/${id}/restore`);
+
 export const bulkAssignOwner = (document_ids: number[], owner_id: number) =>
   apiClient.post('/governance/documents/bulk-assign-owner', { document_ids, owner_id });
 

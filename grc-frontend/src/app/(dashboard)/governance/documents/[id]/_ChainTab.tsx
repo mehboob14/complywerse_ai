@@ -50,6 +50,7 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   rejected: { label: 'Rejected', icon: XCircle, tone: 'bg-rose-50 text-rose-700 ring-rose-200' },
   published: { label: 'Published', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   archived: { label: 'Archived', icon: FileText, tone: SLATE },
+  restored: { label: 'Restored from the archive', icon: FileText, tone: SLATE },
   status_changed: { label: 'Status changed', icon: GitCommitVertical, tone: SLATE },
   review_completed: { label: 'Review completed', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   version_rollback: { label: 'Earlier version restored', icon: History, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },

@@ -6,7 +6,7 @@
  * Owner · Frameworks · Ver · Actions. The shell owns filtering/data + action handlers.
  */
 
-import { CheckCircle2, Send, UserPlus, CalendarClock, Archive, FileText, Eye, Download, Pencil } from 'lucide-react';
+import { CheckCircle2, Send, UserPlus, CalendarClock, Archive, ArchiveRestore, FileText, Eye, Download, Pencil } from 'lucide-react';
 import {
   DataTable,
   type ColumnDef,
@@ -44,6 +44,9 @@ export interface RegisterTableProps {
   /** per row: the owner and the author may change or archive their own document without the role permission */
   canEditRow?: (d: GovDoc) => boolean;
   canArchiveRow?: (d: GovDoc) => boolean;
+  /** an archived document back as a draft, for the people who may change it */
+  onRestore?: (doc: GovDoc) => void;
+  canRestoreRow?: (d: GovDoc) => boolean;
   loading?: boolean;
 }
 
@@ -64,6 +67,8 @@ export function RegisterTable({
   canEdit = false,
   canEditRow,
   canArchiveRow,
+  onRestore,
+  canRestoreRow,
   loading = false,
 }: RegisterTableProps) {
   const nameMap = useFrameworkNames();
@@ -140,6 +145,7 @@ export function RegisterTable({
               { key: 'edit', label: 'Edit', icon: Pencil, onClick: () => onEdit(d), hidden: !(canEditRow ? canEditRow(d) : canEdit) },
               { key: 'download', label: 'Download', icon: Download, onClick: () => onDownload(d) },
               { key: 'archive', label: 'Archive', icon: Archive, onClick: () => onArchive(d), variant: 'danger', hidden: !(canArchiveRow ? canArchiveRow(d) : canEdit) },
+              { key: 'restore', label: 'Restore', icon: ArchiveRestore, onClick: () => onRestore?.(d), hidden: !(onRestore && canRestoreRow?.(d)) },
             ]}
           />
         </div>
