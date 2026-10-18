@@ -8,6 +8,7 @@
  * Links a person confirmed survive a re-run.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Play } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
@@ -129,7 +130,14 @@ export function MappingScope({ documentId, scope, canRun }: {
         )}
       </div>
 
-      {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{error}</p>}
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
+          {error}
+          {/no statements/i.test(error) && (
+            <> <Link href={`/governance/documents/${documentId}?tab=statements`} className="font-semibold text-[#0b4f46] underline">Open Statements</Link></>
+          )}
+        </p>
+      )}
       {running ? (
         <p className="text-xs text-slate-600">
           {last?.message || 'Mapping the statements'} against {count} framework{count === 1 ? '' : 's'}. This can take

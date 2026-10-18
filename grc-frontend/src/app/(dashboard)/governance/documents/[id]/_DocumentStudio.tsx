@@ -3,7 +3,7 @@
 /**
  * A library document in the AI Studio. Everyone reads it here and does their own step (acknowledge, review and sign, approve and
  * sign, publish, submit for review); the people who may change it open their one draft of it with Edit. One top bar: the status
- * (its life cycle on hover), the version, the four views (Document · Approvals · Mappings · Versions), the one main action for
+ * (its life cycle on hover), the version, the views (Document · Approvals · Statements · Mappings · Gap analysis · Versions), the one main action for
  * this person, Edit, Download and ⋯; the rest opens in popups. Opening the document only reads: no studio session is made
  * until Edit (POST /governance/studio/documents/{id}/draft), and who may do what comes from GET .../access.
  */
@@ -37,7 +37,9 @@ import DetailsDialog from './_DetailsDialog';
 import SubmitDialog from './_SubmitDialog';
 import ReviewHistory from './_ReviewHistory';
 import { ClassicDocumentPage } from './_LegacyDocumentPage';
-import { VIEWS, viewOf, type DocView } from '../_view/docRoute';
+import StatementsView from './_StatementsView';
+import GapAnalysisView from './_GapAnalysisView';
+import { LIBRARY_VIEWS, VIEWS, viewOf, type DocView } from '../_view/docRoute';
 import { inForceLine, lastAcknowledged, primaryAction, publishLine, rejectionOf, stepLine } from '../_view/docActions';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -111,8 +113,8 @@ export default function DocumentStudio() {
     q.delete('version');
     router.replace(`/governance/documents/${id}?${q.toString()}`, { scroll: false });
   };
-  // a link to this same document with another ?tab= (the top bar's Pending approvals, a notification) does not load the page again:
-  // the view follows the URL
+  // a link to this same document with another ?tab= (the top bar's Pending approvals, a notification, Mappings' "no statements
+  // yet" link to Statements) does not load the page again: the view follows the URL
   const tabAsked = search?.get('tab') ?? null;
   useEffect(() => {
     const v = viewOf(tabAsked);
@@ -154,10 +156,10 @@ export default function DocumentStudio() {
     onError: (e) => toast({ type: 'error', title: 'Not restored', message: problemOf(e) }),
   });
   const { hasPermission, isLoading: permsLoading } = usePermissions();
-  // the library (its lists, the Mappings view, the way back to the documents): any governance:policies right; while the rights are
-  // still loading it is shown, so a library reader is not sent off ?tab=mappings (the server decides anyway)
+  // the library (its lists, the Statements, Mappings and Gap analysis views, the way back to the documents): any governance:policies
+  // right; while the rights are still loading it is shown, so a library reader is not sent off ?tab=mappings (the server decides anyway)
   const library = permsLoading || hasPermission('governance:policies:*');
-  useEffect(() => { if (!library && view === 'mappings') setViewState('document'); }, [library, view]);
+  useEffect(() => { if (!library && LIBRARY_VIEWS.has(view)) setViewState('document'); }, [library, view]);
   // the library's lists, the register's own keys included (DocumentsWorkspace.refreshAll), so they show it archived or restored at once
   const refreshLibrary = () => {
     for (const key of ['governance-documents', 'governance-documents-for-compare', 'gov-docs-workspace', 'gov-docs-hierarchy', 'gov-docs-summary',
@@ -362,10 +364,10 @@ export default function DocumentStudio() {
             </Menu>
           </div>
 
-          {/* the four views: in the bar on very wide screens, on their own row below it otherwise */}
+          {/* the views: in the bar on very wide screens, on their own row below it otherwise */}
           <nav aria-label="Views" className="order-last -mx-1 flex w-full overflow-x-auto px-1 [scrollbar-width:none] 2xl:order-none 2xl:mx-0 2xl:w-auto 2xl:px-0 [&::-webkit-scrollbar]:hidden">
             <div className="inline-flex rounded-lg bg-[#eef1f4] p-0.5" role="tablist">
-              {VIEWS.filter((v) => library || v.key !== 'mappings').map((v) => {
+              {VIEWS.filter((v) => library || !LIBRARY_VIEWS.has(v.key)).map((v) => {
                 const on = view === v.key;
                 const badge = v.key === 'approvals' ? (personal && primary?.kind !== 'acknowledge' ? 'Your step' : pendingApprovals ? String(pendingApprovals) : '') : '';
                 return (
@@ -451,8 +453,10 @@ export default function DocumentStudio() {
             </>
           )
         )}
-        {/* the library's own Mappings page: for people who read the library */}
+        {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
+        {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={canEdit} />}
         {view === 'mappings' && library && <GovernanceMappingsPage initialDocumentId={id} />}
+        {view === 'gaps' && library && <GapAnalysisView documentId={id} tenantId={doc.tenant_id} canEdit={canEdit} />}
         {view === 'versions' && (
           lifecycleOn ? (
             <ChainTab documentId={id} currentVersion={version} onRestore={canEdit ? setRestoring : undefined} focusVersionId={focusVersion}

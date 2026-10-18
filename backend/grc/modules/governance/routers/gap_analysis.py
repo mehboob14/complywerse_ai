@@ -901,7 +901,10 @@ def _generate_clause_fix(document: GovernanceDocument, finding: PolicyGapFinding
         base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
     )
 
-    full_content = document.content or ""
+    from .. import change_chain as _chain
+
+    # the text a fix is applied to: the content, or for a document that is its Word or PDF file, the file's text
+    full_content = _chain.document_text(document) or ""
     # Cap to keep the prompt within model budget. Most policies fit; truncated
     # tail is rarely the right place to splice anyway.
     existing_text_excerpt = full_content[:12000]
@@ -1092,22 +1095,81 @@ def generate_finding_fix(
     }
 
 
-def _bump_minor_version(current: Optional[str]) -> str:
-    """1.0 → 1.1, 1.9 → 1.10, 2.3 → 2.4. Best-effort — falls back to "1.0"
-    if the existing value isn't a recognisable major.minor pair."""
-    if not current:
-        return "1.0"
-    try:
-        parts = current.strip().split(".")
-        if len(parts) >= 2:
-            major = int(parts[0])
-            minor = int(parts[1])
-            return f"{major}.{minor + 1}"
-        if len(parts) == 1:
-            return f"{int(parts[0])}.1"
-    except (TypeError, ValueError):
-        pass
-    return "1.0"
+def _gap_name(finding: PolicyGapFinding) -> str:
+    return " ".join(p for p in (finding.framework_name, finding.clause_reference) if p) or "a framework clause"
+
+
+def _write_text(db: Session, document: GovernanceDocument, user: GRCUser, old_text: str, new_text: str, *, change_type: str,
+                origin: str, summary: str, reason: str, done: str):
+    """Put ``new_text`` into the document as every other save does (D28): until it is published, into its one pending version,
+    else as the next number. A document that is its Word or PDF file gets a new file, as a take back does (a Word file is edited
+    in place, a PDF becomes a Word copy). The version's change set says who made the change. Does not commit.
+    Returns ``(version row, number, notes, is_file)``."""
+    from .. import change_chain as C, doc_lifecycle, doc_version
+    from .documents import _snapshot_content_version, create_audit_log
+
+    is_file = not (document.content or "").strip()
+    old_version, old_status = document.current_version or "1.0", document.status
+    name = user.display_name or user.username or "A user"
+    pending = doc_version.pending_row(db, document)
+    held = dict(pending.change_set) if pending is not None and isinstance(pending.change_set, dict) else None
+    notes: List[str] = []
+    if is_file:
+        from ..studio import service as studio
+
+        try:
+            data, notes = studio.file_bytes(db, document, new_text)
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The document's file could not be written: {exc}")
+        row, number, _ = studio.write_file_version(db, document, user, data, change_type=change_type, summary=summary, reason=reason, done=done)
+    else:
+        document.content, document.updated_at = new_text, datetime.utcnow()
+        number = _snapshot_content_version(db, document, old_content=old_text, old_title=document.title, old_version=old_version,
+                                           change_type=change_type, change_reason=reason, user_id=user.id, summary=summary)
+        db.flush()
+        row = (db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == document.id,
+                                                          GovernanceDocumentVersion.version_number == number)
+               .order_by(GovernanceDocumentVersion.id.desc()).first())
+        doc_lifecycle.changed_after_review(db, document, old_status, user.id, f"{done} (version {number}), so it needs approving again")
+        create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id, action="content_edited",
+                         field_changed="current_version", old_value=old_version, new_value=number,
+                         action_details=f"{reason}; version {number}" + doc_lifecycle.outcome(old_status, document.status))
+    at = datetime.utcnow().isoformat()
+    if row is not None and pending is not None and row.id == pending.id:
+        before = doc_version.before_pending(db, document, row)
+        maker = db.get(GRCUser, row.created_by) if row.created_by else None
+        cs = C.fold(C.version_text(before) if before is not None else "", old_text, new_text, held, kind=origin, by=name, by_id=user.id,
+                    at=at, version=number, reason=reason, held_by=(maker.display_name or maker.username) if maker is not None else "",
+                    held_by_id=row.created_by, held_at=row.created_at.isoformat() if row.created_at else None)
+        if cs is not None:
+            row.change_set = cs
+    elif row is not None:
+        cs = C.build_change_set(old_text, new_text, [], default_kind=origin, by=name, by_id=user.id, at=at)
+        for item in cs["items"]:
+            item["reason"] = reason
+        row.change_set = cs
+    return row, number, notes, is_file
+
+
+def _take_back(text: str, finding: PolicyGapFinding) -> Optional[str]:
+    """``text`` without what this finding's fix put into it, every other change kept: a replaced clause gets its earlier wording
+    back; an added clause goes, with the heading it was added under when that heading holds nothing else. None when the clause
+    is not in the text as it was applied (it was edited since)."""
+    clause = (finding.applied_clause_text or "").strip()
+    # an added clause went in after everything the document held then: its last copy (an earlier one was there already)
+    at = (text.rfind(clause) if finding.replacement_mode != "replace" else text.find(clause)) if clause else -1
+    if at < 0:
+        return None
+    if finding.replacement_mode == "replace":
+        if finding.original_clause_text is None:
+            return None
+        return text[:at] + finding.original_clause_text.rstrip() + text[at + len(clause):]
+    start, rest = at, text[at + len(clause):]
+    head = re.search(r"(?:\A|\n)\n*#{1,6}[ \t][^\n]*\n\s*\Z", text[:at])        # the heading line right above the clause
+    if head and re.match(r"\s*(?:#|\Z)", rest):                                  # ... which holds only this clause
+        start = head.start()
+    left = text[:start].rstrip("\n")
+    return left + ("\n\n" + rest.lstrip("\n") if rest.strip() else "")
 
 
 def _norm_ws(s: Optional[str]) -> str:
@@ -1222,10 +1284,10 @@ def apply_finding_fix(
       - "replace" — splice `proposed_text` in for the verbatim `current_text`
       - "append" — append `proposed_text` under a new section heading
 
-    BEFORE modifying, snapshot the current document content into a
-    `GovernanceDocumentVersion` row (status='superseded') for audit. The
-    document's `current_version` string is bumped (1.0 → 1.1). The finding
-    is marked closed with a link back to the new version row.
+    The change is saved as every other save is (D28): until the document is published it goes into its one pending version, else
+    it makes the next number (major or minor, as Comply Agent or the rule judges it). A document that is its Word or PDF file gets
+    the fix in a new file (a Word file edited in place, a PDF a Word copy). The finding links to that version; Override takes the
+    fix back out on its own (``override_finding``).
     """
     user_tenants = get_user_tenants(current_user, db)
 
@@ -1263,35 +1325,15 @@ def apply_finding_fix(
         )
     ensure_editor(db, current_user, document)
 
-    original_content = document.content or ""
+    from .. import change_chain as C, doc_version
+
+    # the text the fix goes into: the content, or for a document that is its Word or PDF file, the file's text
+    original_content = C.document_text(document)
+    if original_content is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail="The text of this document's file cannot be read, so the fix cannot be written into it.")
     original_version_label = document.current_version or "1.0"
     original_status = document.status
-
-    # ---- Snapshot the pre-change document state into a version row. -----
-    # Mark any prior "current" version superseded so only the latest snapshot
-    # holds that status. (We avoid touching version status on file uploads
-    # which already manage their own version lifecycle.)
-    db.query(GovernanceDocumentVersion).filter(
-        GovernanceDocumentVersion.document_id == document.id,
-        GovernanceDocumentVersion.status == "current",
-    ).update({"status": "superseded"}, synchronize_session=False)
-
-    snapshot = GovernanceDocumentVersion(
-        document_id=document.id,
-        version_number=original_version_label,
-        change_type="minor",
-        title=document.title or "",
-        content=original_content,
-        change_summary=(
-            f"Pre-fix snapshot — about to {mode} for gap "
-            f"{finding.framework_name or ''} {finding.clause_reference or ''}".strip()
-        ),
-        change_reason=body.change_reason or None,
-        status="superseded",
-        created_by=current_user.id,
-    )
-    db.add(snapshot)
-    db.flush()  # gives us snapshot.id
 
     # ---- Compute the new content. --------------------------------------
     if mode == "replace":
@@ -1322,35 +1364,18 @@ def apply_finding_fix(
         heading = " — ".join(heading_parts) if heading_parts else "Compliance Update"
         new_content = original_content + f"\n\n## {heading}\n\n{proposed_text}\n"
 
-    # ---- Write the new document state and a "current" version row. -----
-    new_version_label = _bump_minor_version(original_version_label)
-    new_version = GovernanceDocumentVersion(
-        document_id=document.id,
-        version_number=new_version_label,
-        change_type="minor",
-        title=document.title or "",
-        content=new_content,
-        change_summary=(
-            f"Gap remediation ({mode}) for "
-            f"{finding.framework_name or 'framework'} {finding.clause_reference or ''}".strip()
-            + (f" — {finding.clause_title}" if finding.clause_title else "")
-        ),
-        change_reason=body.change_reason or None,
-        status="current",
-        created_by=current_user.id,
-    )
-    db.add(new_version)
-    db.flush()
-
-    document.content = new_content
-    document.current_version = new_version_label
+    # ---- Write it as every other save is (D28): until the document is published, into its one pending version. ----
     # Applying a remediation edits the document, so a reviewed one is reviewed again from the start by the same people (a new
     # round, also while in review or approval), as every other new version is; a draft stays a draft.
-    document.updated_at = datetime.utcnow()
-    from .. import doc_lifecycle
-
-    doc_lifecycle.changed_after_review(db, document, original_status, current_user.id,
-                                       f"Gap remediation applied (version {new_version_label}), so it needs approving again")
+    gap = _gap_name(finding)
+    reason = (body.change_reason or "").strip()[:2000] or f"Gap fix for {gap}"
+    decision = doc_version.decide(original_content, new_content, title=document.title)
+    drafted = proposed_text == (finding.suggested_clause_text or "").strip()        # Comply Agent's draft, as it wrote it
+    in_place = doc_version.pending_row(db, document) is not None                     # not published yet: into that one version
+    new_version, new_version_label, notes, is_file = _write_text(
+        db, document, current_user, original_content, new_content, change_type=decision["change"], origin="ai" if drafted else "manual",
+        summary=doc_version.summary_of(f"Gap fix ({'clause replaced' if mode == 'replace' else 'clause added'}) for {gap}", decision),
+        reason=reason, done="A gap fix was applied")
 
     now = datetime.utcnow()
     finding.applied_clause_text = proposed_text
@@ -1358,7 +1383,7 @@ def apply_finding_fix(
     finding.original_clause_text = body.current_text if mode == "replace" else None
     finding.applied_at = now
     finding.applied_by = current_user.id
-    finding.applied_version_id = new_version.id
+    finding.applied_version_id = new_version.id if new_version is not None else None
     finding.applied_prev_status = original_status
     # The clause now lives in the document, so the gap is addressed — flip the
     # compliance status to fully_compliant so the register reflects the fix.
@@ -1379,6 +1404,10 @@ def apply_finding_fix(
     )
 
     db.commit()
+    if is_file:
+        from ..studio import service as studio
+
+        studio.reanchor(db, document, current_user.id)
     db.refresh(finding)
     db.refresh(document)
 
@@ -1388,11 +1417,13 @@ def apply_finding_fix(
         "mode": mode,
         "applied_at": finding.applied_at.isoformat() if finding.applied_at else None,
         "remediation_status": finding.remediation_status,
-        "applied_version_id": new_version.id,
+        "applied_version_id": finding.applied_version_id,
         "applied_version_number": new_version_label,
         "previous_version_number": original_version_label,
         "compliance_status": finding.compliance_status,
         "document_status": document.status,
+        "in_place": in_place,            # it went into the version not published yet, with the other changes
+        "notes": notes,                  # about the document's file (e.g. a PDF became a Word copy)
     }
 
 
@@ -1465,34 +1496,35 @@ def override_finding(
             detail=f"Invalid override status. Must be one of: {', '.join(valid_statuses)}"
         )
 
-    # If this finding's remediation clause was applied to the document, an
-    # override is an UNDO: roll the document back to the snapshot taken just
-    # before the clause was spliced in, restore its prior status, and clear the
-    # applied audit trail before recording the override.
-    if finding.applied_at and finding.applied_version_id:
+    # If this finding's remediation clause was applied to the document, an override is an UNDO: that fix's text is taken back
+    # out of the document, every other change kept, as a take back is saved (D28: into the pending version while there is one),
+    # and the applied audit trail is cleared before the override is recorded.
+    taken_back, refiled, left = None, None, False
+    if finding.applied_at:
         document = db.query(GovernanceDocument).filter(
             GovernanceDocument.id == finding.document_id,
             GovernanceDocument.tenant_id.in_(user_tenants),
         ).first()
         if document:
-            snapshot = db.query(GovernanceDocumentVersion).filter(
-                GovernanceDocumentVersion.document_id == document.id,
-                GovernanceDocumentVersion.id < finding.applied_version_id,
-            ).order_by(GovernanceDocumentVersion.id.desc()).first()
-            applied_version = db.query(GovernanceDocumentVersion).filter(
-                GovernanceDocumentVersion.id == finding.applied_version_id,
-            ).first()
-            if snapshot:
-                document.content = snapshot.content
-                document.current_version = snapshot.version_number
-                snapshot.status = "current"
-            if applied_version:
-                applied_version.status = "reverted"
-            document.status = finding.applied_prev_status or "draft"
-            document.updated_at = datetime.utcnow()
+            from .. import change_chain as C, doc_version
+
+            old_text = C.document_text(document)
+            new_text = _take_back(old_text, finding) if old_text is not None else None
+            if new_text is None:
+                # its clause was changed or removed in the document since: that edit stands, so the document (and the statement
+                # that follows it) is left as it is - the reply says so - and the finding is overridden
+                left = True
+            elif new_text != old_text:
+                gap = _gap_name(finding)
+                why = (override.override_justification or "").strip()
+                reason = f"Gap fix for {gap} taken back" + (f": {why}" if why else "")
+                _row, taken_back, _notes, is_file = _write_text(
+                    db, document, current_user, old_text, new_text, change_type=doc_version.by_rule(old_text, new_text), origin="revert",
+                    summary=f"Gap fix for {gap} taken back", reason=reason[:2000], done="A gap fix was taken back")
+                refiled = document if is_file else None
         # Revert the statement change too: restore the prior text (replace) or
         # retract the statement that was created (append).
-        if finding.applied_statement_id:
+        if finding.applied_statement_id and not left:
             stmt = db.query(PolicyStatement).filter(
                 PolicyStatement.id == finding.applied_statement_id,
                 PolicyStatement.tenant_id.in_(user_tenants),
@@ -1523,9 +1555,15 @@ def override_finding(
     finding.updated_at = datetime.utcnow()
 
     db.commit()
+    if refiled is not None:
+        from ..studio import service as studio
+
+        studio.reanchor(db, refiled, current_user.id)
     db.refresh(finding)
 
-    return serialize_finding(finding, db)
+    # taken_back_version: the version the document is at after its fix was taken back (None: no fix was taken back);
+    # fix_left_in_document: its fix's clause was changed in the document since, so the document was left as it is
+    return {**serialize_finding(finding, db), "taken_back_version": taken_back, "fix_left_in_document": left}
 
 
 @router.put("/findings/{finding_id}/accept-risk")

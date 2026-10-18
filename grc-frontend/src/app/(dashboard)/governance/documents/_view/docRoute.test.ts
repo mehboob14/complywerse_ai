@@ -3,13 +3,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { VIEWS, inStudio, viewOf } from './docRoute.ts';
+import { LIBRARY_VIEWS, VIEWS, inStudio, viewOf } from './docRoute.ts';
 
 test('the AI Studio view is the only one: it needs the switch on, whatever the link asks for', () => {
   assert.equal(inStudio(true), true);
   assert.equal(inStudio(false), false);
   assert.equal(inStudio(undefined), false);
-  for (const tab of ['statements', 'gap-analysis', 'gaps']) assert.equal(viewOf(tab), 'mappings');   // they open Mappings, not the classic page
+});
+
+test('the classic page\'s Statements and Gap Analysis links open the studio\'s own views', () => {
+  assert.equal(viewOf('statements'), 'statements');
+  for (const tab of ['gap-analysis', 'gaps', 'Gap-Analysis']) assert.equal(viewOf(tab), 'gaps', tab);
+  assert.equal(viewOf('controls'), 'mappings');                  // Mappings stays Mappings
 });
 
 test('viewOf maps every old tab and every new view', () => {
@@ -21,11 +26,11 @@ test('viewOf maps every old tab and every new view', () => {
     ['discussion', 'approvals'],
     ['review-history', 'approvals'],
     ['approvals', 'approvals'],
+    ['statements', 'statements'],
     ['controls', 'mappings'],
-    ['statements', 'mappings'],
-    ['gap-analysis', 'mappings'],
-    ['gaps', 'mappings'],
     ['mappings', 'mappings'],
+    ['gap-analysis', 'gaps'],
+    ['gaps', 'gaps'],
     ['chain', 'versions'],
     ['versions', 'versions'],
   ];
@@ -42,11 +47,15 @@ test('viewOf ignores case and spaces, falls back to document', () => {
   assert.equal(viewOf('constructor'), 'document');
 });
 
-test('VIEWS lists the four views in order', () => {
+test('VIEWS lists the six views in order; statements, mappings and gap analysis are the library\'s', () => {
   assert.deepEqual(VIEWS.map((v) => [v.key, v.label]), [
     ['document', 'Document'],
     ['approvals', 'Approvals'],
+    ['statements', 'Statements'],
     ['mappings', 'Mappings'],
+    ['gaps', 'Gap analysis'],
     ['versions', 'Versions'],
   ]);
+  assert.deepEqual(VIEWS.filter((v) => LIBRARY_VIEWS.has(v.key)).map((v) => v.key), ['statements', 'mappings', 'gaps']);
+  for (const tab of ['statements', 'mappings', 'gap-analysis']) assert.ok(LIBRARY_VIEWS.has(viewOf(tab)), tab);
 });
