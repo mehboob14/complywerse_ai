@@ -178,11 +178,12 @@ export default function PendingApprovalsPage() {
     },
   });
 
-  // opened from the top bar's Pending approvals (#approval-compliance-12): that item, once the list is in
+  // opened from the top bar's Pending approvals (#approval-compliance-12): that item, once the list is in; only once, so acting on
+  // another item (the list loads again) does not jump back to it
   const [focused, setFocused] = useState('');
   useEffect(() => {
-    const anchor = decodeURIComponent(window.location.hash.slice(1));
-    const el = pendingApprovals && anchor ? document.getElementById(anchor) : null;
+    const anchor = window.location.hash.slice(1);
+    const el = pendingApprovals && anchor && anchor !== focused ? document.getElementById(anchor) : null;
     if (!el) return;
     el.scrollIntoView({ block: 'center' });
     el.focus({ preventScroll: true });

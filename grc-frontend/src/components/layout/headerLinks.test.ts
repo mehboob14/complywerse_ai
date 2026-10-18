@@ -9,6 +9,11 @@ test('only a page of this app is opened, never another site', () => {
   for (const bad of ['//evil.example/x', '/\\evil.example', 'https://evil.example/', 'javascript:alert(1)', 'governance/documents/3', '', null, undefined]) {
     assert.equal(appPath(bad), null, String(bad));
   }
+  // the browser drops tabs and line breaks, so these would open evil.example
+  for (const bad of ['/\t/evil.example/x', '/\n/evil.example', '/\r\\evil.example', '/\t\\evil.example']) {
+    assert.equal(new URL(bad, 'https://app.test/').host === 'app.test', false, JSON.stringify(bad));   // what makes them dangerous
+    assert.equal(appPath(bad), null, JSON.stringify(bad));
+  }
 });
 
 test('a notification opens its link first', () => {
@@ -23,6 +28,7 @@ test('one without a link opens the page its text names, without the sentence aro
   assert.equal(notificationHref({ message: 'Open it at /governance/documents/3 (its Approvals).' }), '/governance/documents/3');
   assert.equal(notificationHref({ message: 'Open it at /governance/documents/3.' }), '/governance/documents/3');
   assert.equal(notificationHref({ message: '/my-work has two items' }), '/my-work');
+  assert.equal(notificationHref({ message: '<p>Open: /vendor-risk/vendors/4</p>' }), '/vendor-risk/vendors/4');
 });
 
 test('one with nothing to open is plain text', () => {

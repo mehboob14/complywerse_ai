@@ -15,6 +15,8 @@ import { assessmentApprovalHref, docRequestHref, notificationHref } from './head
 const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge' };
 // a dropdown item that opens what it is about (a link: Tab, Enter)
 const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
+// the Pending approvals and Notifications dropdowns: under the bar across a phone's width, else at the button
+const DROPDOWN = 'fixed inset-x-3 top-14 z-50 rounded-lg border border-gray-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2';
 
 const navIconProps = {
   size: 18,
@@ -307,7 +309,7 @@ export default function Header() {
             )}
           </button>
           {approvalsOpen && (
-            <div className="absolute right-0 z-50 mt-2 w-96 rounded-lg border border-gray-200 bg-white shadow-xl">
+            <div className={`${DROPDOWN} sm:w-96`}>
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
                 <span className="text-sm font-semibold text-gray-800">Pending Approvals</span>
                 {pendingApprovalCount > 0 && (
@@ -398,7 +400,7 @@ export default function Header() {
             )}
           </button>
           {notifOpen && (
-            <div className="absolute right-0 z-50 mt-2 w-80 rounded-lg border border-gray-200 bg-white shadow-xl">
+            <div className={`${DROPDOWN} sm:w-80`}>
               <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100">
                 <span className="text-sm font-semibold text-gray-800">Notifications</span>
                 <div className="flex items-center gap-2">

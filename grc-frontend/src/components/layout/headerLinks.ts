@@ -1,15 +1,16 @@
 // Where each item of the top bar's Notifications and Pending approvals opens. Every href is a page of this app.
 
-/** A page of this app ("/governance/documents/3?tab=lifecycle"), never another site ("//x", "/\x", "https://x", "javascript:…"). */
+/** A page of this app ("/governance/documents/3?tab=lifecycle"), never another site ("//x", "/\x", "https://x", "javascript:…").
+ * A tab or line break inside is refused too: the browser drops them, so "/\t/x" would open the site x. */
 export function appPath(to: string | null | undefined): string | null {
   const s = (to ?? '').trim();
-  return /^\/(?![/\\])/.test(s) ? s : null;
+  return /^\/(?![/\\])/.test(s) && !/[\t\n\r]/.test(s) ? s : null;
 }
 
 /** A notification opens its link; one without (older rows, other modules) the page its text names ("Open: /vendor-risk/vendors/4"),
  * else none: it is shown as plain text. */
 export function notificationHref(n: { link?: string | null; url?: string | null; message?: string | null }): string | null {
-  const named = /(?:^|\s)(\/[A-Za-z][^\s]*)/.exec(n.message ?? '')?.[1]?.replace(/[.,;:!?)\]'"]+$/, '');
+  const named = /(?:^|\s)(\/[A-Za-z][^\s<>]*)/.exec(n.message ?? '')?.[1]?.replace(/[.,;:!?)\]'"]+$/, '');
   return appPath(n.link) ?? appPath(n.url) ?? appPath(named);
 }
 
