@@ -3,16 +3,16 @@
 The approval chain itself is still driven by routers/document_signoff.py; this reads the per-person obligations
 (modules/governance/doc_lifecycle.py) and takes acknowledgements. Tenants without it get ``{"enabled": false}``.
 """
-from typing import Optional
+from typing import Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ....models import DocumentObligation, GRCUser, get_db
-from ....routers.auth_router import get_user_tenants, require_auth
+from ....routers.auth_router import get_user_tenants, has_tenant_permission, require_auth
 from .. import doc_lifecycle
-from ..permissions import in_force_number, is_admin, require_doc_editor, require_doc_reader
+from ..permissions import in_force_number, require_doc_editor, require_doc_reader
 from .document_signoff import _doc_or_404, check_version
 
 router = APIRouter(prefix="/documents", tags=["Governance - Lifecycle"])
@@ -70,11 +70,14 @@ def remind(document_id: int, db: Session = Depends(get_db), current_user: GRCUse
                                                   DocumentObligation.status == "pending").all()
     people = set(doc_lifecycle._people(db))
     pending = [o for o in pending if o.user_id in people]                  # never an account that is not a person
+    # the reminder channels; with reminders off, one someone asks for by hand still goes in the app
+    event = "reminder" if doc_lifecycle.channels(doc_lifecycle.settings(db, doc.tenant_id), "reminder") else None
     for kind in {o.kind for o in pending}:
         ids = [o.user_id for o in pending if o.kind == kind]
         doc_lifecycle._notify(db, doc, ids, f"Reminder: {doc_lifecycle._VERB[kind]} {doc.title}",
                               f"{current_user.display_name or current_user.username} reminds you to "
-                              f"{doc_lifecycle._VERB[kind].lower()} \"{doc.title}\".", "warning", email=True, link=doc_lifecycle._link(doc, kind))
+                              f"{doc_lifecycle._VERB[kind].lower()} \"{doc.title}\".", "warning", link=doc_lifecycle._link(doc, kind),
+                              event=event)
     db.commit()
     return {"reminded": len({o.user_id for o in pending})}
 
@@ -85,10 +88,37 @@ class SettingsIn(BaseModel):
     remind_days: Optional[int] = None
     admin_after_days: Optional[int] = None
     email: Optional[bool] = None
+    # Governance > Settings (2026-10-18); null escalate_role_id = the administrators
+    review_days: Optional[int] = None
+    remind_every_days: Optional[int] = None
+    owner_after_days: Optional[int] = None
+    escalate_role_id: Optional[int] = None
+    notify: Optional[Dict[str, str]] = None
+    task_create: Optional[Dict[str, bool]] = None
+    task_priority: Optional[Dict[str, str]] = None
+    task_title: Optional[str] = None
+    task_description: Optional[str] = None
+    task_category: Optional[str] = None
+
+
+SETTINGS_RIGHT = "governance:settings:edit"
+SETTINGS_REFUSED = "Only an administrator or someone allowed to change governance settings can change these."
 
 
 def _tenant_id(db: Session, user: GRCUser) -> int:
     return get_user_tenants(user, db)[0]
+
+
+def _settings_answer(db: Session, user: GRCUser, tenant_id: int, saved=None) -> dict:
+    """The settings, the defaults (for Reset), whether the person may change them, and the roles escalation can go to."""
+    from ....models import Role
+
+    can_edit = has_tenant_permission(db, user, SETTINGS_RIGHT)
+    roles = [{"id": r.id, "name": r.name} for r in db.query(Role).filter(Role.tenant_id == tenant_id).order_by(Role.name, Role.id)] if can_edit else []
+    current = saved or doc_lifecycle.settings(db, tenant_id)
+    chosen = db.get(Role, current["escalate_role_id"]) if current["escalate_role_id"] else None
+    return {"enabled": True, "settings": current, "can_edit": can_edit, "defaults": doc_lifecycle.resolved({}), "roles": roles,
+            "escalate_role_name": chosen.name if chosen else None}
 
 
 @router.get("/lifecycle/mine")
@@ -104,21 +134,24 @@ def my_requests(db: Session = Depends(get_db), current_user: GRCUser = Depends(r
 def get_lifecycle_settings(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     if not doc_lifecycle.enabled(db):
         return {"enabled": False}
-    tenant_id = _tenant_id(db, current_user)
-    return {"enabled": True, "settings": doc_lifecycle.settings(db, tenant_id), "can_edit": is_admin(db, current_user)}
+    return _settings_answer(db, current_user, _tenant_id(db, current_user))
 
 
 @router.put("/lifecycle/settings")
 def put_lifecycle_settings(body: SettingsIn, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
-    """How long approvals and acknowledgements are given, when to remind and when to escalate. Administrators only."""
+    """How long reviews, approvals and acknowledgements are given, reminders, escalation, the channel of every alert and the
+    tasks made for each request (Governance > Settings). Administrators and holders of governance:settings:edit."""
     if not doc_lifecycle.enabled(db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not enabled for this organisation")
     tenant_id = _tenant_id(db, current_user)
-    if not is_admin(db, current_user):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only an administrator can change these settings.")
+    if not has_tenant_permission(db, current_user, SETTINGS_RIGHT):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SETTINGS_REFUSED)
+    patch = body.model_dump(exclude_none=True)
+    if "escalate_role_id" in body.model_fields_set and body.escalate_role_id is None:
+        patch["escalate_role_id"] = None                     # back to the administrators
     try:
-        saved = doc_lifecycle.save_settings(db, tenant_id, body.model_dump(exclude_none=True), current_user.id)
+        saved = doc_lifecycle.save_settings(db, tenant_id, patch, current_user.id)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
-    return {"enabled": True, "settings": saved, "can_edit": True}
+    return _settings_answer(db, current_user, tenant_id, saved)

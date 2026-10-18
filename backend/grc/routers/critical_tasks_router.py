@@ -318,6 +318,16 @@ def _serialize_task(task, include_relations=False):
         "created_by": _serialize_user(task.created_by),
         "custom_values": getattr(task, "custom_values", None) or {},
     }
+    if task.source_module == "document_lifecycle":
+        # a document review, approval or acknowledgement request: the document, the person's step, and the buttons' links
+        # ponytail: one query per such task in a list; batch it if a list of hundreds of them gets slow
+        try:
+            from ..modules.governance import doc_lifecycle
+            sess = Session.object_session(task)
+            result["document_request"] = doc_lifecycle.task_request(sess, task) if sess is not None else None
+        except Exception:
+            logger.exception("Could not read the document request of task %s", task.id)
+            result["document_request"] = None
     if include_relations:
         result["sub_tasks"] = [
             {
@@ -799,8 +809,14 @@ def bulk_action(
     if payload.action == "assign" and payload.assigned_owner_id is not None:
         _validate_tenant_user(db, payload.assigned_owner_id, user_tenants)
 
+    from ..modules.governance import doc_lifecycle
+
     updated = 0
+    left = 0        # document requests' tasks: their status and person follow the request (doc_lifecycle.locked_change)
     for task in tasks:
+        if payload.action in ("change_status", "assign") and doc_lifecycle.is_task(task):
+            left += 1
+            continue
         if payload.action == "change_priority" and payload.value:
             old = task.priority
             task.priority = payload.value
@@ -842,7 +858,7 @@ def bulk_action(
 
     db.commit()
     _sync_mirrors(db, [t.id for t in tasks], current_user.id)
-    return {"updated": updated}
+    return {"updated": updated, "left_document_tasks": left}
 
 
 @router.post("/from-module", status_code=status.HTTP_201_CREATED)
@@ -1093,6 +1109,11 @@ def update_task(
         update_data["assigned_user_ids"] = normalized_ids
         update_data["assigned_owner_id"] = normalized_ids[0] if normalized_ids else None
 
+    from ..modules.governance import doc_lifecycle
+    locked = doc_lifecycle.locked_change(task, update_data)
+    if locked:
+        raise HTTPException(status_code=400, detail=locked)
+
     if "status" in update_data and update_data["status"] != task.status:
         new_status = update_data["status"]
         allowed = VALID_TRANSITIONS.get(task.status, [])
@@ -1165,6 +1186,12 @@ def delete_task(
     ).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    from ..modules.governance import doc_lifecycle as lifecycle
+    from .auth_router import is_tenant_admin
+
+    # a document request's task closes by itself; only an administrator may remove one (the user's choice, 2026-10-19)
+    if lifecycle.is_task(task) and not is_tenant_admin(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=lifecycle.DELETE_REFUSED)
     try:
         from ..modules.governance import committee_tasks, doc_lifecycle, regulatory_tasks
         regulatory_tasks.on_critical_task_deleted(db, task)
@@ -1190,6 +1217,11 @@ def transition_status(
     ).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    from ..modules.governance import doc_lifecycle
+
+    locked = doc_lifecycle.locked_change(task, {"status": payload.new_status})
+    if locked:
+        raise HTTPException(status_code=400, detail=locked)
 
     allowed = VALID_TRANSITIONS.get(task.status, [])
     if payload.new_status not in allowed:

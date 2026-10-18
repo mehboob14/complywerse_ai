@@ -228,6 +228,11 @@ PERMISSION_MATRIX = [
                 "name": "regulatory_changes",
                 "display_name": "Regulatory Changes",
                 "actions": ["view", "create", "edit", "delete"]
+            },
+            {
+                "name": "settings",
+                "display_name": "Governance Settings",
+                "actions": ["view", "edit"]
             }
         ]
     },

@@ -7,23 +7,26 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, ClipboardCheck, FileText, Sparkles } from 'lucide-react';
+import { AlertTriangle, ClipboardCheck, FileText, Settings, Sparkles } from 'lucide-react';
 import { clsx } from 'clsx';
 import { studioApi } from '@/lib/studio/api';
+import { usePermissions } from '@/hooks/usePermissions';
 
 const DOCUMENTS = { name: 'Documents', href: '/governance/documents', icon: FileText };
 const ATTESTATION = { name: 'Attestation', href: '/governance/documents/attestation', icon: ClipboardCheck };
 const EXCEPTIONS = { name: 'Policy Exceptions', href: '/governance/exceptions', icon: AlertTriangle };
 const STUDIO = { name: 'AI Studio', href: '/governance/documents/studio', icon: Sparkles };      // only where the AI Studio is on
+const SETTINGS = { name: 'Settings', href: '/governance/settings', icon: Settings };        // administrators and governance:settings:* holders
 
 /** Whether a page belongs to the Documents area (the pages these tabs lead to). */
 export const inDocumentsArea = (pathname: string | null) =>
-  !!pathname && (pathname.startsWith('/governance/documents') || pathname.startsWith('/governance/exceptions'));
+  !!pathname && (pathname.startsWith('/governance/documents') || pathname.startsWith('/governance/exceptions') || pathname.startsWith(SETTINGS.href));
 
 export default function DocumentsTabs() {
   const pathname = usePathname() ?? '';
   const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
   const tabs = studio.data?.enabled ? [DOCUMENTS, STUDIO, ATTESTATION, EXCEPTIONS] : [DOCUMENTS, ATTESTATION, EXCEPTIONS];
+  if (usePermissions().hasPermission('governance:settings:*')) tabs.push(SETTINGS);
   // a document opens in the AI Studio where it is on, so that tab is the open one there
   const docInStudio = !!studio.data?.enabled && /^\/governance\/documents\/\d+$/.test(pathname);
   return (

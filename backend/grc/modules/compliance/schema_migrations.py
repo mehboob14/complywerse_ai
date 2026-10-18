@@ -274,6 +274,7 @@ _COLUMN_ADDS = [
     # AI Studio: a whole document as far as it is written, shown in the document while Comply Agent writes it
     ("grc_studio_messages", "preview", "TEXT", None),
     ("grc_document_obligations", "emailed_at", "TIMESTAMP", None),
+    ("grc_document_obligations", "overdue_at", "TIMESTAMP", None),     # Governance > Settings: the person's overdue notice
     # Statement <-> original document sync (cfsb): the wording as the file has it and where
     ("grc_policy_statements", "source_text", "TEXT", None),
     ("grc_policy_statements", "source_start", "INTEGER", None),

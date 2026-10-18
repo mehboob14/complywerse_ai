@@ -17,13 +17,17 @@ least once. An identity an access-review connector imported (a cloud account, a 
 
 Every pending row has a twin in Task Management (``grc_critical_tasks``, source_module ``document_lifecycle``) and an
 in-app alert, so it shows up with the person's other work. The twin cannot be completed from Task Management - signing
-or acknowledging in the document does that. A sweep reminds before the due date, tells the document owner when it is
-overdue and the tenant administrators a week later. Nothing here may stop a sign-off: the hooks swallow their own errors.
+or acknowledging in the document does that (its buttons open the document there, ``task_request``); its person, due date and
+status are read-only there and only an administrator may delete it (``locked_change``, ``DELETE_REFUSED``). A sweep reminds before the due date (and again every few days, if set), tells
+the person when it is overdue, then the document owner, then the tenant administrators (or a chosen role); the days, the
+channels of every alert and the tasks are the organisation's (Governance > Settings, ``settings``). Nothing here may stop a
+sign-off: the hooks swallow their own errors.
 """
 from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
@@ -31,19 +35,44 @@ from . import permissions
 
 logger = logging.getLogger(__name__)
 
-# Defaults, overridable per organisation (Settings in the Approvals & Acknowledgements tab; ``settings``).
+# Defaults, overridable per organisation (Governance > Settings; ``settings``). Keys are only ever added, never renamed.
+KINDS = ("review", "approval", "acknowledgement")
+EVENTS = ("request", "reminder", "overdue", "escalation", "approved", "published", "rejected")
+CHANNELS: Dict[str, tuple] = {"in_app": ("in_app",), "email": ("email",), "both": ("in_app", "email"), "off": ()}
+PRIORITIES = ("Critical", "High", "Medium", "Low")              # Task Management's
+PLACEHOLDERS = ("document", "version", "due_date", "action", "owner", "link", "verb")
 DEFAULTS: Dict[str, Any] = {
-    "approval_days": int(os.getenv("DOCUMENT_APPROVAL_DUE_DAYS", "7")),     # a reviewer or approver is given this long
+    "approval_days": int(os.getenv("DOCUMENT_APPROVAL_DUE_DAYS", "7")),     # an approver (and a reviewer, unless review_days) is given this long
     "ack_days": int(os.getenv("DOCUMENT_ACK_DUE_DAYS", "14")),              # an acknowledgement is given this long
     "remind_days": 3,                                                       # a reminder this many days before the due date
-    "admin_after_days": 7,                                                  # tenant administrators are told this long after the due date
-    "email": True,                                                          # also email, where the organisation has email set up
+    "admin_after_days": 7,                                                  # the escalation (administrators, or escalate_role_id) this long after the due date
+    "email": True,                                                          # older single switch: read when "notify" was never saved
+    "review_days": None,                                                    # a reviewer is given this long (None: approval_days)
+    "remind_every_days": 0,                                                 # then again every this many days until done (0: once)
+    "owner_after_days": 0,                                                  # the document owner is told this long after the due date
+    "escalate_role_id": None,                                               # the members of this role are the escalation (None: administrators)
+    "notify": {e: "both" for e in EVENTS},                                  # per event: in_app | email | both | off
+    "task_create": {k: True for k in KINDS},                                # a Task Management task for each request
+    "task_priority": {"review": "High", "approval": "High", "acknowledgement": "Medium"},
+    "task_title": "{action}: {document}",
+    # plain words; Task Management shows the links as buttons (task_request), never as a path in the text
+    "task_description": "Please {verb} \"{document}\", version {version}, by {due_date}.",
+    "task_category": "Compliance",                                          # the Task Management category of every request's task
 }
-_LIMITS = {"approval_days": (1, 365), "ack_days": (1, 365), "remind_days": (0, 60), "admin_after_days": (1, 365)}
+_LIMITS = {"approval_days": (1, 365), "ack_days": (1, 365), "remind_days": (0, 60), "admin_after_days": (1, 365),
+           "review_days": (1, 365), "remind_every_days": (0, 60), "owner_after_days": (0, 365)}
+_LABELS = {"approval_days": "Days to approve", "review_days": "Days to review", "ack_days": "Days to acknowledge",
+           "remind_days": "Days before the due date for the first reminder", "remind_every_days": "Days between reminders",
+           "owner_after_days": "Days overdue before the owner is told", "admin_after_days": "Days overdue before escalating further"}
+_MAPS = {"notify": (EVENTS, CHANNELS), "task_create": (KINDS, None), "task_priority": (KINDS, PRIORITIES)}
+_TEMPLATES = {"task_title": ("Task title", 200), "task_description": ("Task description", 2000)}
 SOURCE_MODULE = "document_lifecycle"
 SOURCE_TYPE = "DocumentObligation"
 _STAGE_KIND = {"reviewer": "review", "approver": "approval"}
 _VERB = {"review": "Review", "approval": "Approve", "acknowledgement": "Acknowledge"}
+_STEP = {"review": "review and sign", "approval": "approve and sign", "acknowledgement": "acknowledge"}     # {verb}
+ACTION_LABEL = {"review": "Review and sign", "approval": "Approve and sign", "acknowledgement": "Acknowledge"}
+_ACT = {"review": "sign", "approval": "sign", "acknowledgement": "ack"}      # ?act= on the document page opens that popup
 _NOUN = {"review": "Review", "approval": "Approval", "acknowledgement": "Acknowledgement"}
 _PENDING_STAGE = ("pending_review", "pending_approval")
 
@@ -61,35 +90,172 @@ def enabled(db) -> bool:
     return bool(tenant and ("*" in DOCUMENT_LIFECYCLE_TENANTS or (tenant.slug or "").lower() in DOCUMENT_LIFECYCLE_TENANTS))
 
 
-def settings(db, tenant_id: int) -> Dict[str, Any]:
+def _no_email(channel: str) -> str:
+    return "in_app" if "email" in CHANNELS.get(channel, ()) else channel
+
+
+def resolved(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """Every setting, from what was saved (``raw``) over the defaults: maps keep the entries added since, review_days follows
+    approval_days until it is set, and "notify" follows the older ``email`` switch until it is saved itself."""
+    out = {**DEFAULTS, **{k: v for k, v in raw.items() if k in DEFAULTS}}
+    for key, (names, _allowed) in _MAPS.items():
+        saved = raw.get(key) if isinstance(raw.get(key), dict) else {}
+        out[key] = {n: saved.get(n, DEFAULTS[key][n]) for n in names}
+    if out["review_days"] is None:
+        out["review_days"] = out["approval_days"]
+    if not isinstance(raw.get("notify"), dict) and not out["email"]:
+        out["notify"] = {e: _no_email(c) for e, c in out["notify"].items()}
+    out["email"] = any("email" in CHANNELS.get(c, ()) for c in out["notify"].values())
+    return out
+
+
+def _stored(db, tenant_id: int):
     from ...models import DocumentLifecycleSettings
 
-    row = db.query(DocumentLifecycleSettings).filter(DocumentLifecycleSettings.tenant_id == tenant_id).first()
-    return {**DEFAULTS, **{k: v for k, v in ((row.config if row else None) or {}).items() if k in DEFAULTS}}
+    return db.query(DocumentLifecycleSettings).filter(DocumentLifecycleSettings.tenant_id == tenant_id).first()
+
+
+def settings(db, tenant_id: int) -> Dict[str, Any]:
+    row = _stored(db, tenant_id)
+    return resolved((row.config if row else None) or {})
+
+
+def _template_problem(label: str, text: str) -> Optional[str]:
+    from string import Formatter
+
+    try:
+        fields = [(name, spec, conv) for _lit, name, spec, conv in Formatter().parse(text) if name is not None]
+    except ValueError:
+        return f"{label}: a {{ or }} is not closed. Placeholders look like {{document}}."
+    for name, spec, conv in fields:
+        if name not in PLACEHOLDERS or spec or conv:
+            return f"{label}: {{{name}}} is not a placeholder. Use " + ", ".join(f"{{{p}}}" for p in PLACEHOLDERS) + "."
+    return None
+
+
+def _valid(db, tenant_id: int, key: str, value: Any, current: Dict[str, Any]) -> Any:
+    """One setting as it is stored, or ValueError with a message for the person."""
+    if key == "email":
+        return bool(value)
+    if key in _LIMITS:
+        low, high = _LIMITS[key]
+        try:
+            number = int(value)
+        except (TypeError, ValueError):
+            number = None
+        if number is None or isinstance(value, bool) or not low <= number <= high:
+            raise ValueError(f"{_LABELS[key]} must be a whole number from {low} to {high}.")
+        return number
+    if key == "escalate_role_id":
+        if value in (None, "", 0):
+            return None
+        from ...models import Role
+
+        role = db.query(Role).filter(Role.id == int(value), Role.tenant_id == tenant_id).first() if str(value).isdigit() else None
+        if role is None:
+            raise ValueError("The role chosen for escalation no longer exists. Choose another, or the administrators.")
+        return role.id
+    if key in _MAPS:
+        names, allowed = _MAPS[key]
+        if not isinstance(value, dict):
+            raise ValueError(f"{key} must be a list of choices.")
+        merged = dict(current[key])
+        for name, choice in value.items():
+            if name not in names:
+                raise ValueError(f"Unknown entry in {key}: {name}.")
+            if allowed is None:
+                merged[name] = bool(choice)
+            elif choice not in allowed:
+                raise ValueError(f"{choice} is not one of " + ", ".join(allowed) + ".")
+            else:
+                merged[name] = choice
+        return merged
+    if key == "task_category":
+        text = str(value or "").strip()
+        if not text or len(text) > 100:
+            raise ValueError("Task category must be 1 to 100 characters.")
+        return text
+    label, limit = _TEMPLATES[key]
+    text = str(value or "").strip()
+    if not text:
+        raise ValueError(f"{label} cannot be empty.")
+    if len(text) > limit:
+        raise ValueError(f"{label} is too long (at most {limit} characters).")
+    problem = _template_problem(label, text)
+    if problem:
+        raise ValueError(problem)
+    return text
 
 
 def save_settings(db, tenant_id: int, patch: Dict[str, Any], user_id: Optional[int] = None) -> Dict[str, Any]:
+    """Validate and save ``patch`` (only the keys it names); returns every setting. Raises ValueError for the person to read."""
     from ...models import DocumentLifecycleSettings
 
-    current = settings(db, tenant_id)
+    row = _stored(db, tenant_id)
+    raw = {k: v for k, v in ((row.config if row else None) or {}).items() if k in DEFAULTS}
     for key, value in (patch or {}).items():
         if key not in DEFAULTS:
-            raise ValueError(f"unknown setting: {key}")
-        if key == "email":
-            current[key] = bool(value)
-            continue
-        low, high = _LIMITS[key]
-        number = int(value)
-        if not low <= number <= high:
-            raise ValueError(f"{key} must be between {low} and {high}")
-        current[key] = number
-    row = db.query(DocumentLifecycleSettings).filter(DocumentLifecycleSettings.tenant_id == tenant_id).first()
+            raise ValueError(f"Unknown setting: {key}")
+        raw[key] = _valid(db, tenant_id, key, value, resolved(raw))
+    if "email" in (patch or {}) and "notify" not in (patch or {}):        # an older screen's single switch
+        if not raw["email"]:
+            raw["notify"] = {e: _no_email(c) for e, c in resolved(raw)["notify"].items()}
+        elif not resolved(raw)["email"]:
+            raw.pop("notify", None)                                        # back on: the default channels
+    out = resolved(raw)
+    if out["admin_after_days"] <= out["owner_after_days"]:
+        raise ValueError("Escalate further later than the owner is told: make its days overdue larger.")
+    raw["email"] = out["email"]                                            # kept for anything still reading the single switch
     if row is None:
         row = DocumentLifecycleSettings(tenant_id=tenant_id, config={})
         db.add(row)
-    row.config, row.updated_by, row.updated_at = dict(current), user_id, datetime.utcnow()
+    row.config, row.updated_by, row.updated_at = dict(raw), user_id, datetime.utcnow()
     db.commit()
-    return current
+    return out
+
+
+# ── typed getters (what the life cycle and Task Management read) ─────────────
+@dataclass(frozen=True)
+class TaskSettings:
+    """How a request becomes a Task Management task (Governance > Settings > Task creation)."""
+    create: bool
+    priority: str
+    title: str              # templates with PLACEHOLDERS, rendered by ``render``
+    description: str
+    category: str = DEFAULTS["task_category"]
+
+
+def due_days(cfg: Dict[str, Any], kind: str) -> int:
+    """How many days a request of ``kind`` is given."""
+    return cfg["ack_days"] if kind == "acknowledgement" else cfg["review_days"] if kind == "review" else cfg["approval_days"]
+
+
+def channels(cfg: Dict[str, Any], event: str) -> List[str]:
+    """Where an alert about ``event`` goes: in_app and/or email, or nowhere."""
+    return list(CHANNELS.get(cfg["notify"].get(event, "both"), ()))
+
+
+def task_settings(cfg: Dict[str, Any], kind: str) -> TaskSettings:
+    return TaskSettings(create=bool(cfg["task_create"].get(kind, True)), priority=cfg["task_priority"].get(kind) or "Medium",
+                        title=cfg["task_title"], description=cfg["task_description"], category=cfg["task_category"])
+
+
+def render(template: str, values: Dict[str, Any], fallback: str) -> str:
+    """A template with its placeholders filled; the default one when it cannot be (saved by hand, a placeholder since removed)."""
+    try:
+        return template.format(**values)
+    except (KeyError, ValueError, IndexError, AttributeError):
+        return fallback.format(**values)
+
+
+def task_values(db, ob, doc, spec: Optional[TaskSettings] = None) -> Dict[str, str]:
+    """What a task's placeholders say for one request (the owner's name is looked up only when ``spec`` uses it)."""
+    owner = "-"
+    if doc.owner_id and (spec is None or "{owner}" in spec.title + spec.description):
+        owner = _names(db, [doc.owner_id]).get(doc.owner_id, "-")
+    return {"document": doc.title or "", "version": ob.document_version or doc.current_version or "",
+            "due_date": f"{ob.due_date:%d %b %Y}" if ob.due_date else "no date", "action": _VERB[ob.kind],
+            "owner": owner, "link": _link(doc, ob.kind), "verb": _STEP[ob.kind]}
 
 
 def _safe(fn):
@@ -137,9 +303,10 @@ def _names(db, ids: Iterable[int]) -> Dict[int, str]:
 
 
 def _notify(db, doc, user_ids: Iterable[Optional[int]], subject: str, message: str, kind: str = "info", email: bool = False,
-            link: Optional[str] = None) -> int:
-    """An in-app alert, and an email as well when ``email`` and the organisation has it on (and has email set up). Both say where
-    to open it (``link``, the document's Approvals by default). Returns how many emails were sent."""
+            link: Optional[str] = None, event: Optional[str] = None, only: Iterable[str] = ("in_app", "email")) -> int:
+    """An alert on the channels the organisation chose for ``event`` (Governance > Settings; without an event: in-app, and email
+    too when ``email`` and the organisation has email on), of those in ``only``. Email needs the organisation's email set up.
+    Both say where to open it (``link``, the document's Approvals by default). Returns how many emails were sent."""
     ids = sorted({int(u) for u in user_ids if u})
     if not ids:
         return 0
@@ -147,9 +314,13 @@ def _notify(db, doc, user_ids: Iterable[Optional[int]], subject: str, message: s
     try:
         from ..workflow_engine.services.notification_service import send_workflow_notification
 
-        channels = ["in_app", "email"] if email and settings(db, doc.tenant_id)["email"] else ["in_app"]
+        cfg = settings(db, doc.tenant_id)
+        sent_to = channels(cfg, event) if event else ["in_app", "email"] if email and cfg["email"] else ["in_app"]
+        sent_to = [c for c in sent_to if c in only]
+        if not sent_to:
+            return 0
         out = send_workflow_notification(db, tenant_id=doc.tenant_id, subject=subject[:500], message=message,
-                                         workflow_instance_id=None, user_ids=ids, channels=channels, notification_type=kind, link=link)
+                                         workflow_instance_id=None, user_ids=ids, channels=sent_to, notification_type=kind, link=link)
         return sum(1 for r in (out or {}).get("results") or [] if ((r or {}).get("email_result") or {}).get("success"))
     except Exception:       # noqa: BLE001
         logger.exception("document lifecycle: could not alert users %s", ids)
@@ -163,18 +334,20 @@ def _history(db, task_id: int, user_id: Optional[int], action: str, field=None, 
                                old_value=None if old is None else str(old), new_value=None if new is None else str(new)))
 
 
-def _open_twin(db, ob, doc, by: Optional[int]) -> None:
+def _open_twin(db, ob, doc, by: Optional[int], cfg: Optional[Dict[str, Any]] = None) -> None:
+    """The request's Task Management task, as Governance > Settings > Task creation says (none when it is switched off)."""
     from ...models import CriticalTask
 
-    verb = _VERB[ob.kind]
+    spec = task_settings(cfg or settings(db, ob.tenant_id), ob.kind)
+    if not spec.create:
+        return
+    values = task_values(db, ob, doc, spec)
     ct = CriticalTask(
-        tenant_id=ob.tenant_id, title=f"{verb}: {doc.title}"[:255],
-        description=(f"{verb} the document \"{doc.title}\" (version {ob.document_version or doc.current_version}). "
-                     f"Open it at {_link(doc, ob.kind)}{'' if ob.kind == 'acknowledgement' else ' (its Approvals)'}. This task closes when you "
-                     f"{'acknowledge' if ob.kind == 'acknowledgement' else 'sign'} it there."),
+        tenant_id=ob.tenant_id, title=render(spec.title, values, DEFAULTS["task_title"])[:255],
+        description=render(spec.description, values, DEFAULTS["task_description"]),
         source="Governance document", source_module=SOURCE_MODULE, source_entity_type=SOURCE_TYPE,
-        source_entity_id=ob.id, category="Compliance", status="Open",
-        priority="Medium" if ob.kind == "acknowledgement" else "High", due_date=ob.due_date,
+        source_entity_id=ob.id, category=spec.category[:100], status="Open",
+        priority=spec.priority, due_date=ob.due_date,
         assigned_user_ids=[ob.user_id], assigned_owner_id=ob.user_id, created_by_id=by or doc.owner_id)
     db.add(ct)
     db.flush()
@@ -214,6 +387,7 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
 
     already = {o.user_id for o in _pending(db, doc.id, [kind])}
     asked: List[int] = []
+    cfg = settings(db, doc.tenant_id)
     for uid in dict.fromkeys(int(u) for u in user_ids if u):
         if uid in already:
             continue
@@ -222,7 +396,7 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
                                 due_date=datetime.utcnow() + timedelta(days=days))
         db.add(ob)
         db.flush()
-        _open_twin(db, ob, doc, by)
+        _open_twin(db, ob, doc, by, cfg)
         asked.append(uid)
     return asked
 
@@ -233,11 +407,12 @@ def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
 
     kind = _STAGE_KIND[stage]
     asked: List[int] = []
+    days = due_days(settings(db, doc.tenant_id), kind)
     for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
-        asked += _request(db, doc, kind, _members(db, doc, a), by, settings(db, doc.tenant_id)["approval_days"], a.id)
+        asked += _request(db, doc, kind, _members(db, doc, a), by, days, a.id)
     _notify(db, doc, asked, f"{_NOUN[kind]} requested: {doc.title}",
             f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
-            f"It is in your tasks and under Governance > Documents > Approvals & Acknowledgements.", "warning", email=True)
+            f"It is in your tasks and under Governance > Documents > Approvals & Acknowledgements.", "warning", event="request")
     _mark_emailed(db, doc.id, kind, asked)
 
 
@@ -282,7 +457,7 @@ def on_signed(db, doc, user_id: int, role_type: str, signature_id: Optional[int]
 
         # the owner, and whoever may publish it (the owner often may not)
         _notify(db, doc, {doc.owner_id, doc.author_id} | publisher_ids(db), f"Approved: {doc.title}",
-                f"\"{doc.title}\" has been approved by all its approvers and can be published.", "success", email=True)
+                f"\"{doc.title}\" has been approved by all its approvers and can be published.", "success", event="approved")
 
 
 @_safe
@@ -293,7 +468,7 @@ def on_rejected(db, doc, user_id: int, role_type: str, comment: str) -> None:
         _close(db, ob, completed=True, by=user_id)
     _cancel(db, doc, ("review", "approval"))
     who = _names(db, [user_id]).get(user_id, "A reviewer")
-    _notify(db, doc, [doc.owner_id, doc.author_id], f"Rejected: {doc.title}", f"{who} rejected \"{doc.title}\": {comment}", "error", email=True)
+    _notify(db, doc, [doc.owner_id, doc.author_id], f"Rejected: {doc.title}", f"{who} rejected \"{doc.title}\": {comment}", "error", event="rejected")
 
 
 @_safe
@@ -453,10 +628,10 @@ def request_acknowledgements(db, doc, user_ids: Optional[Iterable[int]] = None, 
         DocumentObligation.status.in_(("pending", "done")))
         if status == "pending" or not version or _major(version) == major}      # (a row with no version cannot tell: it counts)
     asked = _request(db, doc, "acknowledgement", [u for u in pool if u not in have], by,
-                     days or settings(db, doc.tenant_id)["ack_days"], version=number)
+                     days or due_days(settings(db, doc.tenant_id), "acknowledgement"), version=number)
     _notify(db, doc, asked, f"Please acknowledge: {doc.title}",
             f"\"{doc.title}\" has been published. Read it and acknowledge it before the due date; it is in your tasks.", "info",
-            link=_link(doc, "acknowledgement"))
+            link=_link(doc, "acknowledgement"), event="published", only=("in_app",))    # its email: one daily list per person (_email_waiting)
     return len(asked)
 
 
@@ -517,6 +692,64 @@ def acknowledge(db, doc, user, comment: Optional[str] = None, signature_image: O
 
 
 # ── Task Management side ─────────────────────────────────────────────────────
+DELETE_REFUSED = ("Only an administrator can delete this task. It comes from a document review, approval or acknowledgement "
+                  "request and closes by itself when the person does it in the document.")
+# what the request decides (who, by when, done or not, which request): read-only in Task Management (critical_tasks_router)
+_LOCKED = {
+    "assigned_owner_id": "The person on this task is the one asked in the document. To ask someone else, change the document's reviewers or approvers.",
+    "assigned_user_ids": "The person on this task is the one asked in the document. To ask someone else, change the document's reviewers or approvers.",
+    "due_date": "The due date follows the request in the document; Governance > Settings sets how many days people have.",
+    "status": "This task closes by itself when the person does it in the document. Open the document to do it.",
+    "source_module": "This task belongs to a document request; what it is linked to cannot be changed.",
+    "source_entity_type": "This task belongs to a document request; what it is linked to cannot be changed.",
+    "source_entity_id": "This task belongs to a document request; what it is linked to cannot be changed.",
+}
+
+
+def is_task(ct) -> bool:
+    """One of our tasks (a review, approval or acknowledgement request's twin)."""
+    return ct is not None and ct.source_module == SOURCE_MODULE and ct.source_entity_type == SOURCE_TYPE
+
+
+def action_href(document_id: int, kind: str) -> str:
+    """The document with the person's own step open (Review and sign / Approve and sign / Acknowledge)."""
+    return f"/governance/documents/{document_id}?act={_ACT[kind]}"
+
+
+def locked_change(ct, changes: Dict[str, Any]) -> Optional[str]:
+    """Why an edit from Task Management may not be made to one of our tasks (it would no longer match the request), or None."""
+    if not is_task(ct):
+        return None
+    current = {"assigned_owner_id": ct.assigned_owner_id, "assigned_user_ids": list(ct.assigned_user_ids or []), "due_date": ct.due_date,
+               "status": ct.status, "source_module": ct.source_module, "source_entity_type": ct.source_entity_type,
+               "source_entity_id": ct.source_entity_id}
+    for key, value in changes.items():
+        if key in _LOCKED and value != current[key]:
+            return _LOCKED[key]
+    return None
+
+
+def task_request(db, ct) -> Optional[Dict[str, Any]]:
+    """What Task Management shows on one of our tasks: the document, the person's step, its due date and where to do it. Read
+    from the request itself, so tasks made before these fields existed show them too and nothing goes stale (a minor version
+    moves a waiting acknowledgement up to the new number). None for other tasks, or when the request is gone."""
+    from ...models import DocumentObligation, GovernanceDocument
+
+    if not is_task(ct) or not ct.source_entity_id:
+        return None
+    row = (db.query(DocumentObligation, GovernanceDocument.title).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
+           .filter(DocumentObligation.id == ct.source_entity_id).first())
+    if row is None:
+        return None
+    ob, title = row
+    pending = ob.status == "pending"
+    return {"request_id": ob.id, "kind": ob.kind, "document_id": ob.document_id, "document_title": title, "version": ob.document_version,
+            "status": ob.status, "user_id": ob.user_id, "due_date": _iso(ob.due_date), "done_at": _iso(ob.done_at),
+            "overdue": bool(pending and ob.due_date and ob.due_date < datetime.utcnow()),
+            "open_href": f"/governance/documents/{ob.document_id}", "action_label": ACTION_LABEL[ob.kind],
+            "action_href": action_href(ob.document_id, ob.kind) if pending else None}
+
+
 def sync_from_critical_task(db, critical_task_id: int, user_id: Optional[int] = None) -> None:
     """Task Management changed one of our tasks. It cannot be completed there (signing or acknowledging in the document
     does that), so an attempt is put back."""
@@ -577,12 +810,15 @@ def timeline(db, doc, names: Dict[int, str], obligations, previews: bool = True)
         due = group[0].due_date
         events.append({"at": _iso(min(o.requested_at for o in group)), "kind": f"{kind}_requested", "actor": names.get(by),
                        "detail": f"{_NOUN[kind]} asked of {shown}" + (f", due {due:%Y-%m-%d}" if due else ""), "from": None, "to": shown})
+    further = None
     for ob in obligations:
         who = names.get(ob.user_id)
         if ob.escalated_at:
+            if further is None and (ob.escalation_level or 0) >= 2:
+                further = _escalation_name(db, settings(db, doc.tenant_id))
             events.append({"at": _iso(ob.escalated_at), "kind": "escalated", "actor": None,
                            "detail": f"{_NOUN[ob.kind]} by {who} is overdue; "
-                                     + ("the document owner was told" if (ob.escalation_level or 0) < 2 else "the tenant administrators were told"),
+                                     + ("the document owner was told" if (ob.escalation_level or 0) < 2 else f"{further} were told"),
                            "from": None, "to": who})
     return sorted(events, key=lambda e: e["at"] or "", reverse=True)
 
@@ -619,6 +855,26 @@ def state(db, doc, user) -> Dict[str, Any]:
 
 
 # ── the daily sweep ──────────────────────────────────────────────────────────
+def escalation_ids(db, cfg: Dict[str, Any], tenant_id: Optional[int]) -> List[int]:
+    """Who is told when a request is still overdue ``admin_after_days`` after its due date: the people of the chosen role, else
+    (or when it has nobody) the tenant administrators."""
+    from .permissions import admin_user_ids
+    from .routers.document_signoff import _resolve_target_users
+
+    if cfg.get("escalate_role_id") and tenant_id:
+        ids = _people(db, _resolve_target_users(db, [tenant_id], "role", cfg["escalate_role_id"]))
+        if ids:
+            return ids
+    return sorted(admin_user_ids(db))
+
+
+def _escalation_name(db, cfg: Dict[str, Any]) -> str:
+    from ...models import Role
+
+    role = db.get(Role, cfg["escalate_role_id"]) if cfg.get("escalate_role_id") else None
+    return f"the members of {role.name}" if role else "the tenant administrators"
+
+
 def drop_non_people(db) -> int:
     """Requests to accounts that are not people (asked before the people rule, e.g. identities a connector imported) end, with
     their tasks, so nobody is reminded or escalated about them and they leave the counts."""
@@ -637,7 +893,6 @@ def sweep(db) -> Dict[str, int]:
     from sqlalchemy import and_, or_
 
     from ...models import CriticalTask, DocumentObligation, GovernanceDocument
-    from .permissions import admin_user_ids
 
     out = {"asked": 0, "reminded": 0, "owner_told": 0, "admins_told": 0, "emailed": 0, "dropped": 0}
     if not enabled(db):
@@ -651,15 +906,17 @@ def sweep(db) -> Dict[str, int]:
     pending = (db.query(DocumentObligation).filter(DocumentObligation.status == "pending", DocumentObligation.due_date.isnot(None))
                .order_by(DocumentObligation.document_id).all())
     docs = {d.id: d for d in db.query(GovernanceDocument).filter(GovernanceDocument.id.in_({o.document_id for o in pending} or {0}))}
-    cfg = settings(db, next(iter(docs.values())).tenant_id) if docs else dict(DEFAULTS)
+    tenant_id = next(iter(docs.values())).tenant_id if docs else None
+    cfg = settings(db, tenant_id) if docs else resolved({})
+    every = timedelta(days=cfg["remind_every_days"]) if cfg["remind_every_days"] else None
     owner_notes: Dict[int, List[str]] = {}
     admin_notes: Dict[int, List[str]] = {}
     names = _names(db, {o.user_id for o in pending})
 
-    def tell(ob, doc, subject: str, message: str, tone: str) -> None:
+    def tell(ob, doc, subject: str, message: str, tone: str, event: str) -> None:
         """One email about one request; the list of what waits (``_email_waiting``) then leaves it out, so nobody gets two."""
-        out["emailed"] += _notify(db, doc, [ob.user_id], subject, message, tone, email=True, link=_link(doc, ob.kind))
-        if cfg["email"] and ob.emailed_at is None:          # emailed (as the list marks what it emailed)
+        out["emailed"] += _notify(db, doc, [ob.user_id], subject, message, tone, link=_link(doc, ob.kind), event=event)
+        if "email" in channels(cfg, event) and ob.emailed_at is None:          # emailed (as the list marks what it emailed)
             ob.emailed_at = now
 
     for ob in pending:
@@ -667,35 +924,46 @@ def sweep(db) -> Dict[str, int]:
         if doc is None:
             continue
         ct = db.get(CriticalTask, ob.critical_task_id) if ob.critical_task_id else None
+        verb = _VERB[ob.kind]
         if now < ob.due_date:
-            if ob.reminded_at is None and ob.due_date - now <= timedelta(days=cfg["remind_days"]):
-                tell(ob, doc, f"Due soon: {_VERB[ob.kind]} {doc.title}",
-                     f"You are asked to {_VERB[ob.kind].lower()} \"{doc.title}\" by {ob.due_date:%d %b %Y}.", "warning")
+            first = ob.reminded_at is None and ob.due_date - now <= timedelta(days=cfg["remind_days"])
+            if first or (every and ob.reminded_at is not None and now - ob.reminded_at >= every):     # then every N days
+                tell(ob, doc, f"Due soon: {verb} {doc.title}",
+                     f"You are asked to {verb.lower()} \"{doc.title}\" by {ob.due_date:%d %b %Y}.", "warning", "reminder")
                 ob.reminded_at = now
                 out["reminded"] += 1
             continue
+        late = now - ob.due_date
+        if ob.overdue_at is None and (ob.escalation_level or 0) < 1:      # (a request escalated before overdue_at existed was told)
+            tell(ob, doc, f"Overdue: {verb} {doc.title}", f"\"{doc.title}\" is overdue for you.", "error", "overdue")
+            ob.overdue_at = now
+        elif every and now - max(t for t in (ob.reminded_at, ob.overdue_at, ob.escalated_at, ob.due_date) if t) >= every:
+            tell(ob, doc, f"Still overdue: {verb} {doc.title}",
+                 f"You were asked to {verb.lower()} \"{doc.title}\" by {ob.due_date:%d %b %Y}. Please do it now.", "error", "reminder")
+            ob.reminded_at = now
+            out["reminded"] += 1
         line = f"{names.get(ob.user_id)} ({_NOUN[ob.kind].lower()}, due {ob.due_date:%d %b})"
-        if (ob.escalation_level or 0) < 1:
+        if (ob.escalation_level or 0) < 1 and late >= timedelta(days=cfg["owner_after_days"]):
             ob.escalation_level, ob.escalated_at = 1, now
-            tell(ob, doc, f"Overdue: {_VERB[ob.kind]} {doc.title}", f"\"{doc.title}\" is overdue for you.", "error")
             owner_notes.setdefault(doc.id, []).append(line)
-        elif ob.escalation_level < 2 and now - ob.due_date >= timedelta(days=cfg["admin_after_days"]):
+        elif (ob.escalation_level or 0) == 1 and late >= timedelta(days=cfg["admin_after_days"]):
             ob.escalation_level, ob.escalated_at = 2, now
             admin_notes.setdefault(doc.id, []).append(line)
         else:
             continue
         if ct is not None:
             ct.escalation_level = ob.escalation_level
-    admins = sorted(admin_user_ids(db)) if admin_notes else []
+    further = escalation_ids(db, cfg, tenant_id) if admin_notes else []
     for doc_id, lines in owner_notes.items():
         doc = docs[doc_id]
         out["emailed"] += _notify(db, doc, [doc.owner_id, doc.author_id], f"Overdue on \"{doc.title}\"", "Overdue: " + "; ".join(lines[:20])
-                                  + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error", email=True)
+                                  + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error", event="escalation")
         out["owner_told"] += len(lines)
     for doc_id, lines in admin_notes.items():
         doc = docs[doc_id]
-        out["emailed"] += _notify(db, doc, admins, f"Still overdue on \"{doc.title}\"", "A week overdue: " + "; ".join(lines[:20])
-                                  + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error", email=True)
+        out["emailed"] += _notify(db, doc, further, f"Still overdue on \"{doc.title}\"",
+                                  f"Overdue by {cfg['admin_after_days']} days or more: " + "; ".join(lines[:20])
+                                  + (f" and {len(lines) - 20} more" if len(lines) > 20 else ""), "error", event="escalation")
         out["admins_told"] += len(lines)
     out["emailed"] += _email_waiting(db, pending, docs)          # last: what was not just emailed on its own
     db.commit()
@@ -712,7 +980,7 @@ def _email_waiting(db, pending, docs) -> int:
     if not todo:
         return 0
     anchor = next(iter(docs.values()))
-    if not settings(db, anchor.tenant_id)["email"]:
+    if "email" not in channels(settings(db, anchor.tenant_id), "published"):
         return 0
     sent = 0
     for uid, items in todo.items():
@@ -721,7 +989,7 @@ def _email_waiting(db, pending, docs) -> int:
         one = docs[items[0].document_id] if len(ids) == 1 else None
         sent += _notify(db, one or anchor, [uid], f"{len(ids)} document{'' if len(ids) == 1 else 's'} to acknowledge",
                         "Please read and acknowledge: " + "; ".join(titles[:15]) + (f" and {len(titles) - 15} more" if len(titles) > 15 else "") + ".",
-                        "info", email=True, link=_link(one, "acknowledgement") if one else "/governance/approvals")
+                        "info", link=_link(one, "acknowledgement") if one else "/governance/approvals", event="published")
         for ob in items:
             ob.emailed_at = datetime.utcnow()
     return sent
