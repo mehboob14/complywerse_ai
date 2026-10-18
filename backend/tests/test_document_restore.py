@@ -69,6 +69,14 @@ def test_restoring_brings_nothing_back_in_force_and_asks_nobody_until_it_is_sent
     assert world.http.get("/governance/documents/5").json()["version_in_force"] is None
 
 
+def test_archiving_an_archived_document_again_changes_nothing(world):
+    _archive(world, who=EDITOR)
+    _archive(world, who=OWNER)                                             # e.g. picked again in the library's Archived list
+    assert len(_rows(world, "archived")) == 1
+    world.me["id"] = OWNER
+    assert world.http.get("/governance/documents/5").json()["archived_by_name"] == "Eddie Editor"
+
+
 def test_the_library_lists_archived_documents_for_who_may_change_them_and_the_document_says_when_and_by_whom(world):
     world.me["id"] = EDITOR
     got = world.http.get("/governance/documents/5").json()

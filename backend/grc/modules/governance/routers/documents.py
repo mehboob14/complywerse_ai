@@ -1569,6 +1569,8 @@ def bulk_archive(
     archived_count = 0
     for doc in documents:
         old_status = doc.status
+        if old_status == "archived":            # already archived: its history and the date it was archived stay as they are
+            continue
         doc.status = "archived"
         doc.updated_at = datetime.utcnow()
         doc_lifecycle.on_status_changed(db, doc, old_status, "archived", current_user.id)

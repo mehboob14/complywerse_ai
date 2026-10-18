@@ -32,6 +32,7 @@ export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   acknowledged: 'Acknowledged', escalated: 'Escalated', status_changed: 'Status changed', version_created: 'New version',
   statements_written_to_document: 'Statements written to the document', review_requested: 'Review requested',
   approval_requested: 'Approval requested', acknowledgement_requested: 'Acknowledgement requested', file_uploaded: 'File uploaded',
+  restored: 'Restored from the archive',
 };
 export const eventLabel = (kind: string) => LIFECYCLE_EVENT_LABEL[kind] || (kind.charAt(0).toUpperCase() + kind.slice(1)).replace(/_/g, ' ');
 

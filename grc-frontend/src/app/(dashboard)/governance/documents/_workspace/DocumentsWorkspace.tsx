@@ -163,10 +163,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const headerDoc = selectedNodeId != null ? allDocs.find((d) => d.id === selectedNodeId) ?? null : null;
   const breadcrumb = useMemo(() => {
     if (selectedNodeId == null) return ['All documents'];
-    const path = findPath(hierarchy, selectedNodeId);
+    const path = findPath(workingTree, selectedNodeId);     // as the tree shows it: an archived parent is not in the path
     if (!path || path.length === 0) return ['All documents'];
     return [pluralType(path[0].doc_type), ...path.map((n) => n.title)];
-  }, [hierarchy, selectedNodeId]);
+  }, [workingTree, selectedNodeId]);
 
   const attestationGaps = useMemo(
     () =>
@@ -365,7 +365,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               myDocsCount={counts.mine}
               allCount={counts.all}
               archivedCount={counts.archived}
-              activeLibrary={statusFilter === 'archived' ? 'archived' : library}
+              activeLibrary={statusFilter === 'archived' && library === 'all' ? 'archived' : library}
               onSelectLibrary={selectLibrary}
               selectedNodeId={selectedNodeId}
               onSelectNode={selectNode}
@@ -382,7 +382,7 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           ) : view === 'table' ? (
             <RegisterTable
               docs={filteredDocs}
-              totalCount={summary?.total_documents ?? allDocs.length}
+              totalCount={statusFilter === 'archived' ? counts.archived : counts.all}
               updatedLabel={updatedLabel}
               coverageMap={coverageMap}
               onOpenDoc={openDoc}

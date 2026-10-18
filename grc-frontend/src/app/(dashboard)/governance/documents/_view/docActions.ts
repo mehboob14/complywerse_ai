@@ -53,7 +53,7 @@ const ON_ITS_WAY: Record<string, string> = { draft: 'being revised', pending_rev
  *  `newer` (the server sends it to someone who reads the version in force): they read the published one; without it, the person
  *  reads the newest (`current`) and everyone else the published one. */
 export function inForceLine(d: { status: string; current: string; inForce?: string | null; newer?: { number: string; status: string } | null }): string | null {
-  if (d.newer) {
+  if (d.newer && d.status !== 'archived') {          // an archived one: nothing is in force, nothing on its way (its banner says so)
     const when = d.newer.status === 'approved' ? 'when it is published' : 'when it is approved and published';
     return `You are reading the published version v${d.current}. Version ${d.newer.number} is ${ON_ITS_WAY[d.newer.status] ?? d.newer.status.replace(/_/g, ' ')}; it replaces this one ${when}.`;
   }

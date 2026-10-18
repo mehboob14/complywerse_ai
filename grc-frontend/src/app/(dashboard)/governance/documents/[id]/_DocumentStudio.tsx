@@ -271,9 +271,9 @@ export default function DocumentStudio() {
             <h1 className="min-w-0 truncate text-[15px] font-semibold text-[#1f2933]" title={doc.title}>{doc.title}</h1>
             {doc.document_code && <span className="hidden shrink-0 font-mono text-xs text-[#586472] md:inline">{doc.document_code}</span>}
             {/* the version read is the published one for someone the server sent `newer_version`; the version on its way is a pill */}
-            <LifecycleHover doc={doc} focusable><StatusChip status={doc.newer_version ? 'published' : doc.status} /></LifecycleHover>
+            <LifecycleHover doc={doc} focusable><StatusChip status={doc.newer_version && !archived ? 'published' : doc.status} /></LifecycleHover>
             <span className="shrink-0 text-xs font-semibold text-[#3f4b58]">v{version}</span>
-            {doc.newer_version ? (
+            {doc.newer_version && !archived ? (
               <span className="shrink-0 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-900">v{doc.newer_version.number} {SIGNOFF_STATUS[doc.newer_version.status]?.label.toLowerCase() ?? 'on its way'}</span>
             ) : inForceNote && (
               <span className="shrink-0 rounded-full border border-[#99d5cc] bg-[#effaf8] px-2 py-0.5 text-[11px] font-medium text-[#0b4f46]">v{doc.version_in_force} in force</span>
@@ -472,7 +472,7 @@ export default function DocumentStudio() {
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
-          <p className="text-sm text-[#26323d]">It is no longer in force, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it as Archived.</p>
+          <p className="text-sm text-[#26323d]">It is no longer in force, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can restore it as a draft.</p>
           {archive.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not archived: {problemOf(archive.error)}</p>}
         </div>
       </AnimatedModal>
