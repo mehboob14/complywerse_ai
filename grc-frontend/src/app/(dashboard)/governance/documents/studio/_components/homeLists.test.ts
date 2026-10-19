@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { docLine, humanize, pickable, workAction, type PickDoc } from './homeLists.ts';
+
+test('Edit from the library asks the server for the documents the person may edit, not the newest they read', () => {
+  const page = readFileSync(new URL('../page.tsx', import.meta.url), 'utf8');
+  const api = readFileSync(new URL('../../../../../../lib/studio/api.ts', import.meta.url), 'utf8');
+  assert.ok(page.includes('studioApi.documents(q, 12, editable)') && page.includes('<DocList focus editable'));
+  assert.ok(api.includes("get<{ items: LibraryDoc[] }>('/documents', { q, limit, editable: editable || undefined })"));
+});
 
 const TYPES = { policy: 'Policy', standard: 'Standard' };
 const STATUSES = { pending_review: { label: 'In review' }, draft: { label: 'Draft' } };

@@ -13,6 +13,7 @@ test('NCA names read as names, not file names', () => {
     ['Workstations and Mobile Devices and BYOD Security', 'Workstations and Mobile Devices and BYOD Security'],
     ['Policy SSDLC Policy', 'SSDLC Policy'],
     ['REGISTER Vulnerability Register', 'Vulnerability Register'],
+    ['Register Cybersecurity Audit Plan', 'Cybersecurity Audit Plan Register'],
     ['Report.docx', 'Report'],
     ['  Physical   Security (1) ', 'Physical Security'],
     ['EDR', 'EDR'],

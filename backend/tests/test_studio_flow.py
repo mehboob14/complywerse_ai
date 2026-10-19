@@ -670,6 +670,21 @@ def test_the_edit_picker_knows_which_documents_the_person_may_edit(world):
     assert may_edit() == {10: True}                                                       # its author may
 
 
+def test_the_edit_picker_asks_the_server_for_the_documents_the_person_may_edit_however_many_they_read(world):
+    from datetime import datetime
+
+    _sam_reads_the_library(world)
+    world.me["id"] = 2
+    older, newer = world.db.get(m.GovernanceDocument, 11), world.db.get(m.GovernanceDocument, 10)
+    older.author_id, older.updated_at, newer.updated_at = 2, datetime(2026, 1, 1), datetime(2026, 2, 1)
+    world.db.commit()
+    ids = lambda path: [d["id"] for d in world.http.get(world.api(path)).json()["items"]]
+    assert ids("/documents?limit=1") == [10]                                              # the newest he reads, not his
+    assert ids("/documents?limit=1&editable=true") == [11]                                # the one he wrote, though older
+    world.me["id"] = 1
+    assert ids("/documents?editable=true") == [10, 11]                                    # an administrator changes every one
+
+
 def test_a_readers_comparison_can_be_removed_from_their_work_and_the_document_stays(world):
     mine = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
     _sam_reads_the_library(world)

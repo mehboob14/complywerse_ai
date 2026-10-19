@@ -10,7 +10,8 @@ export function ncaName(raw: string): string {
     .replace(/\.?(docx?|xlsx?|pdf)$/i, '')                       // a file extension, also glued to a version ("V1.0xlsx")
     .replace(/(\s+template)?(\s+(en|ar))?\s*$/i, '')             // "Template en", " en"
     .trim();
-  t = t.replace(/^(\S+)\s+(.+\s\1)$/i, '$2');                     // a category word said twice ("Policy SSDLC Policy")
+  t = t.replace(/^(\S+)\s+(.+\s\1)$/i, '$2')                      // a category word said twice ("Policy SSDLC Policy")
+    .replace(/^register\s+(.+)$/i, '$1 Register');               // the file's category first ("Register Cybersecurity Audit Plan")
   return t.split(' ').map((w, i) => {
     if (/[A-Z0-9]/.test(w.slice(1)) || /\d/.test(w)) return w;  // an acronym, a mixed-case name or a version, as written
     const lower = w.toLowerCase();

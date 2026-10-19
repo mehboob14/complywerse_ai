@@ -30,14 +30,13 @@ const secondary = 'rounded-lg border border-[#b8c4c8] bg-white px-3.5 py-2 text-
 const fieldLabel = 'text-xs font-semibold text-[#26323d]';
 const chip = 'inline-flex items-center gap-1 rounded-full border border-[#c5ccd3] bg-white px-2.5 py-1 text-xs font-semibold text-[#3f4b58] hover:bg-[#eef1f4]';
 
-function useDocs(q: string, limit: number) {
-  return useQuery({ queryKey: ['studio', 'documents', q, limit], queryFn: () => studioApi.documents(q, limit), staleTime: 30_000 });
+function useDocs(q: string, editable: boolean) {
+  return useQuery({ queryKey: ['studio', 'documents', q, 12, editable], queryFn: () => studioApi.documents(q, 12, editable), staleTime: 30_000 });
 }
 
 function DocList({ onPick, exclude, list = 'max-h-52', focus = false, empty = 'No document found.', editable = false }: { onPick: (d: LibraryDoc) => void; exclude?: number[]; list?: string; focus?: boolean; empty?: string; editable?: boolean }) {
   const [q, setQ] = useState('');
-  // ponytail: to edit, the newest 100 the person may read, filtered here; a server-side filter if libraries outgrow it
-  const docs = useDocs(q, editable ? 100 : 12);
+  const docs = useDocs(q, editable);         // to edit: the server lists only those the person may change
   const rows = pickable(docs.data?.items ?? [], { exclude, editable });
   return (
     <div>

@@ -432,7 +432,8 @@ const del = async <T>(path: string): Promise<T> => (await apiClient.delete(`${ba
 
 export const studioApi = {
   status: () => get<StudioStatus>('/status'),
-  documents: (q = '', limit = 30) => get<{ items: LibraryDoc[] }>('/documents', { q, limit }),
+  /** ``editable``: only the documents the person may change (Edit from the library) */
+  documents: (q = '', limit = 30, editable = false) => get<{ items: LibraryDoc[] }>('/documents', { q, limit, editable: editable || undefined }),
   frameworks: () => get<{ items: FrameworkItem[] }>('/frameworks'),
 
   templates: () => get<{ items: TemplateItem[] }>('/templates'),
