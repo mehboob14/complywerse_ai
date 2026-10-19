@@ -43,7 +43,9 @@ const PART = '_wvPart_';                   // ...a header or footer part (+ its 
 const TEMPLATE = '_wvTemplate';            // ...a page drawn only to have a header or footer to copy
 const ANCHOR = '_wvAnchor';                // ...a picture Word places itself (+ the index of its placement)
 const EXACT_ROW = '_wvExact';              // ...a table row of exact height
+const WHOLE_ROW = '_wvWhole';              // ...a table row Word does not break over two pages
 const GOES_ON = '_wvGoesOn';               // ...the first part of a paragraph split over two pages
+const FLOW = '_wvFlow_';                   // ...how a paragraph may break over pages (+ n keep with next, l keep lines, w widows)
 const SPLIT_AT = 'wv-split';               // a recorded page break inside a paragraph's text, where `splitParagraphs` splits it
 const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
 const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -76,6 +78,8 @@ export interface Prepared {
   evenAndOdd: boolean;
   /** how Word places each floating picture */
   anchors: Anchor[];
+  /** whether Word laid the file out and recorded its page breaks (then a page only a little too long is Word's) */
+  saved: boolean;
 }
 
 export interface SectionParts {
@@ -188,6 +192,8 @@ interface Styles {
   defaultPara: string | null;
   /** the ids of the character styles Word names "Hyperlink" */
   hyperlink: Set<string>;
+  /** the document's default paragraph properties (docDefaults) */
+  defaults: Element | null;
 }
 
 function readStyles(doc: Document | null): Styles {
@@ -237,7 +243,8 @@ function readStyles(doc: Document | null): Styles {
     }
     return null;
   };
-  return { chain, prop, colour, defaultPara, hyperlink };
+  const defaults = doc ? kid(all(doc, 'pPrDefault')[0] ?? null, 'pPr') : null;
+  return { chain, prop, colour, defaultPara, hyperlink, defaults };
 }
 
 const styleOf = (p: Element, st: Styles): string | null => val(kid(kid(p, 'pPr'), 'pStyle')) ?? st.defaultPara;
@@ -435,6 +442,35 @@ function autoColourOnDark(doc: Document, st: Styles): void {
   }
 }
 
+/**
+ * Tracked changes as Word's final view shows them (No Markup, the file as it reads once they are accepted): deleted and
+ * moved-away text left out, inserted and moved-in text kept, the old formatting a change remembers dropped, a deleted row
+ * left out, and a paragraph whose mark was deleted joined to the next one, which keeps its own look (docx-preview kept such
+ * a paragraph as a line of its own: an empty line in a draft where Word shows none).
+ */
+function acceptChanges(doc: Document): void {
+  const inMark = (el: Element) => isW(el.parentElement, 'rPr') || isW(el.parentElement, 'trPr');
+  for (const name of ['del', 'moveFrom']) for (const el of all(doc, name)) if (!inMark(el)) el.remove();
+  for (const name of ['ins', 'moveTo']) for (const el of all(doc, name)) {
+    if (inMark(el)) el.remove();                                       // an inserted mark or row stays as it is
+    else el.replaceWith(...Array.from(el.childNodes));
+  }
+  for (const name of ['rPrChange', 'pPrChange', 'sectPrChange', 'tblPrChange', 'trPrChange', 'tcPrChange', 'tblGridChange', 'numberingChange',
+    'moveFromRangeStart', 'moveFromRangeEnd', 'moveToRangeStart', 'moveToRangeEnd']) for (const el of all(doc, name)) el.remove();
+  for (const tr of all(doc, 'tr')) if (kid(kid(tr, 'trPr'), 'del')) tr.remove();
+  for (const p of all(doc, 'p')) {
+    const marks = [kid(kid(kid(p, 'pPr'), 'rPr'), 'del'), kid(kid(kid(p, 'pPr'), 'rPr'), 'moveFrom')].filter(Boolean) as Element[];
+    if (!marks.length) continue;
+    marks.forEach((m) => m.remove());
+    const next = p.nextElementSibling;
+    if (!next || !isW(next, 'p') || kid(kid(p, 'pPr'), 'sectPr')) continue;
+    const own = kid(next, 'pPr');
+    const at = own ? own.nextSibling : next.firstChild;               // after the next paragraph's properties, before its text
+    for (const c of Array.from(p.childNodes)) if (!(c.nodeType === 1 && isW(c as Element, 'pPr'))) next.insertBefore(c, at);
+    p.remove();
+  }
+}
+
 /** A paragraph with no style named has the document's default paragraph style (Normal). docx-preview gave its text the
  * document defaults instead (Calibri 11 where Normal says Arial 10). In a table, what the table's style sets still wins: its
  * rules come later in docx-preview's sheet. */
@@ -445,6 +481,54 @@ function defaultStyle(doc: Document, st: Styles): void {
     let pPr = kid(p, 'pPr');
     if (!pPr) p.insertBefore(pPr = make(doc, 'pPr'), p.firstChild);
     pPr.insertBefore(make(doc, 'pStyle', { val: st.defaultPara }), pPr.firstChild);
+  }
+}
+
+/** How Word may break each paragraph of the body over pages, for `paginate`: kept with the next one, its lines kept together,
+ * and widow and orphan control (at least two lines at the foot and at the top of a page), each from the paragraph, its style
+ * or the document's defaults. Marked only where one of them is on. The paragraphs of a table's cells too, for a row broken
+ * over pages (`rowBreak`): their lines kept together, and widow control in a file for Word 2013 and later (Word moved a row
+ * whose two lines would have been split there; a Word 2010 file's cell gave one line to each page). */
+function flowMarks(doc: Document, st: Styles, compat: number): void {
+  const body = all(doc, 'body')[0];
+  const cells = body ? kids(body, 'tbl').flatMap((t) => kids(t, 'tr')).flatMap((r) => kids(r, 'tc')).flatMap((c) => kids(c, 'p')) : [];
+  for (const p of body ? [...kids(body, 'p'), ...cells] : []) {
+    const inCell = isW(p.parentElement, 'tc');
+    const setting = (name: string) => inherited(p, st, name) ?? kid(st.defaults, name);
+    const widows = setting('widowControl');                    // on unless the file turns it off, as Word has it
+    const flags = `${!inCell && isOn(setting('keepNext')) ? 'n' : ''}${isOn(setting('keepLines')) ? 'l' : ''}${(!widows || isOn(widows)) && (!inCell || compat >= 15) ? 'w' : ''}`;
+    if (flags) p.insertBefore(make(doc, 'bookmarkStart', { id: '989992', name: `${FLOW}${flags}` }), kid(p, 'pPr')?.nextSibling ?? p.firstChild);
+  }
+}
+
+/** In a table, a paragraph's own style sets what it sets over the table style, as Word resolves them (document defaults, then
+ * the table style, then the paragraph's style, then its own formatting); docx-preview's sheet let the table style win, so a
+ * platform-made table stood in single lines where Word sets Normal's 1.15 (four pages too few in 36). The style's spacing and
+ * alignment are written onto such paragraphs, under what they set themselves, a setting's related attributes together (before
+ * or beforeLines; line with its rule). Not its indents: a list level's indent ranks above the style's, and a paragraph whose
+ * numbering is taken off is set at the margin (`numberingRemoved`). */
+const SETTINGS: Record<string, string[][]> = {
+  spacing: [['before', 'beforeLines', 'beforeAutospacing'], ['after', 'afterLines', 'afterAutospacing'], ['line', 'lineRule']],
+  jc: [['val']],
+};
+function tableParagraphs(doc: Document, st: Styles): void {
+  for (const p of all(doc, 'p')) {
+    if (!nearest(p, 'tc')) continue;
+    const chain = st.chain(styleOf(p, st));
+    for (const [name, groups] of Object.entries(SETTINGS)) {
+      const set = chain.map((s) => kid(kid(s, 'pPr'), name)).filter(Boolean) as Element[];      // base first
+      if (!set.length) continue;
+      let pPr = kid(p, 'pPr');
+      if (!pPr) p.insertBefore(pPr = make(doc, 'pPr'), p.firstChild);
+      let own = kid(pPr, name);
+      if (!own) pPr.appendChild(own = make(doc, name));
+      for (const styled of set.reverse()) {                                   // the nearest style first
+        for (const group of groups) {
+          if (group.some((a) => own!.hasAttributeNS(W, a))) continue;
+          for (const a of group) if (styled.hasAttributeNS(W, a)) own.setAttributeNS(W, `w:${a}`, styled.getAttributeNS(W, a)!);
+        }
+      }
+    }
   }
 }
 
@@ -487,7 +571,7 @@ function tables(doc: Document, compat: number, cellMargin: number): void {
  * Tables sized as Word sizes them. A double border is three times its line's width (two lines and the gap between them), a
  * triple five times, as Word draws them (docx-preview drew one thin line). A table keeps the column widths Word saved with it
  * (its grid), as Word shows them, where the browser shared the width out by the cells' text; a table in a cell or text box fits
- * itself in. Rows of exact height are marked for `rowHeights`.
+ * itself in. Rows of exact height are marked for `rowHeights`, and they and rows kept whole for `paginate`.
  */
 function tableLayout(doc: Document): void {
   for (const b of Array.from(doc.getElementsByTagNameNS(W, '*'))) {
@@ -497,9 +581,11 @@ function tableLayout(doc: Document): void {
     if (border && (kind === 'double' || kind === 'triple') && sz && /^\d+$/.test(sz)) b.setAttributeNS(W, 'w:sz', String(Number(sz) * (kind === 'double' ? 3 : 5)));
   }
   for (const tr of all(doc, 'tr')) {
-    if (val(kid(kid(tr, 'trPr'), 'trHeight'), 'hRule') !== 'exact') continue;
     const p = all(tr, 'p')[0];
-    if (p) p.insertBefore(make(doc, 'bookmarkStart', { id: '989997', name: EXACT_ROW }), kid(p, 'pPr')?.nextSibling ?? p.firstChild);
+    const floating = !!kid(kid(nearest(tr, 'tbl'), 'tblPr'), 'tblpPr');       // a floating table's rows go to the next page whole
+    const marks = [[val(kid(kid(tr, 'trPr'), 'trHeight'), 'hRule') === 'exact', EXACT_ROW, '989997'],
+      [floating || isOn(kid(kid(tr, 'trPr'), 'cantSplit')), WHOLE_ROW, '989996']] as const;
+    for (const [on, name, id] of marks) if (on && p) p.insertBefore(make(doc, 'bookmarkStart', { id, name }), kid(p, 'pPr')?.nextSibling ?? p.firstChild);
   }
   for (const tbl of all(doc, 'tbl')) {
     if (nearest(tbl, 'tc') || nearest(tbl, 'txbxContent')) continue;
@@ -678,17 +764,14 @@ function emptyLines(doc: Document): void {
     const k = kid(kid(r, 'rPr'), n);
     return !!k && !(n === 'u' && val(k) === 'none') && isOn(k);
   });
+  const blank = (r: Element) => Array.from(r.children).every((c) => isW(c, 'rPr') || isW(c, 'tab')
+    || (isW(c, 't') && !/[^\s\u00a0\u2002-\u200b\u3000]/.test(c.textContent ?? '')));
   for (const p of all(doc, 'p')) {
-    // a line of spaces only is as high as its paragraph mark in Word (an 18 pt space over an 11 pt mark: an 11 pt line), so
-    // such spaces are left out and the paragraph is an empty one
-    const texts = all(p, 't');
-    if (texts.length && texts.every((t) => !/[^\s  -​　]/.test(t.textContent ?? '') && plain(nearest(t, 'r')))) {
-      for (const t of texts) {
-        const r = nearest(t, 'r');
-        t.remove();
-        if (r && !Array.from(r.children).some((c) => c.localName !== 'rPr')) r.remove();     // an empty run still props the line up
-      }
-    }
+    // a line of spaces and tabs only is as high as its paragraph mark in Word (an 18 pt space over an 11 pt mark: an 11 pt
+    // line), so its runs are left out and the paragraph is an empty one; not where a tab draws a leader
+    const runs = all(p, 'r');
+    const leaders = kids(kid(kid(p, 'pPr'), 'tabs'), 'tab').some((t) => (val(t, 'leader') ?? 'none') !== 'none');
+    if (runs.length && !leaders && runs.every((r) => blank(r) && plain(r))) for (const r of runs) r.remove();     // an empty run still props the line up
     if (all(p, 't').some((t) => t.textContent) || ['tab', 'ptab', 'br', 'sym', 'object'].some((n) => all(p, n).length)
       || [...all(p, 'drawing'), ...all(p, 'pict')].some((d) => !floats(d))) continue;
     const mark = kid(kid(p, 'pPr'), 'rPr');
@@ -1136,13 +1219,16 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
   for (const r of relsDoc ? Array.from(relsDoc.getElementsByTagName('Relationship')) : []) rels.set(r.getAttribute('Id') ?? '', (r.getAttribute('Target') ?? '').split('/').pop() ?? '');
   const evenAndOdd = isOn(settings ? all(settings, 'evenAndOddHeaders')[0] ?? null : null);
   let parts: SectionParts[] = [];
+  let saved = false;
   const anchors: Anchor[] = [];
   for (const path of Object.keys(zip.files).filter((p) => /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(p))) {
     const doc = await read(path);
     if (!doc) continue;
+    acceptChanges(doc);                                // first: the rest sees the text Word's final view shows
     latinFonts(doc);
     plainContents(doc, st);
     defaultStyle(doc, st);
+    tableParagraphs(doc, st);
     numberingRemoved(doc, st);
     listLevels(doc, st);
     autoColourOnDark(doc, st);
@@ -1151,10 +1237,12 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
     tableLayout(doc);
     contextualSpacing(doc, st);
     if (path === 'word/document.xml') {
+      saved = all(doc, 'lastRenderedPageBreak').length > 0;
       pageBreaksAsSaved(doc, st);
       parts = sections(doc, rels);
       numbers(doc, st, lists);                         // after the page breaks: a number is shown text to them
       splitParagraphs(doc);
+      flowMarks(doc, st, compat);
     }
     if (/header|footer/.test(path)) {
       pageFields(doc);
@@ -1175,6 +1263,9 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
       listLevels(doc, st);
       tableLayout(doc);                                // a table style's double borders
       baseStylesFirst(doc);
+      // a paragraph style and its character style are a pair only for Word's menus: docx-preview gave each the other's look (a
+      // heading of 16 pt the 14 pt its "Heading 1 Char" still had from the template it was made from)
+      for (const link of all(doc, 'link')) link.remove();
     }
     write(path, doc);
   }
@@ -1185,10 +1276,30 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
     const stand = STAND_INS[val(kid(f, 'family')) ?? ''];
     if (stand && val(f, 'name')) fonts[val(f, 'name')!] = stand;
   }
-  return { file: await zip.generateAsync({ type: 'blob', compression: 'STORE' }), stops, defaultTab, fonts, compat, sections: parts, evenAndOdd, anchors };
+  return { file: await zip.generateAsync({ type: 'blob', compression: 'STORE' }), stops, defaultTab, fonts, compat, sections: parts, evenAndOdd, anchors, saved };
 }
 
 const STAND_INS: Record<string, string> = { swiss: 'Arial, sans-serif', roman: '"Times New Roman", serif', modern: '"Courier New", monospace', script: 'cursive' };
+
+/** The size Word sets text in: a whole number of dots at 600 dpi (10.5 pt is set as 10.56 pt, 11 pt as 11.04 pt, 10 pt as 9.96
+ * pt; every size in Word's PDFs of fifteen files is one of these). In the file's own size a 10.5 pt line came out 0.5%
+ * narrower than Word's, and broke a word later. */
+export function wordSize(pt: number): number {
+  return Math.round(pt * 600 / 72) * 72 / 600;
+}
+
+function fontSizes(styles: HTMLElement, body: HTMLElement): void {
+  const sized = (css: string) => css.replace(/font-size:\s*(\d*\.?\d+)pt/g, (_m, v: string) => `font-size: ${+wordSize(Number(v)).toFixed(3)}pt`);
+  for (const s of Array.from(styles.querySelectorAll('style'))) {
+    const css = s.textContent ?? '';
+    const done = sized(css);
+    if (done !== css) s.textContent = done;
+  }
+  for (const el of Array.from(body.querySelectorAll<HTMLElement>('[style*="font-size"]'))) {
+    const m = /^(\d*\.?\d+)pt$/.exec(el.style.fontSize);
+    if (m) el.style.fontSize = `${+wordSize(Number(m[1])).toFixed(3)}pt`;
+  }
+}
 
 /** A font the computer does not have is set in a font of its kind, as Word substitutes it (a sans-serif corporate font in Arial),
  * not in the browser's default serif. */
@@ -1246,9 +1357,12 @@ function paragraphs(styles: HTMLElement, body: HTMLElement): void {
       goesOn: own.textAlign === 'justify' && !!p.querySelector(`:scope > span[id="${GOES_ON}"]`),
     };
   });
-  const lines = looks.map((l) => lineRatio(l.family));
+  // ...and its height from the size the file names, not the size Word sets the letters in (`fontSizes`): 10.5 pt text is set as
+  // 10.56 pt, yet its lines are as tall as 10.5 pt lines (sizes are whole half points, so the named one is the nearest half)
+  const named = (px: string) => { const pt = parseFloat(px) * PT; return pt > 0 ? Math.round(pt * 2) / 2 / pt : 1; };
+  const lines = looks.map((l, i) => lineRatio(l.family) * named(l.size ?? getComputedStyle(all[i]).fontSize));
   all.forEach((p, i) => {
-    p.style.setProperty('--wv-lh', lines[i].toFixed(3));
+    p.style.setProperty('--wv-lh', lines[i].toFixed(4));
     if (looks[i].size) p.style.fontSize = looks[i].size!;
     if (looks[i].ownFamily) p.style.fontFamily = looks[i].ownFamily!;
     for (const l of looks[i].labels) l.style.lineHeight = '0';
@@ -1336,23 +1450,69 @@ function justification(body: HTMLElement, compat: number): void {
   }
 }
 
+const cssPx = (v: string) => { const m = /^(-?\d*\.?\d+)(pt|px)$/.exec(v.trim()); return m ? Number(m[1]) / (m[2] === 'pt' ? PT : 1) : 0; };
+
+/** A cell's top and bottom borders as wide as the file makes them, in px: the browser draws a border in whole device pixels (a
+ * 0.5 pt line is 1 px at 100 %, 0.67 px in Word). Read from the rules of its table's style and its own style. */
+function fileBorders(body: HTMLElement): (td: HTMLElement) => [number, number] {
+  const sheets = Array.from((body.getRootNode() as Document | ShadowRoot).styleSheets ?? []);
+  const rules = sheets.flatMap((s) => { try { return Array.from(s.cssRules); } catch { return []; } })
+    .filter((r): r is CSSStyleRule => r instanceof CSSStyleRule && /border/.test(r.style.cssText));
+  const width = (w: string, s: string) => (!s || /none|hidden/.test(s) ? 0 : w === 'thin' ? 1 : w === 'thick' ? 5 : !w || w === 'medium' ? 3 : cssPx(w));
+  const known = new Map<string, [number, number]>();
+  return (td) => {
+    const key = `${td.closest('table')?.className}|${td.parentElement?.className}|${td.className}|${td.getAttribute('style')}`;
+    let found = known.get(key);
+    if (!found) {
+      const side = (name: 'Top' | 'Bottom') => {
+        let [w, s] = ['', ''];
+        for (const r of rules) {
+          let on = false;
+          try { on = td.matches(r.selectorText); } catch { /* a rule for a pseudo-element */ }
+          if (on) [w, s] = [r.style[`border${name}Width`] || w, r.style[`border${name}Style`] || s];
+        }
+        return width(td.style[`border${name}Width`] || w, td.style[`border${name}Style`] || s);
+      };
+      known.set(key, found = [side('Top'), side('Bottom')]);
+    }
+    return found;
+  };
+}
+
 /** Rows as tall as Word makes them (measured against Word's own PDFs): a row of at least a height is that height plus its cells'
  * top and bottom margins and its border; one of exact height is its height plus the bottom margin. The browser put the margins
- * and borders inside the height: up to 7 px less a row, a page less in a long table. */
+ * and borders inside the height: up to 7 px less a row, a page less in a long table. Borders count as wide as Word draws them:
+ * where the browser draws them wider or thinner (in whole pixels), a row gives the difference back above its cells' content (a
+ * third of a pixel a row at 100 %, a row of a long table on every page). A cell's text is as wide as its column less its
+ * margins, as in Word: the browser also took half of each side border out of it (a word that fits Word's line went to the next). */
 function rowHeights(body: HTMLElement): void {
-  const px = (v: string) => { const m = /^(-?\d*\.?\d+)(pt|px)$/.exec(v.trim()); return m ? Number(m[1]) / (m[2] === 'pt' ? PT : 1) : 0; };
-  const plans: [HTMLElement, number][] = [];
+  const borders = fileBorders(body);
+  const plans: [HTMLElement, number, HTMLElement[], number][] = [];
+  const sides: [HTMLElement, number, number][] = [];
   for (const tr of Array.from(body.querySelectorAll<HTMLElement>('tr'))) {
-    const set = px(tr.style.height);
-    const cells = Array.from(tr.children).filter((c) => c.tagName === 'TD');
-    if (!set || !cells.length) continue;
+    const cells = Array.from(tr.children).filter((c) => c.tagName === 'TD') as HTMLElement[];
+    if (!cells.length) continue;
+    const set = cssPx(tr.style.height);
     const looks = cells.map((c) => getComputedStyle(c));
     const most = (side: 'paddingTop' | 'paddingBottom' | 'borderTopWidth' | 'borderBottomWidth') => Math.max(0, ...looks.map((cs) => parseFloat(cs[side]) || 0));
+    looks.forEach((cs, i) => {
+      const [left, right] = [parseFloat(cs.borderLeftWidth) || 0, parseFloat(cs.borderRightWidth) || 0];
+      if (left || right) sides.push([cells[i], Math.max(0, (parseFloat(cs.paddingLeft) || 0) - left / 2), Math.max(0, (parseFloat(cs.paddingRight) || 0) - right / 2)]);
+    });
+    const file = cells.map(borders);
+    const word = (Math.max(0, ...file.map((b) => b[0])) + Math.max(0, ...file.map((b) => b[1]))) / 2;
     const first = tr.querySelector('p');
     const exact = !!first && first.closest('tr') === tr && !!first.querySelector(`:scope > span[id="${EXACT_ROW}"]`);
-    plans.push([tr, exact ? set + most('paddingBottom') : set + most('paddingTop') + most('paddingBottom') + (most('borderTopWidth') + most('borderBottomWidth')) / 2]);
+    const extra = exact ? 0 : (most('borderTopWidth') + most('borderBottomWidth')) / 2 - word;
+    const tops = Math.abs(extra) > 0.01 ? cells.map((c) => c.firstElementChild as HTMLElement | null).filter((c): c is HTMLElement => !!c) : [];
+    plans.push([tr, !set ? 0 : exact ? set + most('paddingBottom') : set + most('paddingTop') + most('paddingBottom') + word, tops, extra]);
   }
-  for (const [tr, h] of plans) tr.style.height = `${h.toFixed(2)}px`;
+  const margins = plans.map(([, , tops]) => tops.map((c) => parseFloat(getComputedStyle(c).marginTop) || 0));
+  plans.forEach(([tr, h, tops, extra], i) => {
+    if (h) tr.style.height = `${h.toFixed(2)}px`;
+    tops.forEach((c, j) => { c.style.marginTop = `${(margins[i][j] - extra).toFixed(3)}px`; });
+  });
+  for (const [td, left, right] of sides) Object.assign(td.style, { paddingLeft: `${left.toFixed(3)}px`, paddingRight: `${right.toFixed(3)}px` });
 }
 
 /**
@@ -1527,6 +1687,33 @@ function tableHeads(body: HTMLElement): void {
   }
 }
 
+/** A table in text set in columns runs on from one column into the next, as in Word and Chrome; Firefox keeps a table whole in
+ * one column (a glossary in two columns stood in one, twice the page's height). Where the browser kept it whole it is cut by its
+ * rows into one table for each column, of about the same height, its header rows at the top of each. Not a table with merged rows. */
+function columnTables(body: HTMLElement): void {
+  for (const article of Array.from(body.querySelectorAll<HTMLElement>('section.docx > article'))) {
+    const cols = parseInt(getComputedStyle(article).columnCount, 10) || 1;
+    if (cols < 2) continue;
+    for (const table of Array.from(article.children).filter((c) => c.tagName === 'TABLE') as HTMLElement[]) {
+      const rows = Array.from(table.querySelectorAll<HTMLElement>(':scope > tr, :scope > tbody > tr'));
+      if (rows.length < 2 || table.getClientRects().length > 1 || table.querySelector('td[rowspan]:not([rowspan="1"])')) continue;
+      const heights = rows.map((tr) => tr.getBoundingClientRect().height);
+      const total = heights.reduce((a, b) => a + b, 0);
+      const cuts: number[] = [];                              // the row each next table starts with
+      let sum = 0;
+      heights.forEach((h, i) => { if (i && cuts.length < cols - 1 && sum + h / 2 > (total / cols) * (cuts.length + 1)) cuts.push(i); sum += h; });
+      let last = table;
+      cuts.forEach((from, k) => {
+        const part = table.cloneNode(false) as HTMLElement;
+        for (const keep of Array.from(table.querySelectorAll(':scope > colgroup, :scope > thead'))) part.appendChild(keep.cloneNode(true));
+        part.append(...rows.slice(from, cuts[k + 1] ?? rows.length));
+        last.after(part);
+        last = part;
+      });
+    }
+  }
+}
+
 /** A list number has its paragraph's look (the style's font, size, weight; not its underline), as Word draws it, its list
  * level's look over it: docx-preview gave a heading's "4.3." the body text's size and weight. */
 function numberLooks(styles: HTMLElement): void {
@@ -1630,17 +1817,129 @@ function pageTops(body: HTMLElement, compat: number): void {
   });
 }
 
-const keptWithNext = (el: Element): boolean => el.tagName === 'P' && /heading|title/i.test(el.className);
+/** How Word may break a paragraph over pages (`flowMarks`): n kept with the next, l its lines kept together, w widow control. */
+const flowOf = (el: Element): string => (el.tagName === 'P' ? Array.from(el.children).find((c) => c.id.startsWith(FLOW))?.id.slice(FLOW.length) ?? '' : '');
+const keptWithNext = (el: Element): boolean => el.tagName === 'P' && (flowOf(el).includes('n') || /heading|title/i.test(el.className));
+
+/** The text of a paragraph in reading order, without what floats out of it (a picture Word places itself, a shape). */
+function textsOf(p: HTMLElement): Text[] {
+  const out: Text[] = [];
+  const walk = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode() as Text | null; n; n = walk.nextNode() as Text | null) {
+    if (n.data && !n.parentElement?.closest('[style*="absolute"], .wv-float')) out.push(n);
+  }
+  return out;
+}
+
+/** A paragraph's lines as the browser set them, top to bottom: the top and bottom of each line, the space of its line height
+ * around its text included (what has to fit above the foot of the page, as in Word). */
+function linesOf(p: HTMLElement): { top: number; bottom: number }[] {
+  const range = document.createRange();
+  const rects: DOMRect[] = [];
+  for (const t of textsOf(p)) {
+    range.selectNodeContents(t);
+    rects.push(...Array.from(range.getClientRects()).filter((r) => r.height > 0));
+  }
+  const lines: { top: number; bottom: number }[] = [];
+  for (const r of rects.sort((x, y) => x.top - y.top)) {
+    const line = lines.find((l) => r.top < l.bottom - 2 && r.bottom > l.top + 2);
+    if (line) [line.top, line.bottom] = [Math.min(line.top, r.top), Math.max(line.bottom, r.bottom)];
+    else lines.push({ top: r.top, bottom: r.bottom });
+  }
+  const height = parseFloat(getComputedStyle(p).lineHeight);
+  for (const l of height ? lines : []) {
+    const more = (height - (l.bottom - l.top)) / 2;
+    if (more > 0) [l.top, l.bottom] = [l.top - more, l.bottom + more];
+  }
+  return lines;
+}
+
+/** Where the line starting at `top` begins in a paragraph's text. */
+function lineStart(p: HTMLElement, top: number): { node: Text; offset: number } | null {
+  const range = document.createRange();
+  const topOf = (n: Text, i: number) => { range.setStart(n, i); range.setEnd(n, i + 1); return range.getBoundingClientRect().top; };
+  for (const n of textsOf(p)) {
+    if (topOf(n, n.data.length - 1) < top - 1) continue;                   // all of it above that line
+    let [lo, hi] = [-1, n.data.length - 1];                                 // lo above the line (or before the text), hi on it
+    while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (topOf(n, mid) >= top - 1) hi = mid; else lo = mid; }
+    return { node: n, offset: hi };
+  }
+  return null;
+}
+
+/** A paragraph split before `at`: the rest goes on as the same paragraph, without the space before it, a first-line indent or
+ * its number; the first part ends without its space after, its last line justified like the others. */
+function splitParagraph(p: HTMLElement, at: { node: Text; offset: number }): HTMLElement {
+  const range = document.createRange();
+  range.setStart(at.node, at.offset);
+  range.setEnd(p, p.childNodes.length);
+  const rest = p.cloneNode(false) as HTMLElement;
+  rest.append(range.extractContents());
+  for (const c of Array.from(rest.classList)) if (c === 'wv-hang' || c.startsWith('docx-num-')) rest.classList.remove(c);
+  Object.assign(rest.style, { textIndent: '0', marginTop: '0' });
+  p.style.marginBottom = '0';
+  if (getComputedStyle(p).textAlign === 'justify') p.style.textAlignLast = 'justify';
+  p.after(rest);
+  return rest;
+}
+
+/** Where Word breaks a table row that reaches past `limit` over two pages: in each cell, the first child that goes on (and the
+ * line it goes on from, where a paragraph is broken: whole where its lines are kept together, two lines on each page where it
+ * has widow control, `flowMarks`). Null where Word moves the row whole: a row kept whole or of exact height, one with nothing
+ * that fits or nothing that does not, one in a table with merged rows. */
+type RowCut = { child: number; at: { node: Text; offset: number } | null }[];
+function rowBreak(tr: HTMLElement, limit: number): RowCut | null {
+  const cells = Array.from(tr.children).filter((c) => c.tagName === 'TD') as HTMLElement[];
+  if (!cells.length || tr.querySelector(`span[id="${EXACT_ROW}"], span[id="${WHOLE_ROW}"]`) || tr.closest('table')?.querySelector('td[rowspan]:not([rowspan="1"])')) return null;
+  const cut = cells.map((td) => {
+    const kids = Array.from(td.children) as HTMLElement[];
+    const room = limit - (parseFloat(getComputedStyle(td).paddingBottom) || 0);
+    const i = kids.findIndex((k) => k.getBoundingClientRect().bottom > room);
+    if (i < 0) return { child: kids.length, at: null };
+    const lines = kids[i].tagName === 'P' ? linesOf(kids[i]) : [];
+    let fit = lines.filter((l) => l.bottom <= room).length;
+    if (lines.length && fit === lines.length) return { child: i + 1, at: null };
+    const flow = flowOf(kids[i]);
+    if (flow.includes('l')) fit = 0;
+    else if (flow.includes('w')) {
+      if (lines.length - fit < 2) fit = lines.length - 2;
+      if (fit < 2) fit = 0;
+    }
+    return { child: i, at: fit > 0 ? lineStart(kids[i], lines[fit].top) : null };
+  });
+  const stays = cut.some((c) => c.child > 0 || c.at);
+  const goes = cut.some((c, i) => c.child < cells[i].children.length);
+  return stays && goes ? cut : null;
+}
+
+/** The row broken where `rowBreak` found: what goes on, in a row of its own with the same cells; both rows as tall as what is in
+ * them, the space after the last paragraph at the foot running into the margin as Word lets it. */
+function breakRow(tr: HTMLElement, cut: RowCut): HTMLElement {
+  const rest = tr.cloneNode(false) as HTMLElement;
+  const cells = Array.from(tr.children).filter((c) => c.tagName === 'TD') as HTMLElement[];
+  cells.forEach((td, i) => {
+    const { child, at } = cut[i];
+    const kids = Array.from(td.children) as HTMLElement[];
+    const cell = rest.appendChild(td.cloneNode(false)) as HTMLElement;
+    cell.append(...(at ? [splitParagraph(kids[child], at), ...kids.slice(child + 1)] : kids.slice(child)));
+    const last = td.lastElementChild as HTMLElement | null;
+    if (last) last.style.marginBottom = '0';
+  });
+  tr.style.height = rest.style.height = '';
+  return rest;
+}
 
 /**
- * A page whose content runs well past its foot is split where the content reaches the foot, as Word would: between blocks, a
- * heading kept with what follows it, a table between rows. Word records no page break inside a table of contents or on an
- * empty line, and none at all in a file it did not lay out itself. A page only a little too long is left alone: Word fitted
- * it, and the browser's lines are a little taller or shorter than Word's (`slack`, a share of the page's text height).
+ * A page whose content runs past its foot is split where the content reaches the foot, as Word would: between blocks, a
+ * heading kept with what follows it, a table between rows, a paragraph between lines (with at least two lines on each page
+ * where its widow control says so, and whole where its lines are kept together). Word records no page break inside a table
+ * of contents or on an empty line, and none at all in a file it did not lay out itself. In a file Word laid out, a page only
+ * a little too long is left alone: Word fitted it, and the browser's lines are a little taller or shorter than Word's
+ * (`slack`, a share of the page's text height).
  */
 export function paginate(body: HTMLElement, slack = 0.1): void {
-  for (let round = 0; round < 200; round++) {
-    const plans: { page: HTMLElement; article: HTMLElement; blocks: HTMLElement[]; from: number; rows: HTMLElement[] }[] = [];
+  for (let round = 0; round < 400; round++) {
+    const plans: { page: HTMLElement; article: HTMLElement; blocks: HTMLElement[]; from: number; rows: HTMLElement[]; split: { tr: HTMLElement; cut: RowCut } | null; at: { node: Text; offset: number } | null }[] = [];
     for (const page of Array.from(body.querySelectorAll<HTMLElement>('section.docx'))) {    // read every page, then change them
       const article = Array.from(page.children).filter((c) => c.tagName === 'ARTICLE').pop() as HTMLElement | undefined;
       const blocks = article ? (Array.from(article.children) as HTMLElement[]) : [];
@@ -1648,29 +1947,46 @@ export function paginate(body: HTMLElement, slack = 0.1): void {
       // text set in columns is measured as one long column: it is not split
       if (!article || blocks.length === 0 || !height || (parseInt(getComputedStyle(article).columnCount, 10) || 1) > 1) continue;
       const box = page.getBoundingClientRect();
-      const below = article.nextElementSibling;                              // footnotes and the footer keep their place
-      const foot = box.top + height - (below ? box.bottom - below.getBoundingClientRect().top : parseFloat(getComputedStyle(page).paddingBottom) || 0);
+      // the text ends at the bottom margin, or higher where footnotes or a tall footer come up into the page (both keep their
+      // place: where they would be on a page of its own height)
+      const below = article.nextElementSibling;
+      const margin = box.top + height - (parseFloat(getComputedStyle(page).paddingBottom) || 0);
+      const foot = below ? Math.min(margin, below.getBoundingClientRect().top - (box.height - height)) : margin;
       const top = article.getBoundingClientRect().top;
       // a block reaches as far down as the pictures that float from it
       const bottoms = blocks.map((b) => Math.max(b.getBoundingClientRect().bottom, ...Array.from(b.querySelectorAll('.wv-float')).map((f) => f.getBoundingClientRect().bottom)));
-      if (Math.max(...bottoms) - foot <= slack * (foot - top)) continue;
+      if (Math.max(...bottoms) - foot <= Math.max(0.5, slack * (foot - top))) continue;
       let from = bottoms.findIndex((b) => b > foot + 0.5);
       if (from < 0) continue;
       let rows: HTMLElement[] = [];
+      let split: { tr: HTMLElement; cut: RowCut } | null = null;          // a row broken over the pages
+      let at: { node: Text; offset: number } | null = null;
       if (blocks[from].tagName === 'TABLE') {
         const trs = Array.from(blocks[from].querySelectorAll<HTMLElement>(':scope > tr, :scope > tbody > tr'));
-        const fit = trs.findIndex((tr) => tr.getBoundingClientRect().bottom > foot + 0.5);
-        if (fit > 0) rows = trs.slice(fit);
+        // a row fits with the border under it, as Word counts it (the table's own bottom shows how far that border reaches)
+        const under = trs.length ? bottoms[from] - trs[trs.length - 1].getBoundingClientRect().bottom : 0;
+        const fit = trs.findIndex((tr) => tr.getBoundingClientRect().bottom + under > foot + 0.5);
+        const cut = fit >= 0 ? rowBreak(trs[fit], foot + 0.5 - under) : null;
+        if (cut) [split, rows] = [{ tr: trs[fit], cut }, trs.slice(fit + 1)];
+        else if (fit > 0) rows = trs.slice(fit);
+      } else if (blocks[from].tagName === 'P' && !flowOf(blocks[from]).includes('l')) {
+        const lines = linesOf(blocks[from]);
+        let fit = lines.filter((l) => l.bottom <= foot + 0.5).length;
+        if (flowOf(blocks[from]).includes('w')) {                            // two lines at the foot and two at the top
+          if (lines.length - fit < 2) fit = lines.length - 2;
+          if (fit < 2) fit = 0;
+        }
+        if (fit > 0 && fit < lines.length) at = lineStart(blocks[from], lines[fit].top);
       }
-      if (!rows.length) {
+      if (!rows.length && !split && !at) {
         while (from > 0 && keptWithNext(blocks[from - 1])) from--;
         if (from === 0) from = 1;                                            // taller than a page on its own: it stays
         if (from >= blocks.length) continue;
       }
-      plans.push({ page, article, blocks, from, rows });
+      plans.push({ page, article, blocks, from, rows, split, at });
     }
     if (!plans.length) return;
-    for (const { page, article, blocks, from, rows } of plans) {
+    for (const { page, article, blocks, from, rows, split, at } of plans) {
       const next = page.cloneNode(false) as HTMLElement;
       let content: HTMLElement | null = null;
       for (const c of Array.from(page.children)) {
@@ -1678,16 +1994,17 @@ export function paginate(body: HTMLElement, slack = 0.1): void {
         else if (c === article) content = next.appendChild(article.cloneNode(false) as HTMLElement);
       }
       if (!content) continue;
-      if (rows.length) {
+      if (rows.length || split) {
         const table = blocks[from];
         const rest = table.cloneNode(false) as HTMLElement;
         for (const keep of Array.from(table.querySelectorAll(':scope > colgroup, :scope > thead'))) rest.appendChild(keep.cloneNode(true));   // header rows repeat
+        if (split) rest.appendChild(breakRow(split.tr, split.cut));
         for (const tr of rows) rest.appendChild(tr);
         content.appendChild(rest);
       }
-      const moved = blocks.slice(rows.length ? from + 1 : from);
+      const moved = at ? [splitParagraph(blocks[from], at), ...blocks.slice(from + 1)] : blocks.slice(rows.length || split ? from + 1 : from);
       for (const b of moved) content.appendChild(b);
-      if (!rows.length && moved[0]?.tagName === 'P') moved[0].style.marginTop = '0';     // Word's own page break: no space before
+      if (!rows.length && !split && !at && moved[0]?.tagName === 'P') moved[0].style.marginTop = '0';     // Word's own page break: no space before
       page.after(next);
     }
   }
@@ -1823,6 +2140,7 @@ function layOutTabs(body: HTMLElement, prepared: Prepared): void {
 export function finishLayout(body: HTMLElement, styles: HTMLElement, prepared: Prepared, slack?: number): void {
   numberLooks(styles);
   fontStandIns(styles, body, prepared.fonts);                    // first: the line heights below are measured in these fonts
+  fontSizes(styles, body);                                       // ...and in Word's sizes
   paragraphs(styles, body);
   rowHeights(body);
   justification(body, prepared.compat);
@@ -1832,10 +2150,21 @@ export function finishLayout(body: HTMLElement, styles: HTMLElement, prepared: P
   const parts = takeTemplates(body);                             // before pages are counted, joined or split
   sectionPages(body);
   tableHeads(body);
+  columnTables(body);
   pageTops(body, prepared.compat);
-  paginate(body, slack);
+  paginate(body, slack ?? (prepared.saved ? 0.1 : 0));            // a file Word never laid out breaks at the foot
+  pageFeet(body);
   headersAndFooters(body, prepared, parts);
   pageNumbers(body);
+}
+
+/** The space after a page's last line runs into the bottom margin in Word; counted, it made a full page a little too long. */
+function pageFeet(body: HTMLElement): void {
+  const lasts = Array.from(body.querySelectorAll<HTMLElement>('section.docx')).map((page) => {
+    const article = Array.from(page.children).filter((c) => c.tagName === 'ARTICLE').pop();
+    return (Array.from(article?.children ?? []) as HTMLElement[]).reverse().find((b) => getComputedStyle(b).display !== 'none');
+  });
+  for (const b of lasts) if (b) b.style.marginBottom = '0';
 }
 
 /** CSS for what `finishLayout` adds. */

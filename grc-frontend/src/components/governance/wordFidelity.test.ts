@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { leaderText, mergeStops, nextStop, symbolTwin, tabWidth, type TabStop } from './wordFidelity.ts';
+import { leaderText, mergeStops, nextStop, symbolTwin, tabWidth, wordSize, type TabStop } from './wordFidelity.ts';
 
 const at = (pos: number, kind: TabStop['kind'] = 'left', leader = 'none'): TabStop => ({ pos, kind, leader });
 
@@ -62,4 +62,12 @@ test('a leader fills the tab with its character, leaving a little room', () => {
   assert.equal(leaderText('underscore', 20, 5.56), '__');
   assert.equal(leaderText('none', 100, 2.78), '');
   assert.equal(leaderText('dot', 2, 2.78), '');                             // no room for even one
+});
+
+test('a size is drawn as Word draws it, in whole dots at 600 dpi: 10.5 pt is 10.56 pt, 10 pt is 9.96 pt', () => {
+  const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-9, `${a} is not ${b}`);
+  near(wordSize(10.5), 10.56);
+  near(wordSize(11), 11.04);
+  near(wordSize(10), 9.96);
+  near(wordSize(12), 12);
 });
