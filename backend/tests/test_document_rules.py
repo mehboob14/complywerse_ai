@@ -118,6 +118,39 @@ def test_a_request_opens_its_document_until_it_is_withdrawn(world, status):
     assert readable(world, ASKED) == [] and list(world.db.execute(P.asked_ids(world.db, world.user(ASKED)))) == []
 
 
+@pytest.mark.parametrize("status", ["pending", "done", "rejected"])
+def test_an_archived_document_opens_for_a_request_still_waiting_and_its_editors_not_for_staff(world, status):
+    world.db.get(m.DocumentObligation, 1).status = status
+    world.doc(IN_REVIEW).status = "archived"                                 # withdrawn: not in force
+    world.db.commit()
+    waiting = [IN_REVIEW] if status == "pending" else []                     # an acknowledgement given before opens it no more
+    assert (readable(world, ASKED), listed(world, ASKED)) == (waiting, waiting)
+    for uid in (VIEWER, WILD, STAFF, OUTSIDER):                              # staff, with the library right or without
+        assert IN_REVIEW not in readable(world, uid) and IN_REVIEW not in listed(world, uid), uid
+    for uid in (OWNER, BYNAME, EDITOR, PUBLISHER, ADMIN):                    # its owner, its sign-off, who may change or publish it
+        assert IN_REVIEW in readable(world, uid) and IN_REVIEW in listed(world, uid), uid
+    assert IN_REVIEW in readable(world, AUDITOR)
+    with pytest.raises(HTTPException) as e:
+        P.require_doc_reader(IN_REVIEW, world.db, world.user(VIEWER))
+    assert (e.value.status_code, e.value.detail) == (403, P.DRAFT_REFUSED)
+
+
+@pytest.mark.parametrize("status", ["done", "rejected"])
+def test_an_answered_request_opens_a_draft_never_published_but_not_one_revived_after_a_withdrawal(world, status):
+    world.db.get(m.DocumentObligation, 1).status = status
+    world.db.add(m.DocumentObligation(id=3, tenant_id=1, document_id=DRAFT, kind="review", user_id=ASKED, status=status))
+    travel = world.doc(IN_REVIEW)
+    travel.status = "archived"
+    world.db.commit()
+    travel.status = "draft"                                                  # restored: nothing in force until published again
+    world.db.commit()
+    assert (travel.published_version, travel.last_published_version) == (None, "1.0")
+    assert (readable(world, ASKED), listed(world, ASKED)) == ([DRAFT], [DRAFT])     # the review of a draft never published still opens it
+    travel.status = "published"
+    world.db.commit()
+    assert (readable(world, ASKED), listed(world, ASKED)) == ([DRAFT, IN_REVIEW], [DRAFT, IN_REVIEW])
+
+
 def test_auditors_and_the_library_right_are_matched_with_wildcards_and_platform_given_roles_only(world):
     db, u = world.db, world.user
     assert [uid for uid in range(1, 19) if P.is_auditor(db, u(uid))] == [ADMIN, CONTACT, AUDITOR]
@@ -181,9 +214,10 @@ def test_the_version_in_force_while_a_new_one_is_on_its_way(world):
     assert P.in_force_number(travel) == "1.0" and P.in_force_row(db, travel) is None
     travel.current_version = "1.1"
     for status in ("archived", "expired", "exception_applied"):                     # withdrawn: nothing is in force any more,
-        travel.status = status                                                       # but staff still read 1.0, never the 1.1 nobody approved
+        travel.status = status                                                       # who still reads it reads 1.0, never the 1.1 nobody approved
         assert P.in_force_number(travel) is None and P.in_force_row(db, travel).id == 1, status
-        assert P.version_for(db, world.user(VIEWER), travel).id == 1 and P.can_read(db, world.user(VIEWER), travel), status
+        assert P.version_for(db, world.user(VIEWER), travel).id == 1, status
+        assert P.can_read(db, world.user(VIEWER), travel) is (status != "archived"), status   # archived: staff no longer read it
     travel.status = "draft"                                                          # revived: the old version does not come back in force
     assert P.in_force_number(travel) is None and P.in_force_row(db, travel).id == 1
     assert (travel.published_version, travel.last_published_version) == (None, "1.0")
@@ -284,7 +318,12 @@ def test_a_once_published_document_never_shows_staff_a_text_nobody_approved_and_
     travel.status = "archived"                                               # withdrawn: nothing in force
     db.commit()
     assert travel.published_version is None and P.in_force_number(travel) is None
-    assert IN_REVIEW in listed(world, VIEWER) and P.version_for(db, viewer, travel).version_number == "1.0"
+    assert IN_REVIEW not in listed(world, VIEWER) and not P.can_read(db, viewer, travel)     # archived: staff neither list nor open it
+    assert P.version_for(db, viewer, travel).version_number == "1.0"         # (who still opens it reads 1.0)
     travel.status = "draft"                                                  # revived: the old version does not come back in force
     db.commit()
     assert P.in_force_number(travel) is None and P.version_for(db, viewer, travel).version_number == "1.0"
+    assert IN_REVIEW not in listed(world, VIEWER) and not P.can_read(db, viewer, travel)     # nor is it shown to staff until published
+    travel.status = "published"
+    db.commit()
+    assert IN_REVIEW in listed(world, VIEWER) and P.can_read(db, viewer, travel)

@@ -346,6 +346,8 @@ def list_documents(
         visible = or_(GovernanceDocument.published_version.isnot(None), GovernanceDocument.status == "published", visible)
     if visible is not None:
         query = query.filter(visible)
+    if brief:                                   # a picker never offers an archived document (withdrawn: D29), to anyone
+        query = query.filter(or_(GovernanceDocument.status.is_(None), GovernanceDocument.status != "archived"))
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
@@ -651,7 +653,6 @@ def get_document_hierarchy(
     if not user_tenants:
         return []
     
-    # ponytail: a document under a draft the person may not see is left out with it; lift it to the top if that ever matters
     visible = permissions.visible_filter(db, current_user)
     in_force = _in_force_for(db, current_user, visible is None)
     query = db.query(GovernanceDocument).options(
@@ -665,7 +666,11 @@ def get_document_hierarchy(
         query = query.filter(GovernanceDocument.tenant_id == tenant_id)
     
     if parent_id is None:
-        query = query.filter(GovernanceDocument.parent_document_id.is_(None))
+        top = GovernanceDocument.parent_document_id.is_(None)
+        if visible is not None:                 # a document under one the person may not see (a draft, an archived one): at the top
+            seen = select(GovernanceDocument.id).where(visible).correlate(None)
+            top = or_(top, GovernanceDocument.parent_document_id.notin_(seen))
+        query = query.filter(top)
     else:
         query = query.filter(GovernanceDocument.parent_document_id == parent_id)
     

@@ -11,18 +11,22 @@ may (the shared rule, ``auth_router.is_tenant_admin``). Signing, rejecting and a
 Who may read it (the user's decisions of 2026-10-17, "rights or asked"):
 
 * The library: administrators and anyone whose platform-given roles hold any ``governance:policies:*`` right, matched the way the
-  menu and the reports match it (wildcards). They read every document that has a version in force; a draft that was never
-  published only if they may also edit or publish documents, or they are asked about it (below).
+  menu and the reports match it (wildcards). They read every document that has a version in force, or that expired or is under
+  an exception after one was (``staff_reads``); a draft that was never published, an archived document (archiving withdraws it:
+  D29) and one restored from the archive until it is published again only if they may also edit or publish documents, or they
+  are asked about it (below).
 * Its owner and its author.
-* Anyone asked about it: a request (review, approval, acknowledgement) that is not cancelled, or its sign-off naming them as
-  prepared by, reviewer or approver - by name, by a role the platform gave them, or by a team they belong to or lead.
+* Anyone asked about it: a request (review, approval, acknowledgement) still waiting, or one answered while staff read the
+  document or while it was never published (never once archived, nor restored until it is published again), or its sign-off
+  naming them as prepared by, reviewer or approver - by name, by a role the platform gave them, or by a team they belong to or lead.
 * Auditors (the right that opens the Auditor Portal, ``compliance:frameworks:*``) open single documents from the portal and the
   evidence screens; no library lists.
 * Everybody else is refused; lists show only what the person may read.
 
 While a new version of a published document is on its way, the version published stays in force: whoever may not change, publish
 or sign off the document reads that one (``version_for``), the others read the newest. Whatever the status, a once-published
-document never shows them a newer number than the one published last (also once archived, expired or flagged for review).
+document never shows them a newer number than the one published last (also once expired or flagged for review, and to those who
+still open it once archived).
 
 This module must not import ``routers/documents.py`` (documents -> permissions -> document_signoff -> documents would be a cycle);
 ``reporting_router`` is imported inside the functions that use it.
@@ -31,7 +35,7 @@ from typing import Iterable, Optional, Set, Tuple
 
 from fastapi import Depends, HTTPException, status
 from sqlalchemy import and_, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from ...models import (DocumentObligation, DocumentSignoffAssignment, GovernanceDocument, GovernanceDocumentVersion, GRCUser, Role,
                        Team, TeamMember, Tenant, UserRole, get_db)
@@ -52,6 +56,7 @@ ANNOTATE_REFUSED = ("Only the document's owner, its author, someone allowed to e
 SIGNOFF_KINDS = ("prepared_by", "reviewer", "approver")
 # a new version of a published document is on its way in these statuses; the version published stays in force meanwhile
 ON_ITS_WAY = ("draft", "pending_review", "pending_approval", "approved", "review_required")     # (a workflow flags it for review)
+LAPSED = ("expired", "exception_applied")       # withdrawn but not archived: library readers still read the version published last
 _DRAFT_RIGHTS = {"governance:policies:edit", "governance:policies:publish"}
 
 # An administrator, or a platform-given role that holds the permission (an admin ticks permissions on a role in
@@ -179,10 +184,21 @@ def participant(db: Session, user: GRCUser, doc_id: int, kinds: Iterable[str] = 
     return db.execute(_assigned(db, user, kinds).where(DocumentSignoffAssignment.document_id == doc_id).limit(1)).first() is not None
 
 
+def _staff_read(G):
+    """``staff_reads`` as a condition on G (the documents table or an alias of it)."""
+    return or_(G.status == "published", and_(G.status.in_(ON_ITS_WAY), G.published_version.isnot(None)),
+               and_(G.status.in_(LAPSED), or_(G.last_published_version.isnot(None), G.published_version.isnot(None))))
+
+
 def asked_ids(db: Session, user: GRCUser):
-    """A select of the ids of documents the person is asked about: a request that is not cancelled, or a sign-off naming them."""
-    O = DocumentObligation
-    return select(O.document_id).where(O.user_id == user.id, O.status != "cancelled").union(_assigned(db, user))
+    """A select of the ids of documents the person is asked about: a request still waiting, one answered (done, rejected) while
+    staff read the document or while it was never published (its reviews) - an acknowledgement given before opens no archived
+    document, nor one restored from the archive until it is published again - or a sign-off naming them."""
+    O, D = DocumentObligation, aliased(GovernanceDocument)      # an alias: never correlated with a query on the documents
+    answered = select(D.id).where(or_(_staff_read(D), and_(D.published_version.is_(None), D.last_published_version.is_(None),
+                                                           func.coalesce(D.status, "") != "archived")))
+    return select(O.document_id).where(O.user_id == user.id, or_(
+        O.status == "pending", and_(O.status != "cancelled", O.document_id.in_(answered)))).union(_assigned(db, user))
 
 
 def _own_or_asked(db: Session, user: GRCUser):
@@ -200,30 +216,36 @@ def readable_ids(db: Session, user: GRCUser):
 
 def visible_filter(db: Session, user: GRCUser):
     """For a list of documents: a condition on GovernanceDocument keeping what the person may read, or None when they read every
-    document (administrators, and whoever may edit or publish any document). A library reader sees the documents that were ever
-    published plus their own and those they are asked about; anyone else only the latter. Auditors get no lists."""
+    document (administrators, and whoever may edit or publish any document). A library reader sees the documents ``staff_reads``
+    plus their own and those they are asked about; anyone else only the latter. Auditors get no lists."""
     library, _auditor, drafts = _rights(db, user)
     if drafts:
         return None
     G = GovernanceDocument
     mine = _own_or_asked(db, user)
-    # published at some time, with a known version to serve (published_at alone cannot tell which text was approved)
-    published = or_(G.published_version.isnot(None), G.last_published_version.isnot(None), G.status == "published")
-    return or_(published, mine) if library else mine
+    # staff_reads: in force, or lapsed with a known version to serve (published_at alone cannot tell which text was approved)
+    return or_(_staff_read(G), mine) if library else mine
+
+
+def staff_reads(doc: GovernanceDocument) -> bool:
+    """A library reader who may not see drafts reads it: a version is in force (``in_force_number``), or it expired or is under an
+    exception after one was. Never an archived document (archiving withdraws it, D29), nor one restored from the archive until it
+    is published again (a draft with nothing in force)."""
+    return bool(in_force_number(doc) or (doc.status in LAPSED and published_last(doc)))
 
 
 def can_read(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
     if user.id in (doc.owner_id, doc.author_id):
         return True
     library, auditor, drafts = _rights(db, user)
-    if drafts or auditor or (library and (doc.status == "published" or published_last(doc))):
+    if drafts or auditor or (library and staff_reads(doc)):
         return True
     return db.execute(select(GovernanceDocument.id).where(GovernanceDocument.id == doc.id,
                                                           GovernanceDocument.id.in_(asked_ids(db, user)))).first() is not None
 
 
 def ensure_reader(db: Session, user: GRCUser, doc: GovernanceDocument) -> None:
-    if not can_read(db, user, doc):           # a library reader is refused only a draft never published
+    if not can_read(db, user, doc):           # a library reader is refused only what is not in force (a draft, an archived one)
         raise _forbidden(DRAFT_REFUSED if can_read_library(db, user) else READ_REFUSED)
 
 

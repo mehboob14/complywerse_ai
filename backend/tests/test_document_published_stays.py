@@ -383,7 +383,7 @@ def _signature():
     return "data:image/png;base64," + base64.b64encode(out.getvalue()).decode()
 
 
-@pytest.mark.parametrize("status", ["archived", "expired", "exception_applied", "review_required", "draft", "approved"])
+@pytest.mark.parametrize("status", ["expired", "exception_applied", "review_required", "draft", "approved"])   # archived: below
 def test_staff_read_the_version_published_last_whatever_the_status(world, status):
     d = doc(world, TEXT)
     d.status = status                                                      # withdrawn, flagged for review, rejected, approved
@@ -400,13 +400,95 @@ def test_staff_read_the_version_published_last_whatever_the_status(world, status
         assert r.status_code == 200, r.text
 
 
-def test_archiving_a_document_in_review_keeps_serving_staff_the_published_text(world):
+def ids(w, who, path):
+    return {i["id"] for i in get(w, who, path).json()["items"]}
+
+
+def test_an_archived_document_is_not_in_force_staff_neither_list_nor_open_it_and_its_editors_still_do(world):
     world.me["id"] = EDITOR
     assert world.http.post("/governance/documents/bulk-archive", json={"document_ids": [TEXT]}).status_code == 200
     d = doc(world, TEXT)
     assert (d.status, d.published_version, d.last_published_version) == ("archived", None, "1.0")
-    assert get(world, STAFF, f"/governance/documents/{TEXT}").json()["content"] == V10
-    assert "every quarter" not in world.http.get(f"/governance/documents/{TEXT}/view-html").json()["html"]
+    assert world.db.query(m.DocumentObligation).filter_by(document_id=TEXT, user_id=ACKER).one().status == "cancelled"
+    for who, detail in ((STAFF, P.DRAFT_REFUSED), (ACKER, P.READ_REFUSED)):     # the library right | asked to acknowledge, cancelled
+        for path in ("", "/view-html", "/change-chain", "/download-file"):
+            r = get(world, who, f"/governance/documents/{TEXT}{path}")
+            assert (r.status_code, r.json()["detail"]) == (403, detail), (who, path)
+        assert TEXT not in ids(world, who, "/governance/documents") | ids(world, who, "/governance/documents?status=archived"), who
+    assert TEXT not in {n["id"] for n in get(world, STAFF, "/governance/documents/hierarchy").json()}
+    for who, text in ((EDITOR, V11), (OWNER, V11), (ADMIN, V11), (REVIEWER, V11), (AUDITOR, V10)):   # never staff's 1.1 to an auditor
+        r = get(world, who, f"/governance/documents/{TEXT}")
+        assert (r.status_code, r.json()["content"], r.json()["status"]) == (200, text, "archived"), who
+    for who in (EDITOR, OWNER, ADMIN, REVIEWER):                           # the library's Archived list
+        assert TEXT in ids(world, who, "/governance/documents?status=archived"), who
+
+
+def test_a_document_under_an_archived_one_stays_in_the_staff_tree_at_the_top(world):
+    doc(world, WORD).parent_document_id = TEXT
+    world.db.commit()
+    world.me["id"] = EDITOR
+    assert world.http.post("/governance/documents/bulk-archive", json={"document_ids": [TEXT]}).status_code == 200
+    tree = {n["id"]: n for n in get(world, STAFF, "/governance/documents/hierarchy").json()}
+    assert sorted(tree) == [WORD] and tree[WORD]["children"] == []        # never the draft under the archived one (DRAFT)
+    tree = {n["id"]: n for n in get(world, EDITOR, "/governance/documents/hierarchy").json()}
+    assert sorted(tree) == [TEXT] and sorted(c["id"] for c in tree[TEXT]["children"]) == [DRAFT, WORD]   # the tree as it is
+
+
+def test_pickers_never_offer_an_archived_document(world):
+    doc(world, TEXT).status = "archived"
+    world.db.commit()
+    for who in (OUTSIDER, STAFF, EDITOR, OWNER, ADMIN):
+        offered = ids(world, who, "/governance/documents?brief=1")
+        assert TEXT not in offered and WORD in offered, who
+    assert TEXT in ids(world, EDITOR, "/governance/documents")              # the library still lists it for its editors
+
+
+def test_a_restored_document_stays_hidden_from_staff_until_it_is_published_again(world):
+    world.me["id"] = EDITOR
+    assert world.http.post("/governance/documents/bulk-archive", json={"document_ids": [TEXT]}).status_code == 200
+    assert world.http.post(f"/governance/documents/{TEXT}/restore").status_code == 200
+    d = doc(world, TEXT)
+    assert (d.status, d.published_version, d.last_published_version) == ("draft", None, "1.0")      # nothing in force
+    r = get(world, STAFF, f"/governance/documents/{TEXT}")
+    assert (r.status_code, r.json()["detail"]) == (403, P.DRAFT_REFUSED)
+    assert TEXT not in ids(world, STAFF, "/governance/documents") | ids(world, STAFF, "/governance/documents?brief=1")
+    assert get(world, EDITOR, f"/governance/documents/{TEXT}").json()["content"] == V11
+    world.me["id"] = ADMIN
+    assert world.http.put(f"/governance/documents/{TEXT}/status", json={"status": "published"}).status_code == 200
+    got = get(world, STAFF, f"/governance/documents/{TEXT}").json()
+    assert (got["content"], got["current_version"], got["status"]) == (V11, "1.1", "published")
+    assert TEXT in ids(world, STAFF, "/governance/documents") & ids(world, STAFF, "/governance/documents?brief=1")
+
+
+def test_an_acknowledgement_given_before_opens_neither_the_archived_document_nor_its_restored_draft(world):
+    world.db.query(m.DocumentObligation).filter_by(document_id=TEXT, user_id=ACKER).update({"status": "done"})
+    world.db.add(m.DocumentObligation(tenant_id=1, document_id=TEXT, kind="acknowledgement", user_id=STAFF, document_version="1.0", status="done"))
+    world.db.commit()
+    world.me["id"] = EDITOR
+    assert world.http.post("/governance/documents/bulk-archive", json={"document_ids": [TEXT]}).status_code == 200
+    for step in ("archived", "restored"):
+        if step == "restored":
+            world.me["id"] = EDITOR
+            assert world.http.post(f"/governance/documents/{TEXT}/restore").status_code == 200
+        for who, detail in ((STAFF, P.DRAFT_REFUSED), (ACKER, P.READ_REFUSED)):     # done acknowledgements survive both
+            r = get(world, who, f"/governance/documents/{TEXT}")
+            assert (r.status_code, r.json()["detail"]) == (403, detail), (step, who)
+            assert TEXT not in ids(world, who, "/governance/documents"), (step, who)
+    world.me["id"] = ADMIN
+    assert world.http.put(f"/governance/documents/{TEXT}/status", json={"status": "published"}).status_code == 200
+    for who in (STAFF, ACKER):                                             # in force again: what they acknowledged opens again
+        assert get(world, who, f"/governance/documents/{TEXT}").json()["content"] == V11, who
+        assert TEXT in ids(world, who, "/governance/documents"), who
+
+
+def test_the_dashboard_summary_counts_only_the_documents_the_person_may_read(world):
+    def summary(who):
+        return get(world, who, "/governance/dashboard/summary").json()
+    assert (summary(STAFF)["total_documents"], summary(EDITOR)["total_documents"]) == (2, 3)    # never the draft never published
+    doc(world, TEXT).status = "archived"
+    world.db.commit()
+    assert summary(STAFF)["by_status"] == {"pending_review": 1}
+    assert summary(EDITOR)["by_status"] == {"archived": 1, "draft": 1, "pending_review": 1}
 
 
 def test_drafting_from_a_parent_needs_reading_it_and_drafts_from_the_text_the_person_reads(world, monkeypatch):
