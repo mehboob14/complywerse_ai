@@ -173,8 +173,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const selectNode = (id: number | null) => { setSelectedNodeId(id); if (id != null) setLibrary('all'); };
 
   const runBulk = async (fn: () => Promise<unknown>, ok: string) => {
-    try { await fn(); toast({ title: ok, type: 'success' }); refreshAll(); }
-    catch { toast({ title: 'Action failed', message: 'The backend endpoint may not be available yet.', type: 'error' }); }
+    try { await fn(); toast({ title: ok, type: 'success' }); }
+    catch (e) { toast({ title: 'Action failed', message: problemOf(e), type: 'error' }); }     // the server's reason (e.g. archived)
+    finally { refreshAll(); }                                                                  // a bulk Restore may have restored some
   };
   const onBulkApprove = (ids: number[]) => runBulk(() => bulkUpdateStatus(ids, 'approved'), `${ids.length} approved`);
   const onBulkPublish = (ids: number[]) => runBulk(() => bulkPublish(ids), `Publish requested for ${ids.length}`);

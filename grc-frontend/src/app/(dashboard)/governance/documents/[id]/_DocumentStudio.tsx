@@ -440,7 +440,7 @@ export default function DocumentStudio() {
             <>
               {/* the person's own step is asked in the bar's popups, with the version shown */}
               <LifecycleTab documentId={id} doc={doc} canEdit={canEdit} canAnnotate={canAnnotate} settings={false} ownSteps={false} />
-              <ReviewHistory documentId={id} doc={doc} canEdit={canEdit} />
+              <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
             </>
           ) : (
             <>
@@ -452,7 +452,7 @@ export default function DocumentStudio() {
                   <DocumentAnnotationPanel documentId={id} />
                 </section>
               )}
-              <ReviewHistory documentId={id} doc={doc} canEdit={canEdit} />
+              <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
             </>
           )
         )}

@@ -1402,6 +1402,7 @@ def start_review(
     ).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    permissions.ensure_not_archived(document)          # a periodic review moves its review dates: restored first
     
     review_type = request_body.review_type if request_body else "periodic"
     
@@ -1444,6 +1445,7 @@ def complete_review(
     ).first()
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
+    permissions.ensure_not_archived(document)          # recording a review sets its next review date: restored first
     
     review = db.query(PolicyReviewHistory).filter(
         PolicyReviewHistory.document_id == document_id,

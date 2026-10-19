@@ -65,11 +65,17 @@ def test_every_route_that_changes_a_document_refuses_an_archived_one(archived):
         ("put", "/governance/gap-analysis/findings/1/override", {"json": {"override_status": "not_addressed", "override_justification": "undo"}}),
         ("post", "/governance/studio/documents/5/draft", {"json": {}}),
         ("post", "/governance/documents/5/signoff/send-for-review", {}),             # not out of the archive into review
+        ("post", "/governance/workflows/documents/5/start", {"json": {}}),           # nor by the older approval requests
+        ("post", "/governance/documents/5/start-workflow", {"json": {}}),
+        ("post", "/governance/documents/5/start-review", {"json": {}}),              # a periodic review moves its review dates
+        ("post", "/governance/documents/5/complete-review", {"json": {}}),
     ]:
         r = getattr(w.http, method)(path, **kw)
         assert (r.status_code, r.json().get("detail")) == LOCKED, (path, r.text)
     _same(w, before)
     assert w.db.get(m.PolicyGapFinding, 1).applied_at is not None             # the fix was not taken back either
+    assert w.db.query(m.PolicyReviewHistory).filter_by(document_id=5).count() == 0
+    assert w.db.query(m.DocumentWorkflowInstance).filter_by(document_id=5).count() == 0
 
 
 def test_bulk_changes_refuse_archived_documents_naming_them(archived):
