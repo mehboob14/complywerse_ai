@@ -597,6 +597,14 @@ def _upsert_user_from_claims(
     return new_user
 
 
+def _imported_by_email(tenant_db: Session, claims: Dict[str, Any]) -> bool:
+    """The sign-in was refused because its email names an account an access-review connector imported (never adopted
+    automatically): the login page then says an administrator can create the user (admin create_user adopts the account)."""
+    email = (claims.get("email") or claims.get("preferred_username") or "").lower().strip()
+    user = tenant_db.query(GRCUser).filter(GRCUser.email == email).first() if email else None
+    return user is not None and not is_platform_account(tenant_db, user)
+
+
 # ---------------------------------------------------------------------------
 # Config CRUD (admin)
 # ---------------------------------------------------------------------------
@@ -1175,7 +1183,8 @@ def sso_callback(
 
             user = _upsert_user_from_claims(tenant_db=tenant_db, claims=claims, config=cfg)
             if not user:
-                return _login_redirect(request, "sso_not_provisioned", target_tenant_slug)
+                refused = "sso_imported_account" if _imported_by_email(tenant_db, claims) else "sso_not_provisioned"
+                return _login_redirect(request, refused, target_tenant_slug)
 
             tenant_row = tenant_db.query(Tenant).first()
             try:

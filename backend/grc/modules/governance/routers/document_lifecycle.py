@@ -110,11 +110,13 @@ def _tenant_id(db: Session, user: GRCUser) -> int:
 
 
 def _settings_answer(db: Session, user: GRCUser, tenant_id: int, saved=None) -> dict:
-    """The settings, the defaults (for Reset), whether the person may change them, and the roles escalation can go to."""
+    """The settings, the defaults (for Reset), whether the person may change them, and the roles escalation can go to (not one a
+    connector made, whose members are not users of this platform: document_signoff.signoff_roles)."""
     from ....models import Role
+    from .document_signoff import signoff_roles
 
     can_edit = has_tenant_permission(db, user, SETTINGS_RIGHT)
-    roles = [{"id": r.id, "name": r.name} for r in db.query(Role).filter(Role.tenant_id == tenant_id).order_by(Role.name, Role.id)] if can_edit else []
+    roles = [{"id": r["id"], "name": r["name"]} for r in signoff_roles(db, [tenant_id])] if can_edit else []
     current = saved or doc_lifecycle.settings(db, tenant_id)
     chosen = db.get(Role, current["escalate_role_id"]) if current["escalate_role_id"] else None
     return {"enabled": True, "settings": current, "can_edit": can_edit, "defaults": doc_lifecycle.resolved({}), "roles": roles,

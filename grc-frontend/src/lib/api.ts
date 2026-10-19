@@ -366,6 +366,9 @@ export const governanceApi = {
     apiClient.post(`/governance/documents/${documentId}/signoff/reject`, data),
   getMySignoffPending: () =>
     apiClient.get('/governance/documents/signoff/my-pending'),
+  /** who can review or approve a document: people, roles (not connector-made) and teams; anyone signed in may ask */
+  getSignoffTargets: () =>
+    apiClient.get<import('./signoffTargets').SignoffTargets>('/governance/documents/signoff/targets'),
   getPendingApprovals: (params?: { include_delegated?: boolean; skip?: number; limit?: number }) =>
     apiClient.get('/governance/workflows/pending', { params }),
   getWorkflowDashboard: () => apiClient.get('/governance/workflows/dashboard'),

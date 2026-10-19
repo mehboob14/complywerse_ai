@@ -26,7 +26,7 @@ export const titleCase = (s: string) => s.replace(/_/g, ' ').replace(/^\w/, (c) 
 export const withCurrent = <T extends string | number>(opts: [T, string][], value: T | null | '', label: (v: T) => string): [T, string][] =>
   value === null || value === '' || opts.some(([v]) => v === value) ? opts : [...opts, [value as T, label(value as T)]];
 
-/** The organisation's people (same key and shape as useAssigneeOptions in ./_SignoffControl, users only). */
+/** The organisation's people, for the owner pickers (the sign-off pickers read /signoff/targets: useAssigneeOptions in ./_SignoffControl). */
 export function useOrgUsers(tenantId?: number, enabled = true) {
   return useQuery({
     queryKey: ['signoff-users', tenantId],

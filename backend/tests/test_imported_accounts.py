@@ -440,3 +440,214 @@ def test_evidence_approval_tiers_and_workflows_from_a_template_name_platform_use
 
 def test_an_id_that_is_not_a_number_is_not_an_id():
     assert auth.imported_account_problem(None, ["", "Lena", "²", None, 0]) is None     # a label in a free-form body: nothing to ask
+
+
+# -- follow-ups found in testing (2026-10-19) -------------------------------------------------------------------------------------
+def _png():
+    from test_esignature import _png as png
+
+    return png()
+
+
+def _signed(db, doc_id, uid, role_type="reviewer"):
+    """``uid`` signed ``doc_id`` this round (after its round began)."""
+    db.add(m.DocumentSignature(tenant_id=1, document_id=doc_id, signer_user_id=uid, role_type=role_type, role_label="Reviewed by",
+                               decision="signed", signature_text="x", signed_at=datetime.utcnow()))
+
+
+def _status_rows(db, doc_id):
+    return [(r.old_value, r.new_value, r.action_details)
+            for r in db.query(m.DocumentAuditLog).filter_by(document_id=doc_id, action="status_changed").order_by(m.DocumentAuditLog.id)]
+
+
+def test_the_one_off_fix_ends_a_review_everyone_left_has_signed_and_asks_the_approver(w):
+    db = w.db
+    _signers(db, 10, "pending_review", reviewers=[ARIF, LOCAL], approvers=[AUTHOR])
+    db.flush()
+    _signed(db, 10, LOCAL)                                                          # the only one who can sign has signed
+    db.commit()
+
+    fixing = sessionmaker(bind=w.engine, autoflush=False)()                         # as tenant sessions are (PITFALLS 74)
+    out = imported_owners.run(fixing)
+    fixing.commit()
+    fixing.close()
+    db.expire_all()
+    assert (out["signers"], out["stages"]) == (1, 1)
+    doc = db.get(m.GovernanceDocument, 10)
+    assert doc.status == "pending_approval"
+    assert _status_rows(db, 10) == [("pending_review", "pending_approval",
+                                     "Everyone left to review it has signed, so it goes to its approvers")]
+    asked = db.query(m.DocumentObligation).filter_by(document_id=10, status="pending").all()
+    assert [(o.kind, o.user_id) for o in asked] == [("approval", AUTHOR)] and asked[0].critical_task_id
+    from grc.modules.governance.routers.document_signoff import _user_actionable_role
+
+    assert _user_actionable_role(db, [1], doc, AUTHOR, []) == "approver"
+
+
+def test_removing_a_reviewer_who_had_not_signed_ends_the_review_when_the_others_signed(w):
+    http, db, me = w.http, w.db, w.me
+    _signers(db, 11, "draft", reviewers=[LOCAL, AUTHOR], approvers=[CONTACT])
+    db.commit()
+    assert http.post("/governance/documents/11/signoff/send-for-review").json()["status"] == "pending_review"
+    me["id"] = LOCAL
+    assert http.post("/governance/documents/11/signoff/sign", json={"signature_image": _png()}).json()["status"] == "pending_review"
+    me["id"] = CONTACT
+
+    def participants(reviewers):
+        return http.put("/governance/documents/11/signoff/participants", json={
+            "reviewers": [{"target_type": "user", "target_id": u} for u in reviewers],
+            "approvers": [{"target_type": "user", "target_id": CONTACT}]})
+
+    def waiting():
+        db.expire_all()
+        return sorted((o.kind, o.user_id) for o in db.query(m.DocumentObligation).filter_by(document_id=11, status="pending"))
+
+    r = participants([LOCAL, AUTHOR, ADOPTED])                                     # someone added: the one who signed is not asked again
+    assert r.status_code == 200 and r.json()["status"] == "pending_review"
+    assert waiting() == [("review", AUTHOR), ("review", ADOPTED)]
+    r = participants([LOCAL])                                                       # only the one who signed is left
+    assert r.status_code == 200 and r.json()["status"] == "pending_approval"
+    assert r.json()["my_actionable_role"] == "approver"                            # the approver (CONTACT) can sign now
+    assert waiting() == [("approval", CONTACT)]
+    assert _status_rows(db, 11)[-1] == ("pending_review", "pending_approval",
+                                        "Everyone left to review it has signed, so it goes to its approvers")
+
+
+def test_an_entra_account_the_directory_sync_stamped_keeps_its_documents_and_requests(w):
+    db = w.db
+    db.get(m.GovernanceDocument, 5).owner_id = DIRECTORY                           # staff of the organisation's own directory
+    _signers(db, 12, "pending_review", reviewers=[DIRECTORY])
+    db.flush()
+    life._request(db, db.get(m.GovernanceDocument, 12), "review", [DIRECTORY], CONTACT, 7)
+    db.commit()
+    out = imported_owners.run(db)
+    db.commit()
+    db.expire_all()
+    assert db.get(m.GovernanceDocument, 5).owner_id == DIRECTORY                  # kept
+    assert db.get(m.GovernanceDocument, 3).owner_id == AUTHOR                     # the DigitalOcean account's is replaced
+    assert db.query(m.DocumentObligation).filter_by(document_id=12, user_id=DIRECTORY).one().status == "pending"
+    assert db.query(m.DocumentSignoffAssignment).filter_by(document_id=12, target_id=DIRECTORY).count() == 1
+    assert db.get(m.GovernanceDocument, 12).status == "pending_review"
+    assert out["owners"] == 2
+
+
+def test_a_second_process_running_the_fix_at_the_same_moment_does_nothing(w):
+    db = w.db
+    second = w.factory()
+    stale = second.query(m.Tenant).first()                                          # it read the organisation before the marks
+    assert not (stale.settings or {}).get(imported_owners.MARK)
+    assert imported_owners.run(db)["owners"] == 2
+    db.commit()
+    marks = dict(db.get(m.Tenant, 1).settings)
+    rows = db.query(m.DocumentAuditLog).count()
+    assert imported_owners.run(second) == {"owners": 0, "prepared_by": 0, "requests": 0, "signers": 0, "stages": 0}
+    second.commit()
+    second.close()
+    db.expire_all()
+    assert db.get(m.Tenant, 1).settings == marks                                   # the marks the first one wrote stand
+    assert db.query(m.DocumentAuditLog).count() == rows
+
+
+def test_a_task_already_assigned_to_an_imported_account_can_still_be_edited(w):
+    from fastapi import BackgroundTasks
+
+    tasks = importlib.import_module("grc.routers.critical_tasks_router")
+    db, me = w.db, w.user(CONTACT)
+    db.add(m.CriticalTask(id=60, tenant_id=1, title="Rotate keys", status="Open", priority="High", assigned_owner_id=ARIF,
+                          assigned_user_ids=[ARIF], reviewer_id=ARIF, created_by_id=CONTACT))
+    db.add(m.CriticalTaskSubTask(id=61, task_id=60, title="Rotate the DO key", assigned_owner_id=ARIF))
+    db.commit()
+    form = {"title": "Rotate the keys", "assigned_owner_id": ARIF, "assigned_user_ids": [ARIF], "reviewer_id": ARIF}   # as the form sends it
+    assert tasks.update_task(task_id=60, payload=tasks.TaskUpdate(**form), background_tasks=BackgroundTasks(), db=db,
+                             current_user=me)["title"] == "Rotate the keys"
+    assert tasks.update_sub_task(task_id=60, sub_task_id=61, payload=tasks.SubTaskUpdate(title="Rotate it", assigned_owner_id=ARIF),
+                                 db=db, current_user=me)["title"] == "Rotate it"
+    _refused_named(lambda: tasks.update_task(task_id=60, payload=tasks.TaskUpdate(assigned_user_ids=[ARIF, OUTSIDER]),
+                                             background_tasks=BackgroundTasks(), db=db, current_user=me), "Otto Okta")
+    _refused_named(lambda: tasks.update_sub_task(task_id=60, sub_task_id=61, payload=tasks.SubTaskUpdate(assigned_owner_id=OUTSIDER),
+                                                 db=db, current_user=me), "Otto Okta")
+
+
+def _refused_named(call, name):
+    with pytest.raises(HTTPException) as e:
+        call()
+    assert e.value.status_code == 400 and e.value.detail.startswith(f"{name} is an account an access review imported")
+
+
+def _create_user(w, monkeypatch, **body):
+    admin = importlib.import_module("grc.routers.admin_router")
+    monkeypatch.setattr(admin, "get_tenant_from_request", lambda request, token, db: w.db.get(m.Tenant, 1))
+    data = admin.UserCreate.model_construct(**{"username": "otto.k", "email": "otto@cfsb.test", "password": "Adopted!Passw0rd-2026",
+                                               "display_name": "Otto Khan", "role_ids": [APPROVERS], **body})   # (EmailStr refuses .test)
+    return admin.create_user(data=data, user=w.user(CONTACT), tenant_db=w.db, request=None, db=w.db)
+
+
+def test_an_administrator_turns_an_imported_person_into_a_platform_user_by_creating_them(w, monkeypatch):
+    db, http = w.db, w.http
+    assert _login(w, monkeypatch, "otto@cfsb.test", "pw-otto").status_code == 403   # the directory import: refused until then
+    assert sso._imported_by_email(db, {"email": "OTTO@cfsb.test"}) is True        # SSO says an administrator can create the user
+    assert sso._imported_by_email(db, {"email": "lena@cfsb.test"}) is False
+    with pytest.raises(HTTPException) as e:                                         # without a role it would stay an imported account
+        _create_user(w, monkeypatch, role_ids=[])
+    assert e.value.status_code == 400 and "choose at least one role" in e.value.detail
+
+    out = _create_user(w, monkeypatch)
+    assert out["adopted"] is True and out["message"] == "An account from Access Reviews was turned into a platform user"
+    db.expire_all()
+    otto = w.user(OUTSIDER)
+    assert out["user"]["id"] == OUTSIDER and (otto.username, otto.display_name) == ("otto.k", "Otto Khan")
+    assert (otto.external_provider, otto.external_id) == ("okta", "okta:7")      # Access Reviews still match it
+    assert is_platform_account(db, otto) and not sso._imported_by_email(db, {"email": "otto@cfsb.test"})
+    link = db.query(m.UserRole).filter_by(user_id=OUTSIDER, role_id=APPROVERS).one()
+    assert (link.source, link.assigned_by) == (None, CONTACT)
+    why = db.query(m.AuditLog).filter_by(resource_type="users", resource_id=OUTSIDER).one()
+    assert why.user_id == CONTACT
+    assert _login(w, monkeypatch, "otto.k", "Adopted!Passw0rd-2026").status_code == 200
+    assert http.put("/governance/documents/5", json={"owner_id": OUTSIDER}).status_code == 200     # documents can be given to them
+
+
+def test_creating_a_user_still_refuses_a_name_another_account_has(w, monkeypatch):
+    with pytest.raises(HTTPException) as e:
+        _create_user(w, monkeypatch, username="lena")                              # a platform user's username
+    assert e.value.detail == "Username or email already exists"
+    with pytest.raises(HTTPException) as e:
+        _create_user(w, monkeypatch, username="arif", email="new@cfsb.test")       # an imported account's username, another email
+    assert "access review imported an account" in e.value.detail
+
+
+def test_pickers_offer_platform_people_by_name_and_roles_and_teams_counting_them_only(w):
+    w.me["id"] = LOCAL                                                              # not an administrator
+    r = w.http.get("/governance/documents/signoff/targets")
+    assert r.status_code == 200
+    body = r.json()
+    assert [u["name"] for u in body["users"]] == ["Ada Adopted", "Anna Author", "Cfsb Admin", "Lena Local", "Sia Sso"]
+    assert [(x["name"], x["user_count"]) for x in body["roles"]] == [("Administrator", 1), ("Approvers", 2)]   # not the DigitalOcean team
+    assert [(x["name"], x["member_count"]) for x in body["teams"]] == [("Security", 1)]       # its imported lead and member left out
+    from grc.modules.governance.routers.document_lifecycle import _settings_answer
+
+    assert [x["name"] for x in _settings_answer(w.db, w.user(CONTACT), 1)["roles"]] == ["Administrator", "Approvers"]   # "Escalate to"
+
+
+def test_a_stage_nobody_can_sign_goes_on_and_send_for_review_says_why(w):
+    http, db = w.http, w.db
+    db.add(m.GovernanceDocument(id=13, tenant_id=1, title="Policy 13", doc_type="policy", status="draft", current_version="1.0",
+                                content="# P\n", owner_id=LOCAL, author_id=LOCAL))
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=13, role_type="approver", target_type="role", target_id=DO_ROLE))
+    db.commit()
+    r = http.post("/governance/documents/13/signoff/send-for-review")
+    assert r.status_code == 200 and r.json()["status"] == "draft"                  # nobody in that role can approve it
+    assert r.json()["notice"] == ("Nobody in DigitalOcean: team My Team can sign it; choose other approvers. None of its reviewers or "
+                                  "approvers can sign it, so it is a draft again: choose others and send it for review.")
+    assert _status_rows(db, 13)[-1][1:] == ("draft", "None of its reviewers or approvers can sign it, so it is a draft again: "
+                                                     "choose others and send it for review")
+    assert not db.query(m.DocumentObligation).filter_by(document_id=13).count()
+
+    db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=13, role_type="reviewer", target_type="user", target_id=LOCAL))
+    db.commit()
+    r = http.post("/governance/documents/13/signoff/send-for-review")
+    assert r.json()["status"] == "pending_review" and r.json()["notice"].startswith("Nobody in DigitalOcean: team My Team can sign it")
+    w.me["id"] = LOCAL
+    signed = http.post("/governance/documents/13/signoff/sign", json={"signature_image": _png()}).json()
+    assert signed["status"] == "approved"                                           # as with no approvers
+    w.me["id"] = CONTACT
+    assert http.post("/governance/documents/5/signoff/send-for-review").status_code == 400   # nobody chosen at all: as before
