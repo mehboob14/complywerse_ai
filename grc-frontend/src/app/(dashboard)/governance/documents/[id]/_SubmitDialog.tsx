@@ -59,7 +59,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
       const said = sentToast(sent, reviewers.length ? 'Reviewers were asked' : 'Approvers were asked');
       toast({ ...said, title: said.title === 'Sent' ? 'Sent for review' : said.title });
       refresh();
-      onClose();
+      if (said.title !== 'Not sent') onClose();          // still a draft: it stays open to choose others
     },
     onError: (e: any) => {
       if (e?.participantsSaved) refresh();

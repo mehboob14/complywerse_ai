@@ -518,6 +518,10 @@ def sign_document(
         + f" · e-signature {esig.image_sha256[:12]}, seal {esig.seal[:12]}"
         + (f" → {advanced_to}" if advanced_to else ""),
     )
+    if advanced_to == "approved" and role_type == "reviewer" and any(a.role_type == "approver" for a in _assignments(db, document_id)):
+        create_audit_log(db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id, action="status_changed",
+                         field_changed="status", old_value="pending_review", new_value="approved",
+                         action_details="None of its approvers can sign it, so it is approved after its review")
     db.flush()
     doc_lifecycle.on_signed(db, doc, current_user.id, role_type, signature.id, esig.id, advanced_to)
     db.commit()

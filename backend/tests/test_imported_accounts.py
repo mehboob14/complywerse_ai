@@ -606,6 +606,18 @@ def test_an_administrator_turns_an_imported_person_into_a_platform_user_by_creat
     assert http.put("/governance/documents/5", json={"owner_id": OUTSIDER}).status_code == 200     # documents can be given to them
 
 
+def test_adopting_an_imported_person_gives_only_the_roles_ticked(w, monkeypatch):
+    db = w.db
+    db.add(m.UserRole(user_id=OUTSIDER, role_id=ADMIN_ROLE, tenant_id=1))           # an older link nobody gave (no source)
+    db.add(m.UserRole(user_id=OUTSIDER, role_id=DO_ROLE, tenant_id=1, source="okta"))  # the connector's own
+    db.commit()
+    _create_user(w, monkeypatch)                                                    # Approvers ticked
+    db.expire_all()
+    otto = w.user(OUTSIDER)
+    assert not auth.is_tenant_admin(db, otto)                                       # not an Administrator nobody chose
+    assert {(l.role_id, l.source) for l in db.query(m.UserRole).filter_by(user_id=OUTSIDER)} == {(APPROVERS, None), (DO_ROLE, "okta")}
+
+
 def test_creating_a_user_still_refuses_a_name_another_account_has(w, monkeypatch):
     with pytest.raises(HTTPException) as e:
         _create_user(w, monkeypatch, username="lena")                              # a platform user's username
@@ -649,5 +661,6 @@ def test_a_stage_nobody_can_sign_goes_on_and_send_for_review_says_why(w):
     w.me["id"] = LOCAL
     signed = http.post("/governance/documents/13/signoff/sign", json={"signature_image": _png()}).json()
     assert signed["status"] == "approved"                                           # as with no approvers
+    assert _status_rows(db, 13)[-1] == ("pending_review", "approved", "None of its approvers can sign it, so it is approved after its review")
     w.me["id"] = CONTACT
     assert http.post("/governance/documents/5/signoff/send-for-review").status_code == 400   # nobody chosen at all: as before

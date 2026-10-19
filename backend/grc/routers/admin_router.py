@@ -798,12 +798,17 @@ def _adopt_imported_account(tenant_db: Session, account: TenantUser, data: UserC
     if not roles:
         raise HTTPException(status_code=400, detail="An access review imported an account with this email. To make it a user of "
                                                     "this platform, choose at least one role for it.")
+    held = tenant_db.query(Role.name).join(UserRole, UserRole.role_id == Role.id).filter(UserRole.user_id == account.id, PLATFORM_GRANT)
     before = {"username": account.username, "display_name": account.display_name, "is_active": account.is_active,
-              "external_provider": account.external_provider}
+              "external_provider": account.external_provider, "roles": sorted({n for (n,) in held})}
     account.username = data.username
     account.password_hash = hash_password(data.password)
     account.display_name = data.display_name or data.username
     account.is_active = True
+    # the ticked roles are the ones it holds, as update_user keeps them: an older link nobody gave (a connector's from before
+    # links carried their source) would otherwise grant a role the administrator did not choose, Administrator included
+    tenant_db.query(UserRole).filter(UserRole.user_id == account.id, PLATFORM_GRANT,
+                                     ~UserRole.role_id.in_([r.id for r in roles])).delete(synchronize_session=False)
     for role in roles:
         link = tenant_db.query(UserRole).filter(UserRole.user_id == account.id, UserRole.role_id == role.id,
                                                 UserRole.source.is_(None)).first()
