@@ -9,8 +9,9 @@ import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import WordView from '@/components/governance/WordView';
 import { problemOfBlob, studioApi, type Session } from '@/lib/studio/api';
+import { fileNote } from './viewSwitch';
 
-export default function FileView({ session }: { session: Session }) {
+export default function FileView({ session, maySave }: { session: Session; maySave: boolean }) {
   const word = !!session.source?.in_place;
   const [file, setFile] = useState<Blob | null>(null);
   const [pdfUrl, setPdfUrl] = useState<string | null>(null);
@@ -34,9 +35,7 @@ export default function FileView({ session }: { session: Session }) {
   return (
     <div className="flex h-full min-h-0 flex-col bg-[#e8ecf0]">
       <p className="shrink-0 border-b border-[#d5dbe1] bg-white px-3 py-1.5 text-xs text-[#3f4b58]">
-        {word
-          ? 'Your Word file with your changes written in, as Word lays it out. Make changes in Edit; this follows what you save.'
-          : 'The PDF as it was uploaded. A PDF cannot be edited: you change its text in Edit, and saving makes a Word copy of it.'}
+        {fileNote(session.source, maySave)}
       </p>
       <div className="min-h-0 flex-1 overflow-y-auto p-3">
         {error ? (

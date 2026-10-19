@@ -11,6 +11,7 @@ import { ArrowLeft, Loader2, Sparkles } from 'lucide-react';
 import type { ChainHunk } from '@/lib/documentChain';
 import { problemOf, studioApi, type Message, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { maySaveToLibrary } from '@/lib/studio/text';
 import RedlineView, { StatsLine, type Focus } from './RedlineView';
 
 export type CompareSpec =
@@ -70,7 +71,7 @@ export default function ChangesView({ session, spec, aiConfigured, onClose, flus
       qc.invalidateQueries({ queryKey: ['studio', 'revisions', session.id] });
       qc.invalidateQueries({ queryKey: ['studio', 'messages', session.id] });          // the cards of the changes that were taken back
       toast({ title: 'Change taken back', type: 'success',
-              message: session.document_id && session.may_save !== false ? 'Taken back in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
+              message: session.document_id && maySaveToLibrary(session) ? 'Taken back in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
     },
     onError: (e) => {
       qc.invalidateQueries({ queryKey: ['studio', 'changes', session.id] });

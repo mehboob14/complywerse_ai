@@ -7,7 +7,7 @@ import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2 } from 'l
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioApi, type ExportNote, type ExportOptions, type MoveToLibrary, type Session } from '@/lib/studio/api';
-import { saveWarning, savedNote } from '@/lib/studio/text';
+import { ARCHIVED_NOTE, maySaveToLibrary, saveWarning, savedNote } from '@/lib/studio/text';
 import AssetImage from './AssetImage';
 import { DocumentDetailsFields, useDocumentDetails } from '../../_DetailsFields';
 import { NO_SIGNOFF, ReviewerApproverFields, saveSignoffChoice, type SignoffChoice } from '../../_SignoffControl';
@@ -172,26 +172,29 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
 }
 
 // ── save into the library document ───────────────────────────────────────────
-export function SaveToDocumentDialog({ session, onClose, flush, onDone }: { session: Session; onClose: () => void; flush: () => Promise<void>; onDone: () => void }) {
+export function SaveToDocumentDialog({ session, onClose, flush, onDone, onConflict }: { session: Session; onClose: () => void; flush: () => Promise<void>; onDone: () => void; onConflict?: () => void }) {
   const { toast } = useToast();
   const [reason, setReason] = useState('');
   const [conflict, setConflict] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: async (force: boolean) => { await flush(); return studioApi.saveToDocument(session.id, { change_reason: reason || undefined, force }); },
     onSuccess: (r) => { toast({ ...savedNote(r, session.document_status), type: 'success' }); onDone(); },
-    onError: (e) => { if (isConflict(e)) setConflict(problemOf(e)); else toast({ title: 'Could not save', message: problemOf(e), type: 'error' }); },
+    // a refusal may be the document archived while this was open: the session is read again, so no "Save anyway" is offered then
+    onError: (e) => { if (isConflict(e)) { setConflict(problemOf(e)); onConflict?.(); } else toast({ title: 'Could not save', message: problemOf(e), type: 'error' }); },
   });
   // the version everyone else reads until this one is published (GET /studio/sessions/{id}: document_version_in_force)
   const warning = saveWarning(session.document_status, session.document_version_in_force);
+  // archived since the studio was opened (the session is read again when this opens): nothing is saved, nor offered
+  const archived = session.document_status === 'archived';
   return (
     <AnimatedModal isOpen onClose={onClose} title="Save to the library" subtitle={`${session.title} — saved as its next version`} size="md"
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
-        <button type="button" className={primary} disabled={save.isPending} onClick={() => save.mutate(!!conflict)}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {conflict ? 'Save anyway' : 'Save as a new version'}</button></div>}>
-      <div className="space-y-3 p-5">
+        {!archived && <button type="button" className={primary} disabled={save.isPending} onClick={() => save.mutate(!!conflict)}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {conflict ? 'Save anyway' : 'Save as a new version'}</button>}</div>}>
+      {archived ? <p className="p-5 text-sm text-[#26323d]" role="status">{ARCHIVED_NOTE}</p> : <div className="space-y-3 p-5">
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">What changed (optional)</span><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Updated the password rules to match the new standard" className={`${input} mt-1`} /></label>
         {warning && <p className="flex gap-1.5 rounded-lg bg-[#fffbed] px-2.5 py-2 text-xs text-[#6b4e00]"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> {warning}</p>}
         {conflict && <p className="rounded-lg border border-[#f0cf7a] bg-[#fffbed] p-3 text-sm text-[#6b4e00]" role="alert">{conflict}</p>}
-      </div>
+      </div>}
     </AnimatedModal>
   );
 }
@@ -226,7 +229,7 @@ function LibraryDetails({ session, onClose, onChanged }: { session: Session; onC
       </AnimatedModal>
     );
   }
-  return <DetailsDialog doc={docQ.data} open onClose={onClose} canEdit={session.may_save !== false} onSaved={(p) => void follow(p)} />;
+  return <DetailsDialog doc={docQ.data} open onClose={onClose} canEdit={maySaveToLibrary(session)} onSaved={(p) => void follow(p)} />;
 }
 
 function DraftDetails({ session, onClose, onChanged }: { session: Session; onClose: () => void; onChanged: (patch: Partial<Session>) => void }) {

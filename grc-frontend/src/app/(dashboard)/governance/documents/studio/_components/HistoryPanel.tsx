@@ -8,10 +8,12 @@
 import { useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Bot, FileUp, GitCompare, History, Loader2, Pencil, RotateCcw, Search, Undo2, Upload, User } from 'lucide-react';
-import { problemOf, studioApi, type Revision, type Session } from '@/lib/studio/api';
+import { DOC_TYPE_LABEL, problemOf, studioApi, type Revision, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { ago, plural } from '@/lib/studio/text';
 import type { CompareSpec } from './ChangesView';
+import { SIGNOFF_STATUS } from '../../_SignoffControl';
+import { docLine } from './homeLists';
 
 const AUTHOR: Record<Revision['author_type'], { label: string; icon: typeof Bot }> = {
   user: { label: 'You', icon: Pencil },
@@ -92,7 +94,7 @@ export default function HistoryPanel({ session, flush, onCompare, onContent, onS
           {docs.data?.items.filter((d) => d.id !== session.document_id && (d.has_text || d.has_file)).map((d) => (
             <li key={d.id}>
               <button type="button" onClick={() => onCompare({ type: 'document', id: d.id, title: d.title })} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
-                <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#1f2933]">{d.title}</span><span className="block text-[11px] text-[#586472]">{[d.code, d.doc_type, `v${d.version}`].filter(Boolean).join(' · ')}</span></span>
+                <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#1f2933]">{d.title}</span><span className="block text-[11px] text-[#586472]">{docLine(d, DOC_TYPE_LABEL, SIGNOFF_STATUS)}</span></span>
                 <GitCompare className="h-4 w-4 text-[#0f766e]" />
               </button>
             </li>

@@ -371,9 +371,14 @@ export default function StudioHomePage() {
   const [dialog, setDialog] = useState<Start | null>(prefill || search?.get('new') === '1' ? 'new' : null);
   const status = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 60_000 });
   const sessions = useQuery({ queryKey: ['studio', 'sessions'], queryFn: studioApi.sessions, enabled: !!status.data?.enabled });
+  const [confirmDel, setConfirmDel] = useState<Session | null>(null);      // Discard draft / Remove, asked first
   const del = useMutation({
     mutationFn: (s: Session) => studioApi.deleteSession(s.id),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['studio', 'sessions'] }),
+    onSuccess: (_r, s) => {
+      setConfirmDel(null);
+      toast({ title: s.document_id ? 'Removed from your work' : 'Draft discarded', message: s.title, type: 'success' });
+      return qc.invalidateQueries({ queryKey: ['studio', 'sessions'] });
+    },
     onError: (e, s) => toast({ title: s.document_id ? 'Could not remove it' : 'Could not discard it', message: problemOf(e), type: 'error' }),
   });
   const useTemplate = useMutation({
@@ -408,11 +413,27 @@ export default function StudioHomePage() {
       </div>
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <YourWork sessions={sessions.data?.items ?? []} loading={sessions.isLoading} onOpen={(id) => router.push(`/governance/documents/studio/${id}`)}
-          onDiscard={(s) => { if (window.confirm(`Discard the draft “${s.title}”? It was never in the library, so it cannot be brought back.`)) del.mutate(s); }}
-          onRemove={(s) => { if (window.confirm(`Remove “${s.title}” from your work? The document stays in the library; your notes and chat on it here are removed.`)) del.mutate(s); }} />
+          onDiscard={setConfirmDel} onRemove={setConfirmDel} />
         <Templates onUse={(t) => useTemplate.mutate(t)} />
       </div>
 
+      {confirmDel && (
+        <AnimatedModal isOpen onClose={() => setConfirmDel(null)} size="md"
+          title={confirmDel.document_id ? `Remove “${confirmDel.title}” from your work?` : `Discard the draft “${confirmDel.title}”?`}
+          footer={(
+            <div className="flex justify-end gap-2">
+              <button type="button" onClick={() => setConfirmDel(null)} className={secondary}>Cancel</button>
+              <button type="button" onClick={() => del.mutate(confirmDel)} disabled={del.isPending}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-[#b42318] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
+                {del.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : confirmDel.document_id ? <X className="h-4 w-4" /> : <Trash2 className="h-4 w-4" />} {confirmDel.document_id ? 'Remove' : 'Discard'}
+              </button>
+            </div>
+          )}>
+          <p className="px-5 py-4 text-sm text-[#26323d]">
+            {confirmDel.document_id ? 'The document stays in the library; your notes and chat on it here are removed.' : 'It was never in the library, so it cannot be brought back.'}
+          </p>
+        </AnimatedModal>
+      )}
       {dialog === 'new' && <NewDocumentDialog onClose={close} onOpen={open} prefill={prefill} />}
       {dialog === 'upload' && <UploadDialog onClose={close} onOpen={open} maxMb={status.data.max_upload_mb ?? 30} />}
       {dialog === 'library' && <LibraryDialog onClose={close} onCompare={() => setDialog('compare')} />}

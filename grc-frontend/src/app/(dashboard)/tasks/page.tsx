@@ -12,7 +12,7 @@ import { TASK_SLA_LABELS, TASK_SLA_ORDER, TaskSLALevel, getTaskSLAConfig } from 
 import { RightSlidePanel, MultiSelectDropdown, SearchInput } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DocumentTaskLink, useMyUserId } from '@/components/governance/DocumentTaskActions';
-import { isDocumentTask, type DocumentRequest } from '@/lib/documentTasks';
+import { dayOf, isDocumentTask, type DocumentRequest } from '@/lib/documentTasks';
 import {
   CustomFieldsTab, CustomFieldsTabBar, builtinLabel, errorText, listOptions, showBuiltin, useModuleSettings, valuesToSave, type CustomValues,
 } from '@/components/settings/CustomFields';
@@ -802,7 +802,7 @@ export default function TaskBoardPage() {
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-xs text-[var(--color-muted)]">
-                        {task.due_date ? new Date(task.due_date).toLocaleDateString() : '—'}
+                        {dayOf(task.due_date) ?? '—'}
                       </span>
                     </td>
                     <td className="px-4 py-3">
@@ -854,7 +854,7 @@ export default function TaskBoardPage() {
                           </span>
                         </div>
                         {task.due_date && (
-                          <span className="text-[10px] text-[var(--color-muted)] mt-1 block">Due: {new Date(task.due_date).toLocaleDateString()}</span>
+                          <span className="text-[10px] text-[var(--color-muted)] mt-1 block">Due {dayOf(task.due_date)}</span>
                         )}
                       </Link>
                     ))
