@@ -73,6 +73,22 @@ export function withoutLocked<T extends Record<string, unknown>>(t: TaskLike, pa
   return out as Partial<T>;
 }
 
+/** How the server refuses to give a document task to someone else (backend doc_lifecycle._LOCKED). */
+const PERSON_LOCKED = 'The person on this task is the one asked';
+
+/** What Apply Reassignments says once it ran: one entry per update, null when it worked, else the server's refusal ('' unknown). */
+export function reassignReport(outcomes: readonly (string | null)[]): { moved: number; message: string | null } {
+  const moved = outcomes.filter((o) => o === null).length;
+  const locked = outcomes.filter((o) => !!o && o.startsWith(PERSON_LOCKED)).length;
+  const other = outcomes.length - moved - locked;
+  const tasks = (n: number) => `${n} task${n === 1 ? '' : 's'}`;
+  const parts = [
+    locked ? `${tasks(locked)} could not be reassigned: ${locked === 1 ? 'it follows' : 'they follow'} a document request.` : '',
+    other ? `${tasks(other)} could not be reassigned.` : '',
+  ].filter(Boolean);
+  return { moved, message: parts.length ? parts.join(' ') : null };
+}
+
 /** A dropdown's choices plus the task's own value when it is not one of them (a document task's "Governance document" source,
  *  or a category typed in Governance > Settings), so the edit form shows what the task has instead of the first choice. */
 export function withCurrent(choices: readonly string[], current: unknown): string[] {

@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { criticalTasksApi, risksApi, ermApi, vulnManagementApi } from '@/lib/api';
 import { usePermissions } from '@/hooks/usePermissions';
 import { DocumentTaskCard, useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { AnimatedModal } from '@/components/ui/AnimatedModal';
+import { useToast } from '@/components/ui/ToastProvider';
 import { canDeleteTask, dayOf, isDocumentTask, plainDescription, withCurrent, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
 import Link from 'next/link';
 import {
@@ -166,6 +168,8 @@ export default function TaskDetailPage() {
   const [aiRootCause, setAiRootCause] = useState<Record<string, unknown> | null>(null);
   const [aiDescription, setAiDescription] = useState<Record<string, unknown> | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     criticalTasksApi.getTenantUsers().then(r => setUsers(r.data || [])).catch(() => setUsers([]));
@@ -249,7 +253,15 @@ export default function TaskDetailPage() {
 
   const deleteMutation = useMutation({
     mutationFn: () => criticalTasksApi.delete(taskId),
-    onSuccess: () => router.push('/tasks'),
+    onSuccess: () => {
+      setConfirmDelete(false);
+      toast({ type: 'success', title: 'Task deleted' });
+      router.push('/tasks');
+    },
+    onError: (e: unknown) => {
+      const detail = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      toast({ type: 'error', title: 'Not deleted', message: typeof detail === 'string' ? detail : 'The task could not be deleted. Try again.' });
+    },
   });
 
   const commentMutation = useMutation({
@@ -382,6 +394,15 @@ export default function TaskDetailPage() {
   const allowedTransitions = docTask ? [] : VALID_TRANSITIONS[task.status] || [];
   const canDeleteThis = canDeleteTask(task, { isAdmin, hasDeleteRight: canDelete });
   const description = docTask ? plainDescription(task.description) : task.description;
+  // a document task's details in plain words (its source module and record ids are the platform's, not the person's)
+  const req = task.document_request;
+  const docFacts: [string, string][] | null = docTask ? [
+    ['Document', req?.document_title || '—'],
+    ['Version', req?.version || '—'],
+    ['Requested by', task.created_by?.display_name || task.created_by?.username || '—'],
+    ['Due', dayOf(req?.due_date ?? task.due_date) ?? '—'],
+    ['Category', task.category],
+  ] : null;
 
   return (
     <div className="space-y-6 text-[var(--color-text)]">
@@ -438,14 +459,26 @@ export default function TaskDetailPage() {
           {canEdit && <button onClick={startEdit} className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Pencil size={14} /> Edit
           </button>}
-          {canDeleteThis && <button onClick={() => {
-            if (confirm(docTask ? 'Delete this task? The request in the document stays; only the task is removed.' : 'Delete this task?')) deleteMutation.mutate();
-          }}
+          {canDeleteThis && <button onClick={() => setConfirmDelete(true)}
             className="cw-btn-danger flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Trash2 size={14} /> Delete
           </button>}
         </div>
       </div>
+
+      <AnimatedModal isOpen={confirmDelete} onClose={() => setConfirmDelete(false)} title="Delete this task?" size="md" footer={(
+        <div className="flex justify-end gap-2">
+          <button type="button" onClick={() => setConfirmDelete(false)} className="cw-btn-secondary rounded-lg px-3 py-1.5 text-sm">Cancel</button>
+          <button type="button" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}
+            className="cw-btn-danger flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm disabled:opacity-60">
+            {deleteMutation.isPending ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />} Delete
+          </button>
+        </div>
+      )}>
+        <p className="px-5 py-4 text-sm text-[#26323d]">
+          {docTask ? 'The request in the document stays; only this task is removed.' : `"${task.title}" and its sub-tasks and comments are removed.`}
+        </p>
+      </AnimatedModal>
 
       {docTask && <DocumentTaskCard request={task.document_request} meId={meId} />}
 
@@ -564,6 +597,16 @@ export default function TaskDetailPage() {
             <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap">{description || 'No description provided.'}</p>
           </div>
           <div className="grid grid-cols-2 gap-6">
+            {docFacts ? (
+            <div>
+              <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Document request</h3>
+              <dl className="space-y-2 text-sm">
+                {docFacts.map(([label, value]) => (
+                  <div key={label} className="flex justify-between gap-4"><dt className="text-[var(--color-muted)]">{label}</dt><dd className="text-right text-[var(--color-text)]">{value}</dd></div>
+                ))}
+              </dl>
+            </div>
+            ) : (
             <div>
               <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Task Information</h3>
               <dl className="space-y-2 text-sm">
@@ -576,6 +619,8 @@ export default function TaskDetailPage() {
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Escalation Level</dt><dd className="text-[var(--color-text)]">{task.escalation_level}</dd></div>
               </dl>
             </div>
+            )}
+            {!docTask && (
             <div>
               <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Linked Entities</h3>
               <dl className="space-y-2 text-sm">
@@ -585,6 +630,7 @@ export default function TaskDetailPage() {
                 <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Vulnerability</dt><dd className="text-[var(--color-text)]">{task.linked_vulnerability_id ? `#${task.linked_vulnerability_id}` : '—'}</dd></div>
               </dl>
             </div>
+            )}
           </div>
           {(task.completed_at || task.verified_at) && (
             <div>

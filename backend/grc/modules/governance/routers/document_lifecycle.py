@@ -10,7 +10,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from ....models import DocumentObligation, GRCUser, get_db
-from ....routers.auth_router import get_user_tenants, has_tenant_permission, require_auth
+from ....routers.auth_router import get_user_tenants, has_tenant_permission, is_tenant_admin, require_auth, tenant_permission_names
 from .. import doc_lifecycle
 from ..permissions import in_force_number, require_doc_editor, require_doc_reader
 from .document_signoff import _doc_or_404, check_version
@@ -103,6 +103,12 @@ class SettingsIn(BaseModel):
 
 SETTINGS_RIGHT = "governance:settings:edit"
 SETTINGS_REFUSED = "Only an administrator or someone allowed to change governance settings can change these."
+READ_SETTINGS_REFUSED = "Only an administrator or someone with a governance right can see these settings."
+
+
+def _reads_governance(db: Session, user: GRCUser) -> bool:
+    """An administrator, or a platform-given role holds any governance right (governance:*)."""
+    return is_tenant_admin(db, user) or any(n.startswith("governance:") for n in tenant_permission_names(db, user))
 
 
 def _tenant_id(db: Session, user: GRCUser) -> int:
@@ -134,6 +140,8 @@ def my_requests(db: Session = Depends(get_db), current_user: GRCUser = Depends(r
 def get_lifecycle_settings(db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
     if not doc_lifecycle.enabled(db):
         return {"enabled": False}
+    if not _reads_governance(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=READ_SETTINGS_REFUSED)
     return _settings_answer(db, current_user, _tenant_id(db, current_user))
 
 

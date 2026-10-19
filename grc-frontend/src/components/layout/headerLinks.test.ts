@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { appPath, approvalAnchor, assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks.ts';
+import { actionHref } from '../../lib/documentTasks.ts';
 
 test('only a page of this app is opened, never another site', () => {
   assert.equal(appPath('/governance/documents/3?tab=lifecycle'), '/governance/documents/3?tab=lifecycle');
@@ -37,10 +38,11 @@ test('one with nothing to open is plain text', () => {
   }
 });
 
-test('a document request opens like the server\'s own links: the document to acknowledge, else its Approvals', () => {
-  assert.equal(docRequestHref({ kind: 'acknowledgement', document_id: 3 }), '/governance/documents/3');
-  assert.equal(docRequestHref({ kind: 'review', document_id: 3 }), '/governance/documents/3?tab=lifecycle');
-  assert.equal(docRequestHref({ kind: 'approval', document_id: 8 }), '/governance/documents/8?tab=lifecycle');
+test('a document request opens the person\'s own step, as My Approvals and Task Management do', () => {
+  assert.equal(docRequestHref({ kind: 'acknowledgement', document_id: 3 }), '/governance/documents/3?act=ack');
+  assert.equal(docRequestHref({ kind: 'review', document_id: 3 }), '/governance/documents/3?act=sign');
+  assert.equal(docRequestHref({ kind: 'approval', document_id: 8 }), '/governance/documents/8?act=sign');
+  assert.equal(docRequestHref({ kind: 'approval', document_id: 8 }), actionHref(8, 'approval'));
 });
 
 test('an evidence approval opens the approvals page at its own item', () => {

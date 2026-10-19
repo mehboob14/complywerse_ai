@@ -521,7 +521,7 @@ export default function DocumentStudio() {
         </p>
       </AnimatedModal>
       <AnimatedModal isOpen={popup === 'settings'} onClose={() => setPopup(null)} size="lg" title="Due dates and escalation">
-        <div className="p-4"><SettingsCard /></div>
+        <div className="p-4"><SettingsCard inPopup /></div>
       </AnimatedModal>
       <AnimatedModal isOpen={!!restoring} onClose={() => setRestoring(null)} size="md" title={`Restore version ${restoring?.number}?`}
         footer={(

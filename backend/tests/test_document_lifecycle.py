@@ -461,7 +461,7 @@ def test_my_requests_across_documents_and_the_settings_routes(world, monkeypatch
 
     mine = client.get("/documents/lifecycle/mine").json()
     assert mine["total"] == 2 and {i["title"] for i in mine["items"]} == {"Access policy", "Backup policy"}
-    assert client.get("/documents/lifecycle/settings").json()["can_edit"] is False
+    assert client.get("/documents/lifecycle/settings").status_code == 403          # no governance right (test_governance_settings)
     assert client.put("/documents/lifecycle/settings", json={"ack_days": 21}).status_code == 403          # not an administrator
     me["u"] = user(db, 7)
     got = client.put("/documents/lifecycle/settings", json={"ack_days": 21, "email": False}).json()

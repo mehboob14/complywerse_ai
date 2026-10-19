@@ -178,10 +178,13 @@ def test_saving_a_studio_draft_into_the_library_is_checked_again_when_it_is_save
 def test_lifecycle_settings_and_the_studio_follow_the_administrator_rule(world):
     for who, admin in [(OWNER, False), (CLOUD, False), (ADMIN, True), (CONTACT, True)]:   # a "root" role imported from a cloud is not
         world.me["id"] = who
-        assert world.http.get("/governance/documents/lifecycle/settings").json()["can_edit"] is admin, who
+        got = world.http.get("/governance/documents/lifecycle/settings")                      # nobody else holds a governance right
+        assert (got.status_code, got.json().get("can_edit")) == ((200, True) if admin else (403, None)), who
         assert world.http.put("/governance/documents/lifecycle/settings", json={"ack_days": 20}).status_code == (200 if admin else 403), who
         assert world.http.get("/governance/studio/status").json()["is_admin"] is admin, who
     assert permissions.admin_user_ids(world.db) == {ADMIN, CONTACT}
+    world.me["id"] = EDITOR                                                                     # a governance right reads them
+    assert world.http.get("/governance/documents/lifecycle/settings").json()["can_edit"] is False
 
 
 def test_only_people_are_asked_never_an_identity_a_connector_imported_that_never_signed_in(world):
@@ -368,8 +371,9 @@ def test_someone_who_may_not_read_a_document_gets_none_of_its_life_cycle_sign_of
         assert r.status_code == 403 and r.json()["detail"] == permissions.READ_REFUSED, (path, r.status_code, r.text)
     assert world.http.get("/governance/documents/404/lifecycle").status_code == 404           # a missing document first
     assert world.http.get(f"/governance/esignatures/{loose}").status_code == 200              # a signature on no document: its tenant
-    for path in ("/governance/documents/lifecycle/mine", "/governance/documents/signoff/my-pending", "/governance/documents/lifecycle/settings"):
+    for path in ("/governance/documents/lifecycle/mine", "/governance/documents/signoff/my-pending"):
         assert world.http.get(path).status_code == 200, path                                   # personal queues stay open
+    assert world.http.get("/governance/documents/lifecycle/settings").status_code == 403      # the settings need a governance right
     assert db.query(m.DocumentObligation).count() == 0 and db.query(m.DocumentSignature).count() == 0
 
 
