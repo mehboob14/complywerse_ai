@@ -4193,6 +4193,8 @@ def create_workflow(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [t.get("approver_user_id") for t in request.tiers])
     if request.is_default:
         db.query(AssessmentEvidenceApprovalWorkflow).filter(
             AssessmentEvidenceApprovalWorkflow.tenant_id == tenant_id,
@@ -4303,6 +4305,10 @@ def update_workflow(
     if not workflow:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [t.get("approver_user_id") for t in request.tiers or []],
+                             kept=[uid for (uid,) in db.query(AssessmentEvidenceApprovalTier.approver_user_id).filter(
+                                 AssessmentEvidenceApprovalTier.workflow_id == workflow_id)])
     if request.is_default:
         db.query(AssessmentEvidenceApprovalWorkflow).filter(
             AssessmentEvidenceApprovalWorkflow.tenant_id == workflow.tenant_id,

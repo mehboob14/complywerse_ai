@@ -252,7 +252,7 @@ def imported_account_problem(db: Session, user_ids, kept=()) -> Optional[str]:
     """A sentence naming the first of ``user_ids`` that an access review imported (None when all are platform accounts or unknown).
     The ids in ``kept`` (already on the record, sent back as they are) are not asked about."""
     def numbers(values):         # a free-form body may hold a label or an empty string where an id goes: not an id
-        return {int(v) for v in (values or []) if str(v).strip().isdigit() and int(v)}
+        return {int(v) for v in (values or []) if str(v).strip().isdecimal() and int(v)}
 
     ids = numbers(user_ids) - numbers(kept)
     if not ids:

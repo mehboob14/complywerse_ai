@@ -415,3 +415,28 @@ def test_the_signers_part_runs_where_the_owners_part_ran_before_it_existed(w):
     assert db.get(m.GovernanceDocument, 3).owner_id == ARIF                       # the owners part does not run again
     assert db.get(m.GovernanceDocument, 6).status == "draft"
     assert {imported_owners.MARK, imported_owners.SIGNERS_MARK} <= set(db.get(m.Tenant, 1).settings)
+
+
+def test_evidence_approval_tiers_and_workflows_from_a_template_name_platform_users_only(w):
+    assessments = importlib.import_module("grc.routers.compliance_assessments_router")
+    templates = importlib.import_module("grc.modules.workflow_engine.routers.templates")
+    db, me = w.db, w.user(CONTACT)
+
+    def tiers(uid):
+        return [{"tier_order": 1, "tier_name": "Reviewer", "approver_type": "user", "approver_user_id": uid}]
+
+    _refused(lambda: assessments.create_workflow(request=assessments.WorkflowCreate(name="Evidence", tiers=tiers(ARIF)),
+                                                 db=db, current_user=me))
+    made = assessments.create_workflow(request=assessments.WorkflowCreate(name="Evidence", tiers=tiers(LOCAL)), db=db, current_user=me)
+    _refused(lambda: assessments.update_workflow(workflow_id=made["id"], request=assessments.WorkflowUpdate(tiers=tiers(ARIF)),
+                                                 db=db, current_user=me))
+    assessments.update_workflow(workflow_id=made["id"], request=assessments.WorkflowUpdate(tiers=tiers(AUTHOR)), db=db, current_user=me)
+
+    db.add(m.WorkflowEngineTemplate(id=80, tenant_id=1, name="Approve", trigger_event="manual",
+                                    nodes_json=[{"node_key": "a", "node_type": "approval", "config": {"approver_user_ids": [ARIF]}}]))
+    db.commit()
+    _refused(lambda: templates.instantiate_template(template_id=80, db=db, current_user=me, _=True))
+
+
+def test_an_id_that_is_not_a_number_is_not_an_id():
+    assert auth.imported_account_problem(None, ["", "Lena", "²", None, 0]) is None     # a label in a free-form body: nothing to ask
