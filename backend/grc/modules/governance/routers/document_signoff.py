@@ -186,9 +186,10 @@ def _stage_complete(db: Session, tenant_ids: List[int], document_id: int, role_t
 
 def advance_if_complete(db: Session, doc: GovernanceDocument, tenant_ids: List[int], by: Optional[int]) -> Optional[str]:
     """The stage in progress ends once every one of its participants has a signature of this round (``_stage_complete``): review
-    goes to approval, or to approved when no approver has anyone who can sign; approval to approved. Returns the new status (None:
-    unchanged); the caller runs the follow-ups (``doc_lifecycle.on_signed``, or ``recheck_stage`` when a signer was removed and the
-    people left had all signed). ``approved_by`` is whoever signed the stage last."""
+    goes to approval; to approved only when no approver is named at all; back to draft when approvers are named but none of them has
+    anyone who can sign (it is never approved without them); approval to approved. Returns the new status (None: unchanged); the
+    caller runs the follow-ups (``doc_lifecycle.on_signed``, or ``recheck_stage`` when a signer was removed and the people left had
+    all signed). ``approved_by`` is whoever signed the stage last."""
     stage = {s: r for r, s in _STAGE_STATUS.items()}.get(doc.status)
     if stage is None:
         return None
@@ -197,8 +198,11 @@ def advance_if_complete(db: Session, doc: GovernanceDocument, tenant_ids: List[i
     signatures = _signatures(db, doc.id)
     if not _stage_complete(db, tenant_ids, doc.id, stage, assignments, signatures):
         return None
-    if stage == "reviewer" and any(a.role_type == "approver" and doc_lifecycle._members(db, doc, a) for a in assignments):
+    approvers = [a for a in assignments if a.role_type == "approver"]
+    if stage == "reviewer" and any(doc_lifecycle._members(db, doc, a) for a in approvers):
         doc.status = "pending_approval"
+    elif stage == "reviewer" and approvers:            # approvers named, none can sign: not approved without them
+        doc.status = "draft"
     else:
         last = max((s for s in signatures if s.role_type == stage), key=lambda s: s.signed_at, default=None)
         doc.status, doc.approved_by, doc.approved_at = "approved", last.signer_user_id if last else by, datetime.utcnow()
@@ -519,10 +523,10 @@ def sign_document(
         + f" · e-signature {esig.image_sha256[:12]}, seal {esig.seal[:12]}"
         + (f" → {advanced_to}" if advanced_to else ""),
     )
-    if advanced_to == "approved" and role_type == "reviewer" and any(a.role_type == "approver" for a in _assignments(db, document_id)):
+    if advanced_to == "draft":
         create_audit_log(db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id, action="status_changed",
-                         field_changed="status", old_value="pending_review", new_value="approved",
-                         action_details="None of its approvers can sign it, so it is approved after its review")
+                         field_changed="status", old_value="pending_review", new_value="draft",
+                         action_details="Reviewed, but none of its approvers can sign it, so it is a draft again: choose other approvers and send it for review")
     db.flush()
     doc_lifecycle.on_signed(db, doc, current_user.id, role_type, signature.id, esig.id, advanced_to)
     db.commit()

@@ -479,6 +479,10 @@ def _advanced(db, doc, by: Optional[int], advanced_to: Optional[str]) -> None:
     """After a stage ended: the approvers are asked, or the owner and whoever may publish it are told it is approved."""
     if advanced_to == "pending_approval":
         _open_stage(db, doc, "approver", by)
+    elif advanced_to == "draft":                 # reviewed, but none of its named approvers can sign it
+        _notify(db, doc, {doc.owner_id, doc.author_id}, f"Choose other approvers: {doc.title}",
+                f"\"{doc.title}\" has been reviewed, but none of its approvers can sign it, so it is a draft again. "
+                "Choose other approvers and send it for review.", "warning", event="rejected")
     elif advanced_to == "approved":
         from .permissions import publisher_ids
 
@@ -552,7 +556,8 @@ def start_round(db, doc, by: Optional[int] = None) -> Optional[str]:
 
 _ENDED = {("pending_review", "pending_approval"): "Everyone left to review it has signed, so it goes to its approvers",
           ("pending_review", "approved"): "Everyone left to review it has signed and nobody approves it, so it is approved",
-          ("pending_approval", "approved"): "Everyone left to approve it has signed, so it is approved"}
+          ("pending_approval", "approved"): "Everyone left to approve it has signed, so it is approved",
+          ("pending_review", "draft"): "Reviewed, but none of its approvers can sign it, so it is a draft again: choose other approvers and send it for review"}
 
 
 def recheck_stage(db, doc, by: Optional[int] = None) -> bool:

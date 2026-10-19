@@ -660,7 +660,7 @@ def test_a_stage_nobody_can_sign_goes_on_and_send_for_review_says_why(w):
     assert r.json()["status"] == "pending_review" and r.json()["notice"].startswith("Nobody in DigitalOcean: team My Team can sign it")
     w.me["id"] = LOCAL
     signed = http.post("/governance/documents/13/signoff/sign", json={"signature_image": _png()}).json()
-    assert signed["status"] == "approved"                                           # as with no approvers
-    assert _status_rows(db, 13)[-1] == ("pending_review", "approved", "None of its approvers can sign it, so it is approved after its review")
+    assert signed["status"] == "draft"                                              # never approved without its named approvers
+    assert _status_rows(db, 13)[-1] == ("pending_review", "draft", "Reviewed, but none of its approvers can sign it, so it is a draft again: choose other approvers and send it for review")
     w.me["id"] = CONTACT
     assert http.post("/governance/documents/5/signoff/send-for-review").status_code == 400   # nobody chosen at all: as before
