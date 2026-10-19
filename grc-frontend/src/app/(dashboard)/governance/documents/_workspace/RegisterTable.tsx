@@ -1,17 +1,28 @@
 'use client';
 
 /**
- * Register TABLE view for the Governance Documents workspace. Dense, presentational
- * table built on the shipped DataTable<GovDoc>. Columns: Title · Type · Lifecycle ·
- * Owner · Frameworks · Ver · Actions. The shell owns filtering/data + action handlers.
+ * Register TABLE of the Governance Documents workspace, built on the shipped DataTable<GovDoc>. Columns: Title · Type · Lifecycle ·
+ * Owner · Frameworks · Ver · Actions. Every document has an arrow before its title: opened, it shows the document's versions (newest
+ * first, each a link to that version on the document page) and the documents under it (parent_document_id) as rows of the same table,
+ * one level in, which open the same way. The shell owns filtering/data + action handlers.
  */
 
-import { CheckCircle2, Send, UserPlus, CalendarClock, Archive, ArchiveRestore, FileText, Eye, Download, Pencil } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import Link from 'next/link';
+import { useQuery } from '@tanstack/react-query';
+import {
+  CheckCircle2, Send, UserPlus, CalendarClock, Archive, ArchiveRestore, FileText, Eye, Download, Pencil,
+  ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Loader2,
+} from 'lucide-react';
 import {
   DataTable,
   type ColumnDef,
   type BulkAction,
 } from '@/components/ui';
+import { governanceApi } from '@/lib/api';
+import { documentChainApi } from '@/lib/documentChain';
+import { day } from '@/lib/documentLifecycle';
+import { problemOf } from '@/lib/studio/api';
 import {
   type GovDoc,
   TypePill,
@@ -21,14 +32,23 @@ import {
   AttestCell,
   useFrameworkNames,
   inForceNote,
+  statusLabel,
+  verLabel,
 } from './lib';
 import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
-import { DocumentTree } from './DocumentTree';
 import { bulkActionIds } from './archive';
+import { NOTHING_OPEN, buildTree, collapseAll, expandAll, flip, openness, treeEntries, type Fold } from './docTree';
+import { versionStates } from './library';
+import { retryUnlessRefused } from '../_view/docRoute';
 
 export interface RegisterTableProps {
+  /** the documents that match the search and filters */
   docs: GovDoc[];
+  /** every document the list is drawn from (archived ones only when asked for): the documents above a match come from here */
+  scope: GovDoc[];
+  /** a search or filter is on: the way to every match is open, the documents above it greyed */
+  filtering?: boolean;
   totalCount: number;
   updatedLabel?: string;
   coverageMap?: Record<number, number>;
@@ -53,12 +73,103 @@ export interface RegisterTableProps {
   showingArchived?: boolean;
   onBulkRestore?: (ids: number[]) => void;
   loading?: boolean;
-  /** the Tree view: the same columns and row actions, each document under its parent (`scope`: the library scope the ancestors come from) */
-  tree?: { scope: GovDoc[]; headerDoc: GovDoc | null; breadcrumb: string[] };
+}
+
+const STEP = 24;           // px per level: the width of the arrow
+const GAP = 6;             // between the arrow and the title
+const NO_DOCS: GovDoc[] = [];
+const NONE = new Set<number>();
+const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#d5dbe1] bg-white px-2.5 py-1 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]';
+// the version's size as the document's Versions view says it; the first one is the original
+const SIZE: Record<string, string> = { major: 'Major', minor: 'Minor', patch: 'Patch' };
+
+type Open = 'all' | 'docs' | null;
+type VersionRow = { id: number; number: string; kind: string | null; at: string | null; by: string | null };
+
+function TitleCell({ doc, depth, match, childCount, open, parentTitle, onToggle }: {
+  doc: GovDoc; depth: number; match: boolean; childCount: number; open: Open; parentTitle?: string; onToggle: () => void;
+}) {
+  const label = open === 'docs' ? `Hide the documents under ${doc.title}`
+    : `${open ? 'Hide' : 'Show'} the versions of ${doc.title}${childCount ? ' and the documents under it' : ''}`;
+  return (
+    <div className="flex items-start" style={{ paddingLeft: depth * STEP, gap: GAP }}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); onToggle(); }}
+        aria-expanded={open != null}
+        aria-label={label}
+        title={label}
+        className="-my-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-[#586472] hover:bg-[#eef2f6] hover:text-[#1f2933] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+      >
+        {open ? <ChevronDown className="h-4 w-4" strokeWidth={1.75} aria-hidden /> : <ChevronRight className="h-4 w-4" strokeWidth={1.75} aria-hidden />}
+      </button>
+      <span className="relative min-w-0">
+        <span className={match ? 'font-medium text-slate-900' : 'text-[#586472]'}>{doc.title}</span>
+        {/* the indent shows the nesting to the eye; this says it to a screen reader */}
+        {parentTitle && <span className="sr-only">, under {parentTitle}</span>}
+        {!open && childCount > 0 && <span className="ml-1.5 whitespace-nowrap text-[11px] text-[#586472]">{childCount} under it</span>}
+        {!match && <span className="block text-[11px] text-[#586472]">Parent of a match</span>}
+      </span>
+    </div>
+  );
+}
+
+/** A document's versions, newest first, read as the document page reads them (its Versions view: the change chain; where the chain is
+ *  off, the version history): number, state, size, date and who made it, each a link to that version on the document page. */
+function Versions({ doc, depth }: { doc: GovDoc; depth: number }) {
+  const chain = useQuery({ queryKey: ['document-chain', doc.id], queryFn: () => documentChainApi.chain(doc.id), staleTime: 15_000, retry: retryUnlessRefused });
+  const off = chain.data?.enabled === false;
+  const history = useQuery({
+    queryKey: ['document-versions', doc.id],
+    enabled: off,
+    retry: retryUnlessRefused,
+    queryFn: async () => {                    // as the document page's version history reads it (same key, same shape)
+      const d: any = (await governanceApi.getDocumentVersions(doc.id)).data;
+      return (Array.isArray(d) ? d : d?.items || []) as any[];
+    },
+  });
+  const rows: VersionRow[] = off
+    ? (history.data ?? []).map((v) => ({ id: v.id, number: String(v.version_number), kind: v.change_type ?? null, at: v.created_at ?? null, by: v.creator_name ?? null }))
+    : [...(chain.data?.versions ?? [])].reverse();
+  const lines = versionStates(rows, doc);
+  const failed = chain.error ?? history.error;
+  const note = { paddingLeft: depth * STEP + STEP + GAP };
+
+  if (chain.isPending || (off && history.isPending)) {
+    return <p style={note} className="inline-flex items-center gap-1.5 text-[12px] text-[#586472]"><Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Reading the versions…</p>;
+  }
+  if (failed) return <p style={note} role="alert" className="text-[12px] text-[#9b1c1c]">{problemOf(failed, 'The versions could not be read.')}</p>;
+  if (lines.length === 0) return <p style={note} className="text-[12px] text-[#586472]">No versions recorded yet.</p>;
+  return (
+    <ul aria-label={`Versions of ${doc.title}, newest first`} style={{ marginLeft: depth * STEP + STEP / 2 }} className="border-l border-[#d5dbe1] pl-2">
+      {lines.map((v, i) => {
+        const word = v.state === 'in-force' ? 'In force' : v.state === 'superseded' ? 'Superseded' : statusLabel(doc.status);
+        const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
+        // text-[#fff], not text-white: the library's governance-light repaints text-white grey
+        const look = inForce ? 'border-[#0f766e] bg-[#0f766e] text-[#fff]' : v.state === 'superseded' ? 'border-[#d5dbe1] text-[#586472]' : 'border-[#9aa5b1] text-[#1f2933]';
+        const size = i === lines.length - 1 ? 'The original' : SIZE[v.kind ?? ''];
+        return (
+          <li key={v.id}>
+            <Link
+              href={`/governance/documents/${doc.id}?tab=versions&version=${v.id}`}
+              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1 text-[12px] text-[#26323d] hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+            >
+              <span className="font-semibold tabular-nums text-[#1f2933]">{verLabel(v.number)}</span>
+              <span className={`rounded border px-1.5 text-[11px] font-medium leading-4 ${look}`}>{word}</span>
+              {/* on a phone the table is wider than the screen: the rest of the line goes under the number, in view */}
+              <span className="text-[11px] text-[#586472] max-sm:basis-full">{[size, day(v.at), v.by || 'Unknown'].filter(Boolean).join(' · ')}</span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
+  );
 }
 
 export function RegisterTable({
   docs,
+  scope,
+  filtering = false,
   totalCount,
   updatedLabel,
   coverageMap = {},
@@ -79,10 +190,27 @@ export function RegisterTable({
   showingArchived = false,
   onBulkRestore,
   loading = false,
-  tree,
 }: RegisterTableProps) {
   const nameMap = useFrameworkNames();
   const rows = docs ?? [];
+
+  // each document under its parent; with a search or filter, the matches and the documents above them (docTree.ts)
+  const roots = useMemo(() => buildTree(scope, new Set(rows.map((d) => d.id))), [scope, rows]);
+  const entries = useMemo(() => treeEntries(roots), [roots]);
+  const at = useMemo(() => new Map(entries.map((e) => [e.doc.id, e])), [entries]);
+  const top = useMemo(() => roots.map((n) => n.doc), [roots]);
+  const parents = entries.filter((e) => e.children.length > 0).map((e) => e.doc.id);
+  const context = entries.filter((e) => !e.match).length;
+
+  // what the person closed belongs to one set of matches: a new search or filter opens the way to every match again
+  const matchKey = useMemo(() => rows.map((d) => d.id).join(','), [rows]);
+  const [state, setState] = useState<{ key: string; fold: Fold }>({ key: '', fold: NOTHING_OPEN });
+  const current = (s: typeof state): Fold => (s.key === matchKey ? s.fold : { ...s.fold, shut: NONE });
+  const fold = current(state);
+  const change = (next: (f: Fold) => Fold) => setState((s) => ({ key: matchKey, fold: next(current(s)) }));
+  const openIn = (f: Fold, id: number): Open => openness(f, id, (at.get(id)?.children.length ?? 0) > 0, filtering);
+  const openOf = (id: number) => openIn(fold, id);
+  const anyOpen = entries.some((e) => openOf(e.doc.id) != null);
 
   const columns: ColumnDef<GovDoc>[] = [
     {
@@ -91,7 +219,15 @@ export function RegisterTable({
       accessor: 'title',
       sortable: true,
       minWidth: '280px',
-      render: (d) => <span className="font-medium text-slate-900">{d.title}</span>,
+      render: (d) => {
+        const e = at.get(d.id);
+        const open = openOf(d.id);
+        return (
+          <TitleCell doc={d} depth={e?.depth ?? 0} match={e?.match ?? true} childCount={e?.children.length ?? 0} open={open}
+            parentTitle={e && e.depth > 0 && d.parent_document_id != null ? at.get(d.parent_document_id)?.doc.title : undefined}
+            onToggle={() => change((f) => flip(f, d.id, openIn(f, d.id) != null))} />
+        );
+      },
     },
     {
       id: 'type',
@@ -178,27 +314,37 @@ export function RegisterTable({
       ] as BulkAction<GovDoc>[]).filter((a) => offered.has(a.id) && (a.id !== 'restore' || !!onBulkRestore))
     : [];
 
-  if (tree) {
-    return (
-      <DocumentTree docs={rows} scope={tree.scope} columns={columns} headerDoc={tree.headerDoc} breadcrumb={tree.breadcrumb}
-        totalCount={totalCount} updatedLabel={updatedLabel} onOpenDoc={onOpenDoc} />
-    );
-  }
-
   return (
     <section className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
+      <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold text-slate-900">Document Register</h2>
           <p className="text-sm text-slate-500">
             {rows.length} shown · {totalCount} total
+            {context > 0 ? ` · ${context} shown as parents` : ''}
             {updatedLabel ? ` · ${updatedLabel}` : ''}
           </p>
         </div>
+        {(parents.length > 0 || anyOpen) && (
+          <div className="flex shrink-0 items-center gap-2">
+            {/* the documents under every document; a document's versions open with its own arrow (each is read when it opens) */}
+            <button type="button" className={BTN} onClick={() => change(expandAll)}
+              disabled={parents.every((id) => openOf(id) != null)} title="Show every document under its parent">
+              <ChevronsUpDown className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Expand all
+            </button>
+            <button type="button" className={BTN} onClick={() => change(() => collapseAll(parents))} disabled={!anyOpen}>
+              <ChevronsDownUp className="h-4 w-4" strokeWidth={1.75} aria-hidden /> Collapse all
+            </button>
+          </div>
+        )}
       </div>
 
       <DataTable<GovDoc>
-        data={rows}
+        data={top}
+        subRows={(d) => at.get(d.id)?.children ?? NO_DOCS}
+        showSubRows={(d) => openOf(d.id) != null}
+        renderUnder={(d) => (openOf(d.id) === 'all' ? <Versions doc={d} depth={at.get(d.id)?.depth ?? 0} /> : null)}
+        isContext={(d) => at.get(d.id)?.match === false}
         columns={columns}
         loading={loading}
         selectable={bulkActions.length > 0}
