@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * Shared primitives for the Governance Documents workspace (Tree / Register / Board views).
+ * Shared primitives for the Governance Documents workspace (the register table, the life-cycle hover, the document page).
  * One source of truth for lifecycle mapping, review-status coloring, framework-name
  * resolution, owner avatars and doc-type tiles — so every view renders identically.
  *
@@ -56,26 +56,6 @@ export interface GovDoc {
   file_type: string | null;
   has_file: boolean;
   policy_statement_count?: number;
-}
-
-/** One version of a document as the library tree shows it (GET /governance/documents/hierarchy), base first. */
-export interface TreeVersion {
-  id: number;
-  number: string;
-  kind: string | null;
-  current: boolean;
-  at: string | null;
-  by: string | null;
-  reason: string;
-  summary: string;
-  has_file: boolean;
-}
-
-export interface GovDocNode extends GovDoc {
-  children?: GovDocNode[];
-  /** the base and the newest five; ``version_count`` is how many there are in all */
-  versions?: TreeVersion[];
-  version_count?: number;
 }
 
 // ─── Lifecycle stages ────────────────────────────────────────────────────────
@@ -227,16 +207,6 @@ export const DOC_TYPE_STYLE: Record<string, { letter: string; tile: string; labe
 
 export function docTypeStyle(docType: string) {
   return DOC_TYPE_STYLE[docType] || { letter: (docType[0] || '?').toUpperCase(), tile: 'bg-slate-100 text-slate-600', label: docType };
-}
-
-export function DocTypeTile({ docType, size = 'md' }: { docType: string; size?: 'sm' | 'md' }) {
-  const s = docTypeStyle(docType);
-  const dim = size === 'sm' ? 'h-7 w-7 text-xs' : 'h-9 w-9 text-sm';
-  return (
-    <span className={`inline-flex shrink-0 items-center justify-center rounded-lg font-bold ${dim} ${s.tile}`}>
-      {s.letter}
-    </span>
-  );
 }
 
 /** Type pill (TYPE column). */

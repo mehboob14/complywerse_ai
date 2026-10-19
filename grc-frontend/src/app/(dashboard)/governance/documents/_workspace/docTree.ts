@@ -1,4 +1,4 @@
-// The library's Tree view: documents nested under their parent (parent_document_id), as rows with depth and connector lines.
+// The library table's hierarchy: documents nested under their parent (parent_document_id), and what the person opened in it.
 // Pure (no React), so `node --test` runs docTree.test.ts against it.
 
 export interface TreeDoc {
@@ -13,16 +13,12 @@ export interface TreeNode<T extends TreeDoc> {
   children: TreeNode<T>[];
 }
 
-export interface TreeRow<T extends TreeDoc> {
+/** One document of the tree: how deep it sits and the documents directly under it. */
+export interface TreeEntry<T extends TreeDoc> {
   doc: T;
   match: boolean;
   depth: number;
-  /** one per ancestor at depth 1..depth-1: true when that ancestor has a later sibling, so its line runs through this row */
-  rails: boolean[];
-  /** the last of its siblings: the connector turns (└) instead of running on (├) */
-  last: boolean;
-  childCount: number;
-  expanded: boolean;
+  children: T[];
 }
 
 /**
@@ -69,23 +65,43 @@ export function buildTree<T extends TreeDoc>(scope: readonly T[], matches: Reado
   return roots;
 }
 
-/** The visible rows, depth first: the children of a document in `collapsed` are left out. */
-export function flattenTree<T extends TreeDoc>(roots: readonly TreeNode<T>[], collapsed: ReadonlySet<number>): TreeRow<T>[] {
-  const out: TreeRow<T>[] = [];
-  const walk = (list: readonly TreeNode<T>[], depth: number, rails: boolean[]) => {
-    list.forEach((n, i) => {
-      const last = i === list.length - 1;
-      const expanded = n.children.length > 0 && !collapsed.has(n.doc.id);
-      out.push({ doc: n.doc, match: n.match, depth, rails, last, childCount: n.children.length, expanded });
-      // top-level documents have no connector, so their children draw no rail for them
-      if (expanded) walk(n.children, depth + 1, depth === 0 ? [] : [...rails, !last]);
-    });
-  };
-  walk(roots, 0, []);
+/** Every document of the tree, depth first, with its depth and the documents directly under it. */
+export function treeEntries<T extends TreeDoc>(roots: readonly TreeNode<T>[]): TreeEntry<T>[] {
+  const out: TreeEntry<T>[] = [];
+  const walk = (list: readonly TreeNode<T>[], depth: number) => list.forEach((n) => {
+    out.push({ doc: n.doc, match: n.match, depth, children: n.children.map((c) => c.doc) });
+    walk(n.children, depth + 1);
+  });
+  walk(roots, 0);
   return out;
 }
 
-/** The documents that have documents under them (what "Collapse all" folds). */
-export function parentIds<T extends TreeDoc>(roots: readonly TreeNode<T>[]): number[] {
-  return flattenTree(roots, new Set()).filter((r) => r.childCount > 0).map((r) => r.doc.id);
+/** What the person opened in the table: `open` all the way (a document's versions and the documents under it), `shut` closed by
+ *  them, `all` Expand all (every document shows the documents under it). */
+export interface Fold {
+  open: ReadonlySet<number>;
+  shut: ReadonlySet<number>;
+  all: boolean;
 }
+
+export const NOTHING_OPEN: Fold = { open: new Set(), shut: new Set(), all: false };
+
+/** How far a row is open: 'all' when the person opened it; 'docs' (the documents under it, not its versions, so nothing is read) under
+ *  Expand all or, while a search or filter is on, on the way to a match, unless the person closed it; null when it is closed. */
+export function openness(fold: Fold, id: number, hasChildren: boolean, filtering: boolean): 'all' | 'docs' | null {
+  if (fold.open.has(id)) return 'all';
+  return hasChildren && !fold.shut.has(id) && (fold.all || filtering) ? 'docs' : null;
+}
+
+/** A row's arrow: an open row closes, a closed one opens all the way. */
+export function flip(fold: Fold, id: number, isOpen: boolean): Fold {
+  const open = new Set(fold.open);
+  const shut = new Set(fold.shut);
+  if (isOpen) { open.delete(id); shut.add(id); } else { open.add(id); shut.delete(id); }
+  return { ...fold, open, shut };
+}
+
+/** Expand all opens the documents under every document (the rows opened all the way stay so); Collapse all closes everything, the way
+ *  to a match too (until the next search). */
+export const expandAll = (fold: Fold): Fold => ({ open: fold.open, shut: new Set(), all: true });
+export const collapseAll = (parents: Iterable<number>): Fold => ({ open: new Set(), shut: new Set(parents), all: false });

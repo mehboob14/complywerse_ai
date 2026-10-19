@@ -9,7 +9,7 @@
  * is restarted with them.
  */
 import apiClient, { governanceApi } from '@/lib/api';
-import type { GovDoc, GovDocNode } from './lib';
+import type { GovDoc } from './lib';
 
 export interface DocListParams {
   doc_type?: string;
@@ -35,23 +35,6 @@ export async function fetchDocuments(params?: DocListParams): Promise<DocListRes
   // Backend returns {items,total,skip,limit}; tolerate a bare array too.
   if (Array.isArray(data)) return { items: data as GovDoc[], total: (data as GovDoc[]).length, skip: 0, limit: (data as GovDoc[]).length };
   return data as DocListResponse;
-}
-
-export async function fetchHierarchy(): Promise<GovDocNode[]> {
-  const res = await governanceApi.getDocumentHierarchy();
-  const data = res.data as unknown;
-  return (Array.isArray(data) ? data : ((data as { items?: GovDocNode[] })?.items ?? [])) as GovDocNode[];
-}
-
-export interface DashboardSummary {
-  total_documents: number;
-  by_type: Record<string, number>;
-  by_status: Record<string, number>;
-  by_classification: Record<string, number>;
-}
-export async function fetchSummary(): Promise<DashboardSummary> {
-  const res = await governanceApi.getDashboardSummary();
-  return res.data as DashboardSummary;
 }
 
 export interface OverdueReviewItem {

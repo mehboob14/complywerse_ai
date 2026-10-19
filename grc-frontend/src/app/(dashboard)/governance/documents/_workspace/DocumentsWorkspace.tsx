@@ -1,35 +1,28 @@
 'use client';
 
 /**
- * Governance Documents Workspace — the new home of /governance/documents.
- * A persistent left library/hierarchy tree (Tree view) + an adaptive center view
- * (Tree: the register nested by parent / Register table / Lifecycle board).
- * Data + scope/filter/view state live here;
- * the views are presentational. The existing create/upload/AI-draft/templates
- * modals stay in page.tsx and are opened via the callbacks passed in.
+ * Governance Documents Workspace — the home of /governance/documents: the toolbar (search, filters, create) and the register table,
+ * where each document opens to its versions and the documents under it. Data + filter state live here; the table is presentational.
+ * The existing create/upload/AI-draft/templates modals stay in page.tsx and are opened via the callbacks passed in.
  */
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Archive, FolderTree, Table2, KanbanSquare, Loader2, Plus, Sparkles, LayoutTemplate, Search } from 'lucide-react';
+import { Archive, Loader2, Plus, Sparkles, LayoutTemplate, Search } from 'lucide-react';
 import { AnimatedModal, MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
 import { assetsApi, governanceApi } from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 import { problemOf, studioApi } from '@/lib/studio/api';
-import type { GovDoc, GovDocNode } from './lib';
+import type { GovDoc } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
-  fetchDocuments, fetchHierarchy, fetchSummary, fetchCoverageMap,
+  fetchDocuments, fetchCoverageMap,
   bulkUpdateStatus, bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, restoreDocument,
 } from './api';
-import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked, withoutArchived } from './archive';
-import { creation, pluralType, rememberView, rememberedView, type ViewMode } from './library';
-import { LibraryTree } from './LibraryTree';
+import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
+import { creation } from './library';
 import { RegisterTable } from './RegisterTable';
-import { LifecycleBoard } from './LifecycleBoard';
 import DetailsDialog from '../[id]/_DetailsDialog';
-
-type LibraryKey = 'all' | 'recent' | 'mine';
 
 export interface DocumentsWorkspaceProps {
   canCreate: boolean;
@@ -47,27 +40,6 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'archived', label: 'Archived' },
 ];
 
-// ─── hierarchy helpers ───────────────────────────────────────────────────────
-function findNode(nodes: GovDocNode[], id: number): GovDocNode | null {
-  for (const n of nodes) {
-    if (n.id === id) return n;
-    if (n.children?.length) { const f = findNode(n.children, id); if (f) return f; }
-  }
-  return null;
-}
-function collectIds(node: GovDocNode, acc: Set<number>) {
-  acc.add(node.id);
-  for (const c of node.children ?? []) collectIds(c, acc);
-}
-function findPath(nodes: GovDocNode[], id: number, trail: GovDocNode[] = []): GovDocNode[] | null {
-  for (const n of nodes) {
-    const next = [...trail, n];
-    if (n.id === id) return next;
-    if (n.children?.length) { const f = findPath(n.children, id, next); if (f) return f; }
-  }
-  return null;
-}
-
 export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDocument, onAIDraft, onTemplates }: DocumentsWorkspaceProps) {
   const router = useRouter();
   const qc = useQueryClient();
@@ -77,15 +49,9 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   // the row's Edit and Archive: its editors, never on an archived document (Restore brings it back first)
   const mayChange = (d: GovDoc) => (canEdit || mine(d)) && d.status !== 'archived';
 
-  // the view this browser chose last; read after the first render, so the server's page and the browser's agree
-  const [view, setViewState] = useState<ViewMode>('table');
-  useEffect(() => { setViewState(rememberedView()); }, []);
-  const setView = (v: ViewMode) => { setViewState(v); rememberView(v); };
   // New Document, AI Draft and Templates all open the Comply AI Studio
   const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
   const create = creation(canCreate, studio.data?.enabled);
-  const [library, setLibrary] = useState<LibraryKey>('all');
-  const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState<string>('');
   const [statusFilter, setStatusFilter] = useState<string>('');
@@ -101,9 +67,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     queryKey: ['gov-docs-workspace'],
     queryFn: () => fetchDocuments({ limit: 1000, sort_by: 'updated_at', sort_order: 'desc' }),
   });
-  // refetched on every visit: a version saved a moment ago shows in the tree at once
-  const { data: hierarchy = [] } = useQuery({ queryKey: ['gov-docs-hierarchy'], queryFn: fetchHierarchy, refetchOnMount: 'always' });
-  const { data: summary } = useQuery({ queryKey: ['gov-docs-summary'], queryFn: fetchSummary });
   const { data: coverageMap = {} } = useQuery({ queryKey: ['gov-docs-coverage'], queryFn: fetchCoverageMap });
   const { data: users = [] } = useQuery({
     queryKey: ['tenant-users-gov'],
@@ -116,28 +79,20 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     () => users.map((u) => ({ value: String(u.id), label: u.display_name, subLabel: u.email })),
     [users]
   );
-  // archived documents count only under Archived, and the tree shows the working library (archive.ts)
-  const counts = useMemo(() => libraryCounts(allDocs, currentUserId), [allDocs, currentUserId]);
-  const workingTree = useMemo(() => withoutArchived(hierarchy), [hierarchy]);
+  // archived documents count only under Archived (archive.ts)
+  const counts = useMemo(() => libraryCounts(allDocs), [allDocs]);
 
   const refreshAll = () => {
-    ['gov-docs-workspace', 'gov-docs-hierarchy', 'gov-docs-summary', 'gov-docs-overdue', 'gov-docs-mypending', 'gov-docs-coverage']
+    ['gov-docs-workspace', 'gov-docs-overdue', 'gov-docs-mypending', 'gov-docs-coverage']
       .forEach((k) => qc.invalidateQueries({ queryKey: [k] }));
   };
 
-  // ── scope: tree selection OR library shortcut ──
-  const scopedDocs = useMemo(() => {
-    if (selectedNodeId != null) {
-      const node = findNode(hierarchy, selectedNodeId);
-      if (node) { const ids = new Set<number>(); collectIds(node, ids); return allDocs.filter((d) => ids.has(d.id)); }
-    }
-    if (library === 'mine') return currentUserId ? allDocs.filter((d) => d.owner_id === currentUserId) : [];
-    return allDocs;
-  }, [allDocs, hierarchy, selectedNodeId, library, currentUserId]);
-
+  // the documents the table is drawn from (the documents above a match come from here) and the ones that match
+  const scope = useMemo(() => unlessArchivedAsked(allDocs, statusFilter), [allDocs, statusFilter]);
+  const filtering = !!(search.trim() || typeFilter || statusFilter || ownerFilter);
   const filteredDocs = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let out = unlessArchivedAsked(scopedDocs, statusFilter).filter((d) => {
+    return scope.filter((d) => {
       if (typeFilter && d.doc_type !== typeFilter) return false;
       if (statusFilter && d.status !== statusFilter) return false;
       if (ownerFilter && String(d.owner_id ?? '') !== ownerFilter) return false;
@@ -147,30 +102,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       }
       return true;
     });
-    if (library === 'recent' && selectedNodeId == null) {
-      out = [...out].sort((a, b) => (b.updated_at || '').localeCompare(a.updated_at || ''));
-    }
-    return out;
-  }, [scopedDocs, typeFilter, statusFilter, ownerFilter, search, library, selectedNodeId]);
-
-  const headerDoc = selectedNodeId != null ? allDocs.find((d) => d.id === selectedNodeId) ?? null : null;
-  const breadcrumb = useMemo(() => {
-    if (selectedNodeId == null) return ['All documents'];
-    const path = findPath(workingTree, selectedNodeId);     // as the tree shows it: an archived parent is not in the path
-    if (!path || path.length === 0) return ['All documents'];
-    return [pluralType(path[0].doc_type), ...path.map((n) => n.title)];
-  }, [workingTree, selectedNodeId]);
+  }, [scope, typeFilter, statusFilter, ownerFilter, search]);
 
   // ── handlers ──
   const openDoc = (id: number) => router.push(`/governance/documents/${id}`);
-  // Archived is the Status filter set to Archived, so it shows in every view; the other entries leave it
-  const selectLibrary = (key: LibraryKey | 'archived') => {
-    setSelectedNodeId(null);
-    if (key === 'archived') { setLibrary('all'); setStatusFilter('archived'); return; }
-    setLibrary(key);
-    if (statusFilter === 'archived') setStatusFilter('');
-  };
-  const selectNode = (id: number | null) => { setSelectedNodeId(id); if (id != null) setLibrary('all'); };
 
   const runBulk = async (fn: () => Promise<unknown>, ok: string) => {
     try { await fn(); toast({ title: ok, type: 'success' }); }
@@ -254,13 +189,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     }
   };
 
-  // ── toolbar bits ──
-  const VIEWS: { key: ViewMode; label: string; icon: typeof FolderTree }[] = [
-    { key: 'tree', label: 'Tree', icon: FolderTree },
-    { key: 'table', label: 'Table', icon: Table2 },
-    { key: 'board', label: 'Board', icon: KanbanSquare },
-  ];
-
   const updatedLabel = useMemo(() => {
     const latest = allDocs.reduce((m, d) => (d.updated_at > m ? d.updated_at : m), '');
     if (!latest) return 'up to date';
@@ -299,18 +227,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           <MultiSelectDropdown title="Owner" items={ownerOptions} selectedValues={ownerFilter ? [ownerFilter] : []} onApply={(v) => setOwnerFilter(v[0] || '')} multiSelect={false} autoApply forceSearch placeholder="All" size="md" />
         </div>
         <div className="ml-auto flex shrink-0 items-center gap-2">
-          <div className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 bg-slate-100 p-0.5">
-            {VIEWS.map((v) => {
-              const Icon = v.icon;
-              const active = view === v.key;
-              return (
-                <button key={v.key} onClick={() => setView(v.key)} title={v.label}
-                  className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-colors ${active ? 'bg-white text-primary-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}>
-                  <Icon strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden sm:inline">{v.label}</span>
-                </button>
-              );
-            })}
-          </div>
           {create === 'studio-off' && (
             <span className="shrink-0 text-xs text-[#3f4b58]">Creating documents needs the Comply AI Studio.</span>
           )}
@@ -330,59 +246,37 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
         </div>
       </div>
 
-      {/* Adaptive layout: Tree = 2-pane workspace (library tree · the register nested by parent);
-          Table/Board = full-width to match the dense-register / pipeline frames. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-12">
-        {view === 'tree' && (
-          <aside className="lg:col-span-3">
-            <LibraryTree
-              summary={summary}
-              hierarchy={workingTree}
-              myDocsCount={counts.mine}
-              allCount={counts.all}
-              archivedCount={counts.archived}
-              activeLibrary={statusFilter === 'archived' && library === 'all' ? 'archived' : library}
-              onSelectLibrary={selectLibrary}
-              selectedNodeId={selectedNodeId}
-              onSelectNode={selectNode}
-              loading={docsLoading}
-            />
-          </aside>
+      <section className="min-w-0">
+        {docsLoading ? (
+          <div className="card"><PageLoader className="h-96" /></div>
+        ) : (
+          <RegisterTable
+            // the documents above a match come from the same archived-aware scope as the list: no archived parent in the working list
+            scope={scope}
+            filtering={filtering}
+            docs={filteredDocs}
+            totalCount={statusFilter === 'archived' ? counts.archived : counts.all}
+            updatedLabel={updatedLabel}
+            coverageMap={coverageMap}
+            onOpenDoc={openDoc}
+            onEdit={onEditDoc}
+            onDownload={onDownloadDoc}
+            onArchive={onArchiveDoc}
+            onBulkApprove={onBulkApprove}
+            onBulkPublish={onBulkPublish}
+            onBulkArchive={onBulkArchive}
+            onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
+            onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
+            canEdit={canEdit}
+            canEditRow={mayChange}
+            canArchiveRow={mayChange}
+            onRestore={onRestoreDoc}
+            canRestoreRow={(d) => (canEdit || mine(d)) && d.status === 'archived'}
+            showingArchived={statusFilter === 'archived'}
+            onBulkRestore={onBulkRestore}
+          />
         )}
-
-        <section className={`min-w-0 ${view === 'tree' ? 'lg:col-span-9' : 'lg:col-span-12'}`}>
-          {docsLoading ? (
-            <div className="card"><PageLoader className="h-96" /></div>
-          ) : view !== 'board' ? (
-            <RegisterTable
-              // the ancestors come from the same archived-aware scope as the list: no archived parent under All documents
-              tree={view === 'tree' ? { scope: unlessArchivedAsked(scopedDocs, statusFilter), headerDoc, breadcrumb } : undefined}
-              docs={filteredDocs}
-              totalCount={statusFilter === 'archived' ? counts.archived : counts.all}
-              updatedLabel={updatedLabel}
-              coverageMap={coverageMap}
-              onOpenDoc={openDoc}
-              onEdit={onEditDoc}
-              onDownload={onDownloadDoc}
-              onArchive={onArchiveDoc}
-              onBulkApprove={onBulkApprove}
-              onBulkPublish={onBulkPublish}
-              onBulkArchive={onBulkArchive}
-              onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
-              onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
-              canEdit={canEdit}
-              canEditRow={mayChange}
-              canArchiveRow={mayChange}
-              onRestore={onRestoreDoc}
-              canRestoreRow={(d) => (canEdit || mine(d)) && d.status === 'archived'}
-              showingArchived={statusFilter === 'archived'}
-              onBulkRestore={onBulkRestore}
-            />
-          ) : (
-            <LifecycleBoard docs={filteredDocs} onOpenDoc={openDoc} />
-          )}
-        </section>
-      </div>
+      </section>
 
       {/* Bulk: assign owner */}
       <RightSlidePanel isOpen={assignOwnerFor != null} onClose={() => setAssignOwnerFor(null)} title={`Assign owner · ${assignOwnerFor?.length ?? 0} documents`}>
