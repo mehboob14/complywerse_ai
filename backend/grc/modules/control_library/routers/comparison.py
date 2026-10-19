@@ -1627,11 +1627,7 @@ def ai_compare_dispatch(
             return _serialize_run(existing)
         # status == "failed" -> fall through and re-dispatch
 
-    if existing and (body.refresh or existing.status == "failed"):
-        db.delete(existing)
-        db.commit()
-        existing = None
-
+    # before the old run is deleted: a refused re-run keeps the comparison there is
     from ....tasks.base import tenant_rate_limit, RateLimitExceeded
     try:
         redis_up = tenant_rate_limit(tenant_slug, bucket="control_compare")
@@ -1642,6 +1638,11 @@ def ai_compare_dispatch(
         )
     if not redis_up:   # the job queue is that Redis: refused at once, not after a minute on the broker
         raise HTTPException(status_code=503, detail="Background jobs are not available now: the job queue cannot be reached.")
+
+    if existing and (body.refresh or existing.status == "failed"):
+        db.delete(existing)
+        db.commit()
+        existing = None
 
     run = ControlComparisonRun(
         tenant_id=primary_tenant_id,

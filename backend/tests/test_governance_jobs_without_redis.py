@@ -178,6 +178,25 @@ def test_a_gap_job_that_finds_another_running_on_the_document_fails_its_runs(wor
     assert (run.status, run.error_message) == ("failed", "Another gap analysis of this document was running. Run it again when it is done.")
 
 
+def test_a_comparison_rerun_refused_without_redis_keeps_the_comparison_there_is(world, monkeypatch):
+    from grc.modules.control_library.routers import comparison
+
+    db = world.db
+    monkeypatch.setattr(comparison, "check_ai_available", lambda: True)
+    monkeypatch.setattr(base, "_redis_client", RedisDown())
+    for fid in (7, 8):
+        db.add(m.UploadedFramework(id=fid, tenant_id=1, name=f"F{fid}", file_name="f.pdf", file_path="f.pdf", file_type="pdf",
+                                   upload_status="parsed", is_active=True, uploaded_by=OWNER))
+    db.add(m.ControlComparisonRun(id=4, tenant_id=1, source_framework_id=7, dest_framework_id=8, status="completed"))
+    db.commit()
+    with pytest.raises(HTTPException) as refused:
+        comparison.ai_compare_dispatch(comparison.AiCompareRunRequest(source_framework_id=7, dest_framework_id=8, refresh=True),
+                                       REQUEST, db, db.get(m.GRCUser, OWNER))
+    assert refused.value.status_code == 503
+    db.expire_all()
+    assert db.get(m.ControlComparisonRun, 4).status == "completed"          # not deleted before the refusal
+
+
 def test_a_run_running_far_longer_than_a_job_can_take_is_shown_failed_and_nothing_is_written(world):
     db = world.db
     old = db.get(m.PolicyGapAnalysisRun, 1)
