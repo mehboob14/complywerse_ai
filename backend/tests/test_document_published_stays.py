@@ -410,7 +410,7 @@ def test_an_archived_document_is_not_in_force_staff_neither_list_nor_open_it_and
     d = doc(world, TEXT)
     assert (d.status, d.published_version, d.last_published_version) == ("archived", None, "1.0")
     assert world.db.query(m.DocumentObligation).filter_by(document_id=TEXT, user_id=ACKER).one().status == "cancelled"
-    for who, detail in ((STAFF, P.DRAFT_REFUSED), (ACKER, P.READ_REFUSED)):     # the library right | asked to acknowledge, cancelled
+    for who, detail in ((STAFF, P.ARCHIVED_REFUSED), (ACKER, P.READ_REFUSED)):  # the library right: told it is archived | asked, cancelled
         for path in ("", "/view-html", "/change-chain", "/download-file"):
             r = get(world, who, f"/governance/documents/{TEXT}{path}")
             assert (r.status_code, r.json()["detail"]) == (403, detail), (who, path)
@@ -470,7 +470,8 @@ def test_an_acknowledgement_given_before_opens_neither_the_archived_document_nor
         if step == "restored":
             world.me["id"] = EDITOR
             assert world.http.post(f"/governance/documents/{TEXT}/restore").status_code == 200
-        for who, detail in ((STAFF, P.DRAFT_REFUSED), (ACKER, P.READ_REFUSED)):     # done acknowledgements survive both
+        staff = P.ARCHIVED_REFUSED if step == "archived" else P.DRAFT_REFUSED     # archived, then a draft once restored
+        for who, detail in ((STAFF, staff), (ACKER, P.READ_REFUSED)):              # done acknowledgements survive both
             r = get(world, who, f"/governance/documents/{TEXT}")
             assert (r.status_code, r.json()["detail"]) == (403, detail), (step, who)
             assert TEXT not in ids(world, who, "/governance/documents"), (step, who)

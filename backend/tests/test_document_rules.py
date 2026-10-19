@@ -132,7 +132,7 @@ def test_an_archived_document_opens_for_a_request_still_waiting_and_its_editors_
     assert IN_REVIEW in readable(world, AUDITOR)
     with pytest.raises(HTTPException) as e:
         P.require_doc_reader(IN_REVIEW, world.db, world.user(VIEWER))
-    assert (e.value.status_code, e.value.detail) == (403, P.DRAFT_REFUSED)
+    assert (e.value.status_code, e.value.detail) == (403, P.ARCHIVED_REFUSED)         # a library reader is told it is archived
 
 
 @pytest.mark.parametrize("status", ["done", "rejected"])

@@ -41,10 +41,10 @@ def _cut(text: str, limit: int) -> Tuple[str, bool]:
 def read_as(db, doc, user) -> Tuple[Any, str]:
     """What ``user`` reads of a library document, and its number. Refused unless they may read it (``permissions.can_read``); while
     a newer version is on its way that they do not see, the version in force (``permissions.version_for``), else the document."""
-    from ..permissions import DRAFT_REFUSED, READ_REFUSED, can_read, can_read_library, version_for
+    from ..permissions import READ_REFUSED, can_read, refusal, version_for
 
     if user is None or not can_read(db, user, doc):
-        raise Refused(DRAFT_REFUSED if user is not None and can_read_library(db, user) else READ_REFUSED)
+        raise Refused(refusal(db, user, doc) if user is not None else READ_REFUSED)
     row = version_for(db, user, doc)
     return (row, row.version_number) if row is not None else (doc, doc.current_version or "1.0")
 

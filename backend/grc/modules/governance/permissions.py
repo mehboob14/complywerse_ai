@@ -49,6 +49,8 @@ READ_REFUSED = ("Only people allowed to read the document library, or asked to r
                 "can open it.")
 DRAFT_REFUSED = ("This document is a draft that has not been published yet; it opens for its owner, author, editors and the people "
                  "asked to review or approve it.")          # what a library reader is told
+ARCHIVED_REFUSED = ("This document is archived, so it is no longer in force; it opens for its owner, author, editors and the people "
+                    "who may restore it.")                  # what a library reader is told about an archived one
 LIBRARY_REFUSED = "Only people allowed to read the document library can see this."
 ANNOTATE_REFUSED = ("Only the document's owner, its author, someone allowed to edit documents, an auditor or someone taking part "
                     "in its sign-off can add remarks to it.")
@@ -244,9 +246,16 @@ def can_read(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
                                                           GovernanceDocument.id.in_(asked_ids(db, user)))).first() is not None
 
 
+def refusal(db: Session, user: GRCUser, doc: GovernanceDocument) -> str:
+    """Why ``user`` may not open ``doc``: a library reader is refused only what is not in force (a draft, an archived one)."""
+    if not can_read_library(db, user):
+        return READ_REFUSED
+    return ARCHIVED_REFUSED if doc.status == "archived" else DRAFT_REFUSED
+
+
 def ensure_reader(db: Session, user: GRCUser, doc: GovernanceDocument) -> None:
-    if not can_read(db, user, doc):           # a library reader is refused only what is not in force (a draft, an archived one)
-        raise _forbidden(DRAFT_REFUSED if can_read_library(db, user) else READ_REFUSED)
+    if not can_read(db, user, doc):
+        raise _forbidden(refusal(db, user, doc))
 
 
 def ensure_annotator(db: Session, user: GRCUser, doc: GovernanceDocument) -> None:
