@@ -14,6 +14,7 @@ from ....routers.auth_router import PLATFORM_GRANT, platform_role_ids, require_a
 
 from ..permissions import require_doc_editor as _require_doc_editor  # noqa: E402
 from ..permissions import require_doc_reader as _require_doc_reader  # noqa: E402
+from ..permissions import ensure_not_archived as _ensure_not_archived  # noqa: E402
 
 router = APIRouter(prefix="/documents", tags=["Governance - Document Workflow"])
 
@@ -401,6 +402,7 @@ def advance_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    _ensure_not_archived(document)                     # a step sets the document's status
     
     instance = document.workflow_instance
     if not instance or instance.status != "active":
@@ -590,6 +592,7 @@ def reject_workflow_step(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    _ensure_not_archived(document)                     # a step sets the document's status
     
     instance = document.workflow_instance
     if not instance or instance.status != "active":

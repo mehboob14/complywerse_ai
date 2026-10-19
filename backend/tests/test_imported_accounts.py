@@ -39,6 +39,7 @@ def _hash(pw):
 @pytest.fixture
 def w(monkeypatch):
     monkeypatch.setattr("grc.modules.governance.routers.documents._resolve_tenant_slug_for_autoparse", lambda tenant_id: None)  # never the real master database
+    monkeypatch.setattr(life, "_task_viewers", lambda db: set(range(1, 9)))      # everyone may open Task Management (not tested here)
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     m.Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)

@@ -1,4 +1,6 @@
 from ....config import get_openai_model
+import contextlib
+import logging
 import os
 import re
 import json
@@ -21,15 +23,36 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from ....schemas import ConvertStatementsRequest, InternalControlFromStatementResponse
 from ....services.ai_gateway.errors import AIBlocked
 from ..action_logger import log_governance_action
-from ..permissions import require_doc_editor, require_doc_reader
+from ..permissions import require_doc_changer, require_doc_reader
 
 router = APIRouter(prefix="/documents", tags=["Governance - Policy Parser"])
+logger = logging.getLogger(__name__)
 
 MAX_PARSE_CHUNKS = 12
 MAX_PARSE_CHARACTERS = 180000
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
+
+AI_UNAVAILABLE = "Comply Agent is not available right now. Try again later."
+NOT_COMPLETED = "It could not be completed. Try again."
+# what the jobs write for people (shown as they are); anything else is a technical error, kept for the logs only
+_PLAIN_JOB_ERRORS = {
+    "Document not found", "Document has no content or file to parse", "No text could be extracted from the document",
+    "Framework not found", "The gap analysis could not be started.", "The gap analysis did not finish. Run it again.",
+    "The gap analysis stopped before it finished. Run it again.",
+    "Another gap analysis of this document was running. Run it again when it is done.",
+}
+_AI_DOWN = re.compile(r"openai|anthropic|not configured|api[ _-]?key|connection error|error code: \d{3}|rate.?limit|timed? ?out|"
+                      r"quota|budget|overloaded|AIBlocked", re.I)
+
+
+def public_job_error(message):
+    """A background job's stored error as a page shows it: a sentence written for people as it is, else never the stored text
+    (a vendor's name, an HTTP code), but Comply Agent being unavailable or that it could not be completed."""
+    if not message or message in _PLAIN_JOB_ERRORS:
+        return message
+    return AI_UNAVAILABLE if _AI_DOWN.search(str(message)) else NOT_COMPLETED
 
 
 def _sanitize_policy_text(raw_text: str) -> str:
@@ -919,6 +942,8 @@ def get_parse_status(
                     pass
             _parsing_status.pop(document_id, None)
             status_info = {"status": "idle", "stale_cleared": True}
+    if status_info.get("error"):
+        status_info = {**status_info, "error": public_job_error(status_info["error"])}
     return status_info
 
 
@@ -1182,7 +1207,7 @@ def _parse_policy_background(document_id: int, user_id: int, tenant_slug: str):
         db.close()
 
 
-@router.post("/{document_id}/parse-policy", dependencies=[Depends(require_doc_editor)])
+@router.post("/{document_id}/parse-policy", dependencies=[Depends(require_doc_changer)])
 def parse_policy_document(
     document_id: int,
     request: Request,
@@ -1250,11 +1275,8 @@ def parse_policy_document(
         except Exception as _celery_exc:  # noqa: BLE001
             # Broker unreachable / Celery misconfigured. Fall through to
             # the thread path so the user's parse runs anyway.
-            print(
-                f"[DISPATCH] policy_parse → celery FAILED, falling back to thread "
-                f"(reason: {type(_celery_exc).__name__}: {_celery_exc!s:.140s})",
-                flush=True,
-            )
+            logger.warning("policy_parse: celery dispatch failed, falling back to a thread (%s: %.140s)",
+                           type(_celery_exc).__name__, _celery_exc)
             force_thread = True
 
     if force_thread:
@@ -1262,11 +1284,8 @@ def parse_policy_document(
         task_id = dispatch_parse_in_thread(tenant_slug, document_id, current_user.id)
         dispatched_via = "thread"
 
-    print(
-        f"[DISPATCH] policy_parse → {dispatched_via} task_id={task_id} "
-        f"tenant={tenant_slug} doc={document_id}",
-        flush=True,
-    )
+    with contextlib.suppress(Exception):            # the job is on its way: a diagnostic never turns that into an error
+        logger.info("policy_parse dispatched via %s task_id=%s tenant=%s doc=%s", dispatched_via, task_id, tenant_slug, document_id)
 
     return {
         "status": "queued",
@@ -1347,10 +1366,7 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
         from ....tasks.governance import dispatch_parse, dispatch_parse_in_thread
         # without Redis the create request does not wait a minute on Celery's broker: a thread at once
         (dispatch_parse if redis_up else dispatch_parse_in_thread)(tenant_slug, document_id, user_id)
-        print(
-            f"[DISPATCH] auto-parse-on-create → dispatched tenant={tenant_slug} doc={document_id}",
-            flush=True,
-        )
+        logger.info("auto-parse-on-create dispatched tenant=%s doc=%s", tenant_slug, document_id)
         return True
     except Exception:  # noqa: BLE001
         _logging.getLogger(__name__).warning(
@@ -1438,7 +1454,7 @@ def get_document_policy_statements(
     }
 
 
-@router.post("/{document_id}/statements", dependencies=[Depends(require_doc_editor)])
+@router.post("/{document_id}/statements", dependencies=[Depends(require_doc_changer)])
 def add_policy_statement(
     document_id: int,
     request: CreatePolicyStatementRequest,
@@ -1527,7 +1543,7 @@ def add_policy_statement(
     return serialize_statement(statement, compliance_record.id)
 
 
-@router.put("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_editor)])
+@router.put("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_changer)])
 def update_policy_statement(
     document_id: int,
     statement_id: int,
@@ -1646,7 +1662,7 @@ def get_statement_versions(
     }
 
 
-@router.post("/{document_id}/statements/{statement_id}/rollback", dependencies=[Depends(require_doc_editor)])
+@router.post("/{document_id}/statements/{statement_id}/rollback", dependencies=[Depends(require_doc_changer)])
 def rollback_statement(
     document_id: int,
     statement_id: int,
@@ -1816,7 +1832,7 @@ def get_reparse_proposals(
     return {"document_id": document_id, **proposals}
 
 
-@router.post("/{document_id}/reparse-proposals/apply", dependencies=[Depends(require_doc_editor)])
+@router.post("/{document_id}/reparse-proposals/apply", dependencies=[Depends(require_doc_changer)])
 def apply_reparse_proposals(
     document_id: int,
     request: ApplyReparseProposalsRequest,
@@ -1992,7 +2008,7 @@ def get_document_sync(document_id: int, db: Session = Depends(get_db), current_u
     return doc_sync.state(db, document) if doc_sync.enabled(db) else {"enabled": False}
 
 
-@router.post("/{document_id}/document-sync/check", dependencies=[Depends(require_doc_editor)])
+@router.post("/{document_id}/document-sync/check", dependencies=[Depends(require_doc_changer)])
 def check_document_sync(document_id: int, again: bool = False, db: Session = Depends(get_db),
                         current_user: GRCUser = Depends(require_auth)):
     """Match the statements to the document's file (statements already matched are kept unless ``again``)."""
@@ -2005,7 +2021,7 @@ def check_document_sync(document_id: int, again: bool = False, db: Session = Dep
     return doc_sync.state(db, document)
 
 
-@router.post("/{document_id}/document-sync/apply", dependencies=[Depends(require_doc_editor)])
+@router.post("/{document_id}/document-sync/apply", dependencies=[Depends(require_doc_changer)])
 def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session = Depends(get_db),
                         current_user: GRCUser = Depends(require_auth)):
     """Write the edited statements into the document's file as a new version."""
@@ -2024,7 +2040,7 @@ def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
-@router.delete("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_editor)])
+@router.delete("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_changer)])
 def delete_policy_statement(
     document_id: int,
     statement_id: int,
@@ -2064,7 +2080,7 @@ def delete_policy_statement(
     return {"message": "Statement deleted"}
 
 
-@router.post("/{document_id}/statements/convert-to-controls", dependencies=[Depends(require_doc_editor)], response_model=List[InternalControlFromStatementResponse])
+@router.post("/{document_id}/statements/convert-to-controls", dependencies=[Depends(require_doc_changer)], response_model=List[InternalControlFromStatementResponse])
 def convert_statements_to_controls(
     document_id: int,
     request: ConvertStatementsRequest,

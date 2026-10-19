@@ -164,6 +164,14 @@ def require_doc_editor(document_id: int, db: Session = Depends(get_db), user: GR
     return doc
 
 
+def require_doc_changer(document_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)) -> GovernanceDocument:
+    """``require_doc_editor`` for a route that changes the document or what is kept with it (its statements, reviews, gap and
+    mapping runs): refused while it is archived (D29)."""
+    doc = require_doc_editor(document_id, db, user)
+    ensure_not_archived(doc)
+    return doc
+
+
 def require_doc_publisher(document_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)) -> GovernanceDocument:
     doc = _document(document_id, db, user)
     ensure_publisher(db, user)

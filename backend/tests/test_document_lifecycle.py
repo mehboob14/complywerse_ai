@@ -43,6 +43,11 @@ def world():
         for uid in (4, 5):
             db.add(m.UserRole(user_id=uid, role_id=10, tenant_id=1))
         db.add(m.UserRole(user_id=7, role_id=11, tenant_id=1))
+        db.add(m.Role(id=900, tenant_id=1, name="Staff"))                         # everyone opens Task Management (life._task_viewers)
+        db.add(m.Permission(id=900, name=life.TASKS_VIEW, resource="critical_tasks:tasks", action="view"))
+        db.add(m.RolePermission(role_id=900, permission_id=900))
+        for uid in range(1, 8):
+            db.add(m.UserRole(user_id=uid, role_id=900, tenant_id=1))
         db.add(m.GovernanceDocument(id=5, tenant_id=1, title="Access policy", doc_type="policy", status="draft",
                                     current_version="1.0", owner_id=1, author_id=1))
         db.commit()
@@ -94,7 +99,7 @@ def test_sending_for_review_asks_each_reviewer_with_a_task_and_an_alert(world):
         mine = [t for t in tasks(db) if t.assigned_user_ids == [2]]
         assert len(tasks(db)) == 2 and mine[0].title == "Review: Access policy" and mine[0].source_entity_id == rows[0].id
         assert mine[0].description.startswith('Please review and sign "Access policy", version 1.0, by ')   # plain words, no bare path
-        assert life.task_values(db, rows[0], doc(db))["link"].endswith("/governance/documents/5?tab=lifecycle")  # {link}: its Approvals
+        assert life.task_values(db, rows[0], doc(db))["link"].endswith("/governance/documents/5?act=sign")  # {link}: the person's own step
         assert len(alerts(db, 2)) == 1 and len(alerts(db, 3)) == 1 and alerts(db, 6) == []
         assert alerts(db, 2)[0].message.endswith("It is in your tasks and in the document's Approvals.")   # the tab that exists
 
@@ -503,7 +508,7 @@ def test_requests_and_rejections_are_worded_as_people_say_them_and_alerts_open_t
     with world.factory() as db:
         participants(db)
         signoff.send_for_review(5, db, user(db, 1))
-        assert alerts(db, 2)[-1].link == "/governance/documents/5?tab=lifecycle"                           # the bell opens the document
+        assert alerts(db, 2)[-1].link == "/governance/documents/5?act=sign"                               # the bell opens the step
         sign(db, 2)
         sign(db, 3)
         assert alerts(db, 4)[-1].subject == "Approval requested: Access policy"
@@ -517,9 +522,9 @@ def test_requests_and_rejections_are_worded_as_people_say_them_and_alerts_open_t
         db.commit()
         assert any(e["detail"].startswith("Acknowledgement asked of") for e in life.state(db, d, user(db, 1))["timeline"])
         ack = db.query(m.DocumentObligation).filter_by(user_id=6, kind="acknowledgement").one()
-        assert life.task_values(db, ack, d)["link"].endswith("/governance/documents/5")          # {link}: the document itself, to read
+        assert life.task_values(db, ack, d)["link"].endswith("/governance/documents/5?act=ack")  # {link}: the document, to read and acknowledge
         assert "/governance/" not in db.get(m.CriticalTask, ack.critical_task_id).description
-        assert alerts(db, 6)[-1].link == "/governance/documents/5" and "Open:" not in alerts(db, 6)[-1].message
+        assert alerts(db, 6)[-1].link == "/governance/documents/5?act=ack" and "Open:" not in alerts(db, 6)[-1].message
 
 
 def test_the_sweep_sends_one_email_per_request_and_counts_the_emails_it_sent(world, monkeypatch):

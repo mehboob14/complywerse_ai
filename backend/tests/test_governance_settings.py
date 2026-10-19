@@ -216,7 +216,7 @@ def test_task_creation_can_be_switched_off_per_kind_and_tasks_follow_the_priorit
         signoff.send_for_review(5, db, user(db, 1))
         t = tasks(db)[0]
         assert (t.title, t.priority) == ("[Review] Access policy v1.0", "Critical")
-        assert t.description.startswith("Owner Olivia Owner, due ") and t.description.endswith("Open /governance/documents/5?tab=lifecycle")
+        assert t.description.startswith("Owner Olivia Owner, due ") and t.description.endswith("Open /governance/documents/5?act=sign")
         before = len(tasks(db))
         publish(db)
         assert len(obligations(db, "acknowledgement", "pending")) == 7 and len(tasks(db)) == before        # asked, without tasks
@@ -263,7 +263,7 @@ def test_the_settings_routes_for_administrators_and_holders_of_the_settings_righ
     db.add(m.UserRole(user_id=6, role_id=30, tenant_id=1))
     db.commit()
     seen = client.get("/documents/lifecycle/settings").json()
-    assert seen["can_edit"] is True and [r["name"] for r in seen["roles"]] == ["Administrator", "Approvers", "Policy office"]
+    assert seen["can_edit"] is True and [r["name"] for r in seen["roles"]] == ["Administrator", "Approvers", "Policy office", "Staff"]
     got = client.put("/documents/lifecycle/settings", json={"review_days": 3, "escalate_role_id": 30, "notify": {"approved": "in_app"}}).json()
     assert (got["settings"]["review_days"], got["settings"]["escalate_role_id"], got["settings"]["notify"]["approved"]) == (3, 30, "in_app")
     db.add(m.Role(id=31, tenant_id=1, name="Policy readers"))                   # any governance right reads them
