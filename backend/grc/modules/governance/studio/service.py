@@ -1141,7 +1141,7 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     if (s.settings or {}).get("file_master"):
         return _save_file_version(db, s, user, doc, change_reason=change_reason, force=force)
     if _norm_doc(s.content) == _norm_doc(doc.content or ""):
-        raise StudioError("Nothing has changed since the library version.")
+        raise StudioError(f"Nothing has changed since the library version: version {doc.current_version or '1.0'} already holds every change.")
     if not force and (doc.content or "").strip() and _norm_doc(doc.content) != _norm_doc(s.base_content):
         raise Conflict("The document was changed in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
     from ..doc_version import decide, summary_of
@@ -1330,7 +1330,7 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
     the changes written into it; a PDF cannot be edited, so its new version is a Word copy built from the text and the PDF stays as
     the earlier version. Statements are anchored in the new file again (organisations that have them tied to the file)."""
     if _norm_doc(s.content) == _norm_doc(s.base_content) and not (s.settings or {}).get("file_changed"):     # (a tidy changes the file only)
-        raise StudioError("Nothing has changed since the library version.")
+        raise StudioError(f"Nothing has changed since the library version: version {doc.current_version or '1.0'} already holds every change.")
     if not force and doc.file_path != (s.settings or {}).get("library_file"):
         raise Conflict("The file of this document was replaced in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
     from ..doc_version import decide, summary_of

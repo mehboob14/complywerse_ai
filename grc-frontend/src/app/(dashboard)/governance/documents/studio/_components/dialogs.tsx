@@ -180,7 +180,12 @@ export function SaveToDocumentDialog({ session, onClose, flush, onDone, onConfli
     mutationFn: async (force: boolean) => { await flush(); return studioApi.saveToDocument(session.id, { change_reason: reason || undefined, force }); },
     onSuccess: (r) => { toast({ ...savedNote(r, session.document_status), type: 'success' }); onDone(); },
     // a refusal may be the document archived while this was open: the session is read again, so no "Save anyway" is offered then
-    onError: (e) => { if (isConflict(e)) { setConflict(problemOf(e)); onConflict?.(); } else toast({ title: 'Could not save', message: problemOf(e), type: 'error' }); },
+    onError: (e) => {
+      if (isConflict(e)) { setConflict(problemOf(e)); onConflict?.(); }
+      // nothing new since the library version (an accepted change was saved at once): not a failure
+      else if (/^Nothing has changed/.test(problemOf(e))) { toast({ title: 'Already saved in the library', message: problemOf(e), type: 'info' }); onDone(); }
+      else toast({ title: 'Could not save', message: problemOf(e), type: 'error' });
+    },
   });
   // the version everyone else reads until this one is published (GET /studio/sessions/{id}: document_version_in_force)
   const warning = saveWarning(session.document_status, session.document_version_in_force);

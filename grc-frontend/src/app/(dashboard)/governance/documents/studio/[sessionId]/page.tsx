@@ -496,7 +496,11 @@ export default function StudioWorkspacePage() {
             <GitCompare className="h-3.5 w-3.5" /> Tracked changes
           </button>
           <button type="button" onClick={() => setDialog('export')} className="inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]"><Download className="h-3.5 w-3.5" /> Export</button>
-          {!maySave ? null : inLibrary ? (
+          {/* everything is in the library already (an accepted change on a draft is saved at once): nothing to save until the text changes */}
+          {!maySave ? null : inLibrary && session.unsaved_in_library === false && saveState === 'saved' ? (
+            <span title={`Every change is saved in the library${session.document_version ? `, in version ${session.document_version}` : ''}. Change the text and it can be saved again.`}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-[#b9dccb] bg-[#eef8f3] px-2.5 py-1.5 text-xs font-semibold text-[#0a5a38]"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved in the library</span>
+          ) : inLibrary ? (
             <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Save className="h-3.5 w-3.5" /> Save to the library</button>
           ) : (
             <button type="button" onClick={() => setDialog('move')} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Library className="h-3.5 w-3.5" /> Move to the library</button>
