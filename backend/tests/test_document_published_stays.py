@@ -423,6 +423,17 @@ def test_an_archived_document_is_not_in_force_staff_neither_list_nor_open_it_and
         assert TEXT in ids(world, who, "/governance/documents?status=archived"), who
 
 
+def test_a_document_under_an_archived_one_stays_in_the_staff_tree_at_the_top(world):
+    doc(world, WORD).parent_document_id = TEXT
+    world.db.commit()
+    world.me["id"] = EDITOR
+    assert world.http.post("/governance/documents/bulk-archive", json={"document_ids": [TEXT]}).status_code == 200
+    tree = {n["id"]: n for n in get(world, STAFF, "/governance/documents/hierarchy").json()}
+    assert sorted(tree) == [WORD] and tree[WORD]["children"] == []        # never the draft under the archived one (DRAFT)
+    tree = {n["id"]: n for n in get(world, EDITOR, "/governance/documents/hierarchy").json()}
+    assert sorted(tree) == [TEXT] and sorted(c["id"] for c in tree[TEXT]["children"]) == [DRAFT, WORD]   # the tree as it is
+
+
 def test_pickers_never_offer_an_archived_document(world):
     doc(world, TEXT).status = "archived"
     world.db.commit()
@@ -447,6 +458,27 @@ def test_a_restored_document_stays_hidden_from_staff_until_it_is_published_again
     got = get(world, STAFF, f"/governance/documents/{TEXT}").json()
     assert (got["content"], got["current_version"], got["status"]) == (V11, "1.1", "published")
     assert TEXT in ids(world, STAFF, "/governance/documents") & ids(world, STAFF, "/governance/documents?brief=1")
+
+
+def test_an_acknowledgement_given_before_opens_neither_the_archived_document_nor_its_restored_draft(world):
+    world.db.query(m.DocumentObligation).filter_by(document_id=TEXT, user_id=ACKER).update({"status": "done"})
+    world.db.add(m.DocumentObligation(tenant_id=1, document_id=TEXT, kind="acknowledgement", user_id=STAFF, document_version="1.0", status="done"))
+    world.db.commit()
+    world.me["id"] = EDITOR
+    assert world.http.post("/governance/documents/bulk-archive", json={"document_ids": [TEXT]}).status_code == 200
+    for step in ("archived", "restored"):
+        if step == "restored":
+            world.me["id"] = EDITOR
+            assert world.http.post(f"/governance/documents/{TEXT}/restore").status_code == 200
+        for who, detail in ((STAFF, P.DRAFT_REFUSED), (ACKER, P.READ_REFUSED)):     # done acknowledgements survive both
+            r = get(world, who, f"/governance/documents/{TEXT}")
+            assert (r.status_code, r.json()["detail"]) == (403, detail), (step, who)
+            assert TEXT not in ids(world, who, "/governance/documents"), (step, who)
+    world.me["id"] = ADMIN
+    assert world.http.put(f"/governance/documents/{TEXT}/status", json={"status": "published"}).status_code == 200
+    for who in (STAFF, ACKER):                                             # in force again: what they acknowledged opens again
+        assert get(world, who, f"/governance/documents/{TEXT}").json()["content"] == V11, who
+        assert TEXT in ids(world, who, "/governance/documents"), who
 
 
 def test_the_dashboard_summary_counts_only_the_documents_the_person_may_read(world):

@@ -16,9 +16,9 @@ Who may read it (the user's decisions of 2026-10-17, "rights or asked"):
   D29) and one restored from the archive until it is published again only if they may also edit or publish documents, or they
   are asked about it (below).
 * Its owner and its author.
-* Anyone asked about it: a request (review, approval, acknowledgement) that is not cancelled - on an archived document only one
-  still waiting - or its sign-off naming them as prepared by, reviewer or approver - by name, by a role the platform gave them,
-  or by a team they belong to or lead.
+* Anyone asked about it: a request (review, approval, acknowledgement) still waiting, or one answered while staff read the
+  document or while it was never published (never once archived, nor restored until it is published again), or its sign-off
+  naming them as prepared by, reviewer or approver - by name, by a role the platform gave them, or by a team they belong to or lead.
 * Auditors (the right that opens the Auditor Portal, ``compliance:frameworks:*``) open single documents from the portal and the
   evidence screens; no library lists.
 * Everybody else is refused; lists show only what the person may read.
@@ -184,12 +184,21 @@ def participant(db: Session, user: GRCUser, doc_id: int, kinds: Iterable[str] = 
     return db.execute(_assigned(db, user, kinds).where(DocumentSignoffAssignment.document_id == doc_id).limit(1)).first() is not None
 
 
+def _staff_read(G):
+    """``staff_reads`` as a condition on G (the documents table or an alias of it)."""
+    return or_(G.status == "published", and_(G.status.in_(ON_ITS_WAY), G.published_version.isnot(None)),
+               and_(G.status.in_(LAPSED), or_(G.last_published_version.isnot(None), G.published_version.isnot(None))))
+
+
 def asked_ids(db: Session, user: GRCUser):
-    """A select of the ids of documents the person is asked about: a request that is not cancelled (on an archived document only
-    one still waiting: an acknowledgement given before opens it no more), or a sign-off naming them."""
+    """A select of the ids of documents the person is asked about: a request still waiting, one answered (done, rejected) while
+    staff read the document or while it was never published (its reviews) - an acknowledgement given before opens no archived
+    document, nor one restored from the archive until it is published again - or a sign-off naming them."""
     O, D = DocumentObligation, aliased(GovernanceDocument)      # an alias: never correlated with a query on the documents
-    return select(O.document_id).where(O.user_id == user.id, O.status != "cancelled", or_(
-        O.status == "pending", O.document_id.notin_(select(D.id).where(D.status == "archived")))).union(_assigned(db, user))
+    answered = select(D.id).where(or_(_staff_read(D), and_(D.published_version.is_(None), D.last_published_version.is_(None),
+                                                           func.coalesce(D.status, "") != "archived")))
+    return select(O.document_id).where(O.user_id == user.id, or_(
+        O.status == "pending", and_(O.status != "cancelled", O.document_id.in_(answered)))).union(_assigned(db, user))
 
 
 def _own_or_asked(db: Session, user: GRCUser):
@@ -215,9 +224,7 @@ def visible_filter(db: Session, user: GRCUser):
     G = GovernanceDocument
     mine = _own_or_asked(db, user)
     # staff_reads: in force, or lapsed with a known version to serve (published_at alone cannot tell which text was approved)
-    in_force = or_(G.status == "published", and_(G.status.in_(ON_ITS_WAY), G.published_version.isnot(None)),
-                   and_(G.status.in_(LAPSED), or_(G.last_published_version.isnot(None), G.published_version.isnot(None))))
-    return or_(in_force, mine) if library else mine
+    return or_(_staff_read(G), mine) if library else mine
 
 
 def staff_reads(doc: GovernanceDocument) -> bool:

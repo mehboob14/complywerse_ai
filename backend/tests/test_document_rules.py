@@ -135,6 +135,22 @@ def test_an_archived_document_opens_for_a_request_still_waiting_and_its_editors_
     assert (e.value.status_code, e.value.detail) == (403, P.DRAFT_REFUSED)
 
 
+@pytest.mark.parametrize("status", ["done", "rejected"])
+def test_an_answered_request_opens_a_draft_never_published_but_not_one_revived_after_a_withdrawal(world, status):
+    world.db.get(m.DocumentObligation, 1).status = status
+    world.db.add(m.DocumentObligation(id=3, tenant_id=1, document_id=DRAFT, kind="review", user_id=ASKED, status=status))
+    travel = world.doc(IN_REVIEW)
+    travel.status = "archived"
+    world.db.commit()
+    travel.status = "draft"                                                  # restored: nothing in force until published again
+    world.db.commit()
+    assert (travel.published_version, travel.last_published_version) == (None, "1.0")
+    assert (readable(world, ASKED), listed(world, ASKED)) == ([DRAFT], [DRAFT])     # the review of a draft never published still opens it
+    travel.status = "published"
+    world.db.commit()
+    assert (readable(world, ASKED), listed(world, ASKED)) == ([DRAFT, IN_REVIEW], [DRAFT, IN_REVIEW])
+
+
 def test_auditors_and_the_library_right_are_matched_with_wildcards_and_platform_given_roles_only(world):
     db, u = world.db, world.user
     assert [uid for uid in range(1, 19) if P.is_auditor(db, u(uid))] == [ADMIN, CONTACT, AUDITOR]
