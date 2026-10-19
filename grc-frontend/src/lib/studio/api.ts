@@ -348,6 +348,8 @@ export interface LibraryDoc {
   version: string;
   has_file: boolean;
   has_text: boolean;
+  /** the person may change it, so it can be opened to edit (Edit from the library offers only those) */
+  may_edit?: boolean;
 }
 
 export interface FrameworkItem {

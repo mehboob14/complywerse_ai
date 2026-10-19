@@ -15,7 +15,7 @@
 // Presentation follows the platform charter: one teal brand (primary-*),
 // flat (no gradients), hairline slate borders, semantic-only status chips.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   X, Search, Sparkles, BookMarked, FileText, Layers,
@@ -31,7 +31,34 @@ import {
   type RecommendedDoc,
   type RecommendedCategory,
 } from './_recommendedDocsCatalog';
+import { ncaName } from './_ncaName';
 import type { CertificationJourney } from '@/types';
+
+/** A popup as a dialog: the focus moves into it (unless a field already took it) and back where it was when it closes; Escape
+ *  closes it, the preview opened inside it first. Spread `props` on the panel and give `titleId` to its title. */
+function useDialog(onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  const titleId = useId();
+  const close = useRef(onClose);
+  close.current = onClose;
+  // read while rendering, before an autofocused field inside takes the focus
+  const [opener] = useState(() => (typeof document === 'undefined' ? null : (document.activeElement as HTMLElement | null)));
+  useEffect(() => {
+    const node = ref.current;
+    if (!node?.contains(document.activeElement)) node?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || node?.querySelector('[role="dialog"]')) return;
+      e.preventDefault();
+      close.current();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      setTimeout(() => { if (!node?.isConnected) opener?.focus?.(); }, 0);     // closed, not re-run (dev strict mode)
+    };
+  }, [opener]);
+  return { titleId, props: { ref, role: 'dialog', 'aria-modal': true, 'aria-labelledby': titleId, tabIndex: -1 } as const };
+}
 
 // ─── Pick payloads ──────────────────────────────────────────────────────
 export type DocumentTemplatePick =
@@ -169,10 +196,11 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny, busy 
   };
 
   const activeLabel = TABS.find((t) => t.key === activeTab)?.label ?? 'templates';
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="flex w-full max-w-5xl max-h-[94vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
+      <div {...dialog.props} className="flex w-full max-w-5xl max-h-[94vh] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl outline-none">
         {/* Header */}
         <div className="flex items-start gap-3.5 border-b border-slate-200 px-5 py-4">
           <div className="hidden sm:flex h-11 w-11 items-center justify-center rounded-xl bg-primary-50 shrink-0">
@@ -180,7 +208,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny, busy 
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-base sm:text-lg font-semibold text-slate-900 flex items-center gap-2">
-              Document Templates
+              <span id={dialog.titleId}>Document Templates</span>
               <span className="hidden sm:inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-primary-50 text-primary-700">
                 <Sparkles className="h-3 w-3" />
                 AI-ready
@@ -435,7 +463,8 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
     queryKey: ['nca-templates-list'],
     queryFn: async () => {
       const r = await apiClient.get('/governance/nca-templates');
-      return r.data;
+      // names, not file names: shown here, in the preview and as the new document's title
+      return { ...r.data, templates: (r.data?.templates ?? []).map((t: NcaTemplate) => ({ ...t, title: ncaName(t.title) })) };
     },
     staleTime: 5 * 60_000,
   });
@@ -572,17 +601,18 @@ function NcaPreviewPopup({
     },
     staleTime: 5 * 60_000,
   });
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+      <div {...dialog.props} className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col outline-none">
         {/* Header */}
         <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
           <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
             <FileText className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={template.title}>
+            <h2 id={dialog.titleId} className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={template.title}>
               {template.title}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
@@ -835,16 +865,17 @@ function ReferenceLawPreviewPopup({
     },
     staleTime: 5 * 60_000,
   });
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+      <div {...dialog.props} className="w-full max-w-5xl max-h-[94vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col outline-none">
         <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
           <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
             <Scale className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={law.name}>
+            <h2 id={dialog.titleId} className="text-sm sm:text-base font-semibold text-slate-900 truncate" title={law.name}>
               {law.name}
             </h2>
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
@@ -1359,16 +1390,17 @@ function ArtifactDetailsPopup({
     genMode === 'table' ? { t: 'Spreadsheet template', c: 'bg-emerald-50 text-emerald-700' }
       : genMode === 'guide' ? { t: 'Collection guide', c: 'bg-amber-50 text-amber-700' }
         : { t: 'Document', c: 'bg-primary-50 text-primary-700' };
+  const dialog = useDialog(onClose);
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 sm:p-6 animate-fade-in">
-      <div className="w-full max-w-2xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col">
+      <div {...dialog.props} className="w-full max-w-2xl max-h-[88vh] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl flex flex-col outline-none">
         <div className="border-b border-slate-200 px-5 py-3.5 flex items-start gap-3">
           <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-primary-50 shrink-0">
             <Layers className="h-5 w-5 text-primary-700" strokeWidth={1.75} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">{item.name}</h2>
+            <h2 id={dialog.titleId} className="text-sm sm:text-base font-semibold text-slate-900 leading-snug">{item.name}</h2>
             <p className="mt-0.5 text-[11px] text-slate-500">
               {frameworkName} · {item.artifact_type}
             </p>

@@ -633,7 +633,7 @@ export default function ChatPanel(props: ChatPanelProps) {
             </button>
           ) : (
             <button type="button" onClick={() => void submit()} disabled={(!text.trim() && !ready.length) || reading || !aiConfigured}
-              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50" aria-label="Send">
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-[#0f766e] px-3 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50" aria-label="Send to Comply Agent">
               <Send className="h-4 w-4" />
             </button>
           )}

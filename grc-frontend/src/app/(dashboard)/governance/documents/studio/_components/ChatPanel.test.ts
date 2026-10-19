@@ -16,3 +16,8 @@ test('the composer keeps the paperclip, drop, paste, Enter to send and Stop', ()
     assert.ok(src.includes(kept), `missing from ChatPanel.tsx: ${kept}`);
   }
 });
+
+test('the composer button is named apart from the top bar quick ask, also called Send', () => {
+  assert.ok(src.includes('aria-label="Send to Comply Agent"'));
+  assert.ok(!src.includes('aria-label="Send"'));
+});
