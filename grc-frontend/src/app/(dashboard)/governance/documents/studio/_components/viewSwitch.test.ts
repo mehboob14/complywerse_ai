@@ -7,7 +7,7 @@ const pdf = { kind: 'pdf', in_place: false };
 const none = { kind: null, in_place: false };
 
 test('the file view tells a reader it is the document as its file shows it, with no Edit to point to', () => {
-  assert.equal(fileNote(word, false), 'The document as its Word file shows it, as Word lays it out.');
+  assert.equal(fileNote(word, false), 'The document as its Word file shows it, as Word lays it out, with any change you accept here.');
   assert.equal(fileNote(pdf, false), 'The document as its PDF shows it, as it was uploaded.');
   for (const s of [word, pdf]) assert.doesNotMatch(fileNote(s, false), /Edit|your changes|saving/);
   assert.match(fileNote(word, true), /Make changes in Edit/);
@@ -21,6 +21,8 @@ test('the switch is Edit and View, and only View for someone who may not save', 
   }
   assert.match(switchButtons(word, true)[1].title, /Word lays it out/);
   assert.match(switchButtons(pdf, false)[0].title, /PDF as it was uploaded/);
+  assert.equal(switchButtons(word, false)[0].title, fileNote(word, false));          // a reader: no "your changes written in"
+  assert.doesNotMatch(switchButtons(word, false)[0].title, /your changes/);
 });
 
 test('View is the file when there is one, else the text read-only', () => {

@@ -113,11 +113,23 @@ export function dayOf(iso: string | null | undefined): string | null {
   return m && month ? `${Number(m[3])} ${month} ${m[1]}` : null;
 }
 
+/** The server's naive UTC time as a Date (one that names its zone is read as it is), as lib/serverTime's parseUtc reads it. */
+function utcMoment(iso: string | null | undefined): Date | null {
+  const v = (iso ?? '').trim();
+  const t = v ? new Date(/(?:[zZ]|[+-]\d\d:?\d\d)$/.test(v) ? v : `${v}Z`) : null;
+  return t && !Number.isNaN(t.getTime()) ? t : null;
+}
+
 /** A moment (the server's naive UTC time, e.g. when a task was created) as the reader's own day, written as dayOf writes a date. */
 export function momentDayOf(iso: string | null | undefined): string | null {
-  const v = (iso ?? '').trim();
-  const t = v ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : `${v}Z`) : null;
-  return t && !Number.isNaN(t.getTime()) ? `${t.getDate()} ${MONTHS[t.getMonth()]} ${t.getFullYear()}` : null;
+  const t = utcMoment(iso);
+  return t ? `${t.getDate()} ${MONTHS[t.getMonth()]} ${t.getFullYear()}` : null;
+}
+
+/** The same with the reader's time of day, "2 Nov 2026, 09:05": a comment, a history entry, a completion. */
+export function momentOf(iso: string | null | undefined): string | null {
+  const t = utcMoment(iso);
+  return t ? `${momentDayOf(iso)}, ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : null;
 }
 
 const NOUN: Record<RequestKind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement' };

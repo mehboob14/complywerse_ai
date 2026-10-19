@@ -8,7 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { DocumentTaskCard, useMyUserId } from '@/components/governance/DocumentTaskActions';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
-import { canDeleteTask, dayOf, isDocumentTask, momentDayOf, plainDescription, withCurrent, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
+import { canDeleteTask, dayOf, isDocumentTask, momentDayOf, momentOf, plainDescription, withCurrent, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, Plus, X,
@@ -485,7 +485,7 @@ export default function TaskDetailPage() {
 
       {docTask && <DocumentTaskCard request={task.document_request} meId={meId} />}
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className={`grid gap-4 ${task.reviewer ? 'grid-cols-4' : 'grid-cols-3'}`}>
         <div className={`rounded-lg border p-3 ${SLA_COLORS[task.sla_status] || ''}`}>
           <div className="text-xs font-medium opacity-70">SLA Status</div>
           <div className="text-lg font-semibold">{task.sla_status}</div>
@@ -540,7 +540,7 @@ export default function TaskDetailPage() {
           </div>
           {task.approved_by && task.approved_at && (
             <p className="text-xs text-[var(--color-muted)] mb-3">
-              {task.approval_status === 'Approved' ? 'Approved' : 'Reviewed'} by {task.approved_by.display_name || task.approved_by.username} on {new Date(task.approved_at).toLocaleString()}
+              {task.approval_status === 'Approved' ? 'Approved' : 'Reviewed'} by {task.approved_by.display_name || task.approved_by.username} on {momentOf(task.approved_at)}
             </p>
           )}
           <div className="flex items-center gap-2">
@@ -641,8 +641,8 @@ export default function TaskDetailPage() {
             <div>
               <h3 className="text-xs font-medium text-[var(--color-muted)] uppercase tracking-wider mb-2">Completion</h3>
               <dl className="space-y-2 text-sm">
-                {task.completed_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Completed At</dt><dd className="text-[var(--color-text)]">{new Date(task.completed_at).toLocaleString()}</dd></div>}
-                {task.verified_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Verified At</dt><dd className="text-[var(--color-text)]">{new Date(task.verified_at).toLocaleString()}</dd></div>}
+                {task.completed_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Completed At</dt><dd className="text-[var(--color-text)]">{momentOf(task.completed_at)}</dd></div>}
+                {task.verified_at && <div className="flex justify-between"><dt className="text-[var(--color-muted)]">Verified At</dt><dd className="text-[var(--color-text)]">{momentOf(task.verified_at)}</dd></div>}
               </dl>
             </div>
           )}
@@ -709,7 +709,7 @@ export default function TaskDetailPage() {
                 <div key={c.id} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm font-medium text-[var(--color-text)]">{c.user?.display_name || c.user?.username || 'Unknown'}</span>
-                    <span className="text-xs text-[var(--color-muted)]">{c.created_at ? new Date(c.created_at).toLocaleString() : ''}</span>
+                    <span className="text-xs text-[var(--color-muted)]">{momentOf(c.created_at) ?? ''}</span>
                   </div>
                   <p className="text-sm text-[var(--color-text)] whitespace-pre-wrap">{c.content}</p>
                 </div>
@@ -750,7 +750,7 @@ export default function TaskDetailPage() {
                       </p>
                     )}
                     <p className="text-xs text-[var(--color-muted)] mt-0.5">
-                      {h.user?.display_name || h.user?.username || 'System'} · {h.created_at ? new Date(h.created_at).toLocaleString() : ''}
+                      {h.user?.display_name || h.user?.username || 'System'} · {momentOf(h.created_at) ?? ''}
                     </p>
                   </div>
                 </div>

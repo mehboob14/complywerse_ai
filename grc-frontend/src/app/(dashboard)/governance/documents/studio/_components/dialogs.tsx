@@ -172,14 +172,15 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
 }
 
 // ── save into the library document ───────────────────────────────────────────
-export function SaveToDocumentDialog({ session, onClose, flush, onDone }: { session: Session; onClose: () => void; flush: () => Promise<void>; onDone: () => void }) {
+export function SaveToDocumentDialog({ session, onClose, flush, onDone, onConflict }: { session: Session; onClose: () => void; flush: () => Promise<void>; onDone: () => void; onConflict?: () => void }) {
   const { toast } = useToast();
   const [reason, setReason] = useState('');
   const [conflict, setConflict] = useState<string | null>(null);
   const save = useMutation({
     mutationFn: async (force: boolean) => { await flush(); return studioApi.saveToDocument(session.id, { change_reason: reason || undefined, force }); },
     onSuccess: (r) => { toast({ ...savedNote(r, session.document_status), type: 'success' }); onDone(); },
-    onError: (e) => { if (isConflict(e)) setConflict(problemOf(e)); else toast({ title: 'Could not save', message: problemOf(e), type: 'error' }); },
+    // a refusal may be the document archived while this was open: the session is read again, so no "Save anyway" is offered then
+    onError: (e) => { if (isConflict(e)) { setConflict(problemOf(e)); onConflict?.(); } else toast({ title: 'Could not save', message: problemOf(e), type: 'error' }); },
   });
   // the version everyone else reads until this one is published (GET /studio/sessions/{id}: document_version_in_force)
   const warning = saveWarning(session.document_status, session.document_version_in_force);

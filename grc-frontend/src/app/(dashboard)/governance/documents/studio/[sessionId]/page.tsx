@@ -632,7 +632,7 @@ export default function StudioWorkspacePage() {
 
       {dialog === 'export' && <ExportDialog session={session} onClose={() => setDialog(null)} flush={flush} />}
       {dialog === 'move' && <MoveToLibraryDialog session={session} onClose={() => setDialog(null)} flush={flush} onDone={() => { setDialog(null); void refreshSession(); }} />}
-      {dialog === 'save' && <SaveToDocumentDialog session={session} onClose={() => setDialog(null)} flush={flush} onDone={() => { setDialog(null); void refreshSession(); }} />}
+      {dialog === 'save' && <SaveToDocumentDialog session={session} onClose={() => setDialog(null)} flush={flush} onDone={() => { setDialog(null); void refreshSession(); }} onConflict={() => void onSessionChanged()} />}
       {dialog === 'details' && <StudioDetailsDialog session={session} onClose={() => setDialog(null)}
         onChanged={(p) => { patchSessionCache(p); if (p.doc_type) qc.invalidateQueries({ queryKey: ['studio', 'checks', id] }); }} />}
       {dialog === 'template' && <SaveTemplateDialog session={session} onClose={() => setDialog(null)} getContent={() => (editor.current?.getMarkdown() ?? latest.current)} />}
