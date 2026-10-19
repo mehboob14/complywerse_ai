@@ -8,11 +8,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { governanceApi, adminApi, teamsApi, tenantApi } from '@/lib/api';
+import { governanceApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { parseUtc } from '@/lib/serverTime';
-import { personOf } from '@/lib/people';
+import { assigneeOptions, assigneePlaceholder, sentToast, type TargetOption } from '@/lib/signoffTargets';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import {
@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 export type Participant = { target_type: string; target_id: number; display?: string };
-type Option = { value: string; label: string; subLabel?: string };
+type Option = TargetOption;
 export type SignoffSignature = {
   id: number; role_type: string; role_label: string; signer_user_id: number; signer_name: string | null; decision: string;
   signed_at: string | null; comment: string | null; esign?: { id: number; image_sha256: string } | null;
@@ -70,41 +70,14 @@ function useRefreshAll(documentId: number) {
   };
 }
 
-export function useAssigneeOptions(tenantId?: number): Option[] {
-  const usersQ = useQuery({
-    queryKey: ['signoff-users', tenantId],
-    queryFn: async () => {
-      try {
-        // tenantApi falls back to the session-scoped /assets/tenant-users when the document carries no tenant_id, so users
-        // always populate (not just roles).
-        const r = await tenantApi.getTenantUsers(tenantId);
-        const d: any = r.data;
-        return (Array.isArray(d) ? d : d?.users || []) as any[];
-      } catch { return []; }
-    },
+/** Who can be picked to review or approve: one read-only list anyone signed in may ask for (people of this platform by name, roles
+ *  a connector did not make, teams), not the administrators' role list. `_tenantId`: kept for the callers; the server knows it. */
+export function useAssigneeOptions(_tenantId?: number): Option[] {
+  const targetsQ = useQuery({
+    queryKey: ['signoff-targets'],
+    queryFn: async () => { try { return (await governanceApi.getSignoffTargets()).data; } catch { return null; } },
   });
-  const rolesQ = useQuery({
-    queryKey: ['signoff-roles'],
-    queryFn: async () => { try { return ((await adminApi.getRoles()).data || []) as any[]; } catch { return []; } },
-  });
-  const teamsQ = useQuery({
-    queryKey: ['signoff-teams'],
-    queryFn: async () => { try { return ((await teamsApi.list()).data || []) as any[]; } catch { return []; } },
-  });
-  return useMemo(() => {
-    const out: Option[] = [];
-    for (const row of usersQ.data || []) {
-      const p = personOf(row);
-      out.push({ value: `user:${p.id}`, label: p.name, subLabel: p.email });
-    }
-    for (const r of rolesQ.data || []) {
-      out.push({ value: `role:${r.id}`, label: `Role · ${r.name}`, subLabel: r.user_count != null ? `${r.user_count} users` : undefined });
-    }
-    for (const t of teamsQ.data || []) {
-      out.push({ value: `team:${t.id}`, label: `Team · ${t.name}`, subLabel: t.member_count != null ? `${t.member_count} members` : undefined });
-    }
-    return out;
-  }, [usersQ.data, rolesQ.data, teamsQ.data]);
+  return useMemo(() => assigneeOptions(targetsQ.data), [targetsQ.data]);
 }
 
 export function AssigneeMultiSelect({
@@ -125,7 +98,7 @@ export function AssigneeMultiSelect({
         }))}
         multiSelect
         triggerVariant="input"
-        placeholder="Add users, roles, or teams…"
+        placeholder={assigneePlaceholder(options)}
         size="md"
         forceSearch
       />
@@ -280,7 +253,7 @@ export function SignoffParticipants({ documentId, doc, readOnly = false }: { doc
   });
   const send = useMutation({
     mutationFn: async () => governanceApi.sendDocumentForReview(documentId),
-    onSuccess: () => { toast({ type: 'success', title: 'Sent', message: 'The reviewers and approvers were asked, in order.' }); refresh(); },
+    onSuccess: (r: any) => { toast(sentToast(r?.data, 'The reviewers and approvers were asked, in order.')); refresh(); },
     onError: (e: any) => toast({ type: 'error', title: 'Not sent', message: e?.response?.data?.detail || 'Add a reviewer or an approver first.' }),
   });
 

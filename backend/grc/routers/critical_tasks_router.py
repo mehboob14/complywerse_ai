@@ -31,7 +31,8 @@ router = APIRouter(
 SORTABLE_COLUMNS = {"created_at", "updated_at", "title", "priority", "status", "due_date", "source", "category"}
 
 
-def _validate_tenant_user(db: Session, user_id: Optional[int], user_tenants: List[int]):
+def _validate_tenant_user(db: Session, user_id: Optional[int], user_tenants: List[int], kept=()):
+    """``kept``: the people already on the record (an edit sends them back as they are: refuse_imported_accounts)."""
     if user_id is None:
         return
     # Per-tenant DB: every active grc_users row belongs to this tenant. The
@@ -44,11 +45,11 @@ def _validate_tenant_user(db: Session, user_id: Optional[int], user_tenants: Lis
     ).first()
     if not user:
         raise HTTPException(status_code=400, detail=f"User {user_id} does not belong to your tenant")
-    refuse_imported_accounts(db, [user_id])
+    refuse_imported_accounts(db, [user_id], kept)
 
 
-def _normalize_assignee_list(db: Session, raw_ids) -> List[int]:
-    """Validate, dedupe and order-preserve a list of user ids."""
+def _normalize_assignee_list(db: Session, raw_ids, kept=()) -> List[int]:
+    """Validate, dedupe and order-preserve a list of user ids (``kept``: as for _validate_tenant_user)."""
     if raw_ids is None:
         return []
     seen: set = set()
@@ -72,7 +73,7 @@ def _normalize_assignee_list(db: Session, raw_ids) -> List[int]:
             status_code=400,
             detail=f"Users {missing} do not belong to your tenant",
         )
-    refuse_imported_accounts(db, cleaned)
+    refuse_imported_accounts(db, cleaned, kept)
     return cleaned
 
 
@@ -1098,14 +1099,16 @@ def update_task(
                 getattr(task, "custom_values", None), creating=False)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
+    # the edit form sends the task's people back: one already on it (assigned before imported accounts were refused) may stay
+    kept = [task.assigned_owner_id, task.reviewer_id, *(task.assigned_user_ids or [])]
     if "assigned_owner_id" in update_data:
-        _validate_tenant_user(db, update_data["assigned_owner_id"], user_tenants)
+        _validate_tenant_user(db, update_data["assigned_owner_id"], user_tenants, kept)
     if "reviewer_id" in update_data:
-        _validate_tenant_user(db, update_data["reviewer_id"], user_tenants)
+        _validate_tenant_user(db, update_data["reviewer_id"], user_tenants, kept)
     if "assigned_user_ids" in update_data:
         # Replace the multi-assignee list and keep `assigned_owner_id` in sync
         # with the first entry (single-source-of-truth for back-compat).
-        normalized_ids = _normalize_assignee_list(db, update_data["assigned_user_ids"])
+        normalized_ids = _normalize_assignee_list(db, update_data["assigned_user_ids"], kept)
         update_data["assigned_user_ids"] = normalized_ids
         update_data["assigned_owner_id"] = normalized_ids[0] if normalized_ids else None
 
@@ -1331,7 +1334,7 @@ def update_sub_task(
     update_data = payload.model_dump(exclude_unset=True)
     if "assigned_owner_id" in update_data:
         user_tenants2 = get_user_tenants(current_user, db)
-        _validate_tenant_user(db, update_data["assigned_owner_id"], user_tenants2)
+        _validate_tenant_user(db, update_data["assigned_owner_id"], user_tenants2, [sub.assigned_owner_id])
     for field, value in update_data.items():
         old = getattr(sub, field, None)
         if old != value:

@@ -784,6 +784,48 @@ def get_user(
     }
 
 
+ADOPTED_MESSAGE = "An account from Access Reviews was turned into a platform user"
+
+
+def _adopt_imported_account(tenant_db: Session, account: TenantUser, data: UserCreate, admin: TenantUser, tenant_id: int) -> dict:
+    """``account`` (imported by an access-review connector, with the email of the user being created) becomes that user: the
+    password, name and username asked for, and the roles ticked, given by this administrator - which is what makes it a platform
+    account (auth_router.platform_account). Its connector's external_provider and external_id stay, so Access Reviews keep
+    matching it; its imported role links stay too. Without a role it would stay an imported account, so one is required."""
+    from ..rich_audit import write_rich_audit_log
+
+    roles = tenant_db.query(Role).filter(Role.id.in_(list(data.role_ids or []))).order_by(Role.id).all()
+    if not roles:
+        raise HTTPException(status_code=400, detail="An access review imported an account with this email. To make it a user of "
+                                                    "this platform, choose at least one role for it.")
+    held = tenant_db.query(Role.name).join(UserRole, UserRole.role_id == Role.id).filter(UserRole.user_id == account.id, PLATFORM_GRANT)
+    before = {"username": account.username, "display_name": account.display_name, "is_active": account.is_active,
+              "external_provider": account.external_provider, "roles": sorted({n for (n,) in held})}
+    account.username = data.username
+    account.password_hash = hash_password(data.password)
+    account.display_name = data.display_name or data.username
+    account.is_active = True
+    # the ticked roles are the ones it holds, as update_user keeps them: an older link nobody gave (a connector's from before
+    # links carried their source) would otherwise grant a role the administrator did not choose, Administrator included
+    tenant_db.query(UserRole).filter(UserRole.user_id == account.id, PLATFORM_GRANT,
+                                     ~UserRole.role_id.in_([r.id for r in roles])).delete(synchronize_session=False)
+    for role in roles:
+        link = tenant_db.query(UserRole).filter(UserRole.user_id == account.id, UserRole.role_id == role.id,
+                                                UserRole.source.is_(None)).first()
+        if link is None:
+            tenant_db.add(UserRole(tenant_id=tenant_id, user_id=account.id, role_id=role.id, assigned_by=admin.id))
+        elif link.assigned_by is None:
+            link.assigned_by = admin.id
+    write_rich_audit_log(db=tenant_db, tenant_id=tenant_id, user_id=admin.id, action="update", resource_type="users",
+                         resource_id=account.id, resource_name=account.display_name, resource_url="/admin/users",
+                         summary=f"{ADOPTED_MESSAGE}: {account.display_name} ({account.external_provider or 'access review'})",
+                         before=before, after={"username": account.username, "display_name": account.display_name,
+                                               "is_active": True, "roles": [r.name for r in roles]})
+    tenant_db.commit()
+    return {"message": ADOPTED_MESSAGE, "adopted": True,
+            "user": {"id": account.id, "username": account.username, "email": account.email, "display_name": account.display_name}}
+
+
 @router.post("/users", status_code=201)
 def create_user(
     data: UserCreate,
@@ -803,13 +845,17 @@ def create_user(
             )
     local_tenant_id = tenant.id
 
-    existing = tenant_db.query(TenantUser).filter(
-        (TenantUser.username == data.username) | (TenantUser.email == data.email)
-    ).first()
+    from .auth_router import is_platform_account
 
-    if existing:
-        from .auth_router import is_platform_account
-
+    taken = tenant_db.query(TenantUser).filter(
+        (TenantUser.username == data.username) | (func.lower(TenantUser.email) == data.email.lower())
+    ).order_by(TenantUser.id).all()
+    # A person an access review imported before an administrator added them (a directory import of the staff) is made this user
+    # in place: the one way in for them, since sign-in, SSO and the pickers refuse such accounts.
+    adopt = next((u for u in taken if (u.email or "").lower() == data.email.lower() and not is_platform_account(tenant_db, u)), None)
+    for existing in taken:
+        if existing is adopt:
+            continue
         if not is_platform_account(tenant_db, existing):       # not on the Users page, so say why the name is taken
             raise HTTPException(status_code=400, detail="An access review imported an account with this username or email, "
                                                         "so it cannot be used for a new user.")
@@ -821,6 +867,9 @@ def create_user(
     _pw_ok, _pw_err = validate_password(data.password, get_active_password_policy(tenant_db))
     if not _pw_ok:
         raise HTTPException(status_code=400, detail=_pw_err)
+
+    if adopt is not None:
+        return _adopt_imported_account(tenant_db, adopt, data, user, local_tenant_id)
 
     new_user = TenantUser(
         username=data.username,

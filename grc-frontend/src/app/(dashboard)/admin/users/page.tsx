@@ -35,6 +35,7 @@ export default function UsersManagementPage() {
   const [roles, setRoles] = useState<AdminRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingUser, setEditingUser] = useState<AdminUser | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -139,7 +140,7 @@ export default function UsersManagementPage() {
           role_ids: formData.role_ids,
         });
       } else {
-        await adminApi.createUser({
+        const created = await adminApi.createUser({
           username: formData.username,
           email: formData.email,
           password: formData.password,
@@ -150,6 +151,8 @@ export default function UsersManagementPage() {
           designation: formData.designation,
           role_ids: formData.role_ids,
         });
+        // an account an access review had imported with this email became this user (the server says so)
+        setNotice(created.data?.adopted ? `${created.data.message}.` : null);
       }
       setShowModal(false);
       fetchData();
@@ -301,6 +304,15 @@ export default function UsersManagementPage() {
           </button>
         </IfPermission>
       </div>
+
+      {notice && (
+        <div role="status" className="rounded-lg border border-teal-200 bg-teal-50 p-4 text-sm text-teal-900">
+          {notice}
+          <button onClick={() => setNotice(null)} className="ml-4 underline">
+            Dismiss
+          </button>
+        </div>
+      )}
 
       {error && (
         <div className="bg-rose-50 border border-rose-200 rounded-lg p-4 text-rose-700">

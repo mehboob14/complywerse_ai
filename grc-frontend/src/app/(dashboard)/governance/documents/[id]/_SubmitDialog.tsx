@@ -8,6 +8,7 @@ import { Loader2, Send } from 'lucide-react';
 import { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
+import { sentToast } from '@/lib/signoffTargets';
 import { AssigneeMultiSelect, useAssigneeOptions, useSignoff, type Participant } from '../_SignoffControl';
 
 const detailOf = (e: any, fallback: string) => {
@@ -48,15 +49,17 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
         prepared_by: ids(data?.participants?.prepared_by || []), reviewers: ids(reviewers), approvers: ids(approvers),
       });
       try {
-        await governanceApi.sendDocumentForReview(documentId);
+        return (await governanceApi.sendDocumentForReview(documentId)).data;
       } catch (e: any) {
         throw Object.assign(e ?? {}, { participantsSaved: true });
       }
     },
-    onSuccess: () => {
-      toast({ type: 'success', title: 'Sent for review', message: reviewers.length ? 'Reviewers were asked' : 'Approvers were asked' });
+    onSuccess: (sent: any) => {
+      // the server names reviewers or approvers nobody can sign for (a role or team without users of this platform)
+      const said = sentToast(sent, reviewers.length ? 'Reviewers were asked' : 'Approvers were asked');
+      toast({ ...said, title: said.title === 'Sent' ? 'Sent for review' : said.title });
       refresh();
-      onClose();
+      if (said.title !== 'Not sent') onClose();          // still a draft: it stays open to choose others
     },
     onError: (e: any) => {
       if (e?.participantsSaved) refresh();

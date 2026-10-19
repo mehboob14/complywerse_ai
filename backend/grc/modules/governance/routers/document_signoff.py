@@ -184,6 +184,82 @@ def _stage_complete(db: Session, tenant_ids: List[int], document_id: int, role_t
     return True
 
 
+def advance_if_complete(db: Session, doc: GovernanceDocument, tenant_ids: List[int], by: Optional[int]) -> Optional[str]:
+    """The stage in progress ends once every one of its participants has a signature of this round (``_stage_complete``): review
+    goes to approval, or to approved when no approver has anyone who can sign; approval to approved. Returns the new status (None:
+    unchanged); the caller runs the follow-ups (``doc_lifecycle.on_signed``, or ``recheck_stage`` when a signer was removed and the
+    people left had all signed). ``approved_by`` is whoever signed the stage last."""
+    stage = {s: r for r, s in _STAGE_STATUS.items()}.get(doc.status)
+    if stage is None:
+        return None
+    db.flush()          # tenant sessions do not autoflush: the signature and the participants just written must count
+    assignments = _assignments(db, doc.id)
+    signatures = _signatures(db, doc.id)
+    if not _stage_complete(db, tenant_ids, doc.id, stage, assignments, signatures):
+        return None
+    if stage == "reviewer" and any(a.role_type == "approver" and doc_lifecycle._members(db, doc, a) for a in assignments):
+        doc.status = "pending_approval"
+    else:
+        last = max((s for s in signatures if s.role_type == stage), key=lambda s: s.signed_at, default=None)
+        doc.status, doc.approved_by, doc.approved_at = "approved", last.signer_user_id if last else by, datetime.utcnow()
+    return doc.status
+
+
+def nobody_can_sign(db: Session, doc: GovernanceDocument) -> List[str]:
+    """A sentence for each reviewer or approver of ``doc`` with nobody who can sign it: a role or team without users of this platform
+    (one a connector made), or an account that is not one."""
+    out = []
+    for a in _assignments(db, doc.id):
+        if a.role_type in _STAGE_STATUS and not doc_lifecycle._members(db, doc, a):
+            label = _target_display(db, a.target_type, a.target_id)       # "Role: <name>", "Team: <name>" or the person
+            who = "reviewers" if a.role_type == "reviewer" else "approvers"
+            out.append(f"{label} cannot sign it; choose other {who}." if a.target_type == "user"
+                       else f"Nobody in {label.partition(': ')[2] or label} can sign it; choose other {who}.")
+    return out
+
+
+def signoff_targets(db: Session, tenant_ids: List[int]) -> Dict[str, list]:
+    """Who a document's reviewers and approvers (and Governance Settings' escalation) can be: the platform's people by name, the
+    roles an access-review connector did not make (a role whose every link it imported, such as "DigitalOcean: team My Team", has
+    nobody who can sign) and the active teams, each counting the people ``_resolve_target_users`` would ask."""
+    from collections import defaultdict
+    from sqlalchemy import func
+
+    from ....models import Team, TeamMember
+
+    people = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(doc_lifecycle._people(db)))}
+    users = sorted(({"id": u.id, "name": u.display_name or u.username or u.email or f"User {u.id}", "email": u.email}
+                    for u in people.values()), key=lambda u: (u["name"].casefold(), u["id"]))
+    members = defaultdict(set)
+    for team_id, user_id in db.query(TeamMember.team_id, TeamMember.user_id):
+        members[team_id].add(user_id)
+    teams = []
+    for t in db.query(Team).filter(Team.tenant_id.in_(tenant_ids), Team.is_active.is_(True)).order_by(func.lower(Team.name), Team.id):
+        teams.append({"id": t.id, "name": t.name, "member_count": len((members[t.id] | {t.lead_user_id}) & people.keys())})
+    return {"users": users, "roles": signoff_roles(db, tenant_ids, set(people)), "teams": teams}
+
+
+def signoff_roles(db: Session, tenant_ids: List[int], people: Optional[Set[int]] = None) -> List[dict]:
+    """The roles of ``signoff_targets``, by name: not one an access-review connector made (every link to it imported), each with
+    how many of ``people`` (the platform's active people) hold it as the platform gave it (auth_router.PLATFORM_GRANT)."""
+    from collections import defaultdict
+    from sqlalchemy import func
+
+    from ....models import Role, UserRole
+    from ....routers.auth_router import SOURCE_SSO
+
+    people = set(doc_lifecycle._people(db)) if people is None else people
+    granted, by_connector = defaultdict(set), set()
+    for role_id, user_id, source in db.query(UserRole.role_id, UserRole.user_id, UserRole.source).filter(UserRole.tenant_id.in_(tenant_ids)):
+        if source is None or source == SOURCE_SSO:
+            granted[role_id].add(user_id)
+        else:
+            by_connector.add(role_id)
+    return [{"id": r.id, "name": r.name, "user_count": len(granted.get(r.id, set()) & people)}
+            for r in db.query(Role).filter(Role.tenant_id.in_(tenant_ids)).order_by(func.lower(Role.name), Role.id)
+            if r.id in granted or r.id not in by_connector]
+
+
 def _user_actionable_role(db: Session, tenant_ids: List[int], doc: GovernanceDocument,
                           user_id: int, assignments: List[DocumentSignature]) -> Optional[str]:
     """The role_type the given user may sign RIGHT NOW for this doc, or None."""
@@ -314,6 +390,7 @@ def set_participants(
     _add("approver", body.approvers or [])
     db.flush()
     doc_lifecycle.on_participants_changed(db, doc, current_user.id)
+    doc_lifecycle.recheck_stage(db, doc, current_user.id)     # a signer removed: the people left may all have signed, or be nobody
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -325,7 +402,9 @@ def send_for_review(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Send the document to its reviewers (or straight to approvers if no reviewers
-    are assigned). Routes it to each assignee's Pending Approvals queue."""
+    are assigned). Routes it to each assignee's Pending Approvals queue. A stage nobody
+    can sign goes on as ``doc_lifecycle.start_round`` says (the other stage, or back to
+    draft), and ``notice`` says which reviewers or approvers cannot sign."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     assignments = _assignments(db, document_id)
@@ -344,9 +423,24 @@ def send_for_review(
         field_changed="status", old_value="draft", new_value=new_status,
     )
     db.flush()
-    doc_lifecycle.on_sent(db, doc, current_user.id)
+    notice = nobody_can_sign(db, doc)
+    moved = doc_lifecycle.start_round(db, doc, current_user.id)
+    if moved:
+        notice.append(f"{moved}.")
+    if doc.status in _STAGE_STATUS.values():
+        doc_lifecycle.on_sent(db, doc, current_user.id)
     db.commit()
-    return get_signoff(document_id, db, current_user)
+    return {**get_signoff(document_id, db, current_user), "notice": " ".join(notice) or None}
+
+
+@router.get("/signoff/targets")
+def get_signoff_targets(
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Who can be chosen to review or approve a document (``signoff_targets``). Anyone signed in, as the people and team lists are:
+    anyone may create a document and choose who signs it."""
+    return signoff_targets(db, get_user_tenants(current_user, db))
 
 
 @router.post("/{document_id}/signoff/sign", dependencies=[Depends(require_doc_reader)])
@@ -414,25 +508,7 @@ def sign_document(
     )
     doc.updated_at = datetime.utcnow()
 
-    # Recompute stage completion (include this new signature).
-    all_assignments = _assignments(db, document_id)
-    fresh_sigs = _signatures(db, document_id) + [type("S", (), {"role_type": role_type, "signer_user_id": current_user.id})()]
-    advanced_to = None
-    if role_type == "reviewer" and _stage_complete(db, user_tenants, document_id, "reviewer", all_assignments, fresh_sigs):
-        # Reviews done → move to approval if approvers exist, else approved.
-        if any(a.role_type == "approver" for a in all_assignments):
-            doc.status = "pending_approval"
-            advanced_to = "pending_approval"
-        else:
-            doc.status = "approved"
-            doc.approved_by = current_user.id
-            doc.approved_at = datetime.utcnow()
-            advanced_to = "approved"
-    elif role_type == "approver" and _stage_complete(db, user_tenants, document_id, "approver", all_assignments, fresh_sigs):
-        doc.status = "approved"
-        doc.approved_by = current_user.id
-        doc.approved_at = datetime.utcnow()
-        advanced_to = "approved"
+    advanced_to = advance_if_complete(db, doc, user_tenants, current_user.id)      # this signature included
 
     create_audit_log(
         db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id,
@@ -442,6 +518,10 @@ def sign_document(
         + f" · e-signature {esig.image_sha256[:12]}, seal {esig.seal[:12]}"
         + (f" → {advanced_to}" if advanced_to else ""),
     )
+    if advanced_to == "approved" and role_type == "reviewer" and any(a.role_type == "approver" for a in _assignments(db, document_id)):
+        create_audit_log(db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id, action="status_changed",
+                         field_changed="status", old_value="pending_review", new_value="approved",
+                         action_details="None of its approvers can sign it, so it is approved after its review")
     db.flush()
     doc_lifecycle.on_signed(db, doc, current_user.id, role_type, signature.id, esig.id, advanced_to)
     db.commit()

@@ -403,13 +403,18 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
 
 # ── hooks called by the sign-off, publish and participant flows ──────────────
 def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
-    from .routers.document_signoff import _assignments
+    """Ask the people of each participant of ``stage`` that nobody has signed for this round (one already signed for is not
+    asked again when the participants are saved)."""
+    from .routers.document_signoff import _assignments, _resolve_target_users, _signatures
 
     kind = _STAGE_KIND[stage]
     asked: List[int] = []
     days = due_days(settings(db, doc.tenant_id), kind)
+    db.flush()          # the round just started (the models' listener) must be the one read
+    signed = {s.signer_user_id for s in _signatures(db, doc.id) if s.role_type == stage}
     for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
-        asked += _request(db, doc, kind, _members(db, doc, a), by, days, a.id)
+        if not signed & _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id):     # as _stage_complete counts it
+            asked += _request(db, doc, kind, _members(db, doc, a), by, days, a.id)
     _notify(db, doc, asked, f"{_NOUN[kind]} requested: {doc.title}",
             f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
             f"It is in your tasks and under Governance > Documents > Approvals & Acknowledgements.", "warning", event="request")
@@ -450,8 +455,21 @@ def on_signed(db, doc, user_id: int, role_type: str, signature_id: Optional[int]
         if ob.assignment_id in assignments:
             ob.status, ob.done_at = "cancelled", now
             _close(db, ob, completed=False)
+    _advanced(db, doc, user_id, advanced_to)
+
+
+@_safe
+def on_advanced(db, doc, by: Optional[int], advanced_to: Optional[str]) -> None:
+    """The stage ended without a signature just now (``recheck_stage``: a signer who had not signed was removed): what was still
+    asked of it ends, and the next stage is asked as after a last signature."""
+    _cancel(db, doc, ("review", "approval"))
+    _advanced(db, doc, by, advanced_to)
+
+
+def _advanced(db, doc, by: Optional[int], advanced_to: Optional[str]) -> None:
+    """After a stage ended: the approvers are asked, or the owner and whoever may publish it are told it is approved."""
     if advanced_to == "pending_approval":
-        _open_stage(db, doc, "approver", user_id)
+        _open_stage(db, doc, "approver", by)
     elif advanced_to == "approved":
         from .permissions import publisher_ids
 
@@ -492,26 +510,63 @@ def on_participants_changed(db, doc, by: Optional[int]) -> None:
     _open_stage(db, doc, stage, by)
 
 
-def start_round(db, doc, by: Optional[int] = None) -> None:
+def start_round(db, doc, by: Optional[int] = None) -> Optional[str]:
     """The document went to review or approval from anything else (a change to an approved or published one, a status set by
     hand): a new round with the same reviewers and approvers (the round itself is stamped by the models' status listener, so the
-    signatures given before no longer count). With nobody to sign that stage it goes to the stage that has someone, as Send
-    would, or back to draft to be sent. Runs for every organisation, with or without the life cycle."""
+    signatures given before no longer count). With nobody who can sign that stage (none set, or only roles, teams or accounts
+    without users of this platform: ``_members``) it goes to the stage that has someone, as Send would, or back to draft to be
+    sent. Runs for every organisation, with or without the life cycle. Returns why it moved (also written to the history)."""
     from .routers.document_signoff import _assignments
     from .routers.versions import create_audit_log
 
-    roles = {a.role_type for a in _assignments(db, doc.id)}
+    assignments = [a for a in _assignments(db, doc.id) if a.role_type in _STAGE_KIND]
+    named = {a.role_type for a in assignments}
+    roles = {a.role_type for a in assignments if _members(db, doc, a)}
     stage = "reviewer" if doc.status == "pending_review" else "approver"
     if stage in roles:
-        return
+        return None
     other = "approver" if stage == "reviewer" else "reviewer"
     to = ("pending_approval" if other == "approver" else "pending_review") if other in roles else "draft"
-    why = {"pending_approval": "No reviewers are set, so it goes to its approvers",
-           "pending_review": "No approvers are set, so it goes to its reviewers",
-           "draft": "Nobody is set to review or approve it, so it is a draft again: choose reviewers and send it for review"}[to]
+    if to == "draft" and named:
+        why = "None of its reviewers or approvers can sign it, so it is a draft again: choose others and send it for review"
+    elif stage in named:
+        why = f"None of its {stage}s can sign it, so it goes to its {other}s"
+    else:
+        why = {"pending_approval": "No reviewers are set, so it goes to its approvers",
+               "pending_review": "No approvers are set, so it goes to its reviewers",
+               "draft": "Nobody is set to review or approve it, so it is a draft again: choose reviewers and send it for review"}[to]
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="status_changed", field_changed="status",
                      old_value=doc.status, new_value=to, action_details=why)
     doc.status = to
+    return why
+
+
+_ENDED = {("pending_review", "pending_approval"): "Everyone left to review it has signed, so it goes to its approvers",
+          ("pending_review", "approved"): "Everyone left to review it has signed and nobody approves it, so it is approved",
+          ("pending_approval", "approved"): "Everyone left to approve it has signed, so it is approved"}
+
+
+def recheck_stage(db, doc, by: Optional[int] = None) -> bool:
+    """A reviewer or approver was removed (participants saved, the one-off fix of imported accounts): the stage in progress may have
+    nobody left who can sign it (``start_round``: the other stage, or a draft) or only people who signed this round
+    (``document_signoff.advance_if_complete``: it ends as at a last signature). Either way a history row says why and the next
+    stage's people are asked. Runs for every organisation; True when the status changed."""
+    from .routers.document_signoff import advance_if_complete
+    from .routers.versions import create_audit_log
+
+    was = doc.status
+    if was not in _PENDING_STAGE:
+        return False
+    if start_round(db, doc, by):
+        _reask(db, doc, by)                     # the old requests end; the new stage's people are asked
+        return True
+    to = advance_if_complete(db, doc, [doc.tenant_id], by)
+    if to is None:
+        return False
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="status_changed", field_changed="status",
+                     old_value=was, new_value=to, action_details=_ENDED[(was, to)])
+    on_advanced(db, doc, by, to)
+    return True
 
 
 REVIEWED = ("approved", "published", "exception_applied") + _PENDING_STAGE
