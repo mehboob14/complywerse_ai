@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 from ....models import GovernanceDocument, GRCUser, StudioReference, StudioSession, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import doc_lifecycle
-from ..permissions import can_delete, can_edit, can_publish, require_doc_editor, require_doc_reader  # noqa: F401  (can_edit/can_publish are imported from here too)
+from ..permissions import (ARCHIVED_LOCKED, can_delete, can_edit, can_publish, ensure_not_archived, require_doc_editor,  # noqa: F401  (can_edit/can_publish are imported from here too)
+                           require_doc_reader)
 from ..studio import references as refs
 from ..studio import service, setup
 from ..studio.importers import ALLOWED_EXTENSIONS, ImportProblem
@@ -31,6 +32,8 @@ def _openable(doc: GovernanceDocument) -> Tuple[bool, Optional[str]]:
     """Whether the studio can open the document (as ``service.create_session`` does), and why not."""
     import os
 
+    if doc.status == "archived":
+        return False, ARCHIVED_LOCKED
     if (doc.content or "").strip():
         return True, None
     if not doc.file_path or not os.path.exists(doc.file_path):
@@ -118,6 +121,7 @@ def open_draft(document_id: int, body: Optional[DraftIn] = None, db: Session = D
     """The person's one draft of the document: reused, replaced when it is clean and the library moved on, or started."""
     fresh = bool(body and body.fresh)
     doc = require_doc_editor(document_id, db, user)
+    ensure_not_archived(doc)
     # two tabs asking at once still give one draft
     db.query(GovernanceDocument.id).filter(GovernanceDocument.id == doc.id).with_for_update().first()
     s, stale, old = _draft(db, doc, user), False, None

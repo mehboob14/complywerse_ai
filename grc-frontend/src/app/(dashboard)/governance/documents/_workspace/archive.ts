@@ -18,6 +18,16 @@ export function withoutArchived<T extends Doc & { children?: T[] }>(nodes: T[]):
   });
 }
 
+/** What archiving does, as its confirmation says it (the document page and the library's row Archive). */
+export const ARCHIVE_LINE = 'It is no longer in force, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting '
+  + 'are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can '
+  + 'restore it as a draft.';
+
+/** The register's bulk bar: the Archived list offers Restore only (the server refuses changing archived documents). */
+export function bulkActionIds(showingArchived: boolean): string[] {
+  return showingArchived ? ['restore'] : ['approve', 'publish', 'assign-owner', 'set-review', 'archive'];
+}
+
 /** What the library's entries count: All documents and My documents (the person owns it) leave archived ones out. */
 export function libraryCounts(docs: Doc[], me?: number | null): { all: number; mine: number; archived: number } {
   const out = { all: 0, mine: 0, archived: 0 };

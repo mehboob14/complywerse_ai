@@ -4,6 +4,7 @@
   or whoever holds ``governance:policies:edit``.
 * Publish it, or move it to approved or published by hand: ``governance:policies:publish``.
 * Delete it: its owner, its author, or ``governance:policies:delete``.
+* Nobody changes an archived document (D29) until it is restored (``ensure_not_archived``); restoring and archiving still work.
 
 Administrators - the organisation's primary contact and holders of the platform-given role named exactly "Administrator" - always
 may (the shared rule, ``auth_router.is_tenant_admin``). Signing, rejecting and acknowledging stay with the person whose turn it is.
@@ -47,11 +48,13 @@ PUBLISH_REFUSED = "Only someone allowed to publish documents can approve or publ
 DELETE_REFUSED = "Only the document's owner, its author or someone allowed to delete documents can delete it."
 READ_REFUSED = ("Only people allowed to read the document library, or asked to review, approve or acknowledge this document, "
                 "can open it.")
-DRAFT_REFUSED = ("This document is a draft that has not been published yet; it opens for its owner, author, editors and the people "
-                 "asked to review or approve it.")          # what a library reader is told
+DRAFT_REFUSED = ("This document is a draft and not in force; it opens for its owner, author, editors and the people asked to review "
+                 "or approve it.")                          # what a library reader is told (never published, or restored from the archive)
 ARCHIVED_REFUSED = ("This document is archived, so it is no longer in force; it opens for its owner, author, editors and the people "
                     "who may restore it.")                  # what a library reader is told about an archived one
 LIBRARY_REFUSED = "Only people allowed to read the document library can see this."
+ARCHIVED_LOCKED = "This document is archived. Restore it to change it."     # archived documents are read, never changed (D29)
+RESTORE_FIRST = "Restore it from the archive first."
 ANNOTATE_REFUSED = ("Only the document's owner, its author, someone allowed to edit documents, an auditor or someone taking part "
                     "in its sign-off can add remarks to it.")
 
@@ -114,12 +117,29 @@ def ensure_publisher(db: Session, user: GRCUser) -> None:
         raise _forbidden(PUBLISH_REFUSED)
 
 
+def _names(docs: list) -> str:
+    return ", ".join(f'"{d.title}"' for d in docs[:10]) + (f" and {len(docs) - 10} more" if len(docs) > 10 else "")
+
+
 def ensure_all_editable(db: Session, user: GRCUser, docs: Iterable[GovernanceDocument]) -> None:
     """A bulk change is all or nothing: refused, naming them, when the person may not change some of the documents."""
     refused = [d for d in docs if not can_edit(db, user, d)]
     if refused:
-        names = ", ".join(f'"{d.title}"' for d in refused[:10]) + (f" and {len(refused) - 10} more" if len(refused) > 10 else "")
-        raise _forbidden(f"Nothing was changed: you may not change {names}. {EDIT_REFUSED}")
+        raise _forbidden(f"Nothing was changed: you may not change {_names(refused)}. {EDIT_REFUSED}")
+
+
+def ensure_not_archived(doc: GovernanceDocument) -> None:
+    """An archived document is withdrawn (D29): its text, file, details and versions stay as they are until it is restored."""
+    if doc is not None and doc.status == "archived":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=ARCHIVED_LOCKED)
+
+
+def ensure_none_archived(docs: Iterable[GovernanceDocument]) -> None:
+    """A bulk change is all or nothing: refused, naming them, when some of the documents are archived."""
+    archived = [d for d in docs if d.status == "archived"]
+    if archived:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail=f"Nothing was changed: {_names(archived)} {'is' if len(archived) == 1 else 'are'} archived. {RESTORE_FIRST}")
 
 
 # ── dependencies for routes with a {document_id} ─────────────────────────────

@@ -25,6 +25,7 @@ import {
 import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
 import { DocumentTree } from './DocumentTree';
+import { bulkActionIds } from './archive';
 
 export interface RegisterTableProps {
   docs: GovDoc[];
@@ -48,6 +49,9 @@ export interface RegisterTableProps {
   /** an archived document back as a draft, for the people who may change it */
   onRestore?: (doc: GovDoc) => void;
   canRestoreRow?: (d: GovDoc) => boolean;
+  /** the list shows the archived documents: its bulk bar offers Restore only */
+  showingArchived?: boolean;
+  onBulkRestore?: (ids: number[]) => void;
   loading?: boolean;
   /** the Tree view: the same columns and row actions, each document under its parent (`scope`: the library scope the ancestors come from) */
   tree?: { scope: GovDoc[]; headerDoc: GovDoc | null; breadcrumb: string[] };
@@ -72,6 +76,8 @@ export function RegisterTable({
   canArchiveRow,
   onRestore,
   canRestoreRow,
+  showingArchived = false,
+  onBulkRestore,
   loading = false,
   tree,
 }: RegisterTableProps) {
@@ -159,14 +165,16 @@ export function RegisterTable({
 
   const ids = (selected: GovDoc[]) => selected.map((d) => d.id);
 
+  const offered = new Set(bulkActionIds(showingArchived));
   const bulkActions: BulkAction<GovDoc>[] = canEdit
-    ? [
+    ? ([
         { id: 'approve', label: 'Approve', icon: CheckCircle2, onClick: (r) => onBulkApprove(ids(r)) },
         { id: 'publish', label: 'Publish', icon: Send, onClick: (r) => onBulkPublish(ids(r)) },
         { id: 'assign-owner', label: 'Assign owner', icon: UserPlus, onClick: (r) => onBulkAssignOwner(ids(r)) },
         { id: 'set-review', label: 'Set review date', icon: CalendarClock, onClick: (r) => onBulkSetReviewDate(ids(r)) },
         { id: 'archive', label: 'Archive', icon: Archive, variant: 'danger', onClick: (r) => onBulkArchive(ids(r)) },
-      ]
+        { id: 'restore', label: 'Restore', icon: ArchiveRestore, onClick: (r) => onBulkRestore?.(ids(r)) },
+      ] as BulkAction<GovDoc>[]).filter((a) => offered.has(a.id) && (a.id !== 'restore' || !!onBulkRestore))
     : [];
 
   if (tree) {

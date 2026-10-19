@@ -27,7 +27,7 @@ from ....routers.auth_router import require_auth, get_user_tenants, get_user_pri
 from ....services.ai_gateway.errors import AIBlocked
 from .policy_parser import extract_text_from_file, _create_version_snapshot
 from ..action_logger import log_governance_action
-from ..permissions import ensure_editor, require_doc_editor, require_doc_reader
+from ..permissions import ensure_editor, ensure_not_archived, require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/gap-analysis", tags=["Policy Gap Analysis"])
 
@@ -1324,6 +1324,7 @@ def apply_finding_fix(
             detail="Source document not found"
         )
     ensure_editor(db, current_user, document)
+    ensure_not_archived(document)
 
     from .. import change_chain as C, doc_version
 
@@ -1508,6 +1509,7 @@ def override_finding(
             GovernanceDocument.tenant_id.in_(user_tenants),
         ).first()
         if document:
+            ensure_not_archived(document)       # taking the fix back out changes the document
             from .. import change_chain as C, doc_version
 
             old_text = C.document_text(document)

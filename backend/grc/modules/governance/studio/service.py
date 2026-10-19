@@ -1123,6 +1123,9 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     if doc is None:
         raise StudioError("This session is not linked to a library document.")
     _may_change(db, user, doc)                        # checked again here: the right may have been taken away since the draft was opened
+    from ..permissions import ensure_not_archived
+
+    ensure_not_archived(doc)                          # archived since the draft was opened: restored first
     if (s.settings or {}).get("file_master"):
         return _save_file_version(db, s, user, doc, change_reason=change_reason, force=force)
     if _norm_doc(s.content) == _norm_doc(doc.content or ""):
@@ -1173,6 +1176,10 @@ def version_after_accept(db, s, user, accepted: int) -> Optional[Dict[str, Any]]
     if not s.document_id or not accepted:
         return None
     doc = db.get(GovernanceDocument, s.document_id)
+    if doc is not None and doc.status == "archived":
+        from ..permissions import ARCHIVED_LOCKED
+
+        return {"saved": False, "why": f"{ARCHIVED_LOCKED} This change stays in the Comply AI Studio until then."}
     if doc is not None and (doc.status or "draft") != "draft":
         state = {"pending_review": "in review", "pending_approval": "waiting for approval"}.get(doc.status, doc.status.replace("_", " "))
         return {"saved": False, "why": f"The document is {state}, so this change stays in the studio. Save to library makes the next "
@@ -1214,7 +1221,9 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
     from ..routers.documents import GOVERNANCE_UPLOAD_DIR
     from ..routers.versions import create_audit_log, increment_version
     from .. import doc_lifecycle
+    from ..permissions import ensure_not_archived
 
+    ensure_not_archived(doc)                     # every new file of a document passes here
     old_path, old_name, old_type, old_size = doc.file_path, doc.file_name, (doc.file_type or "").lower(), doc.file_size
     ext = (ext or "docx").lower().lstrip(".")
     new_name = f"{os.path.splitext(old_name or doc.title or 'document')[0]}.{ext}"

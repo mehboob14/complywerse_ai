@@ -27,7 +27,7 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from ....services import esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
 from .. import doc_lifecycle
-from ..permissions import require_doc_editor, require_doc_reader
+from ..permissions import ensure_not_archived, require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/documents", tags=["Governance - Sign-off"])
 
@@ -328,6 +328,7 @@ def send_for_review(
     are assigned). Routes it to each assignee's Pending Approvals queue."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
+    ensure_not_archived(doc)                           # out of the archive only by Restore, then sent as a draft
     assignments = _assignments(db, document_id)
     has_reviewers = any(a.role_type == "reviewer" for a in assignments)
     has_approvers = any(a.role_type == "approver" for a in assignments)

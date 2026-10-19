@@ -30,6 +30,7 @@ import GovernanceMappingsPage from '../../mappings/page';
 import { SIGNOFF_STATUS, SignOffControlTab, SignoffAction, StatusChip, useSignoff } from '../_SignoffControl';
 import { LifecycleHover } from '../_workspace/LifecycleHover';
 import { bulkArchive, restoreDocument } from '../_workspace/api';
+import { ARCHIVE_LINE } from '../_workspace/archive';
 import LifecycleTab, { AckAction, SettingsCard } from './_LifecycleTab';
 import ChainTab from './_ChainTab';
 import { DocumentSignoffPanel, DocumentVersionHistoryPanel, DocumentViewerTab } from './_DocumentViewer';
@@ -247,6 +248,8 @@ export default function DocumentStudio() {
   // archiving needs edit rights, as the server's bulk-archive does
   const canArchive = canEdit && doc.status !== 'archived';
   const archived = doc.status === 'archived';
+  // an archived document is read, not changed, until it is restored (the server refuses it): only Restore is offered
+  const mayChange = canEdit && !archived;
   // a rejection is of the version on its way: not shown to someone reading the published one (`newer_version`)
   const rejected = lc && !doc.newer_version ? rejectionOf(doc.status, lc.approvals) : null;
   // remarks: editors, auditors and the sign-off's people (the server's ensure_annotator); unknown to an older server: shown
@@ -283,7 +286,7 @@ export default function DocumentStudio() {
   };
   const editLabel = draft?.unsaved ? 'Continue editing' : 'Edit in Comply AI Studio';
   // the typed-name sign-off writes into the document's own text: only a text document (an uploaded file keeps its own table)
-  const canTyped = canEdit && !doc.has_file && /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(doc.content || '');
+  const canTyped = mayChange && !doc.has_file && /^#{1,6}\s|^\*\*|^-\s|^\d+\.\s/m.test(doc.content || '');
 
   return (
     // fills the page under the app's top bar (cancels main's compact padding exactly, as the AI Studio's workspace does); the bar
@@ -314,8 +317,8 @@ export default function DocumentStudio() {
 
           <div className="ml-auto flex shrink-0 flex-wrap items-center gap-1.5">
             {canEdit && (
-              <button type="button" onClick={() => edit.mutate(false)} disabled={!access?.openable || edit.isPending} className={BTN}
-                title={!access?.openable ? access?.reason ?? '' : draft ? `Your draft${draft.updated_at ? `, ${ago(draft.updated_at)}` : ''}${draft.behind ? ' · the document has changed since' : ''}` : 'Open your draft of this document in the Comply AI Studio'}>
+              <button type="button" onClick={() => edit.mutate(false)} disabled={!mayChange || !access?.openable || edit.isPending} className={BTN}
+                title={!mayChange || !access?.openable ? access?.reason ?? 'This document is archived. Restore it to change it.' : draft ? `Your draft${draft.updated_at ? `, ${ago(draft.updated_at)}` : ''}${draft.behind ? ' · the document has changed since' : ''}` : 'Open your draft of this document in the Comply AI Studio'}>
                 {edit.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                 <span className="hidden md:inline">{editLabel}</span>
               </button>
@@ -355,7 +358,7 @@ export default function DocumentStudio() {
                   }}><Link2 className="h-4 w-4" /> Copy link</button>
                   {!lifecycleOn && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('history'); }}>Version history…</button>}
                   {canTyped && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('control'); }}>Document control…</button>}
-                  {lifecycleOn && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('settings'); }}>Due dates and escalation…</button>}
+                  {lifecycleOn && !archived && <button type="button" role="menuitem" className={ITEM} onClick={() => { close(); setPopup('settings'); }}>Due dates and escalation…</button>}
                   {!lifecycleOn && <Link role="menuitem" href="/governance/workflows" className={ITEM} onClick={close}>Older approval requests</Link>}
                   {canArchive && <button type="button" role="menuitem" className={ITEM_DANGER} onClick={() => { close(); archive.reset(); setPopup('archive'); }}><Archive className="h-4 w-4" /> Archive document…</button>}
                   {archived && canEdit && <button type="button" role="menuitem" className={ITEM} disabled={unarchive.isPending} onClick={() => { close(); unarchive.mutate(); }}><ArchiveRestore className="h-4 w-4" /> Restore from the archive</button>}
@@ -428,7 +431,7 @@ export default function DocumentStudio() {
         )}
         {view === 'document' && (
           <DocumentViewerTab document={doc} htmlContent={htmlQ.data} htmlLoading={htmlQ.isLoading} docType={{ label: TYPE_LABEL[doc.doc_type] ?? doc.doc_type }}
-            chainOn={lifecycleOn} trackedRange={trackedRange} variant="studio" canTakeBack={canEdit} reading={reading} onStopReading={() => setReading(null)}
+            chainOn={lifecycleOn} trackedRange={trackedRange} variant="studio" canTakeBack={mayChange} reading={reading} onStopReading={() => setReading(null)}
             onRead={(v: { id: number; number: string }) => { setTrackedRange(null); setReading(v); }}
             ackedVersion={ackedVersion} />
         )}
@@ -454,17 +457,17 @@ export default function DocumentStudio() {
           )
         )}
         {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
-        {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={canEdit} />}
+        {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={mayChange} />}
         {view === 'mappings' && library && <GovernanceMappingsPage initialDocumentId={id} />}
-        {view === 'gaps' && library && <GapAnalysisView documentId={id} tenantId={doc.tenant_id} canEdit={canEdit} />}
+        {view === 'gaps' && library && <GapAnalysisView documentId={id} tenantId={doc.tenant_id} canEdit={mayChange} />}
         {view === 'versions' && (
           lifecycleOn ? (
-            <ChainTab documentId={id} currentVersion={version} onRestore={canEdit ? setRestoring : undefined} focusVersionId={focusVersion}
+            <ChainTab documentId={id} currentVersion={version} onRestore={mayChange ? setRestoring : undefined} focusVersionId={focusVersion}
               onShowInDocument={(range) => { setReading(null); setTrackedRange(range); setView('document'); }}
               onRead={(v) => { setTrackedRange(null); setReading(v); setView('document'); }} />
           ) : (
             <section className="rounded-xl border border-[#d5dbe1] bg-white p-4">
-              <p className="text-sm text-[#26323d]">Every version of this document, with its file and what changed{canEdit ? ', and Restore' : ''}.</p>
+              <p className="text-sm text-[#26323d]">Every version of this document, with its file and what changed{mayChange ? ', and Restore' : ''}.</p>
               <button type="button" onClick={() => setPopup('history')} className={`${BTN} mt-3`}>Open the versions</button>
             </section>
           )
@@ -472,7 +475,7 @@ export default function DocumentStudio() {
       </div></div>
 
       {/* ── popups ──────────────────────────────────────────────────── */}
-      <DetailsDialog doc={doc} open={popup === 'details'} onClose={() => setPopup(null)} canEdit={canEdit} />
+      <DetailsDialog doc={doc} open={popup === 'details'} onClose={() => setPopup(null)} canEdit={mayChange} />
       <SubmitDialog documentId={id} doc={doc} open={popup === 'submit'} onClose={() => setPopup(null)} />
       <AnimatedModal isOpen={popup === 'sign'} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE}
         title={primary?.kind === 'approve' ? 'Approve and sign' : 'Review and sign'} subtitle={`${doc.title} · version ${version}`}>
@@ -504,7 +507,7 @@ export default function DocumentStudio() {
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
-          <p className="text-sm text-[#26323d]">It is no longer in force, so staff stop reading it, and the reviews, approvals and acknowledgements still waiting are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can restore it as a draft.</p>
+          <p className="text-sm text-[#26323d]">{ARCHIVE_LINE}</p>
           {archive.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not archived: {problemOf(archive.error)}</p>}
         </div>
       </AnimatedModal>
@@ -544,8 +547,8 @@ export default function DocumentStudio() {
           </label>
         </div>
       </AnimatedModal>
-      {canEdit && <DocumentSignoffPanel documentId={id} isOpen={popup === 'control'} onClose={() => setPopup(null)} onDone={refreshAll} />}
-      <DocumentVersionHistoryPanel documentId={id} isOpen={popup === 'history'} onClose={() => setPopup(null)} canRestore={canEdit} status={doc.status} onRestored={() => { setPopup(null); refreshAll(); }} />
+      {mayChange && <DocumentSignoffPanel documentId={id} isOpen={popup === 'control'} onClose={() => setPopup(null)} onDone={refreshAll} />}
+      <DocumentVersionHistoryPanel documentId={id} isOpen={popup === 'history'} onClose={() => setPopup(null)} canRestore={mayChange} status={doc.status} onRestored={() => { setPopup(null); refreshAll(); }} />
     </div>
   );
 }

@@ -912,6 +912,7 @@ def _snapshot_content_version(
     from .versions import increment_version
     from .. import doc_version
 
+    permissions.ensure_not_archived(document)          # every text change of a document passes here
     existing = db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.document_id == document.id
     ).count()
@@ -1040,6 +1041,7 @@ def update_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)          # its text and its details: restored first
     
     update_data = document_update.model_dump(exclude_unset=True)
     if "status" in update_data and update_data["status"] == document.status:
@@ -1159,6 +1161,7 @@ def signoff_document(
     ).first()
     if not document:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    permissions.ensure_not_archived(document)
 
     old_content = document.content
     old_title = document.title
@@ -1528,6 +1531,8 @@ def bulk_update_status(
     permissions.ensure_all_editable(db, current_user, documents)
     if bulk_update.status in ("approved", "published"):
         permissions.ensure_publisher(db, current_user)
+    if bulk_update.status != "archived":            # out of the archive only by Restore (a draft, reviewed and approved again)
+        permissions.ensure_none_archived(documents)
     updated_count = 0
     for doc in documents:
         old_status = doc.status
@@ -1627,6 +1632,7 @@ def bulk_assign_owner(
         )
 
     permissions.ensure_all_editable(db, current_user, documents)
+    permissions.ensure_none_archived(documents)
     from ....routers.auth_router import refuse_imported_accounts
 
     refuse_imported_accounts(db, [bulk_request.owner_id])
@@ -1677,6 +1683,7 @@ def bulk_set_review_date(
         )
 
     permissions.ensure_all_editable(db, current_user, documents)
+    permissions.ensure_none_archived(documents)
     updated_count = 0
     for doc in documents:
         old_review_date = doc.next_review_date
@@ -1726,6 +1733,7 @@ def bulk_publish(
         )
 
     permissions.ensure_publisher(db, current_user)
+    permissions.ensure_none_archived(documents)
     published_count = 0
     skipped_count = 0
     for doc in documents:
@@ -1791,6 +1799,8 @@ def update_document_status(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    if new_status != "archived":                # out of the archive only by Restore
+        permissions.ensure_not_archived(document)
 
     old_status = document.status
     document.status = new_status
@@ -1987,6 +1997,7 @@ async def upload_document_file(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)
     
     if not file.filename:
         raise HTTPException(
