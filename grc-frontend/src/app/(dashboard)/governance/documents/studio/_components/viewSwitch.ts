@@ -25,6 +25,14 @@ export function switchButtons(source: Source, maySave: boolean): { key: ViewKey;
   return maySave ? [{ key: 'edit', label: 'Edit', title: 'Change the text; it is saved as you go' }, view] : [view];
 }
 
+/** The line above the file view. Someone who may not save has no Edit: for them it is the document as its file shows it. */
+export function fileNote(source: Source, maySave: boolean): string {
+  const word = viewShows(source) === 'word';
+  if (!maySave) return word ? 'The document as its Word file shows it, as Word lays it out.' : 'The document as its PDF shows it, as it was uploaded.';
+  return word ? 'Your Word file with your changes written in, as Word lays it out. Make changes in Edit; this follows what you save.'
+    : 'The PDF as it was uploaded. A PDF cannot be edited: you change its text in Edit, and saving makes a Word copy of it.';
+}
+
 /** Whether the document opens on its file: a Word file edited in place does, and any file does for someone who may only read it. */
 export function opensOnFile(source: Source, maySave: boolean): boolean {
   const shows = viewShows(source);

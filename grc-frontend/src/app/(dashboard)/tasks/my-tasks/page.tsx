@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { criticalTasksApi } from '@/lib/api';
 import Link from 'next/link';
 import { DocumentTaskLink, useMyUserId } from '@/components/governance/DocumentTaskActions';
-import { isDocumentTask, type DocumentRequest } from '@/lib/documentTasks';
+import { dayOf, isDocumentTask, momentDayOf, type DocumentRequest } from '@/lib/documentTasks';
 import {
   Clock, CheckCircle2, AlertTriangle, Target, Loader2, ChevronRight,
 } from 'lucide-react';
@@ -148,7 +148,7 @@ export default function MyTasksPage() {
                   <span className="text-sm text-[var(--color-text)]">{t.title}</span>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="text-xs text-rose-600">Due: {t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}</span>
+                  <span className="text-xs text-rose-600">Due {dayOf(t.due_date) ?? '—'}</span>
                   <ChevronRight size={14} className="text-[var(--color-muted)]" />
                 </div>
               </Link>
@@ -183,7 +183,7 @@ export default function MyTasksPage() {
                     <span className="text-xs text-[var(--color-muted)]">{t.source} · {t.category}</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    {t.due_date && <span className="text-xs text-[var(--color-muted)]">{new Date(t.due_date).toLocaleDateString()}</span>}
+                    {t.due_date && <span className="text-xs text-[var(--color-muted)]">{dayOf(t.due_date)}</span>}
                     <span className={`text-xs font-medium ${SLA_COLORS[t.sla_status]}`}>{t.sla_status}</span>
                     <ChevronRight size={14} className="text-[var(--color-muted)]" />
                   </div>
@@ -207,7 +207,7 @@ export default function MyTasksPage() {
                   <CheckCircle2 size={16} className="text-emerald-600" />
                   <span className="text-sm text-[var(--color-muted)] line-through">{t.title}</span>
                 </div>
-                <span className="text-xs text-[var(--color-muted)]">{t.completed_at ? new Date(t.completed_at).toLocaleDateString() : ''}</span>
+                <span className="text-xs text-[var(--color-muted)]">{momentDayOf(t.completed_at) ?? ''}</span>
               </Link>
             ))}
           </div>

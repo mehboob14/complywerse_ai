@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  actOf, actOutcome, actionHref, canDeleteTask, closesWhen, isDocumentTask, plainDescription, reassignReport, requestLine, taskButtons,
+  actOf, actOutcome, actionHref, canDeleteTask, closesWhen, dayOf, isDocumentTask, momentDayOf, plainDescription, reassignReport, requestLine, taskButtons,
   withCurrent, withoutLocked, type DocumentRequest,
 } from './documentTasks.ts';
 
@@ -69,6 +69,21 @@ test('an older task drops its "Open it at /path" sentence; the buttons do that n
     'Review the document "AUP" (version 1.0). This task closes when you sign it there.');
   assert.equal(plainDescription('Please acknowledge "AUP", version 1.2, by 30 Oct 2026.'), 'Please acknowledge "AUP", version 1.2, by 30 Oct 2026.');
   assert.equal(plainDescription(null), '');
+});
+
+test('a due date in the request\'s words reads as the task page writes dates: 2 Nov 2026, not 02 Nov 2026', () => {
+  assert.equal(plainDescription('Please review "AUP", version 1.0, by 02 Nov 2026.'), `Please review "AUP", version 1.0, by ${dayOf('2026-11-02')}.`);
+  assert.equal(plainDescription('Due 09 May 2027, then 10 May 2027.'), 'Due 9 May 2027, then 10 May 2027.');
+});
+
+test('a moment is written as a date is: "2 Nov 2026", the reader\'s own day of the server\'s UTC time', () => {
+  const d = new Date(Date.UTC(2026, 10, 2, 12));
+  const local = `${d.getDate()} ${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][d.getMonth()]} ${d.getFullYear()}`;
+  assert.equal(momentDayOf('2026-11-02T12:00:00'), local);
+  assert.equal(momentDayOf('2026-11-02T12:00:00.123456'), local);
+  assert.equal(momentDayOf('2026-11-02T12:00:00Z'), local);
+  assert.equal(momentDayOf(null), null);
+  assert.equal(momentDayOf('not a date'), null);
 });
 
 test('where the request stands, in a line', () => {

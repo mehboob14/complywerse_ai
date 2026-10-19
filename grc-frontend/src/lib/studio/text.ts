@@ -88,6 +88,20 @@ export function saveWarning(status: string | null | undefined, inForce?: string 
   return [warning, keeps].filter(Boolean).join(' ') || null;
 }
 
+/** Whether the studio's text may be saved to the library: not by someone who may only read the document (`may_save` false;
+ *  missing: allowed), and by nobody while it is archived (D29: it is restored first). */
+export function maySaveToLibrary(s: { may_save?: boolean; document_status?: string | null }): boolean {
+  return s.may_save !== false && s.document_status !== 'archived';
+}
+
+export const ARCHIVED_NOTE = 'This document is archived, so nothing here is saved to the library. Restore it in the library to change it.';
+
+/** The line after changes are accepted: written into the document when the library has them too (or the work is not in the
+ *  library yet), else kept here in the studio (`saved`: the accept's `library_version.saved`). */
+export function acceptedLine(n: number, inLibrary: boolean, saved: boolean): string {
+  return `${plural(n, 'change')} accepted ${!inLibrary || saved ? 'and written into the document' : 'here in the studio; the library is not changed'}.`;
+}
+
 /** The toast after Save to the library: the version, major or minor, and where the document is now (`before`: its status before). */
 export function savedNote(r: { version: string; change?: 'major' | 'minor' | null; status?: string; in_place?: boolean }, before?: string | null): { title: string; message?: string } {
   // a document not published yet collects every change in one version: it stays that number until it is published

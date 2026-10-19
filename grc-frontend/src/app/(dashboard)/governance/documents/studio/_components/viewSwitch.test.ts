@@ -1,10 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { choose, opensOnFile, pressedKey, switchButtons, viewShows } from './viewSwitch.ts';
+import { choose, fileNote, opensOnFile, pressedKey, switchButtons, viewShows } from './viewSwitch.ts';
 
 const word = { kind: 'docx', in_place: true };
 const pdf = { kind: 'pdf', in_place: false };
 const none = { kind: null, in_place: false };
+
+test('the file view tells a reader it is the document as its file shows it, with no Edit to point to', () => {
+  assert.equal(fileNote(word, false), 'The document as its Word file shows it, as Word lays it out.');
+  assert.equal(fileNote(pdf, false), 'The document as its PDF shows it, as it was uploaded.');
+  for (const s of [word, pdf]) assert.doesNotMatch(fileNote(s, false), /Edit|your changes|saving/);
+  assert.match(fileNote(word, true), /Make changes in Edit/);
+  assert.match(fileNote(pdf, true), /saving makes a Word copy/);
+});
 
 test('the switch is Edit and View, and only View for someone who may not save', () => {
   for (const s of [word, pdf, none, null]) {

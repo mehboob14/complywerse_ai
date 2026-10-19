@@ -12,13 +12,13 @@ import Link from 'next/link';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
-  AlertTriangle, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Info, Library, ListChecks, Loader2,
+  AlertTriangle, Archive, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Info, Library, ListChecks, Loader2,
   MessageSquare, Pencil, Save, Settings2, Sparkles, Square, X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { isConflict, problemOf, studioApi, type AnswerItem, type Attachment, type Issue, type Message, type Session } from '@/lib/studio/api';
-import { countPlaceholders, countWords, num, plural } from '@/lib/studio/text';
+import { ARCHIVED_NOTE, acceptedLine, countPlaceholders, countWords, maySaveToLibrary, num, plural } from '@/lib/studio/text';
 import StudioEditor, { type EditorMode, type StudioEditorHandle } from '../_components/StudioEditor';
 import ChatPanel from '../_components/ChatPanel';
 import { useLiveProgress } from '../_components/useLiveProgress';
@@ -245,12 +245,12 @@ export default function StudioWorkspacePage() {
                 message: v?.saved ? (v.in_place
                   ? `Saved in version ${v.version}${v.change ? ` (${v.change} change)` : ''}: it stays ${v.version} until it is published.`
                   : `Saved as version ${v.version}${v.change ? ` (${v.change} change)` : ''}; the version before is kept in the history.`)
-                  : session?.may_save !== false ? v?.why : undefined });   // `why` speaks of saving to the library
+                  : session && maySaveToLibrary(session) ? v?.why : undefined });   // `why` speaks of saving to the library
         // marked from the revision before this accept (its own revision is the one after): a saved version has moved the
         // session's starting point to the accepted text, so "since the start" would show nothing
         // (offered when some can be marked: a spacing tidy is not in the text; the count is the toast's, all that were accepted)
         const marked = (r.message.proposal?.ops ?? []).filter((o) => opIds.includes(o.id) && o.status === 'accepted' && o.kind !== 'tidy').length;
-        setJustAccepted(marked ? { n: r.accepted, from: r.revision - 1, to: r.revision } : null);
+        setJustAccepted(marked ? { n: r.accepted, from: r.revision - 1, to: r.revision, line: acceptedLine(r.accepted, !!session?.document_id, !!v?.saved) } : null);
         if (v?.saved) {
           patchSessionCache({ unsaved_in_library: false });
           onSessionChanged();                                                 // its label names the new version
@@ -268,7 +268,7 @@ export default function StudioWorkspacePage() {
       const v = r.library_version;
       toast({ title: 'Change taken back', type: 'success',
               message: v?.saved ? `Saved as version ${v.version}; the version before is kept in the history.`
-                : session?.document_id && session.may_save !== false ? 'Taken back in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
+                : session?.document_id && maySaveToLibrary(session) ? 'Taken back in the studio; Save to the library to make it the next version.' : 'It is a new revision, so nothing is lost.' });
       void onSessionChanged();
     } catch (e) { toast({ title: 'Could not take it back', message: problemOf(e), type: 'error' }); }
   };
@@ -287,12 +287,12 @@ export default function StudioWorkspacePage() {
   const [compare, setCompare] = useState<CompareSpec | null>(null);
   const [asFile, setAsFile] = useState(false);                       // the document as its file shows it (Word, or the PDF)
   const openedAsFile = useRef<number | null>(null);
-  const startsOnFile = !!session && opensOnFile(session.source, session.may_save !== false);
+  const startsOnFile = !!session && opensOnFile(session.source, maySaveToLibrary(session));
   useEffect(() => {                                   // a Word file opens as Word lays it out (a PDF too, for a reader), once per document
     if (session && startsOnFile && openedAsFile.current !== session.id) { openedAsFile.current = session.id; setAsFile(true); }
   }, [session, startsOnFile]);
   // the changes just accepted, and the revisions they lie between: offered to be seen marked in the document
-  const [justAccepted, setJustAccepted] = useState<{ n: number; from: number; to: number } | null>(null);
+  const [justAccepted, setJustAccepted] = useState<{ n: number; from: number; to: number; line: string } | null>(null);
   const [dialog, setDialog] = useState<Dialog>(null);
   const [focusRef, setFocusRef] = useState<string | null>(null);
   const [issues, setIssues] = useState<Issue[]>([]);
@@ -423,8 +423,9 @@ export default function StudioWorkspacePage() {
 
   const aiConfigured = !!status.data?.ai_configured;
   const inLibrary = !!session.document_id;
-  // someone who may only read the library document (a comparison opened by a reader): no saving or moving (a server that does not say: allowed)
-  const maySave = session.may_save !== false;
+  // someone who may only read the library document (a comparison opened by a reader), or an archived one: no saving or moving
+  const maySave = maySaveToLibrary(session);
+  const archived = session.document_status === 'archived';
   const shownMode: EditorMode = maySave ? mode : 'view';
   const shownView = compare ? null : pressedKey(session.source, shownMode, asFile);
   const show = async (key: ViewKey) => {
@@ -511,8 +512,10 @@ export default function StudioWorkspacePage() {
 
       {!maySave && (
         <div className="flex items-center gap-2 border-b border-[#d5dbe1] bg-[#f3f6f8] px-4 py-1.5 text-xs text-[#3f4b58]" role="status">
-          <Eye className="h-4 w-4 shrink-0" aria-hidden />
-          <span>You can compare and try changes here; only the document’s owner, author or editors can save them to the library.</span>
+          {archived ? <Archive className="h-4 w-4 shrink-0" aria-hidden /> : <Eye className="h-4 w-4 shrink-0" aria-hidden />}
+          {archived ? (
+            <span>{ARCHIVED_NOTE} <Link href={`/governance/documents/${session.document_id}`} className="font-semibold text-[#0b6b58] underline">Open the document</Link></span>
+          ) : <span>You can compare and try changes here; only the document’s owner, author or editors can save them to the library.</span>}
         </div>
       )}
 
@@ -576,7 +579,7 @@ export default function StudioWorkspacePage() {
           {justAccepted && !compare && (
             <div className="flex shrink-0 items-center gap-2 border-b border-[#9fd9bd] bg-[#f3fbf6] px-3 py-1.5 text-xs text-[#0a5a38]" role="status">
               <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
-              <span className="min-w-0 flex-1">{plural(justAccepted.n, 'change')} accepted and written into the document.</span>
+              <span className="min-w-0 flex-1">{justAccepted.line}</span>
               <button type="button" onClick={() => { setJustAccepted(null); showChanges(justAccepted); }} className="font-semibold underline">Show {justAccepted.n === 1 ? 'it' : 'them'} marked in the document</button>
               <button type="button" onClick={() => setJustAccepted(null)} aria-label="Dismiss" className="rounded p-0.5 hover:bg-[#d4f2e0]"><X className="h-3.5 w-3.5" /></button>
             </div>
@@ -591,7 +594,7 @@ export default function StudioWorkspacePage() {
                 onContent={(c, r) => { applyServerContent(c, r); void onSessionChanged(); }} onShowSource={(k) => { setFocusRef(k); setTab('references'); }} />
             ) : writing ? (
               <StudioEditor value={writing.markdown} version={writing.seq} mode="view" onChange={() => undefined} />
-            ) : asFile ? <FileView session={session} /> : null}
+            ) : asFile ? <FileView session={session} maySave={maySave} /> : null}
           </div>
         </section>
         <aside className={`flex min-h-0 min-w-0 flex-col border-l border-[#d5dbe1] bg-[#f8fafb] ${pane === 'assistant' ? 'flex' : 'hidden'} lg:flex`} aria-label="Assistant">

@@ -8,9 +8,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { BookMarked, Eye, EyeOff, FileText, Layers, Loader2, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react';
-import { problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Reference, type ReferenceScope, type Session } from '@/lib/studio/api';
+import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Reference, type ReferenceScope, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import { plural } from '@/lib/studio/text';
+import { SIGNOFF_STATUS } from '../../_SignoffControl';
+import { docLine } from './homeLists';
 
 type AddTab = 'parent' | 'document' | 'framework' | 'upload' | 'template';
 
@@ -145,7 +147,7 @@ function DocumentPicker({ onPick, busy, empty, exclude }: { onPick: (doc: Librar
               <FileText className="h-4 w-4 shrink-0 text-[#586472]" />
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm text-[#1f2933]">{d.title}</span>
-                <span className="block text-[11px] text-[#586472]">{[d.code, d.doc_type, `v${d.version}`, d.status].filter(Boolean).join(' · ')}{!d.has_text && !d.has_file ? ' · no text' : ''}</span>
+                <span className="block text-[11px] text-[#586472]">{docLine(d, DOC_TYPE_LABEL, SIGNOFF_STATUS)}{!d.has_text && !d.has_file ? ' · no text' : ''}</span>
               </span>
               <Plus className="h-4 w-4 text-[#0f766e]" />
             </button>

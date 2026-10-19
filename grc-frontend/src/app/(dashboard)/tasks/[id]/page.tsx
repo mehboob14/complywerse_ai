@@ -8,7 +8,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { DocumentTaskCard, useMyUserId } from '@/components/governance/DocumentTaskActions';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
-import { canDeleteTask, dayOf, isDocumentTask, plainDescription, withCurrent, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
+import { canDeleteTask, dayOf, isDocumentTask, momentDayOf, plainDescription, withCurrent, withoutLocked, type DocumentRequest } from '@/lib/documentTasks';
 import Link from 'next/link';
 import {
   ArrowLeft, CheckCircle2, Plus, X,
@@ -448,6 +448,8 @@ export default function TaskDetailPage() {
           )}
         </div>
         <div className="flex items-center gap-2">
+          {/* a document task's description is the request's own words: no AI root cause or description */}
+          {!docTask && <>
           <button onClick={handleAiRootCause} disabled={aiLoading === 'root-cause'}
             className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 disabled:opacity-50">
             {aiLoading === 'root-cause' ? <Loader2 className="animate-spin" size={14} /> : <Sparkles size={14} />} Root Cause
@@ -456,6 +458,7 @@ export default function TaskDetailPage() {
             className="flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-sm text-primary-700 hover:bg-primary-100 disabled:opacity-50">
             {aiLoading === 'description' ? <Loader2 className="animate-spin" size={14} /> : <FileText size={14} />} AI Description
           </button>
+          </>}
           {canEdit && <button onClick={startEdit} className="cw-btn-secondary flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm">
             <Pencil size={14} /> Edit
           </button>}
@@ -486,19 +489,21 @@ export default function TaskDetailPage() {
         <div className={`rounded-lg border p-3 ${SLA_COLORS[task.sla_status] || ''}`}>
           <div className="text-xs font-medium opacity-70">SLA Status</div>
           <div className="text-lg font-semibold">{task.sla_status}</div>
-          {task.due_date && <div className="text-xs opacity-70 mt-1">Due: {new Date(task.due_date).toLocaleDateString()}</div>}
+          {task.due_date && <div className="text-xs opacity-70 mt-1">Due {dayOf(task.due_date) ?? '—'}</div>}
         </div>
         <div className="cw-card p-3">
           <div className="text-xs font-medium text-[var(--color-muted)]">Owner</div>
           <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.assigned_owner?.display_name || task.assigned_owner?.username || 'Unassigned'}</div>
         </div>
+        {task.reviewer && (
         <div className="cw-card p-3">
           <div className="text-xs font-medium text-[var(--color-muted)]">Reviewer</div>
-          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.reviewer?.display_name || task.reviewer?.username || 'None'}</div>
+          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.reviewer.display_name || task.reviewer.username}</div>
         </div>
+        )}
         <div className="cw-card p-3">
           <div className="text-xs font-medium text-[var(--color-muted)]">Created</div>
-          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{task.created_at ? new Date(task.created_at).toLocaleDateString() : '—'}</div>
+          <div className="text-sm text-[var(--color-text)] font-medium mt-1">{momentDayOf(task.created_at) ?? '—'}</div>
           <div className="text-xs text-[var(--color-muted)] mt-0.5">by {task.created_by?.display_name || task.created_by?.username || 'System'}</div>
         </div>
       </div>
@@ -672,7 +677,7 @@ export default function TaskDetailPage() {
                     {st.title}
                   </span>
                   {st.assigned_owner && <span className="text-xs text-[var(--color-muted)]">{st.assigned_owner.display_name || st.assigned_owner.username}</span>}
-                  {st.due_date && <span className="text-xs text-[var(--color-muted)]">{new Date(st.due_date).toLocaleDateString()}</span>}
+                  {st.due_date && <span className="text-xs text-[var(--color-muted)]">{dayOf(st.due_date)}</span>}
                   {canDelete && <button onClick={() => subTaskDeleteMutation.mutate(st.id)} className="text-[var(--color-muted)] hover:text-rose-600">
                     <Trash2 size={14} />
                   </button>}

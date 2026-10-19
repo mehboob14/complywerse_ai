@@ -1,6 +1,19 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { num, plural, saveWarning, savedNote } from './text.ts';
+import { acceptedLine, maySaveToLibrary, num, plural, saveWarning, savedNote } from './text.ts';
+
+test('nothing is saved to the library from an archived document, nor by someone who may only read it', () => {
+  assert.equal(maySaveToLibrary({ may_save: true, document_status: 'draft' }), true);
+  assert.equal(maySaveToLibrary({}), true);
+  assert.equal(maySaveToLibrary({ may_save: false, document_status: 'draft' }), false);
+  assert.equal(maySaveToLibrary({ may_save: true, document_status: 'archived' }), false);
+});
+
+test('an accept says it is in the document only when the library has it too', () => {
+  assert.equal(acceptedLine(2, true, true), '2 changes accepted and written into the document.');
+  assert.equal(acceptedLine(1, false, false), '1 change accepted and written into the document.');
+  assert.equal(acceptedLine(2, true, false), '2 changes accepted here in the studio; the library is not changed.');
+});
 
 test('counts are written with a thousands separator', () => {
   assert.equal(plural(16278, 'word'), '16,278 words');

@@ -98,9 +98,10 @@ export function withCurrent(choices: readonly string[], current: unknown): strin
 }
 
 /** Tasks made before the buttons say where to go as a path ("Open it at /governance/documents/3 (its Approvals)."): the
- *  buttons do that now, so the sentence is left out. */
+ *  buttons do that now, so the sentence is left out. The server writes a due date "02 Nov 2026"; it reads as dayOf's "2 Nov 2026". */
 export function plainDescription(text: string | null | undefined): string {
-  return (text ?? '').replace(/\s*Open it at \/governance\/documents\/\d+[^\s.]*(?: \(its Approvals\))?\./g, '').trim();
+  return (text ?? '').replace(/\s*Open it at \/governance\/documents\/\d+[^\s.]*(?: \(its Approvals\))?\./g, '')
+    .replace(/\b0(\d) (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) (\d{4})\b/g, '$1 $2 $3').trim();
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -110,6 +111,13 @@ export function dayOf(iso: string | null | undefined): string | null {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec((iso ?? '').trim());
   const month = m ? MONTHS[Number(m[2]) - 1] : undefined;
   return m && month ? `${Number(m[3])} ${month} ${m[1]}` : null;
+}
+
+/** A moment (the server's naive UTC time, e.g. when a task was created) as the reader's own day, written as dayOf writes a date. */
+export function momentDayOf(iso: string | null | undefined): string | null {
+  const v = (iso ?? '').trim();
+  const t = v ? new Date(/[zZ]|[+-]\d\d:?\d\d$/.test(v) ? v : `${v}Z`) : null;
+  return t && !Number.isNaN(t.getTime()) ? `${t.getDate()} ${MONTHS[t.getMonth()]} ${t.getFullYear()}` : null;
 }
 
 const NOUN: Record<RequestKind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement' };
