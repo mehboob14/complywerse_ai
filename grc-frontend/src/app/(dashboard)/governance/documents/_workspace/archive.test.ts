@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { libraryCounts, unlessArchivedAsked, withoutArchived } from './archive.ts';
+import { bulkActionIds, libraryCounts, unlessArchivedAsked, withoutArchived } from './archive.ts';
+import { buildTree, flattenTree } from './docTree.ts';
 
 const docs = [
   { id: 1, status: 'published', owner_id: 7 },
@@ -26,6 +27,28 @@ test('the tree leaves archived documents out and keeps the documents under them'
   const ids = (nodes: N[]): unknown[] => nodes.map((n) => (n.children?.length ? [n.id, ids(n.children)] : n.id));
   assert.deepEqual(ids(withoutArchived(tree)), [[1, [5, 3]], 6]);
   assert.equal(tree[0].children?.[0].id, 2);                                                // the hierarchy itself is not changed
+});
+
+test('the Tree view under All documents shows no archived parent: the documents under it are at the top', () => {
+  // 1 archived ─ 2 draft ─ 3 published; 4 published
+  const scope = [
+    { id: 1, status: 'archived', parent_document_id: null },
+    { id: 2, status: 'draft', parent_document_id: 1 },
+    { id: 3, status: 'published', parent_document_id: 2 },
+    { id: 4, status: 'published', parent_document_id: null },
+  ];
+  const rows = (statusFilter: string) => {
+    const shown = unlessArchivedAsked(scope, statusFilter).filter((d) => !statusFilter || d.status === statusFilter);   // the list
+    const tree = buildTree(unlessArchivedAsked(scope, statusFilter), new Set(shown.map((d) => d.id)));                 // its scope
+    return flattenTree(tree, new Set()).map((r) => [r.doc.id, r.depth, r.match]);
+  };
+  assert.deepEqual(rows(''), [[2, 0, true], [3, 1, true], [4, 0, true]]);       // no greyed "parent of a match" row for 1
+  assert.deepEqual(rows('archived'), [[1, 0, true]]);                           // the Archived list shows it
+});
+
+test('the bulk bar of the Archived list offers Restore only', () => {
+  assert.deepEqual(bulkActionIds(true), ['restore']);
+  assert.deepEqual(bulkActionIds(false), ['approve', 'publish', 'assign-owner', 'set-review', 'archive']);
 });
 
 test('the library counts archived documents only under Archived', () => {

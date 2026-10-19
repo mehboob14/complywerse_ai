@@ -290,6 +290,9 @@ def start_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    from ..permissions import ensure_not_archived
+
+    ensure_not_archived(document)                      # out of the archive only by Restore
     
     if document.workflow_instance and document.workflow_instance.status == "active":
         raise HTTPException(

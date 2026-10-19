@@ -302,7 +302,9 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     from ...models import GovernanceDocumentVersion, PolicyStatement
     from .routers.documents import GOVERNANCE_UPLOAD_DIR
     from .routers.versions import create_audit_log
+    from .permissions import ensure_not_archived
 
+    ensure_not_archived(document)
     info = state(db, document)
     if info["reason"]:
         raise ValueError(info["reason"])

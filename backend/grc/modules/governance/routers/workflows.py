@@ -968,6 +968,7 @@ def start_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)          # out of the archive only by Restore
     
     existing_instance = db.query(DocumentWorkflowInstance).filter(
         DocumentWorkflowInstance.document_id == document_id,

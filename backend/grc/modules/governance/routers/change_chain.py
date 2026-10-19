@@ -16,7 +16,7 @@ from ....models import GovernanceDocumentVersion, GRCUser, get_db
 from ....routers.auth_router import get_user_tenants, require_auth
 from .. import change_chain as C
 from .. import change_chain_export, doc_lifecycle, doc_version
-from ..permissions import require_doc_editor, require_doc_reader, version_for
+from ..permissions import ensure_not_archived, require_doc_editor, require_doc_reader, version_for
 from .document_signoff import _doc_or_404
 from .documents import _snapshot_content_version, create_audit_log
 
@@ -72,6 +72,7 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
     """Take chosen changes back to what an earlier version had, leaving every other change as it is. A new version."""
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     _enabled_or_404(db)
+    ensure_not_archived(doc)
     is_file = not (doc.content or "").strip()            # an uploaded Word or PDF: the file is the document
     base_v = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.id == body.from_version_id,
                                                         GovernanceDocumentVersion.document_id == doc.id).first()

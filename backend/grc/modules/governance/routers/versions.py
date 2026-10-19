@@ -181,6 +181,7 @@ def create_version(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)
     
     if version_data.change_type not in ["major", "minor", "patch"]:
         raise HTTPException(
@@ -396,6 +397,7 @@ def rollback_to_version(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)
     
     target_version = db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.id == version_id,

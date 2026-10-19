@@ -10,25 +10,17 @@ import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { problemOf, studioApi } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
-import { SearchInput, MultiSelectDropdown, RightSlidePanel, PageLoader } from '@/components/ui';
+import { SearchInput, RightSlidePanel, PageLoader } from '@/components/ui';
 import {
   FileText,
   Loader2,
   AlertCircle,
   Plus,
   X,
-  Edit2,
   Eye,
   ChevronLeft,
   ChevronRight,
-  BookOpen,
-  FileCheck,
-  ClipboardList,
-  Lightbulb,
-  Shield,
-  Layers,
   Upload,
-  Download,
   FileSpreadsheet,
   File,
   CheckCircle,
@@ -40,9 +32,7 @@ import {
   BookMarked,
 } from 'lucide-react';
 import Link from 'next/link';
-import NcaTemplateSelect, { NcaTemplateMeta } from '@/components/governance/NcaTemplateSelect';
 import RecommendedDocsModal, { NCA_DOC_TYPE_MAP, ARTIFACT_DOC_TYPE_MAP, type DocumentTemplatePick } from './_RecommendedDocsModal';
-import RichTextEditor from './_RichTextEditor';
 import {
   STUDIO_NEW_DOCUMENT, artifactStart, lawFileName, lawStart, ncaStart, recommendedStart, sessionBody, studioDraftUrl, type TemplateStart,
 } from './_templateStart';
@@ -113,34 +103,6 @@ interface DocumentHierarchyItem extends DocumentItem {
   children?: DocumentHierarchyItem[];
 }
 
-const DOCUMENT_TYPES = [
-  { value: '', label: 'All Types' },
-  { value: 'policy', label: 'Policy', icon: BookOpen, color: 'text-[var(--color-base)]', bgColor: 'bg-[var(--color-base-soft)]' },
-  { value: 'standard', label: 'Standard', icon: FileCheck, color: 'text-[var(--color-base)]', bgColor: 'bg-[var(--color-base-soft)]' },
-  { value: 'procedure', label: 'Procedure', icon: ClipboardList, color: 'text-[var(--color-success)]', bgColor: 'bg-[var(--color-success-soft)]' },
-  { value: 'guideline', label: 'Guideline', icon: Lightbulb, color: 'text-[var(--color-warning)]', bgColor: 'bg-[var(--color-warning-soft)]' },
-  { value: 'charter', label: 'Charter', icon: Shield, color: 'text-[var(--color-base)]', bgColor: 'bg-[var(--color-base-soft)]' },
-  { value: 'framework', label: 'Framework', icon: Layers, color: 'text-[var(--color-warning)]', bgColor: 'bg-[var(--color-warning-soft)]' },
-];
-
-const DOCUMENT_STATUSES = [
-  { value: '', label: 'All Statuses' },
-  { value: 'draft', label: 'Draft', color: 'text-[var(--color-status-draft)]', bgColor: 'bg-[var(--color-status-draft)]/20' },
-  { value: 'pending_review', label: 'Pending Review', color: 'text-[var(--color-status-review)]', bgColor: 'bg-[var(--color-status-review)]/20' },
-  { value: 'pending_approval', label: 'Pending Approval', color: 'text-[var(--color-status-approval)]', bgColor: 'bg-[var(--color-status-approval)]/20' },
-  { value: 'approved', label: 'Approved', color: 'text-[var(--color-status-approved)]', bgColor: 'bg-[var(--color-status-approved)]/20' },
-  { value: 'published', label: 'Published', color: 'text-[var(--color-status-published)]', bgColor: 'bg-[var(--color-status-published)]/20' },
-  { value: 'expired', label: 'Expired', color: 'text-[var(--color-status-expired)]', bgColor: 'bg-[var(--color-status-expired)]/20' },
-  { value: 'archived', label: 'Archived', color: 'text-[var(--color-status-archived)]', bgColor: 'bg-[var(--color-status-archived)]/20' },
-];
-
-const CLASSIFICATIONS = [
-  { value: 'public', label: 'Public' },
-  { value: 'internal', label: 'Internal' },
-  { value: 'confidential', label: 'Confidential' },
-  { value: 'restricted', label: 'Restricted' },
-];
-
 const ALLOWED_FILE_TYPES = ['pdf', 'doc', 'docx', 'xls', 'xlsx'];
 const ALLOWED_MIME_TYPES = [
   'application/pdf',
@@ -149,14 +111,6 @@ const ALLOWED_MIME_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
-
-const getTypeStyle = (type: string) => {
-  return DOCUMENT_TYPES.find(t => t.value === type) || { label: type, color: 'text-[var(--color-muted)]', bgColor: 'bg-[var(--color-muted)]/20', icon: FileText };
-};
-
-const getStatusStyle = (status: string) => {
-  return DOCUMENT_STATUSES.find(s => s.value === status) || { label: status, color: 'text-[var(--color-muted)]', bgColor: 'bg-[var(--color-muted)]/20' };
-};
 
 const formatFileSize = (bytes: number | null): string => {
   if (!bytes) return '-';
@@ -203,10 +157,7 @@ export default function GovernanceDocumentsPage() {
   const [typeFilter, setTypeFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [ownerFilter, setOwnerFilter] = useState('');
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [uploadingToDocumentId, setUploadingToDocumentId] = useState<number | null>(null);
-  const [editingDocument, setEditingDocument] = useState<DocumentItem | null>(null);
-  const [viewingDocument, setViewingDocument] = useState<DocumentItem | null>(null);
   const [parsingDocumentId, setParsingDocumentId] = useState<number | null>(null);
   const [parseResult, setParseResult] = useState<{ documentId: number; count: number } | null>(null);
   const [attestationTargetDocument, setAttestationTargetDocument] = useState<DocumentItem | null>(null);
@@ -249,48 +200,6 @@ export default function GovernanceDocumentsPage() {
       return response.data as unknown as DocumentListResponse;
     },
     placeholderData: keepPreviousData,
-  });
-
-  const { data: parentDocumentOptions = [] } = useQuery({
-    queryKey: ['governance-documents-parent-options'],
-    queryFn: async () => {
-      const response = await governanceApi.getDocuments({
-        skip: 0,
-        limit: 1000,
-        sort_by: 'title',
-        sort_order: 'asc',
-      } as any);
-      const payload = response.data as unknown as DocumentListResponse;
-      return payload.items || [];
-    },
-    staleTime: 60 * 1000,
-  });
-
-  const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<DocumentItem> }) => {
-      const payload = {
-        title: data.title,
-        description: data.description,
-        content: data.content,
-        doc_type: data.doc_type,
-        classification: data.classification,
-        parent_document_id: data.parent_document_id || null,
-        owner_id: data.owner_id,
-        review_cycle_months: data.review_cycle_months,
-        effective_date: data.effective_date,
-        expiry_date: data.expiry_date,
-        // Allow editing the framework linkage after creation too —
-        // re-tagging a doc must propagate to the auditor portal.
-        framework_ids: Array.isArray(data.framework_ids) ? data.framework_ids : undefined,
-        applicable_framework_ids: Array.isArray(data.applicable_framework_ids) ? data.applicable_framework_ids : undefined,
-      };
-      return governanceApi.updateDocument(id, payload as any);
-    },
-    onSuccess: () => {
-      invalidateDocumentQueries();
-      setIsModalOpen(false);
-      setEditingDocument(null);
-    },
   });
 
   const uploadToDocumentMutation = useMutation({
@@ -402,41 +311,6 @@ export default function GovernanceDocumentsPage() {
     }),
   });
 
-  const handleDownload = async (doc: DocumentItem) => {
-    try {
-      let blob: Blob;
-      let filename = doc.file_name || `${doc.title || `document_${doc.id}`}.html`;
-
-      if (doc.file_name) {
-        const response = await governanceApi.downloadDocumentFile(doc.id);
-        blob = new Blob([response.data]);
-      } else {
-        const response = await governanceApi.getDocumentViewHtml(doc.id);
-        const html = response.data?.html || '';
-        blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-        if (!filename.toLowerCase().endsWith('.html')) {
-          filename = `${filename}.html`;
-        }
-      }
-
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
-    } catch {
-      toast({ type: 'error', title: 'Download Failed', message: 'Could not download this document.' });
-    }
-  };
-
-  const handleEdit = (doc: DocumentItem) => {
-    setEditingDocument(doc);
-    setIsModalOpen(true);
-  };
-
   const formatDate = (dateStr: string | null) => {
     if (!dateStr) return '-';
     return new Date(dateStr).toLocaleDateString();
@@ -493,25 +367,8 @@ export default function GovernanceDocumentsPage() {
         onNewDocument={() => router.push('/governance/documents/studio')}     // the AI Studio: upload, write, edit, compare
         onAIDraft={() => router.push(STUDIO_NEW_DOCUMENT)}                    // the AI Studio's new-document popup
         onTemplates={() => setIsRecommendedOpen(true)}
-        onEditDocument={(doc) => handleEdit(doc as unknown as DocumentItem)}
       />
 
-
-      {isModalOpen && (
-        <DocumentModal
-          document={editingDocument}
-          parentDocuments={parentDocumentOptions}
-          onClose={() => {
-            setIsModalOpen(false);
-            setEditingDocument(null);
-          }}
-          onSubmit={(data) => {
-            // editing a document's details (Edit on a row); new documents are written in the AI Studio
-            if (editingDocument?.id) updateMutation.mutate({ id: editingDocument.id, data });
-          }}
-          isLoading={updateMutation.isPending}
-        />
-      )}
 
       {uploadingToDocumentId !== null && (
         <UploadFileToDocumentModal
@@ -519,18 +376,6 @@ export default function GovernanceDocumentsPage() {
           onClose={() => setUploadingToDocumentId(null)}
           onSubmit={(formData) => uploadToDocumentMutation.mutate({ documentId: uploadingToDocumentId, formData })}
           isLoading={uploadToDocumentMutation.isPending}
-        />
-      )}
-
-      {viewingDocument && (
-        <ViewDocumentModal
-          document={viewingDocument}
-          onClose={() => setViewingDocument(null)}
-          onEdit={() => {
-            handleEdit(viewingDocument);
-            setViewingDocument(null);
-          }}
-          onDownload={() => handleDownload(viewingDocument)}
         />
       )}
 
@@ -753,496 +598,6 @@ function UploadFileToDocumentModal({ documentId, onClose, onSubmit, isLoading }:
 
       </form>
     </RightSlidePanel>
-  );
-}
-
-interface DocumentModalProps {
-  document: DocumentItem | null;
-  parentDocuments: DocumentItem[];
-  onClose: () => void;
-  onSubmit: (data: Partial<DocumentItem>) => void;
-  isLoading: boolean;
-}
-
-function DocumentModal({ document, parentDocuments, onClose, onSubmit, isLoading }: DocumentModalProps) {
-  const [formData, setFormData] = useState({
-    title: document?.title || '',
-    description: document?.description || '',
-    doc_type: document?.doc_type || 'policy',
-    classification: document?.classification || 'internal',
-    parent_document_id: document?.parent_document_id || null,
-    owner_id: document?.owner_id || null,
-    content: document?.content || '',
-    review_cycle_months: document?.review_cycle_months || 12,
-    effective_date: document?.effective_date?.split('T')[0] || '',
-    expiry_date: document?.expiry_date?.split('T')[0] || '',
-    // Optional framework linkage — this is what the auditor portal reads
-    // from `framework_ids` to display the doc under each framework. Empty
-    // by default; user can pick zero, one, or many.
-    framework_ids: (document?.framework_ids || []) as number[],
-    // Frameworks the doc is audited against — drives the control-coverage panel.
-    applicable_framework_ids: (document?.applicable_framework_ids || []) as number[],
-  });
-
-  // Frameworks available for linkage — same source the AI-draft modal uses,
-  // so the IDs are guaranteed to be the same shape the auditor-portal
-  // backend expects (UploadedFramework.id).
-  const { data: frameworkOptions } = useQuery({
-    queryKey: ['document-modal-frameworks'],
-    queryFn: async () => {
-      const response = await apiClient.get('/framework-upload/upload');
-      const data = response.data;
-      const items = Array.isArray(data) ? data : data?.items || data?.frameworks || [];
-      const filtered = (items as any[]).filter((f) =>
-        f.is_active && ['parsed', 'published', 'classified', 'completed'].includes(f.upload_status),
-      );
-      // Dedup by name — global + tenant copies (or repeat uploads) otherwise
-      // show the same framework twice. Keep the most recent (highest id).
-      const byName = new Map<string, any>();
-      for (const f of filtered) {
-        const key = String(f.name || '').trim().toLowerCase();
-        const existing = byName.get(key);
-        if (!existing || (f.id || 0) > (existing.id || 0)) byName.set(key, f);
-      }
-      return Array.from(byName.values());
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // NCA template prefill — only available on create (not edit) so existing
-  // content is never silently overwritten on an edit.
-  const isCreating = !document?.id;
-  const [ncaTemplateId, setNcaTemplateId] = useState<string | null>(null);
-  const [loadingTemplate, setLoadingTemplate] = useState(false);
-  const [templateLoadError, setTemplateLoadError] = useState<string | null>(null);
-
-  const NCA_CATEGORY_TO_DOC_TYPE: Record<string, string> = {
-    Policy: 'policy',
-    Standard: 'standard',
-    Procedure: 'procedure',
-    Program: 'program',
-    Checklist: 'checklist',
-    Form: 'form',
-    Report: 'report',
-    'Cybersecurity Foundation': 'policy',
-  };
-
-  const handleSelectNcaTemplate = async (id: string | null, meta: NcaTemplateMeta | null) => {
-    setNcaTemplateId(id);
-    setTemplateLoadError(null);
-    if (!id || !meta) return;
-    setLoadingTemplate(true);
-    try {
-      const res = await apiClient.get(`/governance/nca-templates/${id}/content`);
-      const tplContent = (res.data?.content as string) || '';
-      setFormData(prev => ({
-        ...prev,
-        // Only fill blank fields — don't trample what the user already typed
-        title: prev.title || meta.title,
-        content: prev.content || tplContent,
-        description: prev.description || `Created from NCA template: ${meta.title}`,
-        doc_type: prev.doc_type === 'policy'
-          ? (NCA_CATEGORY_TO_DOC_TYPE[meta.category] || 'policy')
-          : prev.doc_type,
-      }));
-    } catch (e: any) {
-      setTemplateLoadError('Could not load template content. You can still write the document manually.');
-    } finally {
-      setLoadingTemplate(false);
-    }
-  };
-
-  const availableParentDocuments = parentDocuments.filter((docOption) => docOption.id !== document?.id);
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSubmit({
-      ...formData,
-      parent_document_id: formData.parent_document_id || null,
-      effective_date: formData.effective_date || null,
-      expiry_date: formData.expiry_date || null,
-      // Persist framework linkage explicitly. Empty array is fine — the
-      // auditor portal just won't surface the doc under any framework
-      // until the user attaches one.
-      framework_ids: formData.framework_ids,
-    } as any);
-  };
-
-  return (
-    <RightSlidePanel
-      isOpen={true}
-      onClose={onClose}
-      title={document?.id ? 'Edit Document' : 'New Document'}
-      width="w-full max-w-4xl"
-      footer={
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form="document-form"
-            disabled={isLoading}
-            className="cw-btn-primary inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium disabled:opacity-50"
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              document?.id ? 'Update Document' : 'Create Document'
-            )}
-          </button>
-        </div>
-      }
-    >
-      <form id="document-form" onSubmit={handleSubmit} className="space-y-4">
-          {isCreating && (
-            <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
-              <NcaTemplateSelect
-                value={ncaTemplateId}
-                onChange={handleSelectNcaTemplate}
-                label="Templates"
-              />
-              {loadingTemplate && (
-                <p className="text-xs text-blue-700 mt-2 flex items-center gap-1.5">
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                  Loading template content…
-                </p>
-              )}
-              {templateLoadError && (
-                <p className="text-xs text-rose-700 mt-2">{templateLoadError}</p>
-              )}
-            </div>
-          )}
-
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Title *</label>
-            <input
-              type="text"
-              required
-              value={formData.title}
-              onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Enter document title"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Description</label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={2}
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              placeholder="Brief description of the document"
-            />
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Document Type *</label>
-              <MultiSelectDropdown
-                title="Document Type"
-                items={DOCUMENT_TYPES.filter(t => t.value).map(type => ({ value: type.value, label: type.label }))}
-                selectedValues={formData.doc_type ? [formData.doc_type] : []}
-                onApply={(vals) => setFormData(prev => ({ ...prev, doc_type: vals[0] || '' }))}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-                placeholder="Select Document Type"
-                size="md"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Classification</label>
-              <MultiSelectDropdown
-                title="Classification"
-                items={CLASSIFICATIONS.filter(c => c.value).map(cls => ({ value: cls.value, label: cls.label }))}
-                selectedValues={formData.classification ? [formData.classification] : []}
-                onApply={(vals) => setFormData(prev => ({ ...prev, classification: vals[0] || '' }))}
-                multiSelect={false}
-                triggerVariant="input"
-                triggerClassName="w-full"
-                placeholder="Select Classification"
-                size="md"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Select Parent Document</label>
-            <MultiSelectDropdown
-              title="Parent Document"
-              items={availableParentDocuments.map((docOption) => ({
-                value: String(docOption.id),
-                label: `${docOption.title} (${docOption.doc_type})`,
-              }))}
-              selectedValues={formData.parent_document_id != null ? [String(formData.parent_document_id)] : []}
-              onApply={(vals) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  parent_document_id: vals[0] ? Number(vals[0]) : null,
-                }))
-              }
-              multiSelect={false}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              placeholder="Select Parent Document"
-              size="md"
-              forceSearch
-            />
-          </div>
-
-          {/* Optional framework linkage. When set, the document shows up
-              under each linked framework's Documents tab in the auditor
-              portal. The auditor portal endpoint matches UploadedFramework.id
-              against this array, so the picker pulls from the same
-              framework-upload list. */}
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">
-              Linked Frameworks <span className="text-xs font-normal text-gray-500">(optional)</span>
-            </label>
-            <MultiSelectDropdown
-              title="Linked Frameworks"
-              items={(frameworkOptions || []).map((f: any) => ({
-                value: String(f.id),
-                label: f.name || `Framework ${f.id}`,
-              }))}
-              selectedValues={formData.framework_ids.map(String)}
-              onApply={(vals) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
-                }))
-              }
-              multiSelect={true}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              placeholder="Link to one or more frameworks…"
-              size="md"
-              forceSearch
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              Linked documents appear under each framework&apos;s Documents tab in the auditor portal.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">
-              Applicable Frameworks <span className="text-xs font-normal text-gray-500">— audited against (drives control coverage &amp; gaps)</span>
-            </label>
-            <MultiSelectDropdown
-              title="Applicable Frameworks"
-              items={(frameworkOptions || []).map((f: any) => ({
-                value: String(f.id),
-                label: f.name || `Framework ${f.id}`,
-              }))}
-              selectedValues={formData.applicable_framework_ids.map(String)}
-              onApply={(vals) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  applicable_framework_ids: vals.map((v) => Number(v)).filter((n) => !Number.isNaN(n)),
-                }))
-              }
-              multiSelect={true}
-              triggerVariant="input"
-              triggerClassName="w-full"
-              placeholder="Frameworks this document must comply with…"
-              size="md"
-              forceSearch
-            />
-            <p className="mt-1 text-xs text-gray-500">
-              The Controls tab shows which of these frameworks&apos; controls this document covers — and which are missing.
-            </p>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-800 mb-1">Content</label>
-            <RichTextEditor
-              value={formData.content}
-              onChange={(content) => setFormData(prev => ({ ...prev, content }))}
-              placeholder="Document content..."
-              minHeight={240}
-            />
-            <p className="mt-1 text-[11px] text-gray-400">Format with the toolbar — no markdown symbols needed. Switch to “Markdown” any time to view the raw source.</p>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Review Cycle (months)</label>
-              <input
-                type="number"
-                min={1}
-                value={formData.review_cycle_months}
-                onChange={(e) => setFormData(prev => ({ ...prev, review_cycle_months: parseInt(e.target.value) || 12 }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Effective Date</label>
-              <input
-                type="date"
-                value={formData.effective_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, effective_date: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-800 mb-1">Expiry Date</label>
-              <input
-                type="date"
-                value={formData.expiry_date}
-                onChange={(e) => setFormData(prev => ({ ...prev, expiry_date: e.target.value }))}
-                className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
-              />
-            </div>
-          </div>
-
-      </form>
-    </RightSlidePanel>
-  );
-}
-
-interface ViewDocumentModalProps {
-  document: DocumentItem;
-  onClose: () => void;
-  onEdit: () => void;
-  onDownload: () => void;
-}
-
-function ViewDocumentModal({ document, onClose, onEdit, onDownload }: ViewDocumentModalProps) {
-  const typeStyle = getTypeStyle(document.doc_type);
-  const statusStyle = getStatusStyle(document.status);
-  const TypeIcon = typeStyle.icon || FileText;
-  const FileIcon = getFileIcon(document.file_type);
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-      <div className="cw-card w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-xl shadow-xl">
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] p-4">
-          <div className="flex items-center gap-3">
-            <div className={`rounded-lg ${typeStyle.bgColor} p-2`}>
-              <TypeIcon className={`h-5 w-5 ${typeStyle.color}`} />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold cw-text">{document.title}</h2>
-              {document.document_code && (
-                <p className="text-sm cw-text-muted font-mono">{document.document_code}</p>
-              )}
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="rounded p-1.5 cw-text-muted hover:bg-[var(--color-hover)] hover:cw-text transition-colors"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-        
-        <div className="p-4 space-y-6">
-          <div className="flex flex-wrap gap-2">
-            <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${typeStyle.bgColor} ${typeStyle.color}`}>
-              <TypeIcon className="h-3 w-3" />
-              {typeStyle.label}
-            </span>
-            <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium ${statusStyle.bgColor} ${statusStyle.color}`}>
-              {statusStyle.label}
-            </span>
-            <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium bg-slate-500/20 cw-text-muted">
-              v{document.current_version}
-            </span>
-          </div>
-
-          {document.description && (
-            <div>
-              <h3 className="text-sm font-medium cw-text-muted mb-1">Description</h3>
-              <p className="cw-text">{document.description}</p>
-            </div>
-          )}
-
-          {document.file_name && (
-            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/50 p-4">
-              <h3 className="text-sm font-medium cw-text-muted mb-3">Attached File</h3>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <FileIcon className={`h-8 w-8 ${getFileTypeColor(document.file_type)}`} />
-                  <div>
-                    <p className="cw-text font-medium">{document.file_name}</p>
-                    <p className="text-sm cw-text-muted">
-                      {document.file_type?.toUpperCase()} • {formatFileSize(document.file_size)}
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={onDownload}
-                  className="cw-btn-success flex items-center gap-2"
-                >
-                  <Download className="h-4 w-4" />
-                  Download
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <h3 className="text-sm font-medium cw-text-muted mb-1">Owner</h3>
-              <p className="cw-text">{document.owner_name || '-'}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium cw-text-muted mb-1">Classification</h3>
-              <p className="cw-text capitalize">{document.classification}</p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium cw-text-muted mb-1">Effective Date</h3>
-              <p className="cw-text">
-                {document.effective_date ? new Date(document.effective_date).toLocaleDateString() : '-'}
-              </p>
-            </div>
-            <div>
-              <h3 className="text-sm font-medium cw-text-muted mb-1">Next Review</h3>
-              <p className="cw-text">
-                {document.next_review_date ? new Date(document.next_review_date).toLocaleDateString() : '-'}
-              </p>
-            </div>
-          </div>
-
-          {document.content && (
-            <div>
-              <h3 className="text-sm font-medium cw-text-muted mb-1">Content</h3>
-              <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]/50 p-4 max-h-64 overflow-y-auto">
-                <p className="cw-text whitespace-pre-wrap">{document.content}</p>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
-            <button
-              onClick={onClose}
-              className="cw-btn-secondary"
-            >
-              Close
-            </button>
-            <button
-              onClick={onEdit}
-              className="cw-btn-primary flex items-center gap-2"
-            >
-              <Edit2 className="h-4 w-4" />
-              Edit Document
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
   );
 }
 

@@ -8,25 +8,27 @@
  * the views are presentational. The existing create/upload/AI-draft/templates
  * modals stay in page.tsx and are opened via the callbacks passed in.
  */
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { FolderTree, Table2, KanbanSquare, Plus, Sparkles, LayoutTemplate, Search } from 'lucide-react';
-import { MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Archive, FolderTree, Table2, KanbanSquare, Loader2, Plus, Sparkles, LayoutTemplate, Search } from 'lucide-react';
+import { AnimatedModal, MultiSelectDropdown, RightSlidePanel, useToast, PageLoader } from '@/components/ui';
 import { assetsApi, governanceApi } from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
+import { problemOf, studioApi } from '@/lib/studio/api';
 import type { GovDoc, GovDocNode } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
   fetchDocuments, fetchHierarchy, fetchSummary, fetchCoverageMap,
   bulkUpdateStatus, bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, restoreDocument,
 } from './api';
-import { libraryCounts, unlessArchivedAsked, withoutArchived } from './archive';
+import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked, withoutArchived } from './archive';
+import { creation, pluralType, rememberView, rememberedView, type ViewMode } from './library';
 import { LibraryTree } from './LibraryTree';
 import { RegisterTable } from './RegisterTable';
 import { LifecycleBoard } from './LifecycleBoard';
+import DetailsDialog from '../[id]/_DetailsDialog';
 
-type ViewMode = 'tree' | 'table' | 'board';
 type LibraryKey = 'all' | 'recent' | 'mine';
 
 export interface DocumentsWorkspaceProps {
@@ -36,8 +38,6 @@ export interface DocumentsWorkspaceProps {
   onNewDocument: () => void;
   onAIDraft: () => void;
   onTemplates: () => void;
-  /** Open the pre-filled edit modal for an existing document (hosted in page.tsx). */
-  onEditDocument?: (doc: GovDoc) => void;
 }
 
 const TYPE_OPTIONS = Object.keys(DOC_TYPE_STYLE).map((k) => ({ value: k, label: DOC_TYPE_STYLE[k].label }));
@@ -46,11 +46,6 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'expired', label: 'Expired' },
   { value: 'archived', label: 'Archived' },
 ];
-
-function pluralType(t: string): string {
-  const s = DOC_TYPE_STYLE[t]?.label || t;
-  return s.endsWith('s') ? s : `${s}s`;
-}
 
 // ─── hierarchy helpers ───────────────────────────────────────────────────────
 function findNode(nodes: GovDocNode[], id: number): GovDocNode | null {
@@ -73,13 +68,22 @@ function findPath(nodes: GovDocNode[], id: number, trail: GovDocNode[] = []): Go
   return null;
 }
 
-export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDocument, onAIDraft, onTemplates, onEditDocument }: DocumentsWorkspaceProps) {
+export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDocument, onAIDraft, onTemplates }: DocumentsWorkspaceProps) {
   const router = useRouter();
   const qc = useQueryClient();
   const { toast } = useToast();
-  const mine = (d: GovDoc) => currentUserId != null && (d.owner_id === currentUserId || d.author_id === currentUserId);
+  const mine = (d: { owner_id?: number | null; author_id?: number | null }) =>
+    currentUserId != null && (d.owner_id === currentUserId || d.author_id === currentUserId);
+  // the row's Edit and Archive: its editors, never on an archived document (Restore brings it back first)
+  const mayChange = (d: GovDoc) => (canEdit || mine(d)) && d.status !== 'archived';
 
-  const [view, setView] = useState<ViewMode>('table');
+  // the view this browser chose last; read after the first render, so the server's page and the browser's agree
+  const [view, setViewState] = useState<ViewMode>('table');
+  useEffect(() => { setViewState(rememberedView()); }, []);
+  const setView = (v: ViewMode) => { setViewState(v); rememberView(v); };
+  // New Document, AI Draft and Templates all open the Comply AI Studio
+  const studio = useQuery({ queryKey: ['studio', 'status'], queryFn: studioApi.status, staleTime: 5 * 60_000, retry: false });
+  const create = creation(canCreate, studio.data?.enabled);
   const [library, setLibrary] = useState<LibraryKey>('all');
   const [selectedNodeId, setSelectedNodeId] = useState<number | null>(null);
   const [search, setSearch] = useState('');
@@ -169,12 +173,14 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   const selectNode = (id: number | null) => { setSelectedNodeId(id); if (id != null) setLibrary('all'); };
 
   const runBulk = async (fn: () => Promise<unknown>, ok: string) => {
-    try { await fn(); toast({ title: ok, type: 'success' }); refreshAll(); }
-    catch { toast({ title: 'Action failed', message: 'The backend endpoint may not be available yet.', type: 'error' }); }
+    try { await fn(); toast({ title: ok, type: 'success' }); }
+    catch (e) { toast({ title: 'Action failed', message: problemOf(e), type: 'error' }); }     // the server's reason (e.g. archived)
+    finally { refreshAll(); }                                                                  // a bulk Restore may have restored some
   };
   const onBulkApprove = (ids: number[]) => runBulk(() => bulkUpdateStatus(ids, 'approved'), `${ids.length} approved`);
   const onBulkPublish = (ids: number[]) => runBulk(() => bulkPublish(ids), `Publish requested for ${ids.length}`);
   const onBulkArchive = (ids: number[]) => runBulk(() => bulkArchive(ids), `${ids.length} archived`);
+  const onBulkRestore = (ids: number[]) => runBulk(async () => { for (const id of ids) await restoreDocument(id); }, `${ids.length} restored as drafts`);
 
   const doAssignOwner = async () => {
     if (!assignOwnerFor || !assignOwnerId) return;
@@ -188,7 +194,15 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
   };
 
   // ── register row actions ──
-  const onEditDoc = (doc: GovDoc) => (onEditDocument ? onEditDocument(doc) : openDoc(doc.id));
+  // Edit: the document page's Details popup, on the whole document (the list holds only part of it)
+  const [details, setDetails] = useState<any | null>(null);
+  const onEditDoc = async (doc: GovDoc) => {
+    try {
+      setDetails(await qc.fetchQuery({ queryKey: ['governance-document', doc.id], queryFn: async () => (await governanceApi.getDocument(doc.id)).data as any }));
+    } catch (e) {
+      toast({ title: 'The details could not be opened', message: problemOf(e), type: 'error' });
+    }
+  };
   const triggerDownload = (data: BlobPart, fileName: string) => {
     const url = URL.createObjectURL(new Blob([data]));
     const a = document.createElement('a');
@@ -218,15 +232,17 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
       toast({ title: 'Download failed', message: 'Could not export this document.', type: 'error' });
     }
   };
-  // documents are archived, never deleted (the user, 2026-10-17)
-  const onArchiveDoc = async (doc: GovDoc) => {
-    if (!window.confirm(`Archive "${doc.title}"? It is no longer in force; its versions and history are kept.`)) return;
-    try { await bulkArchive([doc.id]); toast({ title: 'Document archived', type: 'success' }); refreshAll(); }
-    catch (e: any) {
-      const detail = e?.response?.data?.detail;
-      toast({ title: 'Not archived', message: typeof detail === 'string' ? detail : undefined, type: 'error' });
-    }
-  };
+  // documents are archived, never deleted (the user, 2026-10-17); asked as the document page asks it
+  const [archiving, setArchiving] = useState<GovDoc | null>(null);
+  const archive = useMutation({
+    mutationFn: (id: number) => bulkArchive([id]),
+    onSuccess: () => {
+      setArchiving(null);
+      toast({ title: 'Document archived', message: 'It is no longer in force; its versions and history are kept.', type: 'success' });
+      refreshAll();
+    },
+  });
+  const onArchiveDoc = (doc: GovDoc) => { archive.reset(); setArchiving(doc); };
   const onRestoreDoc = async (doc: GovDoc) => {
     try {
       await restoreDocument(doc.id);
@@ -295,7 +311,10 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               );
             })}
           </div>
-          {canCreate && (
+          {create === 'studio-off' && (
+            <span className="shrink-0 text-xs text-[#3f4b58]">Creating documents needs the Comply AI Studio.</span>
+          )}
+          {create === 'buttons' && (
             <>
               <button onClick={onTemplates} title="Templates" className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 <LayoutTemplate strokeWidth={1.75} className="h-4 w-4" /> <span className="hidden xl:inline">Templates</span>
@@ -336,7 +355,8 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             <div className="card"><PageLoader className="h-96" /></div>
           ) : view !== 'board' ? (
             <RegisterTable
-              tree={view === 'tree' ? { scope: scopedDocs, headerDoc, breadcrumb } : undefined}
+              // the ancestors come from the same archived-aware scope as the list: no archived parent under All documents
+              tree={view === 'tree' ? { scope: unlessArchivedAsked(scopedDocs, statusFilter), headerDoc, breadcrumb } : undefined}
               docs={filteredDocs}
               totalCount={statusFilter === 'archived' ? counts.archived : counts.all}
               updatedLabel={updatedLabel}
@@ -351,10 +371,12 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
               onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}
               onBulkSetReviewDate={(ids) => setReviewDateFor(ids)}
               canEdit={canEdit}
-              canEditRow={(d) => canEdit || mine(d)}
-              canArchiveRow={(d) => (canEdit || mine(d)) && d.status !== 'archived'}
+              canEditRow={mayChange}
+              canArchiveRow={mayChange}
               onRestore={onRestoreDoc}
               canRestoreRow={(d) => (canEdit || mine(d)) && d.status === 'archived'}
+              showingArchived={statusFilter === 'archived'}
+              onBulkRestore={onBulkRestore}
             />
           ) : (
             <LifecycleBoard docs={filteredDocs} onOpenDoc={openDoc} />
@@ -390,6 +412,29 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
           </div>
         </div>
       </RightSlidePanel>
+
+      {/* Row Edit: the document page's Details popup */}
+      {details && (
+        <DetailsDialog doc={details} open onClose={() => setDetails(null)} canEdit={mayChange(details)} onSaved={refreshAll} />
+      )}
+
+      {/* Row Archive: asked as the document page asks it */}
+      <AnimatedModal isOpen={!!archiving} onClose={() => setArchiving(null)} size="md" title={`Archive “${archiving?.title ?? ''}”?`}
+        footer={(
+          <div className="flex justify-end gap-2">
+            <button type="button" onClick={() => setArchiving(null)}
+              className="rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8]">Cancel</button>
+            <button type="button" onClick={() => archiving && archive.mutate(archiving.id)} disabled={archive.isPending}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-[#b42318] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
+              {archive.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Archive className="h-4 w-4" />} Archive
+            </button>
+          </div>
+        )}>
+        <div className="space-y-3 px-5 py-4">
+          <p className="text-sm text-[#26323d]">{ARCHIVE_LINE}</p>
+          {archive.isError && <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]" role="alert">Not archived: {problemOf(archive.error)}</p>}
+        </div>
+      </AnimatedModal>
     </div>
   );
 }
