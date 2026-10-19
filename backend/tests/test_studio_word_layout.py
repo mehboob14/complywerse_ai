@@ -1,12 +1,13 @@
 """A Word file's own hierarchy in the studio: the numbers Word puts in front of paragraphs (which are not in their text), the
 indents, clauses numbered through a heading style that look like body text, and lists that start deep under a heading -
-which must still read back block for block, so the file stays edited in place."""
+which must still read back block for block, so the file stays edited in place. And its look: the typography Word gives each
+paragraph (resolved through the styles as Word does) and the page, so the editor shows the document as Word does."""
 import io
 
 from docx import Document
 from docx.oxml import parse_xml
 from docx.oxml.ns import nsdecls, qn
-from docx.shared import Pt
+from docx.shared import Pt, RGBColor, Twips
 
 from grc.modules.governance.studio import blocks as B
 from grc.modules.governance.studio import docx_io as D
@@ -77,7 +78,8 @@ def test_a_list_that_starts_deep_under_a_heading_reads_back_and_stays_edited_in_
     num_pr = p._p.pPr.find(qn("w:numPr"))
     assert num_pr.find(qn("w:ilvl")).get(qn("w:val")) == "2"                        # Word's level of the items beside it, not the first
     looks = L.for_blocks(data, md)
-    assert looks[B.parse(md).index(next(b for b in B.parse(md) if b.text == "Passwords are never shared"))] == {"label": "▪", "left": 108.0, "hang": 18.0}
+    look = looks[B.parse(md).index(next(b for b in B.parse(md) if b.text == "Passwords are never shared"))]
+    assert (look["label"], look["left"], look["hang"]) == ("▪", 108.0, 18.0)
 
 
 def test_each_block_gets_the_number_indent_and_look_word_gives_it(tmp_path):
@@ -88,7 +90,7 @@ def test_each_block_gets_the_number_indent_and_look_word_gives_it(tmp_path):
     assert [x.get("label") for x in looks] == ["I.", "II.", "1.", "1.1.", "1.1.1.", "1.1.2.", "▪", "▪", "2.", "2.1.", "I.", None, None]
     assert [bool(x.get("body")) for x in looks][2:6] == [False, False, True, True]  # the clauses look like text, the headings do not
     assert looks[4]["left"] == 108.0 and looks[4]["hang"] == 36.0                    # the list level's indent (third level)
-    assert looks[11] == {"left": 36.0, "hang": -18.0} and looks[12] == {}            # a first-line indent; the rule
+    assert (looks[11]["left"], looks[11]["hang"], "label" in looks[11]) == (36.0, -18.0, False) and looks[12] == {}   # a first-line indent; the rule
 
 
 def test_the_studio_serves_the_layout_of_a_word_file_and_the_pdf_a_text_was_read_from(world, tmp_path):
@@ -96,6 +98,9 @@ def test_the_studio_serves_the_layout_of_a_word_file_and_the_pdf_a_text_was_read
     layout = world.http.get(world.api(f"/sessions/{s['id']}/layout")).json()
     assert layout["revision"] == s["revision"] and [x.get("label") for x in layout["blocks"]][:4] == ["I.", "II.", "1.", "1.1."]
     assert world.http.get(world.api(f"/sessions/{s['id']}/source-file")).status_code == 404       # a Word file is shown as Word draws it
+    page = layout["page"]                                                                      # python-docx's Letter page, Cambria 11 pt
+    assert (page["width"], page["left"], page["right"], page["top"], page["normal"]["font"], page["normal"]["size"]) == (612.0, 90.0, 90.0, 72.0, "Cambria", 11.0)
+    assert layout["blocks"][2]["font"] == "Calibri" and layout["blocks"][2]["bold"] is True       # a heading: the theme's heading font
     from grc.modules.governance.studio import exporters
 
     pdf_path = tmp_path / "policy.pdf"
@@ -103,7 +108,7 @@ def test_the_studio_serves_the_layout_of_a_word_file_and_the_pdf_a_text_was_read
     p = upload(world, str(pdf_path), name="policy.pdf", kind="application/pdf")
     got = world.http.get(world.api(f"/sessions/{p['id']}/source-file"))
     assert got.status_code == 200 and got.headers["content-type"] == "application/pdf" and got.content == pdf_path.read_bytes()
-    assert world.http.get(world.api(f"/sessions/{p['id']}/layout")).json()["blocks"] == []
+    assert world.http.get(world.api(f"/sessions/{p['id']}/layout")).json() == {"revision": p["revision"], "blocks": [], "page": None}
 
 
 def test_comply_agent_reads_the_numbers_word_shows_and_is_told_not_to_type_them(world, tmp_path):
@@ -115,3 +120,84 @@ def test_comply_agent_reads_the_numbers_word_shows_and_is_told_not_to_type_them(
     assert "[B1 · I.] 1. Document Control" in prompt and "[B5 · 1.1.1.] ### All staff protect the information they use." in prompt
     assert "[B7] - Passwords are at least eight characters" in prompt               # a bullet: the Markdown shows it already
     assert "never write it into the text" in prompt
+
+
+def _style(xml: str) -> None:
+    return parse_xml(xml.replace("<w:style ", f"<w:style {nsdecls('w')} ", 1))
+
+
+def typeset(path: str) -> str:
+    """A file whose look comes from everywhere Word takes it: the document's defaults (python-docx's: the theme's minor font,
+    11 pt, 10 pt after, 1.15 lines), a Normal style in Arial 10 pt, a style that names an East Asian font only (it must not
+    change the Latin one), a style based on it, a theme font, runs that set their own look, a bold lead-in, spacing set on the
+    paragraph, a theme colour, list items that leave out the space between them, a shaded table and an A4 page."""
+    d = Document()
+    d.styles["Normal"].font.name, d.styles["Normal"].font.size = "Arial", Pt(10)
+    styles = d.styles.element
+    styles.append(_style('<w:style w:type="paragraph" w:styleId="Banner"><w:name w:val="Banner"/><w:basedOn w:val="Normal"/>'
+                         '<w:pPr><w:spacing w:before="360" w:after="120" w:line="240" w:lineRule="auto"/><w:jc w:val="center"/></w:pPr>'
+                         '<w:rPr><w:rFonts w:eastAsia="Times New Roman" w:cs="Arial"/><w:b/><w:sz w:val="32"/></w:rPr></w:style>'))
+    styles.append(_style('<w:style w:type="paragraph" w:styleId="SubBanner"><w:name w:val="Sub Banner"/><w:basedOn w:val="Banner"/>'
+                         '<w:rPr><w:sz w:val="24"/><w:u w:val="single"/></w:rPr></w:style>'))
+    styles.append(_style('<w:style w:type="paragraph" w:styleId="Themed"><w:name w:val="Themed"/><w:basedOn w:val="Normal"/>'
+                         '<w:rPr><w:rFonts w:asciiTheme="majorHAnsi" w:ascii="Courier New"/></w:rPr></w:style>'))
+    d.add_paragraph("Big banner", style="Banner")
+    d.add_paragraph("Sub banner", style="Sub Banner")
+    r = d.add_paragraph(style="Banner").add_run("Plain banner")
+    r.bold, r.font.size, r.font.color.rgb = False, Pt(10), RGBColor(0xFF, 0x00, 0x00)
+    d.add_paragraph("Themed text", style="Themed")
+    p = d.add_paragraph()
+    p.add_run("Note:").bold = True
+    p.add_run(" the rest of this paragraph is plain text.")
+    p = d.add_paragraph("Justified with automatic space before.")
+    ppr = p._p.get_or_add_pPr()
+    ppr.append(parse_xml(f'<w:spacing {nsdecls("w")} w:beforeAutospacing="1" w:line="280" w:lineRule="exact"/>'))
+    ppr.append(parse_xml(f'<w:jc {nsdecls("w")} w:val="both"/>'))
+    r = d.add_paragraph().add_run("Coloured by the theme")
+    r.font.all_caps = True
+    r._r.get_or_add_rPr().append(parse_xml(f'<w:color {nsdecls("w")} w:val="auto" w:themeColor="accent1"/>'))
+    d.add_paragraph("First item", style="List Bullet")
+    d.add_paragraph("Second item", style="List Bullet")
+    t = d.add_table(rows=2, cols=2)
+    t.style = "Table Grid"
+    for c, (head, body) in enumerate((("Role", "CISO"), ("Owner", "Board"))):
+        t.cell(0, c).paragraphs[0].text = head
+        t.cell(0, c)._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:val="clear" w:color="auto" w:fill="1f497d"/>'))
+        t.cell(1, c).paragraphs[0].add_run(body).font.size = Pt(9)
+    sec = d.sections[0]
+    sec.page_width, sec.left_margin, sec.right_margin, sec.top_margin = Twips(11906), Twips(1134), Twips(1134), Twips(1417)
+    d.save(path)
+    return path
+
+
+def _looks(path: str):
+    imp = D.import_docx(path, twin=True)
+    assert imp.native is not None, imp.notes
+    data, _ = D.export_in_place(path, imp.markdown)
+    looks, page = L.read(data, imp.markdown)
+    return {"table" if b.kind == "table" else b.text: look for b, look in zip(B.parse(imp.markdown), looks)}, page
+
+
+def test_each_paragraph_gets_the_typography_word_resolves_through_its_styles(tmp_path):
+    looks, _ = _looks(typeset(str(tmp_path / "typeset.docx")))
+    # the style's own size, bold, centring and spacing; its East Asian font leaves Normal's Arial for Latin text
+    assert looks["Big banner"] == {"font": "Arial", "size": 16.0, "bold": True, "align": "center", "before": 18.0, "after": 6.0, "line": 1.0}
+    # a style based on it: what it sets itself wins, the rest comes from the style it is based on
+    assert looks["Sub banner"] == {"font": "Arial", "size": 12.0, "bold": True, "underline": True, "align": "center", "before": 18.0, "after": 6.0, "line": 1.0}
+    # the run's own size, colour and "not bold" beat the style
+    assert looks["Plain banner"] == {"font": "Arial", "size": 10.0, "color": "#FF0000", "align": "center", "before": 18.0, "after": 6.0, "line": 1.0}
+    # a theme font wins over a named font on the same element (python-docx's heading font is Calibri)
+    assert looks["Themed text"]["font"] == "Calibri"
+    # a bold lead-in is bold in the text itself (the Markdown shows it), not the whole paragraph
+    assert "bold" not in looks["Note: the rest of this paragraph is plain text."]
+    # justified, Word's automatic space before, an exact line height; the space after still from the document's defaults
+    assert looks["Justified with automatic space before."] == {"font": "Arial", "size": 10.0, "align": "justify", "before": 14.0, "after": 10.0, "line": "14pt"}
+    assert looks["Coloured by the theme"]["color"] == "#4F81BD" and looks["Coloured by the theme"]["caps"] is True
+    # list items of one style leave out the space between them, as Word does (contextualSpacing)
+    assert "after" not in looks["First item"] and looks["Second item"]["after"] == 10.0
+    assert looks["table"] == {"head_fill": "#1F497D", "size": 9.0}                       # its header row's fill, its text's size
+
+
+def test_the_page_is_the_files_last_section_with_its_normal_text(tmp_path):
+    _, page = _looks(typeset(str(tmp_path / "typeset.docx")))
+    assert page == {"width": 595.3, "left": 56.7, "right": 56.7, "top": 70.85, "normal": {"font": "Arial", "size": 10.0, "after": 10.0, "line": 1.15}}

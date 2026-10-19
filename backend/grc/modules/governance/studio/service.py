@@ -1365,7 +1365,14 @@ def word_looks(s) -> List[Dict[str, Any]]:
     ``word_layout.layout``); nothing for any other document, or when the changes cannot be written into the file."""
     if not is_word_in_place(s):
         return []
-    return _word_looks(s.source_path, os.path.getmtime(s.source_path), s.content or "")
+    return _word_looks(s.source_path, os.path.getmtime(s.source_path), s.content or "")[0]
+
+
+def word_page(s) -> Optional[Dict[str, Any]]:
+    """The page of a Word file edited in place: its width, margins and normal text (see ``word_layout.page``); None otherwise."""
+    if not is_word_in_place(s):
+        return None
+    return _word_looks(s.source_path, os.path.getmtime(s.source_path), s.content or "")[1]
 
 
 def source_pdf(s) -> Optional[str]:
@@ -1375,14 +1382,14 @@ def source_pdf(s) -> Optional[str]:
 
 
 @functools.lru_cache(maxsize=8)     # ponytail: per process, the last 8 texts; a shared cache if several workers serve the studio
-def _word_looks(path: str, mtime: float, content: str) -> List[Dict[str, Any]]:
+def _word_looks(path: str, mtime: float, content: str) -> Tuple[List[Dict[str, Any]], Optional[Dict[str, Any]]]:
     from . import docx_io, word_layout
 
     try:
         data, _ = docx_io.export_in_place(path, content)
     except docx_io.PatchProblem:
-        return []
-    return word_layout.for_blocks(data, content)
+        return [], None
+    return word_layout.read(data, content)
 
 
 def export_file(db, s, fmt: str, settings: Dict[str, Any], *, highlight: bool = True, pending: int = 0, build: bool = True) -> Tuple[bytes, List[Dict[str, Any]]]:

@@ -11,11 +11,12 @@ import Table from '@tiptap/extension-table';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
 import TableRow from '@tiptap/extension-table-row';
-import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { Plugin, PluginKey, type Transaction } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { placeholderSpans } from '@/lib/studio/text';
-import type { BlockLook } from '@/lib/studio/api';
+import type { BlockLook, PageLook } from '@/lib/studio/api';
+import { blockStyle } from './wordLook';
 
 const NO_SPANS = {
   colspan: { default: 1, parseHTML: () => 1, renderHTML: () => ({}) },
@@ -160,42 +161,93 @@ export const Marks = Extension.create({
   },
 });
 
-// ── a Word file's own numbers and indents ────────────────────────────────────
-export const wordLayoutKey = new PluginKey<{ set: DecorationSet; on: boolean }>('studioWordLayout');
+// ── a Word file's own numbers, indents and typography ────────────────────────
+export interface WordLayoutState { set: DecorationSet; on: boolean; page: PageLook | null }
+export interface WordLayoutMeta { looks: BlockLook[]; page?: PageLook | null }
+
+export const wordLayoutKey = new PluginKey<WordLayoutState>('studioWordLayout');
+
+/** The kind of block a look was made for: a paragraph, a heading of its level, a table. */
+const blockKind = (node: PMNode | null | undefined): string => (node ? `${node.type.name}${node.attrs.level ?? ''}` : '');
+
+function lookAttrs(l: BlockLook, numbered: boolean): Record<string, string> {
+  const attrs: Record<string, string> = { class: `studio-wl${l.body ? ' studio-wl-body' : ''}${l.locked ? ' studio-wl-locked' : ''}` };
+  if (l.locked) {                                       // Word makes or draws it: shown as it is, changed in Word
+    attrs.contenteditable = 'false';
+    attrs.title = 'Word makes this part itself (its table of contents, a text box or a diagram), so it is changed in Word, not here';
+  }
+  if (l.label && (numbered || !/[A-Za-z0-9]/.test(l.label))) attrs['data-num'] = l.label;   // a bullet repeats; a number waits for the layout
+  const style = blockStyle(l);
+  if (style) attrs.style = style;
+  return attrs;
+}
+
+const lookOn = (from: number, node: PMNode, look: BlockLook, numbered = true): Decoration =>
+  Decoration.node(from, from + node.nodeSize, lookAttrs(look, numbered), { look, kind: blockKind(node) });
+
+/**
+ * The looks after an edit. Each stays on its block while the block is still the kind it was made for (a paragraph made a
+ * heading in the toolbar has a heading's look until the next layout). As in Word, a block split in two (Enter) keeps its look
+ * on both halves - the number only on the first, the next layout numbers the rest - and two blocks joined keep the first one's.
+ */
+function carryLooks(set: DecorationSet, tr: Transaction): DecorationSet {
+  const ranges = blockRanges(tr.doc);
+  const index = new Map(ranges.map((r, i) => [r.from, i]));
+  const before = set.find();
+  const mapped = set.map(tr.mapping, tr.doc);
+  const now = mapped.find();
+  const fits = (d: Decoration) => {
+    const r = ranges[index.get(d.from) ?? -1];
+    return !!r && r.to === d.to && blockKind(r.node) === d.spec.kind;
+  };
+  if (now.length === before.length && now.every(fits)) return mapped;          // typing inside blocks: nothing moved
+  const taken = new Set<number>();
+  const out: Decoration[] = [];
+  for (const d of before) {
+    const from = tr.mapping.mapResult(d.from, 1);
+    const to = tr.mapping.mapResult(d.to, -1);
+    let i = from.deleted ? undefined : index.get(from.pos);
+    for (let first = true; i !== undefined && i < ranges.length; i += 1, first = false) {
+      const r = ranges[i];
+      if (!first && (to.deleted || r.to > to.pos)) break;                       // past the pieces of the block it was on
+      if (taken.has(r.from) || blockKind(r.node) !== d.spec.kind) continue;
+      taken.add(r.from);
+      out.push(lookOn(r.from, r.node, d.spec.look as BlockLook, first));
+    }
+  }
+  return DecorationSet.create(tr.doc, out);
+}
 
 /**
  * What Word shows for each block of a Word file edited in place and its text does not hold: the number in front of it
- * ("1.3.1.1.", "II.", a bullet), its indent, and clauses numbered through a heading style that look like body text. Node
- * decorations, so the numbers are not text and cannot be typed over; they move with the blocks as the person types, and the
- * page sends a new layout after each save. A layout for another number of blocks than the editor holds is not used.
+ * ("1.3.1.1.", "II.", a bullet), its indent, its font, size, colour, alignment and spacing (so a heading looks as Word shows
+ * it, not as the editor would), and clauses numbered through a heading style that look like body text. Node decorations, so
+ * the numbers are not text and cannot be typed over; they move with the blocks as the person types (`carryLooks`), and the
+ * page sends a new layout after each save. A layout for another number of blocks than the editor holds is not used: the one
+ * before stays (a paragraph typed since has the page's normal look until the next one). The page (`page`: its width, margins
+ * and normal text) is kept with the layout it came with.
  */
 export const WordLayout = Extension.create({
   name: 'studioWordLayout',
   addProseMirrorPlugins() {
     return [
-      new Plugin<{ set: DecorationSet; on: boolean }>({
+      new Plugin<WordLayoutState>({
         key: wordLayoutKey,
         state: {
-          init: () => ({ set: DecorationSet.empty, on: false }),
+          init: () => ({ set: DecorationSet.empty, on: false, page: null }),
           apply(tr, old) {
-            const looks = tr.getMeta(wordLayoutKey) as BlockLook[] | undefined;
-            if (!looks) return { set: old.set.map(tr.mapping, tr.doc), on: old.on };
+            const kept = tr.docChanged && old.on ? { ...old, set: carryLooks(old.set, tr) } : old;
+            const meta = tr.getMeta(wordLayoutKey) as WordLayoutMeta | undefined;
+            if (!meta) return kept;
+            const { looks } = meta;
+            if (!looks.length) return { set: DecorationSet.empty, on: false, page: null };   // not (or no longer) laid out as a Word file
             const ranges = blockRanges(tr.doc);
-            if (!looks.length || ranges.length !== looks.length) return { set: DecorationSet.empty, on: false };
+            if (ranges.length !== looks.length) return kept;
             const decorations: Decoration[] = [];
             ranges.forEach((r, i) => {
-              const l = looks[i];
-              if (!l || !(l.label || l.left || l.hang || l.body || l.locked)) return;
-              const attrs: Record<string, string> = { class: `studio-wl${l.body ? ' studio-wl-body' : ''}${l.locked ? ' studio-wl-locked' : ''}` };
-              if (l.locked) {                                       // Word makes or draws it: shown as it is, changed in Word
-                attrs.contenteditable = 'false';
-                attrs.title = 'Word makes this part itself (its table of contents, a text box or a diagram), so it is changed in Word, not here';
-              }
-              if (l.label) attrs['data-num'] = l.label;
-              if (l.left || l.hang) attrs.style = `padding-left:${l.left ?? 0}pt;text-indent:${-(l.hang ?? 0)}pt;--hang:${Math.max(0, l.hang ?? 0)}pt`;
-              decorations.push(Decoration.node(r.from, r.to, attrs));
+              if (looks[i] && Object.keys(looks[i]).length) decorations.push(lookOn(r.from, r.node, looks[i]));
             });
-            return { set: DecorationSet.create(tr.doc, decorations), on: true };
+            return { set: DecorationSet.create(tr.doc, decorations), on: true, page: meta.page ?? null };
           },
         },
         props: {
@@ -213,22 +265,32 @@ export const WordLayout = Extension.create({
  * The position range of each block the server sees, in the server's order: a heading, a paragraph, each list item, a table,
  * a quote, a code block, a rule. (Used to point at a block from a check, or to mark what an AI change would touch.)
  */
-export function blockRanges(doc: PMNode): { from: number; to: number }[] {
-  const out: { from: number; to: number }[] = [];
+export function blockRanges(doc: PMNode): { from: number; to: number; node: PMNode }[] {
+  const out: { from: number; to: number; node: PMNode }[] = [];
   const list = (node: PMNode, pos: number) => {
     node.forEach((item, offset) => {
       const itemPos = pos + 1 + offset;
       item.forEach((child, childOffset) => {
         const childPos = itemPos + 1 + childOffset;
         if (child.type.name === 'bulletList' || child.type.name === 'orderedList') list(child, childPos);
-        else out.push({ from: childPos, to: childPos + child.nodeSize });
+        else out.push({ from: childPos, to: childPos + child.nodeSize, node: child });
       });
     });
   };
   doc.forEach((node, offset) => {
     const name = node.type.name;
     if (name === 'bulletList' || name === 'orderedList') list(node, offset);
-    else out.push({ from: offset, to: offset + node.nodeSize });
+    else out.push({ from: offset, to: offset + node.nodeSize, node });
+  });
+  return out;
+}
+
+/** The levels of the document's headings, in order. */
+export function headingLevels(doc: PMNode): number[] {
+  const out: number[] = [];
+  doc.descendants((node) => {
+    if (node.type.name === 'heading') out.push(node.attrs.level as number);
+    return !node.isTextblock;
   });
   return out;
 }
