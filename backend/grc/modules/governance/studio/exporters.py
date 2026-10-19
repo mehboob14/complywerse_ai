@@ -3,8 +3,9 @@
 Word and PDF carry the organisation's name in the header and its logo in the header or at the foot of the page (left, centre
 or right), the document code, version and classification and "Page X of Y" in the footer, an optional watermark across every
 page ("DRAFT"), tables with a repeating header row, numbered lists that restart where each list starts, and every placeholder
-still to be filled highlighted (so an unfinished document is visibly unfinished). Styles (fonts, heading colours, page
-layout) belong to the export, not to the Markdown: that is how the studio keeps formatting structured.
+still to be filled highlighted (so an unfinished document is visibly unfinished). The look is a professional document's: black
+text and headings on white, light grey table headers and rules; only links and the placeholders still to fill have colour.
+Styles (fonts, sizes, page layout) belong to the export, not to the Markdown: that is how the studio keeps formatting structured.
 
 A Word file made from an uploaded Word document is not built here: it is the original with the edits written into it
 (``docx_io``).
@@ -20,8 +21,10 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple
 from . import blocks as B
 from .checks import _PLACEHOLDERS
 
-TEAL = (0x0F, 0x4C, 0x5C)
-HEADER_FILL = "E3F1F1"
+INK = "000000"                  # the title, the headings and the entity name
+GREY = "404040"                 # the footer and quotations
+RULE = "BFBFBF"                 # the lines under the header, over the footer and for a rule
+HEADER_FILL = "F2F2F2"          # a table's header row
 PLACEHOLDER_FILL = "FFF2A8"
 _MUST = [rx for _kind, required, rx in _PLACEHOLDERS if required]
 _RTL = re.compile(r"[\u0590-\u08FF\uFB1D-\uFDFF\uFE70-\uFEFF]")
@@ -131,16 +134,16 @@ def to_html(markdown: str, *, title: str = "", entity_name: str = "", logo: Opti
         letterhead = f'<header style="justify-content:{justify}">{img if where == "header" else ""}<span>{_html.escape(entity_name)}</span></header>'
     if img and where == "footer":
         footer = f'<footer style="text-align:{side}">{img}</footer>'
-    css = ("body{font:15px/1.55 Calibri,Arial,sans-serif;max-width:820px;margin:32px auto;padding:0 20px;color:#1f2933}header{display:flex;align-items:center;gap:14px;"
-           "border-bottom:2px solid #0f4c5c;padding-bottom:10px;margin-bottom:24px}header img{height:48px}footer{border-top:1px solid #b8c4c8;margin-top:32px;padding-top:12px}"
-           "footer img{height:40px}h1,h2,h3,h4{color:#0f4c5c}table{border-collapse:collapse;width:100%;margin:12px 0}"
-           "td,th{border:1px solid #b8c4c8;padding:6px 8px;vertical-align:top}th{background:#e3f1f1;text-align:left}blockquote{border-left:4px solid #0f4c5c;margin:12px 0;padding:2px 14px;color:#52606d}"
-           "pre{background:#f3f5f6;padding:10px;overflow:auto}code{background:#f3f5f6;padding:1px 4px}mark{background:#fff2a8}")
+    css = ("body{font:15px/1.55 Calibri,Arial,sans-serif;max-width:820px;margin:32px auto;padding:0 20px;color:#000;background:#fff}header{display:flex;align-items:center;gap:14px;"
+           "border-bottom:2px solid #bfbfbf;padding-bottom:10px;margin-bottom:24px}header img{height:48px}footer{border-top:1px solid #bfbfbf;margin-top:32px;padding-top:12px}"
+           "footer img{height:40px}h1,h2,h3,h4{color:#000}table{border-collapse:collapse;width:100%;margin:12px 0}"
+           "td,th{border:1px solid #000;padding:6px 8px;vertical-align:top}th{background:#f2f2f2;text-align:left}blockquote{border-left:4px solid #808080;margin:12px 0;padding:2px 14px;color:#404040;font-style:italic}"
+           "pre{background:#f2f2f2;padding:10px;overflow:auto}code{background:#f2f2f2;padding:1px 4px}mark{background:#fff2a8}")
     mark = ""
     if watermark.strip():
         mark = f' data-watermark="{_html.escape(watermark.strip()[:WATERMARK_MAX], quote=True)}"'
         css += ("body[data-watermark]::before{content:attr(data-watermark);position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-35deg);"
-                "font:700 110px Calibri,Arial,sans-serif;color:rgba(15,76,92,.07);white-space:nowrap;pointer-events:none;z-index:0}body>*{position:relative;z-index:1}")
+                "font:700 110px Calibri,Arial,sans-serif;color:rgba(0,0,0,.06);white-space:nowrap;pointer-events:none;z-index:0}body>*{position:relative;z-index:1}")
     page = (f'<!doctype html><html lang="en"><head><meta charset="utf-8"><title>{_html.escape(title or _title_of(blocks, "Document"))}</title>'
             f"<style>{css}</style></head><body{mark}>{letterhead}{''.join(body)}{footer}</body></html>")
     return page.encode("utf-8")
@@ -173,7 +176,7 @@ def _docx_add_runs(paragraph, segs: Sequence[B.Seg], highlight: bool = True, bas
                 run.font.name = "Consolas"
                 run.font.size = Pt(9.5)
             if s.href:
-                run.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+                run.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)         # Word's own link blue, kept: a link must look like one
             if is_placeholder:
                 run.font.highlight_color = WD_COLOR_INDEX.YELLOW
 
@@ -205,7 +208,7 @@ def _shade(cell, fill: str) -> None:
     tc_pr.append(shd)
 
 
-def _border(paragraph, side: str, size: int = 8, color: str = "0F4C5C", space: int = 4) -> None:
+def _border(paragraph, side: str, size: int = 8, color: str = RULE, space: int = 4) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
 
@@ -268,8 +271,21 @@ def _set_numbering(paragraph, num_id: int, level: int) -> None:
     p_pr.insert(1 if p_pr.find(qn("w:pStyle")) is not None else 0, num_pr)
 
 
+def black_headings(doc) -> None:
+    """The title and headings of a python-docx document in black. Word's own template, which python-docx starts from, colours
+    them blue with theme colours (on each style and on the character style linked to it) and rules a blue line under the Title."""
+    from docx.oxml.ns import qn
+    from docx.shared import RGBColor
+
+    for name in ("Title", "Heading 1", "Heading 2", "Heading 3", "Heading 4"):
+        for style in [doc.styles[n] for n in (name, f"{name} Char") if n in doc.styles]:
+            style.font.color.rgb = RGBColor.from_string(INK)            # replaces the theme colour, which Word would show instead
+        for rule in doc.styles[name].element.findall(f"{qn('w:pPr')}/{qn('w:pBdr')}"):
+            rule.getparent().remove(rule)
+
+
 def _style_doc(doc) -> None:
-    from docx.shared import Cm, Pt, RGBColor
+    from docx.shared import Cm, Pt
 
     sec = doc.sections[0]
     sec.page_width, sec.page_height = Cm(21), Cm(29.7)
@@ -282,9 +298,9 @@ def _style_doc(doc) -> None:
     for name, size, before in (("Title", 24, 0), ("Heading 1", 16, 16), ("Heading 2", 13, 12), ("Heading 3", 11.5, 10), ("Heading 4", 10.5, 8)):
         st = doc.styles[name]
         st.font.name, st.font.size, st.font.bold = "Calibri", Pt(size), True
-        st.font.color.rgb = RGBColor(*TEAL)
         st.paragraph_format.space_before, st.paragraph_format.space_after = Pt(before), Pt(6)
         st.paragraph_format.keep_with_next = True
+    black_headings(doc)
 
 
 def _header_footer(doc, *, entity_name: str, logo_path: Optional[str], logo_position: str, footer_text: str) -> None:
@@ -303,18 +319,18 @@ def _header_footer(doc, *, entity_name: str, logo_path: Optional[str], logo_posi
             head.add_run("   ")
     if entity_name:
         run = head.add_run(entity_name)
-        run.font.size, run.font.bold, run.font.color.rgb = Pt(9.5), True, RGBColor(*TEAL)
-    _border(head, "bottom", 6, "B8C4C8", 6)
+        run.font.size, run.font.bold, run.font.color.rgb = Pt(9.5), True, RGBColor.from_string(INK)
+    _border(head, "bottom", 6, RULE, 6)
     foot = sec.footer.paragraphs[0]
     width = sec.page_width - sec.left_margin - sec.right_margin
     foot.paragraph_format.tab_stops.add_tab_stop(width, WD_TAB_ALIGNMENT.RIGHT)
     run = foot.add_run(footer_text)
-    run.font.size, run.font.color.rgb = Pt(8.5), RGBColor(0x52, 0x60, 0x6D)
+    run.font.size, run.font.color.rgb = Pt(8.5), RGBColor.from_string(GREY)
     foot.add_run("\tPage ").font.size = Pt(8.5)
     _field(foot, "PAGE")
     foot.add_run(" of ").font.size = Pt(8.5)
     _field(foot, "NUMPAGES")
-    _border(foot, "top", 6, "B8C4C8", 6)
+    _border(foot, "top", 6, RULE, 6)
     if has_logo and where == "footer":                  # at the foot of every page, under the document code and the page numbers
         mark = sec.footer.add_paragraph()
         mark.alignment = align
@@ -342,7 +358,7 @@ def _watermark_run(text: str, n: int):
     height = min(150, width / max(1, len(text)) * 1.5)
     return parse_xml(
         f'<w:r {nsdecls("w")} {_VML}><w:rPr><w:noProof/></w:rPr><w:pict>{_WATERMARK_SHAPETYPE}'
-        f'<v:shape id="CompliverseWatermark{n}" o:spid="_x0000_s{2049 + n}" type="#_x0000_t136" o:allowincell="f" fillcolor="#c5ced3" stroked="f" '
+        f'<v:shape id="CompliverseWatermark{n}" o:spid="_x0000_s{2049 + n}" type="#_x0000_t136" o:allowincell="f" fillcolor="#c0c0c0" stroked="f" '
         f'style="position:absolute;margin-left:0;margin-top:0;width:{width:.0f}pt;height:{height:.0f}pt;rotation:315;z-index:-251654144;'
         'mso-position-horizontal:center;mso-position-horizontal-relative:margin;mso-position-vertical:center;mso-position-vertical-relative:margin">'
         f'<v:fill opacity=".5"/><v:textpath style="font-family:&quot;Calibri&quot;;font-size:1pt" string="{_html.escape(text, quote=True)}"/>'
@@ -432,9 +448,9 @@ def to_docx(markdown: str, *, title: str = "", entity_name: str = "", logo_path:
         elif b.kind == "quote":
             p = doc.add_paragraph()
             p.paragraph_format.left_indent = Cm(0.8)
-            _border(p, "left", 18, "0F4C5C", 8)
+            _border(p, "left", 18, "808080", 8)
             run = p.add_run(b.text)
-            run.italic, run.font.color.rgb = True, RGBColor(0x52, 0x60, 0x6D)
+            run.italic, run.font.color.rgb = True, RGBColor.from_string(GREY)
         elif b.kind == "code":
             for line in (b.text or " ").split("\n"):
                 p = doc.add_paragraph()
@@ -442,7 +458,7 @@ def to_docx(markdown: str, *, title: str = "", entity_name: str = "", logo_path:
                 run = p.add_run(line or " ")
                 run.font.name, run.font.size = "Consolas", Pt(9)
         elif b.kind == "hr":
-            _border(doc.add_paragraph(), "bottom", 6, "B8C4C8", 1)
+            _border(doc.add_paragraph(), "bottom", 6, RULE, 1)
         else:
             doc.add_paragraph(b.text)
     out = io.BytesIO()
@@ -543,15 +559,15 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
     if _RTL.search(markdown):
         raise ExportProblem("PDF export cannot show right-to-left text (Arabic, Hebrew, Urdu) correctly yet. Export to Word instead.")
     regular, bold, italic, bold_italic = _pdf_font()
-    teal = colors.Color(TEAL[0] / 255, TEAL[1] / 255, TEAL[2] / 255)
+    ink, grey, rule, fill = (colors.HexColor("#" + c) for c in (INK, GREY, RULE, HEADER_FILL))
     blocks = B.parse(markdown)
     heads = [b for b in blocks if b.kind == "heading"]
     one_title = bool(heads) and heads[0].level == 1 and sum(1 for h in heads if h.level == 1) == 1
     body = ParagraphStyle("body", fontName=regular, fontSize=10, leading=14.5, spaceAfter=6)
-    styles = {"title": ParagraphStyle("title", parent=body, fontName=bold, fontSize=22, leading=26, textColor=teal, spaceAfter=12)}
+    styles = {"title": ParagraphStyle("title", parent=body, fontName=bold, fontSize=22, leading=26, textColor=ink, spaceAfter=12)}
     for n, (size, before) in enumerate(((16, 14), (13, 11), (11.5, 9), (10.5, 7)), start=1):
-        styles[f"h{n}"] = ParagraphStyle(f"h{n}", parent=body, fontName=bold, fontSize=size, leading=size + 4, textColor=teal, spaceBefore=before, spaceAfter=5, keepWithNext=1)
-    quote = ParagraphStyle("quote", parent=body, leftIndent=18, textColor=colors.Color(.32, .38, .43), fontName=italic, borderPadding=(0, 0, 0, 8))
+        styles[f"h{n}"] = ParagraphStyle(f"h{n}", parent=body, fontName=bold, fontSize=size, leading=size + 4, textColor=ink, spaceBefore=before, spaceAfter=5, keepWithNext=1)
+    quote = ParagraphStyle("quote", parent=body, leftIndent=18, textColor=grey, fontName=italic, borderPadding=(0, 0, 0, 8))
     story: List[Any] = []
     pending: List[B.Block] = []
 
@@ -601,15 +617,15 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
             lens = [max(8, min(60, max(len(row[c].text) if c < len(row) else 0 for row in b.rows))) for c in range(width)]
             widths = [avail * n / sum(lens) for n in lens]
             table = Table(data, colWidths=widths, repeatRows=1)
-            table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, colors.Color(.72, .77, .78)), ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#" + HEADER_FILL)),
+            table.setStyle(TableStyle([("GRID", (0, 0), (-1, -1), 0.5, ink), ("BACKGROUND", (0, 0), (-1, 0), fill),
                                        ("VALIGN", (0, 0), (-1, -1), "TOP"), ("TOPPADDING", (0, 0), (-1, -1), 4), ("BOTTOMPADDING", (0, 0), (-1, -1), 4)]))
             story += [table, Spacer(1, 8)]
         elif b.kind == "quote":
             story.append(Paragraph(_html.escape(b.text), quote))
         elif b.kind == "code":
-            story.append(Preformatted(b.text, ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8.5, leading=11, backColor=colors.Color(.95, .96, .96))))
+            story.append(Preformatted(b.text, ParagraphStyle("code", parent=body, fontName="Courier", fontSize=8.5, leading=11, backColor=fill)))
         elif b.kind == "hr":
-            story.append(HRFlowable(width="100%", color=colors.Color(.72, .77, .78), spaceBefore=6, spaceAfter=6))
+            story.append(HRFlowable(width="100%", color=rule, spaceBefore=6, spaceAfter=6))
         else:
             story.append(Paragraph(_html.escape(b.text), body))
     flush_list()
@@ -639,7 +655,7 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
 
         def _chrome(self, total: int) -> None:
             w, h = A4
-            self.setStrokeColor(colors.Color(.72, .77, .78))
+            self.setStrokeColor(rule)
             self.setLineWidth(0.5)
             x = 2.2 * cm
             if logo is not None and where == "header":
@@ -651,14 +667,14 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
                 x = x + lw + 8 if side == "left" else 2.2 * cm
             if entity_name:
                 self.setFont(bold, 9.5)
-                self.setFillColor(teal)
+                self.setFillColor(ink)
                 self.drawString(x, h - 1.2 * cm - 0.9 * cm, entity_name)
             self.line(2.2 * cm, h - 2.55 * cm, w - 2.2 * cm, h - 2.55 * cm)
             low = logo is not None and where == "footer"         # the logo at the foot of the page: the footer line and text move up over it
             line_y, text_y = (1.95 * cm, 1.5 * cm) if low else (1.7 * cm, 1.2 * cm)
             self.line(2.2 * cm, line_y, w - 2.2 * cm, line_y)
             self.setFont(regular, 8.5)
-            self.setFillColor(colors.Color(.32, .38, .43))
+            self.setFillColor(grey)
             self.drawString(2.2 * cm, text_y, footer)
             self.drawRightString(w - 2.2 * cm, text_y, f"Page {self._pageNumber} of {total}")
             if low:
@@ -679,7 +695,7 @@ def to_pdf(markdown: str, *, title: str = "", entity_name: str = "", logo_path: 
         w, h = A4
         size = max(28.0, min(120.0, 100 * 700 / max(1.0, stringWidth(mark, bold, 100))))
         canvas.saveState()
-        canvas.setFillColor(colors.Color(.06, .30, .36))
+        canvas.setFillColor(ink)
         canvas.setFillAlpha(0.08)
         canvas.setFont(bold, size)
         canvas.translate(w / 2, h / 2)

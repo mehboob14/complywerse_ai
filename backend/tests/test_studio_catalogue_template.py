@@ -68,6 +68,13 @@ def test_the_checks_and_a_whole_document_draft_follow_the_templates_sections(wor
     assert templates.structure_for(world.db, "policy", "catalogue", session)["sections"][1]["title"] == "Scope"
 
 
+def test_a_templates_sections_are_numbered_in_order_and_an_annex_takes_no_number(world):
+    md = "# Policy\n\n## Purpose\n\nWhy.\n\n## 7. Scope\n\nWhat.\n\n## Annex A — Exception Form\n\nA form.\n\n## Revision History\n\nVersions.\n"
+    s = start(world, title="Policy", doc_type="policy", content=md).json()
+    sections, _scaffold, _custom = drafting.sections_for(world.db, world.db.get(m.StudioSession, s["id"]))
+    assert [x.full_heading for x in sections] == ["1. Purpose", "2. Scope", "Annex A — Exception Form", "3. Revision History"]
+
+
 def test_a_template_that_cannot_start_a_document_is_refused_with_a_sentence(world):
     for body, words in ((dict(content="   <!-- only a comment -->  "), "no text"),
                         (dict(content="# X\n\n" + "word " * 60_000), "too long"),

@@ -117,6 +117,43 @@ def test_the_logo_can_sit_at_the_foot_of_the_page_and_a_watermark_can_go_across_
     assert "data-watermark" not in X.export(MD, "html").decode()
 
 
+_COLOURS = re.compile(r'(?:<w:color w:val|w:color|w:fill|fillcolor)="#?([0-9A-Fa-f]{6})"')
+
+
+def coloured(hexes):
+    """The colours among ``hexes`` (``RRGGBB`` or ``RGB``) that are not black, white or a grey."""
+    full = {(h if len(h) == 6 else "".join(c * 2 for c in h)).upper() for h in hexes}
+    return {h for h in full if not h[0:2] == h[2:4] == h[4:6]}
+
+
+def test_a_document_made_here_is_black_and_white_with_light_grey_table_headers(logo):
+    """Professional documents are not colourful: title, headings and entity name black (none of the theme colours of Word's own
+    template, no blue line under the title), table headers and rules light grey; only links and placeholders to fill have colour."""
+    import fitz
+
+    md = MD + "\n---\n\n```\nretain = 7\n```\n"
+    word = zipfile.ZipFile(io.BytesIO(X.to_docx(md, entity_name="Capital Financial Services Bank", logo_path=logo, doc_code="POL-001", watermark="DRAFT")))
+    styles = word.read("word/styles.xml").decode()
+    for sid in ("Title", "Heading1", "Heading2", "Heading3", "Heading4", "TitleChar", "Heading1Char", "Heading2Char", "Heading3Char", "Heading4Char"):
+        style = re.search(rf'<w:style [^>]*w:styleId="{sid}".*?</w:style>', styles, re.S).group(0)
+        assert '<w:color w:val="000000"/>' in style and "w:themeColor" not in style and "w:themeShade" not in style and "<w:pBdr>" not in style, sid
+    assert re.search(r'w:styleId="Heading1".*?<w:sz w:val="32"/>', styles, re.S) and re.search(r'w:styleId="Title".*?<w:sz w:val="48"/>', styles, re.S)   # sizes kept
+    shown = "".join(word.read(n).decode() for n in ("word/document.xml", "word/header1.xml", "word/footer1.xml"))
+    assert coloured(_COLOURS.findall(shown)) == {"0563C1"}                                            # the link, nothing else
+    assert 'w:fill="F2F2F2"' in shown and '<w:highlight w:val="yellow"/>' in shown and 'fillcolor="#c0c0c0"' in shown
+
+    page = fitz.open(stream=X.to_pdf(md, entity_name="Capital Financial Services Bank", logo_path=logo, doc_code="POL-001", watermark="DRAFT"), filetype="pdf")[0]
+    spans = [s for b in page.get_text("dict")["blocks"] for line in b.get("lines", []) for s in line["spans"]]
+    assert coloured(f"{s['color']:06X}" for s in spans) == {"0563C1"}
+    fills = {"%02X%02X%02X" % tuple(round(c * 255) for c in d[k]) for d in page.get_drawings() for k in ("fill", "color") if d.get(k)}
+    assert coloured(fills) == {"FFF2A8"} and "F2F2F2" in fills and "000000" in fills               # the placeholders' highlight; grey header, black grid
+
+    html = X.export(md, "html", entity_name="Capital Bank", logo_path=logo, watermark="DRAFT").decode()
+    css = re.search(r"<style>(.*?)</style>", html, re.S).group(1)
+    assert coloured(re.findall(r"#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b", css)) == {"FFF2A8"}           # the placeholders' <mark>
+    assert "h1,h2,h3,h4{color:#000}" in css and "th{background:#f2f2f2" in css and "rgba(0,0,0,.06)" in css
+
+
 def test_a_numbered_list_keeps_the_number_it_starts_at():
     from docx import Document
 

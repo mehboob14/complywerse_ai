@@ -8,6 +8,7 @@ import pytest
 
 import grc.models as m
 from grc.modules.governance.studio import blocks as B
+from grc.modules.governance.studio import checks
 from grc.modules.governance.studio import draft_prompts as P
 from grc.modules.governance.studio import drafting
 
@@ -116,6 +117,11 @@ def test_a_new_policy_is_written_whole_planned_first_and_applied_as_the_first_dr
     assert [b.text for b in B.parse(content) if b.kind == "heading" and b.level == 3][:3] == ["7.1 Privileged access", "7.2 Joiners, movers and leavers", "7.3 Access reviews"]
     assert content.startswith("# Access Control Policy") and "The policy statements are grouped by how access is requested" in content
     assert doc["revision"] == 2 and drafts.http.get(drafts.api(f"/sessions/{s['id']}/revisions")).json()["items"][0]["summary"] == "Comply Agent wrote the first draft"
+    # numbered 1, 1.1, 1.1.1 by default: the headings run without a gap, and a numbered section numbers its clauses under its own number
+    assert checks.numbering_issues(B.parse(content)) == []
+    tasks = {re.search(r'heading="([^"]+)"', c["task"]).group(1): c["task"] for c in calls[1:]}
+    assert "Number its clauses 3.1, 3.2 ... and their sub-clauses 3.1.1" in tasks["Purpose"] and "Number its clauses 11.1," in tasks["Related Documents and References"]
+    assert not [h for h, t in tasks.items() if h.startswith("Annex") and "Number its clauses" in t]          # an annex has no number to build on
     assert [o["status"] for o in done["proposal"]["ops"]] == ["accepted"]
 
     # the parts that are not written by the AI are real, and the organisation's own names are used where they exist
@@ -316,6 +322,17 @@ def test_a_part_is_kept_to_its_own_heading_and_to_the_levels_below_the_sections(
     assert drafting._clean("## 3. Purpose\n\nThe text.\n\n## Another\n\nMore.", section) == "The text.\n\n### Another\n\nMore."
     assert drafting._clean("```markdown\n# Purpose\n\nThe text.\n```", section) == "The text."
     assert drafting._clean("### 3.1 Sub heading\n\nThe text.", section).startswith("### 3.1 Sub heading")
+
+
+def test_a_new_document_from_the_chat_is_numbered_1_1_1_1_1_and_an_existing_one_keeps_its_own_numbering():
+    from grc.modules.governance.studio import prompts
+
+    assert "number the headings only if the template or the person asks" not in prompts.SYSTEM
+    rule = prompts.SYSTEM.split("NUMBERING\n")[1].split("\n\n")[0]
+    assert rule.startswith("A new document, and every section you write into one, is numbered hierarchically unless the person asks")
+    assert "the title has no number; the sections are 1., 2., 3. (annexes: Annex A, Annex B); their sub-sections 1.1, 1.2, and below them 1.1.1" in rule
+    assert "a heading or clause you add takes the next number in that style" in rule and "never type it in" in rule      # Word numbers its own
+    assert "keep the document's own language, numbering style and heading style" in prompts.SYSTEM
 
 
 def test_committees_in_the_profile_that_are_test_data_are_not_given_to_the_writer():
