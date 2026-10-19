@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useState, useEffect, useMemo } from 'react';
 import { DataTable, IfPermission, SearchInput, PageLoader } from '@/components/ui';
 import { Edit2, Eye, Plus, Trash2, Users, X } from 'lucide-react';
@@ -78,7 +79,7 @@ export default function RolesManagementPage() {
       setMembersForRole(res.data);
     } catch (err: unknown) {
       const msg =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+        detailText((err as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ||
         (err as { message?: string })?.message ||
         'Failed to load role members';
       setMembersError(msg);
@@ -110,7 +111,7 @@ export default function RolesManagementPage() {
       setRoles(rolesRes.data);
       setPermissionMatrix(matrixRes.data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load roles');
+      setError(detailText(err.response?.data?.detail) || 'Failed to load roles');
     } finally {
       setLoading(false);
     }
@@ -139,7 +140,7 @@ export default function RolesManagementPage() {
       setExpandedModules(new Set());
       setShowModal(true);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load role details');
+      setError(detailText(err.response?.data?.detail) || 'Failed to load role details');
     }
   };
 
@@ -155,7 +156,7 @@ export default function RolesManagementPage() {
       await adminApi.deleteRole(role.id);
       fetchData();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to delete role');
+      setError(detailText(err.response?.data?.detail) || 'Failed to delete role');
     }
   };
 
@@ -179,7 +180,7 @@ export default function RolesManagementPage() {
       setShowModal(false);
       fetchData();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to save role');
+      setError(detailText(err.response?.data?.detail) || 'Failed to save role');
     } finally {
       setSaving(false);
     }

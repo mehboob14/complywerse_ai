@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { ToastContainer, type ToastData, type ToastType } from './Toast';
+import { detailText } from '@/lib/apiError';
 
 interface ToastOptions {
   title: string;
@@ -45,7 +46,8 @@ export function ToastProvider({ children, maxToasts = 5 }: ToastProviderProps) {
     const newToast: ToastData = {
       id,
       title: options.title,
-      message: options.message,
+      // a server's `detail` passed on as it came (a 422 list, an object) is read out, not rendered as an object (a blank app)
+      message: options.message == null || typeof options.message === 'string' ? options.message : detailText(options.message),
       type: options.type || 'info',
       duration: options.duration ?? 5000,
     };

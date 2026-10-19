@@ -16,6 +16,7 @@ export const dynamic = 'force-dynamic';
  *            rows in bulk. One credential covers all targets — matches the
  *            real bank reality of one service account per domain.
  */
+import { detailText } from '@/lib/apiError';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiClient } from '@/lib/api';
@@ -118,7 +119,7 @@ export default function ADDiscoverPage() {
         .filter(Boolean) as string[];
       setSelectedHosts(new Set(allHosts));
     } catch (e: any) {
-      setDiscoverError(e?.response?.data?.detail || e?.message || 'AD discovery failed');
+      setDiscoverError(detailText(e?.response?.data?.detail) || e?.message || 'AD discovery failed');
     } finally {
       setDiscovering(false);
     }
@@ -174,7 +175,7 @@ export default function ADDiscoverPage() {
       });
       setResult(r.data);
     } catch (e: any) {
-      setOnboardError(e?.response?.data?.detail || e?.message || 'Onboard failed');
+      setOnboardError(detailText(e?.response?.data?.detail) || e?.message || 'Onboard failed');
     } finally {
       setOnboarding(false);
     }

@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useCallback, useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
 import { apiClient } from '@/lib/api';
@@ -49,7 +50,7 @@ export default function ActivityTab({
       setRows(res.data.items);
       setTotal(res.data.total);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Could not load the calls.');
+      setError(detailText(e?.response?.data?.detail) || 'Could not load the calls.');
     } finally {
       setLoading(false);
     }

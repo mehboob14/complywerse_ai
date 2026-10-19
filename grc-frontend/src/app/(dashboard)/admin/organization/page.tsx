@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useState, useEffect } from 'react';
 import { adminApi, OrganizationProfile } from '@/lib/api';
 import { authedFetch } from '@/lib/auth-fetch';
@@ -58,7 +59,7 @@ export default function OrganizationProfilePage() {
       setProfile(response.data);
       setFormData(response.data);
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to load company profile');
+      setError(detailText(err.response?.data?.detail) || 'Failed to load company profile');
     } finally {
       setLoading(false);
     }
@@ -73,7 +74,7 @@ export default function OrganizationProfilePage() {
       setEditing(false);
       fetchProfile();
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Failed to update profile');
+      setError(detailText(err.response?.data?.detail) || 'Failed to update profile');
     } finally {
       setSaving(false);
     }

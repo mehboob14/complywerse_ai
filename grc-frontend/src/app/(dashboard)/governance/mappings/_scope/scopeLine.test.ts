@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { scopeLine } from './scopeLine.ts';
+
+test("in a document's Mappings view its editors (the owner among them) run and link, as the server allows, whatever the mapping rights", () => {
+  const page = readFileSync(new URL('../page.tsx', import.meta.url), 'utf8');
+  assert.ok(page.includes("const canCreate = canEdit ?? hasPermission('governance:mappings:create');"));
+  assert.ok(page.includes("const canDelete = canEdit ?? hasPermission('governance:mappings:delete');"));
+});
 
 const base = { running: false, error: '', saved: 0, picked: 0, last: null };
 

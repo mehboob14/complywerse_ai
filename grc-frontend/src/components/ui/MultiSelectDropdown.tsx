@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { clsx } from 'clsx';
 import { createPortal } from 'react-dom';
+import { initialsOf } from '@/lib/people';
 
 export interface MultiSelectDropdownItem {
   value: string;
@@ -47,6 +48,8 @@ export interface MultiSelectDropdownProps {
   disabled?: boolean;
   /** Offer "+ Add “typed text”" when the search matches no item exactly. */
   onCreate?: (text: string) => void;
+  /** The trigger names every selected item ("Bilal, Role · Approvers") instead of "2 selected". */
+  namesInTrigger?: boolean;
 }
 
 const sizeStyles = {
@@ -76,20 +79,8 @@ export function MultiSelectDropdown({
   showAvatars = true,
   disabled = false,
   onCreate,
+  namesInTrigger = false,
 }: MultiSelectDropdownProps) {
-  const getInitials = (text: string) => {
-    const cleaned = text.trim();
-    if (!cleaned) return 'U';
-
-    const words = cleaned.split(/\s+/).filter(Boolean);
-    if (words.length >= 2) {
-      return `${words[0][0]}${words[1][0]}`.toUpperCase();
-    }
-
-    const compact = cleaned.replace(/[^a-zA-Z0-9]/g, '');
-    return compact.slice(0, 2).toUpperCase() || 'U';
-  };
-
   const [isOpen, setIsOpen] = useState(false);
   const [draftValues, setDraftValues] = useState<string[]>(selectedValues);
   const [query, setQuery] = useState('');
@@ -228,8 +219,8 @@ export function MultiSelectDropdown({
     if (selectedLabels.length === 0) {
       return placeholder || title;
     }
-    if (selectedLabels.length === 1) {
-      return selectedLabels[0];
+    if (selectedLabels.length === 1 || namesInTrigger) {
+      return selectedLabels.join(', ');
     }
     return `${selectedLabels.length} selected`;
   })();
@@ -329,7 +320,7 @@ export function MultiSelectDropdown({
               filteredItems.map((item) => {
                 const checked = draftSet.has(item.value);
                 const hasAvatar = showAvatars && Boolean(item.avatarInitials || item.subLabel);
-                const initials = item.avatarInitials || getInitials(item.label);
+                const initials = item.avatarInitials || initialsOf(item.label);
                 const handleClick = () => {
                   if (item.disabled) return;
                   toggleDraftValue(item.value);

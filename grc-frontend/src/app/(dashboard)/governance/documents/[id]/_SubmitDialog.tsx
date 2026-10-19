@@ -57,7 +57,7 @@ export default function SubmitDialog({ documentId, doc, open, onClose }: { docum
     onSuccess: (sent: any) => {
       // the server names reviewers or approvers nobody can sign for (a role or team without users of this platform)
       const said = sentToast(sent, reviewers.length ? 'Reviewers were asked' : 'Approvers were asked');
-      toast({ ...said, title: said.title === 'Sent' ? 'Sent for review' : said.title });
+      toast(said);                                       // titled by where it went: for review, or straight for approval
       refresh();
       if (said.title !== 'Not sent') onClose();          // still a draft: it stays open to choose others
     },

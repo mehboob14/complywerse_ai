@@ -31,7 +31,7 @@ import {
   type RecommendedDoc,
   type RecommendedCategory,
 } from './_recommendedDocsCatalog';
-import { ncaName } from './_ncaName';
+import { fileKind, ncaName } from './_ncaName';
 import type { CertificationJourney } from '@/types';
 
 /** A popup as a dialog: the focus moves into it (unless a field already took it) and back where it was when it closes; Escape
@@ -280,7 +280,7 @@ export default function RecommendedDocsModal({ onClose, onPick, onPickAny, busy 
                   type="text"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder={`Search ${activeLabel.toLowerCase()}…`}
+                  placeholder={`Search ${activeLabel.replace(/\b[A-Z][a-z]+/g, (w) => w.toLowerCase())}…`}
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-lg border border-slate-300 text-slate-800 placeholder-slate-400 focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
                   autoFocus
                 />
@@ -533,7 +533,7 @@ function NcaTab({ search, onPick }: { search: string; onPick: (template: NcaTemp
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-slate-900 truncate">{t.title}</p>
-                    <p className="text-[11px] text-slate-400 truncate">{t.filename}</p>
+                    <p className="text-[11px] text-slate-500 truncate">{fileKind(t.filename)}</p>
                   </div>
                   <button
                     type="button"
@@ -620,7 +620,7 @@ function NcaPreviewPopup({
                 {template.category}
               </span>
               <span className="text-slate-300">·</span>
-              <span className="truncate">{template.filename}</span>
+              <span className="truncate">{fileKind(template.filename)}</span>
               {data && (
                 <>
                   <span className="text-slate-300">·</span>

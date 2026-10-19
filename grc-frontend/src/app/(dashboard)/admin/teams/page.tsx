@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -515,7 +516,7 @@ function MembersModal({
 
 function extractError(e: unknown): string | null {
   return (
-    (e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail ||
+    detailText((e as { response?: { data?: { detail?: string } }; message?: string })?.response?.data?.detail) ||
     (e as { message?: string })?.message ||
     null
   );

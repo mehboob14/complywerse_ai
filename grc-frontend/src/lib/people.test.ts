@@ -3,7 +3,17 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { personOf } from './people.ts';
+import { initialsOf, personOf } from './people.ts';
+
+test('a picker avatar: a person by name, a role or a team by its own name, never "R·"', () => {
+  assert.equal(initialsOf('Olivia Owner'), 'OO');
+  assert.equal(initialsOf('bilal'), 'BI');
+  assert.equal(initialsOf('Role · Approvers'), 'AP');
+  assert.equal(initialsOf('Team · Security Ops'), 'SO');
+  assert.equal(initialsOf('Role: DigitalOcean admins'), 'DA');     // the name the server saved for a participant
+  assert.equal(initialsOf('Zara (Audit) Khan'), 'ZA');
+  assert.equal(initialsOf(''), 'U');
+});
 
 test('a /tenants/{id}/users row: the nested user names the person, user_id is the person (not the membership id)', () => {
   const row = { id: 41, user_id: 5, tenant_id: 1, is_primary: false, user: { id: 5, display_name: 'Sara Reviewer', username: 'sara', email: 'sara@x.test' } };

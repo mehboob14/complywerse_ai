@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { detailText } from '@/lib/apiError';
 import { useCallback, useEffect, useState } from 'react';
 import { Sparkles } from 'lucide-react';
 import { PageHeader, PageLoader } from '@/components/ui';
@@ -56,7 +57,7 @@ export default function AIGovernancePage() {
       setInventory(i.data);
     } catch (e: any) {
       if (e?.response?.status === 403) setForbidden(true);
-      else setError(e?.response?.data?.detail || 'Could not load AI Governance.');
+      else setError(detailText(e?.response?.data?.detail) || 'Could not load AI Governance.');
     }
   }, [days]);
 

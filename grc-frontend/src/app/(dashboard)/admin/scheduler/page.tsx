@@ -6,6 +6,7 @@
  *  connector syncs — and when each last went on the queue. The web app queues
  *  them itself (backend/grc/services/platform_clock.py); the worker runs them.
  */
+import { detailText } from '@/lib/apiError';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CalendarClock, CheckCircle2, Clock, Loader2, Play, PowerOff } from 'lucide-react';
 import { useState } from 'react';
@@ -66,7 +67,7 @@ export default function SchedulerPage() {
       qc.invalidateQueries({ queryKey: ['admin-scheduler'] });
     },
     onError: (e: unknown) => {
-      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      const detail = detailText((e as { response?: { data?: { detail?: string } } })?.response?.data?.detail);
       setMessage(detail || 'Could not queue that job.');
     },
   });

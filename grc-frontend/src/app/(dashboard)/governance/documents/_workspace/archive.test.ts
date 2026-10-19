@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 
 import { bulkActionIds, libraryCounts, unlessArchivedAsked, withoutArchived } from './archive.ts';
 import { buildTree, flattenTree } from './docTree.ts';
@@ -49,6 +50,11 @@ test('the Tree view under All documents shows no archived parent: the documents 
 test('the bulk bar of the Archived list offers Restore only', () => {
   assert.deepEqual(bulkActionIds(true), ['restore']);
   assert.deepEqual(bulkActionIds(false), ['approve', 'publish', 'assign-owner', 'set-review', 'archive']);
+});
+
+test('the register has tick boxes only when its bulk bar has an action for the person (none for an owner without the edit role)', () => {
+  const src = readFileSync(new URL('./RegisterTable.tsx', import.meta.url), 'utf8');
+  assert.ok(src.includes('selectable={bulkActions.length > 0}'));
 });
 
 test('the library counts archived documents only under Archived', () => {

@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { detailText } from '@/lib/apiError';
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -540,7 +541,7 @@ export default function AuditLogsPage() {
       setTotal(res.data.total);
     } catch (err: unknown) {
       const e = err as { response?: { data?: { detail?: string } } };
-      setError(e.response?.data?.detail || 'Failed to load audit logs');
+      setError(detailText(e.response?.data?.detail) || 'Failed to load audit logs');
     } finally {
       setLoading(false);
     }
