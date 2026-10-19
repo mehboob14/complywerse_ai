@@ -1206,6 +1206,14 @@ def parse_policy_document(
     if current_status.get("status") == "parsing":
         return {"status": "parsing", "message": "Document is already being parsed"}
 
+    # Per-tenant rate limit first, so a refused parse leaves no "queued" status behind. It fails open without Redis (optional
+    # locally), and then Celery, whose broker is that Redis, is not tried: the job runs on a thread at once.
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        redis_up = tenant_rate_limit(tenant_slug, bucket="governance_parse")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many parse jobs in the last minute; try again shortly")
+
     initial = {
         "status": "queued",
         "message": "Job queued; waiting for a worker",
@@ -1213,19 +1221,14 @@ def parse_policy_document(
         "total_chunks": 0,
         "current_chunk": 0,
         "progress_percent": 0,
+        "updated_at": datetime.utcnow().isoformat(),     # without it the status endpoint takes it for a leftover
     }
     _parsing_status[document_id] = initial
 
     # Mirror to Redis so the status endpoint can read it across processes.
     from ....job_status import set_status as _set_redis_status
-    _set_redis_status(tenant_slug, "policy_parse", document_id, initial)
-
-    # Per-tenant rate limit + idempotent dispatch.
-    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
-    try:
-        tenant_rate_limit(tenant_slug, bucket="governance_parse")
-    except RateLimitExceeded:
-        raise HTTPException(status_code=429, detail="Too many parse jobs in the last minute; try again shortly")
+    if redis_up:
+        _set_redis_status(tenant_slug, "policy_parse", document_id, initial)
 
     # Dispatch strategy: try Celery first (works when a worker is running),
     # fall back to a daemon thread inside the FastAPI process if the broker
@@ -1237,7 +1240,7 @@ def parse_policy_document(
     import os as _os
     task_id: str
     dispatched_via = "celery"
-    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+    force_thread = not redis_up or _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
 
     if not force_thread:
         try:
@@ -1324,7 +1327,7 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
         # skip auto-parse silently; the user can still parse manually.
         from ....tasks.base import tenant_rate_limit, RateLimitExceeded
         try:
-            tenant_rate_limit(tenant_slug, bucket="governance_parse")
+            redis_up = tenant_rate_limit(tenant_slug, bucket="governance_parse")
         except RateLimitExceeded:
             return False
 
@@ -1341,8 +1344,9 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
             "updated_at": datetime.utcnow().isoformat(),
         })
 
-        from ....tasks.governance import dispatch_parse
-        dispatch_parse(tenant_slug, document_id, user_id)
+        from ....tasks.governance import dispatch_parse, dispatch_parse_in_thread
+        # without Redis the create request does not wait a minute on Celery's broker: a thread at once
+        (dispatch_parse if redis_up else dispatch_parse_in_thread)(tenant_slug, document_id, user_id)
         print(
             f"[DISPATCH] auto-parse-on-create → dispatched tenant={tenant_slug} doc={document_id}",
             flush=True,

@@ -18,6 +18,7 @@ import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { useLibraryDocuments } from '../_DetailsFields';
+import { versionLabel } from '../_view/versionLabel';
 import { formatDate } from './_DocumentViewer';
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
@@ -691,7 +692,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                             {(fw.short_code || fw.framework_type) && <span className="rounded bg-[#eef1f4] px-1.5 py-0.5 font-mono text-xs text-[#3f4b58]">{fw.short_code || fw.framework_type}</span>}
                           </span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
-                            {fw.version && <span>v{fw.version}</span>}
+                            {fw.version && <span>{versionLabel(fw.version)}</span>}
                             {(fw.control_count != null || fw.parsed_controls_count != null) && <span>{fw.control_count ?? fw.parsed_controls_count} controls</span>}
                             {(fw.regulator || fw.source_organization) && <span>{fw.regulator || fw.source_organization}</span>}
                           </span>

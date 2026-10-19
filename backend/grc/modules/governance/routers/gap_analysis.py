@@ -363,7 +363,7 @@ def serialize_run(run: PolicyGapAnalysisRun) -> dict:
         "not_addressed_count": run.not_addressed_count,
         "not_applicable_count": run.not_applicable_count,
         "compliance_percentage": run.compliance_percentage,
-        "ai_model_used": run.ai_model_used,
+        "ai_model_used": None,              # kept in the database; the page never shows a model name (the key stays for old readers)
         "error_message": run.error_message,
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
@@ -600,6 +600,14 @@ def run_gap_analysis(
             detail="No frameworks found to analyze against"
         )
 
+    # The rate limit before any run is made: a refused run leaves nothing behind. It fails open without Redis (optional
+    # locally), and then Celery, whose broker is that Redis, is not tried: the job runs on a thread at once.
+    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    try:
+        redis_up = tenant_rate_limit(tenant_slug, bucket="gap_analysis")
+    except RateLimitExceeded:
+        raise HTTPException(status_code=429, detail="Too many gap-analysis runs in the last minute; try again shortly")
+
     all_runs = []
 
     for framework in frameworks:
@@ -630,18 +638,12 @@ def run_gap_analysis(
     run_ids = [r.id for r in all_runs]
     serialized = [serialize_run(r) for r in all_runs]
 
-    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
-    try:
-        tenant_rate_limit(tenant_slug, bucket="gap_analysis")
-    except RateLimitExceeded:
-        raise HTTPException(status_code=429, detail="Too many gap-analysis runs in the last minute; try again shortly")
-
     # Same fallback strategy as the parse-policy endpoint — Celery first,
     # in-thread daemon if the broker is unreachable or DISABLE_CELERY_DISPATCH=1.
     import os as _os
     task_id: str
     dispatched_via = "celery"
-    force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
+    force_thread = not redis_up or _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
 
     if not force_thread:
         try:
@@ -657,10 +659,19 @@ def run_gap_analysis(
             force_thread = True
 
     if force_thread:
-        from ....tasks.governance import dispatch_gap_analysis_in_thread
-        task_id = dispatch_gap_analysis_in_thread(
-            tenant_slug, run_ids, request.document_id, current_user.id,
-        )
+        try:
+            from ....tasks.governance import dispatch_gap_analysis_in_thread
+            task_id = dispatch_gap_analysis_in_thread(
+                tenant_slug, run_ids, request.document_id, current_user.id,
+            )
+        except Exception:  # noqa: BLE001
+            # nothing will run them: the runs say so, instead of 'running' for every viewer for ever
+            import logging
+            logging.getLogger(__name__).exception("gap analysis dispatch failed for document %s", request.document_id)
+            for r in all_runs:
+                r.status, r.error_message, r.completed_at = "failed", "The gap analysis could not be started.", datetime.utcnow()
+            db.commit()
+            raise HTTPException(status_code=503, detail="The gap analysis could not be started now. Try again in a minute.")
         dispatched_via = "thread"
 
     print(
@@ -703,27 +714,19 @@ def get_analysis_runs(
         PolicyGapAnalysisRun.tenant_id.in_(user_tenants)
     ).order_by(PolicyGapAnalysisRun.started_at.desc()).all()
 
-    # Staleness sweep: a worker that crashed mid-run leaves a row in
-    # status='running' that the UI polls forever. If `started_at` is older
-    # than the threshold, mark it failed so polling can stop and the user
-    # gets a clear error instead of an indefinite spinner.
+    # A run still 'running' long after its job could have ended (the worker or the server stopped; Celery stops a job at 20
+    # minutes) is shown as failed, so the page stops polling. Nothing is written (a GET writes nothing): a job that does
+    # finish late still records its result.
     STALE_AFTER_SECONDS = 1800  # 30 minutes
     now = datetime.utcnow()
-    stale_dirty = False
-    for r in runs:
-        if r.status == "running" and r.started_at:
-            age = (now - r.started_at).total_seconds()
-            if age > STALE_AFTER_SECONDS:
-                r.status = "failed"
-                r.error_message = "Worker did not finish within timeout (stale run cleared)"
-                r.completed_at = now
-                stale_dirty = True
-    if stale_dirty:
-        db.commit()
+    rows = [serialize_run(r) for r in runs]
+    for r, row in zip(runs, rows):
+        if r.status == "running" and r.started_at and (now - r.started_at).total_seconds() > STALE_AFTER_SECONDS:
+            row.update(status="failed", error_message="The gap analysis did not finish. Run it again.")
 
     return {
         "document_id": document_id,
-        "runs": [serialize_run(r) for r in runs],
+        "runs": rows,
         "total": len(runs)
     }
 

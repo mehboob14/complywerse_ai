@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { LIBRARY_VIEWS, VIEWS, inStudio, viewOf } from './docRoute.ts';
+import { LIBRARY_VIEWS, VIEWS, inStudio, retryUnlessRefused, viewOf } from './docRoute.ts';
 
 test('the AI Studio view is the only one: it needs the switch on, whatever the link asks for', () => {
   assert.equal(inStudio(true), true);
@@ -58,4 +58,12 @@ test('VIEWS lists the six views in order; statements, mappings and gap analysis 
   ]);
   assert.deepEqual(VIEWS.filter((v) => LIBRARY_VIEWS.has(v.key)).map((v) => v.key), ['statements', 'mappings', 'gaps']);
   for (const tab of ['statements', 'mappings', 'gap-analysis']) assert.ok(LIBRARY_VIEWS.has(viewOf(tab)), tab);
+});
+
+test('a refused or missing document is not asked for again; other failures up to three times', () => {
+  for (const status of [403, 404]) assert.equal(retryUnlessRefused(0, { response: { status } }), false, String(status));
+  assert.equal(retryUnlessRefused(0, { response: { status: 500 } }), true);
+  assert.equal(retryUnlessRefused(2, new Error('Network Error')), true);
+  assert.equal(retryUnlessRefused(3, { response: { status: 502 } }), false);
+  assert.equal(retryUnlessRefused(0, null), true);
 });

@@ -412,7 +412,7 @@ def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
         asked += _request(db, doc, kind, _members(db, doc, a), by, days, a.id)
     _notify(db, doc, asked, f"{_NOUN[kind]} requested: {doc.title}",
             f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
-            f"It is in your tasks and under Governance > Documents > Approvals & Acknowledgements.", "warning", event="request")
+            "It is in your tasks and in the document's Approvals.", "warning", event="request")
     _mark_emailed(db, doc.id, kind, asked)
 
 

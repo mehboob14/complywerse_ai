@@ -88,4 +88,9 @@ test('?act= opens the person\'s step, or says why it cannot', () => {
   assert.equal((actOutcome({ act: 'ack', myAck: false, myRole: 'reviewer' }) as { title: string }).title, 'Nothing to acknowledge');
   assert.equal((actOutcome({ act: 'sign', myAck: false, myRole: null, doneOn: '2026-10-21' }) as { title: string }).title, 'Already signed');
   assert.equal((actOutcome({ act: 'sign', myAck: true, myRole: null }) as { title: string }).title, 'Not your step now');
+  // never asked: no talk of a change since; asked in an earlier round: why the step is gone
+  assert.deepEqual(actOutcome({ act: 'sign', myAck: false, myRole: null, asked: false }),
+    { title: 'Not your step now', message: 'This document is not waiting for your review or approval.' });
+  assert.deepEqual(actOutcome({ act: 'sign', myAck: false, myRole: null, asked: true }),
+    { title: 'Not your step now', message: 'This document is not waiting for your review or approval: it was signed, sent back or changed since.' });
 });

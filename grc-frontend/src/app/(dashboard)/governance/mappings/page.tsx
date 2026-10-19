@@ -801,10 +801,11 @@ function RecommendedControlsSection({
   );
 }
 
-export default function GovernanceMappingsPage({ initialDocumentId }: { initialDocumentId?: number } = {}) {
+export default function GovernanceMappingsPage({ initialDocumentId, canEdit = true }: { initialDocumentId?: number; canEdit?: boolean } = {}) {
   // `initialDocumentId` (passed when embedded in a document's Mappings tab) only
   // pre-selects that document — the full UI (picker + stats + both panels) stays
-  // exactly like the standalone Mappings page.
+  // exactly like the standalone Mappings page. `canEdit`: the person may change that
+  // document (runs and links need it); without it the tab is read only.
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(initialDocumentId ?? null);
@@ -815,8 +816,10 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
   const [linkError, setLinkError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('governance:mappings:create');
-  const canDelete = hasPermission('governance:mappings:delete');
+  const canCreate = hasPermission('governance:mappings:create') && canEdit;
+  const canDelete = hasPermission('governance:mappings:delete') && canEdit;
+  // the internal (ERM) controls are behind the ERM right: not asked for without it (a 403 for everyone else)
+  const canErm = hasPermission('erm:risks:view');
 
   // Embedded = rendered inside a single document's Mappings tab. In that mode we
   // lock to that one document: no document picker, no portfolio stats — just this
@@ -852,6 +855,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
       const response = await ermApi.internalControls.getAll();
       return response.data as InternalControl[];
     },
+    enabled: canErm,
   });
 
   // Full statement text for the selected document — powers the "full statement
@@ -1037,7 +1041,9 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
   const linkedControlsList = (mappingsData?.control_links?.length ?? 0) === 0 ? (
     <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center">
       <p className="text-sm text-slate-600">No internal controls linked yet</p>
-      <p className="text-xs text-slate-500 mt-0.5">Use &quot;Link Control&quot; to attach internal (ERM) controls.</p>
+      {canCreate && canErm && (
+        <p className="text-xs text-slate-500 mt-0.5">Use &quot;Link internal control&quot; to attach internal (ERM) controls.</p>
+      )}
     </div>
   ) : (
     <div className="space-y-1.5 max-h-72 overflow-y-auto">
@@ -1084,7 +1090,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
         setLinkNotes('');
         setLinkError(null);
       }}
-      title="Link Control"
+      title="Link internal control"
       widthClassName="w-[640px]"
     >
       <div className="space-y-3.5">
@@ -1233,7 +1239,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
             <h3 className="text-base font-semibold text-slate-900">Framework mappings</h3>
             <p className="text-xs text-slate-500">How this document&apos;s statements map to its frameworks&apos; clauses.</p>
           </div>
-          {canCreate && (
+          {canCreate && canErm && (
             <button onClick={() => setShowLinkModal(true)} className="btn-primary btn-sm shrink-0">
               <Plus className="h-4 w-4" /> Link internal control
             </button>
@@ -1248,12 +1254,7 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
           <div className="flex items-center justify-center py-10">
             <Loader2 strokeWidth={1.75} className="h-6 w-6 animate-spin text-primary-600" />
           </div>
-        ) : noFrameworks && gapRecs.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            This document has no applicable or linked frameworks yet, so there is nothing to map against. Pick the
-            frameworks above and run the mapping, or edit the document to set them.
-          </div>
-        ) : (
+        ) : noFrameworks && gapRecs.length === 0 ? null /* the frameworks box above says so, once */ : (
           <RecommendedControlsSection
             recs={embeddedRecs}
             documentId={selectedDocumentId}
@@ -1395,13 +1396,13 @@ export default function GovernanceMappingsPage({ initialDocumentId }: { initialD
                 }
               </p>
             </div>
-            {selectedDocumentId && canCreate && (
+            {selectedDocumentId && canCreate && canErm && (
               <button
                 onClick={() => setShowLinkModal(true)}
                 className="btn-primary btn-sm"
               >
                 <Plus className="h-4 w-4" />
-                Link Control
+                Link internal control
               </button>
             )}
           </div>

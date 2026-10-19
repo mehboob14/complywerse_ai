@@ -412,13 +412,8 @@ export const governanceApi = {
     }),
   getDocumentPolicyStatements: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/policy-statements`),
-  addStatement: (documentId: number, data: any) => {
-    console.log('[API] addStatement called with:', { documentId, data });
-    return apiClient.post(`/governance/documents/${documentId}/statements`, data).then(res => {
-      console.log('[API] addStatement response:', res);
-      return res;
-    });
-  },
+  addStatement: (documentId: number, data: any) =>
+    apiClient.post(`/governance/documents/${documentId}/statements`, data),
   updateStatement: (documentId: number, statementId: number, data: any) =>
     apiClient.put(`/governance/documents/${documentId}/statements/${statementId}`, data),
   deleteStatement: (documentId: number, statementId: number) =>

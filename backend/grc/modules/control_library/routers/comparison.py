@@ -1634,12 +1634,14 @@ def ai_compare_dispatch(
 
     from ....tasks.base import tenant_rate_limit, RateLimitExceeded
     try:
-        tenant_rate_limit(tenant_slug, bucket="control_compare")
+        redis_up = tenant_rate_limit(tenant_slug, bucket="control_compare")
     except RateLimitExceeded:
         raise HTTPException(
             status_code=429,
             detail="Too many comparison runs queued; try again shortly",
         )
+    if not redis_up:   # the job queue is that Redis: refused at once, not after a minute on the broker
+        raise HTTPException(status_code=503, detail="Background jobs are not available now: the job queue cannot be reached.")
 
     run = ControlComparisonRun(
         tenant_id=primary_tenant_id,

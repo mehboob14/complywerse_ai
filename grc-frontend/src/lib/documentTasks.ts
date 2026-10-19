@@ -116,8 +116,9 @@ export function closesWhen(req: DocumentRequest, mine: boolean): string {
     + 'Who it is for, its due date and its status follow the request.';
 }
 
-/** What ?act= does on the document page: the popup of the person's own step, or why there is none. */
-export function actOutcome(i: { act: Act; myAck: boolean; myRole: string | null | undefined; doneOn?: string | null }):
+/** What ?act= does on the document page: the popup of the person's own step, or why there is none. ``asked``: the person was ever
+ *  asked to review or approve this document (any round). */
+export function actOutcome(i: { act: Act; myAck: boolean; myRole: string | null | undefined; doneOn?: string | null; asked?: boolean }):
   { popup: 'ack' | 'sign' } | { title: string; message: string } {
   const on = dayOf(i.doneOn ?? null);
   if (i.act === 'ack') {
@@ -127,5 +128,6 @@ export function actOutcome(i: { act: Act; myAck: boolean; myRole: string | null 
   }
   if (i.myRole === 'reviewer' || i.myRole === 'approver') return { popup: 'sign' };
   return on ? { title: 'Already signed', message: `You signed this document on ${on}. There is nothing more to do.` }
-    : { title: 'Not your step now', message: 'This document is not waiting for your review or approval: it was signed, sent back or changed since.' };
+    : { title: 'Not your step now', message: i.asked ? 'This document is not waiting for your review or approval: it was signed, sent back or changed since.'
+      : 'This document is not waiting for your review or approval.' };
 }
