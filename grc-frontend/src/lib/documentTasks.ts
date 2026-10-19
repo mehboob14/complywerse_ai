@@ -28,9 +28,10 @@ export interface TaskLike {
   document_request?: DocumentRequest | null;
 }
 
-/** A task made by a document request (also one made before `document_request` existed). */
+/** A task made by a document request (also one made before `document_request` existed). `document_request: null` is the
+ *  server saying no request names it (a link typed by hand before that was refused): an ordinary task, as the server treats it. */
 export function isDocumentTask(t: TaskLike | null | undefined): boolean {
-  return !!t && t.source_module === 'document_lifecycle' && t.source_entity_type === 'DocumentObligation';
+  return !!t && t.source_module === 'document_lifecycle' && t.source_entity_type === 'DocumentObligation' && t.document_request !== null;
 }
 
 export type Act = 'ack' | 'sign';
@@ -71,6 +72,22 @@ export function withoutLocked<T extends Record<string, unknown>>(t: TaskLike, pa
   const out: Record<string, unknown> = { ...payload };
   for (const key of LOCKED_FIELDS) delete out[key];
   return out as Partial<T>;
+}
+
+/** How the server refuses to give a document task to someone else (backend doc_lifecycle._LOCKED). */
+const PERSON_LOCKED = 'The person on this task is the one asked';
+
+/** What Apply Reassignments says once it ran: one entry per update, null when it worked, else the server's refusal ('' unknown). */
+export function reassignReport(outcomes: readonly (string | null)[]): { moved: number; message: string | null } {
+  const moved = outcomes.filter((o) => o === null).length;
+  const locked = outcomes.filter((o) => !!o && o.startsWith(PERSON_LOCKED)).length;
+  const other = outcomes.length - moved - locked;
+  const tasks = (n: number) => `${n} task${n === 1 ? '' : 's'}`;
+  const parts = [
+    locked ? `${tasks(locked)} could not be reassigned: ${locked === 1 ? 'it follows' : 'they follow'} a document request.` : '',
+    other ? `${tasks(other)} could not be reassigned.` : '',
+  ].filter(Boolean);
+  return { moved, message: parts.length ? parts.join(' ') : null };
 }
 
 /** A dropdown's choices plus the task's own value when it is not one of them (a document task's "Governance document" source,

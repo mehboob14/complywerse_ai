@@ -2,8 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
-  actOf, actOutcome, actionHref, canDeleteTask, closesWhen, isDocumentTask, plainDescription, requestLine, taskButtons, withCurrent, withoutLocked,
-  type DocumentRequest,
+  actOf, actOutcome, actionHref, canDeleteTask, closesWhen, isDocumentTask, plainDescription, reassignReport, requestLine, taskButtons,
+  withCurrent, withoutLocked, type DocumentRequest,
 } from './documentTasks.ts';
 
 const req = (over: Partial<DocumentRequest> = {}): DocumentRequest => ({
@@ -39,6 +39,9 @@ test('a document task is deleted by an administrator only; other tasks as before
   assert.equal(isDocumentTask(docTask), true);
   assert.equal(isDocumentTask({ source_module: 'document_lifecycle', source_entity_type: 'Other' }), false);
   assert.equal(isDocumentTask({ source_module: 'committees' }), false);
+  assert.equal(isDocumentTask({ ...docTask, document_request: req() }), true);
+  assert.equal(isDocumentTask({ ...docTask, document_request: null }), false);          // no request names it: an ordinary task
+  assert.equal(canDeleteTask({ ...docTask, document_request: null }, { isAdmin: false, hasDeleteRight: true }), true);
   assert.equal(canDeleteTask(docTask, { isAdmin: false, hasDeleteRight: true }), false);
   assert.equal(canDeleteTask(docTask, { isAdmin: true, hasDeleteRight: false }), true);
   assert.equal(canDeleteTask({ source_module: null }, { isAdmin: false, hasDeleteRight: true }), true);
@@ -78,6 +81,17 @@ test('where the request stands, in a line', () => {
     'This task closes by itself when you review and sign it in the document. Who it is for, its due date and its status follow the request.');
   assert.match(closesWhen(req(), false), /^This task closes by itself when the person asked does it in the document\./);
   assert.equal(closesWhen(req({ status: 'done' }), true), 'Done in the document. There is nothing more to do here.');
+});
+
+test('Apply Reassignments says how many could not be moved, and why', () => {
+  const locked = 'The person on this task is the one asked in the document. To ask someone else, change the document\'s reviewers or approvers.';
+  assert.deepEqual(reassignReport([null, null]), { moved: 2, message: null });
+  assert.deepEqual(reassignReport([null, locked, locked]),
+    { moved: 1, message: '2 tasks could not be reassigned: they follow a document request.' });
+  assert.equal(reassignReport([locked]).message, '1 task could not be reassigned: it follows a document request.');
+  assert.equal(reassignReport([locked, '', 'Users [9] do not belong to your tenant']).message,
+    '1 task could not be reassigned: it follows a document request. 2 tasks could not be reassigned.');
+  assert.deepEqual(reassignReport([]), { moved: 0, message: null });
 });
 
 test('?act= opens the person\'s step, or says why it cannot', () => {

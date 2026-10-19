@@ -131,6 +131,11 @@ export function changes(saved: GovernanceSettings, draft: GovernanceSettings): P
   return out as Partial<GovernanceSettings>;
 }
 
+/** The settings were refused for want of a governance right (403): said so, and not asked again. */
+export const noAccess = (e: unknown): boolean => (e as { response?: { status?: number } } | null)?.response?.status === 403;
+/** React Query's retry for the settings: a refusal is final, anything else is tried up to three times. */
+export const retrySettings = (failures: number, e: unknown): boolean => !noAccess(e) && failures < 3;
+
 const day = (d: Date) => d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 export const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400_000);
 

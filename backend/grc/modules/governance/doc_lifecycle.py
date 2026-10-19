@@ -18,7 +18,8 @@ least once. An identity an access-review connector imported (a cloud account, a 
 Every pending row has a twin in Task Management (``grc_critical_tasks``, source_module ``document_lifecycle``) and an
 in-app alert, so it shows up with the person's other work. The twin cannot be completed from Task Management - signing
 or acknowledging in the document does that (its buttons open the document there, ``task_request``); its person, due date and
-status are read-only there and only an administrator may delete it (``locked_change``, ``DELETE_REFUSED``). A sweep reminds before the due date (and again every few days, if set), tells
+status are read-only there and only an administrator may delete it (``locked_change``, ``DELETE_REFUSED``); it shows only to the
+person asked and to whoever may read the document (``may_see_task``, ``without_others_tasks``). A sweep reminds before the due date (and again every few days, if set), tells
 the person when it is overdue, then the document owner, then the tenant administrators (or a chosen role); the days, the
 channels of every alert and the tasks are the organisation's (Governance > Settings, ``settings``). Nothing here may stop a
 sign-off: the hooks swallow their own errors.
@@ -80,6 +81,12 @@ _PENDING_STAGE = ("pending_review", "pending_approval")
 def _link(doc, kind: str = "") -> str:
     """Where a notification or a task about ``doc`` opens: the document itself to acknowledge it, else its Approvals."""
     return f"/governance/documents/{doc.id}" + ("" if kind == "acknowledgement" else "?tab=lifecycle")
+
+
+def _app_url(path: str) -> str:
+    """``path`` as an address to click outside the app (a task's text): absolute when the app's address is set, as the emails
+    make their buttons (workflow_engine notification_service); else the path itself."""
+    return (os.environ.get("FRONTEND_URL") or os.environ.get("NEXT_PUBLIC_APP_URL") or "").rstrip("/") + path
 
 
 def enabled(db) -> bool:
@@ -255,7 +262,7 @@ def task_values(db, ob, doc, spec: Optional[TaskSettings] = None) -> Dict[str, s
         owner = _names(db, [doc.owner_id]).get(doc.owner_id, "-")
     return {"document": doc.title or "", "version": ob.document_version or doc.current_version or "",
             "due_date": f"{ob.due_date:%d %b %Y}" if ob.due_date else "no date", "action": _VERB[ob.kind],
-            "owner": owner, "link": _link(doc, ob.kind), "verb": _STEP[ob.kind]}
+            "owner": owner, "link": _app_url(_link(doc, ob.kind)), "verb": _STEP[ob.kind]}
 
 
 def _safe(fn):
@@ -409,15 +416,17 @@ def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
 
     kind = _STAGE_KIND[stage]
     asked: List[int] = []
-    days = due_days(settings(db, doc.tenant_id), kind)
+    cfg = settings(db, doc.tenant_id)
+    days = due_days(cfg, kind)
     db.flush()          # the round just started (the models' listener) must be the one read
     signed = {s.signer_user_id for s in _signatures(db, doc.id) if s.role_type == stage}
     for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
         if not signed & _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id):     # as _stage_complete counts it
             asked += _request(db, doc, kind, _members(db, doc, a), by, days, a.id)
+    where = "in your tasks and " if task_settings(cfg, kind).create else ""      # no task when Settings switched them off
     _notify(db, doc, asked, f"{_NOUN[kind]} requested: {doc.title}",
             f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
-            "It is in your tasks and in the document's Approvals.", "warning", event="request")
+            f"It is {where}in the document's Approvals.", "warning", event="request")
     _mark_emailed(db, doc.id, kind, asked)
 
 
@@ -682,10 +691,12 @@ def request_acknowledgements(db, doc, user_ids: Optional[Iterable[int]] = None, 
         DocumentObligation.document_id == doc.id, DocumentObligation.kind == "acknowledgement",
         DocumentObligation.status.in_(("pending", "done")))
         if status == "pending" or not version or _major(version) == major}      # (a row with no version cannot tell: it counts)
+    cfg = settings(db, doc.tenant_id)
     asked = _request(db, doc, "acknowledgement", [u for u in pool if u not in have], by,
-                     days or due_days(settings(db, doc.tenant_id), "acknowledgement"), version=number)
+                     days or due_days(cfg, "acknowledgement"), version=number)
     _notify(db, doc, asked, f"Please acknowledge: {doc.title}",
-            f"\"{doc.title}\" has been published. Read it and acknowledge it before the due date; it is in your tasks.", "info",
+            f"\"{doc.title}\" has been published. Read it and acknowledge it before the due date"
+            + ("; it is in your tasks." if task_settings(cfg, "acknowledgement").create else "."), "info",
             link=_link(doc, "acknowledgement"), event="published", only=("in_app",))    # its email: one daily list per person (_email_waiting)
     return len(asked)
 
@@ -761,9 +772,61 @@ _LOCKED = {
 }
 
 
-def is_task(ct) -> bool:
-    """One of our tasks (a review, approval or acknowledgement request's twin)."""
+LINK_REFUSED = ("A task for a document review, approval or acknowledgement is made by the document's request itself. "
+                "Choose another source for this task.")
+
+
+def _claims(ct) -> bool:
+    """Its source says it is one of our tasks; ``is_task`` checks that the request says so too."""
     return ct is not None and ct.source_module == SOURCE_MODULE and ct.source_entity_type == SOURCE_TYPE
+
+
+def is_task(ct, db=None) -> bool:
+    """One of our tasks: the twin a review, approval or acknowledgement request names (only ``_open_twin`` links one). A task that
+    only claims the link (typed in Task Management before that was refused, ``refused_link``) is an ordinary task."""
+    if not _claims(ct) or not ct.source_entity_id or ct.id is None:
+        return False
+    from sqlalchemy.orm import object_session
+
+    from ...models import DocumentObligation
+
+    db = db or object_session(ct)
+    return db is not None and db.query(DocumentObligation.id).filter(
+        DocumentObligation.id == ct.source_entity_id, DocumentObligation.critical_task_id == ct.id).first() is not None
+
+
+def refused_link(values: Dict[str, Any], ct=None) -> Optional[str]:
+    """Why a task created (``ct`` None) or edited in Task Management may not take our source values, or None."""
+    for key, ours in (("source_module", SOURCE_MODULE), ("source_entity_type", SOURCE_TYPE)):
+        if values.get(key) == ours and (ct is None or getattr(ct, key) != ours):
+            return LINK_REFUSED
+    return None
+
+
+def may_see_task(db, user, ct) -> bool:
+    """One of our tasks names a document and its version, which may be a draft: it shows to the person asked and to whoever may
+    read the document (administrators among them). Any other task: to everyone who sees tasks."""
+    from ...models import DocumentObligation, GovernanceDocument
+
+    if not is_task(ct, db) or user.id == ct.assigned_owner_id or user.id in (ct.assigned_user_ids or []):
+        return True
+    doc = (db.query(GovernanceDocument).join(DocumentObligation, DocumentObligation.document_id == GovernanceDocument.id)
+           .filter(DocumentObligation.id == ct.source_entity_id).first())
+    return doc is not None and permissions.can_read(db, user, doc)
+
+
+def without_others_tasks(query, user, reads_all: bool = False):
+    """A list of tasks without other people's document tasks (one SQL condition, not a check per task), unless ``reads_all``: the
+    person reads every document (``permissions.visible_filter`` is None: administrators, and whoever may edit or publish any).
+    Someone who may read only some documents still opens another person's task about one of them by its link (``may_see_task``);
+    a list does not check each document for them. The person of our tasks is ``assigned_owner_id`` (locked to the request)."""
+    from sqlalchemy import func, or_
+
+    from ...models import CriticalTask
+
+    if reads_all:
+        return query
+    return query.filter(or_(func.coalesce(CriticalTask.source_module, "") != SOURCE_MODULE, CriticalTask.assigned_owner_id == user.id))
 
 
 def action_href(document_id: int, kind: str) -> str:
@@ -788,21 +851,33 @@ def task_request(db, ct) -> Optional[Dict[str, Any]]:
     """What Task Management shows on one of our tasks: the document, the person's step, its due date and where to do it. Read
     from the request itself, so tasks made before these fields existed show them too and nothing goes stale (a minor version
     moves a waiting acknowledgement up to the new number). None for other tasks, or when the request is gone."""
+    return task_requests(db, [ct]).get(getattr(ct, "id", None))
+
+
+def task_requests(db, tasks) -> Dict[int, Optional[Dict[str, Any]]]:
+    """``task_request`` of every one of our tasks in a list, read with one query (a board lists a hundred tasks, most of them
+    acknowledgements): {task id: what it shows, or None when its request is gone or does not name it}."""
     from ...models import DocumentObligation, GovernanceDocument
 
-    if not is_task(ct) or not ct.source_entity_id:
-        return None
-    row = (db.query(DocumentObligation, GovernanceDocument.title).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
-           .filter(DocumentObligation.id == ct.source_entity_id).first())
-    if row is None:
-        return None
-    ob, title = row
-    pending = ob.status == "pending"
-    return {"request_id": ob.id, "kind": ob.kind, "document_id": ob.document_id, "document_title": title, "version": ob.document_version,
-            "status": ob.status, "user_id": ob.user_id, "due_date": _iso(ob.due_date), "done_at": _iso(ob.done_at),
-            "overdue": bool(pending and ob.due_date and ob.due_date < datetime.utcnow()),
-            "open_href": f"/governance/documents/{ob.document_id}", "action_label": ACTION_LABEL[ob.kind],
-            "action_href": action_href(ob.document_id, ob.kind) if pending else None}
+    ours = [ct for ct in tasks if _claims(ct) and ct.source_entity_id]
+    if not ours:
+        return {}
+    rows = (db.query(DocumentObligation, GovernanceDocument.title).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
+            .filter(DocumentObligation.id.in_({ct.source_entity_id for ct in ours})).all())
+    found = {ob.id: (ob, title) for ob, title in rows}
+    now, out = datetime.utcnow(), {}
+    for ct in ours:
+        ob, title = found.get(ct.source_entity_id, (None, None))
+        if ob is None or ob.critical_task_id != ct.id:          # a task that only claims the link shows nothing of the request
+            out[ct.id] = None
+            continue
+        pending = ob.status == "pending"
+        out[ct.id] = {"request_id": ob.id, "kind": ob.kind, "document_id": ob.document_id, "document_title": title,
+                      "version": ob.document_version, "status": ob.status, "user_id": ob.user_id, "due_date": _iso(ob.due_date),
+                      "done_at": _iso(ob.done_at), "overdue": bool(pending and ob.due_date and ob.due_date < now),
+                      "open_href": f"/governance/documents/{ob.document_id}", "action_label": ACTION_LABEL[ob.kind],
+                      "action_href": action_href(ob.document_id, ob.kind) if pending else None}
+    return out
 
 
 def sync_from_critical_task(db, critical_task_id: int, user_id: Optional[int] = None) -> None:
@@ -814,7 +889,7 @@ def sync_from_critical_task(db, critical_task_id: int, user_id: Optional[int] = 
     if ct is None or ct.source_module != SOURCE_MODULE or ct.source_entity_type != SOURCE_TYPE:
         return
     ob = db.get(DocumentObligation, ct.source_entity_id)
-    if ob is not None and ob.status == "pending" and ct.status in ("Completed", "Verified"):
+    if ob is not None and ob.critical_task_id == ct.id and ob.status == "pending" and ct.status in ("Completed", "Verified"):
         _history(db, ct.id, user_id, "Reopened: complete this in the document", "status", ct.status, "Open")
         ct.status, ct.completed_at, ct.verified_at = "Open", None, None
 

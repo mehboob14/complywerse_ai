@@ -1,4 +1,5 @@
 // Where each item of the top bar's Notifications and Pending approvals opens. Every href is a page of this app.
+import { actionHref, type RequestKind } from '../../lib/documentTasks.ts';
 
 /** A page of this app ("/governance/documents/3?tab=lifecycle"), never another site ("//x", "/\x", "https://x", "javascript:…").
  * A tab or line break inside is refused too: the browser drops them, so "/\t/x" would open the site x. */
@@ -14,9 +15,10 @@ export function notificationHref(n: { link?: string | null; url?: string | null;
   return appPath(n.link) ?? appPath(n.url) ?? appPath(named);
 }
 
-/** A document request opens where the server's own links (emails, tasks) send it: the document to acknowledge it, else its Approvals. */
+/** A document request opens the document with the person's own step open (Review and sign, Approve and sign, Acknowledge), as My
+ * Approvals and Task Management do. */
 export function docRequestHref(r: { kind: string; document_id: number }): string {
-  return `/governance/documents/${r.document_id}${r.kind === 'acknowledgement' ? '' : '?tab=lifecycle'}`;
+  return actionHref(r.document_id, r.kind as RequestKind);
 }
 
 /** The id of an item on the assessment approvals page (its source and id: evidence and assessment ids can be equal). */

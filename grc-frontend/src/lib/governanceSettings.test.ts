@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { changes, courseOf, renderTemplate, sampleValues, templateProblem, validate, type GovernanceSettings } from './governanceSettings.ts';
+import { changes, courseOf, noAccess, renderTemplate, retrySettings, sampleValues, templateProblem, validate, type GovernanceSettings } from './governanceSettings.ts';
 
 const base: GovernanceSettings = {
   review_days: 7, approval_days: 7, ack_days: 14, remind_days: 3, remind_every_days: 0, owner_after_days: 0, admin_after_days: 7,
@@ -72,4 +72,15 @@ test('a request\'s course: first reminder, due date, owner told, escalated', () 
     { due: '25 Oct 2026', firstReminder: '22 Oct 2026', owner: '26 Oct 2026', further: '30 Oct 2026' });
   assert.equal(courseOf('review', { ...base, remind_days: 0 }, today).firstReminder, null);
   assert.equal(courseOf('review', { ...base, remind_days: 10 }, today).firstReminder, '18 Oct 2026');     // further ahead: at once
+});
+
+test('without a governance right the settings are refused once and said so, not retried', () => {
+  const refused = { response: { status: 403, data: { detail: 'Only an administrator or someone with a governance right can see these settings.' } } };
+  assert.equal(noAccess(refused), true);
+  assert.equal(noAccess({ response: { status: 500 } }), false);
+  assert.equal(noAccess(new Error('Network Error')), false);
+  assert.equal(noAccess(null), false);
+  assert.equal(retrySettings(0, refused), false);
+  assert.equal(retrySettings(0, { response: { status: 502 } }), true);
+  assert.equal(retrySettings(3, { response: { status: 502 } }), false);
 });

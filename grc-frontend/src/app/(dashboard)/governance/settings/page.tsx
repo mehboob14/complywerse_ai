@@ -2,8 +2,8 @@
 
 // Governance > Settings: how long people have to review, approve and acknowledge documents, reminders, escalation, where each
 // alert goes and the Task Management task made for each request. One organisation-wide source (the document page's "Due dates
-// and escalation" shows a summary and links here). Administrators and holders of governance:settings:edit change it; everyone
-// else reads it. Helpers and rules: lib/governanceSettings.ts; backend: modules/governance/doc_lifecycle.py.
+// and escalation" shows a summary and links here). Administrators and holders of governance:settings:edit change it; anyone with
+// a governance right reads it, nobody else. Helpers and rules: lib/governanceSettings.ts; backend: modules/governance/doc_lifecycle.py.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlarmClock, AlertTriangle, ArrowUpRight, Bell, CalendarClock, Check, ChevronRight, Info, ListChecks, Loader2, Lock, Megaphone, PenLine, RotateCcw } from 'lucide-react';
@@ -11,7 +11,7 @@ import { clsx } from 'clsx';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
-  CHANNELS, EVENTS, KIND_LABEL, KINDS, PLACEHOLDERS, PRIORITIES, STEP_LABEL, changes, courseOf, renderTemplate, sampleValues, validate,
+  CHANNELS, EVENTS, KIND_LABEL, KINDS, PLACEHOLDERS, PRIORITIES, STEP_LABEL, changes, courseOf, noAccess, renderTemplate, retrySettings, sampleValues, validate,
   type Channel, type GovernanceSettings, type Kind, type Priority, type SettingsAnswer,
 } from '@/lib/governanceSettings';
 
@@ -97,8 +97,8 @@ export default function GovernanceSettingsPage() {
   const lastField = useRef<'task_title' | 'task_description'>('task_description');
   const fieldRefs = { task_title: useRef<HTMLInputElement>(null), task_description: useRef<HTMLTextAreaElement>(null) };
 
-  const { data, isLoading, isError, refetch } = useQuery<SettingsAnswer>({
-    queryKey: SETTINGS_KEY, queryFn: async () => (await apiClient.get(SETTINGS_URL)).data,
+  const { data, isLoading, isError, error, refetch } = useQuery<SettingsAnswer>({
+    queryKey: SETTINGS_KEY, queryFn: async () => (await apiClient.get(SETTINGS_URL)).data, retry: retrySettings,
   });
 
   const saved = data?.settings;
@@ -142,6 +142,14 @@ export default function GovernanceSettingsPage() {
 
   if (isLoading) {
     return <div className="flex h-60 items-center justify-center" role="status"><Loader2 className="h-6 w-6 animate-spin text-[#0f766e]" aria-hidden /><span className="sr-only">Loading the settings</span></div>;
+  }
+  if (noAccess(error)) {
+    return (
+      <div className="mx-auto max-w-md rounded-xl border border-[#d5dbe1] bg-white p-6 text-center">
+        <Lock className="mx-auto h-7 w-7 text-[#586472]" aria-hidden />
+        <p className="mt-2 text-sm font-medium text-[#1f2933]">Only an administrator or someone with a governance right can see these settings.</p>
+      </div>
+    );
   }
   if (isError || !data) {
     return (

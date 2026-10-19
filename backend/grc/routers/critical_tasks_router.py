@@ -245,7 +245,7 @@ def _auto_escalate_task(task, db):
         db.add(history)
 
 
-def _serialize_task(task, include_relations=False):
+def _assigned_ids(task) -> list:
     raw_assigned_ids = getattr(task, "assigned_user_ids", None) or []
     if not isinstance(raw_assigned_ids, list):
         raw_assigned_ids = []
@@ -253,13 +253,32 @@ def _serialize_task(task, include_relations=False):
     # single owner, surface it as a one-element list.
     if not raw_assigned_ids and getattr(task, "assigned_owner_id", None):
         raw_assigned_ids = [task.assigned_owner_id]
+    return raw_assigned_ids
+
+
+def _prefetch(db: Session, tasks) -> dict:
+    """What _serialize_task reads from other tables, for a whole list at once (not a query per task): the assignees and the
+    document requests behind document tasks."""
+    ids = {uid for t in tasks for uid in _assigned_ids(t)}
+    users = {u.id: u for u in db.query(GRCUser).filter(GRCUser.id.in_(ids))} if ids else {}
+    try:
+        from ..modules.governance import doc_lifecycle
+        requests = doc_lifecycle.task_requests(db, tasks)
+    except Exception:
+        logger.exception("Could not read the document requests of %s tasks", len(tasks))
+        requests = {}
+    return {"users": users, "requests": requests}
+
+
+def _serialize_task(task, include_relations=False, prefetched: Optional[dict] = None):
+    raw_assigned_ids = _assigned_ids(task)
 
     assignees_payload = []
     if raw_assigned_ids:
         sess = Session.object_session(task)
-        if sess is not None:
-            users = sess.query(GRCUser).filter(GRCUser.id.in_(raw_assigned_ids)).all()
-            user_by_id = {u.id: u for u in users}
+        if prefetched is not None or sess is not None:
+            user_by_id = prefetched["users"] if prefetched is not None else {
+                u.id: u for u in sess.query(GRCUser).filter(GRCUser.id.in_(raw_assigned_ids)).all()}
             for uid in raw_assigned_ids:
                 u = user_by_id.get(uid)
                 if not u:
@@ -321,11 +340,14 @@ def _serialize_task(task, include_relations=False):
     }
     if task.source_module == "document_lifecycle":
         # a document review, approval or acknowledgement request: the document, the person's step, and the buttons' links
-        # ponytail: one query per such task in a list; batch it if a list of hundreds of them gets slow
+        # (a list reads them all at once: _prefetch)
         try:
             from ..modules.governance import doc_lifecycle
             sess = Session.object_session(task)
-            result["document_request"] = doc_lifecycle.task_request(sess, task) if sess is not None else None
+            if prefetched is not None:
+                result["document_request"] = prefetched["requests"].get(task.id)
+            else:
+                result["document_request"] = doc_lifecycle.task_request(sess, task) if sess is not None else None
         except Exception:
             logger.exception("Could not read the document request of task %s", task.id)
             result["document_request"] = None
@@ -365,6 +387,26 @@ def _serialize_task(task, include_relations=False):
             for h in sorted((task.history or []), key=lambda x: x.created_at or datetime.min, reverse=True)
         ]
     return result
+
+
+def _without_others_document_tasks(db: Session, user, query):
+    """The board's (and Reports') tasks: another person's document task only for someone who reads every document."""
+    from ..modules.governance import doc_lifecycle, permissions
+    return doc_lifecycle.without_others_tasks(query, user, reads_all=permissions.visible_filter(db, user) is None)
+
+
+def _refuse_document_link(values: dict) -> None:
+    """Only a document's request makes a task linked to it (doc_lifecycle._open_twin), never Task Management."""
+    from ..modules.governance import doc_lifecycle
+    refused = doc_lifecycle.refused_link(values)
+    if refused:
+        raise HTTPException(status_code=400, detail=refused)
+
+
+def _hidden(db: Session, user, task) -> bool:
+    """Another person's document task about a document the user may not read: answered as if it did not exist."""
+    from ..modules.governance import doc_lifecycle
+    return not doc_lifecycle.may_see_task(db, user, task)
 
 
 def _sync_mirrors(db: Session, task_ids, user_id: Optional[int]) -> None:
@@ -570,6 +612,7 @@ def list_tasks(
         query = query.filter(CriticalTask.due_date <= due_before)
     if due_after:
         query = query.filter(CriticalTask.due_date >= due_after)
+    query = _without_others_document_tasks(db, current_user, query)
 
     total = query.count()
 
@@ -590,7 +633,8 @@ def list_tasks(
             changed = True
     if changed:
         db.commit()
-    return {"items": [_serialize_task(t) for t in tasks], "total": total}
+    pre = _prefetch(db, tasks)
+    return {"items": [_serialize_task(t, prefetched=pre) for t in tasks], "total": total}
 
 
 @router.get("/my-tasks")
@@ -611,12 +655,16 @@ def my_tasks(
             CriticalTask.assigned_user_ids.isnot(None),
         ),
     )
+    from ..modules.governance import doc_lifecycle
+    # a document task is the person's own (its reviewer, set by hand, is not the person asked)
+    query = doc_lifecycle.without_others_tasks(query, current_user)
     tasks = query.order_by(CriticalTask.due_date.asc().nullslast(), CriticalTask.priority.desc()).all()
     # ponytail: assignee lists are matched here, not in SQL (JSON membership differs by database);
     # move it into the query if a tenant's task count makes this slow.
     mine = [t for t in tasks if current_user.id in (t.assigned_owner_id, t.reviewer_id)
             or current_user.id in (t.assigned_user_ids or [])]
-    return [_serialize_task(t) for t in mine]
+    pre = _prefetch(db, mine)
+    return [_serialize_task(t, prefetched=pre) for t in mine]
 
 
 @router.get("/tenant-users")
@@ -802,10 +850,10 @@ def bulk_action(
     current_user: GRCUser = Depends(require_auth),
 ):
     user_tenants = get_user_tenants(current_user, db)
-    tasks = db.query(CriticalTask).filter(
+    tasks = _without_others_document_tasks(db, current_user, db.query(CriticalTask).filter(
         CriticalTask.id.in_(payload.task_ids),
         CriticalTask.tenant_id.in_(user_tenants),
-    ).all()
+    )).all()
 
     if payload.action == "assign" and payload.assigned_owner_id is not None:
         _validate_tenant_user(db, payload.assigned_owner_id, user_tenants)
@@ -873,6 +921,7 @@ def create_task_from_module(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         raise HTTPException(status_code=403, detail="No tenant access")
+    _refuse_document_link(payload.model_dump())
 
     if payload.assigned_owner_id:
         _validate_tenant_user(db, payload.assigned_owner_id, user_tenants)
@@ -1022,7 +1071,7 @@ def get_task(
         joinedload(CriticalTask.comments).joinedload(CriticalTaskComment.user),
         joinedload(CriticalTask.history).joinedload(CriticalTaskHistory.user),
     ).filter(CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
     return _serialize_task(task, include_relations=True)
 
@@ -1036,6 +1085,7 @@ def create_task(
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
     user_tenants = get_user_tenants(current_user, db)
+    _refuse_document_link(payload.model_dump())
     _validate_tenant_user(db, payload.assigned_owner_id, user_tenants)
     _validate_tenant_user(db, payload.reviewer_id, user_tenants)
 
@@ -1087,7 +1137,7 @@ def update_task(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
 
     update_data = payload.model_dump(exclude_unset=True)
@@ -1113,7 +1163,7 @@ def update_task(
         update_data["assigned_owner_id"] = normalized_ids[0] if normalized_ids else None
 
     from ..modules.governance import doc_lifecycle
-    locked = doc_lifecycle.locked_change(task, update_data)
+    locked = doc_lifecycle.locked_change(task, update_data) or doc_lifecycle.refused_link(update_data, task)
     if locked:
         raise HTTPException(status_code=400, detail=locked)
 
@@ -1187,7 +1237,7 @@ def delete_task(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
     from ..modules.governance import doc_lifecycle as lifecycle
     from .auth_router import is_tenant_admin
@@ -1218,7 +1268,7 @@ def transition_status(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
     from ..modules.governance import doc_lifecycle
 
@@ -1293,7 +1343,7 @@ def create_sub_task(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
 
     user_tenants = get_user_tenants(current_user, db)
@@ -1322,7 +1372,7 @@ def update_sub_task(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
 
     sub = db.query(CriticalTaskSubTask).filter(
@@ -1364,7 +1414,7 @@ def delete_sub_task(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
     sub = db.query(CriticalTaskSubTask).filter(
         CriticalTaskSubTask.id == sub_task_id, CriticalTaskSubTask.task_id == task_id
@@ -1387,7 +1437,7 @@ def add_comment(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
 
     comment = CriticalTaskComment(
@@ -1414,7 +1464,7 @@ def get_history(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
 
     entries = db.query(CriticalTaskHistory).options(
@@ -1678,7 +1728,7 @@ def request_approval(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
 
     transition_to = data.get("transition_to", "Completed")
@@ -1730,7 +1780,7 @@ def approve_task(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
     if task.assigned_owner_id == current_user.id:
         raise HTTPException(status_code=403, detail="Task owner cannot approve their own task")
@@ -1774,7 +1824,7 @@ def reject_task(
     task = db.query(CriticalTask).filter(
         CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)
     ).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
     if task.assigned_owner_id == current_user.id:
         raise HTTPException(status_code=403, detail="Task owner cannot reject their own task")
@@ -1810,11 +1860,12 @@ def ai_prioritize_tasks(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    from ..modules.governance import doc_lifecycle
     user_tenants = get_user_tenants(current_user, db)
-    tasks = db.query(CriticalTask).filter(
+    tasks = doc_lifecycle.without_others_tasks(db.query(CriticalTask).filter(        # (their titles name documents)
         CriticalTask.tenant_id.in_(user_tenants),
         CriticalTask.status.notin_(["Completed", "Verified"]),
-    ).order_by(CriticalTask.created_at.desc()).limit(50).all()
+    ), current_user).order_by(CriticalTask.created_at.desc()).limit(50).all()
 
     if not tasks:
         return {"suggestions": [], "message": "No open tasks to prioritize"}
@@ -1859,7 +1910,7 @@ def ai_analyze_root_cause(
         joinedload(CriticalTask.sub_tasks),
         joinedload(CriticalTask.comments).joinedload(CriticalTaskComment.user),
     ).filter(CriticalTask.id == task_id, CriticalTask.tenant_id.in_(user_tenants)).first()
-    if not task:
+    if not task or _hidden(db, current_user, task):
         raise HTTPException(status_code=404, detail="Task not found")
 
     context = ai_view(task, "tasks.root_cause")
@@ -1920,14 +1971,15 @@ def ai_predict_escalations(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    from ..modules.governance import doc_lifecycle
     user_tenants = get_user_tenants(current_user, db)
-    tasks = db.query(CriticalTask).options(
+    tasks = doc_lifecycle.without_others_tasks(db.query(CriticalTask).options(        # (their titles name documents)
         joinedload(CriticalTask.assigned_owner),
     ).filter(
         CriticalTask.tenant_id.in_(user_tenants),
         CriticalTask.status.notin_(["Completed", "Verified"]),
         CriticalTask.due_date.isnot(None),
-    ).order_by(CriticalTask.due_date.asc()).limit(50).all()
+    ), current_user).order_by(CriticalTask.due_date.asc()).limit(50).all()
 
     if not tasks:
         return {"predictions": [], "message": "No tasks with SLA to analyze"}
@@ -1973,6 +2025,7 @@ def ai_balance_workload(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    from ..modules.governance import doc_lifecycle
     user_tenants = get_user_tenants(current_user, db)
     tasks = db.query(CriticalTask).options(
         joinedload(CriticalTask.assigned_owner),
@@ -2000,11 +2053,15 @@ def ai_balance_workload(
             workload[owner]["critical"] += 1
         elif v["priority"] == "High":
             workload[owner]["high"] += 1
+        if t.source_module == doc_lifecycle.SOURCE_MODULE:
+            continue        # a document request's task counts in the workload, but its person is the one asked: never moved
         task_data.append({
             "id": v["id"], "title": v["title"], "priority": v["priority"],
             "category": v["category"], "owner": owner,
             "due_date": v["due_date"],
         })
+    if not task_data:
+        return {"suggestions": [], "message": "No active tasks that can be reassigned"}
 
     client = _get_openai_client()
     try:
@@ -2018,6 +2075,9 @@ def ai_balance_workload(
             temperature=0.3,
         )
         result = json.loads(response.choices[0].message.content)
+        movable = {str(row["id"]) for row in task_data}
+        if isinstance(result.get("suggestions"), list):      # only the tasks it was offered (never a document task)
+            result["suggestions"] = [s for s in result["suggestions"] if isinstance(s, dict) and str(s.get("task_id")) in movable]
         for suggestion in result.get("suggestions", []):
             suggestion["suggested_owner_id"] = book.key(suggestion.get("suggested_owner", ""))
         return book.restore(result, lambda uid: names.get(uid, "an owner"))

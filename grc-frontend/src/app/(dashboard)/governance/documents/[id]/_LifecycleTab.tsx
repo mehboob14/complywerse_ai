@@ -11,7 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, ChevronRight, Clock, FileCheck2, Loader2, Search } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { dateTime, day, eventLabel, type DocumentLifecycle as Lifecycle, type LifecycleRow as Row } from '@/lib/documentLifecycle';
-import type { SettingsAnswer } from '@/lib/governanceSettings';
+import { noAccess, retrySettings, type SettingsAnswer } from '@/lib/governanceSettings';
 import { useToast } from '@/components/ui/ToastProvider';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
@@ -340,11 +340,15 @@ function Timeline({ events }: { events: Lifecycle['timeline'] }) {
 }
 
 // ── due dates and escalation: the organisation's settings, changed in Governance > Settings (one source) ──
-export function SettingsCard() {
-  const { data } = useQuery<SettingsAnswer>({
+export function SettingsCard({ inPopup = false }: { inPopup?: boolean }) {
+  const { data, error } = useQuery<SettingsAnswer>({
     queryKey: ['document-lifecycle-settings'],
     queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/settings')).data,
+    retry: retrySettings,
   });
+  if (inPopup && noAccess(error)) {
+    return <p className="text-sm text-[#26323d]">Only an administrator or someone with a governance right can see these settings.</p>;
+  }
   if (!data?.enabled) return null;
   const s = data.settings;
   const days = (n: number) => `${n} day${n === 1 ? '' : 's'}`;
@@ -359,7 +363,7 @@ export function SettingsCard() {
   ];
   return (
     <section className="rounded-xl border border-gray-200 bg-white p-4">
-      <h3 className="text-sm font-semibold text-gray-900">Due dates and escalation</h3>
+      {!inPopup && <h3 className="text-sm font-semibold text-gray-900">Due dates and escalation</h3>}{/* the popup's own title says it */}
       <p className="mt-0.5 text-xs text-gray-600">The same for every document in the organisation.</p>
       <dl className="mt-3 grid gap-x-6 gap-y-1.5 sm:grid-cols-[max-content_1fr]">
         {rows.map(([label, value]) => (

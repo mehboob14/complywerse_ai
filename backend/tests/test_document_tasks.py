@@ -174,3 +174,187 @@ def test_who_when_and_done_follow_the_request_and_cannot_be_changed_in_task_mana
     assert (db.get(m.CriticalTask, t.id).status, db.get(m.CriticalTask, other.id).status) == ("Open", "In Progress")
     assert http.put(f"/critical-tasks/{other.id}", json={"assigned_owner_id": 2}).json()["assigned_owner_id"] == 2   # others: as before
     assert http.post(f"/critical-tasks/{other.id}/transition", json={"new_status": "Under Review"}).json()["status"] == "Under Review"
+
+
+# ── the review's findings (2026-10-19) ───────────────────────────────────────
+def count_queries(http, url):
+    from sqlalchemy import event
+
+    engine, seen = http.db.get_bind(), []
+    listen = lambda *a, **k: seen.append(1)                                     # noqa: E731
+    event.listen(engine, "before_cursor_execute", listen)
+    try:
+        r = http.get(url)
+    finally:
+        event.remove(engine, "before_cursor_execute", listen)
+    assert r.status_code == 200, r.text
+    return len(seen), r.json()
+
+
+def test_a_list_of_document_tasks_reads_their_requests_at_once_not_per_task(http):
+    db = http.db
+    publish(db)                                                                  # one acknowledgement task per person
+    http.me["u"] = 7                                                             # an administrator sees them all
+    count_queries(http, "/critical-tasks")                                       # (anything read once per process)
+    few, board = count_queries(http, "/critical-tasks")
+    mine_few, _ = count_queries(http, "/critical-tasks/my-tasks")
+    db.add(m.GovernanceDocument(id=6, tenant_id=1, title="Backup policy", doc_type="policy", status="published", current_version="1.0", owner_id=1))
+    db.commit()
+    life.ensure_acknowledgements(db, db.get(m.GovernanceDocument, 6), 1)
+    db.commit()
+    many, board2 = count_queries(http, "/critical-tasks")
+    mine_many, mine = count_queries(http, "/critical-tasks/my-tasks")
+    assert board2["total"] == 2 * board["total"] >= 14 and len(mine) == 2
+    assert (many, mine_many) == (few, mine_few)                                 # the same number of queries for twice the tasks
+    assert all(t["document_request"]["document_title"] in ("Access policy", "Backup policy") for t in board2["items"])
+    assert {t["document_request"]["user_id"] for t in board2["items"]} == {t["assigned_owner_id"] for t in board2["items"]}
+
+
+def test_document_tasks_show_only_to_the_person_asked_and_to_who_may_read_the_document(http):
+    db = http.db
+    participants(db)
+    signoff.send_for_review(5, db, user(db, 1))                                 # a draft: Rana (2) and Rafay (3) review it
+    rana = [x for x in tasks(db) if x.assigned_user_ids == [2]][0]
+    other = manual_task(db)
+
+    http.me["u"] = 6                                                             # neither asked nor allowed to read the draft
+    board = http.get("/critical-tasks").json()
+    assert [t["id"] for t in board["items"]] == [other.id] and board["total"] == 1
+    for call in (lambda: http.get(f"/critical-tasks/{rana.id}"), lambda: http.get(f"/critical-tasks/{rana.id}/history"),
+                 lambda: http.put(f"/critical-tasks/{rana.id}", json={"priority": "Low"}),
+                 lambda: http.post(f"/critical-tasks/{rana.id}/comments", json={"content": "hi"})):
+        assert call().status_code == 404                                         # as if it did not exist
+    assert http.get(f"/critical-tasks/{other.id}").status_code == 200           # other tasks: as before
+
+    http.me["u"] = 2                                                             # the person asked
+    assert rana.id in [t["id"] for t in http.get("/critical-tasks").json()["items"]]
+    assert http.get(f"/critical-tasks/{rana.id}").json()["document_request"]["kind"] == "review"
+    http.me["u"] = 3                                                             # the other reviewer reads the draft: opens it by its link
+    assert http.get(f"/critical-tasks/{rana.id}").status_code == 200
+    assert rana.id not in [t["id"] for t in http.get("/critical-tasks").json()["items"]]     # but lists show their own
+    http.me["u"] = 7                                                             # an administrator: everything
+    assert {rana.id, other.id} <= {t["id"] for t in http.get("/critical-tasks").json()["items"]}
+    assert http.get(f"/critical-tasks/{rana.id}").status_code == 200
+
+    rana.reviewer_id = 6                                                         # a reviewer set by hand is not the person asked
+    db.commit()
+    http.me["u"] = 6
+    assert rana.id not in [t["id"] for t in http.get("/critical-tasks/my-tasks").json()]
+
+
+def test_the_reports_on_tasks_leave_out_other_peoples_document_tasks_too(http):
+    reporting = importlib.import_module("grc.routers.reporting_router")
+    db = http.db
+    participants(db)
+    signoff.send_for_review(5, db, user(db, 1))                                 # a draft: Rana (2) and Rafay (3) review it
+    other = manual_task(db)
+    db.add(m.Role(id=40, tenant_id=1, name="Task staff"))                       # Uma may report on tasks, not read the draft
+    db.add(m.Permission(id=40, name="critical_tasks:tasks:view", resource="critical_tasks:tasks", action="view"))
+    db.add(m.RolePermission(role_id=40, permission_id=40))
+    db.add(m.UserRole(user_id=6, role_id=40, tenant_id=1))
+    db.commit()
+    app = FastAPI()
+    app.include_router(reporting.router)
+    app.dependency_overrides[m.get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, http.me["u"])
+    client = TestClient(app)
+
+    http.me["u"] = 6
+    rows = client.post("/reporting/query", json={"dataset": "tasks"}).json()
+    assert [r["id"] for r in rows["rows"]] == [other.id] and rows["total"] == 1
+    grouped = client.post("/reporting/aggregate", json={"dataset": "tasks", "group_by": ["title"],
+                                                        "measures": [{"id": "n", "pct_of_total": True}]}).json()
+    assert [r["title"] for r in grouped["rows"]] == ["Patch the VPN"] and grouped["grand"]["m_n"] == 1
+    http.me["u"] = 7                                                             # an administrator: every task
+    assert client.post("/reporting/query", json={"dataset": "tasks"}).json()["total"] == 1 + len(tasks(db)) >= 3
+
+
+def test_a_task_cannot_be_linked_to_a_document_request_by_hand(http):
+    db = http.db
+    publish(db)
+    ob, real = ack_task(db)
+    for body in ({"title": "x", "source_module": "document_lifecycle", "source_entity_type": "DocumentObligation", "source_entity_id": ob.id},
+                 {"title": "x", "source_entity_type": "DocumentObligation"}, {"title": "x", "source_module": "document_lifecycle"}):
+        r = http.post("/critical-tasks", json=body)
+        assert r.status_code == 400 and r.json()["detail"] == life.LINK_REFUSED, body
+    r = http.post("/critical-tasks/from-module", json={"title": "x", "source_module": "document_lifecycle", "source_entity_id": ob.id,
+                                                        "source_entity_type": "DocumentObligation"})
+    assert r.status_code == 400
+    other = manual_task(db)
+    assert http.put(f"/critical-tasks/{other.id}", json={"source_module": "document_lifecycle"}).status_code == 400
+    assert http.put(f"/critical-tasks/{other.id}", json={"source_entity_type": "DocumentObligation", "source_entity_id": ob.id}).status_code == 400
+    assert http.put(f"/critical-tasks/{real.id}", json={"source_module": "document_lifecycle", "priority": "Low"}).status_code == 200  # its own
+
+    # one made before that was refused, naming Uma's request: an ordinary task, not hers
+    forged = m.CriticalTask(tenant_id=1, title="Forged", status="Open", source_module="document_lifecycle", source_entity_type="DocumentObligation",
+                            source_entity_id=ob.id, assigned_owner_id=2, assigned_user_ids=[2])
+    db.add(forged)
+    db.commit()
+    assert life.is_task(real) and not life.is_task(forged)
+    assert life.task_request(db, forged) is None and life.locked_change(forged, {"status": "In Progress"}) is None
+    http.me["u"] = 2
+    assert http.get(f"/critical-tasks/{forged.id}").json()["document_request"] is None
+    assert http.post(f"/critical-tasks/{forged.id}/transition", json={"new_status": "In Progress"}).status_code == 200
+    assert http.delete(f"/critical-tasks/{forged.id}").status_code == 204       # no administrator needed
+    db.expire_all()
+    assert ob.critical_task_id == real.id and db.get(m.CriticalTask, real.id) is not None
+
+
+def test_balancing_the_workload_counts_document_tasks_but_never_moves_them(http, monkeypatch):
+    import json
+    from types import SimpleNamespace as NS
+
+    db = http.db
+    publish(db)
+    ob, ack = ack_task(db)
+    other = manual_task(db)
+    prompts = []
+
+    def create(**kw):
+        prompts.append(kw["messages"][-1]["content"])
+        answer = {"suggestions": [{"task_id": ack.id, "suggested_owner": "P1"}, {"task_id": other.id, "suggested_owner": "P1"}], "summary": "s"}
+        return NS(choices=[NS(message=NS(content=json.dumps(answer)))])
+
+    monkeypatch.setattr(critical_tasks_router, "_get_openai_client", lambda: NS(chat=NS(completions=NS(create=create))))
+    monkeypatch.setattr(critical_tasks_router, "_get_openai_model", lambda: "test")
+    http.me["u"] = 7
+    out = http.post("/critical-tasks/ai/balance-workload").json()
+    workload = json.loads(prompts[0].split("Current workload:\n", 1)[1].split("\n\nTasks:\n", 1)[0])
+    offered = json.loads(prompts[0].split("\n\nTasks:\n", 1)[1].split("\n\nReturn JSON", 1)[0])
+    assert [t["id"] for t in offered] == [other.id]                              # the only one it may move
+    assert sum(w["count"] for w in workload.values()) == len(tasks(db)) + 1      # the document tasks still count
+    assert [s["task_id"] for s in out["suggestions"]] == [other.id]             # a document task it names anyway is dropped
+
+
+def test_the_alert_says_it_is_in_your_tasks_only_when_a_task_was_made(world):
+    from test_document_lifecycle import alerts
+
+    with world.factory() as db:
+        life.save_settings(db, 1, {"task_create": {"review": False, "acknowledgement": False}}, 1)
+        participants(db)
+        signoff.send_for_review(5, db, user(db, 1))
+        assert not tasks(db) and "in your tasks" not in alerts(db, 2)[-1].message
+        assert alerts(db, 2)[-1].message.endswith("It is in the document's Approvals.")
+        d = doc(db)
+        d.status = "published"
+        life.ensure_acknowledgements(db, d, 1)
+        db.commit()
+        assert "in your tasks" not in alerts(db, 6)[-1].message
+    with world.factory() as db:
+        d = doc(db)
+        d.status = "draft"
+        db.commit()
+        life.save_settings(db, 1, {"task_create": {"review": True, "acknowledgement": True}}, 1)
+        signoff.send_for_review(5, db, user(db, 1))
+        assert "It is in your tasks and in the document's Approvals." in alerts(db, 2)[-1].message
+
+
+def test_the_link_in_a_task_is_the_apps_address_when_it_is_known(world, monkeypatch):
+    for name in ("FRONTEND_URL", "NEXT_PUBLIC_APP_URL"):
+        monkeypatch.delenv(name, raising=False)
+    with world.factory() as db:
+        life.save_settings(db, 1, {"task_description": "Open {link}"}, 1)
+        publish(db)
+        assert ack_task(db)[1].description == "Open /governance/documents/5"               # no address set: the path
+        monkeypatch.setenv("FRONTEND_URL", "https://cfsb.example.test/")
+        assert life.task_values(db, ack_task(db)[0], doc(db))["link"] == "https://cfsb.example.test/governance/documents/5"

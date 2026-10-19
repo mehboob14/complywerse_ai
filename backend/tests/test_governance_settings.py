@@ -252,8 +252,8 @@ def test_the_settings_routes_for_administrators_and_holders_of_the_settings_righ
     app.dependency_overrides[require_auth] = lambda: me["u"]
     client = TestClient(app)
 
-    seen = client.get("/documents/lifecycle/settings").json()
-    assert seen["can_edit"] is False and seen["roles"] == [] and seen["defaults"]["review_days"] == 7
+    hidden = client.get("/documents/lifecycle/settings")                      # no governance right: not even to read them
+    assert hidden.status_code == 403 and hidden.json()["detail"] == "Only an administrator or someone with a governance right can see these settings."
     refused = client.put("/documents/lifecycle/settings", json={"review_days": 3})
     assert refused.status_code == 403 and "governance settings" in refused.json()["detail"]
 
@@ -266,8 +266,15 @@ def test_the_settings_routes_for_administrators_and_holders_of_the_settings_righ
     assert seen["can_edit"] is True and [r["name"] for r in seen["roles"]] == ["Administrator", "Approvers", "Policy office"]
     got = client.put("/documents/lifecycle/settings", json={"review_days": 3, "escalate_role_id": 30, "notify": {"approved": "in_app"}}).json()
     assert (got["settings"]["review_days"], got["settings"]["escalate_role_id"], got["settings"]["notify"]["approved"]) == (3, 30, "in_app")
+    db.add(m.Role(id=31, tenant_id=1, name="Policy readers"))                   # any governance right reads them
+    db.add(m.Permission(id=31, name="governance:policies:read", resource="governance:policies", action="read"))
+    db.add(m.RolePermission(role_id=31, permission_id=31))
+    db.add(m.UserRole(user_id=2, role_id=31, tenant_id=1))
+    db.commit()
     me["u"] = user(db, 2)                                                        # someone who only reads them sees the role's name
-    assert client.get("/documents/lifecycle/settings").json()["escalate_role_name"] == "Policy office"
+    seen = client.get("/documents/lifecycle/settings").json()
+    assert seen["escalate_role_name"] == "Policy office" and seen["can_edit"] is False and seen["roles"] == []
+    assert seen["defaults"]["review_days"] == 7
     me["u"] = user(db, 6)
     assert client.put("/documents/lifecycle/settings", json={"escalate_role_id": None}).json()["settings"]["escalate_role_id"] is None
     assert client.put("/documents/lifecycle/settings", json={"ack_days": 21}).json()["settings"]["review_days"] == 3   # untouched
