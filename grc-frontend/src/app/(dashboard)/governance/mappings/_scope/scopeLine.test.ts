@@ -10,6 +10,13 @@ test("in a document's Mappings view its editors (the owner among them) run and l
   assert.ok(page.includes("const canDelete = canEdit ?? hasPermission('governance:mappings:delete');"));
 });
 
+test('a refused run or link is told as a sentence, never a raw `detail` (a 422 list blanks the page)', () => {
+  for (const f of ['../page.tsx', './MappingScope.tsx']) {
+    const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+    assert.ok(!/set\w*Error\(\s*\w+\??\.response\?\.data\?\.detail/.test(src), `raw detail put on the page in ${f}`);
+  }
+});
+
 const base = { running: false, error: '', saved: 0, picked: 0, last: null };
 
 test('one line at a time: a run first, then the error, then nothing to map against, then the last run', () => {

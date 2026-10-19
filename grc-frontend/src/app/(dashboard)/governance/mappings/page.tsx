@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi, ermApi } from '@/lib/api';
+import { apiErrorText } from '@/lib/apiError';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
@@ -937,7 +938,7 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: {
       setLinkError(null);
     },
     onError: (error: any) => {
-      setLinkError(error?.response?.data?.detail || 'Failed to link control to document.');
+      setLinkError(apiErrorText(error, 'Failed to link control to document.'));
     },
   });
 

@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
 import { apiErrorText } from '@/lib/apiError';
+import { parseUtc } from '@/lib/serverTime';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
@@ -239,7 +240,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       setGapFrameworkSearch('');
       setRunError('');
     },
-    // a failure is told where the run was asked for: in the Run dialog, or as a toast for Run again (each call says)
+    // a failure is told where the run was asked for: in the Run dialog, or as a toast for Run again (each call says); the runs are
+    // asked for again, as the server marks them failed when it could not start them (a 503)
+    onError: () => queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id] }),
   });
   const notStarted = (error: unknown) => apiErrorText(error, 'The gap analysis could not be started.');
   const updateFindingMutation = useMutation({
@@ -424,12 +427,12 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
           </div>
         )}
         {failed.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5" aria-label="Runs that did not finish">
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5" role="group" aria-label="Runs that did not finish">
             <ul className="min-w-0 flex-1 space-y-1">
               {failed.map((r: any) => (
                 <li key={r.id} className="text-xs text-[#7a1616]">
                   <span className="font-semibold">{r.framework_name || `Run ${r.id}`}</span>
-                  {r.started_at && <span className="text-[#8a2c2c]"> · {formatDate(r.started_at)}</span>}
+                  {r.started_at && <span className="text-[#8a2c2c]"> · {parseUtc(r.started_at)?.toLocaleDateString()}</span>}
                   : {r.error_message || 'The gap analysis did not finish.'}
                 </li>
               ))}

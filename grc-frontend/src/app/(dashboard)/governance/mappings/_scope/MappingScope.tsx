@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Play } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
 import { apiClient, governanceApi } from '@/lib/api';
+import { apiErrorText } from '@/lib/apiError';
 import { scopeLine } from './scopeLine';
 
 type ScopeEntry = { id: number; name: string };
@@ -79,7 +80,7 @@ export function MappingScope({ documentId, scope, canRun }: {
       if (ACTIVE.has(data.status)) queryClient.setQueryData(['document-mapping-run', documentId], data);
       else REFRESH.forEach((k) => queryClient.invalidateQueries({ queryKey: [k, documentId] }));
     },
-    onError: (e: any) => setError(e?.response?.data?.detail || 'Could not start the mapping.'),
+    onError: (e: any) => setError(apiErrorText(e, 'Could not start the mapping.')),
   });
 
   const dirty = [...extra].sort().join(',') !== [...savedExtra].sort().join(',');

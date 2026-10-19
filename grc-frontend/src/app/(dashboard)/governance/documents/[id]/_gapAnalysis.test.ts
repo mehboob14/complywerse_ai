@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { frameworkTypeLabel, lastFailedRuns } from './_gapAnalysis.ts';
+
+test('a run the server could not start (it marks it failed) is asked for again, so it shows as failed at once', () => {
+  const src = readFileSync(new URL('./_GapAnalysisView.tsx', import.meta.url), 'utf8');
+  assert.ok(src.includes("onError: () => queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id] }),"));
+});
 
 test('a failed run stays shown until the framework is run again, newest first', () => {
   const runs = [
