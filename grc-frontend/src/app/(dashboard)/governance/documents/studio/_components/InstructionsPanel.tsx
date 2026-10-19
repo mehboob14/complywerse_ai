@@ -45,7 +45,7 @@ function PagePreview({ position, hasLogo, entity, watermark }: { position: LogoP
       </div>
       {watermark && (
         <span className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <span className="-rotate-45 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider text-[#0f4c5c]/25">{watermark.slice(0, 14)}</span>
+          <span className="-rotate-45 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider text-[#000]/25">{watermark.slice(0, 14)}</span>
         </span>
       )}
       <div className="mt-auto border-t border-[#e1e5e9] pt-1">

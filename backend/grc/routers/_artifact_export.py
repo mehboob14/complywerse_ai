@@ -129,7 +129,9 @@ def _table_data(blocks: List[dict], table: Optional[dict]) -> Tuple[List[str], L
 
 def _to_docx(title: str, blocks: List[dict]) -> bytes:
     from docx import Document
+    from ..modules.governance.studio.exporters import black_headings
     doc = Document()
+    black_headings(doc)                 # a document from the platform is black and white, not Word's blue headings
     if title:
         doc.add_heading(_plain(title), 0)
     for b in blocks:

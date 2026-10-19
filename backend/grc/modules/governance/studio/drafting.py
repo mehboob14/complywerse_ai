@@ -160,8 +160,8 @@ def sections_for(db, session) -> Tuple[List[Section], Any, Optional[Dict[str, An
         kind = "front" if key in _FRONT_KEYS else "core" if (not core_taken and not annex and key in _CORE_KEYS) else \
             "dependent" if any(w in key for w in _DEPENDENT_WORDS) else "narrative"
         core_taken = core_taken or kind == "core"
-        number = "" if annex else str(n + 1)
-        full = b.text.strip() if annex else f"{n + 1}. {title}"
+        number = "" if annex else str(sum(1 for _i, h in heads[:n + 1] if not templates.is_annex(h.text)))      # an annex takes no number
+        full = b.text.strip() if annex else f"{number}. {title}"
         out.append(Section(number=number or title.split("—")[0].strip(), heading=title, full_heading=full, key=key, kind=kind,
                            focus=("Follow the organisation's template for this section. " + (f"It says: {body}" if body else "")).strip(), min_words=200, target_words=420,
                            min_clauses=None))

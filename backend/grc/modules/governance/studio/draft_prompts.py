@@ -248,6 +248,13 @@ def plan_task(*, label: str, title: str, sections: Sequence[Any], core: Optional
             "applies; recommended: true for the choice you would make) and other (true when the person may also answer in words).\n</task>")
 
 
+def _clauses(section: Any) -> str:
+    """How a numbered section numbers what it holds (an annex has no number to build on): its clauses one level below it."""
+    n = str(section.number)
+    return (f"\nNumber its clauses {n}.1, {n}.2 ... and their sub-clauses {n}.1.1, {n}.1.2 ...; the number starts the paragraph, and a table or a "
+            "list belongs to the clause before it.") if n.isdigit() else ""
+
+
 def section_task(*, label: str, section: Any, area: Optional[Dict[str, Any]], core: Optional[Any], doc_type: str,
                  sibling_areas: Sequence[str], target_words: int, minimum_words: int, minimum_clauses: Optional[int], fix: str = "") -> str:
     """The task for one part of the document."""
@@ -265,7 +272,7 @@ def section_task(*, label: str, section: Any, area: Optional[Dict[str, Any]], co
     else:
         body = (f"Write the content of section {section.full_heading} of the {label.lower()}. Write its content only: the heading is added for you.\n"
                 f"What this section must achieve: {section.focus}\n"
-                f"About {target_words} words, at least {minimum_words}.")
+                f"About {target_words} words, at least {minimum_words}." + _clauses(section))
         attrs = f'kind="section" number="{section.number}" heading="{section.heading}"'
     return (f"<task {attrs}>\n{body}\n"
             "Return the Markdown in `markdown`, the references you relied on in `references_used`, and in `assumptions` every value you chose that was not given "
@@ -288,6 +295,6 @@ def dependent_task(*, label: str, section: Any, target_words: int, minimum_words
                  "Informed in each cell). Use exactly the role titles used above.")
     return (f"<task kind=\"section\" number=\"{section.number}\" heading=\"{section.heading}\">\n"
             f"Write the content of {section.full_heading} of the {label.lower()}, from the document written so far (given above). Write its content only: the heading is added for you.\n"
-            f"What this part must achieve: {section.focus}\n{extra}\nAbout {target_words} words, at least {minimum_words}.\n"
+            f"What this part must achieve: {section.focus}\n{extra}\nAbout {target_words} words, at least {minimum_words}.{_clauses(section)}\n"
             "Return the Markdown in `markdown`, the references you relied on in `references_used`, and in `assumptions` anything you chose that was not given to you.\n"
             + (f"\nYour previous attempt had these problems; correct all of them:\n{fix}\n" if fix else "") + "</task>")

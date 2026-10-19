@@ -1546,7 +1546,7 @@ def _build_table(ctx: Ctx, block: B.Block) -> Any:
             fill_cell(ctx, tc, _cell_lines(row[c]) if c < len(row) else [[]])
             if r == 0:
                 shd = OxmlElement("w:shd")
-                for k, v in (("val", "clear"), ("color", "auto"), ("fill", "E3F1F1")):
+                for k, v in (("val", "clear"), ("color", "auto"), ("fill", "F2F2F2")):         # light grey, as the exported documents have
                     shd.set(qn(f"w:{k}"), v)
                 tc.get_or_add_tcPr().append(shd)
                 for run in tc.iter(qn("w:r")):

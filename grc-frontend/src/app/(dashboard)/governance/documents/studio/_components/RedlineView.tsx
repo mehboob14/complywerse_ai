@@ -52,7 +52,7 @@ function Row({ row, number, focused }: { row: RedlineRow; number: number; focuse
               {r.cells.map((cell, ci) => {
                 const Cell = ri === 0 ? 'th' : 'td';
                 return (
-                  <Cell key={ci} className={`break-words border border-[#b8c4c8] px-2 py-1 text-left align-top ${ri === 0 ? 'bg-[#e3f1f1] font-semibold' : ''}`}>
+                  <Cell key={ci} className={`break-words border border-[#bfbfbf] px-2 py-1 text-left align-top ${ri === 0 ? 'bg-[#f2f2f2] font-semibold' : ''}`}>
                     <Segments segs={cell} />
                   </Cell>
                 );
@@ -63,7 +63,7 @@ function Row({ row, number, focused }: { row: RedlineRow; number: number; focuse
       </table>
     );
   } else if (row.kind === 'heading') {
-    body = <div className={`font-bold text-[#0f4c5c] ${HEADING[Math.min(row.level, 6)]}`}><Segments segs={segs} /></div>;
+    body = <div className={`font-bold text-[#111] ${HEADING[Math.min(row.level, 6)]}`}><Segments segs={segs} /></div>;
   } else if (row.kind === 'list_item') {
     body = (
       <div className="flex gap-2" style={{ paddingLeft: `${row.level * 1.25}rem` }}>
@@ -72,7 +72,7 @@ function Row({ row, number, focused }: { row: RedlineRow; number: number; focuse
       </div>
     );
   } else if (row.kind === 'quote') {
-    body = <div className="border-l-4 border-[#0f4c5c] pl-3 italic text-[#52606d]"><Segments segs={segs} /></div>;
+    body = <div className="border-l-4 border-[#808080] pl-3 italic text-[#404040]"><Segments segs={segs} /></div>;
   } else if (row.kind === 'code') {
     body = <pre className="overflow-x-auto rounded bg-[#f1f3f5] p-2 font-mono text-xs"><Segments segs={segs} /></pre>;
   } else if (row.kind === 'hr') {
