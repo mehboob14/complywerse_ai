@@ -18,3 +18,15 @@ def test_pdf_renders_wide_and_narrow_tables():
     for ncol, rows in ((6, 3), (25, 2), (50, 2), (85, 0)):
         body, media, ext = build_export("pdf", title="Register", content=_table(ncol, rows))
         assert body.startswith(b"%PDF") and ext == "pdf", ncol
+
+
+def test_word_headings_are_black_not_the_blue_of_words_own_template():
+    import io
+    import re
+    import zipfile
+
+    body, _media, ext = build_export("docx", title="Access Control Policy", content="# 1. Purpose\n\nText.\n\n## 1.1 Scope\n\nMore.\n")
+    styles = zipfile.ZipFile(io.BytesIO(body)).read("word/styles.xml").decode()
+    for sid in ("Title", "Heading1", "Heading2"):
+        style = re.search(rf'<w:style [^>]*w:styleId="{sid}".*?</w:style>', styles, re.S).group(0)
+        assert '<w:color w:val="000000"/>' in style and "w:themeColor" not in style and "<w:pBdr>" not in style, sid
