@@ -85,9 +85,19 @@ def ref_view(r) -> Dict[str, Any]:
             "scope": {k: scope.get(k) for k in ("mode", "domains", "count", "total", "query") if k in scope} or None, "notes": scope.get("notes", [])}
 
 
+def may_save(db, s, user) -> bool:
+    """Save to library is for someone who may change the session's library document; a reader's comparison is theirs to read, not
+    to save (and so theirs to remove from their work)."""
+    from ....models import GovernanceDocument
+    from ..permissions import can_edit
+
+    doc = db.get(GovernanceDocument, s.document_id) if s.document_id else None
+    return doc is None or user is None or can_edit(db, user, doc)
+
+
 def session_view(db, s, *, content: bool = True, user=None) -> Dict[str, Any]:
     from ....models import GovernanceDocument, StudioReference
-    from ..permissions import can_edit, in_force_number
+    from ..permissions import in_force_number
     from ..routers.document_access import _unsaved
 
     rows = db.query(StudioReference).filter(StudioReference.session_id == s.id).order_by(StudioReference.id).all()
@@ -98,10 +108,11 @@ def session_view(db, s, *, content: bool = True, user=None) -> Dict[str, Any]:
            "document_status": doc.status if doc is not None else None,
            # the version everyone else reads until the next one is published (the Save warning says so)
            "document_version_in_force": in_force_number(doc) if doc is not None else None,
-           # only on the session's own page (not each row of the list): Save to library is for someone who may change that document
-           # (a reader's comparison is theirs to read, not to save), and the work (or a tidied Word file) Save to library would keep
-           **({"may_save": doc is None or user is None or can_edit(db, user, doc),
-               "unsaved_in_library": _unsaved(s) if doc is not None else False} if content else {}),
+           # Save to library is for someone who may change that document, on each row of the list too (a reader's comparison can be
+           # removed from their work); only on the session's own page, the work (or a tidied Word file) Save to library would keep
+           # ponytail: one rights lookup per library row of the list (at most 100); look the rights up once per list if it gets slow
+           "may_save": may_save(db, s, user),
+           **({"unsaved_in_library": _unsaved(s) if doc is not None else False} if content else {}),
            "revision": s.revision_no, "base_label": s.base_label, "instructions": s.instructions or {}, "settings": s.settings or {},
            "template_id": s.template_id, "source": {"kind": s.source_kind, "name": s.source_name, "in_place": bool(s.source_kind == "docx" and s.native_map)},
            "references": [ref_view(r) for r in rows], "reference_chars": refs.total_chars(rows),
@@ -1453,11 +1464,12 @@ def export_notes(db, s, fmt: str, settings: Dict[str, Any], pending_changes: int
     return notes
 
 
-def delete_session(db, s) -> None:
-    """Discards a draft that was never in the library. Work on a library document (an upload is one) is archived there instead."""
+def delete_session(db, s, user) -> None:
+    """Discards a draft that was never in the library, or removes from the person's work a library document they may not save (a
+    reader's comparison; the document stays). Their work on a document they may change (an upload is one) is archived there instead."""
     from ....models import StudioMessage, StudioReference, StudioRevision
 
-    if s.document_id:
+    if s.document_id and may_save(db, s, user):
         raise StudioError("This document is in the library, so it cannot be deleted here. Archive it from the library instead.")
     for model in (StudioMessage, StudioReference, StudioRevision):
         db.query(model).filter(model.session_id == s.id).delete(synchronize_session=False)

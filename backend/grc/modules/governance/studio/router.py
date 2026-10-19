@@ -15,7 +15,7 @@ from ....models import (GRCUser, GovernanceDocument, StudioAsset, StudioMessage,
                         UploadedFramework, get_db)
 from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
-from ..permissions import is_admin as _is_admin, visible_filter
+from ..permissions import can_edit, edit_filter, is_admin as _is_admin, visible_filter
 from . import blocks as B
 from . import assets, checks, exporters, gate, jobs, service, templates
 from . import references as refs
@@ -180,17 +180,23 @@ def get_status(db: Session = Depends(get_db), user: GRCUser = Depends(require_au
 
 
 @router.get("/documents", dependencies=[Depends(require_studio)])
-def pick_documents(q: str = "", limit: int = Query(30, le=100), db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
-    """Library documents to use as a reference or to open (those the person may read)."""
+def pick_documents(q: str = "", limit: int = Query(30, le=100), editable: bool = False, db: Session = Depends(get_db),
+                   user: GRCUser = Depends(require_auth)):
+    """Library documents to use as a reference or to open (those the person may read; ``editable``: only those they may change, for
+    Edit from the library); ``may_edit``: the person may change it, so it can be opened to edit."""
     query = db.query(GovernanceDocument).filter(GovernanceDocument.status != "archived")
     visible = visible_filter(db, user)
     if visible is not None:
         query = query.filter(visible)
+    editors_only = edit_filter(db, user)          # None: the person may change every document (one rights lookup, not one per row)
+    if editable and editors_only is not None:
+        query = query.filter(editors_only)
     if q.strip():
         query = query.filter(GovernanceDocument.title.ilike(f"%{q.strip()}%"))
     rows = query.order_by(GovernanceDocument.updated_at.desc()).limit(limit).all()
     return {"items": [{"id": d.id, "title": d.title, "code": d.document_code, "doc_type": d.doc_type, "status": d.status,
-                       "version": d.current_version, "has_file": bool(d.file_path), "has_text": bool((d.content or "").strip())} for d in rows]}
+                       "version": d.current_version, "has_file": bool(d.file_path), "has_text": bool((d.content or "").strip()),
+                       "may_edit": editors_only is None or can_edit(db, user, d)} for d in rows]}
 
 
 @router.get("/frameworks", dependencies=[Depends(require_studio)])
@@ -360,7 +366,7 @@ def setup_options(session_id: int, db: Session = Depends(get_db), user: GRCUser 
 @router.delete("/sessions/{session_id}", dependencies=[Depends(require_studio)])
 def delete_session(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     try:
-        service.delete_session(db, _session(db, session_id, user))
+        service.delete_session(db, _session(db, session_id, user), user)
     except service.StudioError as exc:
         raise _problem(exc)
     return {"deleted": True}

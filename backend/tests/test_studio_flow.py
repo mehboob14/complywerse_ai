@@ -649,7 +649,56 @@ def test_save_to_library_is_offered_only_to_whoever_may_change_the_document(worl
     world.db.commit()
     theirs = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
     assert theirs["may_save"] is False and world.http.get(world.api(f"/sessions/{theirs['id']}")).json()["may_save"] is False
-    assert ["may_save" in i for i in world.http.get(world.api("/sessions")).json()["items"]] == [False]    # the list does not work it out per row
+    assert [i["may_save"] for i in world.http.get(world.api("/sessions")).json()["items"]] == [False]    # each row of the list says it too
+
+
+def _sam_reads_the_library(world):
+    world.db.add_all([m.Role(id=12, tenant_id=1, name="Readers"), m.UserRole(user_id=2, role_id=12, tenant_id=1),
+                      m.Permission(id=12, name="governance:policies:view", resource="governance:policies", action="view"),
+                      m.RolePermission(role_id=12, permission_id=12)])
+    world.db.commit()
+
+
+def test_the_edit_picker_knows_which_documents_the_person_may_edit(world):
+    may_edit = lambda: {d["id"]: d["may_edit"] for d in world.http.get(world.api("/documents")).json()["items"]}
+    assert may_edit() == {10: True, 11: True}                                             # Olivia owns both
+    _sam_reads_the_library(world)
+    world.me["id"] = 2
+    assert may_edit() == {10: False}                                                      # Sam reads the published one, edits none
+    world.db.get(m.GovernanceDocument, 10).author_id = 2
+    world.db.commit()
+    assert may_edit() == {10: True}                                                       # its author may
+
+
+def test_the_edit_picker_asks_the_server_for_the_documents_the_person_may_edit_however_many_they_read(world):
+    from datetime import datetime
+
+    _sam_reads_the_library(world)
+    world.me["id"] = 2
+    older, newer = world.db.get(m.GovernanceDocument, 11), world.db.get(m.GovernanceDocument, 10)
+    older.author_id, older.updated_at, newer.updated_at = 2, datetime(2026, 1, 1), datetime(2026, 2, 1)
+    world.db.commit()
+    ids = lambda path: [d["id"] for d in world.http.get(world.api(path)).json()["items"]]
+    assert ids("/documents?limit=1") == [10]                                              # the newest he reads, not his
+    assert ids("/documents?limit=1&editable=true") == [11]                                # the one he wrote, though older
+    world.me["id"] = 1
+    assert ids("/documents?editable=true") == [10, 11]                                    # an administrator changes every one
+
+
+def test_a_readers_comparison_can_be_removed_from_their_work_and_the_document_stays(world):
+    mine = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    _sam_reads_the_library(world)
+    world.me["id"] = 2
+    theirs = world.http.post(world.api("/sessions"), json={"kind": "library", "document_id": 10}).json()
+    world.http.put(world.api(f"/sessions/{theirs['id']}/content"), json={"content": "# Mine to read\n\nNotes.\n", "base_revision": 1})
+    assert world.http.delete(world.api(f"/sessions/{theirs['id']}")).json() == {"deleted": True}
+    assert world.http.get(world.api("/sessions")).json()["items"] == []
+    assert world.db.query(m.StudioRevision).filter_by(session_id=theirs["id"]).count() == 0
+    assert world.db.get(m.GovernanceDocument, 10).status == "published"
+    # the person's own work on a document they may change is still archived in the library, never removed here
+    world.me["id"] = 1
+    refused = world.http.delete(world.api(f"/sessions/{mine['id']}"))
+    assert refused.status_code == 400 and "Archive it from the library" in refused.json()["detail"]
 
 
 def test_a_framework_is_attached_once_and_controls_about_a_topic_are_those_that_talk_about_it(world):

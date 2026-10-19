@@ -95,6 +95,13 @@ def can_edit(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
     return user.id in (doc.owner_id, doc.author_id) or _granted(db, user, "governance:policies:edit")
 
 
+def edit_filter(db: Session, user: GRCUser):
+    """``can_edit`` for a list: a condition on GovernanceDocument, or None when the person may change every document."""
+    if _granted(db, user, "governance:policies:edit"):
+        return None
+    return or_(GovernanceDocument.owner_id == user.id, GovernanceDocument.author_id == user.id)
+
+
 def can_publish(db: Session, user: GRCUser) -> bool:
     return _granted(db, user, "governance:policies:publish")
 

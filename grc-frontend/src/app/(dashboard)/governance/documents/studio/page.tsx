@@ -20,8 +20,9 @@ import { ago, plural } from '@/lib/studio/text';
 import { documentApi } from '@/lib/studio/documentApi';
 import { FrameworkList } from './_components/ReferencesPanel';
 import { DocumentDetailsFields, titleCase, useDocumentDetails } from '../_DetailsFields';
-import { NO_SIGNOFF, ReviewerApproverFields, saveSignoffChoice, type SignoffChoice } from '../_SignoffControl';
+import { NO_SIGNOFF, ReviewerApproverFields, SIGNOFF_STATUS, saveSignoffChoice, type SignoffChoice } from '../_SignoffControl';
 import { detailsPayload } from '../_detailsRead';
+import { docLine, pickable, workAction } from './_components/homeLists';
 
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const primary = 'inline-flex items-center justify-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -29,14 +30,14 @@ const secondary = 'rounded-lg border border-[#b8c4c8] bg-white px-3.5 py-2 text-
 const fieldLabel = 'text-xs font-semibold text-[#26323d]';
 const chip = 'inline-flex items-center gap-1 rounded-full border border-[#c5ccd3] bg-white px-2.5 py-1 text-xs font-semibold text-[#3f4b58] hover:bg-[#eef1f4]';
 
-function useDocs(q: string) {
-  return useQuery({ queryKey: ['studio', 'documents', q], queryFn: () => studioApi.documents(q, 12), staleTime: 30_000 });
+function useDocs(q: string, editable: boolean) {
+  return useQuery({ queryKey: ['studio', 'documents', q, 12, editable], queryFn: () => studioApi.documents(q, 12, editable), staleTime: 30_000 });
 }
 
-function DocList({ onPick, exclude, list = 'max-h-52', focus = false, empty = 'No document found.' }: { onPick: (d: LibraryDoc) => void; exclude?: number[]; list?: string; focus?: boolean; empty?: string }) {
+function DocList({ onPick, exclude, list = 'max-h-52', focus = false, empty = 'No document found.', editable = false }: { onPick: (d: LibraryDoc) => void; exclude?: number[]; list?: string; focus?: boolean; empty?: string; editable?: boolean }) {
   const [q, setQ] = useState('');
-  const docs = useDocs(q);
-  const rows = (docs.data?.items ?? []).filter((d) => !exclude?.includes(d.id) && (d.has_text || d.has_file));
+  const docs = useDocs(q, editable);         // to edit: the server lists only those the person may change
+  const rows = pickable(docs.data?.items ?? [], { exclude, editable });
   return (
     <div>
       <label className="relative block"><span className="sr-only">Search the library</span><Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-[#7b8794]" /><input autoFocus={focus} value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search the document library" className={`${input} pl-8`} /></label>
@@ -47,7 +48,7 @@ function DocList({ onPick, exclude, list = 'max-h-52', focus = false, empty = 'N
           <li key={d.id}>
             <button type="button" onClick={() => onPick(d)} className="flex w-full items-center gap-2 rounded-lg border border-[#e1e5e9] bg-white px-2.5 py-1.5 text-left hover:border-[#0f766e] hover:bg-[#f3fbf9]">
               <FileText className="h-4 w-4 shrink-0 text-[#586472]" />
-              <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#1f2933]">{d.title}</span><span className="block text-[11px] text-[#586472]">{[d.code, d.doc_type, `v${d.version}`, d.status].filter(Boolean).join(' · ')}</span></span>
+              <span className="min-w-0 flex-1"><span className="block truncate text-sm text-[#1f2933]">{d.title}</span><span className="block text-[11px] text-[#586472]">{docLine(d, DOC_TYPE_LABEL, SIGNOFF_STATUS)}</span></span>
             </button>
           </li>
         ))}
@@ -213,7 +214,7 @@ function UploadDialog({ onClose, onOpen, maxMb }: { onClose: () => void; onOpen:
 }
 
 // ── open a library document / compare ───────────────────────────────────────
-function LibraryDialog({ onClose }: { onClose: () => void }) {
+function LibraryDialog({ onClose, onCompare }: { onClose: () => void; onCompare: () => void }) {
   const { toast } = useToast();
   const router = useRouter();
   const open = useMutation({
@@ -223,7 +224,11 @@ function LibraryDialog({ onClose }: { onClose: () => void }) {
   });
   return (
     <AnimatedModal isOpen onClose={onClose} title="Edit a document from the library" size="lg">
-      <div className="p-5">{open.isPending ? <p className="text-sm text-[#3f4b58]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Opening…</p> : <DocList focus list="max-h-[50vh]" onPick={(d) => open.mutate(d)} />}</div>
+      <div className="p-5">
+        <p className="mb-2 text-xs text-[#3f4b58]">Only the documents you may edit are listed. To read one you may not edit, <button type="button" onClick={onCompare} className="font-semibold text-[#0b6b58] underline">compare it</button> instead.</p>
+        {open.isPending ? <p className="text-sm text-[#3f4b58]"><Loader2 className="mr-1 inline h-4 w-4 animate-spin" /> Opening…</p>
+          : <DocList focus editable list="max-h-[50vh]" empty="No document you may edit was found." onPick={(d) => open.mutate(d)} />}
+      </div>
     </AnimatedModal>
   );
 }
@@ -287,7 +292,7 @@ function Panel({ title, count, info, tools, children }: { title: string; count?:
   );
 }
 
-function YourWork({ sessions, loading, onOpen, onDiscard }: { sessions: Session[]; loading: boolean; onOpen: (id: number) => void; onDiscard: (s: Session) => void }) {
+function YourWork({ sessions, loading, onOpen, onDiscard, onRemove }: { sessions: Session[]; loading: boolean; onOpen: (id: number) => void; onDiscard: (s: Session) => void; onRemove: (s: Session) => void }) {
   const [q, setQ] = useState('');
   const rows = useMemo(() => sessions.filter((s) => !q.trim() || s.title.toLowerCase().includes(q.trim().toLowerCase())), [sessions, q]);
   const search = sessions.length > 5 && (
@@ -311,9 +316,11 @@ function YourWork({ sessions, loading, onOpen, onDiscard }: { sessions: Session[
                   </span>
                   <span className="shrink-0 text-[11px] text-[#586472]">{ago(s.updated_at)}</span>
                 </button>
-                {/* a library document (an upload is one) is archived in the library, never removed here; only a draft can be discarded */}
-                {s.document_id ? <span aria-hidden className="w-[22px] shrink-0" />
-                  : <button type="button" onClick={() => onDiscard(s)} aria-label={`Discard draft ${s.title}`} title="Discard this draft (it was never in the library)" className="shrink-0 rounded p-1 text-[#7b8794] hover:bg-[#fdf3f3] hover:text-[#9b1c1c] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]"><Trash2 className="h-3.5 w-3.5" /></button>}
+                {/* a library document the person may change (an upload is one) is archived in the library, never removed here; a draft
+                    can be discarded, and a document they may only read (a comparison) removed from their work */}
+                {workAction(s) === 'discard' ? <button type="button" onClick={() => onDiscard(s)} aria-label={`Discard draft ${s.title}`} title="Discard this draft (it was never in the library)" className="shrink-0 rounded p-1 text-[#7b8794] hover:bg-[#fdf3f3] hover:text-[#9b1c1c] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]"><Trash2 className="h-3.5 w-3.5" /></button>
+                  : workAction(s) === 'remove' ? <button type="button" onClick={() => onRemove(s)} aria-label={`Remove ${s.title} from my work`} title="Remove from my work (the document stays in the library)" className="shrink-0 rounded p-1 text-[#7b8794] hover:bg-[#f1f3f5] hover:text-[#26323d] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]"><X className="h-3.5 w-3.5" /></button>
+                  : <span aria-hidden className="w-[22px] shrink-0" />}
               </li>
             ))}
           </ul>
@@ -367,7 +374,7 @@ export default function StudioHomePage() {
   const del = useMutation({
     mutationFn: (s: Session) => studioApi.deleteSession(s.id),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio', 'sessions'] }),
-    onError: (e) => toast({ title: 'Could not discard it', message: problemOf(e), type: 'error' }),
+    onError: (e, s) => toast({ title: s.document_id ? 'Could not remove it' : 'Could not discard it', message: problemOf(e), type: 'error' }),
   });
   const useTemplate = useMutation({
     mutationFn: (t: TemplateItem) => studioApi.createSession({ kind: 'new', title: t.name.replace(/ \(standard structure\)$/, ''), doc_type: t.doc_type, template_id: t.id }),
@@ -401,13 +408,14 @@ export default function StudioHomePage() {
       </div>
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)]">
         <YourWork sessions={sessions.data?.items ?? []} loading={sessions.isLoading} onOpen={(id) => router.push(`/governance/documents/studio/${id}`)}
-          onDiscard={(s) => { if (window.confirm(`Discard the draft “${s.title}”? It was never in the library, so it cannot be brought back.`)) del.mutate(s); }} />
+          onDiscard={(s) => { if (window.confirm(`Discard the draft “${s.title}”? It was never in the library, so it cannot be brought back.`)) del.mutate(s); }}
+          onRemove={(s) => { if (window.confirm(`Remove “${s.title}” from your work? The document stays in the library; your notes and chat on it here are removed.`)) del.mutate(s); }} />
         <Templates onUse={(t) => useTemplate.mutate(t)} />
       </div>
 
       {dialog === 'new' && <NewDocumentDialog onClose={close} onOpen={open} prefill={prefill} />}
       {dialog === 'upload' && <UploadDialog onClose={close} onOpen={open} maxMb={status.data.max_upload_mb ?? 30} />}
-      {dialog === 'library' && <LibraryDialog onClose={close} />}
+      {dialog === 'library' && <LibraryDialog onClose={close} onCompare={() => setDialog('compare')} />}
       {dialog === 'compare' && <CompareDialog onClose={close} onOpen={(sid, other) => router.push(`/governance/documents/studio/${sid}?compare=${other.id}&title=${encodeURIComponent(other.title)}`)} />}
     </div>
   );
