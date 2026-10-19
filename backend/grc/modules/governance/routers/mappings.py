@@ -14,7 +14,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from .. import permissions
-from ..permissions import require_doc_editor, require_doc_reader, require_library_reader
+from ..permissions import require_doc_changer, require_doc_reader, require_library_reader
 from ..statement_auto_map import framework_scope
 
 router = APIRouter(prefix="/mappings", tags=["Governance - Mappings"])
@@ -501,10 +501,14 @@ def _run_state(request: Request, document_id: int) -> dict:
             age = _RUN_STALE_SECONDS + 1
         if age > _RUN_STALE_SECONDS:
             return {"status": "idle", "stale_cleared": True}
+    if state.get("error"):
+        from .policy_parser import public_job_error
+
+        state = {**state, "error": public_job_error(state["error"])}
     return state
 
 
-@router.post("/document/{document_id}/run", dependencies=[Depends(require_doc_editor)])
+@router.post("/document/{document_id}/run", dependencies=[Depends(require_doc_changer)])
 def run_document_mapping(
     document_id: int,
     body: MappingRun,
@@ -587,7 +591,7 @@ class RecommendedControlLink(BaseModel):
     link: bool = True  # True = confirm/lock the mapping; False = unlink/unlock
 
 
-@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_editor)])
+@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_changer)])
 def link_recommended_control(
     document_id: int,
     body: RecommendedControlLink,

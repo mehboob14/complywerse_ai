@@ -219,6 +219,7 @@ def submit_for_approval(
         )
     
     permissions.ensure_editor(db, current_user, document)
+    permissions.ensure_not_archived(document)
     if document.status not in ["draft", "pending_review"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -341,6 +342,7 @@ def approve_step(
         )
     
     _ensure_step_approver(db, current_user, step)
+    permissions.ensure_not_archived(step.document)     # approving it would bring it out of the archive
     if step.status != "pending":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -438,6 +440,7 @@ def reject_step(
             detail="Access denied"
         )
     _ensure_step_approver(db, current_user, step)
+    permissions.ensure_not_archived(step.document)
     
     # Temporary simplified model: any logged-in user from the same tenant can
     # reject a pending document review step.
@@ -1160,6 +1163,7 @@ def advance_workflow(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document not found"
         )
+    permissions.ensure_not_archived(document)          # each of its steps sets the document's status
     
     instance = db.query(DocumentWorkflowInstance).options(
         joinedload(DocumentWorkflowInstance.template).joinedload(WorkflowTemplate.steps),
@@ -1354,7 +1358,7 @@ def advance_workflow(
     return result
 
 
-@router.post("/documents/{document_id}/rollback", dependencies=[Depends(permissions.require_doc_editor)])
+@router.post("/documents/{document_id}/rollback", dependencies=[Depends(permissions.require_doc_changer)])
 def rollback_workflow(
     document_id: int,
     request: RollbackWorkflowRequest,
@@ -1450,7 +1454,7 @@ def rollback_workflow(
     }
 
 
-@router.post("/documents/{document_id}/cancel", dependencies=[Depends(permissions.require_doc_editor)])
+@router.post("/documents/{document_id}/cancel", dependencies=[Depends(permissions.require_doc_changer)])
 def cancel_workflow(
     document_id: int,
     request: CancelWorkflowRequest,

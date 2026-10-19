@@ -1,4 +1,6 @@
 from ....config import get_openai_model
+import contextlib
+import logging
 import os
 import io
 import csv
@@ -25,11 +27,12 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
 from ....services.ai_gateway.errors import AIBlocked
-from .policy_parser import extract_text_from_file, _create_version_snapshot
+from .policy_parser import extract_text_from_file, _create_version_snapshot, public_job_error
 from ..action_logger import log_governance_action
-from ..permissions import ensure_editor, ensure_not_archived, require_doc_editor, require_doc_reader
+from ..permissions import ensure_editor, ensure_not_archived, require_doc_changer, require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/gap-analysis", tags=["Policy Gap Analysis"])
+logger = logging.getLogger(__name__)
 
 AI_INTEGRATIONS_OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 AI_INTEGRATIONS_OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
@@ -364,7 +367,7 @@ def serialize_run(run: PolicyGapAnalysisRun) -> dict:
         "not_applicable_count": run.not_applicable_count,
         "compliance_percentage": run.compliance_percentage,
         "ai_model_used": None,              # kept in the database; the page never shows a model name (the key stays for old readers)
-        "error_message": run.error_message,
+        "error_message": public_job_error(run.error_message),       # the stored text stays for the logs
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "created_by": run.created_by,
@@ -569,6 +572,7 @@ def run_gap_analysis(
             detail="Document not found or access denied"
         )
     ensure_editor(db, current_user, document)
+    ensure_not_archived(document)                      # its gap runs stay as they are until it is restored
 
     policy_text = get_document_text(document)
     if not policy_text or not policy_text.strip():
@@ -651,11 +655,8 @@ def run_gap_analysis(
             async_result = _gap_task.delay(tenant_slug, run_ids, request.document_id, current_user.id)
             task_id = async_result.id
         except Exception as _celery_exc:  # noqa: BLE001
-            print(
-                f"[DISPATCH] gap_analysis → celery FAILED, falling back to thread "
-                f"(reason: {type(_celery_exc).__name__}: {_celery_exc!s:.140s})",
-                flush=True,
-            )
+            logger.warning("gap_analysis: celery dispatch failed, falling back to a thread (%s: %.140s)",
+                           type(_celery_exc).__name__, _celery_exc)
             force_thread = True
 
     if force_thread:
@@ -674,11 +675,9 @@ def run_gap_analysis(
             raise HTTPException(status_code=503, detail="The gap analysis could not be started now. Try again in a minute.")
         dispatched_via = "thread"
 
-    print(
-        f"[DISPATCH] gap_analysis → {dispatched_via} task_id={task_id} "
-        f"tenant={tenant_slug} doc={request.document_id} runs={len(run_ids)}",
-        flush=True,
-    )
+    with contextlib.suppress(Exception):            # the runs are on their way: a diagnostic never turns that into an error
+        logger.info("gap_analysis dispatched via %s task_id=%s tenant=%s doc=%s runs=%s", dispatched_via, task_id, tenant_slug,
+                    request.document_id, len(run_ids))
 
     return {
         "message": f"Gap analysis queued for {len(all_runs)} framework(s). Check status for results.",
@@ -1076,6 +1075,7 @@ def generate_finding_fix(
             detail="Source document not found"
         )
     ensure_editor(db, current_user, document)
+    ensure_not_archived(document)                      # a fix could not be applied to it
 
     drafted = _generate_clause_fix(document, finding)
     finding.suggested_clause_text = drafted["proposed_text"]
@@ -1273,7 +1273,7 @@ def _sync_statement_on_apply(
             finding.applied_statement_id = new_stmt.id
             finding.applied_statement_prev_text = None  # marks a created statement
     except Exception as sync_exc:  # noqa: BLE001
-        print(f"[GAP APPLY] statement sync skipped: {type(sync_exc).__name__}: {sync_exc}", flush=True)
+        logger.warning("gap apply: statement sync skipped: %s: %s", type(sync_exc).__name__, sync_exc)
 
 
 @router.post("/findings/{finding_id}/apply-fix")
@@ -2096,7 +2096,7 @@ class GapRecommendedControlLinkRequest(BaseModel):
     finding_id: Optional[int] = None
 
 
-@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_editor)])
+@router.post("/document/{document_id}/recommended-controls/link", dependencies=[Depends(require_doc_changer)])
 def link_gap_recommended_control(
     document_id: int,
     body: GapRecommendedControlLinkRequest,

@@ -12,7 +12,7 @@ from ....models import (
 )
 from ....routers.auth_router import require_auth, get_user_tenants, is_tenant_admin
 from ..schema_migrations import ensure_assigned_column
-from ...governance.permissions import require_doc_editor, require_doc_reader, visible_filter
+from ...governance.permissions import ensure_not_archived, require_doc_editor, require_doc_reader, visible_filter
 
 
 def _ensure_statement_schema(db: Session = Depends(get_db)) -> None:
@@ -478,6 +478,7 @@ def update_statement(
     if not statement:
         raise HTTPException(status_code=404, detail="Statement not found")
     _ensure_may_change(db, statement, current_user)
+    ensure_not_archived(statement.document)          # an archived document's statements stay as they are (D29)
     
     if update_data.category is not None:
         statement.category = update_data.category

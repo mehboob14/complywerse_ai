@@ -247,12 +247,7 @@ def test_the_reports_on_tasks_leave_out_other_peoples_document_tasks_too(http):
     db = http.db
     participants(db)
     signoff.send_for_review(5, db, user(db, 1))                                 # a draft: Rana (2) and Rafay (3) review it
-    other = manual_task(db)
-    db.add(m.Role(id=40, tenant_id=1, name="Task staff"))                       # Uma may report on tasks, not read the draft
-    db.add(m.Permission(id=40, name="critical_tasks:tasks:view", resource="critical_tasks:tasks", action="view"))
-    db.add(m.RolePermission(role_id=40, permission_id=40))
-    db.add(m.UserRole(user_id=6, role_id=40, tenant_id=1))
-    db.commit()
+    other = manual_task(db)                     # Uma may report on tasks (everyone holds the world's Staff role), not read the draft
     app = FastAPI()
     app.include_router(reporting.router)
     app.dependency_overrides[m.get_db] = lambda: db
@@ -355,6 +350,6 @@ def test_the_link_in_a_task_is_the_apps_address_when_it_is_known(world, monkeypa
     with world.factory() as db:
         life.save_settings(db, 1, {"task_description": "Open {link}"}, 1)
         publish(db)
-        assert ack_task(db)[1].description == "Open /governance/documents/5"               # no address set: the path
+        assert ack_task(db)[1].description == "Open /governance/documents/5?act=ack"       # no address set: the path
         monkeypatch.setenv("FRONTEND_URL", "https://cfsb.example.test/")
-        assert life.task_values(db, ack_task(db)[0], doc(db))["link"] == "https://cfsb.example.test/governance/documents/5"
+        assert life.task_values(db, ack_task(db)[0], doc(db))["link"] == "https://cfsb.example.test/governance/documents/5?act=ack"

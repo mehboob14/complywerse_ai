@@ -62,7 +62,8 @@ def _json_after(prompt, marker):
 def tasks_http(wire, monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     tables = [m.Tenant, m.GRCUser, m.CriticalTask, m.CriticalTaskSubTask, m.CriticalTaskComment, m.CriticalTaskHistory,
-              m.CriticalTaskApproval, m.NotificationPreference]
+              m.CriticalTaskApproval, m.NotificationPreference,
+              m.Role, m.UserRole, m.Permission, m.RolePermission]          # the workload counts the tasks the person's board shows
     Base.metadata.create_all(engine, tables=[t.__table__ for t in tables])
     db = sessionmaker(bind=engine)()
     db.add(m.Tenant(id=1, name="Bank", slug="bank"))

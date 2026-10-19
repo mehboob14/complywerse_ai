@@ -27,7 +27,7 @@ from ....routers.auth_router import require_auth, get_user_tenants
 from ....services import esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
 from .. import doc_lifecycle
-from ..permissions import ensure_not_archived, require_doc_editor, require_doc_reader
+from ..permissions import ensure_not_archived, require_doc_changer, require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/documents", tags=["Governance - Sign-off"])
 
@@ -167,21 +167,26 @@ def _signatures(db: Session, document_id: int) -> List[DocumentSignature]:
     return (q.filter(DocumentSignature.signed_at >= since) if since else q).all()
 
 
+def _required(db: Session, tenant_ids: List[int], stage_assignments: List[DocumentSignoffAssignment]) -> List[Set[int]]:
+    """The expanded user set of each participant of a stage that must sign it. One nobody can sign for (a role or team without
+    users of this platform, an imported or deleted account: no ``doc_lifecycle._people``) is left out while another participant of
+    the stage can sign (Send for review names it in its notice); when none can, every one is required, as before."""
+    members = [_resolve_target_users(db, tenant_ids, a.target_type, a.target_id) for a in stage_assignments]
+    signable = [m for m in members if doc_lifecycle._people(db, m)]
+    return signable or members
+
+
 def _stage_complete(db: Session, tenant_ids: List[int], document_id: int, role_type: str,
                     assignments: List[DocumentSignoffAssignment],
                     signatures: List[DocumentSignature]) -> bool:
-    """A stage is complete when EVERY required assignment for that role has at least
+    """A stage is complete when EVERY required assignment for that role (``_required``) has at least
     one signature from a member of its expanded user set. (Named users must each
     sign; a role/team is satisfied by any one member.)"""
     stage_assignments = [a for a in assignments if a.role_type == role_type]
     if not stage_assignments:
         return False
     signer_ids = {s.signer_user_id for s in signatures if s.role_type == role_type}
-    for a in stage_assignments:
-        members = _resolve_target_users(db, tenant_ids, a.target_type, a.target_id)
-        if not (members & signer_ids):
-            return False
-    return True
+    return all(members & signer_ids for members in _required(db, tenant_ids, stage_assignments))
 
 
 def advance_if_complete(db: Session, doc: GovernanceDocument, tenant_ids: List[int], by: Optional[int]) -> Optional[str]:
@@ -315,13 +320,9 @@ def get_signoff(
 
     progress = {}
     for rt in ("reviewer", "approver"):
-        stage_assignments = [a for a in assignments if a.role_type == rt]
-        signed = 0
-        for a in stage_assignments:
-            members = _resolve_target_users(db, user_tenants, a.target_type, a.target_id)
-            if members & {s.signer_user_id for s in signatures if s.role_type == rt}:
-                signed += 1
-        progress[rt] = {"required": len(stage_assignments), "signed": signed}
+        required = _required(db, user_tenants, [a for a in assignments if a.role_type == rt])      # as _stage_complete counts them
+        signers = {s.signer_user_id for s in signatures if s.role_type == rt}
+        progress[rt] = {"required": len(required), "signed": sum(1 for members in required if members & signers)}
 
     actionable = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
 
@@ -349,7 +350,7 @@ def get_signoff(
     }
 
 
-@router.put("/{document_id}/signoff/participants", dependencies=[Depends(require_doc_editor)])
+@router.put("/{document_id}/signoff/participants", dependencies=[Depends(require_doc_changer)])
 def set_participants(
     document_id: int,
     body: ParticipantsUpdate,
@@ -367,9 +368,14 @@ def set_participants(
 
     # a person newly named must use the platform; one already named is sent back as it is (prepared-by is, by the details dialog)
     had = {(a.role_type, a.target_id) for a in _assignments(db, document_id) if a.target_type == "user"}
-    refuse_imported_accounts(db, [it.target_id for role_type, items in (("prepared_by", body.prepared_by), ("reviewer", body.reviewers),
-                                                                        ("approver", body.approvers))
-                                  for it in (items or []) if it.target_type == "user" and (role_type, it.target_id) not in had])
+    named = [int(it.target_id) for role_type, items in (("prepared_by", body.prepared_by), ("reviewer", body.reviewers),
+                                                        ("approver", body.approvers))
+             for it in (items or []) if it.target_type == "user" and (role_type, it.target_id) not in had]
+    unknown = set(named) - {uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.id.in_(named))} if named else set()
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Nobody with user id {min(unknown)} uses this platform. Choose another person.")
+    refuse_imported_accounts(db, named)
 
     db.query(DocumentSignoffAssignment).filter(
         DocumentSignoffAssignment.document_id == document_id

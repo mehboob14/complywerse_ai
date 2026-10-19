@@ -79,8 +79,9 @@ _PENDING_STAGE = ("pending_review", "pending_approval")
 
 
 def _link(doc, kind: str = "") -> str:
-    """Where a notification or a task about ``doc`` opens: the document itself to acknowledge it, else its Approvals."""
-    return f"/governance/documents/{doc.id}" + ("" if kind == "acknowledgement" else "?tab=lifecycle")
+    """Where a notification or a task about ``doc`` opens: for a request (``kind``), the document with the person's own step open
+    (``action_href``: ?act=ack / ?act=sign, as Pending approvals, My Approvals and the tasks open it), else its Approvals."""
+    return action_href(doc.id, kind) if kind in _ACT else f"/governance/documents/{doc.id}?tab=lifecycle"
 
 
 def _app_url(path: str) -> str:
@@ -301,6 +302,20 @@ def _members(db, doc, a) -> List[int]:
     return _people(db, _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id))
 
 
+TASKS_VIEW = "critical_tasks:tasks:view"          # what opens Task Management (critical_tasks_router)
+
+
+def _task_viewers(db) -> set:
+    """Who may open Task Management, as its router checks it (auth_router.has_tenant_permission, as one query): administrators,
+    and holders of ``TASKS_VIEW`` through a role the platform gave them. Only they get a task for a request."""
+    from ...models import Permission, RolePermission, UserRole
+    from ...routers.auth_router import PLATFORM_GRANT
+
+    held = {uid for (uid,) in db.query(UserRole.user_id).join(RolePermission, RolePermission.role_id == UserRole.role_id)
+            .join(Permission, Permission.id == RolePermission.permission_id).filter(PLATFORM_GRANT, Permission.name == TASKS_VIEW)}
+    return held | permissions.admin_user_ids(db)
+
+
 def _names(db, ids: Iterable[int]) -> Dict[int, str]:
     from ...models import GRCUser
 
@@ -341,12 +356,13 @@ def _history(db, task_id: int, user_id: Optional[int], action: str, field=None, 
                                old_value=None if old is None else str(old), new_value=None if new is None else str(new)))
 
 
-def _open_twin(db, ob, doc, by: Optional[int], cfg: Optional[Dict[str, Any]] = None) -> None:
-    """The request's Task Management task, as Governance > Settings > Task creation says (none when it is switched off)."""
+def _open_twin(db, ob, doc, by: Optional[int], cfg: Optional[Dict[str, Any]] = None, viewers: Optional[set] = None) -> None:
+    """The request's Task Management task, as Governance > Settings > Task creation says (none when it is switched off), for a
+    person who may open Task Management (``_task_viewers``; ``viewers`` when the caller looked them up)."""
     from ...models import CriticalTask
 
     spec = task_settings(cfg or settings(db, ob.tenant_id), ob.kind)
-    if not spec.create:
+    if not spec.create or ob.user_id not in (_task_viewers(db) if viewers is None else viewers):
         return
     values = task_values(db, ob, doc, spec)
     ct = CriticalTask(
@@ -395,6 +411,7 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
     already = {o.user_id for o in _pending(db, doc.id, [kind])}
     asked: List[int] = []
     cfg = settings(db, doc.tenant_id)
+    viewers = _task_viewers(db) if task_settings(cfg, kind).create else set()
     for uid in dict.fromkeys(int(u) for u in user_ids if u):
         if uid in already:
             continue
@@ -403,9 +420,16 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
                                 due_date=datetime.utcnow() + timedelta(days=days))
         db.add(ob)
         db.flush()
-        _open_twin(db, ob, doc, by, cfg)
+        _open_twin(db, ob, doc, by, cfg, viewers)
         asked.append(uid)
     return asked
+
+
+def _with_task(db, doc, kind: str, user_ids: Iterable[int]) -> set:
+    """Of ``user_ids``, who got a Task Management task for their waiting ``kind`` request (``_open_twin``): only they are told
+    it is in their tasks."""
+    ids = set(user_ids)
+    return {o.user_id for o in _pending(db, doc.id, [kind]) if o.user_id in ids and o.critical_task_id} if ids else set()
 
 
 # ── hooks called by the sign-off, publish and participant flows ──────────────
@@ -423,10 +447,11 @@ def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
     for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
         if not signed & _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id):     # as _stage_complete counts it
             asked += _request(db, doc, kind, _members(db, doc, a), by, days, a.id)
-    where = "in your tasks and " if task_settings(cfg, kind).create else ""      # no task when Settings switched them off
-    _notify(db, doc, asked, f"{_NOUN[kind]} requested: {doc.title}",
-            f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
-            f"It is {where}in the document's Approvals.", "warning", event="request")
+    tasked = _with_task(db, doc, kind, asked)       # none when Settings switched tasks off, nor for who cannot open Task Management
+    for who, where in ((tasked, "in your tasks and "), (set(asked) - tasked, "")):
+        _notify(db, doc, who, f"{_NOUN[kind]} requested: {doc.title}",
+                f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
+                f"It is {where}in the document's Approvals.", "warning", link=_link(doc, kind), event="request")
     _mark_emailed(db, doc.id, kind, asked)
 
 
@@ -699,10 +724,11 @@ def request_acknowledgements(db, doc, user_ids: Optional[Iterable[int]] = None, 
     cfg = settings(db, doc.tenant_id)
     asked = _request(db, doc, "acknowledgement", [u for u in pool if u not in have], by,
                      days or due_days(cfg, "acknowledgement"), version=number)
-    _notify(db, doc, asked, f"Please acknowledge: {doc.title}",
-            f"\"{doc.title}\" has been published. Read it and acknowledge it before the due date"
-            + ("; it is in your tasks." if task_settings(cfg, "acknowledgement").create else "."), "info",
-            link=_link(doc, "acknowledgement"), event="published", only=("in_app",))    # its email: one daily list per person (_email_waiting)
+    tasked = _with_task(db, doc, "acknowledgement", asked)
+    for who, end in ((tasked, "; it is in your tasks."), (set(asked) - tasked, ".")):
+        _notify(db, doc, who, f"Please acknowledge: {doc.title}",
+                f"\"{doc.title}\" has been published. Read it and acknowledge it before the due date{end}", "info",
+                link=_link(doc, "acknowledgement"), event="published", only=("in_app",))    # its email: one daily list per person (_email_waiting)
     return len(asked)
 
 

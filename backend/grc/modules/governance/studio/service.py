@@ -111,7 +111,8 @@ def session_view(db, s, *, content: bool = True, user=None) -> Dict[str, Any]:
            # Save to library is for someone who may change that document, on each row of the list too (a reader's comparison can be
            # removed from their work); only on the session's own page, the work (or a tidied Word file) Save to library would keep
            # ponytail: one rights lookup per library row of the list (at most 100); look the rights up once per list if it gets slow
-           "may_save": may_save(db, s, user),
+           # nor while the document is archived (D29; document_status says so): it is restored first
+           "may_save": may_save(db, s, user) and not (doc is not None and doc.status == "archived"),
            **({"unsaved_in_library": _unsaved(s) if doc is not None else False} if content else {}),
            "revision": s.revision_no, "base_label": s.base_label, "instructions": s.instructions or {}, "settings": s.settings or {},
            "template_id": s.template_id, "source": {"kind": s.source_kind, "name": s.source_name, "in_place": bool(s.source_kind == "docx" and s.native_map)},

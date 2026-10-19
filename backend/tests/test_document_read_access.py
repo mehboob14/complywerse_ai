@@ -282,7 +282,8 @@ def test_complychat_leaves_governance_documents_out_for_someone_outside_the_libr
 
 # ── every route with a {document_id} has a document guard ───────────────────
 GUARDS = {permissions.require_doc_reader, permissions.require_doc_editor, permissions.require_doc_publisher,
-          permissions.require_doc_deleter, permissions.require_library_reader}
+          permissions.require_doc_deleter, permissions.require_library_reader,
+          permissions.require_doc_changer}                                  # require_doc_editor, and not while archived
 EXCEPTIONS = {   # path, method: why it needs no document guard
     ("/governance/documents/{document_id}/workflow/advance", "POST"): "decided by the workflow step's approver (its own check)",
     ("/governance/documents/{document_id}/workflow/reject", "POST"): "decided by the workflow step's approver (its own check)",

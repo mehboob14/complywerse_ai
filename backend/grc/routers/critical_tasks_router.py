@@ -712,27 +712,29 @@ def reports_summary(
     current_user: GRCUser = Depends(require_auth),
 ):
     user_tenants = get_user_tenants(current_user, db)
-    base = db.query(CriticalTask).filter(CriticalTask.tenant_id.in_(user_tenants))
+    from ..modules.governance import doc_lifecycle, permissions
+    reads_all = permissions.visible_filter(db, current_user) is None
+
+    def board(query):       # what the board lists (_without_others_document_tasks): every count is of those tasks only
+        return doc_lifecycle.without_others_tasks(query.filter(CriticalTask.tenant_id.in_(user_tenants)), current_user, reads_all)
+
+    base = board(db.query(CriticalTask))
 
     total = base.count()
     by_status = dict(
-        db.query(CriticalTask.status, func.count(CriticalTask.id))
-        .filter(CriticalTask.tenant_id.in_(user_tenants))
+        board(db.query(CriticalTask.status, func.count(CriticalTask.id)))
         .group_by(CriticalTask.status).all()
     )
     by_priority = dict(
-        db.query(CriticalTask.priority, func.count(CriticalTask.id))
-        .filter(CriticalTask.tenant_id.in_(user_tenants))
+        board(db.query(CriticalTask.priority, func.count(CriticalTask.id)))
         .group_by(CriticalTask.priority).all()
     )
     by_source = dict(
-        db.query(CriticalTask.source, func.count(CriticalTask.id))
-        .filter(CriticalTask.tenant_id.in_(user_tenants))
+        board(db.query(CriticalTask.source, func.count(CriticalTask.id)))
         .group_by(CriticalTask.source).all()
     )
     by_category = dict(
-        db.query(CriticalTask.category, func.count(CriticalTask.id))
-        .filter(CriticalTask.tenant_id.in_(user_tenants))
+        board(db.query(CriticalTask.category, func.count(CriticalTask.id)))
         .group_by(CriticalTask.category).all()
     )
 
@@ -775,10 +777,9 @@ def reports_summary(
 
     owner_workload = {}
     owner_tasks = (
-        db.query(GRCUser.display_name, GRCUser.username, func.count(CriticalTask.id))
-        .join(CriticalTask, CriticalTask.assigned_owner_id == GRCUser.id)
+        board(db.query(GRCUser.display_name, GRCUser.username, func.count(CriticalTask.id))
+              .join(CriticalTask, CriticalTask.assigned_owner_id == GRCUser.id))
         .filter(
-            CriticalTask.tenant_id.in_(user_tenants),
             CriticalTask.status.notin_(["Completed", "Verified"]),
         )
         .group_by(GRCUser.display_name, GRCUser.username)
@@ -789,12 +790,11 @@ def reports_summary(
 
     completion_by_source = {}
     source_stats = (
-        db.query(
+        board(db.query(
             CriticalTask.source,
             func.count(CriticalTask.id),
             func.count(case((CriticalTask.status.in_(["Completed", "Verified"]), 1))),
-        )
-        .filter(CriticalTask.tenant_id.in_(user_tenants))
+        ))
         .group_by(CriticalTask.source)
         .all()
     )
@@ -2027,12 +2027,12 @@ def ai_balance_workload(
 ):
     from ..modules.governance import doc_lifecycle
     user_tenants = get_user_tenants(current_user, db)
-    tasks = db.query(CriticalTask).options(
+    tasks = _without_others_document_tasks(db, current_user, db.query(CriticalTask).options(       # the board's tasks only
         joinedload(CriticalTask.assigned_owner),
     ).filter(
         CriticalTask.tenant_id.in_(user_tenants),
         CriticalTask.status.notin_(["Completed", "Verified"]),
-    ).all()
+    )).all()
 
     if not tasks:
         return {"suggestions": [], "message": "No active tasks to balance"}
