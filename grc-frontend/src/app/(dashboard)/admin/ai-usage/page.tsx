@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   adminApi,
@@ -86,7 +87,7 @@ export default function TokenUsagePage() {
       // default: first (largest) module expanded
       setExpanded((prev) => (Object.keys(prev).length ? prev : (res.data.modules[0] ? { [res.data.modules[0].module_key]: true } : {})));
     } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Failed to load token usage.');
+      setError(detailText(e?.response?.data?.detail) || 'Failed to load token usage.');
     } finally {
       if (silent) setRefreshing(false); else setLoading(false);
     }
@@ -529,7 +530,7 @@ function BudgetModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
   const firstRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    adminApi.getTokenBudgets().then((r) => setB(r.data)).catch((e) => setErr(e?.response?.data?.detail || 'Failed to load budgets.'));
+    adminApi.getTokenBudgets().then((r) => setB(r.data)).catch((e) => setErr(detailText(e?.response?.data?.detail) || 'Failed to load budgets.'));
   }, []);
 
   const save = async () => {
@@ -545,7 +546,7 @@ function BudgetModal({ onClose, onSaved }: { onClose: () => void; onSaved: () =>
       await adminApi.updateTokenBudgets(payload);
       onSaved();
     } catch (e: any) {
-      setErr(e?.response?.data?.detail || 'Failed to save.');
+      setErr(detailText(e?.response?.data?.detail) || 'Failed to save.');
     } finally {
       setSaving(false);
     }

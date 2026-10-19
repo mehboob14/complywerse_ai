@@ -1,6 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ncaName } from './_ncaName.ts';
+import { fileKind, ncaName } from './_ncaName.ts';
+
+test('a template shows the kind of file it is, not its raw file name', () => {
+  assert.equal(fileKind('DCC Assessment and Compliance Tool V1.0xlsx.xlsx'), 'Excel');
+  assert.equal(fileKind('Cryptography_Template_en-.docx'), 'Word');
+  assert.equal(fileKind('Plan.PDF'), 'PDF');
+  assert.equal(fileKind('notes.odt'), 'ODT');
+  assert.equal(fileKind(''), '');
+});
 
 test('NCA names read as names, not file names', () => {
   const cases: [string, string][] = [

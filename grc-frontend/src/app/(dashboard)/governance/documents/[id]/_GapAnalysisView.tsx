@@ -11,15 +11,18 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowUpDown, BarChart3, Calendar, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Download, Edit3, GitCompare, Loader2, Minus, Play,
-  Search, ShieldAlert, ShieldCheck, Sparkles, User, Wand2, X,
+  RotateCcw, Search, ShieldAlert, ShieldCheck, Sparkles, User, Wand2, X,
 } from 'lucide-react';
 import apiClient, { governanceApi } from '@/lib/api';
+import { apiErrorText } from '@/lib/apiError';
+import { parseUtc } from '@/lib/serverTime';
 import { MultiSelectDropdown, PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { useLibraryDocuments } from '../_DetailsFields';
 import { versionLabel } from '../_view/versionLabel';
 import { formatDate } from './_DocumentViewer';
+import { frameworkTypeLabel, lastFailedRuns } from './_gapAnalysis';
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   fully_compliant: { bg: 'bg-emerald-50', text: 'text-emerald-800', label: 'Fully compliant' },
@@ -116,6 +119,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   const [showNcaCompareModal, setShowNcaCompareModal] = useState(false);
   const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<number[]>([]);
   const [gapFrameworkSearch, setGapFrameworkSearch] = useState('');
+  const [runError, setRunError] = useState('');           // why the Run dialog's run did not start, shown in the dialog
   const [expandedRows, setExpandedRows] = useState<Set<number>>(new Set());
   const [editingRow, setEditingRow] = useState<number | null>(null);
   const [editAction, setEditAction] = useState<string | null>(null);
@@ -234,9 +238,13 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       setShowGapModal(false);
       setSelectedFrameworkIds([]);
       setGapFrameworkSearch('');
+      setRunError('');
     },
-    onError: (error: any) => toast({ type: 'error', title: 'Not started', message: error?.response?.data?.detail || 'The gap analysis could not be started.' }),
+    // a failure is told where the run was asked for: in the Run dialog, or as a toast for Run again (each call says); the runs are
+    // asked for again, as the server marks them failed when it could not start them (a 503)
+    onError: () => queryClient.invalidateQueries({ queryKey: ['gap-analysis-runs', id] }),
   });
+  const notStarted = (error: unknown) => apiErrorText(error, 'The gap analysis could not be started.');
   const updateFindingMutation = useMutation({
     mutationFn: ({ findingId, data }: { findingId: number; data: Record<string, any> }) => governanceApi.updateGapFinding(findingId, data),
     onSuccess: () => {
@@ -324,10 +332,11 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
     }
   };
   const handleRunAnalysis = () => {
-    if (selectedFrameworkIds.length === 0) runGapAnalysisMutation.mutate({ document_id: id, run_all: true });
-    else runGapAnalysisMutation.mutate({ document_id: id, framework_ids: selectedFrameworkIds });
+    setRunError('');
+    runGapAnalysisMutation.mutate(selectedFrameworkIds.length === 0 ? { document_id: id, run_all: true } : { document_id: id, framework_ids: selectedFrameworkIds },
+      { onError: (e) => setRunError(notStarted(e)) });
   };
-  const closeGapModal = () => { setShowGapModal(false); setSelectedFrameworkIds([]); setGapFrameworkSearch(''); };
+  const closeGapModal = () => { setShowGapModal(false); setSelectedFrameworkIds([]); setGapFrameworkSearch(''); setRunError(''); };
   const toggleFramework = (fwId: number) => setSelectedFrameworkIds((prev) => (prev.includes(fwId) ? prev.filter((i) => i !== fwId) : [...prev, fwId]));
   const toggleRowExpand = (rowId: number) => setExpandedRows((prev) => {
     const next = new Set(prev);
@@ -348,6 +357,14 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   const totalPages = Math.ceil(totalFindings / gapFilters.limit);
   const currentPage = Math.floor(gapFilters.skip / gapFilters.limit);
   const running = runs.filter((r: any) => r.status === 'running' || r.status === 'queued');
+  // the frameworks whose last run failed, with the server's reason, until they are run again
+  const failed = lastFailedRuns(runs);
+  const runFailedAgain = () => {
+    const ids = Array.from(new Set(failed.map((r: any) => r.uploaded_framework_id).filter((v: any) => v != null))) as number[];
+    if (!ids.length) { setShowGapModal(true); return; }
+    runGapAnalysisMutation.mutate({ document_id: id, framework_ids: ids },
+      { onError: (e) => toast({ type: 'error', title: 'Not started', message: notStarted(e) }) });
+  };
 
   return (
     <div className="space-y-4">
@@ -409,6 +426,24 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
             })}
           </div>
         )}
+        {failed.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2.5" role="group" aria-label="Runs that did not finish">
+            <ul className="min-w-0 flex-1 space-y-1">
+              {failed.map((r: any) => (
+                <li key={r.id} className="text-xs text-[#7a1616]">
+                  <span className="font-semibold">{r.framework_name || `Run ${r.id}`}</span>
+                  {r.started_at && <span className="text-[#8a2c2c]"> · {parseUtc(r.started_at)?.toLocaleDateString()}</span>}
+                  : {r.error_message || 'The gap analysis did not finish.'}
+                </li>
+              ))}
+            </ul>
+            {canEdit && (
+              <button type="button" onClick={runFailedAgain} disabled={runGapAnalysisMutation.isPending} className={BTN}>
+                {runGapAnalysisMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Run again
+              </button>
+            )}
+          </div>
+        )}
       </section>
 
       <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} />
@@ -450,7 +485,8 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
             ) : (
               <>
                 <p className="text-sm font-medium text-[#1f2933]">No findings yet</p>
-                <p className="text-sm text-[#586472]">{canEdit ? 'Run a gap analysis to check the document against frameworks.' : 'Its editors run a gap analysis to check it against frameworks.'}</p>
+                <p className="text-sm text-[#586472]">{failed.length ? 'The last gap analysis did not finish; the reason is above.'
+                  : canEdit ? 'Run a gap analysis to check the document against frameworks.' : 'Its editors run a gap analysis to check it against frameworks.'}</p>
               </>
             )}
           </div>
@@ -668,7 +704,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
               ) : (() => {
                 const term = gapFrameworkSearch.trim().toLowerCase();
                 const visible = term
-                  ? (uploadedFrameworks as any[]).filter((fw) => [fw.name, fw.short_code, fw.framework_type, fw.regulator, fw.source_organization, fw.version]
+                  ? (uploadedFrameworks as any[]).filter((fw) => [fw.name, fw.short_code, fw.framework_type, frameworkTypeLabel(fw.framework_type), fw.regulator, fw.source_organization, fw.version]
                     .filter(Boolean).join(' ').toLowerCase().includes(term))
                   : (uploadedFrameworks as any[]);
                 if (visible.length === 0) return <p className="py-4 text-center text-sm text-[#586472]">No framework matches &ldquo;{gapFrameworkSearch}&rdquo;.</p>;
@@ -689,7 +725,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                         <span className="min-w-0 flex-1">
                           <span className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-medium text-[#1f2933]">{fw.name || `Framework ${fw.id}`}</span>
-                            {(fw.short_code || fw.framework_type) && <span className="rounded bg-[#eef1f4] px-1.5 py-0.5 font-mono text-xs text-[#3f4b58]">{fw.short_code || fw.framework_type}</span>}
+                            {(fw.short_code || fw.framework_type) && (
+                              <span className={`rounded bg-[#eef1f4] px-1.5 py-0.5 text-xs text-[#3f4b58] ${fw.short_code ? 'font-mono' : ''}`}>{fw.short_code || frameworkTypeLabel(fw.framework_type)}</span>
+                            )}
                           </span>
                           <span className="mt-0.5 flex flex-wrap items-center gap-3 text-xs text-[#586472]">
                             {fw.version && <span>{versionLabel(fw.version)}</span>}
@@ -703,6 +741,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                 );
               })()}
             </div>
+            {runError && <p role="alert" className="mb-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-[#7a1616]">{runError}</p>}
             <div className="flex justify-end gap-2 border-t border-[#e3e8ec] pt-4">
               <button type="button" onClick={closeGapModal} className={BTN}>Cancel</button>
               <button type="button" onClick={handleRunAnalysis} disabled={runGapAnalysisMutation.isPending} className={PRIMARY}>

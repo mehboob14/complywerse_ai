@@ -165,6 +165,7 @@ export function RegisterTable({
 
   const ids = (selected: GovDoc[]) => selected.map((d) => d.id);
 
+  // the rows get tick boxes only when the bulk bar has something for this person to do
   const offered = new Set(bulkActionIds(showingArchived));
   const bulkActions: BulkAction<GovDoc>[] = canEdit
     ? ([
@@ -200,7 +201,7 @@ export function RegisterTable({
         data={rows}
         columns={columns}
         loading={loading}
-        selectable
+        selectable={bulkActions.length > 0}
         bulkActions={bulkActions}
         bulkBarVariant="dark"
         exportable

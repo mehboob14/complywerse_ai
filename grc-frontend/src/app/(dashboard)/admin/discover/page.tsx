@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { detailText } from '@/lib/apiError';
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
@@ -272,7 +273,7 @@ export default function DiscoverPage() {
         </div>
         {discoverMut.isError && (
           <div className="mt-3 text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2">
-            {(discoverMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail ||
+            {detailText((discoverMut.error as { response?: { data?: { detail?: string } } })?.response?.data?.detail) ||
               'Discovery failed.'}
           </div>
         )}

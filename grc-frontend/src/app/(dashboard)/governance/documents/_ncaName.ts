@@ -18,3 +18,11 @@ export function ncaName(raw: string): string {
     return i > 0 && SMALL.has(lower) ? lower : lower.charAt(0).toUpperCase() + lower.slice(1);
   }).join(' ');
 }
+
+const KINDS: Record<string, string> = { doc: 'Word', docx: 'Word', xls: 'Excel', xlsx: 'Excel', pdf: 'PDF', md: 'Text', txt: 'Text' };
+
+/** What kind of file a template is, from its file name: "…V1.0xlsx.xlsx" -> "Excel", "…_Template_en-.docx" -> "Word". */
+export function fileKind(filename: string): string {
+  const ext = /\.([a-z0-9]+)$/i.exec(filename || '')?.[1]?.toLowerCase() || '';
+  return KINDS[ext] || ext.toUpperCase();
+}

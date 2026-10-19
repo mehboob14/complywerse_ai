@@ -1,5 +1,6 @@
 'use client';
 
+import { detailText } from '@/lib/apiError';
 import { Fragment, useEffect, useState } from 'react';
 import { Eye, Lock } from 'lucide-react';
 import { RightSlidePanel } from '@/components/ui';
@@ -78,7 +79,7 @@ export default function CallPanel({ id, onClose, onOpenUseCase }: { id: number |
     let live = true;
     apiClient.get<CallDetail>(`/admin/ai-governance/activity/${id}`)
       .then((r) => { if (live) setDetail(r.data); })
-      .catch((e) => { if (live) setError(e?.response?.data?.detail || 'Could not load this call.'); });
+      .catch((e) => { if (live) setError(detailText(e?.response?.data?.detail) || 'Could not load this call.'); });
     return () => { live = false; };
   }, [id]);
 
@@ -89,7 +90,7 @@ export default function CallPanel({ id, onClose, onOpenUseCase }: { id: number |
       const r = await apiClient.post<Revealed>(`/admin/ai-governance/activity/${id}/reveal`);
       setShown(r.data);
     } catch (e: any) {
-      setRevealError(e?.response?.data?.detail || 'Could not show the text.');
+      setRevealError(detailText(e?.response?.data?.detail) || 'Could not show the text.');
     } finally {
       setRevealing(false);
     }

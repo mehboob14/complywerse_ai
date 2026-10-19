@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { assigneeOptions, assigneePlaceholder, sentToast, type SignoffTargets } from './signoffTargets.ts';
+import { assigneeOptions, assigneePlaceholder, chosenFrom, sentToast, withChosen, type SignoffTargets } from './signoffTargets.ts';
 
 const targets: SignoffTargets = {
   users: [{ id: 3, name: 'zara Khan', email: 'z@x.test' }, { id: 1, name: 'Olivia Owner', email: null }, { id: 2, name: 'Bilal', email: 'b@x.test' }],
@@ -32,9 +32,30 @@ test('the placeholder names only what can be picked', () => {
 
 test('Send for review shows what the server says nobody can sign, and "Not sent" when the document stayed a draft', () => {
   assert.deepEqual(sentToast({ status: 'pending_review', notice: null }, 'Reviewers were asked'),
-    { type: 'success', title: 'Sent', message: 'Reviewers were asked' });
+    { type: 'success', title: 'Sent for review', message: 'Reviewers were asked' });
   const notice = 'Nobody in DigitalOcean: team My Team can sign it; choose other approvers.';
-  assert.deepEqual(sentToast({ status: 'pending_review', notice }, 'x'), { type: 'warning', title: 'Sent', message: notice });
+  assert.deepEqual(sentToast({ status: 'pending_review', notice }, 'x'), { type: 'warning', title: 'Sent for review', message: notice });
   assert.equal(sentToast({ status: 'draft', notice }, 'x').title, 'Not sent');
   assert.equal(sentToast(undefined, 'Sent to them').message, 'Sent to them');           // an older server: no notice
+});
+
+test('a document with no reviewers (or none who can sign) is said to go for approval, as it does', () => {
+  assert.equal(sentToast({ status: 'pending_approval', notice: null }, 'Approvers were asked').title, 'Sent for approval');
+  assert.equal(sentToast({ status: 'pending_approval', notice: 'Nobody can review it; it went to its approvers.' }, 'x').title, 'Sent for approval');
+  assert.equal(sentToast(undefined, 'x').title, 'Sent');
+});
+
+test('a saved participant missing from the options shows under its saved name, can be unticked, and keeps its name', () => {
+  const options = assigneeOptions(targets);
+  const saved = [{ target_type: 'user', target_id: 2, display: 'Bilal' }, { target_type: 'role', target_id: 40, display: 'Role: DigitalOcean admins' }];
+  const shown = withChosen(options, saved);
+  assert.deepEqual(shown[0], { value: 'role:40', label: 'Role: DigitalOcean admins', subLabel: 'Cannot sign: untick to remove it' });
+  assert.equal(shown.length, options.length + 1);                                     // Bilal is an option already: not twice
+  assert.equal(withChosen(options, saved.slice(0, 1)), options);
+  assert.equal(withChosen([], saved)[1].subLabel, undefined);                         // options not loaded yet: nothing claimed
+  assert.equal(withChosen(options, [{ target_type: 'user', target_id: 77 }])[0].label, 'user #77');
+
+  // ticking another one keeps the saved name; unticking the unknown one removes it
+  assert.deepEqual(chosenFrom(['role:40', 'team:5'], saved), [saved[1], { target_type: 'team', target_id: 5 }]);
+  assert.deepEqual(chosenFrom(['user:2'], saved), [saved[0]]);
 });

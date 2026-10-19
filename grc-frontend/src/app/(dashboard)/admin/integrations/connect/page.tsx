@@ -2,6 +2,7 @@
 
 export const dynamic = 'force-dynamic';
 
+import { detailText } from '@/lib/apiError';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { apiClient } from '@/lib/api';
@@ -229,7 +230,7 @@ export default function ConnectWizardPage({
       const r = await apiClient.post('/connect-wizard/issue-token', { platform: p });
       setTokenData(r.data as IssueTokenResp);
     } catch (e: any) {
-      setError(e?.response?.data?.detail || e?.message || 'Failed to start wizard');
+      setError(detailText(e?.response?.data?.detail) || e?.message || 'Failed to start wizard');
     } finally {
       setIssuing(false);
     }

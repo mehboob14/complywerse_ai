@@ -3,6 +3,7 @@
 import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { governanceApi, ermApi } from '@/lib/api';
+import { apiErrorText } from '@/lib/apiError';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   FileText,
@@ -801,11 +802,12 @@ function RecommendedControlsSection({
   );
 }
 
-export default function GovernanceMappingsPage({ initialDocumentId, canEdit = true }: { initialDocumentId?: number; canEdit?: boolean } = {}) {
+export default function GovernanceMappingsPage({ initialDocumentId, canEdit }: { initialDocumentId?: number; canEdit?: boolean } = {}) {
   // `initialDocumentId` (passed when embedded in a document's Mappings tab) only
   // pre-selects that document — the full UI (picker + stats + both panels) stays
   // exactly like the standalone Mappings page. `canEdit`: the person may change that
-  // document (runs and links need it); without it the tab is read only.
+  // document (its editors, the owner among them: the server lets them run and link);
+  // when given it decides, without it the tab is read only. Not given: the rights decide.
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
   const [selectedDocumentId, setSelectedDocumentId] = useState<number | null>(initialDocumentId ?? null);
@@ -816,8 +818,8 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit = tr
   const [linkError, setLinkError] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
-  const canCreate = hasPermission('governance:mappings:create') && canEdit;
-  const canDelete = hasPermission('governance:mappings:delete') && canEdit;
+  const canCreate = canEdit ?? hasPermission('governance:mappings:create');
+  const canDelete = canEdit ?? hasPermission('governance:mappings:delete');
   // the internal (ERM) controls are behind the ERM right: not asked for without it (a 403 for everyone else)
   const canErm = hasPermission('erm:risks:view');
 
@@ -936,7 +938,7 @@ export default function GovernanceMappingsPage({ initialDocumentId, canEdit = tr
       setLinkError(null);
     },
     onError: (error: any) => {
-      setLinkError(error?.response?.data?.detail || 'Failed to link control to document.');
+      setLinkError(apiErrorText(error, 'Failed to link control to document.'));
     },
   });
 

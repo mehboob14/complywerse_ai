@@ -12,7 +12,7 @@ import { governanceApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { parseUtc } from '@/lib/serverTime';
-import { assigneeOptions, assigneePlaceholder, sentToast, type TargetOption } from '@/lib/signoffTargets';
+import { assigneeOptions, assigneePlaceholder, chosenFrom, sentToast, withChosen, type TargetOption } from '@/lib/signoffTargets';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import { retryUnlessRefused } from './_view/docRoute';
@@ -82,6 +82,8 @@ export function useAssigneeOptions(_tenantId?: number): Option[] {
   return useMemo(() => assigneeOptions(targetsQ.data), [targetsQ.data]);
 }
 
+/** Who reviews or approves; one saved before that is not among the options (a connector's role, someone removed) still shows,
+ *  under its saved name, and can be unticked. */
 export function AssigneeMultiSelect({
   label, hint, value, onChange, options,
 }: { label: string; hint?: string; value: Participant[]; onChange: (p: Participant[]) => void; options: Option[] }) {
@@ -92,17 +94,15 @@ export function AssigneeMultiSelect({
       </label>
       <MultiSelectDropdown
         title={label}
-        items={options}
+        items={withChosen(options, value)}
         selectedValues={value.map((p) => `${p.target_type}:${p.target_id}`)}
-        onApply={(vals: string[]) => onChange(vals.map((v) => {
-          const [t, id] = v.split(':');
-          return { target_type: t, target_id: Number(id) };
-        }))}
+        onApply={(vals: string[]) => onChange(chosenFrom(vals, value))}
         multiSelect
         triggerVariant="input"
         placeholder={assigneePlaceholder(options)}
         size="md"
         forceSearch
+        namesInTrigger
       />
     </div>
   );
