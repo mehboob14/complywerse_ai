@@ -89,7 +89,7 @@ def document_access(document_id: int, db: Session = Depends(get_db), user: GRCUs
 
 
 def _may_annotate(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
-    """Remarks: its editors, auditors and the people taking part in its sign-off (``permissions.ensure_annotator``)."""
+    """Remarks: everyone who can read it (``permissions.ensure_annotator``)."""
     from ..permissions import ensure_annotator
 
     try:

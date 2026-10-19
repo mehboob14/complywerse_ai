@@ -213,6 +213,24 @@ def test_the_chain_lists_every_version_with_who_changed_what_the_stage_and_the_a
     assert c["document"]["title"] == "Information Security Policy"
 
 
+def test_the_change_log_keeps_the_whole_approval_trail_and_its_export_names_each_step(library):
+    """Reviews, approvals, acknowledgements, withdrawn requests, removed reviewers, owner changes and returns to draft are in the
+    change log and its export (the user, 2026-10-19: who did what and when, an approval log to view and export)."""
+    db = library.db
+    t0 = datetime(2026, 10, 1, 9, 0)
+    steps = ("reviewed", "approved", "acknowledged", "request_cancelled", "participant_removed", "owner_assigned", "return_to_draft")
+    for i, action in enumerate(steps):
+        _audit(db, 10, 1, action, t0 + timedelta(hours=i), details=f"{action} detail")
+    _audit(db, 10, 1, "viewed", t0 + timedelta(hours=9))                  # opening it is not a step of the log
+    library.me["id"] = 1
+    c = library.chain()
+    assert [e["kind"] for e in c["events"]] == list(steps)
+    rows = C.catalog(c)["approvals"]
+    assert [r[1] for r in rows] == ["Reviewed", "Approved", "Acknowledged", "Request withdrawn", "Reviewer or approver removed",
+                                    "Owner changed", "Returned to draft"]
+    assert (rows[2][2], rows[2][3]) == ("Olivia Owner", "acknowledged detail")
+
+
 def test_a_stored_change_set_is_used_as_written_and_a_file_without_text_is_marked_not_comparable(library):
     db = library.db
     doc = db.get(m.GovernanceDocument, 10)

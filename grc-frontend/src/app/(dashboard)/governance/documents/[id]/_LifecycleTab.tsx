@@ -381,7 +381,7 @@ export function SettingsCard({ inPopup = false }: { inPopup?: boolean }) {
 }
 
 // ── the tab ──────────────────────────────────────────────────────────────────
-export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnotate = true, settings = true, ownSteps = true }: {
+export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnotate = true, settings = true, ownSteps = true, discussion = true }: {
   documentId: number; doc: any;
   /** who may change the document: participants, Send and Remind */
   canEdit?: boolean;
@@ -391,6 +391,8 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
   settings?: boolean;
   /** the person's own sign / acknowledge step (the AI Studio's view asks for those in its own popups) */
   ownSteps?: boolean;
+  /** the Discussion at its foot (the AI Studio's view has it as a view of its own) */
+  discussion?: boolean;
 }) {
   const queryClient = useQueryClient();
   const base = `/governance/documents/${documentId}/lifecycle`;
@@ -439,7 +441,7 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
       <Timeline events={data.timeline} />
       {settings && <SettingsCard />}
 
-      {canAnnotate && (
+      {discussion && canAnnotate && (
         <section className="rounded-xl border border-gray-200 bg-white p-4">
           <h3 className="mb-1 text-sm font-semibold text-gray-900">Discussion</h3>
           <p className="mb-3 text-xs text-gray-500">Everyone involved (the author, reviewers and approvers) can comment here.</p>

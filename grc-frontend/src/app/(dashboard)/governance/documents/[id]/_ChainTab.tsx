@@ -1,6 +1,6 @@
 'use client';
 
-// The document's "Change chain": every version from the original (the uploaded file, or the first version written here) to the
+// The document's change log (the "change chain"): every version from the original (the uploaded file, or the first version written here) to the
 // document as it is now, with who changed what, from what to what, on whose request and from which sources, the approvals in
 // between, each version's size (major or minor), file to download and text to read as it was, and the whole chain as a table that exports to Excel, PDF and CSV. The next person
 // to review reads what each person before them changed. Backend: governance/change_chain.py.
@@ -54,6 +54,18 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   status_changed: { label: 'Status changed', icon: GitCommitVertical, tone: SLATE },
   review_completed: { label: 'Review completed', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   version_rollback: { label: 'Earlier version restored', icon: History, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  // the rest of the approval trail the document's history records
+  submitted: { label: 'Submitted', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  reviewed: { label: 'Reviewed', icon: ShieldCheck, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  approved: { label: 'Approved', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  acknowledged: { label: 'Acknowledged', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  review_skipped: { label: 'Review skipped', icon: GitCommitVertical, tone: SLATE },
+  request_cancelled: { label: 'Request withdrawn', icon: XCircle, tone: SLATE },
+  participant_removed: { label: 'Reviewer or approver removed', icon: Users, tone: SLATE },
+  owner_assigned: { label: 'Owner changed', icon: Users, tone: SLATE },
+  return_to_draft: { label: 'Returned to draft', icon: RotateCcw, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  escalated: { label: 'Escalated', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  delegated: { label: 'Delegated', icon: Send, tone: SLATE },
 };
 
 /** sources with nothing to name them by (a change made on the person's request) are labelled by what they rest on, not "Source" */
@@ -435,7 +447,7 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
       const { blob, filename } = await documentChainApi.exportFile(documentId, format);
       saveBlob(blob, filename);
     } catch (e) {
-      toast({ type: 'error', title: 'Could not export the chain', message: problemOf(e) });
+      toast({ type: 'error', title: 'Could not export the change log', message: problemOf(e) });
     } finally {
       setExporting(null);
     }
@@ -453,8 +465,8 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
   };
 
   if (q.isLoading) return <div className="flex h-40 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-primary-600" /></div>;
-  if (q.isError || !data) return <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{problemOf(q.error, 'The change chain could not be read.')}</p>;
-  if (!data.enabled) return <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-[#334155]">The change chain is not enabled for your organisation.</p>;
+  if (q.isError || !data) return <p className="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert">{problemOf(q.error, 'The change log could not be read.')}</p>;
+  if (!data.enabled) return <p className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-[#334155]">The change log is not enabled for your organisation.</p>;
   const s = data.summary;
   const latest = currentVersion ?? data.document?.version;
   const found = data.sources.filter((x) => x.verified === true).length;
@@ -467,16 +479,16 @@ export default function ChainTab({ documentId, currentVersion, onShowInDocument,
           <div className="flex min-w-0 items-start gap-3">
             <span className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary-50 text-[#0b6b58]"><History className="h-5 w-5" strokeWidth={1.75} aria-hidden /></span>
             <div className="min-w-0">
-              <h3 className="text-base font-semibold text-slate-900">Change chain</h3>
+              <h3 className="text-base font-semibold text-slate-900">Change log</h3>
               <p className={`mt-0.5 max-w-3xl text-xs ${MUTED}`}>
-                Every version from the original to now: who changed what, from what to what, on whose request and from which sources, and the approvals in between.
+                Every version from the original to now: who changed what and when, from what to what, on whose request and from which sources, and every review, approval and acknowledgement in between. Export it as Excel, PDF or CSV.
                 The next person to review sees what each person before them changed.
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <span className={`hidden text-[11px] font-medium uppercase tracking-wide sm:inline ${MUTED}`}>Export</span>
-            <div className="inline-flex overflow-hidden rounded-lg border border-[#cbd5e1] bg-white" role="group" aria-label="Export the chain">
+            <div className="inline-flex overflow-hidden rounded-lg border border-[#cbd5e1] bg-white" role="group" aria-label="Export the change log">
               {([['xlsx', 'Excel', FileSpreadsheet], ['pdf', 'PDF', FileText], ['csv', 'CSV', FileDown]] as const).map(([fmt, label, Icon], i) => (
                 <button key={fmt} type="button" disabled={exporting !== null} onClick={() => download(fmt)}
                   className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-[#334155] hover:bg-primary-50 hover:text-[#0b6b58] disabled:opacity-60 ${i ? 'border-l border-[#cbd5e1]' : ''}`}>

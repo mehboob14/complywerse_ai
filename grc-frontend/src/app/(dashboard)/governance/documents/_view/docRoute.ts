@@ -1,14 +1,15 @@
 // Which document view a URL opens. Old ?tab= links (emails, tasks, bookmarks) keep working.
 
-export type DocView = 'document' | 'approvals' | 'statements' | 'mappings' | 'gaps' | 'versions';
+export type DocView = 'document' | 'approvals' | 'discussion' | 'statements' | 'mappings' | 'gaps' | 'versions';
 
 export const VIEWS: { key: DocView; label: string }[] = [
   { key: 'document', label: 'Document' },
   { key: 'approvals', label: 'Approvals' },
+  { key: 'discussion', label: 'Discussion' },
   { key: 'statements', label: 'Statements' },
   { key: 'mappings', label: 'Mappings' },
   { key: 'gaps', label: 'Gap analysis' },
-  { key: 'versions', label: 'Versions' },
+  { key: 'versions', label: 'Change log' },          // every version and change, who and when, the approvals; exports
 ];
 
 /** The views that work on the library (its statements, framework mappings and gap analyses): for people who read the library. */
@@ -20,7 +21,9 @@ const ALIASES: Record<string, DocView> = {
   approvals: 'approvals',
   lifecycle: 'approvals',
   'sign-off': 'approvals',
-  discussion: 'approvals',
+  discussion: 'discussion',
+  comments: 'discussion',
+  remarks: 'discussion',
   'review-history': 'approvals',
   statements: 'statements',
   mappings: 'mappings',
@@ -29,6 +32,10 @@ const ALIASES: Record<string, DocView> = {
   'gap-analysis': 'gaps',
   versions: 'versions',
   chain: 'versions',
+  'change-log': 'versions',
+  changelog: 'versions',
+  log: 'versions',
+  history: 'versions',
 };
 
 /** The studio view is on for this tenant. There is no way to the classic page (the user, 2026-10-17): ?classic=1 is ignored, and

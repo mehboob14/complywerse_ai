@@ -354,24 +354,28 @@ def test_a_draft_never_published_is_hidden_from_staff_but_not_from_its_owner_edi
         assert get(world, who, f"/governance/documents/{DRAFT}").json()["content"] == "# Access standard\n", who
 
 
-def test_remarks_are_written_by_editors_auditors_and_the_people_taking_part_only(world):
+def test_everyone_who_reads_a_document_comments_and_the_people_taking_part_resolve_others(world):
     url = f"/governance/documents/{TEXT}/annotations"
-    for who in (STAFF, ACKER):                                             # reading it, or asked to acknowledge it, is not enough
-        world.me["id"] = who
-        r = world.http.post(url, json={"comment": "A remark."})
-        assert (r.status_code, r.json()["detail"]) == (403, P.ANNOTATE_REFUSED), who
-    ids = []
-    for who in (REVIEWER, PREPARER, OWNER, EDITOR, AUDITOR):
+    ids = {}
+    for who in (STAFF, ACKER, REVIEWER, PREPARER, OWNER, EDITOR, AUDITOR):   # reading it, or asked to acknowledge it, is enough
         world.me["id"] = who
         r = world.http.post(url, json={"comment": f"From {who}."})
         assert r.status_code == 201, who
-        ids.append(r.json()["id"])
+        ids[who] = r.json()["id"]
     world.me["id"] = STAFF
-    assert world.http.put(f"{url}/{ids[0]}", json={"status": "resolved"}).status_code == 403
-    assert world.http.delete(f"{url}/{ids[0]}").status_code == 403
-    world.me["id"] = PREPARER                                              # someone taking part may resolve another's remark
-    assert world.http.put(f"{url}/{ids[0]}", json={"status": "resolved"}).json()["status"] == "resolved"
-    assert world.http.get(url).json()["total"] == 5
+    listing = world.http.get(url).json()
+    assert (listing["total"], listing["me"], listing["can_moderate"]) == (7, STAFF, False)
+    r = world.http.put(f"{url}/{ids[REVIEWER]}", json={"status": "resolved"})
+    assert (r.status_code, r.json()["detail"]) == (403, P.MODERATE_REFUSED)          # another person's remark
+    assert world.http.delete(f"{url}/{ids[REVIEWER]}").status_code == 403
+    assert world.http.put(f"{url}/{ids[STAFF]}", json={"status": "resolved"}).json()["status"] == "resolved"   # their own
+    assert world.http.delete(f"{url}/{ids[STAFF]}").status_code == 204
+    world.me["id"] = PREPARER                                              # someone taking part resolves another's remark
+    assert world.http.get(url).json()["can_moderate"] is True
+    assert world.http.put(f"{url}/{ids[ACKER]}", json={"status": "resolved"}).json()["status"] == "resolved"
+    assert world.http.get(url).json()["total"] == 6
+    world.me["id"] = OUTSIDER                                              # who cannot read it neither reads nor writes
+    assert world.http.post(url, json={"comment": "Hello."}).status_code == 403
 
 
 # ── the review findings of 2026-10-17 (fix round 5) ──────────────────────────
@@ -398,7 +402,6 @@ def test_staff_read_the_version_published_last_whatever_the_status(world, status
         world.me["id"] = ACKER
         r = world.http.post(f"/governance/documents/{TEXT}/lifecycle/acknowledge", json={"version": "1.0"})
         assert r.status_code == 200, r.text
-
 
 def ids(w, who, path):
     return {i["id"] for i in get(w, who, path).json()["items"]}

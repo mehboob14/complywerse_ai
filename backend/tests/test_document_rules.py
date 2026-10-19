@@ -190,14 +190,25 @@ def test_the_guards_say_not_found_first_then_refuse(world):
     P.ensure_reader(db, u(OWNER), world.doc(DRAFT))
 
 
-def test_remarks_are_for_editors_auditors_and_the_people_taking_part(world):
+def test_remarks_are_for_everyone_who_can_read_it_and_resolving_others_for_the_people_taking_part(world):
+    """The Discussion (the user, 2026-10-19: anybody - acknowledgers, approvers, reviewers - can comment): writing a remark needs
+    only to be able to read the document; resolving another person's is for its editors, auditors and sign-off people."""
     db, u = world.db, world.user
+    for uid in range(1, 19):
+        for d in ALL:
+            if P.can_read(db, u(uid), world.doc(d)):
+                P.ensure_annotator(db, u(uid), world.doc(d))
+            else:
+                with pytest.raises(HTTPException) as e:
+                    P.ensure_annotator(db, u(uid), world.doc(d))
+                assert e.value.status_code == 403, (uid, d)
+    P.ensure_annotator(db, u(ASKED), world.doc(IN_REVIEW))                # asked to acknowledge it: they comment too
+    P.ensure_annotator(db, u(VIEWER), world.doc(PUBLISHED))               # a library reader on a published one
     for uid in (OWNER, AUTHOR, EDITOR, ADMIN, AUDITOR, BYNAME, BYROLE, MEMBER, LEAD):
-        P.ensure_annotator(db, u(uid), world.doc(DRAFT))
+        assert P.may_moderate(db, u(uid), world.doc(DRAFT)), uid
     for uid in (VIEWER, PUBLISHER, ASKED, STAFF, OUTSIDER, IMPORTED):
-        with pytest.raises(HTTPException) as e:
-            P.ensure_annotator(db, u(uid), world.doc(DRAFT))
-        assert (e.value.status_code, e.value.detail) == (403, P.ANNOTATE_REFUSED), uid
+        assert not P.may_moderate(db, u(uid), world.doc(DRAFT)), uid
+    assert not P.may_moderate(db, u(ASKED), world.doc(IN_REVIEW))
 
 
 def test_the_version_in_force_while_a_new_one_is_on_its_way(world):

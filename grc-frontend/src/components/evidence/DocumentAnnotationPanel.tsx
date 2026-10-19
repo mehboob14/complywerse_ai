@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import apiClient from '@/lib/api';
+import { parseUtc } from '@/lib/serverTime';
 import {
   MessageSquarePlus,
   MessageSquare,
@@ -48,7 +49,13 @@ interface Props {
   /** Optional: get notified when the annotation list changes (e.g. for
    *  the parent viewer to re-render highlight spans). */
   onAnnotationsChanged?: (annotations: AnnotationRow[]) => void;
+  /** 'page': the document's Discussion view (a card, no passage to select); 'sidebar' (default): beside the evidence viewer */
+  variant?: 'sidebar' | 'page';
 }
+
+/** What the server answers: the remarks, and who reads them (a remark's author edits, resolves and deletes it; the document's
+ *  editors, auditors and sign-off people may also resolve other people's). Older servers send no `me` / `can_moderate`. */
+interface Remarks { annotations: AnnotationRow[]; total: number; me?: number; can_moderate?: boolean }
 
 /**
  * Annotation sidebar for the EvidenceViewer when the file being shown is
@@ -62,6 +69,7 @@ export default function DocumentAnnotationPanel({
   onAnchorConsumed,
   onJumpToAnchor,
   onAnnotationsChanged,
+  variant = 'sidebar',
 }: Props) {
   const qc = useQueryClient();
   const [newComment, setNewComment] = useState('');
@@ -75,7 +83,7 @@ export default function DocumentAnnotationPanel({
     }
   }, [pendingAnchor]);
 
-  const { data, isLoading, error } = useQuery<{ annotations: AnnotationRow[]; total: number }>({
+  const { data, isLoading, error } = useQuery<Remarks>({
     queryKey: ['document-annotations', documentId],
     queryFn: async () => {
       const res = await apiClient.get(`/governance/documents/${documentId}/annotations`);
@@ -129,6 +137,9 @@ export default function DocumentAnnotationPanel({
   };
 
   const items = data?.annotations || [];
+  const mine = (a: AnnotationRow) => data?.me == null || a.user_id === data.me;
+  const mayResolve = (a: AnnotationRow) => data?.can_moderate !== false || mine(a);
+  const page = variant === 'page';
   const openCount = items.filter((a) => a.status === 'open').length;
   const resolvedCount = items.length - openCount;
 
@@ -140,12 +151,12 @@ export default function DocumentAnnotationPanel({
   }, [items]);
 
   return (
-    <div className="flex h-full flex-col border-l border-slate-200 bg-slate-50/50">
+    <div className={page ? 'flex flex-col overflow-hidden rounded-xl border border-[#d5dbe1] bg-white' : 'flex h-full flex-col border-l border-slate-200 bg-slate-50/50'}>
       {/* Header */}
       <div className="flex items-center justify-between border-b border-slate-200 bg-white px-3 py-2.5">
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-slate-500" />
-          <p className="text-sm font-semibold text-slate-900">Remarks</p>
+          <p className="text-sm font-semibold text-slate-900">{page ? 'Comments' : 'Remarks'}</p>
           <span className="text-[10px] text-slate-500 uppercase tracking-wide">
             {openCount} open · {resolvedCount} resolved
           </span>
@@ -168,7 +179,7 @@ export default function DocumentAnnotationPanel({
         )}
         {!isLoading && !error && items.length === 0 && (
           <div className="rounded-lg border border-dashed border-slate-300 p-4 text-center text-xs text-slate-500">
-            No remarks yet. Select a passage in the document or type below to add one.
+            {page ? 'No comments yet. Write the first one below.' : 'No remarks yet. Select a passage in the document or type below to add one.'}
           </div>
         )}
 
@@ -178,11 +189,11 @@ export default function DocumentAnnotationPanel({
               <AnnotationCard
                 key={a.id}
                 annotation={a}
-                onDelete={() => deleteMutation.mutate(a.id)}
-                onToggleStatus={() => toggleStatusMutation.mutate({
+                onDelete={mine(a) ? () => deleteMutation.mutate(a.id) : undefined}
+                onToggleStatus={mayResolve(a) ? () => toggleStatusMutation.mutate({
                   id: a.id,
                   status: a.status === 'open' ? 'resolved' : 'open',
-                })}
+                }) : undefined}
                 onJump={onJumpToAnchor ? () => {
                   const ad = a.anchor_data as PendingAnchor;
                   if (ad && typeof ad.start_offset === 'number') onJumpToAnchor(ad);
@@ -204,11 +215,11 @@ export default function DocumentAnnotationPanel({
               <AnnotationCard
                 key={a.id}
                 annotation={a}
-                onDelete={() => deleteMutation.mutate(a.id)}
-                onToggleStatus={() => toggleStatusMutation.mutate({
+                onDelete={mine(a) ? () => deleteMutation.mutate(a.id) : undefined}
+                onToggleStatus={mayResolve(a) ? () => toggleStatusMutation.mutate({
                   id: a.id,
                   status: a.status === 'open' ? 'resolved' : 'open',
-                })}
+                }) : undefined}
                 deletePending={deleteMutation.isPending}
               />
             ))}
@@ -239,20 +250,20 @@ export default function DocumentAnnotationPanel({
           value={newComment}
           onChange={(e) => setNewComment(e.target.value)}
           rows={3}
-          placeholder={pendingAnchor ? 'Comment on the selected passage…' : 'Add a general remark…'}
-          className="w-full rounded-md border border-slate-300 p-2 text-xs focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          placeholder={pendingAnchor ? 'Comment on the selected passage…' : page ? 'Write a comment for everyone working on this document…' : 'Add a general remark…'}
+          className={`w-full rounded-md border border-slate-300 p-2 ${page ? 'text-sm' : 'text-xs'} focus:border-[#0f766e] focus:outline-none focus:ring-2 focus:ring-[#0f766e]/20`}
         />
         <div className="flex items-center justify-between gap-2">
           <p className="text-[10px] text-slate-500">
-            {pendingAnchor ? 'Anchored to selection' : 'No anchor — posted as a general comment'}
+            {pendingAnchor ? 'Anchored to selection' : page ? 'Everyone who can open this document reads it.' : 'No anchor — posted as a general comment'}
           </p>
           <button
             type="submit"
             disabled={createMutation.isPending || !newComment.trim()}
-            className="inline-flex items-center gap-1 rounded-md bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-white"
+            className="inline-flex items-center gap-1 rounded-md bg-[#0f766e] hover:bg-[#0b5f58] disabled:opacity-50 px-3 py-1.5 text-xs font-medium text-[#fff]"
           >
             {createMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <MessageSquarePlus className="h-3 w-3" />}
-            Save remark
+            {page ? 'Post comment' : 'Save remark'}
           </button>
         </div>
         {createMutation.isError && (
@@ -274,12 +285,12 @@ function AnnotationCard({
   deletePending,
 }: {
   annotation: AnnotationRow;
-  onDelete: () => void;
-  onToggleStatus: () => void;
+  onDelete?: () => void;
+  onToggleStatus?: () => void;
   onJump?: () => void;
   deletePending: boolean;
 }) {
-  const date = new Date(annotation.created_at);
+  const date = parseUtc(annotation.created_at) ?? new Date(annotation.created_at);     // the server's time is UTC
   const isResolved = annotation.status === 'resolved';
   const quoted = (annotation.anchor_data as PendingAnchor)?.quoted_text;
   return (
@@ -290,21 +301,29 @@ function AnnotationCard({
           <span className="text-[10px] text-slate-500 flex-shrink-0">{date.toLocaleDateString()} {date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          <button
-            onClick={onToggleStatus}
-            className={`rounded p-0.5 ${isResolved ? 'text-emerald-600 hover:text-emerald-800' : 'text-slate-400 hover:text-slate-700'}`}
-            title={isResolved ? 'Reopen' : 'Mark resolved'}
-          >
-            <Check className="h-3 w-3" />
-          </button>
-          <button
-            onClick={onDelete}
-            disabled={deletePending}
-            className="rounded p-0.5 text-slate-400 hover:text-rose-600 disabled:opacity-50"
-            title="Delete remark"
-          >
-            <Trash2 className="h-3 w-3" />
-          </button>
+          {onToggleStatus && (
+            <button
+              type="button"
+              onClick={onToggleStatus}
+              className={`rounded p-0.5 ${isResolved ? 'text-emerald-600 hover:text-emerald-800' : 'text-slate-400 hover:text-slate-700'}`}
+              title={isResolved ? 'Reopen' : 'Mark resolved'}
+              aria-label={isResolved ? 'Reopen' : 'Mark resolved'}
+            >
+              <Check className="h-3 w-3" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              disabled={deletePending}
+              className="rounded p-0.5 text-slate-400 hover:text-rose-600 disabled:opacity-50"
+              title="Delete remark"
+              aria-label="Delete remark"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          )}
         </div>
       </div>
       {quoted && (

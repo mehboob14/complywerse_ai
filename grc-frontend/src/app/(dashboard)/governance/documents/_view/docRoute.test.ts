@@ -23,7 +23,8 @@ test('viewOf maps every old tab and every new view', () => {
     ['document', 'document'],
     ['lifecycle', 'approvals'],
     ['sign-off', 'approvals'],
-    ['discussion', 'approvals'],
+    ['discussion', 'discussion'],               // the Discussion is a view of its own again
+    ['comments', 'discussion'],
     ['review-history', 'approvals'],
     ['approvals', 'approvals'],
     ['statements', 'statements'],
@@ -33,6 +34,8 @@ test('viewOf maps every old tab and every new view', () => {
     ['gaps', 'gaps'],
     ['chain', 'versions'],
     ['versions', 'versions'],
+    ['change-log', 'versions'],                 // the Change log
+    ['history', 'versions'],
   ];
   for (const [tab, view] of cases) assert.equal(viewOf(tab), view, tab);
 });
@@ -47,14 +50,15 @@ test('viewOf ignores case and spaces, falls back to document', () => {
   assert.equal(viewOf('constructor'), 'document');
 });
 
-test('VIEWS lists the six views in order; statements, mappings and gap analysis are the library\'s', () => {
+test('VIEWS lists the seven views in order; statements, mappings and gap analysis are the library\'s', () => {
   assert.deepEqual(VIEWS.map((v) => [v.key, v.label]), [
     ['document', 'Document'],
     ['approvals', 'Approvals'],
+    ['discussion', 'Discussion'],
     ['statements', 'Statements'],
     ['mappings', 'Mappings'],
     ['gaps', 'Gap analysis'],
-    ['versions', 'Versions'],
+    ['versions', 'Change log'],
   ]);
   assert.deepEqual(VIEWS.filter((v) => LIBRARY_VIEWS.has(v.key)).map((v) => v.key), ['statements', 'mappings', 'gaps']);
   for (const tab of ['statements', 'mappings', 'gap-analysis']) assert.ok(LIBRARY_VIEWS.has(viewOf(tab)), tab);

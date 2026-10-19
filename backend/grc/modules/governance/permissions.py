@@ -55,8 +55,8 @@ ARCHIVED_REFUSED = ("This document is archived, so it is no longer in force; it 
 LIBRARY_REFUSED = "Only people allowed to read the document library can see this."
 ARCHIVED_LOCKED = "This document is archived. Restore it to change it."     # archived documents are read, never changed (D29)
 RESTORE_FIRST = "Restore it from the archive first."
-ANNOTATE_REFUSED = ("Only the document's owner, its author, someone allowed to edit documents, an auditor or someone taking part "
-                    "in its sign-off can add remarks to it.")
+MODERATE_REFUSED = ("Only the person who wrote it, the document's owner, its author, someone allowed to edit documents, an auditor or "
+                    "someone taking part in its sign-off can resolve another person's remark.")
 
 SIGNOFF_KINDS = ("prepared_by", "reviewer", "approver")
 # a new version of a published document is on its way in these statuses; the version published stays in force meanwhile
@@ -294,9 +294,15 @@ def ensure_reader(db: Session, user: GRCUser, doc: GovernanceDocument) -> None:
 
 
 def ensure_annotator(db: Session, user: GRCUser, doc: GovernanceDocument) -> None:
-    """Remarks on a document: its editors, auditors and the people taking part in its sign-off."""
-    if not (can_edit(db, user, doc) or is_auditor(db, user) or participant(db, user, doc.id)):
-        raise _forbidden(ANNOTATE_REFUSED)
+    """Remarks on a document (its Discussion): everyone who can read it - its editors and auditors, the people asked to review,
+    approve or acknowledge it, the library's readers (the user, 2026-10-19: anybody can add comments)."""
+    ensure_reader(db, user, doc)
+
+
+def may_moderate(db: Session, user: GRCUser, doc: GovernanceDocument) -> bool:
+    """Who may resolve or reopen another person's remark: the document's editors, auditors and the people taking part in its
+    sign-off. A remark's own author edits, resolves and deletes it."""
+    return bool(can_edit(db, user, doc) or is_auditor(db, user) or participant(db, user, doc.id))
 
 
 def require_doc_reader(document_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)) -> GovernanceDocument:

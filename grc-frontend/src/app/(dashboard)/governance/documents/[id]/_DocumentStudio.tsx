@@ -134,6 +134,12 @@ export default function DocumentStudio() {
   const signoff = useSignoff(id);
   const htmlQ = useQuery({ queryKey: ['document-view-html', id], queryFn: async () => (await governanceApi.getDocumentViewHtml(id)).data as any, enabled: valid && view === 'document',
     retry: retryUnlessRefused });
+  // the Discussion's open comments, counted on its tab (the same query as the Discussion's own list)
+  const remarksQ = useQuery<{ annotations: { status: string }[] }>({
+    queryKey: ['document-annotations', id], enabled: valid, staleTime: 30_000, retry: retryUnlessRefused,
+    queryFn: async () => (await apiClient.get(`/governance/documents/${id}/annotations`)).data,
+  });
+  const openRemarks = (remarksQ.data?.annotations ?? []).filter((a) => a.status === 'open').length;
 
   const refreshAll = () => {
     for (const key of ['governance-document', 'document-access', 'doc-signoff', 'document-lifecycle', 'document-chain', 'document-chain-redline',
@@ -373,7 +379,8 @@ export default function DocumentStudio() {
             <div className="inline-flex rounded-lg bg-[#eef1f4] p-0.5" role="tablist">
               {VIEWS.filter((v) => library || !LIBRARY_VIEWS.has(v.key)).map((v) => {
                 const on = view === v.key;
-                const badge = v.key === 'approvals' ? (personal && primary?.kind !== 'acknowledge' ? 'Your step' : pendingApprovals ? String(pendingApprovals) : '') : '';
+                const badge = v.key === 'approvals' ? (personal && primary?.kind !== 'acknowledge' ? 'Your step' : pendingApprovals ? String(pendingApprovals) : '')
+                  : v.key === 'discussion' && openRemarks ? String(openRemarks) : '';
                 return (
                   <button key={v.key} type="button" role="tab" aria-selected={on} onClick={() => setView(v.key)}
                     className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ${on ? 'bg-white text-[#0b4f46] shadow-sm' : 'text-[#3f4b58] hover:text-[#1f2933]'}`}>
@@ -440,22 +447,22 @@ export default function DocumentStudio() {
           lifecycleOn ? (
             <>
               {/* the person's own step is asked in the bar's popups, with the version shown */}
-              <LifecycleTab documentId={id} doc={doc} canEdit={canEdit} canAnnotate={canAnnotate} settings={false} ownSteps={false} />
+              <LifecycleTab documentId={id} doc={doc} canEdit={canEdit} canAnnotate={canAnnotate} settings={false} ownSteps={false} discussion={false} />
               <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
             </>
           ) : (
             <>
               <SignOffControlTab documentId={id} doc={doc} canEdit={canEdit} version={version} />
-              {canAnnotate && (
-                <section className="rounded-xl border border-gray-200 bg-white p-4">
-                  <h3 className="mb-1 text-sm font-semibold text-gray-900">Discussion</h3>
-                  <p className="mb-3 text-xs text-gray-500">The author, reviewers and approvers can comment here.</p>
-                  <DocumentAnnotationPanel documentId={id} />
-                </section>
-              )}
               <ReviewHistory documentId={id} doc={doc} canEdit={mayChange} />
             </>
           )
+        )}
+        {/* the Discussion: everyone who can open the document comments (its author, reviewers, approvers, the people asked to acknowledge it) */}
+        {view === 'discussion' && (
+          <section className="space-y-2">
+            <p className="text-sm text-[#26323d]">Questions and comments on this document from everyone working on it: its author, reviewers and approvers, and the people asked to acknowledge it.</p>
+            <DocumentAnnotationPanel documentId={id} variant="page" />
+          </section>
         )}
         {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
         {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={mayChange} />}

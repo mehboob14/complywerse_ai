@@ -40,9 +40,14 @@ STAGE_LABEL = {"draft": "Draft", "pending_review": "In review", "pending_approva
 ORIGIN_LABEL = {"ai": "Comply Agent", "manual": "Edited by hand", "mixed": "Comply Agent and edited by hand", "revert": "Taken back",
                 "restore": "Earlier version restored", "signoff": "Sign-off stamp", "initial": "The original", "file": "File replaced",
                 "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
-# audit entries that matter to the chain (the rest - views, downloads, field edits - do not)
-_EVENT_ACTIONS = {"created", "sent_for_review", "sent_for_approval", "signed", "rejected", "published", "archived", "status_changed",
-                  "review_completed", "version_rollback", "restored"}
+# audit entries that matter to the chain: its change and approval log (the rest - views, downloads, field edits - do not)
+EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent_for_approval": "Sent for approval", "signed": "Signed",
+               "reviewed": "Reviewed", "approved": "Approved", "rejected": "Rejected", "published": "Published", "acknowledged": "Acknowledged",
+               "archived": "Archived", "restored": "Restored from the archive", "status_changed": "Status changed",
+               "review_completed": "Review completed", "review_skipped": "Review skipped", "version_rollback": "Earlier version restored",
+               "return_to_draft": "Returned to draft", "request_cancelled": "Request withdrawn", "participant_removed": "Reviewer or approver removed",
+               "owner_assigned": "Owner changed", "escalated": "Escalated", "delegated": "Delegated", "submitted": "Submitted"}
+_EVENT_ACTIONS = set(EVENT_LABEL)
 
 
 # ── cutting a difference into changes ────────────────────────────────────────
@@ -585,11 +590,7 @@ def catalog(c: Dict[str, Any]) -> Dict[str, List[List[Any]]]:
     sources = [[s.get("title") or s.get("ref") or "", s.get("kind") or "", s.get("locator") or "", s.get("quote") or "",
                 "found" if s.get("verified") else ("not found" if s.get("verified") is False else ""), ", ".join(str(n) for n in s.get("versions", []))]
                for s in c["sources"]]
-    approvals = [[_clock(e["at"]), {"created": "Created", "sent_for_review": "Sent for review", "sent_for_approval": "Sent for approval", "signed": "Signed",
-                                     "rejected": "Rejected", "published": "Published", "archived": "Archived", "status_changed": "Status changed",
-                                     "review_completed": "Review completed", "version_rollback": "Earlier version restored",
-                                     "restored": "Restored from the archive"}.get(e["kind"], e["kind"]),
-                  e["actor"] or "", e["detail"] or ""] for e in c["events"]]
+    approvals = [[_clock(e["at"]), EVENT_LABEL.get(e["kind"], e["kind"]), e["actor"] or "", e["detail"] or ""] for e in c["events"]]
     return {"versions": versions, "changes": changes, "sources": sources, "approvals": approvals}
 
 

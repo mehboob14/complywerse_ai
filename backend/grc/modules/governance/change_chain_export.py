@@ -1,4 +1,4 @@
-"""The change chain as files: Excel (one sheet each for versions, changes, sources and approvals), PDF (the same as tables) and
+"""The change log (the change chain) as files: Excel (one sheet each for versions, changes, sources and approvals), PDF (the same as tables) and
 CSV (the changes). Built from ``change_chain.catalog``; the export says who produced it and when, so a printed copy stands alone.
 """
 from __future__ import annotations
@@ -15,7 +15,7 @@ from .change_chain import CATALOG_HEADERS, catalog
 XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 PDF = "application/pdf"
 CSV = "text/csv; charset=utf-8"
-_SHEETS = (("Versions", "versions"), ("Changes", "changes"), ("Sources", "sources"), ("Approvals", "approvals"))
+_SHEETS = (("Versions", "versions"), ("Changes", "changes"), ("Sources", "sources"), ("Approvals", "approvals"))   # the review, approval and acknowledgement trail
 _WIDTHS = {"versions": [9, 17, 22, 14, 24, 9, 9, 9, 48, 12, 22, 17, 30],
            "changes": [8, 9, 17, 22, 14, 36, 10, 50, 50, 9, 9, 22, 36, 36, 40, 8],
            "sources": [38, 16, 22, 60, 12, 14], "approvals": [17, 22, 22, 80]}
@@ -51,7 +51,7 @@ def xlsx_bytes(c: Dict[str, Any], by: str) -> bytes:
     ws.title = "Summary"
     ws.column_dimensions["A"].width = 26
     ws.column_dimensions["B"].width = 70
-    ws.cell(row=1, column=1, value="Change chain").font = Font(bold=True, size=14)
+    ws.cell(row=1, column=1, value="Change log").font = Font(bold=True, size=14)
     for n, (label, value) in enumerate(_header_lines(c, by), start=3):
         ws.cell(row=n, column=1, value=label).font = Font(bold=True)
         _text_cell(ws, n, 2, value)
@@ -109,7 +109,7 @@ def pdf_bytes(c: Dict[str, Any], by: str) -> bytes:
         return escape(text if len(text) <= PDF_CELL_CAP else text[:PDF_CELL_CAP].rstrip() + " … (cut: the Excel file has the whole text)").replace("\n", "<br/>")
 
     cat = catalog(c)
-    story: List[Any] = [Paragraph("Change chain", h1)]
+    story: List[Any] = [Paragraph("Change log", h1)]
     for label, value in _header_lines(c, by):
         story.append(Paragraph(f"<b>{escape(label)}:</b> {escape(value)}", body))
 
@@ -135,26 +135,26 @@ def pdf_bytes(c: Dict[str, Any], by: str) -> bytes:
     table("Changes, from what to what", "changes", [0, 2, 3, 5, 6, 7, 8, 9, 10, 11, 12, 14], [1.1, 2.2, 2.2, 2.9, 1.3, 4.2, 4.2, 0.9, 0.9, 1.9, 2.6, 2.1])
     story.append(PageBreak())
     table("Sources the changes rest on", "sources", [0, 1, 2, 3, 4, 5], [5.5, 2.6, 3.2, 10.0, 2.0, 2.7])
-    table("Approvals and other events", "approvals", [0, 1, 2, 3], [3.0, 4.0, 4.5, 14.5])
+    table("Reviews, approvals, acknowledgements and other events", "approvals", [0, 1, 2, 3], [3.0, 4.0, 4.5, 14.5])
 
     def footer(canvas, doc):
         canvas.saveState()
         canvas.setFont(regular, 7)
         canvas.setFillColor(colors.HexColor("#586472"))
-        canvas.drawString(1.2 * cm, 0.8 * cm, f"{c['document']['title']} - change chain - produced by {by}")
+        canvas.drawString(1.2 * cm, 0.8 * cm, f"{c['document']['title']} - change log - produced by {by}")
         canvas.drawRightString(landscape(A4)[0] - 1.2 * cm, 0.8 * cm, f"Page {doc.page}")
         canvas.restoreState()
 
     out = io.BytesIO()
     SimpleDocTemplate(out, pagesize=landscape(A4), leftMargin=1.2 * cm, rightMargin=1.2 * cm, topMargin=1.2 * cm, bottomMargin=1.5 * cm,
-                      title=f"{c['document']['title']} - change chain", author=by).build(story, onFirstPage=footer, onLaterPages=footer)
+                      title=f"{c['document']['title']} - change log", author=by).build(story, onFirstPage=footer, onLaterPages=footer)
     return out.getvalue()
 
 
 def build(c: Dict[str, Any], fmt: str, by: str) -> Tuple[bytes, str, str]:
     """``(file bytes, media type, file name)`` for ``fmt`` (xlsx | pdf | csv)."""
     stem = re.sub(r"[^\w\- ]+", "", c["document"]["title"], flags=re.UNICODE).strip().replace(" ", "-")[:70] or "document"
-    stem = f"{stem}-change-chain"
+    stem = f"{stem}-change-log"
     if fmt == "xlsx":
         return xlsx_bytes(c, by), XLSX, f"{stem}.xlsx"
     if fmt == "pdf":

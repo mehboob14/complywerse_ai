@@ -3730,6 +3730,9 @@ def list_document_annotations(
     return {
         "annotations": [_serialize_annotation(a, user_lookup) for a in rows],
         "total": len(rows),
+        # who is reading, and whether they may resolve other people's remarks (their own they edit, resolve and delete)
+        "me": current_user.id,
+        "can_moderate": permissions.may_moderate(db, current_user, doc),
     }
 
 
@@ -3776,13 +3779,14 @@ def update_document_annotation(
     ).first()
     if not annotation:
         raise HTTPException(status_code=404, detail="Annotation not found.")
-    # Comment edits restricted to the author; status can be flipped by
-    # any tenant member (so a different reviewer can mark resolved).
+    # its words are its author's; resolving it is also for the document's editors, auditors and sign-off people
     if payload.comment is not None:
         if annotation.user_id != current_user.id:
             raise HTTPException(status_code=403, detail="Only the author can edit this remark.")
         annotation.comment = payload.comment.strip()
     if payload.status is not None:
+        if annotation.user_id != current_user.id and not permissions.may_moderate(db, current_user, doc):
+            raise HTTPException(status_code=403, detail=permissions.MODERATE_REFUSED)
         annotation.status = payload.status
     db.commit()
     db.refresh(annotation)
