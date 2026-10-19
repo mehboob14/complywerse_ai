@@ -442,9 +442,11 @@ def enhance_framework_with_evidence(
 
     from ....tasks.base import tenant_rate_limit, RateLimitExceeded
     try:
-        tenant_rate_limit(tenant_slug, bucket="framework_enhance")
+        redis_up = tenant_rate_limit(tenant_slug, bucket="framework_enhance")
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail="Too many enhancement runs queued; try again shortly")
+    if not redis_up:   # the job queue is that Redis: refused at once, not after a minute on the broker
+        raise HTTPException(status_code=503, detail="Background jobs are not available now: the job queue cannot be reached.")
     from ....tasks.frameworks import enhance_framework_controls as _enhance_task
     _enhance_task.delay(tenant_slug, framework_id, framework.name)
     
@@ -709,9 +711,11 @@ def generate_evidence_requirements(
 
     from ....tasks.base import tenant_rate_limit, RateLimitExceeded
     try:
-        tenant_rate_limit(tenant_slug, bucket="framework_evidence_reqs")
+        redis_up = tenant_rate_limit(tenant_slug, bucket="framework_evidence_reqs")
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail="Too many evidence-requirement jobs queued; try again shortly")
+    if not redis_up:   # the job queue is that Redis: refused at once, not after a minute on the broker
+        raise HTTPException(status_code=503, detail="Background jobs are not available now: the job queue cannot be reached.")
     from ....tasks.frameworks import generate_evidence_requirements as _evid_task
     _evid_task.delay(tenant_slug, framework_id, framework.name)
     

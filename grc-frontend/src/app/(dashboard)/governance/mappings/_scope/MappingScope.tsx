@@ -13,6 +13,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Play } from 'lucide-react';
 import { MultiSelectDropdown } from '@/components/ui';
 import { apiClient, governanceApi } from '@/lib/api';
+import { scopeLine } from './scopeLine';
 
 type ScopeEntry = { id: number; name: string };
 export type FrameworkScope = { applicable: ScopeEntry[]; linked: ScopeEntry[]; extra: ScopeEntry[] };
@@ -47,6 +48,7 @@ export function MappingScope({ documentId, scope, canRun }: {
       return Array.from(byName.values()).sort((a, b) => a.name.localeCompare(b.name));
     },
     staleTime: 300_000,
+    enabled: canRun,            // only who picks them
   });
   const ownNames = new Set(own.map((f) => f.name.trim().toLowerCase()));
   const ownIds = new Set(own.map((f) => f.id));
@@ -88,6 +90,8 @@ export function MappingScope({ documentId, scope, canRun }: {
     </span>
   );
   const last = status.data;
+  const saved = own.length + (scope?.extra || []).length;
+  const line = scopeLine({ running, error, saved, picked: extra.length, last });
 
   return (
     <div className="space-y-2.5 rounded-xl border border-slate-200 bg-white p-3">
@@ -97,11 +101,10 @@ export function MappingScope({ documentId, scope, canRun }: {
         {(scope?.linked || []).filter((f) => !(scope?.applicable || []).some((a) => a.id === f.id))
           .map((f) => chip(f, 'Linked', 'bg-sky-50 text-sky-800 ring-sky-200'))}
         {(scope?.extra || []).map((f) => chip(f, 'Added here', 'bg-violet-50 text-violet-800 ring-violet-200'))}
-        {!own.length && !(scope?.extra || []).length && (
-          <span className="text-xs text-amber-700">No frameworks yet. Pick them below.</span>
-        )}
+        {!saved && <span className="text-xs text-[#586472]">None yet</span>}
       </div>
 
+      {canRun && (
       <div className="flex flex-wrap items-center gap-2">
         <div className="min-w-[260px] flex-1">
           <MultiSelectDropdown
@@ -115,48 +118,56 @@ export function MappingScope({ documentId, scope, canRun }: {
             searchPlaceholder="Search frameworks…"
             forceSearch
             showAvatars={false}
-            disabled={!canRun || running}
+            disabled={running}
             size="sm"
             className="w-full"
             triggerClassName="w-full"
           />
         </div>
-        {canRun && (
-          <button onClick={() => run.mutate()} disabled={running || run.isPending || count === 0}
-                  className="btn-primary btn-sm shrink-0">
-            {running || run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            {running ? 'Mapping…' : dirty ? 'Save & run mapping' : 'Run mapping'}
-          </button>
-        )}
+        <button onClick={() => run.mutate()} disabled={running || run.isPending || count === 0}
+                className="btn-primary btn-sm shrink-0">
+          {running || run.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+          {running ? 'Mapping…' : dirty ? 'Save & run mapping' : 'Run mapping'}
+        </button>
       </div>
+      )}
 
-      {error && (
+      {/* one line at a time: what is happening, what went wrong, what is missing, then how the last run went */}
+      {line === 'running' ? (
+        <p className="text-xs text-slate-600">
+          {last?.message || 'Mapping the statements'} against {count} framework{count === 1 ? '' : 's'}. This can take
+          a few minutes; you can leave this page.
+        </p>
+      ) : line === 'error' ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700" role="alert">
           {error}
           {/no statements/i.test(error) && (
             <> <Link href={`/governance/documents/${documentId}?tab=statements`} className="font-semibold text-[#0b4f46] underline">Open Statements</Link></>
           )}
         </p>
-      )}
-      {running ? (
-        <p className="text-xs text-slate-600">
-          {last?.message || 'Mapping the statements'} against {count} framework{count === 1 ? '' : 's'}. This can take
-          a few minutes; you can leave this page.
+      ) : line === 'none' ? (
+        <p className={`text-xs ${canRun ? 'text-amber-700' : 'text-[#586472]'}`}>
+          {canRun ? 'This document has no applicable or linked frameworks yet. Pick them in "Also map against", then run the mapping.'
+            : 'This document has no frameworks to be mapped against yet.'}
         </p>
-      ) : last?.status === 'completed' && last.statements != null ? (
+      ) : line === 'completed' && last ? (
         <p className="text-xs text-emerald-700">
           Last run: {last.statements_mapped ?? last.statements} of {last.statements} statement(s) mapped,
           {' '}{last.control_links ?? 0} control link(s).
         </p>
-      ) : last?.status === 'failed' ? (
+      ) : line === 'failed' && last ? (
         <p className="text-xs text-red-700">The last run failed: {last.error || 'unknown error'}.</p>
-      ) : last?.status === 'skipped' && last.message ? (
+      ) : line === 'skipped' && last ? (
         <p className="text-xs text-amber-700">{last.message}</p>
       ) : null}
-      <p className="text-[11px] text-slate-400">
-        A document is mapped against the applicable and linked frameworks it was created with. Frameworks added here
-        stay with this document. Links you confirmed are kept when it runs again.
-      </p>
+      {canRun ? (
+        <p className="text-[11px] text-slate-400">
+          A document is mapped against the applicable and linked frameworks it was created with. Frameworks added here
+          stay with this document. Links you confirmed are kept when it runs again.
+        </p>
+      ) : (
+        <p className="text-[11px] text-[#586472]">Read only: the document&apos;s editors choose the frameworks and run the mapping.</p>
+      )}
     </div>
   );
 }

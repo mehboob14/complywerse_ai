@@ -39,7 +39,7 @@ import ReviewHistory from './_ReviewHistory';
 import { ClassicDocumentPage } from './_LegacyDocumentPage';
 import StatementsView from './_StatementsView';
 import GapAnalysisView from './_GapAnalysisView';
-import { LIBRARY_VIEWS, VIEWS, viewOf, type DocView } from '../_view/docRoute';
+import { LIBRARY_VIEWS, VIEWS, retryUnlessRefused, viewOf, type DocView } from '../_view/docRoute';
 import { inForceLine, lastAcknowledged, primaryAction, publishLine, rejectionOf, stepLine } from '../_view/docActions';
 
 const TYPE_LABEL: Record<string, string> = {
@@ -124,14 +124,15 @@ export default function DocumentStudio() {
 
   // a refusal or a missing document is the answer: not asked again
   const docQ = useQuery({ queryKey: ['governance-document', id], queryFn: async () => (await governanceApi.getDocument(id)).data as any, enabled: valid,
-    retry: (n, e: any) => ![403, 404].includes(e?.response?.status) && n < 3 });
+    retry: retryUnlessRefused });
   const accessQ = useQuery({ queryKey: ['document-access', id], queryFn: () => documentApi.access(id), enabled: valid, retry: false });
   const lifecycleQ = useQuery<LifecycleReply>({
-    queryKey: ['document-lifecycle', String(id)], enabled: valid, staleTime: 30_000,
+    queryKey: ['document-lifecycle', String(id)], enabled: valid, staleTime: 30_000, retry: retryUnlessRefused,
     queryFn: async () => (await apiClient.get(`/governance/documents/${id}/lifecycle`)).data,
   });
   const signoff = useSignoff(id);
-  const htmlQ = useQuery({ queryKey: ['document-view-html', id], queryFn: async () => (await governanceApi.getDocumentViewHtml(id)).data as any, enabled: valid && view === 'document' });
+  const htmlQ = useQuery({ queryKey: ['document-view-html', id], queryFn: async () => (await governanceApi.getDocumentViewHtml(id)).data as any, enabled: valid && view === 'document',
+    retry: retryUnlessRefused });
 
   const refreshAll = () => {
     for (const key of ['governance-document', 'document-access', 'doc-signoff', 'document-lifecycle', 'document-chain', 'document-chain-redline',
@@ -210,7 +211,7 @@ export default function DocumentStudio() {
     const doneOn = (lcd ? [...lcd.approvals, ...lcd.acknowledgements.people] : [])
       .filter((r) => r.user_id === lcd?.me?.id && kinds.includes(r.kind) && r.status === 'done').map((r) => r.done_at ?? '').sort().pop() || null;
     const out = actOutcome({ act: actAsked, myAck: !!lcd?.mine.some((r) => r.kind === 'acknowledgement' && r.status === 'pending'),
-      myRole: signoff.data?.my_actionable_role, doneOn });
+      myRole: signoff.data?.my_actionable_role, doneOn, asked: !!lcd?.approvals.some((r) => r.user_id === lcd.me?.id && kinds.includes(r.kind)) });
     if ('popup' in out) setPopup(out.popup);
     else toast({ type: 'info', title: out.title, message: out.message });
     const q = new URLSearchParams(search?.toString() ?? '');
@@ -455,7 +456,7 @@ export default function DocumentStudio() {
         )}
         {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
         {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={canEdit} />}
-        {view === 'mappings' && library && <GovernanceMappingsPage initialDocumentId={id} />}
+        {view === 'mappings' && library && <GovernanceMappingsPage initialDocumentId={id} canEdit={canEdit} />}
         {view === 'gaps' && library && <GapAnalysisView documentId={id} tenantId={doc.tenant_id} canEdit={canEdit} />}
         {view === 'versions' && (
           lifecycleOn ? (

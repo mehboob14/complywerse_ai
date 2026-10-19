@@ -41,3 +41,10 @@ export function viewOf(tab: string | null | undefined): DocView {
   const key = (tab ?? '').trim().toLowerCase();
   return Object.prototype.hasOwnProperty.call(ALIASES, key) ? ALIASES[key] : 'document';
 }
+
+/** React Query `retry` for what the document view reads: a refusal (403) or a missing document (404) is the answer, not asked again;
+ *  anything else up to three times. */
+export function retryUnlessRefused(failures: number, error: unknown): boolean {
+  const status = (error as { response?: { status?: number } } | null)?.response?.status;
+  return status !== 403 && status !== 404 && failures < 3;
+}

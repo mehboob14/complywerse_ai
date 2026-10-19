@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import logging
 import os
+import threading
 import time
 import uuid
 from contextlib import contextmanager
@@ -44,6 +45,12 @@ def get_redis() -> redis.Redis:
     if _redis_client is None:
         _redis_client = redis.Redis.from_url(REDIS_URL, decode_responses=True, socket_timeout=5)
     return _redis_client
+
+
+# Redis is optional locally (jobs then run on threads of this process): these mean it cannot be reached.
+_REDIS_DOWN = (redis.exceptions.ConnectionError, redis.exceptions.TimeoutError)
+_local_locks: set = set()
+_local_guard = threading.Lock()
 
 
 # ─── Distributed lock ────────────────────────────────────────────────────────
@@ -76,6 +83,9 @@ def tenant_lock(
             Recommended: pass `self.request.id` from a Celery task so retries
             of the same task can resume.
 
+    When Redis cannot be reached the lock is held in this process only (a
+    warning is logged): the job runs on a thread here anyway.
+
     Usage:
         with tenant_lock("acme", f"document:{doc_id}", owner=self.request.id):
             ... run idempotent work ...
@@ -84,17 +94,26 @@ def tenant_lock(
     key = f"lock:{tenant_slug}:{resource}"
     token = owner or uuid.uuid4().hex
     r = get_redis()
+    local = False
     deadline = time.monotonic() + blocking_timeout
     while True:
-        # Fast path: nobody holds the lock; we take it.
-        if r.set(key, token, nx=True, ex=ttl_seconds):
-            break
-        # Reclaim path: same owner already holds the lock — refresh TTL and proceed.
-        if owner:
-            current = r.get(key)
-            if current == owner:
-                r.expire(key, ttl_seconds)
-                logger.info("tenant_lock reclaimed by same owner key=%s owner=%s", key, owner[:8])
+        try:
+            # Fast path: nobody holds the lock; we take it.
+            if r.set(key, token, nx=True, ex=ttl_seconds):
+                break
+            # Reclaim path: same owner already holds the lock — refresh TTL and proceed.
+            if owner:
+                current = r.get(key)
+                if current == owner:
+                    r.expire(key, ttl_seconds)
+                    logger.info("tenant_lock reclaimed by same owner key=%s owner=%s", key, owner[:8])
+                    break
+        except _REDIS_DOWN as exc:
+            with _local_guard:
+                local = key not in _local_locks
+                _local_locks.add(key)
+            if local:
+                logger.warning("tenant_lock: Redis unreachable (%s); %s is held in this process only", exc, key)
                 break
         if time.monotonic() >= deadline:
             raise LockNotAcquired(f"could not acquire {key}")
@@ -105,11 +124,15 @@ def tenant_lock(
         # Compare-and-delete: only release the lock if we still own it.
         # Avoids deleting a lock another process re-acquired after our TTL
         # expired.
-        lua = "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end"
-        try:
-            r.eval(lua, 1, key, token)
-        except Exception:
-            logger.exception("tenant_lock release failed for %s", key)
+        if local:
+            with _local_guard:
+                _local_locks.discard(key)
+        else:
+            lua = "if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end"
+            try:
+                r.eval(lua, 1, key, token)
+            except Exception:
+                logger.exception("tenant_lock release failed for %s", key)
 
 
 # ─── Per-tenant rate limit ────────────────────────────────────────────────────
@@ -118,26 +141,36 @@ class RateLimitExceeded(Exception):
     """Raised when a tenant exceeds their per-minute job dispatch budget."""
 
 
-def tenant_rate_limit(tenant_slug: str, *, bucket: str = "jobs", limit_per_min: Optional[int] = None) -> None:
+def tenant_rate_limit(tenant_slug: str, *, bucket: str = "jobs", limit_per_min: Optional[int] = None) -> bool:
     """Token-bucket rate limit. Raises `RateLimitExceeded` if the tenant has
     consumed more than `limit_per_min` requests in the last 60s.
 
     Default limit is read from `TENANT_JOB_RATE_PER_MIN` env (defaults to 120).
     Set to 0 to disable.
+
+    Fails open: when Redis cannot be reached nothing is counted, a warning is
+    logged and False is returned. Celery's broker is that same Redis then, so
+    a caller runs the job on a thread instead of waiting on the broker (a
+    minute). Otherwise True.
     """
     if limit_per_min is None:
         limit_per_min = int(os.getenv("TENANT_JOB_RATE_PER_MIN", "120"))
     if limit_per_min <= 0:
-        return
+        return True
     validate_slug(tenant_slug)
     r = get_redis()
     key = f"rl:{bucket}:{tenant_slug}"
     pipe = r.pipeline()
     pipe.incr(key)
     pipe.expire(key, 60)
-    count, _ = pipe.execute()
+    try:
+        count, _ = pipe.execute()
+    except _REDIS_DOWN as exc:
+        logger.warning("tenant_rate_limit: Redis unreachable (%s); %s/%s is not limited", exc, tenant_slug, bucket)
+        return False
     if int(count) > limit_per_min:
         raise RateLimitExceeded(f"tenant={tenant_slug} bucket={bucket} count={count}/{limit_per_min}")
+    return True
 
 
 # ─── Tenant-aware Task base class ─────────────────────────────────────────────

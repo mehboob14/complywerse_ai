@@ -185,6 +185,22 @@ def dispatch_parse(tenant_slug: str, document_id: int, user_id: int) -> str:
     return dispatch_parse_in_thread(tenant_slug, document_id, user_id)
 
 
+def _gap_runs_failed(db: Session, run_ids: list, message: str) -> None:
+    """The runs this job will not do are failed with ``message``, so no page waits on them while they say 'running'."""
+    from ..models import PolicyGapAnalysisRun
+    try:
+        for run in db.query(PolicyGapAnalysisRun).filter(PolicyGapAnalysisRun.id.in_(list(run_ids or [])),
+                                                         PolicyGapAnalysisRun.status == "running").all():
+            run.status, run.error_message, run.completed_at = "failed", message, datetime.utcnow()
+        db.commit()
+    except Exception:  # noqa: BLE001
+        db.rollback()
+        logger.exception("could not mark gap-analysis runs %s failed", run_ids)
+
+
+_GAP_BUSY = "Another gap analysis of this document was running. Run it again when it is done."
+
+
 def dispatch_gap_analysis_in_thread(
     tenant_slug: str, run_ids: list, document_id: int, user_id: int,
 ) -> str:
@@ -242,6 +258,7 @@ def _run_gap_analysis_with_own_session(
             logger.info("run_gap_analysis(thread) DONE tenant=%s doc=%s task=%s",
                         tenant_slug, document_id, task_id)
     except LockNotAcquired:
+        _gap_runs_failed(db, run_ids, _GAP_BUSY)
         set_status(tenant_slug, "gap_analysis", document_id,
                    {"status": "skipped",
                     "message": "Another worker is already running gap analysis"})
@@ -251,6 +268,7 @@ def _run_gap_analysis_with_own_session(
         except Exception:
             pass
         logger.exception("Gap-analysis thread crashed: %s", exc)
+        _gap_runs_failed(db, run_ids, "The gap analysis stopped before it finished. Run it again.")
         set_status(tenant_slug, "gap_analysis", document_id,
                    {"status": "failed", "error": str(exc)[:500]})
     finally:
@@ -286,6 +304,7 @@ def run_gap_analysis(self, tenant_slug: str, run_ids: list, document_id: int, us
             logger.info("run_gap_analysis DONE tenant=%s doc=%s", tenant_slug, document_id)
             return result or {"status": "completed", "run_ids": run_ids}
     except LockNotAcquired:
+        _gap_runs_failed(db, run_ids, _GAP_BUSY)
         set_status(tenant_slug, "gap_analysis", document_id,
                    {"status": "skipped", "message": "Another gap analysis is already running for this document"})
         return {"status": "skipped"}

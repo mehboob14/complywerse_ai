@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { backendGrcBase } from '@/lib/backendUrl';
+import { proxyBody } from '@/lib/proxyReply';
 
 export const maxDuration = 900;
 export const dynamic = 'force-dynamic';
@@ -50,16 +51,8 @@ export async function POST(request: NextRequest) {
       `[Statutory Audit Upload-Parse] Upstream ${response.status} in ${Date.now() - started}ms`,
     );
 
-    const contentType = response.headers.get('content-type') || '';
-    let data: unknown;
-    if (contentType.includes('application/json')) {
-      data = await response.json();
-    } else {
-      const text = await response.text();
-      data = {
-        detail: text.slice(0, 500) || `Upstream returned ${response.status}`,
-      };
-    }
+    // a plain-text error is not JSON: one plain sentence, the backend's status
+    const data = proxyBody(await response.text(), 'The observations could not be read from the file now. Try again in a minute.');
 
     return NextResponse.json(data, { status: response.status });
   } catch (error: unknown) {

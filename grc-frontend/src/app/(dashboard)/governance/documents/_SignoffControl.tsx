@@ -15,6 +15,7 @@ import { parseUtc } from '@/lib/serverTime';
 import { assigneeOptions, assigneePlaceholder, sentToast, type TargetOption } from '@/lib/signoffTargets';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
+import { retryUnlessRefused } from './_view/docRoute';
 import {
   Loader2, Send, CheckCircle, XCircle, Clock, Users as UsersIcon, UserCheck, PenLine, ShieldCheck, Pencil,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ export function useSignoff(documentId: number) {
   return useQuery({
     queryKey: ['doc-signoff', documentId],
     queryFn: async () => (await governanceApi.getDocumentSignoff(documentId)).data as Signoff,
+    retry: retryUnlessRefused,
   });
 }
 

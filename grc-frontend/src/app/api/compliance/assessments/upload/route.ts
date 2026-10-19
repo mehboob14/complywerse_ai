@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { backendGrcBase } from '@/lib/backendUrl';
+import { proxyBody } from '@/lib/proxyReply';
 
 export const maxDuration = 300;
 
@@ -31,21 +32,8 @@ export async function POST(request: NextRequest) {
       headers,
     });
     
-    let data: any;
-    const contentType = response.headers.get('content-type');
-    
-    try {
-      if (contentType && contentType.includes('application/json')) {
-        data = await response.json();
-      } else {
-        const text = await response.text();
-        console.error('Non-JSON response from backend:', text);
-        data = { detail: `Backend returned non-JSON response: ${text.substring(0, 200)}` };
-      }
-    } catch (parseError) {
-      console.error('Failed to parse response:', parseError);
-      data = { detail: 'Failed to parse server response' };
-    }
+    // a plain-text error is not JSON: one plain sentence, the backend's status
+    const data = proxyBody(await response.text(), 'The assessment file could not be uploaded now. Try again in a minute.');
     
     if (!response.ok) {
       return NextResponse.json(data, { status: response.status });

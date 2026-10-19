@@ -96,6 +96,7 @@ def test_sending_for_review_asks_each_reviewer_with_a_task_and_an_alert(world):
         assert mine[0].description.startswith('Please review and sign "Access policy", version 1.0, by ')   # plain words, no bare path
         assert life.task_values(db, rows[0], doc(db))["link"] == "/governance/documents/5?tab=lifecycle"     # {link}: its Approvals
         assert len(alerts(db, 2)) == 1 and len(alerts(db, 3)) == 1 and alerts(db, 6) == []
+        assert alerts(db, 2)[0].message.endswith("It is in your tasks and in the document's Approvals.")   # the tab that exists
 
 
 def test_the_whole_chain_with_different_users_and_who_is_pending_at_each_step(world):
