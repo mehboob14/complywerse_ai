@@ -385,15 +385,15 @@ export default function StudioWorkspacePage() {
     }, 60);
   };
 
-  // a Word file edited in place: its own numbers, indents and body-text clauses in the editor, from the file as it would be
-  // saved now (fetched for each saved revision; the editor keeps them on the blocks while the person types)
+  // a Word file edited in place: its own page, typography, numbers, indents and body-text clauses in the editor, from the file
+  // as it would be saved now (fetched for each saved revision; the editor keeps them on the blocks while the person types)
   const inPlace = !!session?.source?.in_place;
   const savedRevision = session?.revision;
   useEffect(() => {
     if (!inPlace || savedRevision == null) return;
     let cancelled = false;
     studioApi.layout(id)
-      .then((r) => { if (!cancelled && r.revision === revision.current) editor.current?.setLayout(r.blocks); })
+      .then((r) => { if (!cancelled && r.revision === revision.current) editor.current?.setLayout(r.blocks, r.page); })
       .catch(() => undefined);                                      // without it the editor still works, only without Word's numbers
     return () => { cancelled = true; };
   }, [id, inPlace, savedRevision]);

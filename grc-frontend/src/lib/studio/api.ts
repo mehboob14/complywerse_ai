@@ -538,16 +538,26 @@ export const studioApi = {
     const plain = /filename="?([^";]+)"?/i.exec(header);
     return { blob: res.data as Blob, filename: star ? decodeURIComponent(star[1]) : plain ? plain[1] : `document.${options.format}` };
   },
-  /** a Word file edited in place: what Word shows for each block that its text does not hold (numbers, indents) */
-  layout: (id: number) => get<{ revision: number; blocks: BlockLook[] }>(`/sessions/${id}/layout`),
+  /** a Word file edited in place: what Word shows for each block that its text does not hold (numbers, indents, typography) and
+   *  the page (none for any other document) */
+  layout: (id: number) => get<{ revision: number; blocks: BlockLook[]; page?: PageLook | null }>(`/sessions/${id}/layout`),
   /** the PDF the text was read from, as it is */
   sourceFile: async (id: number): Promise<Blob> => (await apiClient.get(`${base}/sessions/${id}/source-file`, { responseType: 'blob' })).data,
 };
 
-/** What Word shows for a block: the number in front of it, its indent in points (`hang`: the part the number sits in),
+/** What Word shows for a block: the number in front of it, its indents in points (`hang`: the part the number sits in),
  *  `body` for a clause numbered through a heading style that looks like body text, and `locked` for what Word makes or draws
- *  itself (its table of contents, a text box, a diagram): shown, not edited here. */
-export interface BlockLook { label?: string; left?: number; hang?: number; body?: boolean; locked?: boolean }
+ *  itself (its table of contents, a text box, a diagram): shown, not edited here. Its typography as Word resolves it: a
+ *  paragraph's comes whole (`font` and `size` always; the rest only where it applies: sizes and spacing in points, `line` a
+ *  multiple of single lines or "14pt"); a table has `size` and `head_fill`, the shading of its first row. */
+export interface BlockLook {
+  label?: string; left?: number; hang?: number; right?: number; body?: boolean; locked?: boolean;
+  font?: string; size?: number; bold?: boolean; italic?: boolean; underline?: boolean; caps?: boolean; color?: string;
+  align?: 'center' | 'right' | 'justify'; before?: number; after?: number; line?: number | string; head_fill?: string;
+}
+
+/** The page of a Word file, in points, and the look of its normal text. */
+export interface PageLook { width?: number; left?: number; right?: number; top?: number; normal?: BlockLook }
 
 /** An accept that made the library document's next version (`change`: major is +1.0, minor +0.1), or why it did not */
 export interface LibraryVersion { saved: boolean; version?: string; change?: 'major' | 'minor' | null; status?: string; why?: string; in_place?: boolean }

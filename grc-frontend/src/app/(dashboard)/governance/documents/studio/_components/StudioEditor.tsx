@@ -5,6 +5,10 @@
  * italic, underline, links, quotes, code and real tables; placeholders that must be filled in are highlighted; the browser's
  * own spell check marks misspellings. `value` + `version` push a new document in (an accepted AI change, a restored
  * revision); `onChange` reports the person's own edits as Markdown.
+ *
+ * The document is a page of Word on a grey desk, the same in Edit, in View and while Comply Agent writes: a Word file edited
+ * in place looks as its file sets it (`setLayout`: its page, and each block's font, size, colour, spacing, numbers and
+ * indents), any other document as the platform's Word export sets it (wordLook.ts).
  */
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { EditorContent, useEditor, type Editor } from '@tiptap/react';
@@ -27,8 +31,12 @@ import {
   Underline as UnderlineIcon,
   Undo2,
 } from 'lucide-react';
-import { Marks, Placeholders, StudioCell, StudioHeaderCell, StudioRow, StudioTable, WordLayout, blockRanges, findTextRange, marksKey, placeholderRanges, wordLayoutKey, type DocMark } from './editorExtensions';
-import type { BlockLook } from '@/lib/studio/api';
+import {
+  Marks, Placeholders, StudioCell, StudioHeaderCell, StudioRow, StudioTable, WordLayout, blockRanges, findTextRange, headingLevels, marksKey, placeholderRanges,
+  wordLayoutKey, type DocMark, type WordLayoutMeta,
+} from './editorExtensions';
+import { oneTitle, sheetStyle } from './wordLook';
+import type { BlockLook, PageLook } from '@/lib/studio/api';
 
 export type EditorMode = 'edit' | 'view' | 'source';
 
@@ -36,8 +44,8 @@ export interface StudioEditorHandle {
   getMarkdown: () => string;
   setMarkdown: (markdown: string) => void;
   setMarks: (marks: DocMark[]) => void;
-  /** a Word file's own numbers, indents and body-text clauses, one look per block (see `WordLayout`) */
-  setLayout: (looks: BlockLook[]) => void;
+  /** a Word file's own numbers, indents, body-text clauses and typography, one look per block, and its page (see `WordLayout`) */
+  setLayout: (looks: BlockLook[], page?: PageLook | null) => void;
   blockRanges: () => { from: number; to: number }[];
   /** where `quote` is (inside the given block when there is one); null when it is not found */
   rangeOf: (quote: string, block?: number | null) => { from: number; to: number } | null;
@@ -181,6 +189,65 @@ function Toolbar({ editor }: { editor: Editor }) {
   );
 }
 
+// The document's own rules carry three classes, so the dashboard's typography for bare p/td/th/h1-h3 and its table rules
+// (11.5 px text, cell padding, striped rows; globals.css) never reach the page. `.studio-word` is on while a Word file's layout
+// is (each block then also carries its own look inline); without it the page is the platform export's (exporters._style_doc).
+const S = '.studio-editor .studio-sheet .studio-prose';
+const T = '.studio-editor .studio-sheet.studio-one-title .studio-prose';
+const W = '.studio-editor .studio-sheet .studio-prose.studio-word';
+const SHEET_CSS = `
+  .studio-desk { background: #e8ecf0; padding: 20px 12px; }
+  .studio-sheet { box-sizing: border-box; margin: 0 auto; max-width: 100%; min-height: 100%; background: #fff; box-shadow: 0 1px 4px rgba(15, 23, 42, .18); }
+  ${S} { outline: none; min-height: 50vh; font-family: var(--doc-font); font-size: var(--doc-size); line-height: var(--doc-line); color: var(--doc-color); text-align: var(--doc-align); font-weight: 400; font-style: normal; letter-spacing: normal; tab-size: 36pt; }
+  ${S} p { margin: var(--doc-before) 0 var(--doc-after); font-size: inherit; font-weight: inherit; color: inherit; }
+  ${S} :is(h1, h2, h3, h4, h5, h6) { font-family: inherit; font-weight: 700; color: inherit; letter-spacing: normal; line-height: inherit; text-transform: none; margin: 0 0 6pt; }
+  ${S} h1, ${T} h2 { font-size: 16pt; margin-top: 16pt; font-style: normal; }
+  ${S} h2, ${T} h3 { font-size: 13pt; margin-top: 12pt; font-style: normal; }
+  ${S} h3, ${T} h4 { font-size: 11.5pt; margin-top: 10pt; font-style: normal; }
+  ${S} :is(h4, h5, h6), ${T} :is(h5, h6) { font-size: 10.5pt; margin-top: 8pt; font-style: italic; }
+  ${T} h1 { font-size: 24pt; margin-top: 0; line-height: 1; font-style: normal; }
+  ${S} ul { list-style: disc; padding-left: 0.25in; margin: 0 0 3pt; }
+  ${S} ul ul { list-style-type: circle; }
+  ${S} ul ul ul { list-style-type: square; }
+  ${S} ol { list-style: decimal; padding-left: 0.25in; margin: 0 0 3pt; }
+  ${S} li { margin: 0; }
+  ${S} li > p { margin: 0; }
+  ${S} li > :is(ul, ol) { margin: 3pt 0; }
+  ${S} blockquote { margin: 0 0 6pt calc(0.8cm - 10.25pt); padding-left: 8pt; border-left: 2.25pt solid #808080; color: #404040; font-style: italic; }
+  ${S} blockquote p { margin: 0; }
+  ${S} code { font-family: Consolas, "Courier New", monospace; font-size: 9.5pt; }
+  ${S} pre { font-family: Consolas, "Courier New", monospace; font-size: 9pt; margin: 0; white-space: pre-wrap; }
+  ${S} pre code { font-size: inherit; }
+  ${S} hr { border: none; border-top: 0.75pt solid #808080; margin: 13pt 0 6pt; }
+  ${S} a { color: #0563C1; text-decoration: underline; cursor: pointer; }
+  ${S} table { border-collapse: collapse; width: 100%; table-layout: fixed; margin: 0 0 16pt; }
+  ${S} tr { background: transparent; }
+  ${S} :is(th, td) { border: 0.5pt solid #000; padding: 0 5.4pt; vertical-align: top; text-align: left; word-break: break-word; font-size: inherit; color: inherit; background: transparent; }
+  ${S} th { background: var(--head-fill, #F2F2F2); color: var(--head-ink, inherit); font-weight: 700; }
+  ${S} :is(td, th) > p { margin: 0 0 2pt; }
+  ${W} :is(h1, h2, h3, h4, h5, h6) { font-size: inherit; font-style: normal; line-height: inherit; margin: var(--doc-before) 0 var(--doc-after); }
+  ${W} .studio-wl-body { font-weight: 400; }
+  ${W} :is(ul, ol) { list-style: none; padding-left: 0; margin: 0; }
+  ${W} li > p { margin: var(--doc-before) 0 var(--doc-after); }
+  ${W} table { margin: 0; }
+  ${W} th { font-weight: 400; background: var(--head-fill, transparent); }
+  ${W} :is(td, th) > p { margin: 0; }
+  ${S} :is(td, th).selectedCell { background: #cfe9e4; }
+  .studio-prose .studio-ph { background: #fff2a8; box-shadow: 0 0 0 1px #f0d54a; border-radius: 2px; }
+  .studio-prose .studio-issue-error { text-decoration: underline wavy #dc2626; text-underline-offset: 3px; }
+  .studio-prose .studio-issue-warning { text-decoration: underline wavy #d97706; text-underline-offset: 3px; }
+  .studio-prose .studio-issue-info { text-decoration: underline dotted #2563eb; text-underline-offset: 3px; }
+  .studio-prose .studio-pending { background: #e6f4f1; box-shadow: -4px 0 0 #1ed4b0; }
+  .studio-prose .studio-focus { background: #fff7d6; }
+  .studio-prose .studio-focus-block { background: #fffbeb; box-shadow: -5px 0 0 #f59e0b, 0 0 0 1px #fcd34d; border-radius: 4px; animation: studio-focus-in 1.6s ease-out 1; }
+  .studio-prose .studio-focus-text { background: #fde68a; box-shadow: 0 0 0 2px #fde68a; border-radius: 2px; }
+  @keyframes studio-focus-in { 0% { background: #fde68a; } 100% { background: #fffbeb; } }
+  @media (prefers-reduced-motion: reduce) { .studio-prose .studio-focus-block { animation: none; } }
+  .studio-prose .studio-wl[data-num]::before { content: attr(data-num); display: inline-block; min-width: var(--hang, 0); padding-right: 0.5em; box-sizing: border-box; text-indent: 0; }
+  .studio-prose .studio-wl-locked { background: #f1f5f6; border-left: 3px solid #b8c7cc; padding-left: 0.5em; padding-right: 0.5em; cursor: default; white-space: pre-wrap; tab-size: 4; }
+  .studio-prose p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9aa5b1; pointer-events: none; float: left; height: 0; }
+`;
+
 const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor({ value, version, mode, onChange }, ref) {
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
@@ -237,16 +304,17 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
   }, [editor, mode]);
 
   // a layout that came before the editor was ready is put on when it is; the last one is put on again when the text is reloaded
-  // from the Markdown view (the plugin drops it when the blocks no longer match)
-  const pendingLayout = useRef<BlockLook[] | null>(null);
-  const lastLayout = useRef<BlockLook[] | null>(null);
-  const putLayout = useCallback((looks: BlockLook[]) => {
-    lastLayout.current = looks;
-    if (!editor) { pendingLayout.current = looks; return; }
+  // from the Markdown view (a reload takes the old one off the blocks)
+  const pendingLayout = useRef<WordLayoutMeta | null>(null);
+  const lastLayout = useRef<WordLayoutMeta | null>(null);
+  const putLayout = useCallback((looks: BlockLook[], page?: PageLook | null) => {
+    const meta: WordLayoutMeta = { looks, page };
+    lastLayout.current = meta;
+    if (!editor) { pendingLayout.current = meta; return; }
     pendingLayout.current = null;
-    editor.view.dispatch(editor.state.tr.setMeta(wordLayoutKey, looks).setMeta('addToHistory', false));
+    editor.view.dispatch(editor.state.tr.setMeta(wordLayoutKey, meta).setMeta('addToHistory', false));
   }, [editor]);
-  useEffect(() => { if (editor && pendingLayout.current) putLayout(pendingLayout.current); }, [editor, putLayout]);
+  useEffect(() => { if (editor && pendingLayout.current) putLayout(pendingLayout.current.looks, pendingLayout.current.page); }, [editor, putLayout]);
 
   // Source <-> editor: leaving the source view puts what was typed there into the editor
   const previousMode = useRef<EditorMode>(mode);
@@ -254,7 +322,7 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
     if (!editor) return;
     if (previousMode.current === 'source' && mode !== 'source') {
       baseline.current = load(editor, source, quiet);
-      if (lastLayout.current) putLayout(lastLayout.current);
+      if (lastLayout.current) putLayout(lastLayout.current.looks, lastLayout.current.page);
     }
     if (previousMode.current !== 'source' && mode === 'source') setSource(read(editor));
     previousMode.current = mode;
@@ -321,10 +389,15 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
     focus: () => editor?.commands.focus(),
   }), [editor, mode, source, value, scrollTo, putLayout]);
 
+  // the Word file's page and look while its layout is on, else the export's (a lone first # is then the Title)
+  const layout = editor ? wordLayoutKey.getState(editor.state) : undefined;
+  const word = !!layout?.on;
+  const titled = !word && !!editor && oneTitle(headingLevels(editor.state.doc));
+
   return (
-    <div className="studio-editor flex h-full min-h-0 flex-col bg-[#eef1f4]">
+    <div className="studio-editor flex h-full min-h-0 flex-col">
       {mode === 'edit' && editor && <Toolbar editor={editor} />}
-      <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-6">
+      <div ref={scroller} className="studio-desk min-h-0 flex-1 overflow-y-auto">
         {mode === 'source' ? (
           <textarea
             aria-label="Markdown source"
@@ -334,50 +407,12 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
             className="mx-auto block min-h-[60vh] w-full max-w-[860px] resize-y rounded-lg border border-[#c5ccd3] bg-white p-4 font-mono text-xs leading-relaxed text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]"
           />
         ) : (
-          <div className="mx-auto min-h-full max-w-[860px] rounded-lg border border-[#d5dbe1] bg-white px-8 py-8 shadow-sm sm:px-12">
+          <div className={`studio-sheet${titled ? ' studio-one-title' : ''}`} style={sheetStyle(word ? layout?.page : null) as React.CSSProperties}>
             <EditorContent editor={editor} />
           </div>
         )}
       </div>
-      <style>{`
-        .studio-prose { outline: none; color: #1f2933; font-size: 0.9375rem; line-height: 1.65; min-height: 50vh; }
-        .studio-prose h1 { font-size: 1.75rem; font-weight: 700; margin: 0.2em 0 0.5em; color: #0f4c5c; line-height: 1.25; }
-        .studio-prose h2 { font-size: 1.3rem; font-weight: 700; margin: 1.3em 0 0.4em; color: #0f4c5c; }
-        .studio-prose h3 { font-size: 1.1rem; font-weight: 700; margin: 1.1em 0 0.35em; color: #0f4c5c; }
-        .studio-prose h4, .studio-prose h5, .studio-prose h6 { font-size: 1rem; font-weight: 700; margin: 1em 0 0.3em; color: #0f4c5c; }
-        .studio-prose p { margin: 0.55em 0; }
-        .studio-prose ul { list-style: disc; padding-left: 1.5em; margin: 0.5em 0; }
-        .studio-prose ol { list-style: decimal; padding-left: 1.6em; margin: 0.5em 0; }
-        .studio-prose li { margin: 0.2em 0; }
-        .studio-prose li > p { margin: 0.1em 0; }
-        .studio-prose blockquote { border-left: 4px solid #0f4c5c; margin: 0.8em 0; padding: 0.1em 1em; color: #52606d; }
-        .studio-prose code { background: #f1f3f5; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.85em; }
-        .studio-prose pre { background: #f1f3f5; padding: 0.7em 0.9em; border-radius: 6px; overflow-x: auto; }
-        .studio-prose pre code { background: none; padding: 0; }
-        .studio-prose hr { border: none; border-top: 1px solid #c5ccd3; margin: 1.2em 0; }
-        .studio-prose a { color: #0b61c4; text-decoration: underline; cursor: pointer; }
-        .studio-prose table { border-collapse: collapse; width: 100%; margin: 0.9em 0; table-layout: fixed; }
-        .studio-prose th, .studio-prose td { border: 1px solid #b8c4c8; padding: 0.4em 0.6em; vertical-align: top; text-align: left; word-break: break-word; }
-        .studio-prose th { background: #e3f1f1; font-weight: 700; }
-        .studio-prose td > p, .studio-prose th > p { margin: 0; }
-        .studio-prose .selectedCell { background: #cfe9e4; }
-        .studio-prose .studio-ph { background: #fff2a8; box-shadow: 0 0 0 1px #f0d54a; border-radius: 2px; }
-        .studio-prose .studio-issue-error { text-decoration: underline wavy #dc2626; text-underline-offset: 3px; }
-        .studio-prose .studio-issue-warning { text-decoration: underline wavy #d97706; text-underline-offset: 3px; }
-        .studio-prose .studio-issue-info { text-decoration: underline dotted #2563eb; text-underline-offset: 3px; }
-        .studio-prose .studio-pending { background: #e6f4f1; box-shadow: -4px 0 0 #1ed4b0; }
-        .studio-prose .studio-focus { background: #fff7d6; }
-        .studio-prose .studio-focus-block { background: #fffbeb; box-shadow: -5px 0 0 #f59e0b, 0 0 0 1px #fcd34d; border-radius: 4px; animation: studio-focus-in 1.6s ease-out 1; }
-        .studio-prose .studio-focus-text { background: #fde68a; box-shadow: 0 0 0 2px #fde68a; border-radius: 2px; }
-        @keyframes studio-focus-in { 0% { background: #fde68a; } 100% { background: #fffbeb; } }
-        @media (prefers-reduced-motion: reduce) { .studio-prose .studio-focus-block { animation: none; } }
-        .studio-prose.studio-word ul, .studio-prose.studio-word ol { list-style: none; padding-left: 0; }
-        .studio-prose .studio-wl[data-num]::before { content: attr(data-num); display: inline-block; min-width: var(--hang, 0); padding-right: 0.5em; box-sizing: border-box; text-indent: 0; }
-        .studio-prose .studio-wl-body { font-size: 0.9375rem; font-weight: 400; color: #1f2933; line-height: 1.65; margin: 0.55em 0; }
-        .cw-dashboard .studio-prose .studio-wl-body, .governance-light .studio-prose .studio-wl-body { font-size: 11.5px; color: var(--color-text); }  /* as a paragraph there (globals.css) */
-        .studio-prose .studio-wl-locked { background: #f1f5f6; border-left: 3px solid #b8c7cc; padding-left: 0.5em; padding-right: 0.5em; cursor: default; white-space: pre-wrap; tab-size: 4; }
-        .studio-prose p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9aa5b1; pointer-events: none; float: left; height: 0; }
-      `}</style>
+      <style>{SHEET_CSS}</style>
     </div>
   );
 });

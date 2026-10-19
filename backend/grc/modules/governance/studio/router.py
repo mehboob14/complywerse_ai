@@ -888,9 +888,10 @@ def export_document(session_id: int, body: ExportIn, db: Session = Depends(get_d
 @router.get("/sessions/{session_id}/layout", dependencies=[Depends(require_studio)])
 def session_layout(session_id: int, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     """How Word sets out each block of a Word file edited in place - the number in front of it, its indent, a heading that looks
-    like body text - so the editor shows the document's own hierarchy. No blocks for any other document."""
+    like body text, its font, size, colour and spacing - and the page (width, margins, normal text), so the editor shows the
+    document as Word does. No blocks and no page for any other document."""
     s = _session(db, session_id, user)
-    return {"revision": s.revision_no, "blocks": service.word_looks(s)}
+    return {"revision": s.revision_no, "blocks": service.word_looks(s), "page": service.word_page(s)}
 
 
 @router.get("/sessions/{session_id}/source-file", dependencies=[Depends(require_studio)])
