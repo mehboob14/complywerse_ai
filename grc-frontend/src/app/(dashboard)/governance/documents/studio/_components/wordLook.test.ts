@@ -33,6 +33,18 @@ test('a table gets its text size and the fill of its header row, with white text
   assert.equal(blockStyle({ head_fill: '#000000' }), '--head-fill:#000000;--head-ink:#FFFFFF');
   assert.equal(headInk('#1F497D'), '#FFFFFF');
   assert.equal(headInk('#F2F2F2'), null);
+  assert.equal(headInk('#FF0000'), null);                                // Word keeps black text on red
+});
+
+test("a number's room reaches the list stop its tab goes to when that comes before the indent", () => {
+  assert.equal(props(blockStyle({ label: '1.3.1.', left: 61.2, hang: 61.2, tab: 36 }))['--label'], '36pt');
+  assert.equal(props(blockStyle({ label: '1.3.1.1.', left: 90, hang: 54 }))['--label'], undefined);   // text at the indent
+});
+
+test("Word's line spacing is a multiple of the font's own single line, as the View draws it; points stay points", () => {
+  assert.equal(props(blockStyle({ font: 'Calibri', size: 11, line: 1.15 }, () => 1.22))['line-height'], '1.403');
+  assert.equal(props(blockStyle({ font: 'Calibri', size: 11, line: '14pt' }, () => 1.22))['line-height'], '14pt');
+  assert.equal(sheetStyle(null, () => 1.22)['--doc-line'], '1.403');      // the platform's own 1.15 lines in Calibri
 });
 
 test('nothing a file holds can break out of the style', () => {

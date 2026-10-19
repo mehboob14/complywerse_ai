@@ -24,13 +24,22 @@ export function fontStack(name: string): string {
 }
 
 const colour = (v: string | undefined, fallback: string): string => (v && HEX.test(v) ? v : fallback);
-const lineHeight = (v: number | string | undefined): string => (typeof v === 'number' ? String(v) : v && LINE.test(v) ? v : 'normal');
 
-/** Text on a header row's fill: white on a dark fill, as Word draws automatic text there; none on a light one. */
+/** How tall one line of a font is, as a share of its size (`lib/fontLines.lineRatio` in the browser; 1 in tests). */
+export type LineRatio = (fontList: string) => number;
+const noRatio: LineRatio = () => 1;
+
+/** Word's line spacing as CSS: a multiple of the font's own single line (as the View draws it), points as they are. */
+const lineHeight = (v: number | string | undefined, font: string, ratio: LineRatio): string =>
+  typeof v === 'number' ? String(+(v * ratio(font)).toFixed(3)) : v && LINE.test(v) ? v : 'normal';
+
+/** Text on a header row's fill: white on a dark fill (black, navy), as Word draws automatic text there; none on a light or a
+ *  bright one (Word keeps black text on red; the same rule as the View's). */
 export function headInk(fill: string): string | null {
   if (!HEX.test(fill)) return null;
-  const [r, g, b] = [1, 3, 5].map((i) => parseInt(fill.slice(i, i + 2), 16));
-  return (r * 299 + g * 587 + b * 114) / 1000 < 128 ? '#FFFFFF' : null;
+  const linear = (c: number) => (c / 255 <= 0.04045 ? c / 255 / 12.92 : ((c / 255 + 0.055) / 1.055) ** 2.4);
+  const [r, g, b] = [1, 3, 5].map((i) => linear(parseInt(fill.slice(i, i + 2), 16)));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.18 ? '#FFFFFF' : null;
 }
 
 /**
@@ -38,9 +47,11 @@ export function headInk(fill: string): string | null {
  * typography comes whole (it always has a font): what it leaves out is Word's default - not bold, black, no space before or
  * after, single lines - never the editor's heading look. A table has only its text size and the fill of its first row.
  */
-export function blockStyle(l: BlockLook): string {
+export function blockStyle(l: BlockLook, ratio: LineRatio = noRatio): string {
   const css: string[] = [];
   if (l.left || l.hang) css.push(`padding-left:${l.left ?? 0}pt`, `text-indent:${-(l.hang ?? 0)}pt`, `--hang:${Math.max(0, l.hang ?? 0)}pt`);
+  // the number's room up to the list stop its tab goes to, when that comes before the indent ("1.3.1." then text at 0.5")
+  if (l.label && l.tab != null) css.push(`--label:${Math.max(0, l.tab - ((l.left ?? 0) - (l.hang ?? 0)))}pt`);
   if (l.right) css.push(`padding-right:${l.right}pt`);
   if (l.font) {
     css.push(
@@ -54,7 +65,7 @@ export function blockStyle(l: BlockLook): string {
       `text-align:${l.align ?? 'left'}`,
       `margin-top:${l.before ?? 0}pt`,
       `margin-bottom:${l.after ?? 0}pt`,
-      `line-height:${lineHeight(l.line)}`,
+      `line-height:${lineHeight(l.line, fontStack(l.font), ratio)}`,
     );
   } else if (l.size) css.push(`font-size:${l.size}pt`);
   if (l.head_fill && HEX.test(l.head_fill)) {
@@ -71,7 +82,7 @@ export function blockStyle(l: BlockLook): string {
  * export's. A pane narrower than the page shrinks the margins in proportion (the editor is never zoomed: ProseMirror places
  * the cursor by the page's real size).
  */
-export function sheetStyle(page?: PageLook | null): Record<string, string> {
+export function sheetStyle(page?: PageLook | null, ratio: LineRatio = noRatio): Record<string, string> {
   const file = !!page?.width;
   const width = page?.width || EXPORT_PAGE.width;
   const side = (v: number | undefined, fallback: number) => {
@@ -80,12 +91,13 @@ export function sheetStyle(page?: PageLook | null): Record<string, string> {
   };
   const top = side(page?.top, EXPORT_PAGE.top);
   const n: BlockLook = file ? page?.normal ?? {} : EXPORT_NORMAL;
+  const font = fontStack(n.font ?? (file ? 'Times New Roman' : 'Calibri'));
   return {
     width: `${width}pt`,
     padding: `${top} ${side(page?.right, EXPORT_PAGE.right)} ${top} ${side(page?.left, EXPORT_PAGE.left)}`,
-    '--doc-font': fontStack(n.font ?? (file ? 'Times New Roman' : 'Calibri')),
+    '--doc-font': font,
     '--doc-size': `${n.size ?? 10}pt`,
-    '--doc-line': lineHeight(n.line),
+    '--doc-line': lineHeight(n.line, font, ratio),
     '--doc-color': colour(n.color, '#000'),
     '--doc-align': n.align ?? 'left',
     '--doc-before': `${n.before ?? 0}pt`,

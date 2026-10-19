@@ -201,3 +201,21 @@ def test_each_paragraph_gets_the_typography_word_resolves_through_its_styles(tmp
 def test_the_page_is_the_files_last_section_with_its_normal_text(tmp_path):
     _, page = _looks(typeset(str(tmp_path / "typeset.docx")))
     assert page == {"width": 595.3, "left": 56.7, "right": 56.7, "top": 70.85, "normal": {"font": "Arial", "size": 10.0, "after": 10.0, "line": 1.15}}
+
+
+def test_a_numbers_tab_to_a_list_stop_before_the_indent_is_where_its_text_starts(tmp_path):
+    # Word's "1.3.1." at the margin with its indent at 0.85" and a list stop at 0.5": the text starts at 0.5" (as the View draws
+    # it); a level with no such stop starts its text at the indent and gets no tab
+    d = Document()
+    numbering = d.part.numbering_part.element
+    numbering.insert(0, _abstract(93, '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/><w:lvlText w:val="%1."/>'
+                                      '<w:pPr><w:tabs><w:tab w:val="num" w:pos="720"/></w:tabs><w:ind w:left="1224" w:hanging="1224"/></w:pPr></w:lvl>'
+                                      + _lvl(1, "decimal", "%1.%2.", 720, 720)))
+    num = numbering.add_num(93).numId
+    _numbered(d, "Usage Policy of Computing Resources", num, 0)
+    _numbered(d, "All staff protect what they use.", num, 1)
+    path = str(tmp_path / "tabs.docx")
+    d.save(path)
+    looks, _page = _looks(path)
+    assert looks["Usage Policy of Computing Resources"]["tab"] == 36.0
+    assert "tab" not in looks["All staff protect what they use."]

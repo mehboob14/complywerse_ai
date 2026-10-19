@@ -16,6 +16,7 @@ import { Decoration, DecorationSet } from '@tiptap/pm/view';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { placeholderSpans } from '@/lib/studio/text';
 import type { BlockLook, PageLook } from '@/lib/studio/api';
+import { lineRatio } from '@/lib/fontLines';
 import { blockStyle } from './wordLook';
 
 const NO_SPANS = {
@@ -177,7 +178,7 @@ function lookAttrs(l: BlockLook, numbered: boolean): Record<string, string> {
     attrs.title = 'Word makes this part itself (its table of contents, a text box or a diagram), so it is changed in Word, not here';
   }
   if (l.label && (numbered || !/[A-Za-z0-9]/.test(l.label))) attrs['data-num'] = l.label;   // a bullet repeats; a number waits for the layout
-  const style = blockStyle(l);
+  const style = blockStyle(l, lineRatio);
   if (style) attrs.style = style;
   return attrs;
 }

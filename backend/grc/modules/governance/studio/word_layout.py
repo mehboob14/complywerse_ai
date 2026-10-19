@@ -210,6 +210,34 @@ def indent(ctx: Ctx, p) -> Tuple[float, float, float]:
     return (left or 0) / 20, (hang or 0) / 20, (right or 0) / 20
 
 
+def number_tab(ctx: Ctx, p, left: float, hang: float) -> Optional[float]:
+    """Where a numbered paragraph's text starts on its first line, in points, when Word's tab after the number stops at a tab stop
+    before the left indent ("1.3.1." at the margin, its indent at 0.85" and a list stop at 0.5": the text starts at 0.5", as the
+    View draws it); None when it starts at the indent. Stops from the styles (base first), the list level, then the paragraph:
+    each clears the stops it names, and a list stop of a nearer one replaces the one before it."""
+    ppr = p.find(qn("w:pPr"))
+    ps = ppr.find(qn("w:pStyle")) if ppr is not None else None
+    places = list(reversed(list(ctx.styles.chain(ps.get(qn("w:val")) if ps is not None else ctx.styles.default_p))))
+    num_id, ilvl = _numpr(ctx, p)
+    lvl = ctx.numbering._find(num_id, ilvl)[0] if num_id is not None else None
+    stops: Dict[float, str] = {}
+    for el in places + [lvl, p]:
+        tabs = el.find(qn("w:pPr") + "/" + qn("w:tabs")) if el is not None else None
+        found = [(t.get(qn("w:val")), _twips(t, "pos")) for t in (tabs if tabs is not None else []) if t.tag == qn("w:tab")]
+        if any(v == "num" for v, _ in found):
+            stops = {pos: v for pos, v in stops.items() if v != "num"}
+        for v, pos in found:
+            if pos is None:
+                continue
+            if v == "clear":
+                stops.pop(pos / 20, None)
+            else:
+                stops[pos / 20] = v
+    start = left - hang
+    before = sorted(pos for pos, v in stops.items() if v in ("left", "start", "num") and start < pos < left)
+    return before[0] if before else None
+
+
 # ── typography: what Word gives a paragraph's text ───────────────────────────
 _A = "{http://schemas.openxmlformats.org/drawingml/2006/main}"
 _HEX = re.compile(r"[0-9A-Fa-f]{6}")
@@ -394,7 +422,8 @@ def page(ctx: Ctx, th: Theme) -> Dict[str, Any]:
 
 def layout(ctx: Ctx, nodes: List[Node], th: Optional[Theme] = None) -> List[Dict[str, Any]]:
     """For each block the studio shows (in order) what Word shows that the text does not hold: ``label`` (the number in front of
-    it), ``left``, ``hang`` and ``right`` (its indents, in points), ``body`` (a heading that looks like body text), ``locked``
+    it), ``left``, ``hang`` and ``right`` (its indents, in points), ``tab`` (where its text starts after the number, when that is
+    a tab stop before the indent), ``body`` (a heading that looks like body text), ``locked``
     (Word makes or draws it: a table of contents, a text box, a diagram) and its typography (``text_look``; a table's is
     ``table_look``). Only what applies. Spacing between paragraphs of one style that Word leaves out (``contextualSpacing``, as
     list styles do) is left out here."""
@@ -413,6 +442,9 @@ def layout(ctx: Ctx, nodes: List[Node], th: Optional[Theme] = None) -> List[Dict
             left, hang, right = indent(ctx, n.el)
             if left or hang:
                 look["left"], look["hang"] = left, hang
+            tab = number_tab(ctx, n.el, left, hang) if look.get("label") and hang > 0 else None
+            if tab is not None:
+                look["tab"] = tab
             if right:
                 look["right"] = right
             if body_look(ctx, n, normal):

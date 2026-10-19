@@ -19,6 +19,7 @@
  * page's top left out, overlong pages split where their content reaches the foot, and each page's own number.
  */
 import JSZip from 'jszip';
+import { lineRatio } from '../../lib/fontLines.ts';
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
 const VML = 'urn:schemas-microsoft-com:vml';
@@ -945,22 +946,6 @@ function paragraphs(styles: HTMLElement, body: HTMLElement): void {
   for (const el of Array.from(body.querySelectorAll<HTMLElement>('[style*="line-height"]'))) {
     if (/^\d*\.?\d+$/.test(el.style.lineHeight)) el.style.lineHeight = `calc(${el.style.lineHeight} * var(--wv-lh, 1))`;
   }
-  const ratios = new Map<string, number>();
-  const ratio = (family: string) => {
-    let r = ratios.get(family);
-    if (r == null) {
-      const probe = document.createElement('div');
-      probe.style.cssText = 'position:absolute;visibility:hidden;left:-9999px;top:0;font-size:100px;line-height:normal;white-space:nowrap';
-      probe.style.fontFamily = family;
-      probe.textContent = 'Hg';
-      document.body.appendChild(probe);
-      r = probe.getBoundingClientRect().height / 100;                       // not offsetHeight: whole pixels lose a line a page
-      probe.remove();
-      r = r >= 1 && r <= 1.6 ? r : 1.15;
-      ratios.set(family, r);
-    }
-    return r;
-  };
   const all = Array.from(body.querySelectorAll<HTMLElement>('p'));       // read them all, then change them all
   const looks = all.map((p) => {
     const text = getComputedStyle(Array.from(p.querySelectorAll('span')).find((s) => s.textContent?.trim()) ?? p);
@@ -974,7 +959,7 @@ function paragraphs(styles: HTMLElement, body: HTMLElement): void {
       empty: !p.textContent && !p.querySelector('img, svg, canvas, table'),
     };
   });
-  const lines = looks.map((l) => ratio(l.family));
+  const lines = looks.map((l) => lineRatio(l.family));
   all.forEach((p, i) => {
     p.style.setProperty('--wv-lh', lines[i].toFixed(3));
     if (looks[i].size) p.style.fontSize = looks[i].size!;

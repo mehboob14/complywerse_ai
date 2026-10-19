@@ -35,6 +35,7 @@ import {
   Marks, Placeholders, StudioCell, StudioHeaderCell, StudioRow, StudioTable, WordLayout, blockRanges, findTextRange, headingLevels, marksKey, placeholderRanges,
   wordLayoutKey, type DocMark, type WordLayoutMeta,
 } from './editorExtensions';
+import { lineRatio } from '@/lib/fontLines';
 import { oneTitle, sheetStyle } from './wordLook';
 import type { BlockLook, PageLook } from '@/lib/studio/api';
 
@@ -243,7 +244,7 @@ const SHEET_CSS = `
   .studio-prose .studio-focus-text { background: #fde68a; box-shadow: 0 0 0 2px #fde68a; border-radius: 2px; }
   @keyframes studio-focus-in { 0% { background: #fde68a; } 100% { background: #fffbeb; } }
   @media (prefers-reduced-motion: reduce) { .studio-prose .studio-focus-block { animation: none; } }
-  .studio-prose .studio-wl[data-num]::before { content: attr(data-num); display: inline-block; min-width: var(--hang, 0); padding-right: 0.5em; box-sizing: border-box; text-indent: 0; }
+  .studio-prose .studio-wl[data-num]::before { content: attr(data-num); display: inline-block; min-width: var(--label, var(--hang, 0)); padding-right: 0.5em; box-sizing: border-box; text-indent: 0; }
   .studio-prose .studio-wl-locked { background: #f1f5f6; border-left: 3px solid #b8c7cc; padding-left: 0.5em; padding-right: 0.5em; cursor: default; white-space: pre-wrap; tab-size: 4; }
   .studio-prose p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9aa5b1; pointer-events: none; float: left; height: 0; }
 `;
@@ -407,7 +408,7 @@ const StudioEditor = forwardRef<StudioEditorHandle, Props>(function StudioEditor
             className="mx-auto block min-h-[60vh] w-full max-w-[860px] resize-y rounded-lg border border-[#c5ccd3] bg-white p-4 font-mono text-xs leading-relaxed text-[#1f2933] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]"
           />
         ) : (
-          <div className={`studio-sheet${titled ? ' studio-one-title' : ''}`} style={sheetStyle(word ? layout?.page : null) as React.CSSProperties}>
+          <div className={`studio-sheet${titled ? ' studio-one-title' : ''}`} style={sheetStyle(word ? layout?.page : null, lineRatio) as React.CSSProperties}>
             <EditorContent editor={editor} />
           </div>
         )}

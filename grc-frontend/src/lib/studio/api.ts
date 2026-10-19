@@ -552,6 +552,8 @@ export const studioApi = {
  *  multiple of single lines or "14pt"); a table has `size` and `head_fill`, the shading of its first row. */
 export interface BlockLook {
   label?: string; left?: number; hang?: number; right?: number; body?: boolean; locked?: boolean;
+  /** where the text starts after the number (pt), when Word's tab after it stops before the indent */
+  tab?: number;
   font?: string; size?: number; bold?: boolean; italic?: boolean; underline?: boolean; caps?: boolean; color?: string;
   align?: 'center' | 'right' | 'justify'; before?: number; after?: number; line?: number | string; head_fill?: string;
 }
