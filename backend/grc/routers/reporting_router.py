@@ -383,8 +383,13 @@ def _apply_query_filters(
     search: Optional[str],
     db: Optional[Session] = None,
     dataset_key: Optional[str] = None,
+    user: Any = None,
 ):
     """Shared WHERE builder for /query and /aggregate. Returns (query, skipped_filters)."""
+    if dataset_key == "tasks" and user is not None and db is not None:
+        # another person's document task names a document (maybe a draft) they may not read: left out as in Task Management
+        from ..modules.governance import doc_lifecycle, permissions as doc_permissions
+        q = doc_lifecycle.without_others_tasks(q, user, reads_all=doc_permissions.visible_filter(db, user) is None)
     if search:
         term = f"%{search.strip()}%"
         search_cols = [c for c in (_col(model, name) for name in spec.search) if c is not None]
@@ -662,7 +667,7 @@ def query_dataset(body: QueryBody, db: Session = Depends(get_db), user=Depends(r
 
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
-        db=db, dataset_key=body.dataset,
+        db=db, dataset_key=body.dataset, user=user,
     )
 
     total = q.count()
@@ -828,7 +833,7 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
     q = db.query(*select_exprs).select_from(model)
     q, skipped_filters = _apply_query_filters(
         q, model, spec, body.filters, body.logic, body.search,
-        db=db, dataset_key=body.dataset,
+        db=db, dataset_key=body.dataset, user=user,
     )
     if group_cols:
         q = q.group_by(*group_cols)
@@ -867,7 +872,7 @@ def aggregate_dataset(body: AggregateBody, db: Session = Depends(get_db), user=D
         gq = db.query(*g_exprs).select_from(model)
         gq, _ = _apply_query_filters(
             gq, model, spec, body.filters, body.logic, body.search,
-            db=db, dataset_key=body.dataset,
+            db=db, dataset_key=body.dataset, user=user,
         )
         g_row = gq.one()
         g_map = g_row._mapping if hasattr(g_row, "_mapping") else None

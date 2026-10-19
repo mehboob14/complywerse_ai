@@ -28,9 +28,10 @@ export interface TaskLike {
   document_request?: DocumentRequest | null;
 }
 
-/** A task made by a document request (also one made before `document_request` existed). */
+/** A task made by a document request (also one made before `document_request` existed). `document_request: null` is the
+ *  server saying no request names it (a link typed by hand before that was refused): an ordinary task, as the server treats it. */
 export function isDocumentTask(t: TaskLike | null | undefined): boolean {
-  return !!t && t.source_module === 'document_lifecycle' && t.source_entity_type === 'DocumentObligation';
+  return !!t && t.source_module === 'document_lifecycle' && t.source_entity_type === 'DocumentObligation' && t.document_request !== null;
 }
 
 export type Act = 'ack' | 'sign';

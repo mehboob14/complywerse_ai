@@ -39,6 +39,9 @@ test('a document task is deleted by an administrator only; other tasks as before
   assert.equal(isDocumentTask(docTask), true);
   assert.equal(isDocumentTask({ source_module: 'document_lifecycle', source_entity_type: 'Other' }), false);
   assert.equal(isDocumentTask({ source_module: 'committees' }), false);
+  assert.equal(isDocumentTask({ ...docTask, document_request: req() }), true);
+  assert.equal(isDocumentTask({ ...docTask, document_request: null }), false);          // no request names it: an ordinary task
+  assert.equal(canDeleteTask({ ...docTask, document_request: null }, { isAdmin: false, hasDeleteRight: true }), true);
   assert.equal(canDeleteTask(docTask, { isAdmin: false, hasDeleteRight: true }), false);
   assert.equal(canDeleteTask(docTask, { isAdmin: true, hasDeleteRight: false }), true);
   assert.equal(canDeleteTask({ source_module: null }, { isAdmin: false, hasDeleteRight: true }), true);

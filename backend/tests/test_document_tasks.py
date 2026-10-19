@@ -242,6 +242,33 @@ def test_document_tasks_show_only_to_the_person_asked_and_to_who_may_read_the_do
     assert rana.id not in [t["id"] for t in http.get("/critical-tasks/my-tasks").json()]
 
 
+def test_the_reports_on_tasks_leave_out_other_peoples_document_tasks_too(http):
+    reporting = importlib.import_module("grc.routers.reporting_router")
+    db = http.db
+    participants(db)
+    signoff.send_for_review(5, db, user(db, 1))                                 # a draft: Rana (2) and Rafay (3) review it
+    other = manual_task(db)
+    db.add(m.Role(id=40, tenant_id=1, name="Task staff"))                       # Uma may report on tasks, not read the draft
+    db.add(m.Permission(id=40, name="critical_tasks:tasks:view", resource="critical_tasks:tasks", action="view"))
+    db.add(m.RolePermission(role_id=40, permission_id=40))
+    db.add(m.UserRole(user_id=6, role_id=40, tenant_id=1))
+    db.commit()
+    app = FastAPI()
+    app.include_router(reporting.router)
+    app.dependency_overrides[m.get_db] = lambda: db
+    app.dependency_overrides[require_auth] = lambda: db.get(m.GRCUser, http.me["u"])
+    client = TestClient(app)
+
+    http.me["u"] = 6
+    rows = client.post("/reporting/query", json={"dataset": "tasks"}).json()
+    assert [r["id"] for r in rows["rows"]] == [other.id] and rows["total"] == 1
+    grouped = client.post("/reporting/aggregate", json={"dataset": "tasks", "group_by": ["title"],
+                                                        "measures": [{"id": "n", "pct_of_total": True}]}).json()
+    assert [r["title"] for r in grouped["rows"]] == ["Patch the VPN"] and grouped["grand"]["m_n"] == 1
+    http.me["u"] = 7                                                             # an administrator: every task
+    assert client.post("/reporting/query", json={"dataset": "tasks"}).json()["total"] == 1 + len(tasks(db)) >= 3
+
+
 def test_a_task_cannot_be_linked_to_a_document_request_by_hand(http):
     db = http.db
     publish(db)
