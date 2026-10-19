@@ -797,6 +797,10 @@ def set_stage_owner(
     else:
         if owner_type not in ("user", "team", "role"):
             raise HTTPException(status_code=400, detail="owner_type must be user, team, or role")
+        if owner_type == "user":
+            from .auth_router import refuse_imported_accounts
+            was = owners.get(str(stage_n)) or {}
+            refuse_imported_accounts(db, [body.get("ref_id")], kept=[was.get("ref_id")] if was.get("type") == "user" else [])
         owners[str(stage_n)] = {
             "type": owner_type,
             "ref_id": body.get("ref_id"),
@@ -1593,6 +1597,8 @@ def assign_control_implementation(
     # Validate every id maps to an active user in this tenant DB.
     resolved_users = []
     if requested_ids:
+        from .auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, requested_ids, kept=list(implementation.assigned_user_ids or []) + [implementation.assigned_to_user_id])
         users = (
             db.query(GRCUser)
             .filter(GRCUser.id.in_(requested_ids), GRCUser.is_active == True)

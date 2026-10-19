@@ -192,6 +192,8 @@ def create_team(
     )
     if existing:
         raise HTTPException(status_code=400, detail=f"A team named '{name}' already exists.")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.lead_user_id])
 
     row = Team(
         tenant_id=tenant_id,
@@ -256,6 +258,8 @@ def update_team(
     if "description" in data:
         team.description = data["description"] or None
     if "lead_user_id" in data:
+        from .auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [data["lead_user_id"]], kept=[team.lead_user_id])
         team.lead_user_id = data["lead_user_id"]
     if "is_active" in data:
         team.is_active = bool(data["is_active"])

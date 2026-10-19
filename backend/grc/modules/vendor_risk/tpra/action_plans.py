@@ -229,10 +229,13 @@ class ActionUpdate(BaseModel):
     status: Optional[Literal["scheduled", "done", "cancelled"]] = None
 
 
-def _check_people(db: Session, ids: List[int]) -> List[int]:
+def _check_people(db: Session, ids: List[int], kept=()) -> List[int]:
+    from ....routers.auth_router import refuse_imported_accounts
+
     ids = list(dict.fromkeys(int(i) for i in ids if i))
     if ids and len({u.id for u in db.query(GRCUser.id).filter(GRCUser.id.in_(ids))}) != len(ids):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Everyone an action is for must be a platform user")
+    refuse_imported_accounts(db, ids, kept)
     return ids
 
 
@@ -293,7 +296,7 @@ def change(action_id: int, body: ActionUpdate, db: Session = Depends(get_db), us
     if "note" in data:
         item.note = (data["note"] or "").strip() or None
     if "assignee_ids" in data:
-        item.assignee_ids = _check_people(db, data["assignee_ids"] or []) or None
+        item.assignee_ids = _check_people(db, data["assignee_ids"] or [], kept=item.assignee_ids or []) or None
     if "template_id" in data and item.kind == "questionnaire":
         item.template_id = _template(db, v.tenant_id, data["template_id"]).id
     if "due_on" in data:

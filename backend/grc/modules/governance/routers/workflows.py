@@ -11,7 +11,7 @@ from ....models import (
     DocumentWorkflowInstance, DocumentWorkflowAction, WorkflowTemplate, WorkflowStep,
     WorkflowStepApprover
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, platform_user, refuse_imported_accounts
 from .. import permissions
 
 router = APIRouter(prefix="/workflows", tags=["Governance - Workflows"])
@@ -541,6 +541,7 @@ def delegate_approval(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Delegate user not found or inactive"
         )
+    refuse_imported_accounts(db, [request.delegate_to_user_id])
     
     if request.delegate_to_user_id == current_user.id:
         raise HTTPException(
@@ -630,6 +631,7 @@ def escalate_approval(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Escalation user not found or inactive"
         )
+    refuse_imported_accounts(db, [request.escalate_to_user_id])
     
     original_approver_name = step.approver.display_name if step.approver else "Unknown"
     
@@ -911,6 +913,7 @@ def get_approvers_for_step(step: WorkflowStep, document: GovernanceDocument, db:
                 UserRole.role_id == approver.role_id,
                 UserRole.tenant_id == document.tenant_id,
                 PLATFORM_GRANT,
+                platform_user(UserRole.user_id),        # not a member an access review imported
             ).all()
             for ru in role_users:
                 approver_user_ids.append(ru.user_id)
@@ -1207,6 +1210,7 @@ def advance_workflow(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Delegate user not found or inactive"
             )
+        refuse_imported_accounts(db, [request.delegate_to_user_id])
     
     action = DocumentWorkflowAction(
         instance_id=instance.id,

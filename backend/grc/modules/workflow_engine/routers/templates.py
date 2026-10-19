@@ -116,6 +116,11 @@ def instantiate_template(
     ).first()
     if not template:
         raise HTTPException(status_code=404, detail="Workflow template not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    from .definitions import _people_named
+
+    # the new workflow names its people as a saved one does (definitions._apply_nodes)
+    refuse_imported_accounts(db, _people_named([n.get("config") for n in template.nodes_json or []]))
 
     definition = WorkflowDefinition(
         tenant_id=template.tenant_id,

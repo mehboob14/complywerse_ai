@@ -237,6 +237,8 @@ def create_campaign(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid campaign_type. Must be one of: {valid_types}"
         )
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [*(campaign_data.target_user_ids or []), *(ec.approver_id for ec in campaign_data.escalation_chains)])
     
     campaign = AttestationCampaign(
         tenant_id=tenant_id,
@@ -307,6 +309,8 @@ def update_campaign(
         )
     
     update_data = campaign_data.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, update_data.get("target_user_ids") or [], kept=campaign.target_user_ids or [])
     for field, value in update_data.items():
         setattr(campaign, field, value)
     
@@ -408,6 +412,9 @@ def activate_campaign(
     elif campaign.target_type == "custom":
         if campaign.target_user_ids:
             target_user_ids = set(campaign.target_user_ids)
+    from ....routers.auth_router import platform_account
+    # a department's or a role's members (or a list saved before) never include an account an access review imported
+    target_user_ids = {uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.id.in_(target_user_ids), platform_account())}
     
     if not target_user_ids:
         raise HTTPException(
@@ -845,6 +852,8 @@ def add_escalation_chain(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Escalation chain for tier {chain_data.tier} already exists"
         )
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [chain_data.approver_id])
     
     chain = EscalationChain(
         tenant_id=campaign.tenant_id,

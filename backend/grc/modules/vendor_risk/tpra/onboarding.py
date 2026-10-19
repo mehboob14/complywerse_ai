@@ -266,6 +266,10 @@ def _apply_vendor_part(db: Session, v: Vendor, part: VendorPart) -> None:
         known = {u.id for u in db.query(GRCUser.id).filter(GRCUser.id.in_(people))}
         if set(people) - known:
             raise ValueError("Owner and stakeholders must be platform users")
+        from ....routers.auth_router import imported_account_problem
+        problem = imported_account_problem(db, people, [v.owner_id, *(v.stakeholder_ids or [])])
+        if problem:
+            raise ValueError(problem)
     if data.get("notify_emails"):
         emails = [e.strip() for e in data["notify_emails"].replace(";", ",").split(",") if e.strip()]
         bad = [e for e in emails if not _EMAIL.match(e)]

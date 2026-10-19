@@ -4193,6 +4193,8 @@ def create_workflow(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [t.get("approver_user_id") for t in request.tiers])
     if request.is_default:
         db.query(AssessmentEvidenceApprovalWorkflow).filter(
             AssessmentEvidenceApprovalWorkflow.tenant_id == tenant_id,
@@ -4303,6 +4305,10 @@ def update_workflow(
     if not workflow:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
     
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [t.get("approver_user_id") for t in request.tiers or []],
+                             kept=[uid for (uid,) in db.query(AssessmentEvidenceApprovalTier.approver_user_id).filter(
+                                 AssessmentEvidenceApprovalTier.workflow_id == workflow_id)])
     if request.is_default:
         db.query(AssessmentEvidenceApprovalWorkflow).filter(
             AssessmentEvidenceApprovalWorkflow.tenant_id == workflow.tenant_id,
@@ -4452,6 +4458,8 @@ def perform_approval_action(
     
     if not evidence_link:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.delegated_to])
     
     action = request.action.lower()
     
@@ -4712,6 +4720,8 @@ def update_assessment_xlsx_data(
         if "remarks" in sent_fields:
             row["remarks"] = (request.remarks or "").strip() or None
         if "assigned_to_id" in sent_fields:
+            from .auth_router import refuse_imported_accounts
+            refuse_imported_accounts(db, [request.assigned_to_id], kept=[row.get("assigned_to_id")])
             row["assigned_to_id"] = request.assigned_to_id
         if "assigned_to_name" in sent_fields:
             row["assigned_to_name"] = (request.assigned_to_name or "").strip() or None
@@ -5586,6 +5596,9 @@ def set_item_assignees(
     if unknown:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Pick people and teams from this workspace's lists.")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [a["id"] for a in wanted if a["type"] == "user"],
+                             kept=[a["id"] for a in clean_assignees(item.assignees) if a["type"] == "user"])
     item.assignees = wanted
     item.updated_at = datetime.utcnow()
     db.commit()

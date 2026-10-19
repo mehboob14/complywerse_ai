@@ -1449,6 +1449,8 @@ def update_finding(
     require_doc_editor(finding.document_id, db, current_user)
 
     if update.assigned_owner_id is not None:
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [update.assigned_owner_id], kept=[finding.assigned_owner_id])
         finding.assigned_owner_id = update.assigned_owner_id
     if update.target_remediation_date is not None:
         finding.target_remediation_date = update.target_remediation_date

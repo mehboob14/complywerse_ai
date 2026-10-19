@@ -24,7 +24,7 @@ from ....schemas import (
     RiskKRIMeasurementCreate, RiskKRIMeasurementResponse,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 from ....services import kri_feeds, metric_catalog
 
 router = APIRouter(prefix="/kris", tags=["ERM - Key Risk Indicators"])
@@ -266,6 +266,7 @@ def create_kri(
     frequency = kri.frequency or (enriched.get("frequency") if enriched else "monthly")
     data_source = kri.data_source or (enriched.get("data_source") if enriched else None)
     
+    refuse_imported_accounts(db, [kri.owner_id, kri.reviewer_id, kri.data_provider_id])
     db_kri = RiskKRI(
         risk_id=risk_id,
         tenant_id=tenant_id,
@@ -482,6 +483,8 @@ def update_kri(
         )
 
     update_data = kri_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get(k) for k in ("owner_id", "reviewer_id", "data_provider_id")],
+                             kept=[kri.owner_id, kri.reviewer_id, kri.data_provider_id])
     for key, value in update_data.items():
         setattr(kri, key, value)
 

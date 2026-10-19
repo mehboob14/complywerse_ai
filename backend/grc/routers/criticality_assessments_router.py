@@ -49,11 +49,14 @@ from ..models import (
 )
 from .auth_router import (
     get_user_primary_tenant,
+    refuse_imported_accounts,
     require_auth,
     require_tenant_permission,
 )
 
 logger = logging.getLogger(__name__)
+# The people an assessment names (owners, custodian, assessor): each must use the platform.
+_PEOPLE = ("business_owner_user_id", "service_owner_user_id", "custodian_user_id", "assessor_user_id")
 
 
 # ── RBAC gates ──────────────────────────────────────────────────────────────
@@ -843,6 +846,7 @@ def create_isca_item(
 ):
     tenant_id = _tenant_id_or_403(current_user, db)
     _validate_isca_asset(body.linked_asset_id, tenant_id, db)
+    refuse_imported_accounts(db, [getattr(body, k, None) for k in _PEOPLE])
     item = InfoSystemCriticalityItem(
         tenant_id=tenant_id,
         name=body.name,
@@ -896,6 +900,7 @@ def update_isca_item(
     item = _isca_or_404(item_id, tenant_id, db)
     _assert_editable(item)
     _validate_isca_asset(body.linked_asset_id, tenant_id, db)
+    refuse_imported_accounts(db, [getattr(body, k, None) for k in _PEOPLE], kept=[getattr(item, k, None) for k in _PEOPLE])
     data = body.model_dump(exclude_unset=True)
     non_score_changes: Dict[str, Dict[str, Any]] = {}
     for key, value in data.items():
@@ -1040,6 +1045,7 @@ def create_iaca_item(
 ):
     tenant_id = _tenant_id_or_403(current_user, db)
     _validate_iaca_asset(body.linked_asset_id, tenant_id, db)
+    refuse_imported_accounts(db, [getattr(body, k, None) for k in _PEOPLE])
     item = InfraAssetCriticalityItem(
         tenant_id=tenant_id,
         name=body.name,
@@ -1093,6 +1099,7 @@ def update_iaca_item(
     item = _iaca_or_404(item_id, tenant_id, db)
     _assert_editable(item)
     _validate_iaca_asset(body.linked_asset_id, tenant_id, db)
+    refuse_imported_accounts(db, [getattr(body, k, None) for k in _PEOPLE], kept=[getattr(item, k, None) for k in _PEOPLE])
     data = body.model_dump(exclude_unset=True)
     non_score_changes: Dict[str, Dict[str, Any]] = {}
     for key, value in data.items():
@@ -2257,6 +2264,7 @@ def create_followup_task(
     (`CriticalTask` model + the source_module/source_entity_* fields)."""
     tenant_id = _tenant_id_or_403(current_user, db)
     item = _resolve_item(kind, item_id, tenant_id, db)
+    refuse_imported_accounts(db, [body.assignee_user_id])
     from ..models import CriticalTask  # local import keeps top of file lean
 
     band = (item.criticality_level or "moderate").replace("_", " ")

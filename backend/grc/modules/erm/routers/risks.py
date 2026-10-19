@@ -37,7 +37,7 @@ from ....schemas import (
     RiskDetailResponse, RiskHeatmapData, MessageResponse,
     RiskMitigationActionCreate, RiskMitigationActionResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 from ..schema_migrations import ensure_register_labels
 
 router = APIRouter(prefix="/risks", tags=["ERM - Risk Register"])
@@ -1155,6 +1155,7 @@ def create_risk(
         custom_values = clean_record_values(db, tenant_id, "risks", risk.custom_values, creating=True)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    refuse_imported_accounts(db, [risk.owner_id, risk.business_owner_id])
 
     db_risk = Risk(
         tenant_id=tenant_id,
@@ -1695,6 +1696,8 @@ def update_risk(
         )
     
     update_data = risk_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id"), update_data.get("business_owner_id")],
+                             kept=[risk.owner_id, risk.business_owner_id])
     target_register_type = update_data.get("register_type", risk.register_type)
     is_target_ubl = is_ubl_template_register_type(target_register_type)
 
@@ -2964,6 +2967,7 @@ def create_risk_mitigation_action(
     risk = db.query(Risk).filter(Risk.id == risk_id, Risk.tenant_id.in_(user_tenants)).first()
     if not risk:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Risk not found")
+    refuse_imported_accounts(db, [data.owner_id])
     action = RiskMitigationAction(
         risk_id=risk_id,
         title=data.title,

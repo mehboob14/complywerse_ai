@@ -34,7 +34,7 @@ from ....models import (
     Risk,
     get_db,
 )
-from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, require_auth
+from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, refuse_imported_accounts, require_auth
 from ....services import evidence_review
 from ....rich_audit import write_rich_audit_log
 
@@ -569,6 +569,7 @@ def create_observation(
         custom_values = validate_custom_values(settings, payload.custom_values)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    refuse_imported_accounts(db, [payload.owner_id])
 
     obs = AuditObservation(
         tenant_id=tenant_id,
@@ -1009,6 +1010,7 @@ def update_observation(
     tenant_ids = _tenant_ids(current_user, db)
     obs = _get_obs(obs_id, tenant_ids, db)
     data = payload.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [data.get("owner_id")], kept=[obs.owner_id])
     if "observation_type" in data and data["observation_type"] not in OBS_TYPES:
         raise HTTPException(status_code=400, detail="Invalid observation_type")
     if "priority" in data and data["priority"] not in PRIORITIES:

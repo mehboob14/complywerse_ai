@@ -196,6 +196,8 @@ def create_appetite_config(
         RiskAppetiteConfig.tenant_id == tenant_id,
         RiskAppetiteConfig.category == config.category
     ).first()
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [config.escalation_owner_id], kept=[existing.escalation_owner_id] if existing else [])
     
     if existing:
         # Upsert: update existing config
@@ -246,6 +248,8 @@ def update_appetite_config(
         raise HTTPException(status_code=404, detail="Appetite config not found")
     
     update_data = config_update.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("escalation_owner_id")], kept=[db_config.escalation_owner_id])
     for key, value in update_data.items():
         setattr(db_config, key, value)
     

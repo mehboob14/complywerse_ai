@@ -734,6 +734,8 @@ def add_approver(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User not found"
             )
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [request.user_id])
     
     if request.approver_type == "role" and request.role_id:
         role = db.query(Role).filter(Role.id == request.role_id).first()

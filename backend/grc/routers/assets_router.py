@@ -33,7 +33,7 @@ from ..schemas import (
     AssetDetailResponse, AssetCoverageAnalysis,
     LifecycleTransitionRequest,
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token, refuse_imported_accounts
 # Phase 5.4 + 5.3 helpers — keep all logic out of the router body.
 from ..services.asset_criticality import recompute_for_asset as recompute_asset_criticality
 from ..services import asset_lifecycle
@@ -372,6 +372,8 @@ _BULK_ALLOWED_FIELDS = {
     "department", "data_classification", "owner_id", "primary_owner_id",
     "internet_facing",
 }
+# The people an asset names: each must use the platform (not an account an access review imported).
+_ASSET_PEOPLE = ("owner_id", "primary_owner_id", "secondary_owner_id", "business_owner_id", "escalation_contact_id")
 
 
 @router.get("/facets")
@@ -428,6 +430,7 @@ def bulk_update_assets(
             clean[col] = value
     if not clean:
         return {"updated": 0, "fields": []}
+    refuse_imported_accounts(db, [clean.get(k) for k in _ASSET_PEOPLE])
 
     assets = (
         db.query(ITAsset)
@@ -568,6 +571,7 @@ def create_asset(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="criticality_override_reason is required when overriding the derived criticality",
             )
+    refuse_imported_accounts(db, [getattr(asset, k, None) for k in _ASSET_PEOPLE])
 
     # Derive a canonical os_normalized key from whatever OS text the
     # operator supplied (os_version / os_family), so a manually-added asset
@@ -1498,6 +1502,7 @@ def update_asset(
         )
     
     update_data = asset_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get(k) for k in _ASSET_PEOPLE], kept=[getattr(asset, k, None) for k in _ASSET_PEOPLE])
     if "custom_values" in update_data:
         try:
             from ..services.module_settings import clean_record_values

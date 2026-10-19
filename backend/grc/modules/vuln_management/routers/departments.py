@@ -137,6 +137,8 @@ def create_department(
         ).first()
         if not parent:
             raise HTTPException(status_code=404, detail="Parent department not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.department_head_user_id])
     
     dept = GRCDepartment(
         tenant_id=tenant_id,
@@ -264,6 +266,8 @@ def update_department(
     dept = get_department_or_404(dept_id, user_tenants, db)
     
     update_data = request.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("department_head_user_id")], kept=[dept.department_head_user_id])
     
     if "name" in update_data and update_data["name"] != dept.name:
         existing = db.query(GRCDepartment).filter(

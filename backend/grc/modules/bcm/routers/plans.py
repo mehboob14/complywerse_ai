@@ -143,6 +143,8 @@ def create_plan(
     freq = payload.testing_frequency or "annual"
     if freq not in TESTING_FREQUENCIES:
         raise HTTPException(status_code=400, detail=f"Invalid testing_frequency. One of {sorted(TESTING_FREQUENCIES)}")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.owner_id])
     plan = BcmPlan(
         tenant_id=tenant_ids[0],
         title=payload.title,
@@ -192,6 +194,8 @@ def update_plan(
     data = payload.model_dump(exclude_unset=True)
     if "testing_frequency" in data and data["testing_frequency"] not in TESTING_FREQUENCIES:
         raise HTTPException(status_code=400, detail="Invalid testing_frequency")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [data.get("owner_id")], kept=[plan.owner_id])
     for k, v in data.items():
         setattr(plan, k, v)
     plan.updated_at = datetime.utcnow()

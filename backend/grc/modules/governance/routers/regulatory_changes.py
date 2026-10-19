@@ -31,7 +31,7 @@ from ....schemas import (
     RegulatoryChangeClosureReadinessResponse, RegulatoryChangeCloseResponse,
     IncompleteTaskDetail
 )
-from ....routers.auth_router import PLATFORM_GRANT, require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import PLATFORM_GRANT, refuse_imported_accounts, require_auth, get_user_tenants, get_user_primary_tenant
 
 from .. import regulatory_engine, regulatory_tasks
 
@@ -431,6 +431,7 @@ def create_regulatory_change(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
+    refuse_imported_accounts(db, [change.assigned_to])
     source = normalize_regulatory_source(change.source if isinstance(change.source, str) else None)
     status_value = (change.status or "identified").strip() if isinstance(change.status, str) else "identified"
     priority_value = (change.priority or "medium").strip() if isinstance(change.priority, str) else "medium"
@@ -1096,6 +1097,7 @@ def update_regulatory_change(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory change not found")
     
     update_data = change.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("assigned_to")], kept=[db_change.assigned_to])
 
     if "reference_number" in update_data and not update_data.get("regulation_reference"):
         update_data["regulation_reference"] = update_data.get("reference_number")
@@ -1471,9 +1473,9 @@ def _task_obligation(db: Session, change_id: int, obligation_id: int) -> Regulat
     return o
 
 
-def _task_assignees(db: Session, ids) -> List[int]:
+def _task_assignees(db: Session, ids, kept=()) -> List[int]:
     try:
-        return regulatory_tasks.check_users(db, ids or [])
+        return regulatory_tasks.check_users(db, ids or [], kept)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
@@ -1518,7 +1520,7 @@ def update_obligation(obligation_id: int, body: ObligationPatch, db: Session = D
     # Everyone who owns it: the list if one came, else the single owner; owner_id is the first.
     if "owner_ids" in changed or "owner_id" in changed:
         ids = changed.get("owner_ids") if changed.get("owner_ids") is not None else [changed.get("owner_id")]
-        ids = _task_assignees(db, ids)
+        ids = _task_assignees(db, ids, kept=_owner_ids(o))
         changed["owner_ids"], changed["owner_id"] = ids, (ids[0] if ids else None)
     before = {k: getattr(o, k) for k in changed}
     for field, value in changed.items():
@@ -1721,7 +1723,8 @@ def update_implementation_task(
     if "assignee_ids" in update_data or "assigned_to" in update_data:
         ids = update_data.pop("assignee_ids", None)
         single = update_data.pop("assigned_to", None)
-        regulatory_tasks.set_assignees(db_task, _task_assignees(db, ids if ids is not None else [single]))
+        regulatory_tasks.set_assignees(db_task, _task_assignees(db, ids if ids is not None else [single],
+                                                                kept=list(db_task.assignee_ids or []) + [db_task.assigned_to]))
 
     for key, value in update_data.items():
         setattr(db_task, key, value)
@@ -2235,6 +2238,7 @@ def run_gap_analysis(
         user = db.query(GRCUser).filter(GRCUser.id == assignee_id).first()
         if not user:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Assigned user not found")
+        refuse_imported_accounts(db, [assignee_id])
         assignee_name = user.display_name
 
     payload = _build_gap_analysis_payload(

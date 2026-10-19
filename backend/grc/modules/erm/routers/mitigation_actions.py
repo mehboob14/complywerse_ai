@@ -16,7 +16,7 @@ from ....schemas import (
     RiskMitigationActionCreate, RiskMitigationActionUpdate, RiskMitigationActionResponse,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 from ....services.ai_gateway.field_policies import ai_view
 
 router = APIRouter(prefix="/mitigation-actions", tags=["ERM - Mitigation Actions"])
@@ -274,6 +274,7 @@ def update_action(
         )
     
     update_data = action_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id")], kept=[action.owner_id])
     for key, value in update_data.items():
         setattr(action, key, value)
     
@@ -406,6 +407,7 @@ def create_risk_action(
             detail="Risk not found"
         )
     
+    refuse_imported_accounts(db, [action.owner_id])
     db_action = RiskMitigationAction(
         risk_id=risk_id,
         title=action.title,

@@ -496,6 +496,8 @@ def _validate_assigned_user_for_tenant(tenant_id: int, assigned_user_id: Optiona
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Assigned user must belong to the same tenant as the assessment"
         )
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [assigned_user_id])
 
 
 def _validate_risk_scale_value(field_name: str, value: Optional[int]) -> None:

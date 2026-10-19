@@ -585,6 +585,9 @@ def replace_feed_assignments(
             if not role:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Role {raw.id} not found")
             normalized.append(("role", None, int(raw.id)))
+    from ....routers.auth_router import refuse_imported_accounts
+    had = [uid for (uid,) in db.query(RegulatoryFeedAssignment.user_id).filter(RegulatoryFeedAssignment.feed_source_id == source_id)]
+    refuse_imported_accounts(db, [uid for _, uid, _ in normalized], kept=had)
 
     db.query(RegulatoryFeedAssignment).filter(
         RegulatoryFeedAssignment.feed_source_id == source_id

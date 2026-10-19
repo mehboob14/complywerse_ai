@@ -222,6 +222,8 @@ def create_entry(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No tenant available for current user")
 
     data = payload.model_dump()
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [data.get("risk_owner_user_id")])
     # Auto compute risk score when both axes set and score is not.
     if data.get("risk_score") is None:
         data["risk_score"] = _calc_score(data.get("likelihood"), data.get("impact"))
@@ -267,6 +269,8 @@ def update_entry(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="AI risk entry not found")
 
     changes = payload.model_dump(exclude_unset=True)
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [changes.get("risk_owner_user_id")], kept=[row.risk_owner_user_id])
     for k, v in changes.items():
         setattr(row, k, v)
     # Recompute score when either axis changed.

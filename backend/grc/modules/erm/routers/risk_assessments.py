@@ -628,6 +628,8 @@ def create_risk_assessment(
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [data.lead_assessor_id])
 
     assessment = RiskAssessment(
         tenant_id=tenant_id,
@@ -689,6 +691,8 @@ def update_risk_assessment(
         )
 
     update_data = data.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("lead_assessor_id")], kept=[assessment.lead_assessor_id])
     for key, value in update_data.items():
         setattr(assessment, key, value)
 

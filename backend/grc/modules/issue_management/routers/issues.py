@@ -247,6 +247,8 @@ def create_issue(
     target_closure_date = detected_at + timedelta(hours=resolve_hours)
     due_date_raw = body.get("due_date")
     due_date = datetime.fromisoformat(due_date_raw) if due_date_raw else None
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("owner_id"), body.get("assignee_id")])
 
     issue = Issue(
         tenant_id=tenant_id,
@@ -533,6 +535,8 @@ def update_issue(
     issue = _get_issue_or_404(issue_id, current_user, db)
     changes: Dict[str, Any] = {}
     severity_dirty = False
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("owner_id"), body.get("assignee_id")], kept=[issue.owner_id, issue.assignee_id])
 
     for field in (
         "title", "description", "issue_type", "category",

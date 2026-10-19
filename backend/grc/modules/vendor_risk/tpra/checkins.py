@@ -216,6 +216,8 @@ def check_in(vendor_id: int, body: CheckinIn, db: Session = Depends(get_db), use
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Name the person who owns it now")
         if db.query(GRCUser.id).filter(GRCUser.id == body.new_owner_id, GRCUser.is_active.is_(True)).first() is None:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "The new owner must be an active platform user")
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [body.new_owner_id])
     update = {}
     if not body.contact_current:
         update = {k: " ".join(val.split()) for k, val in (body.contact.model_dump() if body.contact else {}).items()

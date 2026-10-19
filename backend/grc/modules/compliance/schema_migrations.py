@@ -1194,8 +1194,9 @@ def _backfill_published_version(engine: Engine) -> None:
 
 
 def _backfill_imported_account_owners(engine: Engine) -> None:
-    """Once per tenant: documents owned by an account an access-review connector imported get their author as owner, and the
-    requests waiting on such accounts end (governance/imported_owners.py; it records that it ran)."""
+    """Once per tenant: documents owned by an account an access-review connector imported get their author as owner, the
+    requests waiting on such accounts end, and such accounts named as reviewers or approvers are removed
+    (governance/imported_owners.py; it records that it ran)."""
     try:
         insp = inspect(engine)
         if not all(insp.has_table(t) for t in ("grc_governance_documents", "grc_document_obligations", "grc_users")):

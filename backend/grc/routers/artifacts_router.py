@@ -1331,6 +1331,8 @@ def create_artifact(
                 platform_count = db.query(func.count(ITAsset.id)).filter(ITAsset.tenant_id == tenant_id).scalar()
         except Exception:
             pass
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.assigned_to_id])
 
     artifact = TenantArtifact(
         tenant_id=tenant_id,
@@ -1443,6 +1445,8 @@ def update_artifact(
 
     # sent-as-null means "unassign"; a None check would silently keep the owner
     if "assigned_to_id" in payload.model_fields_set:
+        from .auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [payload.assigned_to_id], kept=[artifact.assigned_to_id])
         artifact.assigned_to_id = payload.assigned_to_id
     if payload.format is not None:
         artifact.format = payload.format
@@ -1510,6 +1514,8 @@ def assign_artifact(
     user = db.query(GRCUser).filter(GRCUser.id == user_id).first()
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [user_id])
     artifact.assigned_to_id = user_id
     # Keep draft/planned ownership assign even with no content yet.
     if not artifact.status:

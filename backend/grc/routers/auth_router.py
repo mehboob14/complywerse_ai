@@ -241,9 +241,20 @@ def is_platform_account(db: Session, user: Optional[GRCUser]) -> bool:
     return user is not None and db.query(GRCUser.id).filter(GRCUser.id == user.id, platform_account()).first() is not None
 
 
-def imported_account_problem(db: Session, user_ids) -> Optional[str]:
-    """A sentence naming the first of ``user_ids`` that an access review imported (None when all are platform accounts or unknown)."""
-    ids = {int(i) for i in (user_ids or []) if i}
+def platform_user(user_id_column):
+    """SQL filter: the user id in ``user_id_column`` (a role's or a team's member, as expanded) is a platform account."""
+    from sqlalchemy import select
+
+    return user_id_column.in_(select(GRCUser.id).where(platform_account()))
+
+
+def imported_account_problem(db: Session, user_ids, kept=()) -> Optional[str]:
+    """A sentence naming the first of ``user_ids`` that an access review imported (None when all are platform accounts or unknown).
+    The ids in ``kept`` (already on the record, sent back as they are) are not asked about."""
+    def numbers(values):         # a free-form body may hold a label or an empty string where an id goes: not an id
+        return {int(v) for v in (values or []) if str(v).strip().isdecimal() and int(v)}
+
+    ids = numbers(user_ids) - numbers(kept)
     if not ids:
         return None
     row = db.query(GRCUser).filter(GRCUser.id.in_(ids), ~platform_account()).order_by(GRCUser.id).first()
@@ -253,9 +264,10 @@ def imported_account_problem(db: Session, user_ids) -> Optional[str]:
             "Choose someone who signs in here.")
 
 
-def refuse_imported_accounts(db: Session, user_ids) -> None:
-    """HTTP 400 when one of ``user_ids`` is an account an access review imported."""
-    problem = imported_account_problem(db, user_ids)
+def refuse_imported_accounts(db: Session, user_ids, kept=()) -> None:
+    """HTTP 400 when one of ``user_ids`` (an owner, assignee, approver, reviewer, lead or delegate being named) is an account an
+    access review imported; one in ``kept`` (already named on the record) may be sent back as it is. Every such write calls this."""
+    problem = imported_account_problem(db, user_ids, kept)
     if problem:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=problem)
 

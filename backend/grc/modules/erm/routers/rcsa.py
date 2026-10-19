@@ -221,7 +221,8 @@ from ....schemas import (
     RCSADashboardSummary, RCSAFindingsBySeverity, RCSABUProgress, RCSAAISuggestionResponse,
     EvidenceRecommendation, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin
+from ....routers.auth_router import (require_auth, get_user_tenants, get_user_primary_tenant, is_tenant_admin, is_platform_account,
+                                     refuse_imported_accounts)
 from ....services import evidence_review
 
 router = APIRouter(prefix="/rcsa", tags=["RCSA - Risk and Control Self-Assessment"])
@@ -1389,8 +1390,8 @@ def activate_campaign(
                     business_unit_id=bu.id,
                     # Assign the team lead as the default assessor so the
                     # campaign immediately has an owner; tenants can
-                    # reassign per-assessment afterwards.
-                    assessor_id=team.lead_user_id,
+                    # reassign per-assessment afterwards (not a lead an access review imported).
+                    assessor_id=team.lead_user_id if is_platform_account(db, team.lead) else None,
                 )
                 db.add(assessment)
         else:
@@ -1501,6 +1502,7 @@ def assign_business_units(
     if not db_campaign:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
     
+    refuse_imported_accounts(db, (request.assessor_ids or {}).values())
     created_count = 0
     for bu_id in request.business_unit_ids:
         existing = db.query(RCSAAssessment).filter(
@@ -2117,6 +2119,7 @@ def create_approval_workflow(
     if not tenant_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="User not assigned to any tenant")
     
+    refuse_imported_accounts(db, [tier.approver_user_id for tier in workflow.tiers])
     db_workflow = RCSAApprovalWorkflow(
         tenant_id=tenant_id,
         name=workflow.name,
@@ -2422,6 +2425,7 @@ def delegate_approval(
     delegate_user = db.query(GRCUser).filter(GRCUser.id == action.delegate_to_user_id).first()
     if not delegate_user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Delegate user not found")
+    refuse_imported_accounts(db, [action.delegate_to_user_id])
     
     history = RCSAApprovalHistory(
         assessment_id=assessment_id,
@@ -2523,6 +2527,7 @@ def create_finding(
     if not assessment:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assessment not found")
     
+    refuse_imported_accounts(db, [finding.remediation_owner_id])
     db_finding = RCSAFinding(
         tenant_id=assessment.tenant_id,
         assessment_id=assessment_id,
@@ -2582,6 +2587,7 @@ def update_finding(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Finding not found")
     
     update_data = finding.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("remediation_owner_id")], kept=[db_finding.remediation_owner_id])
     
     if "status" in update_data and update_data["status"] == "closed":
         db_finding.closed_at = datetime.utcnow()

@@ -18,7 +18,7 @@ from grc.models import (
     AuditLog, AuditObservation, Base, CriticalTask, CriticalTaskApproval, CriticalTaskComment, CriticalTaskHistory,
     CriticalTaskSubTask, Framework, GovernanceDocument, GRCDepartment, GRCUser, InternalControl, MeetingAgendaItem,
     NormalizedControl, RegulatoryChange, RegulatoryFeedItem, RegulatoryImpactAssessment, RegulatoryImplementationTask,
-    RegulatoryLink, RegulatoryObligation, Tenant, get_db,
+    RegulatoryLink, RegulatoryObligation, Tenant, UserRole, get_db,
 )
 from grc.modules.governance import regulatory_engine as engine
 from grc.modules.governance.routers import regulatory_changes
@@ -28,7 +28,8 @@ _TABLES = [Tenant, GRCUser, RegulatoryChange, RegulatoryImpactAssessment, Regula
            RegulatoryObligation, RegulatoryLink, Framework, NormalizedControl, InternalControl, GovernanceDocument,
            AuditObservation, GRCDepartment, AuditLog, RegulatoryFeedItem, MeetingAgendaItem,
            # AI tasks show in Task Management too (regulatory_tasks)
-           CriticalTask, CriticalTaskHistory, CriticalTaskSubTask, CriticalTaskComment, CriticalTaskApproval]
+           CriticalTask, CriticalTaskHistory, CriticalTaskSubTask, CriticalTaskComment, CriticalTaskApproval,
+           UserRole]                      # the platform-account rule reads it (owners are checked: auth_router.platform_account)
 
 CIRCULAR = "\n\n".join([
     "STATE BANK OF PAKISTAN. BPRD Circular No. 07 of 2026. Subject: Cyber Resilience of Digital Channels.",

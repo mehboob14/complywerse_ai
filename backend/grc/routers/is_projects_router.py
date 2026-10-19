@@ -18,7 +18,7 @@ from ..models import (
     ISProjectDependency, ISProjectHealthSnapshot,
     Evidence, GRCUser, get_db
 )
-from .auth_router import require_auth, get_user_primary_tenant, require_tenant_permission
+from .auth_router import require_auth, get_user_primary_tenant, refuse_imported_accounts, require_tenant_permission
 from ..services import evidence_review
 
 MILESTONE_EVIDENCE_DIR = "backend/uploads/is_project_milestone_evidence"
@@ -596,6 +596,7 @@ def create_project(
     current_user: GRCUser = Depends(require_auth),
 ):
     tenant_id = get_user_primary_tenant(current_user, db)
+    refuse_imported_accounts(db, [data.get("project_owner_id")])
     project = ISProject(
         tenant_id=tenant_id,
         name=data.get("name", "Untitled Project"),
@@ -676,6 +677,7 @@ def update_project(
         "budget_estimated", "budget_actual", "business_justification",
         "linked_risks", "linked_controls", "linked_frameworks", "completion_percentage",
     ]
+    refuse_imported_accounts(db, [data.get("project_owner_id")], kept=[project.project_owner_id])
     for field in updatable:
         if field in data:
             setattr(project, field, data[field])
@@ -968,6 +970,7 @@ def create_task(
     project = db.query(ISProject).filter(ISProject.id == project_id, ISProject.tenant_id == tenant_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    refuse_imported_accounts(db, [data.get("assignee_id")])
     task = ISProjectTask(
         project_id=project_id,
         title=data.get("title", ""),
@@ -1008,6 +1011,7 @@ def update_task(
     ).first()
     if not task:
         raise HTTPException(status_code=404, detail="Task not found")
+    refuse_imported_accounts(db, [data.get("assignee_id")], kept=[task.assignee_id])
 
     for field in ["title", "description", "assignee_id", "assignee_name", "status", "priority", "dependencies", "progress", "sort_order"]:
         if field in data:
@@ -1081,6 +1085,7 @@ def add_team_member(
     project = db.query(ISProject).filter(ISProject.id == project_id, ISProject.tenant_id == tenant_id).first()
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
+    refuse_imported_accounts(db, [data.get("user_id")])
     member = ISProjectTeamMember(
         project_id=project_id,
         user_id=data.get("user_id"),
@@ -1112,6 +1117,7 @@ def update_team_member(
     ).first()
     if not member:
         raise HTTPException(status_code=404, detail="Team member not found")
+    refuse_imported_accounts(db, [data.get("user_id")], kept=[member.user_id])
 
     for field in ["user_id", "user_name", "email", "role", "responsibilities"]:
         if field in data:

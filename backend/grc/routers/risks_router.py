@@ -20,7 +20,7 @@ from ..schemas import (
     RiskFrameworkControlLinkCreate, RiskGovernanceLinkCreate,
     RiskDetailResponse, RiskHeatmapData, MessageResponse
 )
-from .auth_router import require_auth, require_tenant_permission, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, require_tenant_permission, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 
 router = APIRouter(prefix="/risks", tags=["Risk Management"])
 
@@ -100,6 +100,7 @@ def create_risk(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
+    refuse_imported_accounts(db, [risk.owner_id, risk.business_owner_id])
     
     db_risk = Risk(
         tenant_id=tenant_id,
@@ -435,6 +436,8 @@ def update_risk(
         )
     
     update_data = risk_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id"), update_data.get("business_owner_id")],
+                             kept=[risk.owner_id, risk.business_owner_id])
     for field, value in update_data.items():
         setattr(risk, field, value)
     
