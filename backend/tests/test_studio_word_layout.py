@@ -219,3 +219,24 @@ def test_a_numbers_tab_to_a_list_stop_before_the_indent_is_where_its_text_starts
     looks, _page = _looks(path)
     assert looks["Usage Policy of Computing Resources"]["tab"] == 36.0
     assert "tab" not in looks["All staff protect what they use."]
+
+
+def test_a_bullet_in_a_symbol_font_shows_the_sign_that_font_draws(tmp_path):
+    # the same code is a different sign in each font: Symbol's F0E0 is a lozenge (the AUP's second level showed an arrow) and
+    # Wingdings' an arrow; a private-range bullet whose font is not named is the usual bullet of that code
+    assert D.symbol_twin("Symbol", "\uf0e0") == "\u25ca"
+    assert D.symbol_twin("Wingdings", "\uf0e0") == "\u2192"
+    assert D.symbol_twin("Symbol", "\uf0b7") == "\u2022"
+    assert D.symbol_twin("", "\uf0a7") == "\u25aa"
+    assert D.symbol_twin("Courier New", "o") is None
+    d = Document()
+    numbering = d.part.numbering_part.element
+    font = '<w:rPr><w:rFonts w:ascii="Symbol" w:hAnsi="Symbol"/></w:rPr>'
+    numbering.insert(0, _abstract(94, '<w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="bullet"/><w:lvlText w:val="\uf0e0"/>'
+                                      f'<w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>{font}</w:lvl>'))
+    num = numbering.add_num(94).numId
+    _numbered(d, "Act responsibly", num, 0)
+    path = str(tmp_path / "symbol.docx")
+    d.save(path)
+    looks, _page = _looks(path)
+    assert looks["Act responsibly"]["label"] == "\u25ca"

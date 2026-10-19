@@ -23,8 +23,10 @@ const OPTIONS = {
   experimental: false,                        // wordFidelity lays the tabs out; docx-preview's own tab pass would undo it
 };
 
+// the page's own type (its font, its line height of 1.45, its colour) would be inherited into the document's lines: none is
 const FRAME = `
   :host { display: block; }
+  [data-body] { all: initial; display: block; }
   .docx-wrapper { background: #e8ecf0 !important; padding: 20px 0 !important; }
   .docx-wrapper > section.docx { box-shadow: 0 1px 4px rgba(15, 23, 42, .18); margin-bottom: 20px !important; }
 `;

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { leaderText, mergeStops, nextStop, tabWidth, type TabStop } from './wordFidelity.ts';
+import { leaderText, mergeStops, nextStop, symbolTwin, tabWidth, type TabStop } from './wordFidelity.ts';
 
 const at = (pos: number, kind: TabStop['kind'] = 'left', leader = 'none'): TabStop => ({ pos, kind, leader });
 
@@ -36,6 +36,24 @@ test('the width of a tab: to a left stop, a right stop (the text after it ends t
   assert.equal(tabWidth(at(300, 'center'), 100, 40, 40), 180);
   assert.equal(tabWidth(at(300, 'decimal'), 100, 40, 25), 175);
   assert.equal(tabWidth(at(450, 'right'), 440, 30, 30), 0);                 // text too long to end at the stop runs on past it
+});
+
+test("a symbol font's character is the sign that font draws: the same code is a different sign in Symbol and in Wingdings", () => {
+  const pua = (code: number) => String.fromCharCode(0xF000 + code);
+  assert.equal(symbolTwin('Symbol', pua(0xE0)), '◊');                       // the AUP's second-level bullet (it showed as an arrow)
+  assert.equal(symbolTwin('Wingdings', pua(0xE0)), '→');
+  assert.equal(symbolTwin('Symbol', pua(0xB7)), '•');
+  assert.equal(symbolTwin('Wingdings', pua(0xA7)), '▪');
+  assert.equal(symbolTwin('Wingdings', '§'), '▪');                         // the same code written as 00A7
+  assert.equal(symbolTwin('Wingdings', pua(0xD8)), '➢');
+  assert.equal(symbolTwin('Symbol', pua(0xA8)), '♦');
+  assert.equal(symbolTwin('Symbol', 'a'), 'α');
+  assert.equal(symbolTwin('Times New Roman', pua(0xB7)), '•');             // a private-range bullet in another font: as Symbol's
+  assert.equal(symbolTwin('Times New Roman', 'o'), null);                  // Courier New's "o" bullet and other text stay as they are
+  assert.equal(symbolTwin('Symbol', pua(0xF0)), null);                     // no sign there
+  // every Symbol position from 0x20 to 0x7E and from 0xA0 to 0xFE has its sign (the tables are 95 long)
+  for (let c = 0x21; c <= 0x7E; c++) assert.ok(symbolTwin('Symbol', pua(c)), `0x${c.toString(16)}`);
+  for (let c = 0xA0; c <= 0xFE; c++) if (c !== 0xF0) assert.ok(symbolTwin('Symbol', pua(c)), `0x${c.toString(16)}`);
 });
 
 test('a leader fills the tab with its character, leaving a little room', () => {

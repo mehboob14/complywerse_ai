@@ -21,7 +21,7 @@ from docx.opc.constants import RELATIONSHIP_TYPE as RT
 from docx.oxml import parse_xml
 from docx.oxml.ns import qn
 
-from .docx_io import SYMBOL_GLYPHS as _BULLETS
+from .docx_io import symbol_twin
 from .docx_io import Ctx, Node, Para, TableInfo, _local, _on
 
 
@@ -118,7 +118,11 @@ def labels(ctx: Ctx) -> Dict[Any, str]:
         fmt = _val(lvl, "numFmt")
         text = _val(lvl, "lvlText") or ""
         if fmt == "bullet":
-            out[p] = _BULLETS.get(text, text if text and text.isprintable() and not ("" <= text[0] <= "") else "•")
+            # a bullet in a symbol font as the sign that font draws (Symbol's F0E0 is a lozenge, Wingdings' an arrow)
+            fonts = lvl.find(qn("w:rPr") + "/" + qn("w:rFonts"))
+            face = (fonts.get(qn("w:ascii")) or fonts.get(qn("w:hAnsi")) or "") if fonts is not None else ""
+            twin = symbol_twin(face, text)
+            out[p] = twin or ("◦" if text == "o" else text if text and text.isprintable() and not ("\uf000" <= text[0] <= "\uf8ff") else "•")
             continue
         legal = lvl.find(qn("w:isLgl")) is not None and _on(lvl.find(qn("w:isLgl")))
 

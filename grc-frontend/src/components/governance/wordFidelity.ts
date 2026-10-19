@@ -32,11 +32,23 @@ const PAGE = '\uE001';                     // this page's number
 const PAGES = '\uE002';                    // the number of pages
 const MARK = '_wvTabs';                    // a bookmark opening a paragraph with tabs: MARK + the index of its stops
 const BREAK_STYLE = 'WvPageBreak';         // the paragraph that carries a page break Word recorded (drawn as nothing)
+const LABEL_STYLE = 'WvLabel';             // the run of a list number or bullet that `numbers` wrote in
 const CONTINUE = '_wvContinue';            // a bookmark opening a section that goes on on the same page (a continuous break)
 const NO_HEADER = '_wvNoHeader';           // ...a section whose first page has no header / no footer (titlePg, none given)
 const NO_FOOTER = '_wvNoFooter';
 const HEAD_ROWS = '_wvHead';               // ...a table whose first rows repeat on each page (+ how many)
 const PAGE_START = '_wvPageStart';         // ...a section that numbers its pages its own way (+ start_format)
+const SECTION = '_wvSect';                 // ...the first block of a section (+ its index)
+const PART = '_wvPart_';                   // ...a header or footer part (+ its file name)
+const TEMPLATE = '_wvTemplate';            // ...a page drawn only to have a header or footer to copy
+const ANCHOR = '_wvAnchor';                // ...a picture Word places itself (+ the index of its placement)
+const EXACT_ROW = '_wvExact';              // ...a table row of exact height
+const GOES_ON = '_wvGoesOn';               // ...the first part of a paragraph split over two pages
+const SPLIT_AT = 'wv-split';               // a recorded page break inside a paragraph's text, where `splitParagraphs` splits it
+const WP = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing';
+const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const MC = 'http://schemas.openxmlformats.org/markup-compatibility/2006';
+const EMU = 9525;                          // EMUs (DrawingML) to CSS pixels
 const PT = 0.75;                           // CSS pixels to points
 const DARK = 0.18;                         // a shading darker than this (relative luminance) turns automatic text white
 
@@ -58,6 +70,36 @@ export interface Prepared {
   fonts: Record<string, string>;
   /** the Word version the file was made for (12: Word 2007, 15: Word 2013 and later) */
   compat: number;
+  /** each section's headers and footers by kind (default, first, even: the part's file name) and its different first page */
+  sections: SectionParts[];
+  /** different headers and footers on even pages (Word's setting for the whole document) */
+  evenAndOdd: boolean;
+  /** how Word places each floating picture */
+  anchors: Anchor[];
+}
+
+export interface SectionParts {
+  titlePg: boolean;
+  header: Record<string, string>;
+  footer: Record<string, string>;
+}
+
+/** Where a floating picture goes (offsets in CSS pixels): from what frame, aligned in it or at an offset. */
+export interface Placement { from: string; align: string | null; offset: number }
+
+export interface Anchor {
+  h: Placement;
+  v: Placement;
+  /** Word's wrapping: None, Square, Tight, Through, TopAndBottom; and on which sides text may go */
+  wrap: string;
+  side: string;
+  behind: boolean;
+  /** Word's stacking order: a higher one is drawn over a lower one */
+  z: number;
+  /** the space kept clear around it (top, bottom, left, right) and its size, in CSS pixels */
+  dist: number[];
+  width: number;
+  height: number;
 }
 
 // ── what Word does, as plain functions ─────────────────────────────────────────
@@ -278,12 +320,63 @@ export function formatNumber(n: number, format: string | null): string {
   }
 }
 
-// a bullet in a symbol font, as the character it shows (the studio's editor shows the same ones)
-const GLYPHS: Record<string, string> = {
-  '\uF0B7': '•', '\uF0A7': '▪', '\uF0D8': '➢', '\uF076': '❖', '\uF0FC': '✓', '\uF0A8': '□',
-  '\uF06E': '■', '\uF0E0': '➢', '§': '▪', '\uF06C': '•', '\uF0FB': '✗', '\uF0FE': '☑',
-  '\uF0E8': '➔', '\uF0F0': '⇨', '\uF09F': '•', '\uF071': '❑',
+// What a character of a symbol font draws, as Unicode (the studio's editor uses the same tables): Symbol's characters by its
+// encoding from 0x20 and from 0xA0, and Wingdings' bullets and signs. The same code is a different sign in each font (0xE0 is
+// Symbol's lozenge and Wingdings' arrow): a table that ignored the font turned a Symbol lozenge into an arrow.
+const SYMBOL_LOW = ' !∀#∃%&∋()∗+,−./0123456789:;<=>?≅ΑΒΧΔΕΦΓΗΙϑΚΛΜΝΟΠΘΡΣΤΥςΩΞΨΖ[∴]⊥_‾αβχδεφγηιϕκλμνοπθρστυϖωξψζ{|}∼';
+const SYMBOL_HIGH = '€ϒ′≤⁄∞ƒ♣♦♥♠↔←↑→↓°±″≥×∝∂•÷≠≡≈…⏐⎯↵ℵℑℜ℘⊗⊕∅∩∪⊃⊇⊄⊂⊆∈∉∠∇®©™∏√⋅¬∧∨⇔⇐⇑⇒⇓◊〈®©™∑⎛⎜⎝⎡⎢⎣⎧⎨⎩⎪ 〉∫⌠⎮⌡⎞⎟⎠⎤⎥⎦⎫⎬⎭';
+const WINGDINGS: Record<number, string> = {
+  0x21: '✏', 0x22: '✂', 0x28: '☎', 0x2A: '✉', 0x36: '⌛', 0x3E: '✇', 0x3F: '✍', 0x41: '✌', 0x45: '☜', 0x46: '☞', 0x47: '☝',
+  0x48: '☟', 0x4A: '☺', 0x4C: '☹', 0x4E: '☠', 0x51: '✈', 0x52: '☼', 0x54: '❄', 0x56: '✞', 0x58: '✠', 0x59: '✡', 0x5A: '☪',
+  0x5B: '☯', 0x5D: '☸', 0x6C: '●', 0x6D: '❍', 0x6E: '■', 0x6F: '□', 0x71: '❑', 0x72: '❒', 0x73: '⬧', 0x74: '⧫', 0x75: '◆',
+  0x76: '❖', 0x77: '⬥', 0x78: '⌧', 0x7A: '⌘', 0x7B: '❀', 0x7C: '✿', 0x7D: '❝', 0x7E: '❞', 0x9E: '·', 0x9F: '•', 0xA0: '▪',
+  0xA1: '○', 0xA4: '◉', 0xA5: '◎', 0xA7: '▪', 0xA8: '◻', 0xAA: '✦', 0xAB: '★', 0xAC: '✶', 0xAD: '✴', 0xAE: '✹', 0xAF: '✵',
+  0xB2: '⟡', 0xD8: '➢', 0xE0: '→', 0xE8: '➔', 0xEF: '⇦', 0xF0: '⇨', 0xF1: '⇧', 0xF2: '⇩', 0xF3: '⬄', 0xFA: '▫', 0xFB: '✗',
+  0xFC: '✓', 0xFD: '☒', 0xFE: '☑',
 };
+
+// a private-range bullet whose font is not named: the usual bullets of either font
+const COMMON: Record<number, string> = {
+  0xB7: '•', 0xA7: '▪', 0xD8: '➢', 0xFC: '✓', 0x76: '❖', 0x6E: '■', 0x71: '❑', 0xA8: '◻', 0x6C: '●', 0x9F: '•', 0xE8: '➔',
+  0xF0: '⇨', 0xFB: '✗', 0xFE: '☑',
+};
+
+/** The Unicode twin of a character set in a symbol font (its code in the font's private range F0xx, or as 00xx), or null: in
+ * Symbol by its encoding, in Wingdings by the table; a private-range character in any other font is the usual bullet of that
+ * code, else read as Symbol's. */
+export function symbolTwin(font: string, ch: string): string | null {
+  const cp = ch.codePointAt(0) ?? 0;
+  const code = cp >= 0xF000 && cp <= 0xF0FF ? cp - 0xF000 : cp;
+  if (code > 0xFF) return null;
+  const face = font.trim().toLowerCase();
+  if (face === 'wingdings') return WINGDINGS[code] ?? null;
+  if (face !== 'symbol' && (cp < 0xF000 || /dings/.test(face))) return null;
+  if (face !== 'symbol' && COMMON[code]) return COMMON[code];
+  const twin = code >= 0x20 && code <= 0x7E ? SYMBOL_LOW[code - 0x20] : code >= 0xA0 && code <= 0xFE ? SYMBOL_HIGH[code - 0xA0] : undefined;
+  return twin && twin !== ' ' ? twin : null;
+}
+
+const drawable = new Map<string, boolean>();
+
+/** Whether this computer draws `ch` in `font` itself (Windows has Symbol and Wingdings): then it is shown in that font, Word's
+ * own glyph. Measured once: the font draws it when its width is the same whatever follows the font in the list, and is not
+ * the fallback's. */
+function canDraw(font: string, ch: string): boolean {
+  const key = `${font}\n${ch}`;
+  let ok = drawable.get(key);
+  if (ok == null) {
+    ok = false;
+    const ctx = typeof document !== 'undefined' ? document.createElement('canvas').getContext('2d') : null;
+    if (ctx) {
+      const name = font.replace(/"/g, '');
+      const width = (stack: string) => { ctx.font = `40px ${stack}`; return ctx.measureText(ch).width; };
+      const own = width(`"${name}", monospace`);
+      ok = own > 0 && own === width(`"${name}", serif`) && own !== width('monospace');
+    }
+    drawable.set(key, ok);
+  }
+  return ok;
+}
 
 const stopsOf = (pPr: Element | null): TabStop[] => kids(kid(pPr, 'tabs'), 'tab').map((t) => ({
   pos: points(val(t, 'pos')) ?? 0,
@@ -390,6 +483,72 @@ function tables(doc: Document, compat: number, cellMargin: number): void {
   }
 }
 
+/**
+ * Tables sized as Word sizes them. A double border is three times its line's width (two lines and the gap between them), a
+ * triple five times, as Word draws them (docx-preview drew one thin line). A table keeps the column widths Word saved with it
+ * (its grid), as Word shows them, where the browser shared the width out by the cells' text; a table in a cell or text box fits
+ * itself in. Rows of exact height are marked for `rowHeights`.
+ */
+function tableLayout(doc: Document): void {
+  for (const b of Array.from(doc.getElementsByTagNameNS(W, '*'))) {
+    const kind = b.getAttributeNS(W, 'val');
+    const sz = b.getAttributeNS(W, 'sz');
+    const border = b.localName === 'bdr' || /Borders$|^pBdr$/.test(b.parentElement?.localName ?? '');
+    if (border && (kind === 'double' || kind === 'triple') && sz && /^\d+$/.test(sz)) b.setAttributeNS(W, 'w:sz', String(Number(sz) * (kind === 'double' ? 3 : 5)));
+  }
+  for (const tr of all(doc, 'tr')) {
+    if (val(kid(kid(tr, 'trPr'), 'trHeight'), 'hRule') !== 'exact') continue;
+    const p = all(tr, 'p')[0];
+    if (p) p.insertBefore(make(doc, 'bookmarkStart', { id: '989997', name: EXACT_ROW }), kid(p, 'pPr')?.nextSibling ?? p.firstChild);
+  }
+  for (const tbl of all(doc, 'tbl')) {
+    if (nearest(tbl, 'tc') || nearest(tbl, 'txbxContent')) continue;
+    const cols = kids(kid(tbl, 'tblGrid'), 'gridCol').map((c) => Number(val(c, 'w')));
+    if (!cols.length || cols.some((w) => !(w > 0))) continue;
+    let tblPr = kid(tbl, 'tblPr');
+    if (!tblPr) tbl.insertBefore(tblPr = make(doc, 'tblPr'), tbl.firstChild);
+    kid(tblPr, 'tblLayout')?.remove();
+    tblPr.appendChild(make(doc, 'tblLayout', { type: 'fixed', val: 'fixed' }));     // docx-preview reads "val", Word writes "type"
+    if (val(kid(tblPr, 'tblW'), 'type') === 'pct') continue;              // a share of the page: the browser shares it out
+    kid(tblPr, 'tblW')?.remove();
+    tblPr.appendChild(make(doc, 'tblW', { w: String(cols.reduce((a, b) => a + b, 0)), type: 'dxa' }));
+  }
+}
+
+/** Floating pictures (`wp:anchor`), noted with how Word places them for `anchors`: docx-preview set them in the line, one under
+ * the other, where Word lays a newer diagram over the older one at the same place. Pictures in table cells stay in the cell. */
+function anchorMarks(doc: Document, out: Anchor[]): void {
+  const child = (el: Element | null | undefined, name: string) => (el ? Array.from(el.children).find((c) => c.localName === name) ?? null : null);
+  const num = (el: Element | null | undefined, attr: string) => Number(el?.getAttribute(attr)) || 0;
+  for (const a of Array.from(doc.getElementsByTagNameNS(WP, 'anchor'))) {
+    let skip = false;
+    for (let e = a.parentElement; e && !skip; e = e.parentElement) skip = (e.namespaceURI === MC && e.localName === 'Choice') || isW(e, 'tc') || isW(e, 'txbxContent');
+    let at: Element | null = nearest(a, 'r');
+    while (at?.parentElement && !isW(at.parentElement, 'p')) at = at.parentElement;   // the run, or the link it is in
+    if (skip || !at?.parentElement) continue;
+    const place = (name: string, from: string): Placement => {
+      const el = child(a, name);
+      const offset = Number(child(el, 'posOffset')?.textContent) || 0;
+      return { from: el?.getAttribute('relativeFrom') ?? from, align: child(el, 'align')?.textContent?.trim() || null, offset: offset / EMU };
+    };
+    const simple = /^(1|true|on)$/i.test(a.getAttribute('simplePos') ?? '');
+    const pos = child(a, 'simplePos');
+    const wrap = Array.from(a.children).find((c) => c.namespaceURI === WP && /^wrap/.test(c.localName));
+    out.push({
+      h: simple ? { from: 'page', align: null, offset: num(pos, 'x') / EMU } : place('positionH', 'column'),
+      v: simple ? { from: 'page', align: null, offset: num(pos, 'y') / EMU } : place('positionV', 'paragraph'),
+      wrap: wrap ? wrap.localName.slice(4) : 'None',
+      side: wrap?.getAttribute('wrapText') ?? 'bothSides',
+      behind: /^(1|true|on)$/i.test(a.getAttribute('behindDoc') ?? ''),
+      z: num(a, 'relativeHeight'),
+      dist: ['distT', 'distB', 'distL', 'distR'].map((d) => num(a, d) / EMU),
+      width: num(child(a, 'extent'), 'cx') / EMU,
+      height: num(child(a, 'extent'), 'cy') / EMU,
+    });
+    at.before(make(doc, 'bookmarkStart', { id: String(980000 + out.length), name: `${ANCHOR}${out.length - 1}` }));
+  }
+}
+
 /** A page break at the start of a paragraph's text is a break before it. docx-preview split the paragraph there and left an
  * empty copy on the page before, numbered like it (a list counted one too many: "II. Document Control" where Word shows "I.").
  * A paragraph that holds only the break keeps it: the page ends after it, as in Word. */
@@ -445,10 +604,12 @@ function numbers(doc: Document, st: Styles, lists: Lists): void {
     const format = val(kid(lvl, 'numFmt'));
     const text = val(kid(lvl, 'lvlText')) ?? '';
     const legal = isOn(kid(lvl, 'isLgl'));
-    // a symbol font's bullet as its Unicode twin (shown on any computer), when the level is set in a symbol font or the character
-    // is in its private range; any other bullet keeps its own font (Courier New's "o")
-    const symbols = /^[-]/.test(text) || /wingdings|symbol|webdings/i.test(val(kid(kid(lvl, 'rPr'), 'rFonts'), 'ascii') ?? '');
-    const glyph = format === 'bullet' && symbols ? GLYPHS[text] : undefined;
+    // a bullet in a symbol font is drawn in that font where the computer has it (Word's own glyph), else as its Unicode twin;
+    // any other bullet keeps its own font (Courier New's "o")
+    const fonts = kid(kid(lvl, 'rPr'), 'rFonts');
+    const face = (val(fonts, 'ascii') ?? val(fonts, 'hAnsi') ?? '').trim();
+    const symbols = /^[\uF000-\uF0FF]/.test(text) || /^(symbol|wingdings( [23])?|webdings)$/i.test(face);
+    const glyph = format === 'bullet' && symbols && !(face && canDraw(face, text)) ? symbolTwin(face, text) ?? undefined : undefined;
     const label = format === 'bullet' ? glyph ?? text : text.replace(/%([1-9])/g, (_m, d: string) => {
       const k = Number(d) - 1;
       if (k > ilvl) return '';
@@ -468,6 +629,7 @@ function numbers(doc: Document, st: Styles, lists: Lists): void {
       }
       if (glyph) kid(rPr, 'rFonts')?.remove();
       if (!kid(rPr, 'u')) rPr.appendChild(make(doc, 'u', { val: 'none' }));
+      if (!kid(rPr, 'rStyle')) rPr.prepend(make(doc, 'rStyle', { val: LABEL_STYLE }));      // known to `paragraphs` as the number
       r.append(rPr, content);
       return r;
     };
@@ -505,10 +667,30 @@ function numbers(doc: Document, st: Styles, lists: Lists): void {
 }
 
 /** An empty paragraph is one line of its paragraph mark's font high, as in Word (a cover's blank lines in 14 pt place its title
- * where Word does); docx-preview made it 1em of the style's size. A run holding a zero-width space carries the mark's look. */
+ * where Word does); docx-preview made it 1em of the style's size. So is one that holds only pictures and shapes Word floats
+ * (they take no room in the line). A run holding a zero-width space carries the mark's look. */
 function emptyLines(doc: Document): void {
+  const floats = (el: Element) => (isW(el, 'drawing') ? el.getElementsByTagNameNS(WP, 'anchor').length > 0
+    : Array.from(el.getElementsByTagNameNS(VML, '*')).some((s) => /position:\s*absolute/i.test(s.getAttribute('style') ?? '')));
+  // a run of spaces with nothing drawn on them (no underline, strike, highlight, shading or border: a form's blank line keeps
+  // its spaces)
+  const plain = (r: Element | null) => !['u', 'strike', 'dstrike', 'highlight', 'shd', 'bdr'].some((n) => {
+    const k = kid(kid(r, 'rPr'), n);
+    return !!k && !(n === 'u' && val(k) === 'none') && isOn(k);
+  });
   for (const p of all(doc, 'p')) {
-    if (all(p, 't').some((t) => t.textContent) || ['drawing', 'pict', 'tab', 'ptab', 'br', 'sym', 'object'].some((n) => all(p, n).length)) continue;
+    // a line of spaces only is as high as its paragraph mark in Word (an 18 pt space over an 11 pt mark: an 11 pt line), so
+    // such spaces are left out and the paragraph is an empty one
+    const texts = all(p, 't');
+    if (texts.length && texts.every((t) => !/[^\s  -​　]/.test(t.textContent ?? '') && plain(nearest(t, 'r')))) {
+      for (const t of texts) {
+        const r = nearest(t, 'r');
+        t.remove();
+        if (r && !Array.from(r.children).some((c) => c.localName !== 'rPr')) r.remove();     // an empty run still props the line up
+      }
+    }
+    if (all(p, 't').some((t) => t.textContent) || ['tab', 'ptab', 'br', 'sym', 'object'].some((n) => all(p, n).length)
+      || [...all(p, 'drawing'), ...all(p, 'pict')].some((d) => !floats(d))) continue;
     const mark = kid(kid(p, 'pPr'), 'rPr');
     const r = make(doc, 'r');
     if (mark) {
@@ -584,16 +766,18 @@ const blockBefore = (el: Element): Element | null => {
   return e;
 };
 
+/** The paragraph that carries a page break the file recorded (drawn as nothing). */
+function breakerParagraph(doc: Document): Element {
+  const p = make(doc, 'p');
+  p.appendChild(make(doc, 'pPr')).appendChild(make(doc, 'pStyle', { val: BREAK_STYLE }));
+  p.appendChild(make(doc, 'r')).appendChild(make(doc, 'br', { type: 'page' }));
+  return p;
+}
+
 function pageBreaksAsSaved(doc: Document, st: Styles): void {
   const body = all(doc, 'body')[0];
   if (!body) return;
-  const breaker = () => {
-    const p = make(doc, 'p');
-    const pPr = p.appendChild(make(doc, 'pPr'));
-    pPr.appendChild(make(doc, 'pStyle', { val: BREAK_STYLE }));
-    p.appendChild(make(doc, 'r')).appendChild(make(doc, 'br', { type: 'page' }));
-    return p;
-  };
+  const breaker = () => breakerParagraph(doc);
   const breakBefore = (block: Element) => {
     if (!endsPage(doc, blockBefore(block)) && !startsPage(block, st)) block.before(breaker());
   };
@@ -630,9 +814,58 @@ function pageBreaksAsSaved(doc: Document, st: Styles): void {
         for (const r of rows.slice(at)) rest.appendChild(r);
         block.after(breaker(), rest);
       }
-    } else if (ahead.shown) breakAfter(block);                       // split over two pages in Word: whole on the first here
+    } else if (ahead.shown && isW(block, 'p') && shownAfter(doc, block, mark)) {
+      mark.setAttribute(SPLIT_AT, '1');                              // split over two pages in Word: `splitParagraphs` splits it
+      continue;
+    } else if (ahead.shown) breakAfter(block);
     else breakBefore(block);
     mark.remove();
+  }
+}
+
+/**
+ * A paragraph Word broke over two pages (a page break it recorded after some of its text) is split there, as Word shows it:
+ * the first part ends its page, with no space after it and its last line justified like the others; the rest starts the next
+ * page, with no space before it, no first-line indent and no number. docx-preview kept it whole on the first page, so the
+ * next page started a paragraph too late. Run after `numbers`, so the first part keeps the number.
+ */
+function splitParagraphs(doc: Document): void {
+  for (const mark of all(doc, 'lastRenderedPageBreak').filter((m) => m.getAttribute(SPLIT_AT) === '1')) {
+    const p = nearest(mark, 'p');
+    const run = nearest(mark, 'r');
+    if (!p?.lastChild || !p.parentElement) { mark.remove(); continue; }
+    const range = doc.createRange();
+    range.setStartBefore(mark);
+    range.setEndAfter(p.lastChild);
+    const rest = range.extractContents();
+    mark.remove();                                                      // a later break in the rest splits the rest in turn
+    const firstRun = (n: Node): Element | null => {
+      for (const c of Array.from(n.childNodes)) {
+        if (c.nodeType !== 1) continue;
+        if (isW(c as Element, 'r')) return c as Element;
+        const r = firstRun(c);
+        if (r) return r;
+      }
+      return null;
+    };
+    const first = firstRun(rest);                                       // the broken run's second half keeps the run's look
+    const look = kid(run, 'rPr');
+    if (first && look && !kid(first, 'rPr')) first.insertBefore(look.cloneNode(true), first.firstChild);
+    const next = make(doc, 'p');
+    const own = kid(p, 'pPr');
+    if (own) {
+      const pPr = next.appendChild(own.cloneNode(true)) as Element;
+      kid(own, 'sectPr')?.remove();                                     // a section break ends the paragraph: its second part
+      setSpacing(doc, next, 'before');
+      let ind = kid(pPr, 'ind');
+      if (!ind) pPr.appendChild(ind = make(doc, 'ind'));
+      ind.removeAttributeNS(W, 'hanging');
+      ind.setAttributeNS(W, 'w:firstLine', '0');
+    } else next.appendChild(make(doc, 'pPr')).appendChild(make(doc, 'ind', { firstLine: '0' }));
+    next.appendChild(rest);
+    setSpacing(doc, p, 'after');
+    p.insertBefore(make(doc, 'bookmarkStart', { id: '989993', name: GOES_ON }), kid(p, 'pPr')?.nextSibling ?? p.firstChild);
+    p.after(breakerParagraph(doc), next);
   }
 }
 
@@ -641,11 +874,13 @@ function pageBreaksAsSaved(doc: Document, st: Styles): void {
  * showed none). A section with a different first page (titlePg) and no first-page header shows none there (docx-preview showed
  * the usual one, on a cover page). A section that starts with a continuous break goes on on the same page (a glossary set in two
  * columns under its heading), where docx-preview started a page for every section. The first paragraph of such sections is
- * marked for `finishLayout`.
+ * marked for `finishLayout`, and of every section, with its headers and footers by kind returned for `headersAndFooters`.
+ * docx-preview draws only the header and footer of its own pages, so each part is drawn once more on a page of its own at the
+ * start, to be copied from (and then taken away).
  */
-function sections(doc: Document): void {
+function sections(doc: Document, rels: Map<string, string>): SectionParts[] {
   const body = all(doc, 'body')[0];
-  if (!body) return;
+  if (!body) return [];
   const found: { sect: Element; first: Element | null }[] = [];
   let first: Element | null = null;                                         // the first block of the section being read
   for (const block of Array.from(body.children)) {
@@ -682,7 +917,34 @@ function sections(doc: Document): void {
     }
     const numbering = kid(sect, 'pgNumType');                              // its pages numbered from (a cover as page 0), and how
     if (val(numbering, 'start') != null || val(numbering, 'fmt')) mark(start, `${PAGE_START}${val(numbering, 'start') ?? ''}_${val(numbering, 'fmt') ?? ''}`);
+    mark(start, `${SECTION}${i}`);
   });
+  const partOf = (r: Element | undefined) => (r ? rels.get(r.getAttributeNS(REL, 'id') ?? '') : undefined);
+  const out = found.map(({ sect }) => {
+    const byKind = (kind: string) => Object.fromEntries(['default', 'first', 'even'].flatMap((t) => { const p = partOf(ref(sect, kind, t)); return p ? [[t, p]] : []; }));
+    return { titlePg: isOn(kid(sect, 'titlePg')), header: byKind('headerReference'), footer: byKind('footerReference') };
+  });
+  // each part on a page of its own before the document, in the page size and margins of the first section that shows it
+  const drawn = new Set<string>();
+  const pages: Element[] = [];
+  found.forEach(({ sect }) => {
+    for (const kind of ['headerReference', 'footerReference']) for (const r of kids(sect, kind)) {
+      const part = partOf(r);
+      if (!part || drawn.has(part)) continue;
+      drawn.add(part);
+      const page = make(doc, 'p');
+      const props = page.appendChild(make(doc, 'pPr')).appendChild(make(doc, 'sectPr'));
+      const own = r.cloneNode(true) as Element;
+      own.setAttributeNS(W, 'w:type', 'default');
+      props.appendChild(own);
+      for (const name of ['pgSz', 'pgMar', 'cols', 'docGrid']) { const k = kid(sect, name); if (k) props.appendChild(k.cloneNode(true)); }
+      page.appendChild(make(doc, 'bookmarkStart', { id: '989996', name: TEMPLATE }));
+      pages.push(page);
+    }
+  });
+  const firstBlock = Array.from(body.children).find((c) => !isW(c, 'sectPr')) ?? kid(body, 'sectPr');
+  for (const page of pages) body.insertBefore(page, firstBlock);
+  return out;
 }
 
 /** A table's header rows (tblHeader) are marked, so they can repeat at the top of each page and column as in Word. */
@@ -868,6 +1130,13 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
   const tableStyle = (stylesDoc ? all(stylesDoc, 'style') : []).find((s) => val(s, 'type') === 'table' && /^(1|true|on)$/i.test(val(s, 'default') ?? ''));
   const cellMargin = Number(val(kid(kid(kid(tableStyle, 'tblPr'), 'tblCellMar'), 'left'), 'w') ?? 108) || 0;
   for (const doc of [stylesDoc, numberingDoc]) if (doc) latinFonts(doc);           // first: list numbers copy their fonts
+  // the document's parts by relationship (header1.xml...), and whether even pages have headers and footers of their own
+  const relsDoc = await read('word/_rels/document.xml.rels');
+  const rels = new Map<string, string>();
+  for (const r of relsDoc ? Array.from(relsDoc.getElementsByTagName('Relationship')) : []) rels.set(r.getAttribute('Id') ?? '', (r.getAttribute('Target') ?? '').split('/').pop() ?? '');
+  const evenAndOdd = isOn(settings ? all(settings, 'evenAndOddHeaders')[0] ?? null : null);
+  let parts: SectionParts[] = [];
+  const anchors: Anchor[] = [];
   for (const path of Object.keys(zip.files).filter((p) => /^word\/(document|header\d*|footer\d*|footnotes|endnotes)\.xml$/.test(p))) {
     const doc = await read(path);
     if (!doc) continue;
@@ -879,14 +1148,21 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
     autoColourOnDark(doc, st);
     tables(doc, compat, cellMargin);
     defaultTableStyle(doc, val(tableStyle, 'styleId'));
+    tableLayout(doc);
     contextualSpacing(doc, st);
     if (path === 'word/document.xml') {
       pageBreaksAsSaved(doc, st);
-      sections(doc);
+      parts = sections(doc, rels);
       numbers(doc, st, lists);                         // after the page breaks: a number is shown text to them
+      splitParagraphs(doc);
     }
-    if (/header|footer/.test(path)) pageFields(doc);
+    if (/header|footer/.test(path)) {
+      pageFields(doc);
+      const p = all(doc, 'p')[0];                      // which part a page's header or footer shows
+      if (p) p.insertBefore(make(doc, 'bookmarkStart', { id: '989995', name: `${PART}${path.split('/').pop()}` }), kid(p, 'pPr')?.nextSibling ?? p.firstChild);
+    }
     unwrap(doc);
+    anchorMarks(doc, anchors);
     vmlShapes(doc);
     headerRows(doc);
     emptyLines(doc);                                   // last: a blank line's space is shown text to the page breaks
@@ -897,6 +1173,7 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
     if (!doc) continue;
     if (doc === stylesDoc) {
       listLevels(doc, st);
+      tableLayout(doc);                                // a table style's double borders
       baseStylesFirst(doc);
     }
     write(path, doc);
@@ -908,7 +1185,7 @@ export async function prepareDocx(file: Blob): Promise<Prepared> {
     const stand = STAND_INS[val(kid(f, 'family')) ?? ''];
     if (stand && val(f, 'name')) fonts[val(f, 'name')!] = stand;
   }
-  return { file: await zip.generateAsync({ type: 'blob', compression: 'STORE' }), stops, defaultTab, fonts, compat };
+  return { file: await zip.generateAsync({ type: 'blob', compression: 'STORE' }), stops, defaultTab, fonts, compat, sections: parts, evenAndOdd, anchors };
 }
 
 const STAND_INS: Record<string, string> = { swiss: 'Arial, sans-serif', roman: '"Times New Roman", serif', modern: '"Courier New", monospace', script: 'cursive' };
@@ -948,27 +1225,273 @@ function paragraphs(styles: HTMLElement, body: HTMLElement): void {
   }
   const all = Array.from(body.querySelectorAll<HTMLElement>('p'));       // read them all, then change them all
   const looks = all.map((p) => {
-    const text = getComputedStyle(Array.from(p.querySelectorAll('span')).find((s) => s.textContent?.trim()) ?? p);
+    const spans = Array.from(p.querySelectorAll('span'));
+    const label = `docx_${LABEL_STYLE.toLowerCase()}`;                      // the text, not its list number or bullet
+    const text = getComputedStyle(spans.find((s) => s.textContent?.trim() && !s.classList.contains(label)) ?? spans.find((s) => s.textContent) ?? p);
     const own = getComputedStyle(p);
     return {
       family: text.fontFamily,
+      // ...and its text's font: Word sets a line by the fonts on it, while the browser also counts the paragraph's own font,
+      // which docx-preview leaves as the page's (a sans-serif's taller lines under Times New Roman text: a page in eleven)
+      ownFamily: own.fontFamily !== text.fontFamily ? text.fontFamily : null,
       // a line is as tall as its text: the paragraph takes its text's size, or its style's larger size would set every line's
       // height (table text in 8 pt in a 10 pt style stood a third taller than in Word)
       size: Math.abs(parseFloat(text.fontSize) - parseFloat(own.fontSize)) > 0.5 ? text.fontSize : null,
       hang: p.className.includes('-num-') ? -parseFloat(own.textIndent) || 0 : 0,
       empty: !p.textContent && !p.querySelector('img, svg, canvas, table'),
+      // exact line spacing (docx-preview gives such a paragraph a minimum height of its line): every line is that high in Word,
+      // a bullet's taller font (Symbol's) included, where the browser let it stretch the line
+      labels: parseFloat(own.minHeight) > 0 && own.minHeight === own.lineHeight ? Array.from(p.children).filter((c) => c.classList.contains(label)) as HTMLElement[] : [],
+      // the first part of a paragraph split over two pages: its last line is not the paragraph's, and is justified like the rest
+      goesOn: own.textAlign === 'justify' && !!p.querySelector(`:scope > span[id="${GOES_ON}"]`),
     };
   });
   const lines = looks.map((l) => lineRatio(l.family));
   all.forEach((p, i) => {
     p.style.setProperty('--wv-lh', lines[i].toFixed(3));
     if (looks[i].size) p.style.fontSize = looks[i].size!;
+    if (looks[i].ownFamily) p.style.fontFamily = looks[i].ownFamily!;
+    for (const l of looks[i].labels) l.style.lineHeight = '0';
+    if (looks[i].goesOn) p.style.textAlignLast = 'justify';
     if (looks[i].empty) p.classList.add('wv-empty');                      // an empty paragraph is a line high, as in Word
     if (looks[i].hang > 0) {
       p.classList.add('wv-hang');
       p.style.setProperty('--wv-hang', `${looks[i].hang}px`);
     }
   });
+}
+
+/**
+ * Justified text breaks into lines as Word's does. In a file made for Word 2013 and later, Word fits one more word on a
+ * justified line by narrowing its spaces, down to about three quarters of their width (measured in Word's PDFs of eleven
+ * files: never below 0.748); the browser only widens them, so a line ended a word early and a paragraph could take a line
+ * more. The spaces are narrowed by that much for the line breaks, and justification widens them again on every line but the
+ * last, whose spaces are given back their width where it still fits (as Word sets a last line). Paragraphs with tabs keep
+ * their spaces: their stops set them.
+ */
+function justification(body: HTMLElement, compat: number): void {
+  if (compat < 15) return;
+  const widths = new Map<string, number>();
+  const space = (cs: CSSStyleDeclaration) => {
+    const font = `${cs.fontStyle} ${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
+    let w = widths.get(font);
+    if (w == null) {
+      const ctx = document.createElement('canvas').getContext('2d');
+      if (ctx) ctx.font = font;
+      w = ctx ? ctx.measureText(' ').width : 0;
+      widths.set(font, w);
+    }
+    return w;
+  };
+  const tabbed = /[]/;
+  const plans = Array.from(body.querySelectorAll<HTMLElement>('p')).flatMap((p) => {
+    const cs = getComputedStyle(p);
+    if (cs.textAlign !== 'justify' || tabbed.test(p.textContent ?? '')) return [];
+    const text = Array.from(p.querySelectorAll('span')).find((s) => s.textContent?.trim()) ?? p;
+    const w = space(getComputedStyle(text));
+    return w > 0 ? [{ p, shrink: 0.255 * w }] : [];
+  });
+  for (const { p, shrink } of plans) p.style.wordSpacing = `${-shrink}px`;
+  // the last line: its spaces back to their width when the line still fits with them (read every paragraph, then change them)
+  const lasts = plans.flatMap(({ p, shrink }) => {
+    if (p.style.textAlignLast === 'justify') return [];
+    const texts: Text[] = [];
+    const walk = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+    for (let n = walk.nextNode() as Text | null; n; n = walk.nextNode() as Text | null) if (n.data) texts.push(n);
+    if (!texts.length) return [];
+    const range = document.createRange();
+    const rectOf = (n: Text, i: number) => { range.setStart(n, i); range.setEnd(n, i + 1); return range.getBoundingClientRect(); };
+    const lastText = texts[texts.length - 1];
+    const lastTop = rectOf(lastText, lastText.data.length - 1).top;
+    // the first character on the last line: back from the end, a text at a time, then within the text
+    let start: { node: Text; offset: number } | null = null;
+    for (let t = texts.length - 1; t >= 0 && !start; t--) {
+      const n = texts[t];
+      if (rectOf(n, 0).top >= lastTop - 1) { if (t === 0) start = { node: n, offset: 0 }; continue; }
+      let lo = 0;
+      let hi = n.data.length - 1;                                        // lo is above the last line, hi on it
+      if (rectOf(n, hi).top < lastTop - 1) { start = { node: texts[t + 1], offset: 0 }; break; }
+      while (hi - lo > 1) { const mid = (lo + hi) >> 1; if (rectOf(n, mid).top >= lastTop - 1) hi = mid; else lo = mid; }
+      start = { node: n, offset: hi };
+    }
+    if (!start) return [];
+    range.setStart(start.node, start.offset);
+    range.setEnd(lastText, lastText.data.length);
+    const rects = Array.from(range.getClientRects()).filter((r) => r.width > 0);
+    if (!rects.length) return [];
+    const used = Math.max(...rects.map((r) => r.right)) - Math.min(...rects.map((r) => r.left));
+    const spaces = (range.toString().trim().match(/ /g) ?? []).length;
+    const pr = p.getBoundingClientRect();
+    const room = pr.right - (parseFloat(getComputedStyle(p).paddingRight) || 0) - Math.min(...rects.map((r) => r.left));
+    return used + spaces * shrink <= room - 0.5 ? [{ p, start, end: lastText }] : [];
+  });
+  for (const { start, end } of lasts) {
+    const range = document.createRange();
+    range.setStart(start.node, start.offset);
+    range.setEnd(end, end.data.length);
+    const last = document.createElement('wv-line');                    // not a span: docx-preview gives every span its own font
+    last.style.wordSpacing = '0';
+    last.append(range.extractContents());
+    range.insertNode(last);                                              // where it was: what follows the text stays after it
+  }
+}
+
+/** Rows as tall as Word makes them (measured against Word's own PDFs): a row of at least a height is that height plus its cells'
+ * top and bottom margins and its border; one of exact height is its height plus the bottom margin. The browser put the margins
+ * and borders inside the height: up to 7 px less a row, a page less in a long table. */
+function rowHeights(body: HTMLElement): void {
+  const px = (v: string) => { const m = /^(-?\d*\.?\d+)(pt|px)$/.exec(v.trim()); return m ? Number(m[1]) / (m[2] === 'pt' ? PT : 1) : 0; };
+  const plans: [HTMLElement, number][] = [];
+  for (const tr of Array.from(body.querySelectorAll<HTMLElement>('tr'))) {
+    const set = px(tr.style.height);
+    const cells = Array.from(tr.children).filter((c) => c.tagName === 'TD');
+    if (!set || !cells.length) continue;
+    const looks = cells.map((c) => getComputedStyle(c));
+    const most = (side: 'paddingTop' | 'paddingBottom' | 'borderTopWidth' | 'borderBottomWidth') => Math.max(0, ...looks.map((cs) => parseFloat(cs[side]) || 0));
+    const first = tr.querySelector('p');
+    const exact = !!first && first.closest('tr') === tr && !!first.querySelector(`:scope > span[id="${EXACT_ROW}"]`);
+    plans.push([tr, exact ? set + most('paddingBottom') : set + most('paddingTop') + most('paddingBottom') + (most('borderTopWidth') + most('borderBottomWidth')) / 2]);
+  }
+  for (const [tr, h] of plans) tr.style.height = `${h.toFixed(2)}px`;
+}
+
+/**
+ * Floating pictures where Word puts them: measured from the frame Word measures them from (the margin, the page, a margin's
+ * strip, the paragraph's top above its space before), aligned in it or at its offset, a later one over an earlier one, behind
+ * the text when set so. Text keeps clear of them as Word wraps it: beside a picture where an inch or more is left on a side
+ * (on the wider side), else above and below it, held off by an invisible float. In headers and footers, and where Word wraps
+ * no text, a picture only takes its place.
+ */
+function anchors(body: HTMLElement, list: Anchor[]): void {
+  const found = Array.from(body.querySelectorAll<HTMLElement>(`span[id^="${ANCHOR}"]`)).flatMap((mark) => {
+    const a = list[Number(mark.id.slice(ANCHOR.length))];
+    const p = mark.closest('p') as HTMLElement | null;
+    const page = mark.closest('section.docx') as HTMLElement | null;
+    if (!a || !p || !page) return [];
+    const walk = document.createTreeWalker(p, NodeFilter.SHOW_ELEMENT);          // the picture docx-preview drew after the mark
+    walk.currentNode = mark;
+    let el: HTMLElement | null = null;
+    for (let n = walk.nextNode() as HTMLElement | null; n && !el; n = walk.nextNode() as HTMLElement | null) {
+      if (n.id?.startsWith(ANCHOR)) break;
+      if (n.tagName === 'DIV' && n.querySelector('img, svg')) el = n;
+    }
+    return el ? [{ a, p, page, el }] : [];
+  });
+  const plans = found.map(({ a, p, page, el }) => {                             // read everything, then move them
+    const pr = page.getBoundingClientRect();
+    const cs = getComputedStyle(page);
+    const [ml, mr, mt, mb] = [cs.paddingLeft, cs.paddingRight, cs.paddingTop, cs.paddingBottom].map((v) => parseFloat(v) || 0);
+    const height = parseFloat(cs.minHeight) || pr.height;
+    const box = p.getBoundingClientRect();
+    const pTop = box.top - pr.top;
+    const before = parseFloat(getComputedStyle(p).marginTop) || 0;
+    const at = (pl: Placement, size: number, f0: number, f1: number) =>
+      (pl.align === 'center' ? (f0 + f1 - size) / 2 : pl.align && /right|bottom|outside/.test(pl.align) ? f1 - size : pl.align ? f0 : f0 + pl.offset);
+    const hf = a.h.from;
+    const [h0, h1] = hf === 'page' ? [0, pr.width] : /^(left|inside)Margin$/.test(hf) ? [0, ml] : /^(right|outside)Margin$/.test(hf) ? [pr.width - mr, pr.width] : [ml, pr.width - mr];
+    const vf = a.v.from;
+    const [v0, v1] = vf === 'page' ? [0, height] : vf === 'margin' ? [mt, height - mb] : vf === 'topMargin' ? [0, mt] : vf === 'bottomMargin' ? [height - mb, height] : [pTop - before, pTop - before];
+    return {
+      a, p, el, x: at(a.h, a.width, h0, h1), y: at(a.v, a.height, v0, v1), pLeft: box.left - pr.left, pRight: box.right - pr.left, pTop, ml,
+      colRight: pr.width - mr, fromParagraph: !['page', 'margin', 'topMargin', 'bottomMargin'].includes(vf), inPart: !!p.closest('header, footer'),
+    };
+  });
+  const order = [...plans].sort((m, n) => m.a.z - n.a.z);
+  const byParagraph = new Map<HTMLElement, typeof plans>();
+  for (const s of plans) byParagraph.set(s.p, [...(byParagraph.get(s.p) ?? []), s]);
+  for (const [p, group] of Array.from(byParagraph)) {
+    const inP = group.some((s) => s.fromParagraph);              // the paragraph is their frame when one is measured from it
+    if (inP) p.style.position = 'relative';
+    for (const s of group) {
+      const st = s.el.style;
+      Object.assign(st, { position: 'absolute', display: 'block', float: 'none', margin: '0', textAlign: '', width: `${s.a.width}px`, height: `${s.a.height}px` });
+      st.left = `${s.x - (inP ? s.pLeft : 0)}px`;
+      st.top = `${s.y - (inP ? s.pTop : 0)}px`;
+      st.zIndex = s.a.behind ? '-1' : String(1 + order.indexOf(s));
+    }
+    // the paragraph keeps its own line (its mark) when the pictures were all it held
+    const others = Array.from(p.querySelectorAll('img, svg')).some((g) => !group.some((s) => s.el.contains(g)));
+    if (!others && !p.textContent?.replace(/[​\s]/g, '')) p.classList.add('wv-empty');
+    // the space Word keeps clear around each, overlapping ones as one (a diagram pasted over another)
+    const boxes: { l: number; t: number; r: number; b: number; wrap: string; side: string }[] = [];
+    for (const s of group) {
+      if (s.inPart || s.a.behind || s.a.wrap === 'None') continue;
+      const bx = { l: s.x - s.a.dist[2], t: s.y - s.a.dist[0], r: s.x + s.a.width + s.a.dist[3], b: s.y + s.a.height + s.a.dist[1], wrap: s.a.wrap, side: s.a.side };
+      const hit = boxes.find((o) => bx.l < o.r && o.l < bx.r && bx.t < o.b && o.t < bx.b);
+      if (hit) Object.assign(hit, { l: Math.min(hit.l, bx.l), t: Math.min(hit.t, bx.t), r: Math.max(hit.r, bx.r), b: Math.max(hit.b, bx.b), wrap: hit.wrap === 'TopAndBottom' ? hit.wrap : bx.wrap });
+      else boxes.push(bx);
+    }
+    const g = group[0];
+    for (const bx of boxes) {
+      const reach = bx.b - g.pTop;                               // from the paragraph's first line down to the picture's foot
+      if (reach <= 0) continue;
+      const dy = Math.max(0, bx.t - g.pTop);
+      const [left, right] = [bx.l - g.ml, g.colRight - bx.r];
+      const f = document.createElement('span');
+      f.className = 'wv-float';
+      Object.assign(f.style, { height: `${reach}px`, shapeOutside: dy ? `inset(${dy}px 0 0 0)` : '' });
+      if (bx.wrap === 'TopAndBottom' || Math.max(left, right) < 96) {
+        Object.assign(f.style, { float: 'left', width: `${g.colRight - g.ml}px`, marginLeft: `${g.ml - g.pLeft}px` });
+      } else if (bx.side === 'left' || (bx.side !== 'right' && left >= right)) {
+        Object.assign(f.style, { float: 'right', width: `${bx.r - bx.l}px`, marginRight: `${g.pRight - bx.r}px` });
+      } else {
+        Object.assign(f.style, { float: 'left', width: `${bx.r - bx.l}px`, marginLeft: `${bx.l - g.pLeft}px` });
+      }
+      p.prepend(f);
+    }
+  }
+}
+
+/** The headers and footers `sections` drew on pages of their own, by part, and those pages taken out. */
+function takeTemplates(body: HTMLElement): Map<string, HTMLElement> {
+  const parts = new Map<string, HTMLElement>();
+  for (const mark of Array.from(body.querySelectorAll(`span[id="${TEMPLATE}"]`))) {
+    const page = mark.closest('section.docx');
+    if (!page) continue;
+    for (const el of Array.from(page.children)) {
+      const id = el.tagName === 'HEADER' || el.tagName === 'FOOTER' ? el.querySelector(`span[id^="${PART}"]`)?.id.slice(PART.length) : undefined;
+      if (id && !parts.has(id)) parts.set(id, el as HTMLElement);
+    }
+    page.remove();
+  }
+  return parts;
+}
+
+/**
+ * Each page's header and footer as Word chooses them: from the section the page starts in, its first page's own when the
+ * section has a different first page, else on even-numbered pages the even ones when the document has them, else its usual
+ * ones; blank where the section has none of that kind. docx-preview chose them before pages were split and joined: a footer
+ * meant for even pages showed on the odd ones.
+ */
+function headersAndFooters(body: HTMLElement, prepared: Prepared, parts: Map<string, HTMLElement>): void {
+  if (!parts.size || !prepared.sections?.length) return;
+  let sect = 0;
+  let n = 0;
+  for (const page of Array.from(body.querySelectorAll<HTMLElement>('section.docx'))) {
+    const article = page.querySelector(':scope > article');
+    const marks = Array.from(article?.querySelectorAll(`span[id^="${SECTION}"]`) ?? []);
+    const startsHere = marks.find((m) => article?.firstElementChild?.contains(m));
+    if (startsHere) sect = Number(startsHere.id.slice(SECTION.length));
+    const restart = page.querySelector(`article span[id^="${PAGE_START}"]`);       // its number, as pageNumbers counts it
+    const start = restart ? restart.id.slice(PAGE_START.length).split('_')[0] : '';
+    n = start ? Number(start) : n + 1;
+    const s = prepared.sections[sect];
+    const kind = startsHere && s?.titlePg ? 'first' : prepared.evenAndOdd && n % 2 === 0 ? 'even' : 'default';
+    for (const [tag, list] of [['HEADER', s?.header], ['FOOTER', s?.footer]] as const) {
+      if (!list) continue;
+      const part = list[kind];
+      const from = part ? parts.get(part) : undefined;
+      if (part && !from) continue;                                                    // not drawn: as docx-preview drew it
+      const own = Array.from(page.children).find((c) => c.tagName === tag);
+      if (own) own.replaceChildren(...(from ? Array.from(from.cloneNode(true).childNodes) : []));
+      else if (from) {
+        const copy = from.cloneNode(true) as HTMLElement;
+        if (tag === 'HEADER') page.prepend(copy);
+        else page.append(copy);
+      }
+    }
+    if (marks.length) sect = Number(marks[marks.length - 1].id.slice(SECTION.length));   // one begun further down goes on
+  }
 }
 
 /** Sections as `sections` marked them: one that goes on on the same page is put back on the page before it, and a first page
@@ -1128,7 +1651,8 @@ export function paginate(body: HTMLElement, slack = 0.1): void {
       const below = article.nextElementSibling;                              // footnotes and the footer keep their place
       const foot = box.top + height - (below ? box.bottom - below.getBoundingClientRect().top : parseFloat(getComputedStyle(page).paddingBottom) || 0);
       const top = article.getBoundingClientRect().top;
-      const bottoms = blocks.map((b) => b.getBoundingClientRect().bottom);
+      // a block reaches as far down as the pictures that float from it
+      const bottoms = blocks.map((b) => Math.max(b.getBoundingClientRect().bottom, ...Array.from(b.querySelectorAll('.wv-float')).map((f) => f.getBoundingClientRect().bottom)));
       if (Math.max(...bottoms) - foot <= slack * (foot - top)) continue;
       let from = bottoms.findIndex((b) => b > foot + 0.5);
       if (from < 0) continue;
@@ -1300,21 +1824,30 @@ export function finishLayout(body: HTMLElement, styles: HTMLElement, prepared: P
   numberLooks(styles);
   fontStandIns(styles, body, prepared.fonts);                    // first: the line heights below are measured in these fonts
   paragraphs(styles, body);
+  rowHeights(body);
+  justification(body, prepared.compat);
   layOutTabs(body, prepared);
   shapes(body);
+  anchors(body, prepared.anchors ?? []);
+  const parts = takeTemplates(body);                             // before pages are counted, joined or split
   sectionPages(body);
   tableHeads(body);
   pageTops(body, prepared.compat);
   paginate(body, slack);
+  headersAndFooters(body, prepared, parts);
   pageNumbers(body);
 }
 
 /** CSS for what `finishLayout` adds. */
 export const FIDELITY_CSS = `
   .docx p.docx_${BREAK_STYLE.toLowerCase()} { display: none; }
-  .docx .wv-tab { display: inline-block; height: 1em; min-height: 0; text-indent: 0; text-align: center; white-space: pre; letter-spacing: 0; overflow: visible; }
+  .docx .wv-tab { display: inline-block; height: 1em; min-height: 0; text-indent: 0; text-align: center; white-space: pre; letter-spacing: 0; overflow: visible;
+    font: inherit; }                         /* its run's font (docx-preview gives every span the document's), its leader's too */
   .docx p.wv-hang::before { display: inline-block; min-width: var(--wv-hang); text-indent: 0; }
   .docx p.wv-empty::after { content: "\\200b"; }
+  .docx p { min-height: 0; }                /* Word lets a line be lower than its font (a footer's spacer of 0.7 pt) */
+  .docx span[id]:empty { font-size: 0; line-height: 0; }   /* a bookmark takes no room (a heading's took its style's 14 pt) */
+  .docx .wv-float { pointer-events: none; }
   section.docx > footer { display: flex; flex-direction: column; justify-content: flex-end; }   /* Word sets it up from its foot */
   section.docx { isolation: isolate; }      /* a shape "behind text" is behind the text, not behind the page */
 `;

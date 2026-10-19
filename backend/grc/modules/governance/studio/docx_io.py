@@ -391,10 +391,41 @@ class Para:
     base_i: bool = False
 
 
-# the characters symbol fonts (Symbol, Wingdings) keep in the private-use area, as the Unicode characters they draw
-SYMBOL_GLYPHS = {"": "•", "": "▪", "": "➢", "": "❖", "": "✓", "": "□", "": "■", "": "➢",
-                 "o": "◦", "§": "▪", "": "•", "": "•", "": "✗", "": "☑", "": "➔", "": "⇨", "": "•",
-                 "": "❑"}
+# What a character of a symbol font draws, as Unicode (the viewer, wordFidelity.ts, has the same tables): Symbol by its
+# encoding from 0x20 and from 0xA0, Wingdings' bullets and signs. The same code is a different sign in each font (0xE0 is
+# Symbol's lozenge and Wingdings' arrow); a private-range bullet whose font is not named is the usual bullet of that code.
+_SYMBOL_LOW = " !∀#∃%&∋()∗+,−./0123456789:;<=>?≅ΑΒΧΔΕΦΓΗΙϑΚΛΜΝΟΠΘΡΣΤΥςΩΞΨΖ[∴]⊥_‾αβχδεφγηιϕκλμνοπθρστυϖωξψζ{|}∼"
+_SYMBOL_HIGH = "€ϒ′≤⁄∞ƒ♣♦♥♠↔←↑→↓°±″≥×∝∂•÷≠≡≈…⏐⎯↵ℵℑℜ℘⊗⊕∅∩∪⊃⊇⊄⊂⊆∈∉∠∇®©™∏√⋅¬∧∨⇔⇐⇑⇒⇓◊〈®©™∑⎛⎜⎝⎡⎢⎣⎧⎨⎩⎪ 〉∫⌠⎮⌡⎞⎟⎠⎤⎥⎦⎫⎬⎭"
+_WINGDINGS = {
+    0x21: "✏", 0x22: "✂", 0x28: "☎", 0x2A: "✉", 0x36: "⌛", 0x3E: "✇", 0x3F: "✍", 0x41: "✌", 0x45: "☜", 0x46: "☞", 0x47: "☝",
+    0x48: "☟", 0x4A: "☺", 0x4C: "☹", 0x4E: "☠", 0x51: "✈", 0x52: "☼", 0x54: "❄", 0x56: "✞", 0x58: "✠", 0x59: "✡", 0x5A: "☪",
+    0x5B: "☯", 0x5D: "☸", 0x6C: "●", 0x6D: "❍", 0x6E: "■", 0x6F: "□", 0x71: "❑", 0x72: "❒", 0x73: "⬧", 0x74: "⧫", 0x75: "◆",
+    0x76: "❖", 0x77: "⬥", 0x78: "⌧", 0x7A: "⌘", 0x7B: "❀", 0x7C: "✿", 0x7D: "❝", 0x7E: "❞", 0x9E: "·", 0x9F: "•", 0xA0: "▪",
+    0xA1: "○", 0xA4: "◉", 0xA5: "◎", 0xA7: "▪", 0xA8: "◻", 0xAA: "✦", 0xAB: "★", 0xAC: "✶", 0xAD: "✴", 0xAE: "✹", 0xAF: "✵",
+    0xB2: "⟡", 0xD8: "➢", 0xE0: "→", 0xE8: "➔", 0xEF: "⇦", 0xF0: "⇨", 0xF1: "⇧", 0xF2: "⇩", 0xF3: "⬄", 0xFA: "▫", 0xFB: "✗",
+    0xFC: "✓", 0xFD: "☒", 0xFE: "☑",
+}
+_COMMON = {0xB7: "•", 0xA7: "▪", 0xD8: "➢", 0xFC: "✓", 0x76: "❖", 0x6E: "■", 0x71: "❑", 0xA8: "◻", 0x6C: "●", 0x9F: "•",
+           0xE8: "➔", 0xF0: "⇨", 0xFB: "✗", 0xFE: "☑"}
+
+
+def symbol_twin(font: Optional[str], ch: str) -> Optional[str]:
+    """The Unicode twin of a character set in a symbol font (its code in the font's private range F0xx, or as 00xx), or None."""
+    if not ch:
+        return None
+    cp = ord(ch[0])
+    code = cp - 0xF000 if 0xF000 <= cp <= 0xF0FF else cp
+    if code > 0xFF:
+        return None
+    face = (font or "").strip().lower()
+    if face == "wingdings":
+        return _WINGDINGS.get(code)
+    if face != "symbol" and (cp < 0xF000 or "dings" in face):
+        return None
+    if face != "symbol" and code in _COMMON:
+        return _COMMON[code]
+    twin = _SYMBOL_LOW[code - 0x20] if 0x20 <= code <= 0x7E else _SYMBOL_HIGH[code - 0xA0] if 0xA0 <= code <= 0xFE else None
+    return twin if twin and twin != " " else None
 
 
 def _symbol(c) -> str:
@@ -404,7 +435,7 @@ def _symbol(c) -> str:
     except ValueError:
         return "□"
     ch = chr(code + 0xF000 if code < 0x100 else code)
-    return SYMBOL_GLYPHS.get(ch, ch)
+    return symbol_twin(c.get(qn("w:font")) or "Symbol", ch) or ch
 
 
 def read_para(ctx: Ctx, p) -> Para:
