@@ -22,7 +22,7 @@ from ..schemas import (
     AggregatedRiskView, ExecutiveDashboard, BoardReportData, DepartmentRiskSummary,
     ControlEffectivenessUpdate, MessageResponse
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission, refuse_imported_accounts
 
 router = APIRouter(
     prefix="/advanced-erm",
@@ -150,6 +150,7 @@ def create_kri(
             detail="Risk not found"
         )
     
+    refuse_imported_accounts(db, [kri.owner_id, kri.reviewer_id, kri.data_provider_id])
     db_kri = RiskKRI(
         risk_id=kri.risk_id,
         name=kri.name,
@@ -243,6 +244,8 @@ def update_kri(
         )
     
     update_data = kri_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get(k) for k in ("owner_id", "reviewer_id", "data_provider_id")],
+                             kept=[kri.owner_id, kri.reviewer_id, kri.data_provider_id])
     for key, value in update_data.items():
         setattr(kri, key, value)
     
@@ -411,6 +414,7 @@ def create_incident(
                 detail="Risk not found"
             )
     
+    refuse_imported_accounts(db, [incident.assigned_to])
     db_incident = RiskIncident(
         tenant_id=tenant_id,
         risk_id=incident.risk_id,
@@ -532,6 +536,7 @@ def update_incident(
         )
     
     update_data = incident_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("assigned_to")], kept=[incident.assigned_to])
     
     if update_data.get("status") == "resolved" and not incident.resolved_at:
         update_data["resolved_at"] = datetime.utcnow()
@@ -626,6 +631,7 @@ def schedule_review(
             detail="Risk not found"
         )
     
+    refuse_imported_accounts(db, [review.reviewer_id])
     db_review = RiskReview(
         risk_id=review.risk_id,
         review_cycle=review.review_cycle,
@@ -791,6 +797,8 @@ def update_review(
         )
     
     update_data = review_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("reviewer_id"), update_data.get("approver_id")],
+                             kept=[review.reviewer_id, review.approver_id])
     
     if update_data.get("status") == "in_review" and not review.started_at:
         update_data["started_at"] = datetime.utcnow()
@@ -1211,6 +1219,8 @@ def update_appetite(
         db.add(config)
     else:
         update_data = appetite_update.model_dump(exclude_unset=True)
+        from .auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [update_data.get("escalation_owner_id")], kept=[config.escalation_owner_id])
         for key, value in update_data.items():
             setattr(config, key, value)
     

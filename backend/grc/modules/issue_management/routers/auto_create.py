@@ -182,6 +182,8 @@ def create_from_source(
     detected_at_raw = body.get("detected_at")
     detected_at = datetime.fromisoformat(detected_at_raw) if detected_at_raw else datetime.utcnow()
     target_closure_date = detected_at + timedelta(hours=resolve_hours)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("owner_id"), body.get("assignee_id")])
 
     issue = Issue(
         tenant_id=tenant_id, title=title, description=description,

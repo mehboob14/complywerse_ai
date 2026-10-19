@@ -222,7 +222,7 @@ def test_the_one_off_fix_gives_the_documents_to_their_authors_and_ends_the_reque
     out = imported_owners.run(db)
     db.commit()
     db.expire_all()
-    assert out == {"owners": 2, "prepared_by": 1, "requests": 1}
+    assert out == {"owners": 2, "prepared_by": 1, "requests": 1, "signers": 0, "stages": 0}
     assert db.get(m.GovernanceDocument, 3).owner_id == AUTHOR                   # the author owns it
     assert db.get(m.GovernanceDocument, 4).owner_id == CONTACT                  # its author was imported too: the primary contact
     assert db.get(m.GovernanceDocument, 5).owner_id == LOCAL
@@ -237,7 +237,7 @@ def test_the_one_off_fix_gives_the_documents_to_their_authors_and_ends_the_reque
 
     db.get(m.GovernanceDocument, 5).owner_id = DIRECTORY                        # whatever happens later is not moved again
     db.commit()
-    assert imported_owners.run(db) == {"owners": 0, "prepared_by": 0, "requests": 0}
+    assert imported_owners.run(db) == {"owners": 0, "prepared_by": 0, "requests": 0, "signers": 0, "stages": 0}
     db.commit()
     assert db.get(m.GovernanceDocument, 5).owner_id == DIRECTORY
     assert db.query(m.DocumentAuditLog).filter_by(field_changed="owner_id").count() == 2
@@ -272,3 +272,146 @@ def test_an_imported_account_is_never_alerted_emailed_asked_or_matched_by_name_o
     life._open_stage(db, db.get(m.GovernanceDocument, 5), "reviewer", CONTACT)
     db.commit()
     assert {o.user_id for o in db.query(m.DocumentObligation).filter_by(document_id=5)} == {LOCAL}
+
+
+def _refused(call):
+    """The plain 400 of the item 2 change, naming the imported account."""
+    with pytest.raises(HTTPException) as e:
+        call()
+    assert e.value.status_code == 400 and e.value.detail.startswith(f"{ARIF_NAME} is an account an access review imported")
+
+
+def test_a_team_lead_must_use_the_platform_and_one_already_lead_may_stay(w):
+    teams = importlib.import_module("grc.routers.teams_router")
+    db, me = w.db, w.user(CONTACT)
+    _refused(lambda: teams.create_team(payload=teams.TeamCreate(name="Ops", lead_user_id=ARIF), db=db, current_user=me))
+    assert teams.create_team(payload=teams.TeamCreate(name="Ops", lead_user_id=LOCAL), db=db, current_user=me).lead_user_id == LOCAL
+    ops = db.query(m.Team).filter_by(name="Ops").one().id
+    _refused(lambda: teams.update_team(team_id=ops, payload=teams.TeamUpdate(lead_user_id=ARIF), db=db, current_user=me))
+    # team 30 was led by the imported account before the rule: renaming it sends that lead back as it is
+    assert teams.update_team(team_id=30, payload=teams.TeamUpdate(name="Security team", lead_user_id=ARIF), db=db,
+                             current_user=me).name == "Security team"
+
+
+def test_a_regulatory_task_assignee_must_use_the_platform(w):
+    from grc.modules.governance import regulatory_tasks
+    from grc.modules.governance.routers import regulatory_changes
+
+    db = w.db
+    with pytest.raises(ValueError, match="access review imported"):
+        regulatory_tasks.check_users(db, [LOCAL, ARIF])
+    _refused(lambda: regulatory_changes._task_assignees(db, [ARIF]))
+    assert regulatory_changes._task_assignees(db, [LOCAL, ADOPTED]) == [LOCAL, ADOPTED]
+    assert regulatory_changes._task_assignees(db, [LOCAL, ARIF], kept=[ARIF]) == [LOCAL, ARIF]   # already on the task
+
+
+def test_a_statement_is_assigned_to_a_platform_user_only(w):
+    statements = importlib.import_module("grc.modules.compliance.routers.statements")
+    db, me = w.db, w.user(CONTACT)
+    db.add(m.PolicyStatement(id=40, tenant_id=1, document_id=5, statement_text="Passwords are 12 characters or more."))
+    db.commit()
+
+    def assign(uid):
+        return statements.assign_statement(statement_id=40, payload=statements.AssignmentRequest(assigned_to_user_id=uid),
+                                           db=db, current_user=me)
+
+    _refused(lambda: assign(ARIF))
+    assert assign(LOCAL)["assigned_to_user_id"] == LOCAL
+
+
+def test_an_approval_is_delegated_and_escalated_to_platform_users_only(w):
+    db = w.db
+    db.add(m.DocumentApprovalStep(id=50, document_id=5, step_sequence=1, step_name="Approval", approver_id=CONTACT, status="pending"))
+    db.commit()
+    for path, key in (("delegate", "delegate_to_user_id"), ("escalate", "escalate_to_user_id")):
+        r = w.http.post(f"/governance/workflows/steps/50/{path}", json={key: ARIF})
+        assert r.status_code == 400 and r.json()["detail"].startswith(f"{ARIF_NAME} is an account an access review imported")
+    assert w.http.post("/governance/workflows/steps/50/delegate", json={"delegate_to_user_id": LOCAL}).status_code == 200
+    db.expire_all()
+    assert db.get(m.DocumentApprovalStep, 50).delegated_to == LOCAL
+
+
+def test_a_workflow_definition_names_platform_users_only(w):
+    from grc.modules.workflow_engine.routers.definitions import _apply_nodes
+
+    db = w.db
+    approval = {"node_key": "approve", "node_type": "approval",
+                "config": {"approver_user_ids": [str(LOCAL)], "escalation_levels": [{"escalate_to_user_ids": [ARIF]}]}}
+    _refused(lambda: _apply_nodes(db, 70, [approval]))
+    approval["config"]["escalation_levels"][0]["escalate_to_user_ids"] = [AUTHOR]
+    _apply_nodes(db, 70, [approval])
+    db.flush()
+    assert db.query(m.WorkflowNode).filter_by(workflow_definition_id=70).count() == 1
+    db.add(m.WorkflowNode(workflow_definition_id=71, node_key="old", node_type="action", name="Old", config={"owner_id": ARIF}))
+    db.flush()
+    _apply_nodes(db, 71, [{"node_key": "old", "config": {"owner_id": ARIF}}])      # named before the rule: may stay
+
+
+def test_a_role_expanded_to_approvers_skips_imported_members(w):
+    from grc.modules.governance.routers.workflows import get_approvers_for_step
+    from grc.modules.workflow_engine.services.notification_service import resolve_user_ids_from_roles
+    from grc.modules.workflow_engine.services.step_executor import StepExecutor
+
+    db = w.db                     # ARIF holds "Approvers" through a legacy link nobody gave: a platform grant, not a person
+    step = SimpleNamespace(approvers=[SimpleNamespace(approver_type="role", role_id=APPROVERS, user_id=None)])
+    assert set(get_approvers_for_step(step, SimpleNamespace(tenant_id=1, owner_id=None), db)) == {LOCAL, ADOPTED}
+    assert set(StepExecutor._resolve_role_user_ids(db, 1, [APPROVERS])) == {LOCAL, ADOPTED}
+    assert set(resolve_user_ids_from_roles(db, 1, [APPROVERS])) == {LOCAL, ADOPTED}
+
+
+def _signers(db, doc_id, status, reviewers=(), approvers=()):
+    db.add(m.GovernanceDocument(id=doc_id, tenant_id=1, title=f"Policy {doc_id}", doc_type="policy", status=status,
+                                current_version="1.0", content="# P\n", owner_id=LOCAL, author_id=LOCAL))
+    for role, ids in (("reviewer", reviewers), ("approver", approvers)):
+        for uid in ids:
+            db.add(m.DocumentSignoffAssignment(tenant_id=1, document_id=doc_id, role_type=role, target_type="user", target_id=uid))
+
+
+def test_the_one_off_fix_removes_imported_reviewers_and_approvers_and_the_stage_moves_on(w):
+    from grc.modules.governance.routers.document_signoff import _assignments, _user_actionable_role
+
+    db = w.db
+    _signers(db, 6, "pending_review", reviewers=[ARIF], approvers=[AUTHOR])        # only the imported reviewer: on to approval
+    _signers(db, 7, "pending_approval", approvers=[ARIF])                          # nobody left at all: a draft again
+    _signers(db, 8, "pending_review", reviewers=[ARIF, LOCAL])                     # someone left: the stage stays
+    _signers(db, 9, "draft", reviewers=[ARIF], approvers=[AUTHOR])                 # not in a stage: only the reviewer goes
+    db.commit()
+
+    fixing = sessionmaker(bind=w.engine, autoflush=False)()                         # as tenant sessions are (PITFALLS 74)
+    out = imported_owners.run(fixing)
+    fixing.commit()
+    fixing.close()
+    db.expire_all()
+    assert (out["signers"], out["stages"]) == (4, 2)
+    assert not db.query(m.DocumentSignoffAssignment).filter_by(target_type="user", target_id=ARIF).filter(
+        m.DocumentSignoffAssignment.role_type.in_(["reviewer", "approver"])).count()
+    why = db.query(m.DocumentAuditLog).filter_by(action="participant_removed").order_by(m.DocumentAuditLog.document_id).all()
+    assert [(r.document_id, r.field_changed, r.old_value) for r in why] == [(6, "reviewer", str(ARIF)), (7, "approver", str(ARIF)),
+                                                                            (8, "reviewer", str(ARIF)), (9, "reviewer", str(ARIF))]
+    assert why[0].action_details == ("The reviewer was an account imported by an access-review connector, which can never sign: "
+                                     "it was removed")
+    doc6, doc7, doc8, doc9 = (db.get(m.GovernanceDocument, i) for i in (6, 7, 8, 9))
+    assert (doc6.status, doc7.status, doc8.status, doc9.status) == ("pending_approval", "draft", "pending_review", "draft")
+    moved = {r.document_id: r.action_details for r in db.query(m.DocumentAuditLog).filter_by(action="status_changed")}
+    assert moved == {6: "No reviewers are set, so it goes to its approvers",
+                     7: "Nobody is set to review or approve it, so it is a draft again: choose reviewers and send it for review"}
+    asked = db.query(m.DocumentObligation).filter_by(document_id=6, kind="approval", status="pending").one()
+    assert asked.user_id == AUTHOR and asked.critical_task_id                      # the approver is asked, with a task
+    assert _user_actionable_role(db, [1], doc6, AUTHOR, []) == "approver"          # and can sign: the stage can end
+    assert _user_actionable_role(db, [1], doc8, LOCAL, []) == "reviewer"
+    assert {(a.role_type, a.target_id) for a in _assignments(db, 9)} == {("approver", AUTHOR)}
+
+    assert imported_owners.run(db) == {"owners": 0, "prepared_by": 0, "requests": 0, "signers": 0, "stages": 0}   # once
+
+
+def test_the_signers_part_runs_where_the_owners_part_ran_before_it_existed(w):
+    db = w.db
+    _signers(db, 6, "pending_approval", approvers=[ARIF])
+    db.get(m.Tenant, 1).settings = {imported_owners.MARK: "2026-10-19T00:00:00"}
+    db.commit()
+    out = imported_owners.run(db)
+    db.commit()
+    assert (out["owners"], out["signers"], out["stages"]) == (0, 1, 1)
+    assert db.get(m.GovernanceDocument, 3).owner_id == ARIF                       # the owners part does not run again
+    assert db.get(m.GovernanceDocument, 6).status == "draft"
+    assert {imported_owners.MARK, imported_owners.SIGNERS_MARK} <= set(db.get(m.Tenant, 1).settings)

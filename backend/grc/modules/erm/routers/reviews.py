@@ -10,7 +10,7 @@ from ....schemas import (
     RiskReviewCreate, RiskReviewUpdate, RiskReviewResponse,
     RiskScoreHistoryResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 
 router = APIRouter(prefix="/reviews", tags=["ERM - Reviews"])
 
@@ -91,6 +91,7 @@ def schedule_review(
             detail="Risk not found"
         )
     
+    refuse_imported_accounts(db, [review.reviewer_id])
     db_review = RiskReview(
         risk_id=review.risk_id,
         review_cycle=review.review_cycle,
@@ -256,6 +257,8 @@ def update_review(
         )
     
     update_data = review_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("reviewer_id"), update_data.get("approver_id")],
+                             kept=[review.reviewer_id, review.approver_id])
     
     if update_data.get("status") == "in_review" and not review.started_at:
         update_data["started_at"] = datetime.utcnow()

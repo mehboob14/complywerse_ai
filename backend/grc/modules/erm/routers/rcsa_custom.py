@@ -980,6 +980,9 @@ def assign_row(
         )
         if not user:
             raise HTTPException(status_code=400, detail="Assignee not found or inactive")
+        from ....routers.auth_router import refuse_imported_accounts
+
+        refuse_imported_accounts(db, [new_user_id])
 
     r.assigned_user_id = new_user_id
     r.updated_by = current_user.id

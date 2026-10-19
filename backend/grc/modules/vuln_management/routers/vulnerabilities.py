@@ -823,6 +823,8 @@ def assign_vulnerability(
     user = db.query(GRCUser).filter(GRCUser.id == request.user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.user_id])
     
     vuln.assigned_to = request.user_id
     vuln.updated_at = datetime.utcnow()

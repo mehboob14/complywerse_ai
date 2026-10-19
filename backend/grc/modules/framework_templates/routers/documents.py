@@ -155,6 +155,9 @@ def update_document(
     if not d:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
     updates = payload.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [updates.get(k) for k in ("owner_id", "reviewer_id", "approver_id")],
+                             kept=[d.owner_id, d.reviewer_id, d.approver_id])
     for k, v in updates.items():
         setattr(d, k, v)
     # Review-workflow transitions.

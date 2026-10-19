@@ -13,7 +13,7 @@ from ..schemas import (
     IssueCreate, IssueUpdate, IssueResponse,
     GovernanceDashboard, MessageResponse
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 
 router = APIRouter(prefix="/governance", tags=["Governance"])
 
@@ -76,6 +76,7 @@ def create_objective(
             detail="Tenant not found"
         )
     
+    refuse_imported_accounts(db, [objective.owner_id])
     db_objective = GovernanceObjective(
         tenant_id=tenant_id,
         name=objective.name,
@@ -129,6 +130,7 @@ def update_objective(
         )
     
     update_data = objective_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id")], kept=[objective.owner_id])
     for field, value in update_data.items():
         setattr(objective, field, value)
     
@@ -343,6 +345,7 @@ def create_issue(
             detail="Tenant not found"
         )
     
+    refuse_imported_accounts(db, [issue.owner_id])
     db_issue = Issue(
         tenant_id=tenant_id,
         title=issue.title,
@@ -377,6 +380,7 @@ def update_issue(
         )
     
     update_data = issue_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id")], kept=[issue.owner_id])
     for field, value in update_data.items():
         setattr(issue, field, value)
     

@@ -424,7 +424,7 @@ def update_custom(
         control_sub_type=fields.get("control_sub_type", nc.control_sub_type),
     )
     profile_values = clean_profile(profile) if profile is not None else {}
-    _validate_people(db, tenant_id, profile_values)
+    _validate_people(db, tenant_id, profile_values, kept=getattr(get_profile(db, nc), "backup_owner_id", None))
 
     def snapshot() -> Dict[str, Any]:
         row = {f: getattr(nc, f) for f in _UPDATABLE}
@@ -476,8 +476,8 @@ def _iso(value: Any) -> Any:
     return value.isoformat() if isinstance(value, datetime) else value
 
 
-def _validate_people(db: Session, tenant_id: int, values: Dict[str, Any]) -> None:
-    """A department or backup owner must exist in this tenant."""
+def _validate_people(db: Session, tenant_id: int, values: Dict[str, Any], kept: Optional[int] = None) -> None:
+    """A department or backup owner must exist in this tenant; a backup owner newly named (not ``kept``) must use the platform."""
     dept_id = values.get("department_id")
     if dept_id:
         ok = (db.query(BusinessUnit.id)
@@ -488,6 +488,10 @@ def _validate_people(db: Session, tenant_id: int, values: Dict[str, Any]) -> Non
     if user_id:
         if not db.query(GRCUser.id).filter(GRCUser.id == user_id).first():
             raise ValueError(f"user {user_id} not found in this tenant")
+        from grc.routers.auth_router import imported_account_problem
+        problem = imported_account_problem(db, [user_id], [kept])
+        if problem:
+            raise ValueError(problem)
 
 
 def get_profile(db: Session, nc: NormalizedControl) -> Optional[CustomControlProfile]:

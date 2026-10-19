@@ -22,7 +22,7 @@ from ....models import (
     TPRAContract, TPRAControlObligation, TPRAApproval, TPRAMonitoringSignal,
     TPRAEvidenceLink, Evidence, TPRATieringConfig, TPRAAuditLog, TPRASharedAssessment,
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services import evidence_review
 from . import alerts, contracts, customisation, intake, service, rbac, exchange, tier_policy, monitoring, monitoring_connectors, monitoring_policy, ratings, quantification
 from .stages import stages_payload, is_valid_stage
@@ -985,6 +985,7 @@ def create_remediation(finding_id: int, body: RemediationIn, db: Session = Depen
     tids = _tids(user, db)
     f = _get(db, TPRAFinding, finding_id, tids)
     rbac.require_write(db, user, "findings", "edit")
+    refuse_imported_accounts(db, [body.owner_id])
     # Auto-populate a due date from the finding's severity SLA when the analyst
     # didn't set one, so every remediation carries an aging clock (a critical must
     # be fixed in days, not "whenever") and can actually surface as overdue.
@@ -1011,6 +1012,7 @@ def update_remediation(rem_id: int, body: RemediationUpdate, db: Session = Depen
     r = _get(db, TPRARemediation, rem_id, tids)
     rbac.require_write(db, user, "findings", "edit")
     _check_concurrency(r, body.row_version)
+    refuse_imported_accounts(db, [body.owner_id], kept=[r.owner_id])
     for field in ("title", "plan", "treatment_type", "owner_id", "due_date", "status"):
         val = getattr(body, field)
         if val is not None:
@@ -1305,6 +1307,7 @@ def create_approval(assessment_id: int, body: ApprovalIn, db: Session = Depends(
                 "id": f"c{i}", "text": str(c).strip(), "status": "open",
                 "owner_id": None, "due_date": None, "resolved_at": None,
             })
+    refuse_imported_accounts(db, [c["owner_id"] for c in _conditions])
     ap = TPRAApproval(
         tenant_id=a.tenant_id, vendor_id=a.vendor_id, assessment_id=a.id,
         decision=body.decision, conditions=_conditions, recommendation=rec,
@@ -1344,6 +1347,7 @@ def update_condition(approval_id: int, condition_id: str, body: ConditionUpdate,
                 c["status"] = body.status
                 c["resolved_at"] = datetime.utcnow().isoformat() if body.status == "closed" else None
             if body.owner_id is not None:
+                refuse_imported_accounts(db, [body.owner_id], kept=[c.get("owner_id")])
                 c["owner_id"] = body.owner_id
             if body.due_date is not None:
                 c["due_date"] = body.due_date.isoformat()
@@ -1612,6 +1616,8 @@ def save_stage_checklist(
     ).first()
     if not row:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Stage not found")
+    refuse_imported_accounts(db, [it.owner_id for it in body.items],
+                             kept=[it.get("owner_id") for it in row.checklist or [] if isinstance(it, dict)])
     row.checklist = [it.model_dump() for it in body.items]
     _bump(row)
     service.write_audit(

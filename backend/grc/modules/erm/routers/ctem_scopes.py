@@ -20,7 +20,7 @@ from ....models import (
     AuditLog, CtemScope, CtemCycle, GRCUser, get_db,
 )
 from ....routers.auth_router import (
-    require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission,
+    require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission, refuse_imported_accounts,
 )
 from ....services import ctem_scopes as svc
 from ....services import ctem_mobilise as mobilise_svc
@@ -168,6 +168,7 @@ def create_scope(
     tenant_id = get_user_primary_tenant(current_user, db)
     if db.query(CtemScope).filter(CtemScope.tenant_id == tenant_id, CtemScope.name == body.name).first():
         raise HTTPException(status_code=409, detail="A scope with this name already exists")
+    refuse_imported_accounts(db, [body.business_owner_id])
     scope = CtemScope(
         tenant_id=tenant_id, name=body.name, description=body.description,
         business_owner_id=body.business_owner_id, cadence=_valid_cadence(body.cadence),
@@ -238,6 +239,7 @@ def update_scope(
     _perm: bool = _edit,
 ):
     s = _scope_or_404(db, scope_id, current_user)
+    refuse_imported_accounts(db, [body.business_owner_id], kept=[s.business_owner_id])
     s.name = body.name
     s.description = body.description
     s.business_owner_id = body.business_owner_id
@@ -366,6 +368,7 @@ def mobilise_finding(
     remain a separate, optional path.
     """
     s = _scope_or_404(db, scope_id, current_user)
+    refuse_imported_accounts(db, [body.assignee_user_id, body.approver_user_id])
     try:
         result = mobilise_svc.mobilise_finding(
             db,

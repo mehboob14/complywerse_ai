@@ -181,6 +181,8 @@ def set_clause_applicability(
 
     # SoA template metadata (owner / implementation status / linked evidence).
     if request.owner_id is not None:
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [request.owner_id], kept=[record.owner_id])
         record.owner_id = request.owner_id
     if request.owner_name is not None:
         record.owner_name = request.owner_name
@@ -226,6 +228,8 @@ def update_applicability_details(
     ).first()
     if not record:
         raise HTTPException(status_code=404, detail="Applicability record not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.owner_id], kept=[record.owner_id])
     for k, v in request.dict(exclude_unset=True).items():
         setattr(record, k, v)
     record.updated_at = datetime.utcnow()

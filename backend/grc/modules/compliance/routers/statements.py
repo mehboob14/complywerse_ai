@@ -533,6 +533,8 @@ def update_compliance_status(
         )
 
     compliance = get_or_create_compliance_record(db, statement_id, statement.tenant_id)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [compliance_data.owner_id], kept=[compliance.owner_id])
     
     compliance.compliance_status = compliance_data.compliance_status
     compliance.assessment_date = datetime.utcnow()
@@ -681,6 +683,8 @@ def assign_statement(
                 status_code=400,
                 detail="Assignee must be an active user in this tenant"
             )
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [new_user_id])
 
     statement.assigned_to_user_id = new_user_id
     statement.updated_at = datetime.utcnow()

@@ -16,7 +16,7 @@ from ....schemas import (
     RiskIncidentCreate, RiskIncidentUpdate, RiskIncidentResponse,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 from ....services.ai_gateway.field_policies import ai_view
 from ..schema_migrations import ensure_incident_schema
 from .incident_links import apply_inline_links, serialize_links
@@ -248,6 +248,7 @@ def create_incident(
     root_cause = incident.root_cause or (suggestion.get("root_cause") if suggestion else None)
     corrective_actions = incident.corrective_actions or (suggestion.get("corrective_actions") if suggestion else None)
     
+    refuse_imported_accounts(db, [incident.assigned_to])
     db_incident = RiskIncident(
         tenant_id=tenant_id,
         risk_id=incident.risk_id,
@@ -575,6 +576,7 @@ def update_incident(
         )
     
     update_data = incident_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("assigned_to")], kept=[incident.assigned_to])
     link_keys = {
         "linked_asset_ids", "linked_vulnerability_ids",
         "linked_risk_ids", "linked_evidence_ids",

@@ -358,6 +358,8 @@ def promote_control_risk(
             due = datetime.fromisoformat(request.due_date.replace("Z", "+00:00"))
         except ValueError:
             due = None
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [request.owner_id, request.business_owner_id])
 
     risk = Risk(
         tenant_id=tenant_id,
@@ -1084,6 +1086,8 @@ def update_framework_control_ownership(
                 GRCUser.id.in_(clean), GRCUser.is_active == True
             ).all()}
             clean = [uid for uid in clean if uid in valid]
+        from .auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, clean, kept=record.assigned_user_ids or [])
         record.assigned_user_ids = clean
 
     db.commit()

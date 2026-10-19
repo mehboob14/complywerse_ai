@@ -483,6 +483,8 @@ def act(db: Session, tenant_id: int, actor_id: int, *, condition: str, record_ty
             if assignee_id is not None and not db.query(GRCUser.id).filter(
                     GRCUser.id == assignee_id, GRCUser.is_active.is_(True)).first():
                 raise ValueError("There is no active user with that id")
+            from ....routers.auth_router import refuse_imported_accounts
+            refuse_imported_accounts(db, [assignee_id])
             state.assignee_id = assignee_id
         elif action == "snooze":
             if until is None or not today < until <= today + timedelta(days=365):

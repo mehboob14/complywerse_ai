@@ -35,7 +35,7 @@ from ....schemas import (
     InternalControlWorkflowActionResponse, InternalControlDashboard,
     MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, refuse_imported_accounts
 from ....services.ai_gateway.field_policies import pick
 
 router = APIRouter(prefix="/internal-controls", tags=["ERM - Internal Controls"])
@@ -569,6 +569,7 @@ def create_internal_control(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Source governance document not found"
             )
+    refuse_imported_accounts(db, [control.owner_id, control.backup_owner_id])
     
     db_control = InternalControl(
         tenant_id=tenant_id,
@@ -917,6 +918,8 @@ def update_internal_control(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Source governance document not found"
             )
+    refuse_imported_accounts(db, [update_data.get("owner_id"), update_data.get("backup_owner_id")],
+                             kept=[control.owner_id, control.backup_owner_id])
     for field, value in update_data.items():
         setattr(control, field, value)
     
@@ -1406,6 +1409,7 @@ def create_escalation(
 ):
     user_tenants = get_user_tenants(current_user, db)
     control = get_control_or_404(control_id, user_tenants, db)
+    refuse_imported_accounts(db, [escalation_data.escalate_to_user_id])
     
     db_escalation = InternalControlEscalation(
         control_id=control_id,
@@ -1466,6 +1470,7 @@ def update_escalation(
         )
     
     update_data = escalation_update.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("escalate_to_user_id")], kept=[escalation.escalate_to_user_id])
     for field, value in update_data.items():
         setattr(escalation, field, value)
     

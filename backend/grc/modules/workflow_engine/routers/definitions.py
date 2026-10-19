@@ -683,7 +683,27 @@ def _resolve_tenant_id(current_user: GRCUser, db: Session) -> int:
     return tenant_id
 
 
+# The keys under which a node's config names people to approve, be assigned, own, review, assess or be escalated to (as the
+# runtime reads them: services/step_executor.py, services/action_handlers.py). Recipients of an alert are not assignments.
+_PEOPLE_KEYS = {"approver_user_id", "approver_user_ids", "assigned_user_id", "assignee_id", "assignee_user_id", "assignee_user_ids",
+                "assessor_id", "owner_id", "reviewer_id", "reviewer_user_ids", "delegate_to_user_id", "escalate_to_user_ids",
+                "escalate_user_ids", "escalation_user_ids"}
+
+
+def _people_named(value) -> list:
+    """Every user id that ``value`` (node configs, however deeply nested) names under ``_PEOPLE_KEYS``."""
+    if isinstance(value, dict):
+        return [i for k, v in value.items() for i in ((v if isinstance(v, list) else [v]) if k in _PEOPLE_KEYS else _people_named(v))]
+    if isinstance(value, list):
+        return [i for v in value for i in _people_named(v)]
+    return []
+
+
 def _apply_nodes(db: Session, definition_id: int, nodes: list[dict]) -> None:
+    from ....routers.auth_router import refuse_imported_accounts
+
+    before = [c for (c,) in db.query(WorkflowNode.config).filter(WorkflowNode.workflow_definition_id == definition_id)]
+    refuse_imported_accounts(db, _people_named([n.get("config") for n in nodes]), kept=_people_named(before))   # one already named may stay
     db.query(WorkflowNode).filter(WorkflowNode.workflow_definition_id == definition_id).delete()
     for node in nodes:
         db.add(

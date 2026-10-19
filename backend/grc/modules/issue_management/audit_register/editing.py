@@ -61,6 +61,15 @@ def _jsonable(value: Any) -> Any:
     return value
 
 
+def _refuse_imported(db: Session, user_id: Optional[int]) -> None:
+    """ValueError (the register's 400) when the owner named is an account an access review imported."""
+    from ....routers.auth_router import imported_account_problem
+
+    problem = imported_account_problem(db, [user_id])
+    if problem:
+        raise ValueError(problem)
+
+
 def _sync_issue(db: Session, issue: Issue, profile: AuditIssueProfile, fields: List[str]) -> None:
     """Recompute only the issue fields the edited register fields feed."""
     from .service import _issue_fields     # one definition of how the two map
@@ -102,6 +111,7 @@ def apply_edit(db: Session, issue: Issue, profile: AuditIssueProfile,
             if user_id is not None and not db.get(GRCUser, user_id):
                 raise ValueError("owner must be a platform user")
             if user_id != issue.owner_id:
+                _refuse_imported(db, user_id)
                 changed["owner"] = [issue.owner_id, user_id]
                 issue.owner_id = user_id
                 action = (db.query(IssueAction)
@@ -227,6 +237,7 @@ def create_finding(db: Session, tenant_id: int, template: str, raw: Dict[str, An
             owner = db.get(GRCUser, int(value))
             if not owner:
                 raise ValueError("owner must be a platform user")
+            _refuse_imported(db, owner.id)
             owner_id = owner.id
             values["owner_name_raw"] = getattr(owner, "display_name", None) or owner.username
             continue

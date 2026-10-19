@@ -79,6 +79,10 @@ def set_owner_mapping(db: Session, tenant_id: int, raw: str, user_id: Optional[i
     """Map (or unmap) a workbook owner name; returns how many findings moved."""
     if user_id is not None and not db.get(GRCUser, user_id):
         raise ValueError("owner must be a platform user")
+    from ....routers.auth_router import imported_account_problem
+    problem = imported_account_problem(db, [user_id])
+    if problem:
+        raise ValueError(problem)
     _set_alias(db, tenant_id, "owner", raw, user_id, getattr(actor, "id", None))
     target = user_id if user_id is not None else match_owner(raw, build_owner_index(db))
     moved = 0

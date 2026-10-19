@@ -36,6 +36,8 @@ def resolve_user_ids_from_roles(db, tenant_id: int, role_ids: Sequence[int]) -> 
     if not normalized_role_ids:
         return []
 
+    from ....routers.auth_router import platform_user
+
     rows = (
         db.query(UserRole.user_id)
         .join(Role, Role.id == UserRole.role_id)
@@ -43,6 +45,7 @@ def resolve_user_ids_from_roles(db, tenant_id: int, role_ids: Sequence[int]) -> 
             UserRole.tenant_id == int(tenant_id),
             Role.id.in_(normalized_role_ids),
             _platform_grant(),
+            platform_user(UserRole.user_id),     # nor members an access review imported
         )
         .distinct()
         .all()

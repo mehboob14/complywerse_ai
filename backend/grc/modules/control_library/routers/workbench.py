@@ -1225,6 +1225,8 @@ def assign(work_item_id: int, body: dict = Body(...), db: Session = Depends(get_
         valid = {u.id for u in db.query(GRCUser.id).filter(
             GRCUser.id.in_(clean), GRCUser.is_active == True).all()}  # noqa: E712
         clean = [i for i in clean if i in valid]
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, clean, kept=list(wi.assigned_user_ids or []) + [wi.assigned_to_user_id])
     wi.assigned_user_ids = clean
     wi.assigned_to_user_id = clean[0] if clean else None
     flag_modified(wi, "assigned_user_ids")
@@ -1825,6 +1827,8 @@ def add_escalation(work_item_id: int, body: dict = Body(...), db: Session = Depe
                                           ControlWorkItem.tenant_id == tid).first()
     if not wi:
         raise HTTPException(404, "Work item not found")
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [body.get("escalate_to_user_id")])
     e = ControlWorkEscalation(
         work_item_id=wi.id, tenant_id=tid, escalation_level=body.get("escalation_level", 1),
         escalation_name=body.get("escalation_name", "Escalation"),

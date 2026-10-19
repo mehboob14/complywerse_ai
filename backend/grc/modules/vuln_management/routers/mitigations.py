@@ -10,7 +10,7 @@ from ....schemas import (
     VulnerabilityMitigationCreate, VulnerabilityMitigationUpdate,
     VulnerabilityMitigationResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 
 router = APIRouter(tags=["Vulnerability Mitigations"])
 
@@ -112,6 +112,7 @@ def create_mitigation(
         raise HTTPException(status_code=403, detail="User not associated with any tenant")
     
     vuln = get_vuln_or_404(vuln_id, user_tenants, db)
+    refuse_imported_accounts(db, [request.owner_id])
     
     mitigation = VulnerabilityMitigation(
         vulnerability_id=vuln_id,
@@ -168,6 +169,7 @@ def update_mitigation(
     mitigation = get_mitigation_or_404(mitigation_id, user_tenants, db)
     
     update_data = request.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id")], kept=[mitigation.owner_id])
     for field, value in update_data.items():
         setattr(mitigation, field, value)
     

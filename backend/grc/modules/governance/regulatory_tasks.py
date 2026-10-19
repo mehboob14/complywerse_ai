@@ -43,13 +43,19 @@ def set_assignees(task: RegulatoryImplementationTask, ids: Optional[Iterable]) -
     task.assigned_to = ids[0] if ids else None
 
 
-def check_users(db: Session, ids: Iterable[int]) -> List[int]:
-    """The ids, if each is an active user here; otherwise ValueError naming the rest."""
+def check_users(db: Session, ids: Iterable[int], kept: Iterable[int] = ()) -> List[int]:
+    """The ids, if each is an active user here who uses the platform (one in ``kept``, already on the record, may stay);
+    otherwise ValueError naming the rest."""
+    from ...routers.auth_router import imported_account_problem
+
     ids = _ids(ids)
     found = {u.id for u in db.query(GRCUser.id).filter(GRCUser.id.in_(ids), GRCUser.is_active.is_(True))} if ids else set()
     missing = [i for i in ids if i not in found]
     if missing:
         raise ValueError(f"Unknown or inactive users: {missing}")
+    problem = imported_account_problem(db, ids, kept)
+    if problem:
+        raise ValueError(problem)
     return ids
 
 

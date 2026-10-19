@@ -143,6 +143,8 @@ def create_drill(
         if not payload.linked_incident_id:
             raise HTTPException(status_code=400, detail="linked_incident_id is required for incident-triggered records")
         _validate_incident(db, tenant_ids, payload.linked_incident_id)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [payload.owner_id])
     drill = BcmDrill(
         tenant_id=plan.tenant_id,
         plan_id=plan.id,
@@ -194,6 +196,8 @@ def update_drill(
         raise HTTPException(status_code=400, detail="Invalid drill_type")
     if "linked_incident_id" in data and data["linked_incident_id"] is not None:
         _validate_incident(db, tenant_ids, data["linked_incident_id"])
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [data.get("owner_id")], kept=[drill.owner_id])
     for k, v in data.items():
         setattr(drill, k, v)
     drill.updated_at = datetime.utcnow()

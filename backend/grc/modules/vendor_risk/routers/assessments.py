@@ -236,6 +236,9 @@ def create_assessment(
         )
         if not assessor:
             raise HTTPException(status_code=400, detail="Selected assessor is not part of your tenant")
+        from ....routers.auth_router import refuse_imported_accounts
+
+        refuse_imported_accounts(db, [payload.assessed_by])
         assessed_by = payload.assessed_by
 
     assessment = VendorAssessment(

@@ -84,6 +84,8 @@ def create_document(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [document.owner_id])
     
     db_document = Document(
         tenant_id=tenant_id,
@@ -352,6 +354,8 @@ def submit_for_approval(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Approver not found"
         )
+    from .auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [approval_request.approver_id])
     
     workflow = DocumentApprovalWorkflow(
         document_id=document_id,

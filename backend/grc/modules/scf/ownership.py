@@ -188,6 +188,9 @@ def assign_ownership(
 ) -> SCFControlState:
     state = ensure_state(db, tenant_id, scope.id, scf_id)
     before = state_snapshot(state)
+    from grc.routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [owner_user_id, reviewer_user_id, *(assigned_user_ids or [])],
+                             kept=[before["owner_user_id"], before["reviewer_user_id"], *before["assigned_user_ids"]])
 
     if owner_user_id is not None:
         state.owner_user_id = int(owner_user_id)

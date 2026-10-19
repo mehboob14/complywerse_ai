@@ -419,6 +419,8 @@ def update_appetite(
         db.add(config)
     else:
         update_data = appetite_update.model_dump(exclude_unset=True)
+        from ....routers.auth_router import refuse_imported_accounts
+        refuse_imported_accounts(db, [update_data.get("escalation_owner_id")], kept=[config.escalation_owner_id])
         for key, value in update_data.items():
             setattr(config, key, value)
     

@@ -472,6 +472,8 @@ def create_committee(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="User is not assigned to any tenant"
             )
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [committee.chair_id, committee.secretary_id])
     
     db_committee = GovernanceCommittee(
         tenant_id=tenant_id,
@@ -1987,6 +1989,8 @@ def create_oversight_action(
             db, meeting.tenant_id, action.priority, action.due_date)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [action.assigned_to])
 
     db_action = OversightAction(
         tenant_id=meeting.tenant_id,
@@ -2091,6 +2095,8 @@ def update_action_status(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Action not found")
     
     update_data = action_update.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("assigned_to")], kept=[action.assigned_to])
 
     if update_data.get("status") == "completed" and action.status != "completed":
         update_data["completed_at"] = datetime.utcnow()
@@ -2146,6 +2152,8 @@ def create_manual_action(
         priority, due_date, raised_at = committee_tasks.prepare(db, committee.tenant_id, action.priority, action.due_date)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [action.assigned_to])
 
     db_action = OversightAction(
         tenant_id=committee.tenant_id,
@@ -2302,6 +2310,9 @@ def update_committee(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Committee not found")
     
     update_data = committee_update.model_dump(exclude_unset=True)
+    from ....routers.auth_router import refuse_imported_accounts
+    refuse_imported_accounts(db, [update_data.get("chair_id"), update_data.get("secretary_id")],
+                             kept=[committee.chair_id, committee.secretary_id])
     for key, value in update_data.items():
         setattr(committee, key, value)
     

@@ -11,7 +11,7 @@ from ....models import (
     Vendor, VendorAssessment, VendorSLARecord, VendorIncident,
     GRCUser, Tenant, get_db,
 )
-from ....routers.auth_router import require_auth, get_user_tenants
+from ....routers.auth_router import require_auth, get_user_tenants, refuse_imported_accounts
 from ....services.module_settings import clean_record_values
 from ..tpra import rbac
 
@@ -236,6 +236,7 @@ def create_vendor(
         custom_values = clean_record_values(db, tenant_id, "vendors", payload.custom_values, creating=True)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    refuse_imported_accounts(db, [payload.owner_id])
     vendor = Vendor(
         tenant_id=tenant_id,
         custom_values=custom_values,
@@ -422,6 +423,7 @@ def update_vendor(
     vendor = get_vendor_or_404(vendor_id, tenant_ids, db)
 
     update_data = payload.model_dump(exclude_unset=True)
+    refuse_imported_accounts(db, [update_data.get("owner_id")], kept=[vendor.owner_id])
     if "custom_values" in update_data:
         try:
             vendor.custom_values = clean_record_values(db, vendor.tenant_id, "vendors", update_data.pop("custom_values"),
