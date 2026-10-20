@@ -4,9 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
 
 from ..models import (
-    GovernanceObjective, Exception, Issue,
+    GovernanceObjective, Issue,
     NormalizedControl, GRCUser, Tenant, get_db
 )
+# the control-exception model under its own name, so `Exception` stays Python's in this module
+from ..models import Exception as ControlException
 from ..schemas import (
     GovernanceObjectiveCreate, GovernanceObjectiveUpdate, GovernanceObjectiveResponse,
     ExceptionCreate, ExceptionUpdate, ExceptionResponse, ExceptionApproval,
@@ -175,13 +177,13 @@ def list_exceptions(
     if not user_tenants:
         return []
     
-    query = db.query(Exception).filter(Exception.tenant_id.in_(user_tenants))
+    query = db.query(ControlException).filter(ControlException.tenant_id.in_(user_tenants))
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
-        query = query.filter(Exception.tenant_id == tenant_id)
+        query = query.filter(ControlException.tenant_id == tenant_id)
     if status_filter:
-        query = query.filter(Exception.status == status_filter)
+        query = query.filter(ControlException.status == status_filter)
     
     exceptions = query.offset(skip).limit(limit).all()
     return exceptions
@@ -221,7 +223,7 @@ def create_exception(
                 detail="Control not found"
             )
     
-    db_exception = Exception(
+    db_exception = ControlException(
         tenant_id=tenant_id,
         title=exception.title,
         justification=exception.justification,
@@ -243,9 +245,9 @@ def update_exception(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    exception = db.query(Exception).filter(
-        Exception.id == exception_id,
-        Exception.tenant_id.in_(user_tenants)
+    exception = db.query(ControlException).filter(
+        ControlException.id == exception_id,
+        ControlException.tenant_id.in_(user_tenants)
     ).first()
     if not exception:
         raise HTTPException(
@@ -271,9 +273,9 @@ def approve_exception(
 ):
     user_tenants = get_user_tenants(current_user, db)
     
-    exception = db.query(Exception).filter(
-        Exception.id == exception_id,
-        Exception.tenant_id.in_(user_tenants)
+    exception = db.query(ControlException).filter(
+        ControlException.id == exception_id,
+        ControlException.tenant_id.in_(user_tenants)
     ).first()
     if not exception:
         raise HTTPException(
@@ -435,13 +437,13 @@ def get_governance_dashboard(
         )
     
     obj_query = db.query(GovernanceObjective).filter(GovernanceObjective.tenant_id.in_(user_tenants))
-    exc_query = db.query(Exception).filter(Exception.tenant_id.in_(user_tenants))
+    exc_query = db.query(ControlException).filter(ControlException.tenant_id.in_(user_tenants))
     issue_query = db.query(Issue).filter(Issue.tenant_id.in_(user_tenants))
     
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         obj_query = obj_query.filter(GovernanceObjective.tenant_id == tenant_id)
-        exc_query = exc_query.filter(Exception.tenant_id == tenant_id)
+        exc_query = exc_query.filter(ControlException.tenant_id == tenant_id)
         issue_query = issue_query.filter(Issue.tenant_id == tenant_id)
     
     objectives = obj_query.all()

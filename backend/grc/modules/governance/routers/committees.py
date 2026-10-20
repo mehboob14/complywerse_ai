@@ -19,9 +19,12 @@ from pydantic import BaseModel
 from ....models import (
     GovernanceCommittee, CommitteeMember, CommitteeCharter, CommitteeMeeting,
     MeetingAgendaItem, MeetingMinutes, OversightAction, GovernanceDocument,
-    Risk, RegulatoryChange, GRCUser, Tenant, get_db, Exception,
+    Risk, RegulatoryChange, GRCUser, Tenant, get_db,
     UploadedFramework, ParsedFrameworkControl, MeetingAttachment
 )
+# the control-exception model under its own name: imported as "Exception" it hid Python's, and every `except Exception:` here
+# raised TypeError instead of catching the error
+from ....models import Exception as ControlException
 from ....schemas import (
     GovernanceCommitteeCreate, GovernanceCommitteeUpdate, GovernanceCommitteeResponse,
     CommitteeMemberCreate, CommitteeMemberResponse,
@@ -1617,11 +1620,11 @@ def get_suggested_agenda_items(
             "document_status": doc.status,
         })
     
-    pending_exceptions = db.query(Exception).filter(
-        Exception.tenant_id == meeting.tenant_id,
-        Exception.status == "pending"
+    pending_exceptions = db.query(ControlException).filter(
+        ControlException.tenant_id == meeting.tenant_id,
+        ControlException.status == "pending"
     ).all()
-    
+
     for exc in pending_exceptions:
         suggested_items.append({
             "source_type": "exception",
@@ -1630,7 +1633,7 @@ def get_suggested_agenda_items(
             "description": exc.justification or f"Review risk exception: {exc.title}",
             "item_type": "decision",
             "linked_document_id": None,
-            "linked_risk_id": exc.id,
+            "linked_risk_id": None,             # an exception is not a risk: its id names no risk
             "linked_regulatory_change_id": None,
             "exception_status": exc.status,
         })
@@ -1715,26 +1718,27 @@ def auto_populate_agenda_from_pending_approvals(
             db.add(agenda_item)
             created_items.append(agenda_item)
     
+    exception_items = 0
     if opts.include_exceptions:
-        pending_exceptions = db.query(Exception).filter(
-            Exception.tenant_id == meeting.tenant_id,
-            Exception.status == "pending"
+        pending_exceptions = db.query(ControlException).filter(
+            ControlException.tenant_id == meeting.tenant_id,
+            ControlException.status == "pending"
         ).all()
-        
+
         for exc in pending_exceptions:
             current_item_number += 1
-            agenda_item = MeetingAgendaItem(
+            agenda_item = MeetingAgendaItem(          # no risk link: an exception's id names no risk
                 tenant_id=meeting.tenant_id,
                 meeting_id=meeting_id,
                 item_number=current_item_number,
                 title=f"Risk Exception Review: {exc.title}",
                 description=exc.justification or f"Review risk exception: {exc.title}",
                 item_type="decision",
-                linked_risk_id=exc.id,
                 status="pending",
             )
             db.add(agenda_item)
             created_items.append(agenda_item)
+            exception_items += 1
     
     if opts.include_regulatory_changes:
         pending_regulatory_changes = db.query(RegulatoryChange).filter(
@@ -1769,7 +1773,7 @@ def auto_populate_agenda_from_pending_approvals(
         "total_created": len(created_items),
         "by_type": {
             "documents": sum(1 for item in created_items if item.linked_document_id is not None),
-            "exceptions": sum(1 for item in created_items if item.linked_risk_id is not None),
+            "exceptions": exception_items,
             "regulatory_changes": sum(1 for item in created_items if item.linked_regulatory_change_id is not None),
         }
     }
