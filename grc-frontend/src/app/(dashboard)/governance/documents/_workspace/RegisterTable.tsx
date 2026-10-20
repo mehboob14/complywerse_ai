@@ -39,7 +39,7 @@ import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
 import { bulkActionIds } from './archive';
 import { NOTHING_OPEN, buildTree, collapseAll, expandAll, flip, openness, treeEntries, type Fold } from './docTree';
-import { versionStates } from './library';
+import { shownFrameworkIds, versionStates } from './library';
 import { retryUnlessRefused } from '../_view/docRoute';
 
 export interface RegisterTableProps {
@@ -254,7 +254,7 @@ export function RegisterTable({
       minWidth: '150px',
       render: (d) => (
         <FrameworkPills
-          ids={d.framework_ids ?? []}
+          ids={shownFrameworkIds(d)}
           nameMap={nameMap}
           max={3}
         />

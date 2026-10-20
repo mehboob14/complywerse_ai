@@ -22,3 +22,9 @@ export function versionStates<V extends { number: string }>(
   const inForceAt = inForce ? newestFirst.map((v) => v.number).lastIndexOf(inForce) : -1;
   return newestFirst.map((v, i) => ({ ...v, state: i === inForceAt ? 'in-force' : v.number === current ? 'current' : 'superseded' }));
 }
+
+/** The frameworks the register's Frameworks column shows: those the Details dialog edits (applicable_framework_ids), else the
+ *  document's own framework_ids when none are set (the server defaults one to the other on creation). */
+export function shownFrameworkIds(d: { applicable_framework_ids?: number[] | null; framework_ids?: number[] | null }): number[] {
+  return d.applicable_framework_ids?.length ? d.applicable_framework_ids : d.framework_ids ?? [];
+}

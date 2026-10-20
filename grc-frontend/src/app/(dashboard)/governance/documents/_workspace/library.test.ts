@@ -1,7 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { creation, versionStates } from './library.ts';
+import { creation, shownFrameworkIds, versionStates } from './library.ts';
+
+test('the Frameworks column shows what the Details dialog edits, else the frameworks the document was made with', () => {
+  assert.deepEqual(shownFrameworkIds({ applicable_framework_ids: [7, 9], framework_ids: [3] }), [7, 9]);
+  assert.deepEqual(shownFrameworkIds({ applicable_framework_ids: [], framework_ids: [3] }), [3]);
+  assert.deepEqual(shownFrameworkIds({ framework_ids: [3] }), [3]);                       // an older server sends no applicable ids
+  assert.deepEqual(shownFrameworkIds({ applicable_framework_ids: null, framework_ids: null }), []);
+});
 
 test('creating documents is offered only where the Comply AI Studio is on', () => {
   assert.equal(creation(true, true), 'buttons');

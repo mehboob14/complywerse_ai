@@ -200,7 +200,7 @@ def test_the_library_views_leave_out_drafts_never_published_for_staff(reads):
     draft, approved = db.get(m.GovernanceDocument, 5), db.get(m.GovernanceDocument, 6)
     draft.next_review_date, draft.expiry_date = now + timedelta(days=10), now + timedelta(days=20)
     approved.next_review_date, approved.status = now - timedelta(days=3), "approved"          # approved, never published
-    db.add(m.DocumentApprovalStep(id=1, document_id=5, step_sequence=1, step_name="Approval", approver_id=OWNER, status="pending"))
+    db.add(m.DocumentObligation(tenant_id=1, document_id=5, kind="approval", user_id=OWNER, status="pending"))     # waiting for Olivia
     db.commit()
 
     def views(who):

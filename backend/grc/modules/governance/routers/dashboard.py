@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_, or_, extract
 
 from ....models import (
-    GovernanceDocument, DocumentApprovalStep, DocumentControlLink,
+    GovernanceDocument, DocumentControlLink, DocumentObligation,
     DocumentRegulatoryLink, GRCUser, Framework, get_db
 )
 from ....routers.auth_router import require_auth, get_user_tenants
@@ -13,6 +13,11 @@ from ..permissions import ON_ITS_WAY, in_force_number, require_library_reader, v
 
 # the whole library's dashboard: for those allowed to read the document library
 router = APIRouter(prefix="/dashboard", tags=["Governance Dashboard"], dependencies=[Depends(require_library_reader)])
+
+SIGNOFF_REQUESTS = ("review", "approval")      # the kinds of grc_document_obligations a document's sign-off asks people for
+# reviews done on the Reviews page record no due date for the review, so on-time reviews cannot be counted yet (a later release)
+ON_TIME_NO_DATA = ("Not measured yet: a review done on the Reviews page does not record when it was due, so on-time reviews "
+                   "cannot be counted.")
 
 
 def _in_force():
@@ -226,39 +231,41 @@ def get_pending_approvals(
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
         return {"count": 0, "approvals": []}
-    
-    query = db.query(DocumentApprovalStep).join(
-        GovernanceDocument, DocumentApprovalStep.document_id == GovernanceDocument.id
+
+    # the review and approval requests still waiting, one per person (doc_lifecycle; the legacy approval steps are no longer written)
+    query = db.query(DocumentObligation).join(
+        GovernanceDocument, DocumentObligation.document_id == GovernanceDocument.id
     ).filter(
         GovernanceDocument.tenant_id.in_(user_tenants),
-        DocumentApprovalStep.status == "pending"
+        DocumentObligation.kind.in_(SIGNOFF_REQUESTS),
+        DocumentObligation.status == "pending"
     )
     query = _visible(query, db, current_user)
-    
+
     if tenant_id:
         validate_tenant_access(current_user, tenant_id, db)
         query = query.filter(GovernanceDocument.tenant_id == tenant_id)
-    
-    pending_steps = query.order_by(DocumentApprovalStep.requested_at.desc()).limit(50).all()
-    
+
+    pending_steps = query.order_by(DocumentObligation.requested_at.desc(), DocumentObligation.id.desc()).limit(50).all()
+
     approvals_list = []
     for step in pending_steps:
         doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == step.document_id).first()
-        approver = db.query(GRCUser).filter(GRCUser.id == step.approver_id).first() if step.approver_id else None
-        
-        is_overdue = step.due_date and step.due_date < datetime.utcnow()
-        
+        approver = db.query(GRCUser).filter(GRCUser.id == step.user_id).first()
+
+        is_overdue = bool(step.due_date and step.due_date < datetime.utcnow())
+
         approvals_list.append({
             "id": step.id,
             "document_id": step.document_id,
             "document_code": doc.document_code if doc else None,
             "document_title": doc.title if doc else None,
             "doc_type": doc.doc_type if doc else None,
-            "step_sequence": step.step_sequence,
-            "step_name": step.step_name,
-            "approver_id": step.approver_id,
+            "step_sequence": SIGNOFF_REQUESTS.index(step.kind) + 1,       # review first, then approval
+            "step_name": step.kind.capitalize(),
+            "approver_id": step.user_id,
             "approver_name": approver.display_name if approver else None,
-            "approver_role": step.approver_role,
+            "approver_role": None,
             "requested_at": step.requested_at.isoformat() if step.requested_at else None,
             "due_date": step.due_date.isoformat() if step.due_date else None,
             "is_overdue": is_overdue
@@ -717,10 +724,10 @@ def get_documents_overview(
     from sqlalchemy.exc import SQLAlchemyError
     from ....models import (
         DocumentRiskLink, DocumentAssetLink, PolicyException,
-        PolicyReviewHistory, PolicyGapFinding, PolicyStatement,
+        DocumentAuditLog, PolicyGapFinding, PolicyStatement,
         StatementControlMapping, DocumentSignature, DocumentSignoffAssignment,
-        PolicyStatementCompliance, DocumentAttestation, GovernanceActionReview,
-        AttestationCampaign, AttestationRequest,
+        PolicyStatementCompliance, GovernanceActionReview,
+        DocumentAttestationCampaign,
         GovernanceCommittee, CommitteeMeeting, MeetingMinutes, OversightAction,
         CommitteeCharter, CommitteeMember,
         RiskKRI, Risk, ISProject, ISProjectMilestone,
@@ -849,28 +856,27 @@ def get_documents_overview(
                     if r.compliance_status in ("compliant", "partially_compliant", "non_compliant")]
     psc_compliant = sum(1 for r in psc_assessed if r.compliance_status == "compliant")
 
-    # ---- approval steps + sign-off ----------------------------------------
+    # ---- review / approval requests (one per person, doc_lifecycle) + sign-off ------------
+    # a person's request is "done" when they signed, "rejected" when they rejected, "cancelled" when it was withdrawn
     try:
-        steps = db.query(
-            DocumentApprovalStep.status, DocumentApprovalStep.due_date,
-            DocumentApprovalStep.requested_at, DocumentApprovalStep.completed_at,
-            DocumentApprovalStep.document_id
-        ).join(
-            GovernanceDocument, DocumentApprovalStep.document_id == GovernanceDocument.id
-        ).filter(GovernanceDocument.tenant_id.in_(scoped)).all()
+        requests = db.query(
+            DocumentObligation.kind, DocumentObligation.status, DocumentObligation.due_date,
+            DocumentObligation.requested_at, DocumentObligation.done_at
+        ).filter(DocumentObligation.tenant_id.in_(scoped)).all()
     except SQLAlchemyError:
         db.rollback()
-        steps = []
+        requests = []
+    steps = [r for r in requests if r.kind in SIGNOFF_REQUESTS]
 
     pending_steps = [s for s in steps if s.status == "pending"]
     overdue_steps = [s for s in pending_steps if s.due_date and s.due_date < now]
-    docs_awaiting_approval = len({s.document_id for s in pending_steps})
+    docs_awaiting_approval = sum(1 for d in docs if d.status in ("pending_review", "pending_approval"))
     window_90 = now - timedelta(days=90)
-    decided_90 = [s for s in steps if s.status in ("approved", "rejected")
-                  and s.completed_at and s.completed_at >= window_90]
-    approved_90 = sum(1 for s in decided_90 if s.status == "approved")
-    cycle_days = [(s.completed_at - s.requested_at).total_seconds() / 86400
-                  for s in decided_90 if s.requested_at and s.completed_at >= s.requested_at]
+    decided_90 = [s for s in steps if s.status in ("done", "rejected")
+                  and s.done_at and s.done_at >= window_90]
+    approved_90 = sum(1 for s in decided_90 if s.status == "done")
+    cycle_days = [(s.done_at - s.requested_at).total_seconds() / 86400
+                  for s in decided_90 if s.requested_at and s.done_at >= s.requested_at]
     avg_decision_days = round(sum(cycle_days) / len(cycle_days), 1) if cycle_days else None
 
     try:
@@ -905,21 +911,20 @@ def get_documents_overview(
     due_60 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=60))
     due_90 = sum(1 for d in review_universe if now <= d.next_review_date <= now + timedelta(days=90))
 
+    # reviews completed in the last 12 months: the document audit row each completion writes (the Reviews page: "reviewed" with the
+    # new last-reviewed date; the older review endpoint: "review_completed")
     try:
         window_365 = now - timedelta(days=365)
-        completed_reviews = db.query(
-            PolicyReviewHistory.scheduled_date, PolicyReviewHistory.completed_at
-        ).filter(
-            PolicyReviewHistory.tenant_id.in_(scoped),
-            PolicyReviewHistory.review_status == "completed",
-            PolicyReviewHistory.completed_at.isnot(None),
-            PolicyReviewHistory.completed_at >= window_365
+        completed_reviews = db.query(DocumentAuditLog.id).filter(
+            DocumentAuditLog.tenant_id.in_(scoped),
+            DocumentAuditLog.performed_at >= window_365,
+            or_(DocumentAuditLog.action == "review_completed",
+                and_(DocumentAuditLog.action == "reviewed", DocumentAuditLog.field_changed == "last_reviewed_at")),
         ).all()
     except SQLAlchemyError:
         db.rollback()
         completed_reviews = []
-    with_schedule = [r for r in completed_reviews if r.scheduled_date]
-    on_time = sum(1 for r in with_schedule if r.completed_at <= r.scheduled_date)
+    on_time, with_schedule = 0, []                  # ON_TIME_NO_DATA: nothing records when a review was due
 
     # ---- exceptions --------------------------------------------------------
     try:
@@ -944,42 +949,25 @@ def get_documents_overview(
     exc_closed_on_time = sum(1 for e in exc_closed_dated if e.closed_at <= e.expiry_date)
     exc_promoted = sum(1 for e in exceptions if e.promoted_risk_id)
 
-    # ---- attestations ------------------------------------------------------
-    try:
-        window_365 = now - timedelta(days=365)
-        att_rows = db.query(
-            AttestationRequest.status, AttestationRequest.due_date,
-            AttestationRequest.completed_at, AttestationRequest.evidence_id
-        ).filter(
-            AttestationRequest.tenant_id.in_(scoped),
-            AttestationRequest.assigned_at >= window_365
-        ).all()
-        active_campaigns = db.query(func.count(AttestationCampaign.id)).filter(
-            AttestationCampaign.tenant_id.in_(scoped),
-            AttestationCampaign.status == "active").scalar() or 0
-    except SQLAlchemyError:
-        db.rollback()
-        att_rows, active_campaigns = [], 0
+    # ---- attestations: the acknowledgement requests (one per person, doc_lifecycle; a withdrawn one - "cancelled" - is owed
+    # by nobody) and the external-link campaigns. The legacy attestation tables are no longer written.
+    acks = [r for r in requests if r.kind == "acknowledgement" and r.status != "cancelled"]
+    window_365 = now - timedelta(days=365)
+    att_rows = [a for a in acks if a.requested_at and a.requested_at >= window_365]
     att_total = len(att_rows)
-    att_completed = [a for a in att_rows if a.status == "completed" or a.completed_at]
-    att_open = [a for a in att_rows if a.status in ("pending", "overdue", "escalated") and not a.completed_at]
-    att_overdue = sum(1 for a in att_open if a.status == "overdue" or (a.due_date and a.due_date < now))
-    att_evidence = sum(1 for a in att_completed if a.evidence_id)
-
-    # ---- document acknowledgements (legacy read-and-acknowledge records) ----
+    att_completed = [a for a in att_rows if a.status == "done"]
+    att_open = [a for a in acks if a.status == "pending"]
+    att_overdue = sum(1 for a in att_open if a.due_date and a.due_date < now)
+    att_evidence = 0                                # an acknowledgement carries no evidence link: not measured
     try:
-        ack_rows = db.query(
-            DocumentAttestation.status, DocumentAttestation.completed_at
-        ).filter(
-            DocumentAttestation.tenant_id.in_(scoped),
-            DocumentAttestation.attestation_type == "acknowledgment"
-        ).all()
+        active_campaigns = db.query(func.count(DocumentAttestationCampaign.id)).filter(
+            DocumentAttestationCampaign.tenant_id.in_(scoped),
+            DocumentAttestationCampaign.status == "active").scalar() or 0
     except SQLAlchemyError:
         db.rollback()
-        ack_rows = []
-    ack_total = len(ack_rows)
-    ack_done = sum(1 for a in ack_rows
-                   if a.status in ("completed", "acknowledged", "attested") or a.completed_at)
+        active_campaigns = 0
+    ack_total = len(acks)
+    ack_done = sum(1 for a in acks if a.status == "done")
 
     # ---- committees --------------------------------------------------------
     try:
@@ -1217,13 +1205,13 @@ def get_documents_overview(
 
     approvals_metrics = [
         metric("queue_health", "Queue health", 0.30, len(overdue_steps), len(pending_steps),
-               "1 - (overdue approval steps / pending approval steps)",
+               "1 - (overdue review/approval requests / pending review/approval requests)",
                inverse=True, empty_score=100),
         metric("action_review_health", "Action-review backlog", 0.20, ar_pending, len(ar_open),
                "1 - (action reviews still awaiting triage / open action-review items)",
                inverse=True, empty_score=100),
         metric("decision_rate", "Approval rate 90d", 0.25, approved_90, len(decided_90),
-               "steps approved / steps decided, last 90 days"),
+               "review/approval requests signed / requests signed or rejected, last 90 days"),
         metric("signoff_integrity", "Signed-off published", 0.25, signoff_published, published_count,
                "published documents with a recorded approver signature / published documents"),
     ]
@@ -1234,8 +1222,9 @@ def get_documents_overview(
         metric("schedule_health", "Schedule health", 0.45, overdue_reviews, len(review_universe),
                "1 - (overdue reviews / documents with a review schedule)",
                inverse=True, empty_score=100),
-        metric("on_time_rate", "On-time reviews 12m", 0.30, on_time, len(with_schedule),
-               "reviews completed on/before their scheduled date / completed reviews, last 12 months"),
+        {**metric("on_time_rate", "On-time reviews 12m", 0.30, on_time, len(with_schedule),
+                  "reviews completed on/before their scheduled date / completed reviews, last 12 months"),
+         "no_data": True, "note": ON_TIME_NO_DATA},
     ]
 
     exceptions_metrics = [
@@ -1248,13 +1237,14 @@ def get_documents_overview(
 
     attestations_metrics = [
         metric("completion_rate", "Completion 12m", 0.40, len(att_completed), att_total,
-               "attestation requests completed / all requests, last 12 months"),
+               "acknowledgement requests done / requests made in the last 12 months (withdrawn ones left out)"),
         metric("acknowledgement_rate", "Acknowledged", 0.25, ack_done, ack_total,
-               "document acknowledgements completed / all required acknowledgement records"),
+               "acknowledgement requests done / all acknowledgement requests (withdrawn ones left out)"),
         metric("overdue_containment", "Overdue containment", 0.20, att_overdue, len(att_open),
-               "1 - (overdue open requests / open requests)", inverse=True, empty_score=100),
-        metric("evidence_linkage", "Evidence linked", 0.15, att_evidence, len(att_completed),
-               "completed attestations linked to evidence / completed attestations"),
+               "1 - (overdue open acknowledgement requests / open acknowledgement requests)", inverse=True, empty_score=100),
+        {**metric("evidence_linkage", "Evidence linked", 0.15, att_evidence, 0,
+                  "completed attestations linked to evidence / completed attestations"),
+         "no_data": True, "note": "Not measured: an acknowledgement is not linked to evidence."},
     ]
 
     committees_metrics = [
