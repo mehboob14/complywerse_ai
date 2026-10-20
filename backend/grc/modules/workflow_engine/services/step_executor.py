@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 from ....models import ApprovalRequest, Role, UserRole, WorkflowAuditLog, WorkflowEngineStep, WorkflowInstance
 from ....rich_audit import workflow_actor_context
 from .action_handlers import (
+    ActionRefused,
     WorkflowActionHandlers,
     _build_template_context,
     _resolve_template,
@@ -616,12 +617,16 @@ class StepExecutor:
             # re-firing workflows on these rows (loop prevention). The
             # actor_type tag ensures the Admin Audit Logs "Workflow Engine"
             # filter returns these rows correctly.
-            with workflow_actor_context(
-                "workflow",
-                actor_type="workflow_engine",
-                actor_workflow_id=definition.id,
-            ):
-                action_output = WorkflowActionHandlers.execute(db, instance, definition, node, config)
+            try:
+                with workflow_actor_context(
+                    "workflow",
+                    actor_type="workflow_engine",
+                    actor_workflow_id=definition.id,
+                ):
+                    action_output = WorkflowActionHandlers.execute(db, instance, definition, node, config)
+            except ActionRefused as refused:            # the run fails here and says why (runtime: step.failed, error_message)
+                return {"status": "failed", "error": str(refused),
+                        "output": {"action": config.get("action_name"), "error": str(refused)}}
             updated_context = dict(instance.context or {})
             updated_context.setdefault("actions", []).append(
                 {

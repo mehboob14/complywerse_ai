@@ -1752,26 +1752,7 @@ def bulk_publish(
         if doc.status != "approved":
             skipped_count += 1
             continue
-
-        old_status = doc.status
-        doc.status = "published"
-        doc.published_by = current_user.id
-        doc.published_at = datetime.utcnow()
-        doc.updated_at = datetime.utcnow()
-        db.flush()
-        doc_lifecycle.on_status_changed(db, doc, old_status, "published", current_user.id)
-
-        create_audit_log(
-            db=db,
-            document_id=doc.id,
-            tenant_id=doc.tenant_id,
-            user_id=current_user.id,
-            action="published",
-            action_details=f"Document published by {current_user.display_name}",
-            field_changed="status",
-            old_value=old_status,
-            new_value="published"
-        )
+        publish(db, doc, current_user.id, f"Document published by {current_user.display_name}")
         published_count += 1
 
     db.commit()
@@ -1909,35 +1890,31 @@ def publish_document(
             detail="Document not found"
         )
     
-    if document.status != "approved":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Only approved documents can be published. Current status: {document.status}"
-        )
-    
-    old_status = document.status
-    document.status = "published"
-    doc_lifecycle.on_status_changed(db, document, old_status, "published", current_user.id)
-    document.published_by = current_user.id
-    document.published_at = datetime.utcnow()
-    document.updated_at = datetime.utcnow()
-    
-    create_audit_log(
-        db=db,
-        document_id=document_id,
-        tenant_id=document.tenant_id,
-        user_id=current_user.id,
-        action="published",
-        action_details=f"Document published by {current_user.display_name}",
-        field_changed="status",
-        old_value=old_status,
-        new_value="published"
-    )
-    
+    try:
+        publish(db, document, current_user.id, f"Document published by {current_user.display_name}")
+    except ValueError as refused:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(refused))
+
     db.commit()
     db.refresh(document)
     
     return serialize_document(document, db)
+
+
+def publish(db: Session, document: GovernanceDocument, by: int, details: str) -> None:
+    """Publish an approved document - the one way the Publish button, bulk Publish and a workflow's publish action go: the status
+    hooks (the version in force, everyone asked to acknowledge it) and the document's audit row. The caller checks who may, and
+    commits. ValueError when the document is not approved."""
+    if document.status != "approved":
+        raise ValueError(f"Only approved documents can be published. Current status: {document.status}")
+    old_status = document.status
+    document.status = "published"
+    document.published_by = by
+    document.published_at = document.updated_at = datetime.utcnow()
+    db.flush()                      # tenant sessions do not autoflush: the hooks below read what was just set (PITFALLS 74)
+    doc_lifecycle.on_status_changed(db, document, old_status, "published", by)
+    create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=by, action="published",
+                     action_details=details, field_changed="status", old_value=old_status, new_value="published")
 
 
 @router.get("/{document_id}/audit-logs", dependencies=[Depends(permissions.require_doc_reader)])

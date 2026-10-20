@@ -677,6 +677,10 @@ def _is_resolved_context(instance) -> bool:
     return resolution_status in {"resolved", "closed", "completed"}
 
 
+class ActionRefused(Exception):
+    """An action that may not be done (raised before it writes anything): its step fails with this sentence (StepExecutor)."""
+
+
 # ---------------------------------------------------------------------------
 # Main dispatcher
 # ---------------------------------------------------------------------------
@@ -3170,26 +3174,30 @@ class WorkflowActionHandlers:
 
     @staticmethod
     def _publish_policy(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
-        doc_id = payload.get("document_id")
-        if doc_id:
-            try:
-                doc = db.query(GovernanceDocument).filter(
-                    GovernanceDocument.id == int(doc_id),
-                    GovernanceDocument.tenant_id == instance.tenant_id,
-                ).first()
-                if doc:
-                    doc.status = "published"
-            except Exception:
-                pass
+        """Publish the approved document the event is about, the way the Publish button does (the version in force, everyone
+        asked to acknowledge it, the document's audit row). Anything else fails the step with the reason."""
+        from ...governance import doc_lifecycle
+        from ...governance.routers.documents import publish
+
+        doc = doc_lifecycle.document_for_event(db, instance.tenant_id, payload)
+        if doc is None:
+            raise ActionRefused("There is no document to publish: the step names no document of this organisation.")
+        if doc.status != "approved":
+            raise ActionRefused(f"\"{doc.title}\" was not published: only an approved document is published, and it is "
+                                f"{(doc.status or 'draft').replace('_', ' ')}. Approval comes from its approvers signing it in its review.")
+        by = getattr(definition, "created_by_id", None) or doc.owner_id or doc.author_id     # recorded as its publisher
+        if by is None:
+            raise ActionRefused(f"\"{doc.title}\" was not published: neither the workflow nor the document has an owner to record as its publisher.")
+        publish(db, doc, by, f"Document published by the workflow \"{getattr(definition, 'name', None) or 'without a name'}\"")
         db.add(WorkflowAuditLog(
             tenant_id=instance.tenant_id,
             workflow_definition_id=definition.id,
             workflow_instance_id=instance.id,
             event_type="action.publish_policy",
-            message=f"Policy published (document_id={doc_id})",
-            payload={"document_id": doc_id},
+            message=f"Policy published (document_id={doc.id})",
+            payload={"document_id": doc.id},
         ))
-        return {"action": "publish_policy", "document_id": doc_id, "status": "published"}
+        return {"action": "publish_policy", "document_id": doc.id, "status": "published"}
 
     @staticmethod
     def _submit_policy_exception(db, instance, definition, payload: Dict[str, Any]) -> Dict[str, Any]:
