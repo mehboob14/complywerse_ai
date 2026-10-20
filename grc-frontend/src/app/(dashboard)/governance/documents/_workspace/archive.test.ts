@@ -35,9 +35,11 @@ test('the table shows no archived parent in the working library: the documents u
   assert.deepEqual(rows('archived'), [[1, 0, true]]);                           // the Archived list shows it
 });
 
-test('the bulk bar of the Archived list offers Restore only', () => {
+test('the bulk bar of the Archived list offers Restore only, and the working list never offers Approve', () => {
   assert.deepEqual(bulkActionIds(true), ['restore']);
-  assert.deepEqual(bulkActionIds(false), ['approve', 'publish', 'assign-owner', 'set-review', 'archive']);
+  assert.deepEqual(bulkActionIds(false), ['publish', 'assign-owner', 'set-review', 'archive']);
+  const src = readFileSync(new URL('./RegisterTable.tsx', import.meta.url), 'utf8');
+  assert.ok(!src.includes("id: 'approve'"));              // approval is the approvers' signatures in the review, never a bulk action
 });
 
 test('the register has tick boxes only when its bulk bar has an action for the person (none for an owner without the edit role)', () => {

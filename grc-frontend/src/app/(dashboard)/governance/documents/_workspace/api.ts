@@ -100,9 +100,6 @@ export async function fetchCoverageMap(): Promise<Record<number, number>> {
 }
 
 // ─── Mutations ───────────────────────────────────────────────────────────────
-export const bulkUpdateStatus = (document_ids: number[], status: string) =>
-  apiClient.post('/governance/documents/bulk-update-status', { document_ids, status });
-
 export const bulkArchive = (document_ids: number[]) =>
   apiClient.post('/governance/documents/bulk-archive', { document_ids });
 

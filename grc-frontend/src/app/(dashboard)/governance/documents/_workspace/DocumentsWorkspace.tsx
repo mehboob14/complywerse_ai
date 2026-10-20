@@ -17,7 +17,7 @@ import type { GovDoc } from './lib';
 import { DOC_TYPE_STYLE, STAGE_ORDER, statusLabel } from './lib';
 import {
   fetchDocuments, fetchCoverageMap,
-  bulkUpdateStatus, bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, restoreDocument,
+  bulkArchive, bulkAssignOwner, bulkSetReviewDate, bulkPublish, restoreDocument,
 } from './api';
 import { ARCHIVE_LINE, libraryCounts, unlessArchivedAsked } from './archive';
 import { creation } from './library';
@@ -112,7 +112,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
     catch (e) { toast({ title: 'Action failed', message: problemOf(e), type: 'error' }); }     // the server's reason (e.g. archived)
     finally { refreshAll(); }                                                                  // a bulk Restore may have restored some
   };
-  const onBulkApprove = (ids: number[]) => runBulk(() => bulkUpdateStatus(ids, 'approved'), `${ids.length} approved`);
   const onBulkPublish = (ids: number[]) => runBulk(() => bulkPublish(ids), `Publish requested for ${ids.length}`);
   const onBulkArchive = (ids: number[]) => runBulk(() => bulkArchive(ids), `${ids.length} archived`);
   const onBulkRestore = (ids: number[]) => runBulk(async () => { for (const id of ids) await restoreDocument(id); }, `${ids.length} restored as drafts`);
@@ -262,7 +261,6 @@ export function DocumentsWorkspace({ canCreate, canEdit, currentUserId, onNewDoc
             onEdit={onEditDoc}
             onDownload={onDownloadDoc}
             onArchive={onArchiveDoc}
-            onBulkApprove={onBulkApprove}
             onBulkPublish={onBulkPublish}
             onBulkArchive={onBulkArchive}
             onBulkAssignOwner={(ids) => setAssignOwnerFor(ids)}

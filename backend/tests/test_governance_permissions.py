@@ -147,8 +147,8 @@ def test_a_bulk_change_is_refused_whole_naming_the_documents_the_person_may_not_
         r = world.http.post(f"/governance/documents/{path}", json={"document_ids": [5, 6], **body})
         assert r.status_code == 403 and '"Backup policy"' in r.json()["detail"] and '"Access policy"' not in r.json()["detail"], path
     assert (doc(world, 5).status, doc(world, 6).status, doc(world, 6).owner_id) == ("draft", "draft", SAM)
-    world.me["id"] = EDITOR                                                    # may change both, may not publish
-    assert world.http.post("/governance/documents/bulk-update-status", json={"document_ids": [5, 6], "status": "published"}).status_code == 403
+    world.me["id"] = EDITOR                                                    # may change both; publishing is Publish's (test_document_bulk_status)
+    assert world.http.post("/governance/documents/bulk-update-status", json={"document_ids": [5, 6], "status": "published"}).status_code == 400
     assert world.http.post("/governance/documents/bulk-archive", json={"document_ids": [5, 6]}).status_code == 200
     assert (doc(world, 5).status, doc(world, 6).status) == ("archived", "archived")
 

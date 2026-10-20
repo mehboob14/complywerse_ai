@@ -1504,6 +1504,16 @@ def complete_review(
     }
 
 
+# a status a bulk change may not set: each has its own way, with its signatures and its hooks
+_SENT = "A document goes to review and approval with Send for review, from the document itself, so its reviewers and approvers are asked."
+BULK_STATUS_REFUSED = {
+    "approved": "A document is approved by its approvers signing it in its review, not by a bulk change.",
+    "published": "An approved document is published with Publish.",
+    "pending_review": _SENT,
+    "pending_approval": _SENT,
+}
+
+
 @router.post("/bulk-update-status")
 def bulk_update_status(
     bulk_update: BulkStatusUpdate,
@@ -1518,6 +1528,8 @@ def bulk_update_status(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
         )
+    if bulk_update.status in BULK_STATUS_REFUSED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=BULK_STATUS_REFUSED[bulk_update.status])
     
     documents = db.query(GovernanceDocument).filter(
         GovernanceDocument.id.in_(bulk_update.document_ids),
@@ -1531,8 +1543,6 @@ def bulk_update_status(
         )
     
     permissions.ensure_all_editable(db, current_user, documents)
-    if bulk_update.status in ("approved", "published"):
-        permissions.ensure_publisher(db, current_user)
     if bulk_update.status != "archived":            # out of the archive only by Restore (a draft, reviewed and approved again)
         permissions.ensure_none_archived(documents)
     updated_count = 0

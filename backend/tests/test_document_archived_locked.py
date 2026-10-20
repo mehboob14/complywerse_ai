@@ -81,7 +81,7 @@ def test_every_route_that_changes_a_document_refuses_an_archived_one(archived):
 def test_bulk_changes_refuse_archived_documents_naming_them(archived):
     w, before = archived, _state(archived)
     w.me["id"] = ADMIN
-    for path, body in [("/governance/documents/bulk-update-status", {"document_ids": [5, 6], "status": "approved"}),
+    for path, body in [("/governance/documents/bulk-update-status", {"document_ids": [5, 6], "status": "expired"}),     # never approved: test_document_bulk_status
                        ("/governance/documents/bulk-update-status", {"document_ids": [5], "status": "draft"}),
                        ("/governance/documents/bulk-publish", {"document_ids": [5]}),
                        ("/governance/documents/bulk-assign-owner", {"document_ids": [5, 6], "owner_id": PUBLISHER}),

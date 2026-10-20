@@ -15,9 +15,10 @@ export const ARCHIVE_LINE = 'It is no longer in force, so staff stop reading it,
   + 'are cancelled. Every version, signature and the history are kept; the library lists it under Archived, where its editors can '
   + 'restore it as a draft.';
 
-/** The register's bulk bar: the Archived list offers Restore only (the server refuses changing archived documents). */
+/** The register's bulk bar: the Archived list offers Restore only (the server refuses changing archived documents). Never Approve: a
+ *  document is approved by its approvers signing it in its review. */
 export function bulkActionIds(showingArchived: boolean): string[] {
-  return showingArchived ? ['restore'] : ['approve', 'publish', 'assign-owner', 'set-review', 'archive'];
+  return showingArchived ? ['restore'] : ['publish', 'assign-owner', 'set-review', 'archive'];
 }
 
 /** The register's "total": the working library leaves archived documents out; the Archived list counts only those. */

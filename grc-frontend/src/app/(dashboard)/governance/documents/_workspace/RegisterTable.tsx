@@ -11,7 +11,7 @@ import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import {
-  CheckCircle2, Send, UserPlus, CalendarClock, Archive, ArchiveRestore, FileText, Eye, Download, Pencil,
+  Send, UserPlus, CalendarClock, Archive, ArchiveRestore, FileText, Eye, Download, Pencil,
   ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Loader2,
 } from 'lucide-react';
 import {
@@ -57,7 +57,6 @@ export interface RegisterTableProps {
   onDownload: (doc: GovDoc) => void;
   /** documents are archived, never deleted */
   onArchive: (doc: GovDoc) => void;
-  onBulkApprove: (ids: number[]) => void;
   onBulkPublish: (ids: number[]) => void;
   onBulkArchive: (ids: number[]) => void;
   onBulkAssignOwner: (ids: number[]) => void;
@@ -177,7 +176,6 @@ export function RegisterTable({
   onEdit,
   onDownload,
   onArchive,
-  onBulkApprove,
   onBulkPublish,
   onBulkArchive,
   onBulkAssignOwner,
@@ -301,11 +299,11 @@ export function RegisterTable({
 
   const ids = (selected: GovDoc[]) => selected.map((d) => d.id);
 
-  // the rows get tick boxes only when the bulk bar has something for this person to do
+  // the rows get tick boxes only when the bulk bar has something for this person to do; no Approve: a document is approved by its
+  // approvers signing it in its review (the server refuses a bulk approval), and Publish publishes only approved documents
   const offered = new Set(bulkActionIds(showingArchived));
   const bulkActions: BulkAction<GovDoc>[] = canEdit
     ? ([
-        { id: 'approve', label: 'Approve', icon: CheckCircle2, onClick: (r) => onBulkApprove(ids(r)) },
         { id: 'publish', label: 'Publish', icon: Send, onClick: (r) => onBulkPublish(ids(r)) },
         { id: 'assign-owner', label: 'Assign owner', icon: UserPlus, onClick: (r) => onBulkAssignOwner(ids(r)) },
         { id: 'set-review', label: 'Set review date', icon: CalendarClock, onClick: (r) => onBulkSetReviewDate(ids(r)) },
