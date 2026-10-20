@@ -34,7 +34,7 @@ from ....models import (
 from ....routers.auth_router import get_user_primary_tenant, get_user_tenants, require_auth
 from ....rich_audit import write_rich_audit_log
 from ....services import esign
-from ..permissions import in_force_number, in_force_row, require_library_reader
+from ..permissions import edit_filter, ensure_editor, in_force_number, in_force_row, require_library_reader
 
 logger = logging.getLogger(__name__)
 
@@ -108,6 +108,16 @@ def _ensure_tables(db: Session) -> None:
                 _ensured_engines.add(eid)
         except Exception:
             pass
+
+
+KEEP_SIGNED = ("People have acknowledged this campaign, so it is not deleted: every signed acknowledgement is kept. "
+               "Close it instead - closing stops the link and keeps every record.")
+
+
+def _manages(db: Session, user: GRCUser):
+    """Who may create, change, close or delete a document's campaigns: whoever may change the document (permissions.can_edit)."""
+    everyone = edit_filter(db, user) is None
+    return lambda doc: doc is not None and (everyone or user.id in (doc.owner_id, doc.author_id))
 
 
 def _tenant_ids(user: GRCUser, db: Session) -> List[int]:
@@ -256,12 +266,14 @@ def _serialize_campaign(
     campaign: DocumentAttestationCampaign,
     request: Optional[Request] = None,
     *,
+    manages=None,
     with_acks: bool = False,
     tenant_slug: Optional[str] = None,
 ) -> dict:
     prog = _progress(db, campaign)
     doc = campaign.document
     data = {
+        "can_manage": bool(manages and manages(doc)),     # may change, close or delete it (_manages; the server refuses the others)
         "id": campaign.id,
         "document_id": campaign.document_id,
         "document_title": getattr(doc, "title", None),
@@ -458,9 +470,15 @@ def list_campaigns(
         q = q.filter(DocumentAttestationCampaign.status == status_filter)
     rows = q.order_by(DocumentAttestationCampaign.created_at.desc()).limit(200).all()
     slug = getattr(request.state, "tenant_slug", None)
+    manages = _manages(db, current_user)
+    mine = edit_filter(db, current_user)
+    attestable = db.query(GovernanceDocument.id).filter(GovernanceDocument.tenant_id.in_(tenant_ids),
+                                                        GovernanceDocument.status == "published",
+                                                        *([mine] if mine is not None else []))
     return {
-        "items": [_serialize_campaign(db, c, request, tenant_slug=slug) for c in rows],
+        "items": [_serialize_campaign(db, c, request, manages=manages, tenant_slug=slug) for c in rows],
         "count": len(rows),
+        "can_create_for": sorted(i for (i,) in attestable),     # the published documents the person may start a campaign for
     }
 
 
@@ -482,6 +500,7 @@ def create_campaign(
     )
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
+    ensure_editor(db, current_user, doc)            # a document's campaigns are for whoever may change the document
     if (doc.status or "").lower() != "published":
         raise HTTPException(
             status_code=400,
@@ -535,7 +554,7 @@ def create_campaign(
     db.commit()
     db.refresh(camp)
     slug = getattr(request.state, "tenant_slug", None)
-    return _serialize_campaign(db, camp, request, with_acks=True, tenant_slug=slug)
+    return _serialize_campaign(db, camp, request, manages=_manages(db, current_user), with_acks=True, tenant_slug=slug)
 
 
 @router.get("/campaigns/{campaign_id}", dependencies=[Depends(require_library_reader)])
@@ -558,7 +577,7 @@ def get_campaign(
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
     slug = getattr(request.state, "tenant_slug", None)
-    return _serialize_campaign(db, camp, request, with_acks=True, tenant_slug=slug)
+    return _serialize_campaign(db, camp, request, manages=_manages(db, current_user), with_acks=True, tenant_slug=slug)
 
 
 @router.patch("/campaigns/{campaign_id}", dependencies=[Depends(require_library_reader)])
@@ -581,6 +600,7 @@ def update_campaign(
     )
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    ensure_editor(db, current_user, camp.document)          # changing or closing it: whoever may change the document
 
     if body.name is not None:
         camp.name = body.name[:255]
@@ -612,7 +632,7 @@ def update_campaign(
     db.commit()
     db.refresh(camp)
     slug = getattr(request.state, "tenant_slug", None)
-    return _serialize_campaign(db, camp, request, with_acks=True, tenant_slug=slug)
+    return _serialize_campaign(db, camp, request, manages=_manages(db, current_user), with_acks=True, tenant_slug=slug)
 
 
 @router.get("/campaigns/{campaign_id}/acknowledgments/{ack_id}/signature", dependencies=[Depends(require_library_reader)])
@@ -668,6 +688,9 @@ def delete_campaign(
     )
     if not camp:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    ensure_editor(db, current_user, camp.document)
+    if _ack_count(db, camp.id):                             # signed acknowledgements are records: never deleted with it
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=KEEP_SIGNED)
     db.delete(camp)
     db.commit()
     return None
