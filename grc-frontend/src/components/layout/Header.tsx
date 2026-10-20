@@ -12,7 +12,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { parseUtc } from '@/lib/serverTime';
 import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
 
-const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge' };
+const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge', changes: 'To revise' };
 // a dropdown item that opens what it is about (a link: Tab, Enter)
 const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
 // the Pending approvals and Notifications dropdowns: under the bar across a phone's width, else at the button

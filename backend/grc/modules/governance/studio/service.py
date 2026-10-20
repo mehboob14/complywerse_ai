@@ -1162,7 +1162,7 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
     doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"Edited in the Comply AI Studio (version {new_version}), so it needs approving again")
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action="content_edited",
                      action_details=f"Edited in the Comply AI Studio; version {new_version}" + (f". {change_reason}" if change_reason else "")
-                     + doc_lifecycle.outcome(old_status, doc.status),
+                     + doc_lifecycle.outcome(old_status, doc.status, doc),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     row = _version_row(db, doc, new_version)
     if row is not None:
@@ -1256,7 +1256,7 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
         doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"{done} (version {number}), so it needs approving again")
         create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action=audit_action,
                          action_details=f"{done}; version {number} (not published yet) now holds it" + (f". {reason}" if reason else "")
-                         + doc_lifecycle.outcome(old_status, doc.status),
+                         + doc_lifecycle.outcome(old_status, doc.status, doc),
                          field_changed="current_version", old_value=old_version, new_value=number)
         return pending, number, old_status
     if versions.count() == 0:
@@ -1278,7 +1278,7 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
     doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"{done} (version {new_version}), so it needs approving again")
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action=audit_action,
                      action_details=f"{done}; the file was replaced by version {new_version}" + (f". {reason}" if reason else "")
-                     + doc_lifecycle.outcome(old_status, doc.status),
+                     + doc_lifecycle.outcome(old_status, doc.status, doc),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     return row, new_version, old_status
 

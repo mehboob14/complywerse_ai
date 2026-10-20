@@ -3,8 +3,8 @@
 // GET/PUT /governance/documents/lifecycle/settings. Pure helpers here (tested in governanceSettings.test.ts); the page is
 // app/(dashboard)/governance/settings/page.tsx.
 
-export type Kind = 'review' | 'approval' | 'acknowledgement';
-export type GovEvent = 'request' | 'reminder' | 'overdue' | 'escalation' | 'approved' | 'published' | 'rejected';
+export type Kind = 'review' | 'approval' | 'acknowledgement' | 'changes';
+export type GovEvent = 'request' | 'reminder' | 'overdue' | 'escalation' | 'approved' | 'published' | 'rejected' | 'changes' | 'resubmitted' | 'delegated';
 export type Channel = 'in_app' | 'email' | 'both' | 'off';
 export type Priority = 'Critical' | 'High' | 'Medium' | 'Low';
 
@@ -25,6 +25,8 @@ export interface GovernanceSettings {
   /** the Task Management category of every request's task */
   task_category: string;
   email: boolean;
+  /** nobody approves a document they wrote (a server from before it was added sends none); only an administrator changes it */
+  four_eyes?: boolean;
 }
 
 export interface SettingsAnswer {
@@ -34,15 +36,19 @@ export interface SettingsAnswer {
   defaults?: GovernanceSettings;
   roles?: { id: number; name: string }[];
   escalate_role_name?: string | null;
+  /** an administrator: may change four_eyes */
+  can_four_eyes?: boolean;
 }
 
-export const KINDS: Kind[] = ['review', 'approval', 'acknowledgement'];
-export const KIND_LABEL: Record<Kind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement' };
-export const ACTION: Record<Kind, string> = { review: 'Review', approval: 'Approve', acknowledgement: 'Acknowledge' };
+export const KINDS: Kind[] = ['review', 'approval', 'acknowledgement', 'changes'];
+export const KIND_LABEL: Record<Kind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for' };
+export const ACTION: Record<Kind, string> = { review: 'Review', approval: 'Approve', acknowledgement: 'Acknowledge', changes: 'Revise' };
 /** {verb}: what the person is asked to do, in a sentence (the server's doc_lifecycle._STEP) */
-export const VERB: Record<Kind, string> = { review: 'review and sign', approval: 'approve and sign', acknowledgement: 'acknowledge' };
+export const VERB: Record<Kind, string> = { review: 'review and sign', approval: 'approve and sign', acknowledgement: 'acknowledge',
+  changes: 'make the changes asked for and resubmit' };
 /** the buttons a task of each kind shows in Task Management (doc_lifecycle.ACTION_LABEL) */
-export const STEP_LABEL: Record<Kind, string> = { review: 'Review and sign', approval: 'Approve and sign', acknowledgement: 'Acknowledge' };
+export const STEP_LABEL: Record<Kind, string> = { review: 'Review and sign', approval: 'Approve and sign', acknowledgement: 'Acknowledge',
+  changes: 'Make the changes' };
 export const PRIORITIES: Priority[] = ['Critical', 'High', 'Medium', 'Low'];
 export const CHANNELS: { value: Channel; label: string }[] = [
   { value: 'in_app', label: 'In-app' }, { value: 'email', label: 'Email' }, { value: 'both', label: 'Both' }, { value: 'off', label: 'Off' },
@@ -55,11 +61,14 @@ export const EVENTS: { key: GovEvent; label: string; who: string }[] = [
   { key: 'approved', label: 'Approved', who: 'The owner and whoever may publish it' },
   { key: 'published', label: 'Published, please acknowledge', who: 'Everyone asked to acknowledge (email: one list a day)' },
   { key: 'rejected', label: 'Rejected', who: 'The owner and the author' },
+  { key: 'changes', label: 'Changes requested', who: 'The author and the owner, asked to make them and resubmit' },
+  { key: 'resubmitted', label: 'Resubmitted', who: 'The person who asked for the changes' },
+  { key: 'delegated', label: 'Delegated to you', who: 'The person a review or approval was handed to' },
 ];
 
 export const PLACEHOLDERS: { key: string; label: string }[] = [
-  { key: 'action', label: 'Review, Approve or Acknowledge' },
-  { key: 'verb', label: 'review and sign, approve and sign or acknowledge' },
+  { key: 'action', label: 'Review, Approve, Acknowledge or Revise' },
+  { key: 'verb', label: 'review and sign, approve and sign, acknowledge, or make the changes asked for and resubmit' },
   { key: 'document', label: 'Document title' },
   { key: 'version', label: 'Version' },
   { key: 'due_date', label: 'Due date' },

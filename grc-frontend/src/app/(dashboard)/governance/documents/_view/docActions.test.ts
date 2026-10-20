@@ -116,3 +116,10 @@ test('the version a person last acknowledged, when it is not the one asked about
   assert.equal(lastAcknowledged(rows, 9, '2.0'), null);
   assert.equal(lastAcknowledged(rows, undefined, '2.0'), null);
 });
+
+test('changes asked for: Resubmit is the author\'s step, after anyone\'s own signing step; a stage of a route names its step', () => {
+  assert.deepEqual(primaryAction({ ...base, status: 'pending_review', canEdit: true, canResubmit: true }), { kind: 'resubmit', label: 'Resubmit' });
+  assert.equal(kind({ status: 'pending_review', myRole: 'reviewer', canResubmit: true }), 'review');
+  assert.deepEqual(primaryAction({ ...base, status: 'pending_review', myRole: 'reviewer', stepLabel: 'Concur and sign' }), { kind: 'review', label: 'Concur and sign' });
+  assert.equal(stepLine({ kind: 'resubmit' }), 'Changes were asked for: make them, then resubmit it');
+});

@@ -134,3 +134,13 @@ test('?act= opens the person\'s step, or says why it cannot', () => {
   assert.deepEqual(actOutcome({ act: 'sign', myAck: false, myRole: null, asked: true }),
     { title: 'Not your step now', message: 'This document is not waiting for your review or approval: it was signed, sent back or changed since.' });
 });
+
+test('changes asked for: the author is sent to Resubmit, and the task says where it stands', () => {
+  assert.equal(actionHref(3, 'changes'), '/governance/documents/3?act=changes');
+  assert.equal(actOf('changes'), 'changes');
+  assert.deepEqual(actOutcome({ act: 'changes', myAck: false, myRole: null, canResubmit: true }), { popup: 'resubmit' });
+  assert.equal((actOutcome({ act: 'changes', myAck: false, myRole: null }) as { title: string }).title, 'Nothing to resubmit');
+  assert.equal(requestLine(req({ kind: 'changes', status: 'pending', due_date: '2026-10-30' })), 'Changes asked for of version 1.2 · due 30 Oct 2026');
+  assert.equal(requestLine(req({ kind: 'review', status: 'held' })), 'Review of version 1.2 · on hold while changes are made');
+  assert.equal(requestLine(req({ kind: 'review', status: 'delegated', done_at: '2026-10-21T09:00:00' })), 'Delegated on 21 Oct 2026');
+});

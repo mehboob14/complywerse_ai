@@ -32,13 +32,13 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, List, Optional
 
-from . import permissions
+from . import permissions, routes
 
 logger = logging.getLogger(__name__)
 
 # Defaults, overridable per organisation (Governance > Settings; ``settings``). Keys are only ever added, never renamed.
-KINDS = ("review", "approval", "acknowledgement")
-EVENTS = ("request", "reminder", "overdue", "escalation", "approved", "published", "rejected")
+KINDS = ("review", "approval", "acknowledgement", "changes")      # changes: the author makes the changes asked for (routes.py)
+EVENTS = ("request", "reminder", "overdue", "escalation", "approved", "published", "rejected", "changes", "resubmitted", "delegated")
 CHANNELS: Dict[str, tuple] = {"in_app": ("in_app",), "email": ("email",), "both": ("in_app", "email"), "off": ()}
 PRIORITIES = ("Critical", "High", "Medium", "Low")              # Task Management's
 PLACEHOLDERS = ("document", "version", "due_date", "action", "owner", "link", "verb")
@@ -54,11 +54,12 @@ DEFAULTS: Dict[str, Any] = {
     "escalate_role_id": None,                                               # the members of this role are the escalation (None: administrators)
     "notify": {e: "both" for e in EVENTS},                                  # per event: in_app | email | both | off
     "task_create": {k: True for k in KINDS},                                # a Task Management task for each request
-    "task_priority": {"review": "High", "approval": "High", "acknowledgement": "Medium"},
+    "task_priority": {"review": "High", "approval": "High", "acknowledgement": "Medium", "changes": "High"},
     "task_title": "{action}: {document}",
     # plain words; Task Management shows the links as buttons (task_request), never as a path in the text
     "task_description": "Please {verb} \"{document}\", version {version}, by {due_date}.",
     "task_category": "Compliance",                                          # the Task Management category of every request's task
+    "four_eyes": True,                                                      # nobody approves a document they wrote (D33; administrators only)
 }
 _LIMITS = {"approval_days": (1, 365), "ack_days": (1, 365), "remind_days": (0, 60), "admin_after_days": (1, 365),
            "review_days": (1, 365), "remind_every_days": (0, 60), "owner_after_days": (0, 365)}
@@ -70,11 +71,13 @@ _TEMPLATES = {"task_title": ("Task title", 200), "task_description": ("Task desc
 SOURCE_MODULE = "document_lifecycle"
 SOURCE_TYPE = "DocumentObligation"
 _STAGE_KIND = {"reviewer": "review", "approver": "approval"}
-_VERB = {"review": "Review", "approval": "Approve", "acknowledgement": "Acknowledge"}
-_STEP = {"review": "review and sign", "approval": "approve and sign", "acknowledgement": "acknowledge"}     # {verb}
-ACTION_LABEL = {"review": "Review and sign", "approval": "Approve and sign", "acknowledgement": "Acknowledge"}
-_ACT = {"review": "sign", "approval": "sign", "acknowledgement": "ack"}      # ?act= on the document page opens that popup
-_NOUN = {"review": "Review", "approval": "Approval", "acknowledgement": "Acknowledgement"}
+_VERB = {"review": "Review", "approval": "Approve", "acknowledgement": "Acknowledge", "changes": "Revise"}
+_STEP = {"review": "review and sign", "approval": "approve and sign", "acknowledgement": "acknowledge",     # {verb}
+         "changes": "make the changes asked for and resubmit"}
+ACTION_LABEL = {"review": "Review and sign", "approval": "Approve and sign", "acknowledgement": "Acknowledge", "changes": "Make the changes"}
+_ACT = {"review": "sign", "approval": "sign", "acknowledgement": "ack", "changes": "changes"}      # ?act= on the document page opens that popup
+_NOUN = {"review": "Review", "approval": "Approval", "acknowledgement": "Acknowledgement", "changes": "Changes"}
+_SIGNING = ("review", "approval")
 _PENDING_STAGE = ("pending_review", "pending_approval")
 
 
@@ -143,7 +146,7 @@ def _template_problem(label: str, text: str) -> Optional[str]:
 
 def _valid(db, tenant_id: int, key: str, value: Any, current: Dict[str, Any]) -> Any:
     """One setting as it is stored, or ValueError with a message for the person."""
-    if key == "email":
+    if key in ("email", "four_eyes"):
         return bool(value)
     if key in _LIMITS:
         low, high = _LIMITS[key]
@@ -404,7 +407,7 @@ def _pending(db, document_id: int, kinds: Iterable[str], user_id: Optional[int] 
 
 
 def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], days: int, assignment_id: Optional[int] = None,
-             version: Optional[str] = None) -> List[int]:
+             version: Optional[str] = None, stage_position: Optional[int] = None) -> List[int]:
     """Ask each person (once) about ``version`` (the newest by default); returns the ones newly asked."""
     from ...models import DocumentObligation
 
@@ -417,7 +420,7 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
             continue
         ob = DocumentObligation(tenant_id=doc.tenant_id, document_id=doc.id, kind=kind, user_id=uid, assignment_id=assignment_id,
                                 document_version=version or doc.current_version, status="pending", requested_by=by,
-                                due_date=datetime.utcnow() + timedelta(days=days))
+                                due_date=datetime.utcnow() + timedelta(days=days), stage_position=stage_position)
         db.add(ob)
         db.flush()
         _open_twin(db, ob, doc, by, cfg, viewers)
@@ -433,26 +436,60 @@ def _with_task(db, doc, kind: str, user_ids: Iterable[int]) -> set:
 
 
 # ── hooks called by the sign-off, publish and participant flows ──────────────
-def _open_stage(db, doc, stage: str, by: Optional[int]) -> None:
-    """Ask the people of each participant of ``stage`` that nobody has signed for this round (one already signed for is not
-    asked again when the participants are saved)."""
-    from .routers.document_signoff import _assignments, _resolve_target_users, _signatures
+def _open_stage(db, doc, stage, by: Optional[int], quiet: Iterable[int] = ()) -> None:
+    """Ask the people of the stage's participants to ask now (``routes.askable``: all at once, every one nobody has signed for this
+    round; in turn, the first; never the author at approval, four-eyes): one already asked or signed for is not asked again when the
+    participants are saved. ``stage`` is a ``routes.Stage``, or "reviewer" / "approver" for the default route's. ``quiet``: asked
+    without the alert (they were just told it is their turn another way)."""
+    from .routers.document_signoff import _assignments, _signatures
 
-    kind = _STAGE_KIND[stage]
+    st = stage if isinstance(stage, routes.Stage) else routes.DEFAULT_ROUTE[0 if stage == "reviewer" else 1]
+    kind = st.obligation_kind
     asked: List[int] = []
     cfg = settings(db, doc.tenant_id)
-    days = due_days(cfg, kind)
+    days = st.due_days or due_days(cfg, kind)
     db.flush()          # the round just started (the models' listener) must be the one read
-    signed = {s.signer_user_id for s in _signatures(db, doc.id) if s.role_type == stage}
-    for a in (a for a in _assignments(db, doc.id) if a.role_type == stage):
-        if not signed & _resolve_target_users(db, [doc.tenant_id], a.target_type, a.target_id):     # as _stage_complete counts it
-            asked += _request(db, doc, kind, _members(db, doc, a), by, days, a.id)
-    tasked = _with_task(db, doc, kind, asked)       # none when Settings switched tasks off, nor for who cannot open Task Management
-    for who, where in ((tasked, "in your tasks and "), (set(asked) - tasked, "")):
-        _notify(db, doc, who, f"{_NOUN[kind]} requested: {doc.title}",
-                f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
-                f"It is {where}in the document's Approvals.", "warning", link=_link(doc, kind), event="request")
-    _mark_emailed(db, doc.id, kind, asked)
+    excluded = routes.four_eyes_excluded(db, doc, st)
+    for a in routes.askable(db, doc, st, _assignments(db, doc.id), _signatures(db, doc.id)):
+        asked += _request(db, doc, kind, [u for u in _members(db, doc, a) if u not in excluded], by, days, a.id,
+                          stage_position=st.position if st.custom else None)
+    told = [u for u in asked if u not in set(quiet)]
+    tasked = _with_task(db, doc, kind, told)       # none when Settings switched tasks off, nor for who cannot open Task Management
+    for who, where in ((tasked, "in your tasks and "), (set(told) - tasked, "")):
+        if st.custom:
+            ask = "It is your turn to" if st.order == "in_turn" else "You have been asked to"
+            _notify(db, doc, who, f"{routes.KIND_NAME[st.kind]} requested: {doc.title}",
+                    f"{ask} {routes.VERB[st.kind]} \"{doc.title}\" ({st.name}). It is {where}in the document's Approvals.", "warning",
+                    link=_link(doc, kind), event="request")
+        else:
+            _notify(db, doc, who, f"{_NOUN[kind]} requested: {doc.title}",
+                    f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
+                    f"It is {where}in the document's Approvals.", "warning", link=_link(doc, kind), event="request")
+    _mark_emailed(db, doc.id, kind, told)
+
+
+def _open_current(db, doc, by: Optional[int], quiet: Iterable[int] = ()) -> None:
+    """Ask the people of the stage the document is at (its status on the default route, ``route_stage`` on one of its own)."""
+    st = routes.current(db, doc)
+    if st is not None and not st.informs:
+        _open_stage(db, doc, st, by, quiet)
+
+
+def _inform(db, doc, after: int, upto: Optional[int] = None) -> None:
+    """The people of the information stages passed between stage ``after`` and ``upto`` (None: to the end) are told where it is."""
+    from .routers.document_signoff import _assignments
+
+    route = routes.stages(db, doc)
+    if not routes.is_custom(route):
+        return
+    assignments = _assignments(db, doc.id)
+    nxt = routes.stage_at(route, upto) if upto else None
+    for s in route:
+        if s.informs and s.position > after and (upto is None or s.position < upto):
+            ids = {u for a in routes.assignments_of(s, assignments) for u in _members(db, doc, a)}
+            where = f"it is with {nxt.name} now" if nxt else "it has been approved"
+            _notify(db, doc, ids, f"For information: {doc.title}",
+                    f"\"{doc.title}\" is on its way: {where}. You are told for information; nothing is asked of you.", "info")
 
 
 def _mark_emailed(db, document_id: int, kind: str, user_ids: Iterable[int]) -> None:
@@ -469,16 +506,30 @@ def _cancel(db, doc, kinds: Iterable[str]) -> None:
         _close(db, ob, completed=False)
 
 
+def _end_held(db, doc) -> None:
+    """The requests that waited while changes were made end (asked again, or not, by what follows)."""
+    from ...models import DocumentObligation
+
+    for ob in db.query(DocumentObligation).filter(DocumentObligation.document_id == doc.id, DocumentObligation.status == "held").all():
+        ob.status, ob.done_at = "cancelled", datetime.utcnow()
+
+
 @_safe
 def on_sent(db, doc, by: Optional[int]) -> None:
     """The document was sent for review (or straight to approval): a fresh round of requests."""
-    _cancel(db, doc, ("review", "approval"))
-    _open_stage(db, doc, "reviewer" if doc.status == "pending_review" else "approver", by)
+    _cancel(db, doc, _SIGNING + ("changes",))
+    _end_held(db, doc)
+    st = routes.current(db, doc)
+    if st is not None and st.custom:
+        _inform(db, doc, 0, st.position)
+    _open_current(db, doc, by)
 
 
 @_safe
-def on_signed(db, doc, user_id: int, role_type: str, signature_id: Optional[int], esign_id: Optional[int], advanced_to: Optional[str]) -> None:
-    kind = _STAGE_KIND[role_type]
+def on_signed(db, doc, user_id: int, role_type: str, signature_id: Optional[int], esign_id: Optional[int], advanced_to: Optional[str],
+              stage: Optional[routes.Stage] = None) -> None:
+    st = stage or routes.DEFAULT_ROUTE[0 if role_type == "reviewer" else 1]
+    kind = st.obligation_kind
     now = datetime.utcnow()
     assignments = set()
     for ob in _pending(db, doc.id, [kind], user_id).all():
@@ -489,28 +540,40 @@ def on_signed(db, doc, user_id: int, role_type: str, signature_id: Optional[int]
         if ob.assignment_id in assignments:
             ob.status, ob.done_at = "cancelled", now
             _close(db, ob, completed=False)
-    _advanced(db, doc, user_id, advanced_to)
+    if advanced_to:
+        _cancel(db, doc, _SIGNING)                      # any one, or at least N: the others are not needed any more
+        _advanced(db, doc, user_id, advanced_to, st.position if st.custom else 0)
+    elif st.order == "in_turn":
+        _open_current(db, doc, user_id)                 # the next one in turn
 
 
 @_safe
-def on_advanced(db, doc, by: Optional[int], advanced_to: Optional[str]) -> None:
+def on_advanced(db, doc, by: Optional[int], advanced_to: Optional[str], after: int = 0) -> None:
     """The stage ended without a signature just now (``recheck_stage``: a signer who had not signed was removed): what was still
     asked of it ends, and the next stage is asked as after a last signature."""
-    _cancel(db, doc, ("review", "approval"))
-    _advanced(db, doc, by, advanced_to)
+    _cancel(db, doc, _SIGNING)
+    _advanced(db, doc, by, advanced_to, after)
 
 
-def _advanced(db, doc, by: Optional[int], advanced_to: Optional[str]) -> None:
-    """After a stage ended: the approvers are asked, or the owner and whoever may publish it are told it is approved."""
-    if advanced_to == "pending_approval":
-        _open_stage(db, doc, "approver", by)
-    elif advanced_to == "draft":                 # reviewed, but none of its named approvers can sign it
-        _notify(db, doc, {doc.owner_id, doc.author_id}, f"Choose other approvers: {doc.title}",
-                f"\"{doc.title}\" has been reviewed, but none of its approvers can sign it, so it is a draft again. "
-                "Choose other approvers and send it for review.", "warning", event="rejected")
+def _advanced(db, doc, by: Optional[int], advanced_to: Optional[str], after: int = 0) -> None:
+    """After a stage ended: the next stage's people are asked, or the owner and whoever may publish it are told it is approved."""
+    if advanced_to in _PENDING_STAGE:
+        st = routes.current(db, doc)
+        if st is not None and st.custom:
+            _inform(db, doc, after, st.position)
+        _open_current(db, doc, by)
+    elif advanced_to == "draft":                 # its next signers are named, but none of them can sign it
+        own = routes.is_custom(routes.stages(db, doc))
+        _notify(db, doc, {doc.owner_id, doc.author_id}, f"Choose other {'people' if own else 'approvers'}: {doc.title}",
+                (f"\"{doc.title}\" cannot go on: nobody in its next stage can sign it, so it is a draft again. "
+                 "Choose others and send it for review.") if own else
+                (f"\"{doc.title}\" has been reviewed, but none of its approvers can sign it, so it is a draft again. "
+                 "Choose other approvers and send it for review."), "warning", event="rejected")
     elif advanced_to == "approved":
         from .permissions import publisher_ids
 
+        if after:
+            _inform(db, doc, after)
         # the owner, and whoever may publish it (the owner often may not)
         _notify(db, doc, {doc.owner_id, doc.author_id} | publisher_ids(db), f"Approved: {doc.title}",
                 f"\"{doc.title}\" has been approved by all its approvers and can be published.", "success", event="approved")
@@ -522,16 +585,86 @@ def on_rejected(db, doc, user_id: int, role_type: str, comment: str) -> None:
     for ob in _pending(db, doc.id, [_STAGE_KIND[role_type]], user_id).all():
         ob.status, ob.done_at, ob.comment = "rejected", now, comment
         _close(db, ob, completed=True, by=user_id)
-    _cancel(db, doc, ("review", "approval"))
+    _cancel(db, doc, _SIGNING + ("changes",))
     who = _names(db, [user_id]).get(user_id, "A reviewer")
     _notify(db, doc, [doc.owner_id, doc.author_id], f"Rejected: {doc.title}", f"{who} rejected \"{doc.title}\": {comment}", "error", event="rejected")
+
+
+@_safe
+def on_changes_requested(db, doc, by: int, stage: routes.Stage, hold) -> None:
+    """Someone asked for changes (routes.py): their request is answered, everyone else's waits (no reminders, no task) until it is
+    resubmitted, and the author is asked to make the changes, with a task."""
+    now = datetime.utcnow()
+    for ob in _pending(db, doc.id, [stage.obligation_kind], by).all():
+        ob.status, ob.done_at, ob.comment = "changes_requested", now, hold.comment
+        _close(db, ob, completed=True, by=by)
+    waiting = []
+    for ob in _pending(db, doc.id, _SIGNING).all():
+        ob.status = "held"
+        waiting.append(ob.user_id)
+        _close(db, ob, completed=False)
+    who = _names(db, [by]).get(by, "A reviewer")
+    author = doc.author_id or doc.owner_id
+    asked = _request(db, doc, "changes", [author], by, due_days(settings(db, doc.tenant_id), "changes")) if author else []
+    tasked = _with_task(db, doc, "changes", asked)
+    _notify(db, doc, {doc.author_id, doc.owner_id}, f"Changes requested: {doc.title}",
+            f"{who} asked for changes to \"{doc.title}\" at {stage.name.lower()}: {hold.comment} Make them, then resubmit it from the "
+            f"document's Approvals{' (it is in your tasks)' if tasked else ''}.", "warning", link=_link(doc, "changes"), event="changes")
+    _mark_emailed(db, doc.id, "changes", asked)
+    _notify(db, doc, set(waiting) - {by}, f"On hold: {doc.title}",
+            f"{who} asked for changes to \"{doc.title}\". You are asked again when it is resubmitted.", "info")
+
+
+@_safe
+def on_resubmitted(db, doc, by: int, hold) -> None:
+    """The changes are made: the author's request is done; on a minor change the stage it waited at is asked again (the person who
+    asked first, when in turn), on a major one the new round was asked already (``restart_round``)."""
+    now = datetime.utcnow()
+    for ob in _pending(db, doc.id, ["changes"]).all():
+        ob.status, ob.done_at, ob.comment = "done", now, hold.resubmit_note
+        _close(db, ob, completed=True, by=by)
+    _end_held(db, doc)
+    resumed = hold.outcome == "resumed"
+    if resumed:
+        _open_current(db, doc, by, quiet=[hold.requested_by])
+    who = _names(db, [by]).get(by, "The author")
+    note = f": {hold.resubmit_note}" if hold.resubmit_note else ""
+    st = routes.current(db, doc)
+    _notify(db, doc, [hold.requested_by], f"Resubmitted: {doc.title}",
+            f"{who} made the changes you asked for on \"{doc.title}\" and resubmitted it{note}. "
+            + ("It is your turn again." if resumed else "It is a major change, so it is signed again from the start."), "info",
+            link=_link(doc, st.obligation_kind if st else ""), event="resubmitted")
+
+
+@_safe
+def on_withdrawn(db, doc, by: int, reason: Optional[str]) -> None:
+    """The author took it back from review: everyone still asked is told, and their requests end."""
+    people = {o.user_id for o in _pending(db, doc.id, _SIGNING).all()}
+    _cancel(db, doc, _SIGNING + ("changes",))
+    _end_held(db, doc)
+    who = _names(db, [by]).get(by, "The author")
+    _notify(db, doc, people - {by}, f"Withdrawn: {doc.title}",
+            f"{who} withdrew \"{doc.title}\" from review{f': {reason}' if reason else ''}. Nothing is asked of you now.", "info")
+
+
+@_safe
+def on_delegated(db, doc, by: int, handed, stage: routes.Stage) -> None:
+    """A step was handed over: the delegate gets the task and is told."""
+    _open_twin(db, handed, doc, by)
+    who = _names(db, [by]).get(by, "Someone")
+    verb = routes.VERB.get(stage.kind, "review")
+    note = f" They wrote: {handed.comment}" if handed.comment else ""
+    _notify(db, doc, [handed.user_id], f"Delegated to you: {doc.title}",
+            f"{who} asked you to {verb} \"{doc.title}\" for them ({stage.name}).{note} It is in the document's Approvals.", "warning",
+            link=_link(doc, handed.kind), event="delegated")
+    _mark_emailed(db, doc.id, handed.kind, [handed.user_id])
 
 
 @_safe
 def on_participants_changed(db, doc, by: Optional[int]) -> None:
     from .routers.document_signoff import _assignments
 
-    if doc.status not in _PENDING_STAGE:
+    if doc.status not in _PENDING_STAGE or routes.on_hold(db, doc):      # on hold: asked when it is resubmitted
         return
     stage = "reviewer" if doc.status == "pending_review" else "approver"
     # the assignment rows are replaced whenever participants are saved, so match on the person, not the row id
@@ -553,13 +686,28 @@ def start_round(db, doc, by: Optional[int] = None) -> Optional[str]:
     hand): a new round with the same reviewers and approvers (the round itself is stamped by the models' status listener, so the
     signatures given before no longer count). With nobody who can sign that stage (none set, or only roles, teams or accounts
     without users of this platform: ``_members``) it goes to the stage that has someone, as Send would, or back to draft to be
-    sent. Runs for every organisation, with or without the life cycle. Returns why it moved (also written to the history)."""
+    sent. A route of its own starts again at its first stage (a draft when nobody there can sign). Runs for every organisation,
+    with or without the life cycle. Returns why it moved (also written to the history)."""
     from .routers.document_signoff import _assignments
     from .routers.versions import create_audit_log
 
+    route = routes.stages(db, doc)
+    if routes.is_custom(route):
+        everyone = _assignments(db, doc.id)
+        first, _passed = routes.following(route, everyone)
+        if first is not None and routes.can_sign(db, doc, first, everyone):
+            doc.status = routes.status_for(first, None)
+            doc.route_stage = first.position
+            return None
+        why = "Nobody at the start of its route can sign it, so it is a draft again: choose others and send it for review"
+        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="status_changed", field_changed="status",
+                         old_value=doc.status, new_value="draft", action_details=why)
+        doc.status, doc.route_stage = "draft", None
+        return why
     assignments = [a for a in _assignments(db, doc.id) if a.role_type in _STAGE_KIND]
     named = {a.role_type for a in assignments}
-    roles = {a.role_type for a in assignments if _members(db, doc, a)}
+    excluded = routes.four_eyes_excluded(db, doc, routes.DEFAULT_ROUTE[1])      # the author does not approve their own document
+    roles = {a.role_type for a in assignments if set(_members(db, doc, a)) - (excluded if a.role_type == "approver" else set())}
     stage = "reviewer" if doc.status == "pending_review" else "approver"
     if stage in roles:
         return None
@@ -579,6 +727,14 @@ def start_round(db, doc, by: Optional[int] = None) -> Optional[str]:
     return why
 
 
+def restart_round(db, doc, by: Optional[int] = None) -> None:
+    """Signed again from the start by the same people (a major change resubmitted): a new round, its first stage asked."""
+    doc.status = "pending_review"
+    doc.signoff_round_at = datetime.utcnow()           # the same status: the models' listener sees no change, so the round is set here
+    start_round(db, doc, by)
+    _reask(db, doc, by)
+
+
 _ENDED = {("pending_review", "pending_approval"): "Everyone left to review it has signed, so it goes to its approvers",
           ("pending_review", "approved"): "Everyone left to review it has signed and nobody approves it, so it is approved",
           ("pending_approval", "approved"): "Everyone left to approve it has signed, so it is approved",
@@ -586,25 +742,45 @@ _ENDED = {("pending_review", "pending_approval"): "Everyone left to review it ha
 
 
 def recheck_stage(db, doc, by: Optional[int] = None) -> bool:
-    """A reviewer or approver was removed (participants saved, the one-off fix of imported accounts): the stage in progress may have
-    nobody left who can sign it (``start_round``: the other stage, or a draft) or only people who signed this round
-    (``document_signoff.advance_if_complete``: it ends as at a last signature). Either way a history row says why and the next
-    stage's people are asked. Runs for every organisation; True when the status changed."""
-    from .routers.document_signoff import advance_if_complete
+    """A reviewer or approver was removed (participants saved, the one-off fix of imported accounts), or the route resumed after
+    changes: the stage in progress may have nobody left who can sign it (``start_round``: the other stage, or a draft; on a route of
+    its own, a draft) or only people who signed this round (``document_signoff.advance_if_complete``: it ends as at a last
+    signature). Either way a history row says why and the next stage's people are asked. Not while changes are being made. Runs
+    for every organisation; True when the status changed."""
+    from .routers.document_signoff import _assignments, advance_if_complete
     from .routers.versions import create_audit_log
 
     was = doc.status
-    if was not in _PENDING_STAGE:
+    if was not in _PENDING_STAGE or routes.on_hold(db, doc):
         return False
-    if start_round(db, doc, by):
+    route = routes.stages(db, doc)
+    st = routes.current(db, doc, route)
+    if routes.is_custom(route):
+        if st is not None and not routes.can_sign(db, doc, st, _assignments(db, doc.id)):
+            why = f"Nobody left at {st.name} can sign it, so it is a draft again: choose others and send it for review"
+            create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="status_changed", field_changed="status",
+                             old_value=was, new_value="draft", action_details=why)
+            doc.status, doc.route_stage = "draft", None
+            _reask(db, doc, by)
+            return True
+    elif start_round(db, doc, by):
         _reask(db, doc, by)                     # the old requests end; the new stage's people are asked
         return True
     to = advance_if_complete(db, doc, [doc.tenant_id], by)
     if to is None:
         return False
+    at = st.name if st is not None else "its stage"
+    if not routes.is_custom(route):
+        why = _ENDED[(was, to)]
+    elif to in _PENDING_STAGE:
+        why = f"Everyone left at {at} has signed, so it goes to {routes.current(db, doc, route).name}"
+    elif to == "approved":
+        why = f"Everyone left at {at} has signed, so it is approved"
+    else:
+        why = "Nobody in its next stage can sign it, so it is a draft again: choose others and send it for review"
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="status_changed", field_changed="status",
-                     old_value=was, new_value=to, action_details=_ENDED[(was, to)])
-    on_advanced(db, doc, by, to)
+                     old_value=was, new_value=to, action_details=why)
+    on_advanced(db, doc, by, to, st.position if st is not None and st.custom else 0)
     return True
 
 
@@ -614,11 +790,15 @@ REVIEWED = ("approved", "published", "exception_applied") + _PENDING_STAGE
 def changed_after_review(db, doc, old_status: Optional[str], by: Optional[int], why: str) -> bool:
     """The document's text or file became a new version. One that is approved or published, or in review or approval, is
     reviewed again from the start by the same people (the user's decisions of 2026-10-16): a new round, so signatures given on
-    the earlier text no longer count. Writes the status row; True when it is (back) in review or approval afterwards."""
+    the earlier text no longer count. While changes asked for are being made (routes.py) it stays where it is: resubmitting
+    decides (a minor change goes back to the person who asked, a major one starts again). Writes the status row; True when it is
+    (back) in review or approval afterwards."""
     from .routers.versions import create_audit_log
 
     if old_status not in REVIEWED:
         return False
+    if old_status in _PENDING_STAGE and doc.status == old_status and routes.on_hold(db, doc):
+        return True
     doc.status = "pending_review"
     if old_status == "pending_review":
         doc.signoff_round_at = datetime.utcnow()      # the same status: the models' listener sees no change, so the round is set here
@@ -632,19 +812,25 @@ def changed_after_review(db, doc, old_status: Optional[str], by: Optional[int], 
     return doc.status in _PENDING_STAGE
 
 
-def outcome(old: Optional[str], new: Optional[str]) -> str:
-    """What ``changed_after_review`` did, as the history and the screen say it after a new version ("" when nothing changed)."""
+def outcome(old: Optional[str], new: Optional[str], doc=None) -> str:
+    """What ``changed_after_review`` did, as the history and the screen say it after a new version ("" when nothing changed).
+    ``doc``: said of a document whose changes asked for are being made, it waits for them to be resubmitted."""
     if new not in _PENDING_STAGE:
         return "; it is a draft again" if new != old else ""
+    from sqlalchemy.orm import object_session
+
+    if doc is not None and old == new and object_session(doc) is not None and routes.on_hold(object_session(doc), doc):
+        return "; resubmit it when the changes asked for are made"
     who = "its reviewers" if new == "pending_review" else "its approvers"
     return f"; {'signed again from the start by' if old in _PENDING_STAGE else 'sent back to'} {who}"
 
 
 @_safe
 def _reask(db, doc, by: Optional[int] = None) -> None:
-    _cancel(db, doc, ("review", "approval"))
+    _cancel(db, doc, _SIGNING + ("changes",))
+    _end_held(db, doc)
     if doc.status in _PENDING_STAGE:
-        _open_stage(db, doc, "reviewer" if doc.status == "pending_review" else "approver", by)
+        _open_current(db, doc, by)
 
 
 def on_status_changed(db, doc, old: Optional[str], new: Optional[str], by: Optional[int] = None) -> None:
@@ -657,10 +843,12 @@ def on_status_changed(db, doc, old: Optional[str], new: Optional[str], by: Optio
 @_safe
 def _status_hooks(db, doc, old: Optional[str], new: Optional[str], by: Optional[int] = None) -> None:
     if old in _PENDING_STAGE and new not in _PENDING_STAGE:
-        _cancel(db, doc, ("review", "approval"))
+        _cancel(db, doc, _SIGNING + ("changes",))
+        _end_held(db, doc)
     if new in _PENDING_STAGE and old not in _PENDING_STAGE:          # back to review: the same people are asked again
-        _cancel(db, doc, ("review", "approval"))
-        _open_stage(db, doc, "reviewer" if new == "pending_review" else "approver", by)
+        _cancel(db, doc, _SIGNING + ("changes",))
+        _end_held(db, doc)
+        _open_current(db, doc, by)
     if new not in ("published",) + permissions.ON_ITS_WAY:          # withdrawn (archived, expired, an exception): nothing in force
         _cancel(db, doc, ("acknowledgement",))
     if new == "published" and old != "published":

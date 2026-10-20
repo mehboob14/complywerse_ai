@@ -407,7 +407,7 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id,
                      action="statements_written_to_document",
                      action_details=f"{len(edits)} statement edit(s) written into the document; version {new_version} created"
-                                    + doc_lifecycle.outcome(old_status, document.status),
+                                    + doc_lifecycle.outcome(old_status, document.status, document),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     db.commit()
     return {"version": new_version, "version_id": row.id, "updated": len(edits), "conflicts": conflicts,

@@ -3,8 +3,10 @@
 import { parseUtc } from '@/lib/serverTime';
 
 export interface LifecycleRow {
-  id: number; kind: 'review' | 'approval' | 'acknowledgement'; user_id: number; user: string | null;
-  status: 'pending' | 'done' | 'rejected' | 'cancelled'; version: string | null; requested_at: string | null;
+  /** changes: the author is asked to make the changes someone asked for (an approval route on hold) */
+  id: number; kind: 'review' | 'approval' | 'acknowledgement' | 'changes'; user_id: number; user: string | null;
+  /** delegated: handed to someone else; held: waiting while changes are made; changes_requested: this person asked for changes */
+  status: 'pending' | 'done' | 'rejected' | 'cancelled' | 'delegated' | 'held' | 'changes_requested'; version: string | null; requested_at: string | null;
   due_date: string | null; done_at: string | null; comment: string | null; overdue: boolean; escalation_level: number;
 }
 export interface LifecycleEvent { at: string | null; kind: string; actor: string | null; detail: string | null }
@@ -26,13 +28,14 @@ export interface DocumentLifecycle {
 /** An organisation without the life cycle feature is answered `{ enabled: false }` and nothing else. */
 export type LifecycleReply = DocumentLifecycle | { enabled: false };
 
-export const LIFECYCLE_KIND_LABEL = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement' } as const;
+export const LIFECYCLE_KIND_LABEL = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for' } as const;
 export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   sent_for_review: 'Sent for review', sent_for_approval: 'Sent for approval', signed: 'Signed', rejected: 'Rejected', published: 'Published',
   acknowledged: 'Acknowledged', escalated: 'Escalated', status_changed: 'Status changed', version_created: 'New version',
   statements_written_to_document: 'Statements written to the document', review_requested: 'Review requested',
   approval_requested: 'Approval requested', acknowledgement_requested: 'Acknowledgement requested', file_uploaded: 'File uploaded',
-  restored: 'Restored from the archive',
+  restored: 'Restored from the archive', changes_requested: 'Changes requested', resubmitted: 'Resubmitted', withdrawn: 'Withdrawn from review',
+  delegated: 'Delegated', route_set: 'Approval route set',
 };
 export const eventLabel = (kind: string) => LIFECYCLE_EVENT_LABEL[kind] || (kind.charAt(0).toUpperCase() + kind.slice(1)).replace(/_/g, ' ');
 

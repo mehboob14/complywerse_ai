@@ -46,7 +46,9 @@ EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent
                "archived": "Archived", "restored": "Restored from the archive", "status_changed": "Status changed",
                "review_completed": "Review completed", "review_skipped": "Review skipped", "version_rollback": "Earlier version restored",
                "return_to_draft": "Returned to draft", "request_cancelled": "Request withdrawn", "participant_removed": "Reviewer or approver removed",
-               "owner_assigned": "Owner changed", "escalated": "Escalated", "delegated": "Delegated", "submitted": "Submitted"}
+               "owner_assigned": "Owner changed", "escalated": "Escalated", "delegated": "Delegated", "submitted": "Submitted",
+               "changes_requested": "Changes requested", "resubmitted": "Resubmitted", "withdrawn": "Withdrawn from review",
+               "route_set": "Approval route set"}
 _EVENT_ACTIONS = set(EVENT_LABEL)
 
 

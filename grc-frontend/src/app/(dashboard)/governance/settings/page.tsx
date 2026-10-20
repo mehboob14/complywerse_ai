@@ -6,7 +6,7 @@
 // a governance right reads it, nobody else. Helpers and rules: lib/governanceSettings.ts; backend: modules/governance/doc_lifecycle.py.
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlarmClock, AlertTriangle, ArrowUpRight, Bell, CalendarClock, Check, ChevronRight, Info, ListChecks, Loader2, Lock, Megaphone, PenLine, RotateCcw } from 'lucide-react';
+import { AlarmClock, AlertTriangle, ArrowUpRight, Bell, CalendarClock, Check, ChevronRight, Info, ListChecks, Loader2, Lock, Megaphone, PenLine, RotateCcw, ShieldCheck } from 'lucide-react';
 import { clsx } from 'clsx';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
@@ -222,6 +222,23 @@ export default function GovernanceSettingsPage() {
         </div>
         <Note>A new major version (2.0, 3.0) asks everyone to acknowledge again; a minor version (1.1) does not. That is the organisation&apos;s policy and is not changed here.</Note>
       </Section>
+
+      {s.four_eyes !== undefined && (
+        <Section id="approvals" icon={ShieldCheck} title="Who approves"
+          hint="Documents go through their reviewers and approvers in turn; anyone whose turn it is can ask for changes, which waits for the author to make them and resubmit.">
+          <label className="flex items-start gap-2.5">
+            <input type="checkbox" checked={s.four_eyes} disabled={!data.can_four_eyes} onChange={(e) => set({ four_eyes: e.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-[#b8c4c8] text-[#0f766e] focus:ring-[#0f766e]/40" />
+            <span className="min-w-0">
+              <span className="block text-[13px] font-medium text-[#1f2933]">Authors never approve their own documents (four-eyes)</span>
+              <span className="block text-[12px] leading-4 text-[#586472]">
+                The person who wrote a document is not asked at an approval stage and cannot approve it; another approver does.
+                {!data.can_four_eyes && ' Only an administrator changes this.'}
+              </span>
+            </span>
+          </label>
+        </Section>
+      )}
 
       <Section id="reminders" icon={AlarmClock} title="Reminders" hint="Sent to the person asked until they have done it.">
         <div className="grid gap-4 sm:grid-cols-2">

@@ -1,6 +1,6 @@
 // The one main button a person sees on a document, and the line above the document that says why.
 
-export type PrimaryKind = 'acknowledge' | 'review' | 'approve' | 'publish' | 'submit';
+export type PrimaryKind = 'acknowledge' | 'review' | 'approve' | 'publish' | 'submit' | 'resubmit';
 
 export interface PrimaryInput {
   status: string;
@@ -10,13 +10,18 @@ export interface PrimaryInput {
   canPublish: boolean;
   /** a version of it is in force (published, or published before while a new version is on its way): it can be acknowledged */
   inForce?: boolean;
+  /** changes were asked for and the person may make them and resubmit */
+  canResubmit?: boolean;
+  /** the person's step at a stage of a route of its own ("Concur and sign"); else review or approve */
+  stepLabel?: string;
 }
 
 /** First match wins: a personal step (acknowledge, review, approve) beats an admin one (publish, submit). */
 export function primaryAction(i: PrimaryInput): { kind: PrimaryKind; label: string } | null {
   if (i.myAck && (i.inForce || i.status === 'published')) return { kind: 'acknowledge', label: 'Acknowledge' };
-  if (i.myRole === 'reviewer') return { kind: 'review', label: 'Review and sign' };
-  if (i.myRole === 'approver') return { kind: 'approve', label: 'Approve and sign' };
+  if (i.myRole === 'reviewer') return { kind: 'review', label: i.stepLabel ?? 'Review and sign' };
+  if (i.myRole === 'approver') return { kind: 'approve', label: i.stepLabel ?? 'Approve and sign' };
+  if (i.canResubmit) return { kind: 'resubmit', label: 'Resubmit' };
   if (i.canPublish && i.status === 'approved') return { kind: 'publish', label: 'Publish' };
   if (i.canEdit && i.status === 'draft') return { kind: 'submit', label: 'Submit for review' };
   return null;
@@ -28,6 +33,7 @@ const LINES: Record<PrimaryKind, string> = {
   approve: 'You are asked to approve and sign this document',
   publish: 'It is approved: publish it so everyone reads it',
   submit: 'This is a draft: choose reviewers and send it for review',
+  resubmit: 'Changes were asked for: make them, then resubmit it',
 };
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

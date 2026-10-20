@@ -28,6 +28,7 @@ from ....models import (
     AttestationCampaign, AuditObservationDocumentLink, BcmPlan, BcmRecoveryStrategy,
     DocumentAttestationAcknowledgment, DocumentAttestationCampaign, DocumentAttestationRecipient,
     DocumentSignature, DocumentSignoffAssignment, DocumentObligation, DocumentWorkflowAction, DocumentWorkflowInstance,
+    DocumentRouteHold, DocumentRouteStage,
     ElectronicSignature, IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
     PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping, StudioSession,
 )
@@ -1241,6 +1242,8 @@ _DELETE_WITH_DOCUMENT = (  # a table goes before the tables it points at
     DocumentSignature.document_id,
     ElectronicSignature.document_id,
     DocumentSignoffAssignment.document_id,
+    DocumentRouteStage.document_id,
+    DocumentRouteHold.document_id,
     DocumentObligation.document_id,
     DocumentAnnotation.document_id,
     PolicyReviewHistory.document_id,
@@ -2102,7 +2105,7 @@ async def upload_document_file(
         tenant_id=document.tenant_id,
         user_id=current_user.id,
         action="file_uploaded",
-        action_details=f"File uploaded: {file.filename} ({file_size} bytes)" + doc_lifecycle.outcome(old_status, document.status),
+        action_details=f"File uploaded: {file.filename} ({file_size} bytes)" + doc_lifecycle.outcome(old_status, document.status, document),
         field_changed="file_name",
         old_value=old_file_name,
         new_value=file.filename

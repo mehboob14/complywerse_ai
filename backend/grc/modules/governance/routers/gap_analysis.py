@@ -1136,7 +1136,7 @@ def _write_text(db: Session, document: GovernanceDocument, user: GRCUser, old_te
         doc_lifecycle.changed_after_review(db, document, old_status, user.id, f"{done} (version {number}), so it needs approving again")
         create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id, action="content_edited",
                          field_changed="current_version", old_value=old_version, new_value=number,
-                         action_details=f"{reason}; version {number}" + doc_lifecycle.outcome(old_status, document.status))
+                         action_details=f"{reason}; version {number}" + doc_lifecycle.outcome(old_status, document.status, document))
     at = datetime.utcnow().isoformat()
     if row is not None and pending is not None and row.id == pending.id:
         before = doc_version.before_pending(db, document, row)

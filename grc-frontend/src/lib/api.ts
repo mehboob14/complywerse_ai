@@ -364,6 +364,17 @@ export const governanceApi = {
     apiClient.post(`/governance/documents/${documentId}/signoff/sign`, data),
   rejectDocumentSignoff: (documentId: number, data: { comment: string; version?: string; round_at?: string | null }) =>
     apiClient.post(`/governance/documents/${documentId}/signoff/reject`, data),
+  // ── the approval route: its stages, and changes asked for, resubmitted, delegated or withdrawn (governance/routes.py) ──
+  setSignoffRoute: (documentId: number, data: { stages: import('./approvalRoutes').RouteStageIn[] }) =>
+    apiClient.put(`/governance/documents/${documentId}/signoff/route`, data),
+  requestSignoffChanges: (documentId: number, data: { comment: string; version?: string; round_at?: string | null }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/request-changes`, data),
+  resubmitSignoff: (documentId: number, data: { note?: string; major?: boolean }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/resubmit`, data),
+  withdrawSignoff: (documentId: number, data: { reason?: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/withdraw`, data),
+  delegateSignoff: (documentId: number, data: { user_id: number; note?: string }) =>
+    apiClient.post(`/governance/documents/${documentId}/signoff/delegate`, data),
   getMySignoffPending: () =>
     apiClient.get('/governance/documents/signoff/my-pending'),
   /** who can review or approve a document: people, roles (not connector-made) and teams; anyone signed in may ask */

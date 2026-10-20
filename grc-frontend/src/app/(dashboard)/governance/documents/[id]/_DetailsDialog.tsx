@@ -181,7 +181,9 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
   const [form, setForm] = useState<Form>(() => fromDoc(doc));
   // who reviews and approves it: changed here while it is a draft or on its way (the server refuses it once approved)
   const signoffQ = useSignoff(doc?.id);
-  const peopleEditable = canEdit && ['draft', 'pending_review', 'pending_approval'].includes(doc?.status);
+  // a route of its own is changed in Submit for review (its stages, order and rules do not fit two lists)
+  const ownRoute = signoffQ.data?.route?.custom ? signoffQ.data.route : null;
+  const peopleEditable = canEdit && !ownRoute && ['draft', 'pending_review', 'pending_approval'].includes(doc?.status);
   const serverPeople = useMemo<SignoffChoice>(() => {
     const keep = (l?: Participant[]) => (l ?? []).map(({ target_type, target_id, display }) => ({ target_type, target_id, display }));
     return { reviewers: keep(signoffQ.data?.participants.reviewer), approvers: keep(signoffQ.data?.participants.approver) };
@@ -382,6 +384,10 @@ export default function DetailsDialog({ doc, open, onClose, canEdit, onSaved }: 
         <ReviewerApproverFields value={people ?? serverPeople} onChange={setPeople} tenantId={tenantId}
           note={doc?.status === 'draft' ? undefined : 'Saving asks anyone you add at the current step, and cancels the request of anyone you remove.'} />
       </div>
+    ) : ownRoute ? (
+      <Value key="route" label="Approval route">
+        {ownRoute.stages.map((st) => `${st.name}: ${st.people.map((p) => p.display).join(st.order === 'in_turn' ? ', then ' : ', ')}`).join(' · ')}
+      </Value>
     ) : [
       <Value key="reviewers" label="Reviewers">{serverPeople.reviewers.map((p) => p.display || `${p.target_type} ${p.target_id}`).join(', ')}</Value>,
       <Value key="approvers" label="Approvers">{serverPeople.approvers.map((p) => p.display || `${p.target_type} ${p.target_id}`).join(', ')}</Value>,

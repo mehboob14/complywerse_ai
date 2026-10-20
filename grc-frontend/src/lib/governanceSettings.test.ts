@@ -8,9 +8,10 @@ import { changes, courseOf, noAccess, renderTemplate, retrySettings, sampleValue
 const base: GovernanceSettings = {
   review_days: 7, approval_days: 7, ack_days: 14, remind_days: 3, remind_every_days: 0, owner_after_days: 0, admin_after_days: 7,
   escalate_role_id: null, email: true,
-  notify: { request: 'both', reminder: 'both', overdue: 'both', escalation: 'both', approved: 'both', published: 'both', rejected: 'both' },
-  task_create: { review: true, approval: true, acknowledgement: true },
-  task_priority: { review: 'High', approval: 'High', acknowledgement: 'Medium' },
+  notify: { request: 'both', reminder: 'both', overdue: 'both', escalation: 'both', approved: 'both', published: 'both', rejected: 'both',
+    changes: 'both', resubmitted: 'both', delegated: 'both' },
+  task_create: { review: true, approval: true, acknowledgement: true, changes: true },
+  task_priority: { review: 'High', approval: 'High', acknowledgement: 'Medium', changes: 'High' },
   task_title: '{action}: {document}',
   task_description: 'Please {verb} "{document}", version {version}, by {due_date}.',
   task_category: 'Compliance',
