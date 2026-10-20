@@ -36,6 +36,8 @@ import ChainTab from './_ChainTab';
 import { DocumentSignoffPanel, DocumentVersionHistoryPanel, DocumentViewerTab } from './_DocumentViewer';
 import DetailsDialog from './_DetailsDialog';
 import SubmitDialog from './_SubmitDialog';
+import { HoldBanner, ResubmitDialog } from '../_RouteView';
+import { STEP_LABEL } from '@/lib/approvalRoutes';
 import ReviewHistory from './_ReviewHistory';
 import { ClassicDocumentPage } from './_LegacyDocumentPage';
 import StatementsView from './_StatementsView';
@@ -46,7 +48,7 @@ import { inForceLine, lastAcknowledged, primaryAction, publishLine, rejectionOf,
 const TYPE_LABEL: Record<string, string> = {
   policy: 'Policy', standard: 'Standard', procedure: 'Procedure', guideline: 'Guideline', charter: 'Charter', framework: 'Framework',
 };
-type Popup = 'details' | 'submit' | 'sign' | 'ack' | 'publish' | 'stale' | 'control' | 'settings' | 'history' | 'archive';
+type Popup = 'details' | 'submit' | 'sign' | 'ack' | 'publish' | 'stale' | 'control' | 'settings' | 'history' | 'archive' | 'resubmit';
 const FULL_ON_PHONE = 'max-sm:h-[100dvh] max-sm:max-h-[100dvh] max-sm:rounded-none';
 const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-3 py-1.5 text-sm font-medium text-[#26323d] hover:bg-[#f3f6f8] disabled:opacity-50';
 const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
@@ -218,7 +220,8 @@ export default function DocumentStudio() {
     const doneOn = (lcd ? [...lcd.approvals, ...lcd.acknowledgements.people] : [])
       .filter((r) => r.user_id === lcd?.me?.id && kinds.includes(r.kind) && r.status === 'done').map((r) => r.done_at ?? '').sort().pop() || null;
     const out = actOutcome({ act: actAsked, myAck: !!lcd?.mine.some((r) => r.kind === 'acknowledgement' && r.status === 'pending'),
-      myRole: signoff.data?.my_actionable_role, doneOn, asked: !!lcd?.approvals.some((r) => r.user_id === lcd.me?.id && kinds.includes(r.kind)) });
+      myRole: signoff.data?.my_actionable_role, doneOn, asked: !!lcd?.approvals.some((r) => r.user_id === lcd.me?.id && kinds.includes(r.kind)),
+      canResubmit: !!signoff.data?.can_resubmit });
     if ('popup' in out) setPopup(out.popup);
     else toast({ type: 'info', title: out.title, message: out.message });
     const q = new URLSearchParams(search?.toString() ?? '');
@@ -241,7 +244,10 @@ export default function DocumentStudio() {
   const lifecycleOn = !!(access?.lifecycle ?? lc);
   const myAck = lc?.mine.find((r) => r.kind === 'acknowledgement' && r.status === 'pending') ?? null;
   const mySign = lc?.mine.find((r) => (r.kind === 'review' || r.kind === 'approval') && r.status === 'pending') ?? null;
-  const primary = primaryAction({ status: doc.status, myAck: !!myAck, myRole, canEdit, canPublish, inForce: !!doc.version_in_force });
+  // a stage of a route of its own names its step ("Concur and sign"); changes asked for: the author's step is Resubmit
+  const myStep = signoff.data?.route?.custom ? signoff.data.my_step : null;
+  const primary = primaryAction({ status: doc.status, myAck: !!myAck, myRole, canEdit, canPublish, inForce: !!doc.version_in_force,
+    canResubmit: !!signoff.data?.can_resubmit && doc.status !== 'archived', stepLabel: myStep ? STEP_LABEL[myStep.kind] : undefined });
   const personal = primary && ['acknowledge', 'review', 'approve'].includes(primary.kind) ? primary : null;
   const due = primary?.kind === 'acknowledge' ? myAck?.due_date : mySign?.due_date;
   const version = doc.current_version || '1.0';
@@ -428,6 +434,7 @@ export default function DocumentStudio() {
             )}
           </div>
         )}
+        {view === 'document' && <HoldBanner documentId={id} onResubmit={() => setPopup('resubmit')} />}
         {rejected && view === 'document' && (
           <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2.5" role="status">
             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#9b1c1c]" aria-hidden />
@@ -485,8 +492,9 @@ export default function DocumentStudio() {
       {/* ── popups ──────────────────────────────────────────────────── */}
       <DetailsDialog doc={doc} open={popup === 'details'} onClose={() => setPopup(null)} canEdit={mayChange} />
       <SubmitDialog documentId={id} doc={doc} open={popup === 'submit'} onClose={() => setPopup(null)} />
+      <ResubmitDialog documentId={id} open={popup === 'resubmit'} onClose={() => setPopup(null)} />
       <AnimatedModal isOpen={popup === 'sign'} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE}
-        title={primary?.kind === 'approve' ? 'Approve and sign' : 'Review and sign'} subtitle={`${doc.title} · version ${version}`}>
+        title={myStep ? STEP_LABEL[myStep.kind] : primary?.kind === 'approve' ? 'Approve and sign' : 'Review and sign'} subtitle={`${doc.title} · version ${version}`}>
         <div className="p-4"><SignoffAction documentId={id} due={mySign?.due_date} version={version} /></div>
       </AnimatedModal>
       <AnimatedModal isOpen={popup === 'ack' && !!myAck} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE} title="Acknowledge"

@@ -144,7 +144,7 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
                                            f"Changes were taken back (version {new_version}), so it needs approving again")
         create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="content_edited", field_changed="current_version",
                          old_value=old_version, new_value=new_version, action_details=f"{reason}; version {new_version}"
-                         + doc_lifecycle.outcome(old_status, doc.status))
+                         + doc_lifecycle.outcome(old_status, doc.status, doc))
     db.commit()
     if is_file:
         studio.reanchor(db, doc, current_user.id)

@@ -4,8 +4,11 @@ A clean, self-contained approval system layered on the governance document:
   • per-document PARTICIPANTS: prepared_by / reviewer / approver, each targeting a
     user, a role, or a team (roles/teams expand to member users when routing);
   • SEND for review → reviewers sign → (auto) pending approval → approvers sign → approved;
+    or, with a ROUTE of its own (modules/governance/routes.py, set in Submit for review), its stages in order;
   • each SIGN records a structured DocumentSignature AND stamps the signer's row in
     the document's Approval Signoff table (reusing the content patcher), versioned + audited;
+  • the person whose turn it is may instead ask for CHANGES (the route waits until the author RESUBMITS), reject where the
+    stage allows it, or DELEGATE the step; the author may WITHDRAW it from review;
   • a per-user PENDING queue that expands role/team membership so each assignee
     sees exactly the documents awaiting their signature.
 
@@ -14,20 +17,20 @@ Deliberately independent of the two legacy approval engines (DocumentApprovalSte
 """
 import hashlib
 from typing import List, Optional, Dict, Set
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 
 from ....models import (
     GovernanceDocument, GovernanceDocumentVersion, GRCUser, get_db,
-    DocumentSignoffAssignment, DocumentSignature,
+    DocumentObligation, DocumentRouteHold, DocumentRouteStage, DocumentSignoffAssignment, DocumentSignature,
 )
 from ....routers.auth_router import require_auth, get_user_tenants
 from ....services import esign
 from .documents import _patch_signoff_content, _snapshot_content_version, create_audit_log
-from .. import doc_lifecycle
-from ..permissions import ensure_not_archived, require_doc_changer, require_doc_editor, require_doc_reader
+from .. import doc_lifecycle, routes
+from ..permissions import can_edit, ensure_not_archived, require_doc_changer, require_doc_editor, require_doc_reader
 
 router = APIRouter(prefix="/documents", tags=["Governance - Sign-off"])
 
@@ -35,6 +38,9 @@ _ROLE_TYPES = ("prepared_by", "reviewer", "approver")
 _ROLE_LABEL = {"prepared_by": "Prepared by", "reviewer": "Reviewed by", "approver": "Approved by"}
 # Which document.status corresponds to each stage awaiting signatures.
 _STAGE_STATUS = {"reviewer": "pending_review", "approver": "pending_approval"}
+ON_HOLD = "Changes were asked for: it waits for the author to make them and resubmit it."
+OWN_ROUTE = ("This document follows an approval route of its own. Change who reviews and approves it in Submit for review "
+             "(withdraw it from review first if it is in review).")
 
 
 # ── schemas ──────────────────────────────────────────────────────────────
@@ -49,6 +55,22 @@ class ParticipantsUpdate(BaseModel):
     approvers: List[ParticipantIn] = []
 
 
+class StageIn(BaseModel):
+    name: Optional[str] = None
+    kind: str = "review"                   # review | concurrence | recommendation | approval | information
+    order: str = "together"                # together | in_turn
+    rule: str = "all"                      # all | any | at_least
+    min_count: Optional[int] = None
+    due_days: Optional[int] = None         # None: Governance > Settings
+    allow_reject: Optional[bool] = None    # None: on approval stages only
+    allow_delegate: Optional[bool] = None  # None: yes
+    people: List[ParticipantIn] = []       # in their turn order
+
+
+class RouteUpdate(BaseModel):
+    stages: List[StageIn] = []             # none: back to the default route (reviewers, then approvers)
+
+
 class SignRequest(BaseModel):
     version: Optional[str] = None          # the version the signer was shown; 409 when the document has moved on since
     round_at: Optional[str] = None         # the review round the signer was shown (GET /signoff round_at); 409 when a newer one began
@@ -61,6 +83,26 @@ class RejectRequest(BaseModel):
     comment: str
     version: Optional[str] = None
     round_at: Optional[str] = None
+
+
+class ChangesRequest(BaseModel):
+    comment: str
+    version: Optional[str] = None
+    round_at: Optional[str] = None
+
+
+class ResubmitRequest(BaseModel):
+    note: Optional[str] = None
+    major: bool = False                    # the author says it is a major change: the route starts again (never the other way)
+
+
+class WithdrawRequest(BaseModel):
+    reason: Optional[str] = None
+
+
+class DelegateRequest(BaseModel):
+    user_id: int
+    note: Optional[str] = None
 
 
 def _round(doc: GovernanceDocument) -> Optional[str]:
@@ -154,7 +196,7 @@ def _target_display(db: Session, target_type: str, target_id: int) -> str:
 def _assignments(db: Session, document_id: int) -> List[DocumentSignoffAssignment]:
     return db.query(DocumentSignoffAssignment).filter(
         DocumentSignoffAssignment.document_id == document_id
-    ).all()
+    ).order_by(DocumentSignoffAssignment.id).all()
 
 
 def _signatures(db: Session, document_id: int) -> List[DocumentSignature]:
@@ -167,63 +209,53 @@ def _signatures(db: Session, document_id: int) -> List[DocumentSignature]:
     return (q.filter(DocumentSignature.signed_at >= since) if since else q).all()
 
 
-def _required(db: Session, tenant_ids: List[int], stage_assignments: List[DocumentSignoffAssignment]) -> List[Set[int]]:
-    """The expanded user set of each participant of a stage that must sign it. One nobody can sign for (a role or team without
-    users of this platform, an imported or deleted account: no ``doc_lifecycle._people``) is left out while another participant of
-    the stage can sign (Send for review names it in its notice); when none can, every one is required, as before."""
-    members = [_resolve_target_users(db, tenant_ids, a.target_type, a.target_id) for a in stage_assignments]
-    signable = [m for m in members if doc_lifecycle._people(db, m)]
-    return signable or members
-
-
-def _stage_complete(db: Session, tenant_ids: List[int], document_id: int, role_type: str,
-                    assignments: List[DocumentSignoffAssignment],
-                    signatures: List[DocumentSignature]) -> bool:
-    """A stage is complete when EVERY required assignment for that role (``_required``) has at least
-    one signature from a member of its expanded user set. (Named users must each
-    sign; a role/team is satisfied by any one member.)"""
-    stage_assignments = [a for a in assignments if a.role_type == role_type]
-    if not stage_assignments:
-        return False
-    signer_ids = {s.signer_user_id for s in signatures if s.role_type == role_type}
-    return all(members & signer_ids for members in _required(db, tenant_ids, stage_assignments))
-
-
 def advance_if_complete(db: Session, doc: GovernanceDocument, tenant_ids: List[int], by: Optional[int]) -> Optional[str]:
-    """The stage in progress ends once every one of its participants has a signature of this round (``_stage_complete``): review
-    goes to approval; to approved only when no approver is named at all; back to draft when approvers are named but none of them has
-    anyone who can sign (it is never approved without them); approval to approved. Returns the new status (None: unchanged); the
-    caller runs the follow-ups (``doc_lifecycle.on_signed``, or ``recheck_stage`` when a signer was removed and the people left had
-    all signed). ``approved_by`` is whoever signed the stage last."""
-    stage = {s: r for r, s in _STAGE_STATUS.items()}.get(doc.status)
+    """The stage in progress ends once its rule is met by this round's signatures (``routes.done``: on the default route every
+    participant, a role or team by any one member). It goes on to the next stage with participants (review to approval; on a
+    route of its own, the next stage, ``route_stage``), or is approved when there is none; it is a draft again when the next stage
+    has participants but none of them can sign (it is never approved without them). Returns the status it has now when it moved
+    on (None: unchanged); the caller runs the follow-ups (``doc_lifecycle.on_signed``, or ``recheck_stage`` when a signer was
+    removed and the people left had all signed). ``approved_by`` is whoever signed the stage last."""
+    route = routes.stages(db, doc)
+    stage = routes.current(db, doc, route)
     if stage is None:
         return None
     db.flush()          # tenant sessions do not autoflush: the signature and the participants just written must count
     assignments = _assignments(db, doc.id)
     signatures = _signatures(db, doc.id)
-    if not _stage_complete(db, tenant_ids, doc.id, stage, assignments, signatures):
+    if not routes.done(db, doc, stage, assignments, signatures):
         return None
-    approvers = [a for a in assignments if a.role_type == "approver"]
-    if stage == "reviewer" and any(doc_lifecycle._members(db, doc, a) for a in approvers):
-        doc.status = "pending_approval"
-    elif stage == "reviewer" and approvers:            # approvers named, none can sign: not approved without them
-        doc.status = "draft"
+    nxt, _passed = routes.following(route, assignments, stage.position)
+    if nxt is not None and routes.can_sign(db, doc, nxt, assignments):
+        doc.status = routes.status_for(nxt, doc.status)
+        if nxt.custom:
+            doc.route_stage = nxt.position
+    elif nxt is not None:                              # its next signers are named, none can sign: not approved without them
+        doc.status, doc.route_stage = "draft", None
     else:
-        last = max((s for s in signatures if s.role_type == stage), key=lambda s: s.signed_at, default=None)
+        last = max(routes.signatures_of(stage, signatures), key=lambda s: s.signed_at, default=None)
         doc.status, doc.approved_by, doc.approved_at = "approved", last.signer_user_id if last else by, datetime.utcnow()
+        doc.route_stage = None
     return doc.status
 
 
 def nobody_can_sign(db: Session, doc: GovernanceDocument) -> List[str]:
     """A sentence for each reviewer or approver of ``doc`` with nobody who can sign it: a role or team without users of this platform
-    (one a connector made), or an account that is not one."""
+    (one a connector made), an account that is not one, or an approver who is its author (four-eyes)."""
     out = []
+    excluded = routes.four_eyes_excluded(db, doc, routes.DEFAULT_ROUTE[1])
     for a in _assignments(db, doc.id):
-        if a.role_type in _STAGE_STATUS and not doc_lifecycle._members(db, doc, a):
-            label = _target_display(db, a.target_type, a.target_id)       # "Role: <name>", "Team: <name>" or the person
-            who = "reviewers" if a.role_type == "reviewer" else "approvers"
+        if a.role_type not in _STAGE_STATUS:
+            continue
+        people = set(doc_lifecycle._members(db, doc, a))
+        label = _target_display(db, a.target_type, a.target_id)           # "Role: <name>", "Team: <name>" or the person
+        who = "reviewers" if a.role_type == "reviewer" else "approvers"
+        if not people:
             out.append(f"{label} cannot sign it; choose other {who}." if a.target_type == "user"
                        else f"Nobody in {label.partition(': ')[2] or label} can sign it; choose other {who}.")
+        elif a.role_type == "approver" and not people - excluded:
+            out.append(f"{label} wrote this document and does not approve it; choose other approvers." if a.target_type == "user"
+                       else f"Only its author is in {label.partition(': ')[2] or label}, and does not approve it; choose other approvers.")
     return out
 
 
@@ -269,26 +301,37 @@ def signoff_roles(db: Session, tenant_ids: List[int], people: Optional[Set[int]]
             if r.id in granted or r.id not in by_connector]
 
 
+def _step(db: Session, doc: GovernanceDocument, user_id: int) -> Optional[routes.Step]:
+    return routes.step_for(db, doc, user_id, _assignments(db, doc.id), _signatures(db, doc.id))
+
+
 def _user_actionable_role(db: Session, tenant_ids: List[int], doc: GovernanceDocument,
                           user_id: int, assignments: List[DocumentSignature]) -> Optional[str]:
-    """The role_type the given user may sign RIGHT NOW for this doc, or None."""
-    # Map current status → the stage awaiting signatures.
-    stage = None
-    if doc.status == "pending_review":
-        stage = "reviewer"
-    elif doc.status == "pending_approval":
-        stage = "approver"
-    if not stage:
-        return None
-    # Is the user a member of any assignment for that stage, and not yet signed?
-    stage_assignments = [a for a in _assignments(db, doc.id) if a.role_type == stage]
-    already = {s.signer_user_id for s in _signatures(db, doc.id) if s.role_type == stage}
-    if user_id in already:
-        return None
-    for a in stage_assignments:
-        if user_id in _resolve_target_users(db, tenant_ids, a.target_type, a.target_id):
-            return stage
-    return None
+    """The role_type the given user may sign RIGHT NOW for this doc, or None (``routes.step_for``)."""
+    step = _step(db, doc, user_id)
+    return step.stage.role_type if step else None
+
+
+def _my_step_or_403(db: Session, doc: GovernanceDocument, user_id: int, refused: str) -> routes.Step:
+    step = _step(db, doc, user_id)
+    if step is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ON_HOLD if routes.on_hold(db, doc) else refused)
+    return step
+
+
+def _name(db: Session, user_id: Optional[int]) -> Optional[str]:
+    return doc_lifecycle._names(db, [user_id]).get(user_id) if user_id else None
+
+
+def _round_summary(db: Session, doc: GovernanceDocument) -> str:
+    """The route in one line, as the history says it ("Review: Khalid then Sara; Approval: Board")."""
+    assignments = _assignments(db, doc.id)
+    parts = []
+    for s in routes.stages(db, doc):
+        names = [_target_display(db, a.target_type, a.target_id) for a in routes.assignments_of(s, assignments)]
+        if names:
+            parts.append(f"{s.name}: " + (" then " if s.order == "in_turn" else ", ").join(names))
+    return "; ".join(parts)
 
 
 # ── endpoints ────────────────────────────────────────────────────────────
@@ -311,20 +354,22 @@ def get_signoff(
         return {
             "id": a.id, "role_type": a.role_type, "target_type": a.target_type,
             "target_id": a.target_id, "display": _target_display(db, a.target_type, a.target_id),
+            "stage_position": a.stage_position, "position": a.position,
         }
 
-    signer_names = {}
+    signer_names = doc_lifecycle._names(db, {s.signer_user_id for s in all_sigs} | {s.on_behalf_of for s in all_sigs if s.on_behalf_of})
     for s in all_sigs:
-        u = db.query(GRCUser).filter(GRCUser.id == s.signer_user_id).first()
-        signer_names[s.signer_user_id] = (u.display_name or u.username) if u else f"User #{s.signer_user_id}"
+        signer_names.setdefault(s.signer_user_id, f"User #{s.signer_user_id}")
 
+    route = routes.stages(db, doc)
     progress = {}
     for rt in ("reviewer", "approver"):
-        required = _required(db, user_tenants, [a for a in assignments if a.role_type == rt])      # as _stage_complete counts them
-        signers = {s.signer_user_id for s in signatures if s.role_type == rt}
-        progress[rt] = {"required": len(required), "signed": sum(1 for members in required if members & signers)}
+        counts = [routes.progress(db, doc, s, assignments, signatures) for s in route if s.role_type == rt and not s.informs]
+        progress[rt] = {"required": sum(c["required"] for c in counts), "signed": sum(c["signed"] for c in counts)}
 
-    actionable = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
+    step = routes.step_for(db, doc, current_user.id, assignments, signatures)
+    route_view = routes.view(db, doc, assignments, signatures, dict(signer_names), lambda a: _target_display(db, a.target_type, a.target_id))
+    editor = can_edit(db, current_user, doc)
 
     return {
         "document_id": document_id,
@@ -341,12 +386,24 @@ def get_signoff(
                 "signed_at": s.signed_at.isoformat() if s.signed_at else None,
                 "esign": esigns.get(s.id),   # the drawn signature kept with this one: id and fingerprints
                 "this_round": not doc.signoff_round_at or (s.signed_at is not None and s.signed_at >= doc.signoff_round_at),
+                "stage_position": s.stage_position,
+                "on_behalf_of": s.on_behalf_of, "on_behalf_of_name": signer_names.get(s.on_behalf_of) if s.on_behalf_of else None,
             } for s in all_sigs
         ],
         "round_started_at": doc.signoff_round_at.isoformat() if doc.signoff_round_at else None,
         "version": doc.current_version or "1.0",
         "progress": progress,
-        "my_actionable_role": actionable,   # 'reviewer' | 'approver' | null — can sign now
+        "my_actionable_role": step.stage.role_type if step else None,   # 'reviewer' | 'approver' | null — can sign now
+        # the route: its stages and each person's state, and the changes asked for while they wait (routes.view)
+        "route": route_view,
+        "my_step": None if step is None else {
+            "stage_position": step.stage.position, "stage_name": step.stage.name, "kind": step.stage.kind,
+            "kind_label": step.stage.label, "role_type": step.stage.role_type, "in_turn": step.stage.order == "in_turn",
+            "can_reject": step.stage.allow_reject, "can_delegate": step.stage.allow_delegate,
+            "on_behalf_of": _name(db, step.on_behalf_of),
+        },
+        "can_resubmit": editor and route_view["hold"] is not None and doc.status != "archived",
+        "can_withdraw": editor and doc.status in routes.PENDING,
     }
 
 
@@ -358,13 +415,22 @@ def set_participants(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Replace the document's sign-off participants. Prepared-by defaults to the
-    document owner/author (the creator) when none supplied."""
+    document owner/author (the creator) when none supplied. A document with a route of its own keeps its stages: only
+    prepared-by changes here (its reviewers and approvers sent back as they are), anything else is refused (``OWN_ROUTE``)."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     if doc.status not in ("draft", "pending_review", "pending_approval"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="Participants can only be edited before the document is approved.")
     from ....routers.auth_router import refuse_imported_accounts
+
+    custom = routes.is_custom(routes.stages(db, doc))
+    if custom:
+        kept = {(a.role_type, a.target_type, a.target_id) for a in _assignments(db, document_id) if a.role_type != "prepared_by"}
+        sent = {(rt, it.target_type, int(it.target_id)) for rt, items in (("reviewer", body.reviewers), ("approver", body.approvers))
+                for it in (items or [])}
+        if sent != kept:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=OWN_ROUTE)
 
     # a person newly named must use the platform; one already named is sent back as it is (prepared-by is, by the details dialog)
     had = {(a.role_type, a.target_id) for a in _assignments(db, document_id) if a.target_type == "user"}
@@ -377,9 +443,8 @@ def set_participants(
                             detail=f"Nobody with user id {min(unknown)} uses this platform. Choose another person.")
     refuse_imported_accounts(db, named)
 
-    db.query(DocumentSignoffAssignment).filter(
-        DocumentSignoffAssignment.document_id == document_id
-    ).delete()
+    q = db.query(DocumentSignoffAssignment).filter(DocumentSignoffAssignment.document_id == document_id)
+    (q.filter(DocumentSignoffAssignment.role_type == "prepared_by") if custom else q).delete()
 
     def _add(role_type, items):
         for it in items:
@@ -396,11 +461,69 @@ def set_participants(
         default_uid = doc.owner_id or doc.author_id or current_user.id
         prepared = [ParticipantIn(target_type="user", target_id=default_uid)]
     _add("prepared_by", prepared)
-    _add("reviewer", body.reviewers or [])
-    _add("approver", body.approvers or [])
+    if not custom:
+        _add("reviewer", body.reviewers or [])
+        _add("approver", body.approvers or [])
     db.flush()
-    doc_lifecycle.on_participants_changed(db, doc, current_user.id)
-    doc_lifecycle.recheck_stage(db, doc, current_user.id)     # a signer removed: the people left may all have signed, or be nobody
+    if not custom:
+        doc_lifecycle.on_participants_changed(db, doc, current_user.id)
+        doc_lifecycle.recheck_stage(db, doc, current_user.id)     # a signer removed: the people left may all have signed, or be nobody
+    db.commit()
+    return get_signoff(document_id, db, current_user)
+
+
+@router.put("/{document_id}/signoff/route", dependencies=[Depends(require_doc_changer)])
+def set_route(
+    document_id: int,
+    body: RouteUpdate,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The document's approval route (routes.py): its stages in order, each with its people, the order they are asked in, who has
+    to sign and the days they have. It replaces the reviewers and approvers (prepared-by stays); no stages is the default route
+    again, with nobody chosen. Not while it is in review: withdraw it first."""
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _doc_or_404(document_id, user_tenants, db)
+    if doc.status in routes.PENDING:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="It is in review now. Withdraw it from review to change its route.")
+    try:
+        stages = routes.validate([s.model_dump() for s in body.stages])
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    from ....routers.auth_router import refuse_imported_accounts
+
+    named = sorted({tid for s in stages for t, tid in s["people"] if t == "user"})
+    unknown = set(named) - {uid for (uid,) in db.query(GRCUser.id).filter(GRCUser.id.in_(named))} if named else set()
+    if unknown:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
+                            detail=f"Nobody with user id {min(unknown)} uses this platform. Choose another person.")
+    refuse_imported_accounts(db, named)
+
+    before = _round_summary(db, doc) if routes.is_custom(routes.stages(db, doc)) else None
+    db.query(DocumentRouteStage).filter(DocumentRouteStage.document_id == document_id).delete()
+    db.query(DocumentSignoffAssignment).filter(DocumentSignoffAssignment.document_id == document_id,
+                                               DocumentSignoffAssignment.role_type != "prepared_by").delete()
+    now = datetime.utcnow()
+    for s in stages:
+        db.add(DocumentRouteStage(tenant_id=doc.tenant_id, document_id=document_id, position=s["position"], name=s["name"], kind=s["kind"],
+                                  order_mode=s["order"], rule=s["rule"], min_count=s["min_count"], due_days=s["due_days"],
+                                  signature=s["signature"], allow_reject=s["allow_reject"], allow_delegate=s["allow_delegate"],
+                                  created_by=current_user.id, created_at=now))
+        for i, (target_type, target_id) in enumerate(s["people"], start=1):
+            db.add(DocumentSignoffAssignment(tenant_id=doc.tenant_id, document_id=document_id,
+                                             role_type="approver" if s["kind"] == "approval" else "reviewer",
+                                             target_type=target_type, target_id=target_id, stage_position=s["position"], position=i,
+                                             added_by=current_user.id, added_at=now))
+    if not any(a.role_type == "prepared_by" for a in _assignments(db, document_id)):
+        db.add(DocumentSignoffAssignment(tenant_id=doc.tenant_id, document_id=document_id, role_type="prepared_by", target_type="user",
+                                         target_id=doc.owner_id or doc.author_id or current_user.id, added_by=current_user.id, added_at=now))
+    db.flush()
+    after = _round_summary(db, doc) if stages else None
+    if before != after:
+        create_audit_log(db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id, action="route_set",
+                         field_changed="route", old_value=before, new_value=after,
+                         action_details=f"Approval route: {after}" if after else "Back to the usual route: reviewers, then approvers")
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -414,11 +537,34 @@ def send_for_review(
     """Send the document to its reviewers (or straight to approvers if no reviewers
     are assigned). Routes it to each assignee's Pending Approvals queue. A stage nobody
     can sign goes on as ``doc_lifecycle.start_round`` says (the other stage, or back to
-    draft), and ``notice`` says which reviewers or approvers cannot sign."""
+    draft), and ``notice`` says which reviewers or approvers cannot sign. A route of its own starts at its first stage; it is
+    refused when a stage has nobody who can sign."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     ensure_not_archived(doc)                           # out of the archive only by Restore, then sent as a draft
+    if routes.on_hold(db, doc):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Changes were asked for: resubmit it when they are made.")
     assignments = _assignments(db, document_id)
+    route = routes.stages(db, doc)
+    if routes.is_custom(route):
+        if doc.status in routes.PENDING:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="It is in review already.")
+        refused = routes.nobody_can_sign(db, doc, route, assignments)
+        first, _passed = routes.following(route, assignments)
+        if refused or first is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=" ".join(refused) or "Add a stage where someone reviews or approves.")
+        old = doc.status
+        doc.status = routes.status_for(first, None)      # from a draft: a new round (models: _new_signoff_round)
+        doc.route_stage = first.position
+        doc.updated_at = datetime.utcnow()
+        create_audit_log(db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id,
+                         action="sent_for_review" if first.kind != "approval" else "sent_for_approval",
+                         action_details=f"Document sent for {first.name.lower()}: {_round_summary(db, doc)}",
+                         field_changed="status", old_value=old, new_value=doc.status)
+        db.flush()
+        doc_lifecycle.on_sent(db, doc, current_user.id)
+        db.commit()
+        return {**get_signoff(document_id, db, current_user), "notice": None}
     has_reviewers = any(a.role_type == "reviewer" for a in assignments)
     has_approvers = any(a.role_type == "approver" for a in assignments)
     if not (has_reviewers or has_approvers):
@@ -465,18 +611,17 @@ def sign_document(
     """Sign the document in the current user's actionable role. Records a
     DocumentSignature with the signer's drawn electronic signature (sealed, see
     services/esign.py), stamps the signer's row in the Approval Signoff table, and
-    advances the document status when the stage completes."""
+    advances the document status when the stage completes. A delegate signs for the person who handed the step over."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     check_version(db, doc, body.version, body.round_at)
-    signatures = _signatures(db, document_id)
-    role_type = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
-    if not role_type:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="You are not an assigned signer for this document at its current stage, or you have already signed.")
-
-    role_label = _ROLE_LABEL[role_type]
+    step = _my_step_or_403(db, doc, current_user.id,
+                           "You are not an assigned signer for this document at its current stage, or you have already signed.")
+    stage = step.stage
+    role_type, role_label = stage.role_type, stage.label
     signer_name = body.signature_text or current_user.display_name or current_user.username
+    principal = _name(db, step.on_behalf_of)
+    stamped = f"{signer_name} for {principal}" if principal else signer_name
 
     # A formal sign-off is signed electronically. The drawing is checked before anything changes, and the
     # document is fingerprinted as the signer saw it, before this sign-off is stamped into it.
@@ -492,7 +637,7 @@ def sign_document(
     today = datetime.utcnow().strftime("%Y-%m-%d")
     new_content = _patch_signoff_content(
         old_content,
-        [{"role": role_label, "name": signer_name, "designation": None, "date": f"{today} · E-signed {image_sha[:8]}"}],
+        [{"role": role_label, "name": stamped, "designation": None, "date": f"{today} · E-signed {image_sha[:8]}"}],
         {},
     )
     content_changed = new_content != (old_content or "")
@@ -500,41 +645,46 @@ def sign_document(
         doc.content = new_content
         _snapshot_content_version(
             db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
-            change_type="signoff", change_reason=f"{role_label}: {signer_name}", user_id=current_user.id,
+            change_type="signoff", change_reason=f"{role_label}: {stamped}", user_id=current_user.id,
         )
 
     signature = DocumentSignature(
         tenant_id=doc.tenant_id, document_id=document_id, signer_user_id=current_user.id,
         role_type=role_type, role_label=role_label, decision="signed",
         signature_text=signer_name, comment=body.comment, signed_at=datetime.utcnow(),
+        stage_position=stage.position if stage.custom else None, on_behalf_of=step.on_behalf_of,
     )
     db.add(signature)
     db.flush()
     esig = esign.record(
         db, tenant_id=doc.tenant_id, record_type="document_signoff", record_id=signature.id,
-        signature_image=body.signature_image, meaning=f"{role_label}: {doc.title}", signer_name=signer_name,
-        signer_user_id=current_user.id, signer_email=current_user.email,
+        signature_image=body.signature_image, meaning=f"{role_label}{f' for {principal}' if principal else ''}: {doc.title}",
+        signer_name=signer_name, signer_user_id=current_user.id, signer_email=current_user.email,
         signer_title=getattr(current_user, "designation", None), document=doc, document_version=old_version,
         content_sha256=seen_sha, request=request,
     )
     doc.updated_at = datetime.utcnow()
 
     advanced_to = advance_if_complete(db, doc, user_tenants, current_user.id)      # this signature included
+    moved = ""
+    if advanced_to and stage.custom and advanced_to in routes.PENDING:
+        nxt = routes.current(db, doc)
+        moved = f" → {nxt.name}" if nxt else ""
 
     create_audit_log(
         db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id,
         action="signed", field_changed="signoff",
-        old_value=None, new_value=f"{role_label}: {signer_name}",
-        action_details=(body.comment or f"Signed as {role_label}")
+        old_value=None, new_value=f"{role_label}: {stamped}",
+        action_details=(body.comment or f"Signed as {role_label}{f' for {principal}' if principal else ''}")
         + f" · e-signature {esig.image_sha256[:12]}, seal {esig.seal[:12]}"
-        + (f" → {advanced_to}" if advanced_to else ""),
+        + (moved or (f" → {advanced_to}" if advanced_to else "")),
     )
     if advanced_to == "draft":
         create_audit_log(db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id, action="status_changed",
                          field_changed="status", old_value="pending_review", new_value="draft",
                          action_details="Reviewed, but none of its approvers can sign it, so it is a draft again: choose other approvers and send it for review")
     db.flush()
-    doc_lifecycle.on_signed(db, doc, current_user.id, role_type, signature.id, esig.id, advanced_to)
+    doc_lifecycle.on_signed(db, doc, current_user.id, role_type, signature.id, esig.id, advanced_to, stage=stage)
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -547,33 +697,192 @@ def reject_document(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Reject at the current stage — returns the document to draft and records the
-    rejection. Only an assigned reviewer/approver at the current stage may reject."""
+    rejection. Only an assigned reviewer/approver at the current stage may reject, where the stage allows it (on a route of its
+    own, approval stages by default; elsewhere they ask for changes)."""
     if not (body.comment or "").strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A reason is required to reject.")
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     check_version(db, doc, body.version, body.round_at)
-    signatures = _signatures(db, document_id)
-    role_type = _user_actionable_role(db, user_tenants, doc, current_user.id, signatures)
-    if not role_type:
+    step = _my_step_or_403(db, doc, current_user.id, "You are not an assigned signer at this stage.")
+    if not step.stage.allow_reject:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
-                            detail="You are not an assigned signer at this stage.")
-    role_label = _ROLE_LABEL[role_type]
+                            detail=f"At {step.stage.name} you can sign or ask for changes; rejecting is not part of this stage.")
+    role_type = step.stage.role_type
+    role_label = step.stage.label
     db.add(DocumentSignature(
         tenant_id=doc.tenant_id, document_id=document_id, signer_user_id=current_user.id,
         role_type=role_type, role_label=role_label, decision="rejected",
         signature_text=current_user.display_name or current_user.username,
         comment=body.comment, signed_at=datetime.utcnow(),
+        stage_position=step.stage.position if step.stage.custom else None, on_behalf_of=step.on_behalf_of,
     ))
-    doc.status = "draft"
+    doc.status, doc.route_stage = "draft", None
     doc.updated_at = datetime.utcnow()
     create_audit_log(
         db=db, document_id=document_id, tenant_id=doc.tenant_id, user_id=current_user.id,
         action="rejected", field_changed="status", old_value=None, new_value="draft",
-        action_details=f"Rejected at {'review' if role_type == 'reviewer' else 'approval'}: {body.comment}",
+        action_details=f"Rejected at {step.stage.name.lower() if step.stage.custom else 'review' if role_type == 'reviewer' else 'approval'}: {body.comment}",
     )
     db.flush()
     doc_lifecycle.on_rejected(db, doc, current_user.id, role_type, body.comment)
+    db.commit()
+    return get_signoff(document_id, db, current_user)
+
+
+@router.post("/{document_id}/signoff/request-changes", dependencies=[Depends(require_doc_reader)])
+def request_changes(
+    document_id: int,
+    body: ChangesRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Instead of signing, the person whose turn it is asks for changes: the route waits (nobody else signs) until the author makes
+    them and resubmits, and comes back to the person who asked (D33)."""
+    comment = (body.comment or "").strip()
+    if not comment:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Say what should change: the author reads it.")
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _doc_or_404(document_id, user_tenants, db)
+    check_version(db, doc, body.version, body.round_at)
+    step = _my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document.")
+    hold = DocumentRouteHold(tenant_id=doc.tenant_id, document_id=doc.id, round_at=doc.signoff_round_at, stage_position=step.stage.position,
+                             requested_by=current_user.id, on_behalf_of=step.on_behalf_of, requested_at=datetime.utcnow(),
+                             comment=comment, assignment_id=step.assignment_id, content_before=doc.content)
+    db.add(hold)
+    doc.updated_at = datetime.utcnow()
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="changes_requested",
+                     field_changed="signoff", old_value=None, new_value=comment[:500],
+                     action_details=f"Changes asked for at {step.stage.name.lower()}: {comment}")
+    db.flush()
+    doc_lifecycle.on_changes_requested(db, doc, current_user.id, step.stage, hold)
+    db.commit()
+    return get_signoff(document_id, db, current_user)
+
+
+@router.post("/{document_id}/signoff/resubmit", dependencies=[Depends(require_doc_changer)])
+def resubmit(
+    document_id: int,
+    body: ResubmitRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The changes asked for are made: the route goes on. A minor change (or none, by doc_version.by_rule) goes back to the stage it
+    waited at, the person who asked first in line again and earlier signatures standing; a major one, or one the author calls
+    major, starts the route again from its first stage (D33)."""
+    from ..doc_version import by_rule
+
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _doc_or_404(document_id, user_tenants, db)
+    hold = routes.open_hold(db, doc)
+    if hold is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No changes are waiting to be resubmitted.")
+    same = (hold.content_before or "") == (doc.content or "")
+    size = "major" if body.major else "none" if same else by_rule(hold.content_before, doc.content)
+    now = datetime.utcnow()
+    note = (body.note or "").strip() or None
+    hold.resolved_at, hold.resolved_by, hold.resubmit_note, hold.change = now, current_user.id, note, size
+    who = _name(db, hold.requested_by) or "the person who asked"
+    if size == "major":
+        hold.outcome = "restarted"
+        why = f"Resubmitted with a major change after {who} asked for changes, so it is signed again from the start"
+    else:
+        hold.outcome = "resumed"
+        why = f"Resubmitted after {who} asked for changes ({'no change to the text' if size == 'none' else 'a minor change'}): it goes back to {who}"
+    doc.updated_at = now
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="resubmitted",
+                     field_changed="signoff", old_value=hold.comment[:500], new_value=size,
+                     action_details=why + (f". {note}" if note else ""))
+    db.flush()
+    if size == "major":
+        doc_lifecycle.restart_round(db, doc, current_user.id)
+    doc_lifecycle.on_resubmitted(db, doc, current_user.id, hold)
+    if size != "major":
+        doc_lifecycle.recheck_stage(db, doc, current_user.id)      # meanwhile the people left may all have signed, or be nobody
+    db.commit()
+    return {**get_signoff(document_id, db, current_user), "outcome": hold.outcome, "change": size}
+
+
+@router.post("/{document_id}/signoff/withdraw", dependencies=[Depends(require_doc_changer)])
+def withdraw(
+    document_id: int,
+    body: WithdrawRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """The author takes the document back from review: a draft again, what was asked of people ends and they are told. Sending it
+    again starts a new round."""
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _doc_or_404(document_id, user_tenants, db)
+    if doc.status not in routes.PENDING:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="It is not in review.")
+    reason = (body.reason or "").strip() or None
+    hold = routes.open_hold(db, doc)
+    if hold is not None:
+        hold.resolved_at, hold.resolved_by, hold.outcome = datetime.utcnow(), current_user.id, "withdrawn"
+    old = doc.status
+    doc_lifecycle.on_withdrawn(db, doc, current_user.id, reason)          # tells the people still asked, before their requests end
+    doc.status, doc.route_stage, doc.updated_at = "draft", None, datetime.utcnow()
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="withdrawn",
+                     field_changed="status", old_value=old, new_value="draft",
+                     action_details="Withdrawn from review" + (f": {reason}" if reason else ""))
+    db.flush()
+    doc_lifecycle.on_status_changed(db, doc, old, "draft", current_user.id)
+    db.commit()
+    return get_signoff(document_id, db, current_user)
+
+
+@router.post("/{document_id}/signoff/delegate", dependencies=[Depends(require_doc_reader)])
+def delegate(
+    document_id: int,
+    body: DelegateRequest,
+    db: Session = Depends(get_db),
+    current_user: GRCUser = Depends(require_auth),
+):
+    """Hand one's step at the current stage to someone else, who then signs (or asks for changes) for them; the person who handed
+    it over no longer does. Where the stage allows it (on by default)."""
+    user_tenants = get_user_tenants(current_user, db)
+    doc = _doc_or_404(document_id, user_tenants, db)
+    step = _my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document.")
+    stage = step.stage
+    if not stage.allow_delegate:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"{stage.name} cannot be delegated.")
+    to = int(body.user_id)
+    to_name = _name(db, to) or f"User #{to}"
+    if to == current_user.id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose someone else.")
+    if not doc_lifecycle._people(db, [to]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{to_name} cannot sign: choose someone who uses this platform.")
+    if to in routes.four_eyes_excluded(db, doc, stage):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{to_name} wrote this document, so they do not approve it.")
+    assignments = _assignments(db, doc.id)
+    asked_here = set().union(set(), *(routes._members(db, doc, a) for a in routes.assignments_of(stage, assignments)))
+    if to in asked_here | routes.signer_ids(routes.signatures_of(stage, _signatures(db, doc.id))):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"{to_name} is already asked at {stage.name}: choose someone else.")
+    now = datetime.utcnow()
+    note = (body.note or "").strip() or None
+    mine = [o for o in routes.round_requests(db, doc, current_user.id, stage) if o.status == "pending"]
+    for ob in mine:
+        ob.status, ob.done_at, ob.comment = "delegated", now, note
+        doc_lifecycle._close(db, ob, completed=False)
+    if not mine:            # asked through a role or team, or without the life cycle: the hand-over is still recorded
+        db.add(DocumentObligation(tenant_id=doc.tenant_id, document_id=doc.id, kind=stage.obligation_kind, user_id=current_user.id,
+                                  assignment_id=step.assignment_id, stage_position=stage.position if stage.custom else None,
+                                  on_behalf_of=step.on_behalf_of, document_version=doc.current_version, status="delegated",
+                                  requested_by=current_user.id, requested_at=now, done_at=now, comment=note))
+    days = stage.due_days or doc_lifecycle.due_days(doc_lifecycle.settings(db, doc.tenant_id), stage.obligation_kind)
+    due = min((o.due_date for o in mine if o.due_date), default=None) or now + timedelta(days=days)
+    handed = DocumentObligation(tenant_id=doc.tenant_id, document_id=doc.id, kind=stage.obligation_kind, user_id=to,
+                                assignment_id=step.assignment_id, stage_position=stage.position if stage.custom else None,
+                                on_behalf_of=step.on_behalf_of or current_user.id, document_version=doc.current_version,
+                                status="pending", requested_by=current_user.id, requested_at=now, due_date=due, comment=note)
+    db.add(handed)
+    db.flush()
+    me = current_user.display_name or current_user.username
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="delegated",
+                     field_changed="signoff", old_value=me, new_value=to_name,
+                     action_details=f"{stage.name}: {me} delegated their step to {to_name}" + (f": {note}" if note else ""))
+    doc_lifecycle.on_delegated(db, doc, current_user.id, handed, stage)
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -584,25 +893,27 @@ def my_pending_signoffs(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Documents awaiting the current user's signature — expands role/team
-    membership so a user assigned via a role or team still sees the document."""
+    membership so a user assigned via a role or team still sees the document; on a route whose stage asks people in turn, only
+    when it is their turn."""
     user_tenants = get_user_tenants(current_user, db)
     # Candidate docs: in a pending stage, in the user's tenant(s).
     docs = db.query(GovernanceDocument).filter(
         GovernanceDocument.tenant_id.in_(user_tenants),
         GovernanceDocument.status.in_(("pending_review", "pending_approval")),
-    ).all()
+    ).order_by(GovernanceDocument.updated_at.desc(), GovernanceDocument.id).all()
     out = []
     for doc in docs:
-        role = _user_actionable_role(db, user_tenants, doc, current_user.id, _signatures(db, doc.id))
-        if not role:
+        step = _step(db, doc, current_user.id)
+        if not step:
             continue
         out.append({
             "document_id": doc.id,
             "title": doc.title,
             "doc_type": doc.doc_type,
             "status": doc.status,
-            "stage_role": role,                # reviewer | approver
-            "stage_label": _ROLE_LABEL[role],
+            "stage_role": step.stage.role_type,                # reviewer | approver
+            "stage_label": step.stage.label if step.stage.custom else _ROLE_LABEL[step.stage.role_type],
+            "stage_name": step.stage.name,
             "updated_at": doc.updated_at.isoformat() if doc.updated_at else None,
         })
     return {"total": len(out), "items": out}

@@ -14,11 +14,14 @@ class DocumentObligation(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
-    kind = Column(String(20), nullable=False)                     # review | approval | acknowledgement
+    kind = Column(String(20), nullable=False)                     # review | approval | acknowledgement | changes (the author's)
     user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
     assignment_id = Column(Integer, nullable=True)                # the sign-off assignment (a user, role or team) this came from
     document_version = Column(String(50), nullable=True)          # the version it was asked for
-    status = Column(String(20), nullable=False, default="pending")   # pending | done | rejected | cancelled
+    # pending | done | rejected | cancelled | changes_requested (asked for changes) | held (waiting while changes are made) | delegated
+    status = Column(String(20), nullable=False, default="pending")
+    stage_position = Column(Integer, nullable=True)               # the route stage it was asked at (None: by its kind)
+    on_behalf_of = Column(Integer, ForeignKey("grc_users.id"), nullable=True)    # asked of a delegate, for this person
     due_date = Column(DateTime, nullable=True)
     requested_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     requested_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)

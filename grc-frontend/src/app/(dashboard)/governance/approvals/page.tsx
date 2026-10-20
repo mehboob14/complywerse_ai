@@ -23,6 +23,7 @@ import {
   ShieldCheck,
   UserCheck,
   FileCheck2,
+  PenLine,
 } from 'lucide-react';
 
 // What the person is asked to do on a document (the document life cycle), most pressing first.
@@ -30,6 +31,7 @@ const ASKS = [
   { kind: 'approval', title: 'To approve', verb: 'Approve', icon: ShieldCheck },
   { kind: 'review', title: 'To review', verb: 'Review', icon: UserCheck },
   { kind: 'acknowledgement', title: 'To acknowledge', verb: 'Acknowledge', icon: FileCheck2 },
+  { kind: 'changes', title: 'Changes asked for', verb: 'Make the changes', icon: PenLine },
 ] as const;
 
 // the server's times are naive UTC (parseUtc), not the viewer's local time

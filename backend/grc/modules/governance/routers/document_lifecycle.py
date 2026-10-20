@@ -99,11 +99,13 @@ class SettingsIn(BaseModel):
     task_title: Optional[str] = None
     task_description: Optional[str] = None
     task_category: Optional[str] = None
+    four_eyes: Optional[bool] = None          # nobody approves a document they wrote (administrators only)
 
 
 SETTINGS_RIGHT = "governance:settings:edit"
 SETTINGS_REFUSED = "Only an administrator or someone allowed to change governance settings can change these."
 READ_SETTINGS_REFUSED = "Only an administrator or someone with a governance right can see these settings."
+FOUR_EYES_REFUSED = "Only an administrator can let authors approve their own documents."
 
 
 def _reads_governance(db: Session, user: GRCUser) -> bool:
@@ -126,7 +128,7 @@ def _settings_answer(db: Session, user: GRCUser, tenant_id: int, saved=None) -> 
     current = saved or doc_lifecycle.settings(db, tenant_id)
     chosen = db.get(Role, current["escalate_role_id"]) if current["escalate_role_id"] else None
     return {"enabled": True, "settings": current, "can_edit": can_edit, "defaults": doc_lifecycle.resolved({}), "roles": roles,
-            "escalate_role_name": chosen.name if chosen else None}
+            "escalate_role_name": chosen.name if chosen else None, "can_four_eyes": can_edit and is_tenant_admin(db, user)}
 
 
 @router.get("/lifecycle/mine")
@@ -157,6 +159,8 @@ def put_lifecycle_settings(body: SettingsIn, db: Session = Depends(get_db), curr
     if not has_tenant_permission(db, current_user, SETTINGS_RIGHT):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=SETTINGS_REFUSED)
     patch = body.model_dump(exclude_none=True)
+    if "four_eyes" in patch and not is_tenant_admin(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=FOUR_EYES_REFUSED)
     if "escalate_role_id" in body.model_fields_set and body.escalate_role_id is None:
         patch["escalate_role_id"] = None                     # back to the administrators
     try:

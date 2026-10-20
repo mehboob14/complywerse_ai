@@ -17,6 +17,7 @@ import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import DocumentAnnotationPanel from '@/components/evidence/DocumentAnnotationPanel';
 import { SIGNOFF_STATUS, SignoffAction, SignoffParticipants, StatusChip, useSignoff, type Signoff } from '../_SignoffControl';
+import { HoldBanner, RouteStages, WithdrawButton } from '../_RouteView';
 
 /** a row's own drawn signature (servers from before it was sent leave the field out) */
 type Esign = { id: number; image_sha256?: string | null } | null;
@@ -36,20 +37,25 @@ function Avatar({ name }: { name: string | null }) {
 
 const You = () => <span className="ml-1.5 rounded bg-primary-50 px-1 py-px text-[10px] font-semibold uppercase tracking-wide text-primary-800">you</span>;
 
-type Tone = 'waiting' | 'overdue' | 'done' | 'rejected' | 'none';
+type Tone = 'waiting' | 'overdue' | 'done' | 'rejected' | 'none' | 'delegated' | 'held' | 'changes';
 const TONE: Record<Tone, string> = {
   waiting: 'border-amber-300 bg-amber-50 text-amber-900',
   overdue: 'border-rose-300 bg-rose-50 text-rose-800',
   done: 'border-emerald-300 bg-emerald-50 text-emerald-800',
   rejected: 'border-rose-300 bg-rose-50 text-rose-800',
   none: 'border-gray-300 bg-white text-gray-600',
+  delegated: 'border-sky-300 bg-sky-50 text-sky-900',
+  held: 'border-gray-300 bg-white text-gray-700',
+  changes: 'border-amber-400 bg-amber-100 text-amber-950',
 };
 const toneOf = (r: Row): Tone =>
-  r.status === 'done' ? 'done' : r.status === 'rejected' ? 'rejected' : r.status === 'cancelled' ? 'none' : r.overdue ? 'overdue' : 'waiting';
+  r.status === 'done' ? 'done' : r.status === 'rejected' ? 'rejected' : r.status === 'cancelled' ? 'none' : r.status === 'delegated' ? 'delegated'
+    : r.status === 'held' ? 'held' : r.status === 'changes_requested' ? 'changes' : r.overdue ? 'overdue' : 'waiting';
 
 function Badge({ row, doneLabel }: { row: Row; doneLabel: string }) {
   const t = toneOf(row);
-  const label = { done: doneLabel, rejected: 'Rejected', none: 'Not needed', overdue: 'Overdue', waiting: 'Waiting' }[t];
+  const label = { done: doneLabel, rejected: 'Rejected', none: 'Not needed', overdue: 'Overdue', waiting: 'Waiting', delegated: 'Delegated',
+    held: 'On hold', changes: 'Asked for changes' }[t];
   return (
     <span className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${TONE[t]}`}>
       {label}{row.escalation_level > 0 && row.status === 'pending' ? ' · escalated' : ''}
@@ -64,10 +70,20 @@ function Stages({ status, signoff, acks }: { status: string; signoff?: Signoff; 
   const rank = RANK[status] ?? 0;
   const p = signoff?.progress || {};
   const count = (x?: { signed: number; required: number }) => (x && x.required > 0 ? `${x.signed}/${x.required}` : rank > 0 ? 'none' : '');
+  const route = signoff?.route;
+  // a route of its own: its stages in order, between the draft and its publication
+  const middle = route?.custom
+    ? route.stages.filter((s) => s.status !== 'skipped').map((s) => ({
+      label: s.name, note: s.status === 'on_hold' ? 'on hold' : s.progress?.required ? `${s.progress.signed}/${s.progress.required}` : '',
+      done: rank >= 3 || s.status === 'done' || s.status === 'informed', current: s.status === 'current' || s.status === 'on_hold',
+    }))
+    : [
+      { label: 'Review', note: route?.hold && rank === 1 ? 'on hold' : count(p.reviewer), done: rank > 1, current: rank === 1 },
+      { label: 'Approval', note: route?.hold && rank === 2 ? 'on hold' : count(p.approver), done: rank > 2, current: rank === 2 },
+    ];
   const steps = [
     { label: 'Draft', note: '', done: rank > 0, current: rank === 0 },
-    { label: 'Review', note: count(p.reviewer), done: rank > 1, current: rank === 1 },
-    { label: 'Approval', note: count(p.approver), done: rank > 2, current: rank === 2 },
+    ...middle,
     { label: 'Published', note: '', done: rank >= 4, current: rank === 3 },
     { label: 'Acknowledged', note: acks.total ? `${acks.done}/${acks.total}` : '', done: rank >= 4 && acks.total > 0 && acks.pending === 0, current: rank >= 4 && acks.pending > 0 },
   ];
@@ -419,6 +435,7 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
           <span className="text-xs text-gray-600">version {data.document.version} · owner {data.document.owner || '-'}</span>
         </div>
         <Stages status={data.document.status} signoff={signoff} acks={data.acknowledgements} />
+        {canEdit && <WithdrawButton documentId={documentId} className="mt-3" />}
         {waiting.length > 0 && (
           <p className="mt-3 flex flex-wrap items-center gap-1.5 text-xs text-gray-700">
             <Clock className="h-3.5 w-3.5 text-amber-600" aria-hidden />
@@ -431,12 +448,19 @@ export default function LifecycleTab({ documentId, doc, canEdit = true, canAnnot
         )}
       </section>
 
+      <HoldBanner documentId={documentId} />
       {ownSteps && <SignoffAction documentId={documentId} due={mySign?.due_date} />}
       {/* the version the request names: while a new version is on its way it is the one in force, not the newest */}
       {ownSteps && myAck && <AckAction base={base} row={myAck} onDone={refresh} version={myAck.version || data.document.version} />}
 
-      <ReviewAndApproval rows={data.approvals} signoff={signoff} meId={meId} />
-      <SignoffParticipants documentId={documentId} doc={doc} readOnly={!canEdit} />
+      {signoff?.route?.custom ? (
+        <RouteStages route={signoff.route} prepared={(signoff.participants?.prepared_by || []).map((p) => p.display).filter(Boolean).join(', ')} />
+      ) : (
+        <>
+          <ReviewAndApproval rows={data.approvals} signoff={signoff} meId={meId} />
+          <SignoffParticipants documentId={documentId} doc={doc} readOnly={!canEdit} />
+        </>
+      )}
       <Acknowledgements data={data} meId={meId} base={base} canRemind={canEdit} />
       <Timeline events={data.timeline} />
       {settings && <SettingsCard />}

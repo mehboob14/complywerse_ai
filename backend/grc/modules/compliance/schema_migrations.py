@@ -275,6 +275,15 @@ _COLUMN_ADDS = [
     ("grc_studio_messages", "preview", "TEXT", None),
     ("grc_document_obligations", "emailed_at", "TIMESTAMP", None),
     ("grc_document_obligations", "overdue_at", "TIMESTAMP", None),     # Governance > Settings: the person's overdue notice
+    # Approval routes (modules/governance/routes.py): the stage and turn of each participant, signature and request, the stage a
+    # document is at, and who a delegate signs for
+    ("grc_document_signoff_assignments", "stage_position", "INTEGER", None),
+    ("grc_document_signoff_assignments", "position", "INTEGER", None),
+    ("grc_document_signatures", "stage_position", "INTEGER", None),
+    ("grc_document_signatures", "on_behalf_of", "INTEGER", None),
+    ("grc_document_obligations", "stage_position", "INTEGER", None),
+    ("grc_document_obligations", "on_behalf_of", "INTEGER", None),
+    ("grc_governance_documents", "route_stage", "INTEGER", None),
     # Statement <-> original document sync (cfsb): the wording as the file has it and where
     ("grc_policy_statements", "source_text", "TEXT", None),
     ("grc_policy_statements", "source_start", "INTEGER", None),

@@ -64,6 +64,8 @@ class GovernanceDocument(Base):
     # when the current sign-off round began: signatures given before it no longer count (a changed document is signed again).
     # Set by _new_signoff_round below whenever the status goes to review or approval from anything else.
     signoff_round_at = Column(DateTime, nullable=True)
+    # the stage of its approval route it is at while in review or approval (modules/governance/routes.py); None: by its status
+    route_stage = Column(Integer, nullable=True)
     # when everyone was asked to acknowledge it (published with the life cycle on): only then are people who join later asked too
     acks_everyone_at = Column(DateTime, nullable=True)
     # the version published last: it stays in force while a newer one is on its way (modules/governance/permissions.in_force_number).
@@ -115,6 +117,7 @@ def _new_signoff_round(doc, value, old, _initiator):
     back from approval to review starts one too (the reviewers who signed are asked again)."""
     if (value in _PENDING_SIGNOFF and old not in _PENDING_SIGNOFF) or (value == "pending_review" and old == "pending_approval"):
         doc.signoff_round_at = datetime.utcnow()
+        doc.route_stage = None          # a route of its own starts at its first stage (whoever sets the status may set it after)
 
 
 @_event.listens_for(GovernanceDocument.status, "set")
@@ -567,6 +570,8 @@ class DocumentSignoffAssignment(Base):
     role_type = Column(String(20), nullable=False)    # prepared_by | reviewer | approver
     target_type = Column(String(10), nullable=False)  # user | role | team
     target_id = Column(Integer, nullable=False)       # user id / role id / team id
+    stage_position = Column(Integer, nullable=True)   # the route stage (grc_document_route_stages) it belongs to; None: the default route
+    position = Column(Integer, nullable=True)         # its turn within that stage when people are asked one after another
     added_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     added_at = Column(DateTime, default=datetime.utcnow)
 
@@ -590,6 +595,8 @@ class DocumentSignature(Base):
     role_type = Column(String(20), nullable=False)    # prepared_by | reviewer | approver
     role_label = Column(String(100), nullable=True)   # Approval Signoff tier label patched into content
     decision = Column(String(20), default="signed")   # signed | rejected
+    stage_position = Column(Integer, nullable=True)   # the route stage it was given at (None: before routes, by role_type)
+    on_behalf_of = Column(Integer, ForeignKey("grc_users.id"), nullable=True)    # signed for this person, who delegated it
     signature_text = Column(String(255), nullable=True)  # typed name of record
     comment = Column(Text, nullable=True)
     signed_at = Column(DateTime, default=datetime.utcnow)

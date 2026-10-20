@@ -2,7 +2,7 @@
 // task_request / locked_change; the router adds `document_request` to such a task's JSON). Pure helpers, tested in
 // documentTasks.test.ts; used by the Task Management pages and by the document page's ?act= link.
 
-export type RequestKind = 'review' | 'approval' | 'acknowledgement';
+export type RequestKind = 'review' | 'approval' | 'acknowledgement' | 'changes';
 
 /** What the server says about the request behind a document task (`task.document_request`). */
 export interface DocumentRequest {
@@ -11,7 +11,7 @@ export interface DocumentRequest {
   document_id: number;
   document_title: string | null;
   version: string | null;
-  status: 'pending' | 'done' | 'rejected' | 'cancelled';
+  status: 'pending' | 'done' | 'rejected' | 'cancelled' | 'delegated' | 'held' | 'changes_requested';
   user_id: number;
   due_date: string | null;
   done_at: string | null;
@@ -34,17 +34,17 @@ export function isDocumentTask(t: TaskLike | null | undefined): boolean {
   return !!t && t.source_module === 'document_lifecycle' && t.source_entity_type === 'DocumentObligation' && t.document_request !== null;
 }
 
-export type Act = 'ack' | 'sign';
+export type Act = 'ack' | 'sign' | 'changes';
 
 /** The document page with the person's own step open (as the server's doc_lifecycle.action_href builds it). */
 export function actionHref(documentId: number, kind: RequestKind): string {
-  return `/governance/documents/${documentId}?act=${kind === 'acknowledgement' ? 'ack' : 'sign'}`;
+  return `/governance/documents/${documentId}?act=${kind === 'acknowledgement' ? 'ack' : kind === 'changes' ? 'changes' : 'sign'}`;
 }
 
 /** ?act= of the document page: which popup is asked for, or null. */
 export function actOf(param: string | null | undefined): Act | null {
   const v = (param ?? '').trim().toLowerCase();
-  return v === 'ack' || v === 'sign' ? v : null;
+  return v === 'ack' || v === 'sign' || v === 'changes' ? v : null;
 }
 
 export interface TaskButton { label: string; href: string; primary: boolean }
@@ -132,9 +132,11 @@ export function momentOf(iso: string | null | undefined): string | null {
   return t ? `${momentDayOf(iso)}, ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : null;
 }
 
-const NOUN: Record<RequestKind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement' };
-const DONE: Record<RequestKind, string> = { review: 'Reviewed and signed', approval: 'Approved and signed', acknowledgement: 'Acknowledged' };
-const DOING: Record<RequestKind, string> = { review: 'review and sign it', approval: 'approve and sign it', acknowledgement: 'acknowledge it' };
+const NOUN: Record<RequestKind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for' };
+const DONE: Record<RequestKind, string> = { review: 'Reviewed and signed', approval: 'Approved and signed', acknowledgement: 'Acknowledged',
+  changes: 'Changes made and resubmitted' };
+const DOING: Record<RequestKind, string> = { review: 'review and sign it', approval: 'approve and sign it', acknowledgement: 'acknowledge it',
+  changes: 'make the changes and resubmit it' };
 
 /** One line on where the request stands: "Acknowledgement of version 1.2 · due 30 Oct 2026 · overdue", "Acknowledged on …". */
 export function requestLine(req: DocumentRequest): string {
@@ -142,6 +144,9 @@ export function requestLine(req: DocumentRequest): string {
   if (req.status === 'done') return `${DONE[req.kind]}${dayOf(req.done_at) ? ` on ${dayOf(req.done_at)}` : ''}`;
   if (req.status === 'rejected') return `Rejected${dayOf(req.done_at) ? ` on ${dayOf(req.done_at)}` : ''}`;
   if (req.status === 'cancelled') return `${of} · no longer needed`;
+  if (req.status === 'delegated') return `Delegated${dayOf(req.done_at) ? ` on ${dayOf(req.done_at)}` : ''}`;
+  if (req.status === 'changes_requested') return `Changes asked for${dayOf(req.done_at) ? ` on ${dayOf(req.done_at)}` : ''}`;
+  if (req.status === 'held') return `${of} · on hold while changes are made`;
   const due = dayOf(req.due_date);
   return `${of}${due ? ` · due ${due}` : ''}${req.overdue ? ' · overdue' : ''}`;
 }
@@ -154,10 +159,13 @@ export function closesWhen(req: DocumentRequest, mine: boolean): string {
 }
 
 /** What ?act= does on the document page: the popup of the person's own step, or why there is none. ``asked``: the person was ever
- *  asked to review or approve this document (any round). */
-export function actOutcome(i: { act: Act; myAck: boolean; myRole: string | null | undefined; doneOn?: string | null; asked?: boolean }):
-  { popup: 'ack' | 'sign' } | { title: string; message: string } {
+ *  asked to review or approve this document (any round). ``canResubmit``: changes were asked for and the person may resubmit. */
+export function actOutcome(i: { act: Act; myAck: boolean; myRole: string | null | undefined; doneOn?: string | null; asked?: boolean; canResubmit?: boolean }):
+  { popup: 'ack' | 'sign' | 'resubmit' } | { title: string; message: string } {
   const on = dayOf(i.doneOn ?? null);
+  if (i.act === 'changes') {
+    return i.canResubmit ? { popup: 'resubmit' } : { title: 'Nothing to resubmit', message: 'No changes are waiting to be made on this document now.' };
+  }
   if (i.act === 'ack') {
     if (i.myAck) return { popup: 'ack' };
     return on ? { title: 'Already acknowledged', message: `You acknowledged this document on ${on}. There is nothing more to do.` }
