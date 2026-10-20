@@ -16,13 +16,17 @@ from ....schemas import (
     BulkVulnerabilityAssignRequest, BulkVulnerabilityAssignResponse,
     VulnerabilityResponse, MessageResponse
 )
-from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from ....routers.auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from ..services.email_service import EmailService
 import logging
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["Departments"])
+
+# Departments, their heads and members are the organisation's structure (a head can be asked to approve documents):
+# changing them is an administrator's right, reading them is anyone's.
+_manage = Depends(require_tenant_permission("admin:organization:edit"))
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -110,7 +114,8 @@ def create_department(
     request: GRCDepartmentCreate,
     tenant_id: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     if not user_tenants:
@@ -260,7 +265,8 @@ def update_department(
     dept_id: int,
     request: GRCDepartmentUpdate,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -330,7 +336,8 @@ def update_department(
 def delete_department(
     dept_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -347,7 +354,8 @@ def add_department_member(
     dept_id: int,
     request: GRCDepartmentMemberCreate,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
@@ -421,7 +429,8 @@ def remove_department_member(
     dept_id: int,
     user_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    _perm: bool = _manage,
 ):
     user_tenants = get_user_tenants(current_user, db)
     dept = get_department_or_404(dept_id, user_tenants, db)
