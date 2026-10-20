@@ -135,7 +135,14 @@ interface ExceptionItem {
   rejection_reason?: string;
   approval_comments?: string;
   approved_by_name?: string;
+  approver_name?: string;
   approved_at?: string;
+  revocation_reason?: string;
+  revoker_name?: string;
+  /** what the person may do with it, from the server (it refuses the rest) */
+  can_edit?: boolean;
+  can_delete?: boolean;
+  can_decide?: boolean;
   linked_asset_ids?: number[];
   linked_assets?: Array<{ id: number; name: string; asset_type?: string; criticality?: string; confidentiality?: number | null; integrity?: number | null; availability?: number | null }>;
   posture?: { score: number; band: string; overdue: boolean; linked_assets: number };
@@ -691,20 +698,21 @@ export default function PolicyExceptionsPage() {
   }));
   const trendData = (postureTrend || []).map((p) => ({ date: p.date.slice(5), value: p.value ?? 0 }));
 
-  // Per-row actions (⋯ menu) — same lifecycle logic as before, now surfaced
-  // through the shared RowActionsMenu used by the Documents register.
+  // Per-row actions (⋯ menu), shown only to the people the server lets do them: changing a request is its requester's or an
+  // editor's while it is a draft or pending; deciding it is for someone with the approve right who did not request it.
   const rowActions = (exc: ExceptionItem): RowAction[] => [
     { key: 'view', label: 'View details', icon: Eye, onClick: () => setViewingException(exc) },
-    { key: 'edit', label: 'Edit', icon: Edit2, onClick: () => openEditModal(exc), hidden: exc.status !== 'draft' },
-    { key: 'submit', label: 'Submit for approval', icon: Send, onClick: () => submitMutation.mutate(exc.id), hidden: exc.status !== 'draft' },
-    { key: 'approve', label: 'Approve', icon: Check, onClick: () => setApproveModal(exc), hidden: exc.status !== 'pending_approval' },
-    { key: 'reject', label: 'Reject', icon: XCircle, onClick: () => setRejectModal(exc), variant: 'danger', hidden: exc.status !== 'pending_approval' },
-    { key: 'revoke', label: 'Revoke', icon: Ban, onClick: () => setRevokeModal(exc), hidden: exc.status !== 'approved' },
+    { key: 'edit', label: 'Edit', icon: Edit2, onClick: () => openEditModal(exc), hidden: !exc.can_edit },
+    { key: 'submit', label: 'Submit for approval', icon: Send, onClick: () => submitMutation.mutate(exc.id), hidden: exc.status !== 'draft' || !exc.can_edit },
+    { key: 'approve', label: 'Approve', icon: Check, onClick: () => setApproveModal(exc), hidden: exc.status !== 'pending_approval' || !exc.can_decide },
+    { key: 'reject', label: 'Reject', icon: XCircle, onClick: () => setRejectModal(exc), variant: 'danger', hidden: exc.status !== 'pending_approval' || !exc.can_decide },
+    { key: 'revoke', label: 'Revoke', icon: Ban, onClick: () => setRevokeModal(exc), hidden: exc.status !== 'approved' || !exc.can_decide },
     {
       key: 'delete',
       label: 'Delete',
       icon: Trash2,
       variant: 'danger',
+      hidden: !exc.can_delete,
       onClick: () => {
         if (confirm('Are you sure you want to delete this exception?')) deleteMutation.mutate(exc.id);
       },
@@ -1260,7 +1268,7 @@ export default function PolicyExceptionsPage() {
         </div>
         <div>
           <label className="text-xs text-gray-600 uppercase tracking-wide">Requested By</label>
-          <p className="text-black mt-1">{viewingException.requested_by_name || viewingException.requested_by || '-'}</p>
+          <p className="text-black mt-1">{viewingException.requester_name || viewingException.requested_by_name || '-'}</p>
         </div>
         <div>
           <label className="text-xs text-gray-600 uppercase tracking-wide">Effective Date</label>
@@ -1274,10 +1282,16 @@ export default function PolicyExceptionsPage() {
           <label className="text-xs text-gray-600 uppercase tracking-wide">Created</label>
           <p className="text-black mt-1">{formatDate(viewingException.created_at)}</p>
         </div>
-        {viewingException.approved_by_name && (
+        {(viewingException.approver_name || viewingException.approved_by_name) && (
           <div>
             <label className="text-xs text-gray-600 uppercase tracking-wide">Approved By</label>
-            <p className="text-black mt-1">{viewingException.approved_by_name}</p>
+            <p className="text-black mt-1">{viewingException.approver_name || viewingException.approved_by_name}</p>
+          </div>
+        )}
+        {viewingException.revoker_name && (
+          <div>
+            <label className="text-xs text-gray-600 uppercase tracking-wide">Revoked By</label>
+            <p className="text-black mt-1">{viewingException.revoker_name}</p>
           </div>
         )}
       </div>
@@ -1334,6 +1348,13 @@ export default function PolicyExceptionsPage() {
         <div className="bg-green-50 border border-green-200 rounded-lg p-3.5">
           <label className="text-xs text-green-700 uppercase tracking-wide font-medium">Approval Comments</label>
           <RichText value={viewingException.approval_comments} tone="text-green-800" />
+        </div>
+      )}
+
+      {viewingException.revocation_reason && (
+        <div className="bg-[#f3f4f6] border border-[#d1d5db] rounded-lg p-3.5">
+          <label className="text-xs text-[#374151] uppercase tracking-wide font-medium">Revocation Reason</label>
+          <RichText value={viewingException.revocation_reason} tone="text-[#1f2937]" />
         </div>
       )}
 

@@ -61,6 +61,9 @@ class PolicyException(Base):
     requested_at = Column(DateTime, default=datetime.utcnow)
     approved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     approved_at = Column(DateTime, nullable=True)
+    approval_comments = Column(Text, nullable=True)            # what the approver wrote when approving
+    revoked_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)   # revoked at: closed_at
+    revocation_reason = Column(Text, nullable=True)
     rejected_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True, index=True)
     rejected_at = Column(DateTime, nullable=True)
     rejection_reason = Column(Text, nullable=True)

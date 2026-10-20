@@ -390,6 +390,12 @@ def _apply_query_filters(
         # another person's document task names a document (maybe a draft) they may not read: left out as in Task Management
         from ..modules.governance import doc_lifecycle, permissions as doc_permissions
         q = doc_lifecycle.without_others_tasks(q, user, reads_all=doc_permissions.visible_filter(db, user) is None)
+    if dataset_key == "gov_documents" and user is not None and db is not None:
+        # the documents a person may read, as every other list of documents (never-published drafts stay with who may see them)
+        from ..modules.governance import permissions as doc_permissions
+        visible = doc_permissions.visible_filter(db, user)
+        if visible is not None:
+            q = q.filter(visible)
     if search:
         term = f"%{search.strip()}%"
         search_cols = [c for c in (_col(model, name) for name in spec.search) if c is not None]

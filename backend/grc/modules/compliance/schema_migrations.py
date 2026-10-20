@@ -306,6 +306,10 @@ _COLUMN_ADDS = [
     ("grc_governance_documents", "published_version", "VARCHAR(50)", None),  # governance/permissions.in_force_number
     ("grc_governance_documents", "last_published_version", "VARCHAR(50)", None),  # governance/permissions.in_force_row
     ("grc_workflow_notifications", "link", "VARCHAR(500)", None),          # the page a bell notification opens
+    # Policy exceptions: the decision record (policy_exception_router approve / revoke)
+    ("grc_policy_exceptions", "approval_comments", "TEXT", None),
+    ("grc_policy_exceptions", "revoked_by", "INTEGER", None),
+    ("grc_policy_exceptions", "revocation_reason", "TEXT", None),
     # CTEM gated loop — per-cycle stage completion stamps ({"discover": ts, ...});
     # a stage's numbers/actions unlock only after the previous stage is stamped.
     ("grc_ctem_cycles", "stage_progress", "JSON DEFAULT '{}'::json", None),

@@ -288,6 +288,17 @@ def refusal(db: Session, user: GRCUser, doc: GovernanceDocument) -> str:
     return ARCHIVED_REFUSED if doc.status == "archived" else DRAFT_REFUSED
 
 
+def readable_among(db: Session, user: GRCUser, ids: Iterable[Optional[int]]) -> Set[int]:
+    """``can_read`` for many documents at once: the ids among ``ids`` the person may open (``visible_filter``, and an auditor
+    opens any document) - e.g. whose titles a list of other records may show them."""
+    ids = {i for i in ids if i}
+    if not ids:
+        return set()
+    cond = None if is_auditor(db, user) else visible_filter(db, user)
+    q = db.query(GovernanceDocument.id).filter(GovernanceDocument.id.in_(ids))
+    return {i for (i,) in (q if cond is None else q.filter(cond))}
+
+
 def ensure_reader(db: Session, user: GRCUser, doc: GovernanceDocument) -> None:
     if not can_read(db, user, doc):
         raise _forbidden(refusal(db, user, doc))

@@ -89,7 +89,7 @@ def test_admins_are_the_primary_contact_and_platform_given_administrators_only(w
         assert rbac._is_admin_or_primary(w.db, u) is admin, uid
         assert statements._is_admin(w.db, u) is admin, uid
         assert workbench._is_admin(w.db, u) is admin, uid
-        assert exceptions._is_tenant_administrator(u, w.db) is admin, uid
+        assert (exceptions._held(w.db, u) == set(exceptions._RIGHTS)) is admin, uid      # an administrator holds every exception right
     assert permissions.admin_user_ids(w.db) == {MANUAL, SSO, CONTACT}
     assert not regulatory.check_user_has_admin_access(w.user(CONN_ADMIN), 1, w.db)       # its own name list, imported links ignored
     assert regulatory.check_user_has_admin_access(w.user(MANUAL), 1, w.db)
