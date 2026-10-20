@@ -3182,6 +3182,8 @@ class WorkflowActionHandlers:
         doc = doc_lifecycle.document_for_event(db, instance.tenant_id, payload)
         if doc is None:
             raise ActionRefused("There is no document to publish: the step names no document of this organisation.")
+        if doc.status == "published":
+            raise ActionRefused(f"\"{doc.title}\" was not published again: it is already published.")
         if doc.status != "approved":
             raise ActionRefused(f"\"{doc.title}\" was not published: only an approved document is published, and it is "
                                 f"{(doc.status or 'draft').replace('_', ' ')}. Approval comes from its approvers signing it in its review.")

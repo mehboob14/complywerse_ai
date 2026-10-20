@@ -32,6 +32,8 @@ def test_the_workflow_publishes_only_an_approved_document_and_the_way_publish_do
         row = db.query(m.DocumentAuditLog).filter_by(document_id=5, action="published").one()
         assert row.performed_by == 7 and row.action_details == 'Document published by the workflow "Publish approved policies"'
         assert {o.user_id for o in obligations(db, "acknowledgement")} == {1, 2, 3, 4, 5, 6, 7}   # everyone active is asked
+        with pytest.raises(ActionRefused, match="already published"):                           # a second run publishes nothing again
+            H._publish_policy(db, run, FLOW, {"document_id": 5})
 
 
 def test_a_refused_publish_fails_the_workflow_run_and_says_why(world, monkeypatch):
