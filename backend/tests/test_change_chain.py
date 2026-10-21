@@ -190,26 +190,26 @@ def test_the_chain_lists_every_version_with_who_changed_what_the_stage_and_the_a
           reason="Evidence", at=t0 + timedelta(hours=2))
     _audit(db, 10, 2, "signed", t0 + timedelta(hours=3), details="Signed as Reviewed by → pending_approval")
     stamp = db.get(m.GovernanceDocument, 10).content.replace("| Reviewed by | | | |", "| Reviewed by | Rana | | 2026-10-01 · E-signed ab12cd34 |")
-    _edit(db, 10, stamp, user_id=3, reason="Reviewed by: Rana", change_type="signoff", at=t0 + timedelta(hours=3, minutes=1))
+    _edit(db, 10, stamp, user_id=3, reason="Reviewed by: Rana", change_type="signoff")       # into Sam's version: no time of its own
     _audit(db, 10, 3, "signed", t0 + timedelta(hours=5), status="approved", old="pending_approval", details="Signed as Approved by")
 
     library.me["id"] = 1                                                # Sam may not read the document; Olivia administers
     c = library.chain()
     assert c["enabled"] is True
-    # not published yet: the two edits and the sign-off stamp all went into one version (the user's rule, 2026-10-17)
-    assert [v["number"] for v in c["versions"]] == ["1.0", "1.1"]
-    baseline, pending = c["versions"]
+    # each edit is its own version; the sign-off stamp makes no number: it is written into the version being signed (Sam's)
+    assert [v["number"] for v in c["versions"]] == ["1.0", "1.1", "1.2"]
+    baseline, first, second = c["versions"]
     assert (baseline["origin"], baseline["changes"]) == ("initial", 0)
-    assert pending["by"] == "Olivia Owner" and pending["changes"] == 3          # made by Olivia; three changes by three people
-    who = {(i["by"], i["origin"]) for i in pending["items"]}
-    assert who == {("Olivia Owner", "manual"), ("Sam Other", "manual"), ("Khalid Approver", "signoff")}     # each change keeps its author
-    olivia = next(i for i in pending["items"] if i["by"] == "Olivia Owner")
-    assert olivia["before_text"].endswith("every year.") and olivia["after_text"].endswith("every six months.") and olivia["section"] == "3. Access Control"
-    assert pending["reason"].endswith("Review frequency")
+    assert (first["by"], first["stage"], first["origin"], first["changes"]) == ("Olivia Owner", "draft", "manual", 1)
+    assert first["items"][0]["before_text"].endswith("every year.") and first["items"][0]["after_text"].endswith("every six months.")
+    assert first["items"][0]["section"] == "3. Access Control" and first["reason"] == "Review frequency"
+    assert (second["by"], second["stage"], second["stage_label"], second["changes"]) == ("Sam Other", "pending_review", "In review", 2)
+    who = {(i["by"], i["origin"]) for i in second["items"]}
+    assert who == {("Sam Other", "manual"), ("Khalid Approver", "signoff")}     # each change in it keeps its author
     kinds = [e["kind"] for e in c["events"]]
     assert kinds == ["sent_for_review", "signed", "signed"] and c["events"][0]["actor"] == "Olivia Owner" and c["events"][2]["to"] == "approved"
     assert c["events"][1]["to"] == "pending_approval"                  # a signature that moved the document on says where to
-    assert c["summary"]["versions"] == 2 and c["summary"]["changes"] == 3
+    assert c["summary"]["versions"] == 3 and c["summary"]["people"] == 3 and c["summary"]["changes"] == 3
     assert c["document"]["title"] == "Information Security Policy"
 
 
@@ -327,7 +327,7 @@ def test_the_changes_of_one_version_are_taken_back_from_the_document_as_it_is_no
     latest = db.query(m.GovernanceDocumentVersion).filter_by(document_id=10).order_by(m.GovernanceDocumentVersion.id).all()
     sam = library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[1].id}&to={versions[2].id}").json()
     assert sam["hunks"][0]["section"] == "2. Scope" and sam["hunks"][0]["can_revert"] is False and sam["hunks"][0]["current_id"] is None
-    assert "changed again" in sam["why_not"] and len(latest) == 4             # the edit went into the version the take back made
+    assert "changed again" in sam["why_not"] and [v.version_number for v in latest] == ["1.0", "1.1", "1.2", "1.3", "1.4"]   # each its own version
 
 
 def test_one_change_is_taken_back_as_a_new_version_and_a_published_document_goes_back_to_review(library):
@@ -373,20 +373,25 @@ def test_a_restore_and_a_take_back_are_major_or_minor_by_the_rule_and_keep_the_p
                                              rollback_data=version_routes.VersionRollback(rollback_reason="Scope was not agreed"))
     assert (out["new_version"]["version_number"], out["new_version"]["change_type"], out["new_version"]["change_reason"]) == ("1.3", "minor", "Scope was not agreed")
 
-    # a section is added (major): not published yet, so the pending 1.3 becomes 2.0 (one version up, now major)
+    # a section is added (a major version), then taken back: removing a section is major too, with the person's why
     _edit(db, 10, db.get(m.GovernanceDocument, 10).content + "\n## 5. Exceptions\n\nNo exception is allowed.\n", user_id=1, reason="Exceptions", change_type="major")
-    assert db.get(m.GovernanceDocument, 10).current_version == "2.0" and number("2.0").id == out["new_version"]["id"]
-    red = library.lib.get(f"/governance/documents/10/change-chain/redline?from={versions[2].id}").json()
+    assert db.get(m.GovernanceDocument, 10).current_version == "2.0" and number("1.3").id == out["new_version"]["id"]     # the restore stays 1.3
+    red = library.lib.get(f"/governance/documents/10/change-chain/redline?from={number('1.3').id}").json()
     added = next(h for h in red["hunks"] if h["status"] == "inserted")
-    back = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": versions[2].id, "hunks": [added["id"]],
+    back = library.lib.post("/governance/documents/10/change-chain/revert", json={"from_version_id": number("1.3").id, "hunks": [added["id"]],
                                                                                   "hash": red["hash"], "reason": "Exceptions are in their own policy"})
-    assert back.status_code == 200 and back.json()["version"] == "2.0"     # the take back goes into the same version
-    row = number("2.0")
-    assert row.change_type == "major" and row.change_reason.startswith("Exceptions are in their own policy")
-    assert row.change_summary == "Took back 1 change made since version 1.2: Exceptions are in their own policy"
-    items = library.chain()["versions"][-1]["items"]
-    assert any(i["origin"] == "revert" or i["reason"] == "Exceptions are in their own policy" for i in items) or not any(
-        i["status"] == "inserted" for i in items)                           # the section is gone; the version still says why
+    assert back.status_code == 200 and back.json()["version"] == "3.0"
+    row = number("3.0")
+    assert (row.change_type, row.change_reason) == ("major", "Exceptions are in their own policy")
+    assert row.change_summary == "Took back 1 change made since version 1.3: Exceptions are in their own policy"
+    assert library.chain()["versions"][-1]["origin_label"] == "Taken back"                  # the chain still says how it was made
+    assert "No exception is allowed." in number("2.0").content                              # 2.0 keeps the section it added
+
+    # restoring 2.0 undoes the take back, a major version: major, numbered as one
+    out = version_routes.rollback_to_version(document_id=10, version_id=number("2.0").id, db=db, current_user=me)
+    assert (out["new_version"]["version_number"], out["new_version"]["change_type"]) == ("4.0", "major")
+    assert [v.version_number for v in db.query(m.GovernanceDocumentVersion).filter_by(document_id=10).order_by(m.GovernanceDocumentVersion.id)] == [
+        "1.0", "1.1", "1.2", "1.3", "2.0", "3.0", "4.0"]                                    # the restore and the take back kept every version
 
 
 def test_a_sign_off_record_is_not_taken_back_and_a_file_that_cannot_be_read_cannot_be_taken_back_into(library):
@@ -517,10 +522,12 @@ def test_a_change_to_a_word_original_that_cannot_be_written_into_it_is_taken_bac
 
     monkeypatch.setattr(docx_io, "export_in_place", refuse)
     out = world.lib.post("/governance/documents/20/change-chain/revert", json={"from_version_id": chain["versions"][0]["id"], "hunks": [red["hunks"][0]["id"]]})
-    assert out.status_code == 200 and out.json()["version"] == "1.1" and out.json()["status"] == "draft"      # not published: still 1.1
+    assert out.status_code == 200 and out.json()["version"] == "1.2" and out.json()["status"] == "draft"      # a draft too: its own version
     assert len(out.json()["notes"]) == 1 and "clean Word document" in out.json()["notes"][0]
     doc = db.get(m.GovernanceDocument, 20)
     assert "Review it every year." in "\n".join(p.text for p in Document(doc.file_path).paragraphs)
+    edited = db.query(m.GovernanceDocumentVersion).filter_by(document_id=20, version_number="1.1").one()      # the edit stays as 1.1
+    assert edited.status == "superseded" and "every six months" in "\n".join(p.text for p in Document(edited.file_path).paragraphs)
 
 
 def test_a_change_is_written_into_a_word_file_with_tracked_changes_as_into_a_copy_with_them_accepted_and_no_copy_is_left_behind(library, lib):
@@ -557,7 +564,7 @@ def test_an_uploaded_pdf_original_is_kept_and_a_change_to_its_word_copy_is_taken
     red = world.lib.get(f"/governance/documents/21/change-chain/redline?from={uploaded['id']}").json()
     assert red["can_revert"] is True and "three years" in red["hunks"][0]["after_text"]
     out = world.lib.post("/governance/documents/21/change-chain/revert", json={"from_version_id": uploaded["id"], "hunks": [red["hunks"][0]["id"]], "hash": red["hash"]})
-    assert out.status_code == 200 and out.json()["version"] == "1.1"          # not published: the take back goes into 1.1
+    assert out.status_code == 200 and out.json()["version"] == "1.2"          # its own version: the Word copy of 1.1 stays as it was
     doc = db.get(m.GovernanceDocument, 21)
     assert doc.file_type == "docx" and doc.file_path.endswith(".docx")
     text = "\n".join(p.text for p in Document(doc.file_path).paragraphs)

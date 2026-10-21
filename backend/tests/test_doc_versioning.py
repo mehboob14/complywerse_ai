@@ -146,9 +146,11 @@ def test_a_file_uploaded_to_the_library_starts_at_its_own_version_and_a_new_file
     with open(same, "rb") as f:
         library.http.post(f"/documents/{doc.id}/upload-file", files={"file": ("manual5b.docx", f.read(), DOCX)})
     library.db.refresh(doc)
-    # not published yet: the new file goes into the version already on its way (5.0), not 5.1
-    assert doc.current_version == "5.0" and _versions(library.db, doc.id)[-1] == ("5.0", "major", "current")
-    assert [v for v, _, _ in _versions(library.db, doc.id)] == ["4.0", "5.0"]
+    # its own version, the one before kept with its file (a draft too: every new file makes its own version)
+    assert doc.current_version == "5.1" and _versions(library.db, doc.id) == [("4.0", "major", "superseded"), ("5.0", "major", "superseded"),
+                                                                             ("5.1", "minor", "current")]
+    five = library.db.query(m.GovernanceDocumentVersion).filter_by(document_id=doc.id, version_number="5.0").one()
+    assert five.file_name == "manual5.docx" and "every year" in "\n".join(p.text for p in Document(five.file_path).paragraphs)
 
 
 def test_a_new_file_for_a_published_document_sends_it_back_to_review_in_a_new_round(library):
@@ -176,14 +178,13 @@ def test_editing_a_documents_text_in_the_library_is_numbered_by_the_change(libra
     library.db.commit()
     library.http.put("/documents/7", json={"content": RULES.replace("every year", "every twelve months"), "change_reason": "wording"})
     library.http.put("/documents/7", json={"content": RULES + "\n## Exceptions\n\nThe CISO may grant one.\n"})
-    # never published: both edits go into one version up from 1.4 - a minor step, which the major change makes 2.0
-    assert _versions(library.db, 7) == [("1.4", "baseline", "superseded"), ("2.0", "major", "current")]
+    assert _versions(library.db, 7) == [("1.4", "baseline", "superseded"), ("1.5", "minor", "superseded"), ("2.0", "major", "current")]
     assert library.db.get(m.GovernanceDocument, 7).current_version == "2.0"
 
 
-def test_until_it_is_published_every_change_goes_into_one_version_up_and_after_it_the_next_change_starts_the_next(library):
-    """However many changes are made, a document goes up one version (minor, or major once a change is major) until it is
-    published; the first change after a publication makes the next number (the user's rule, 2026-10-17)."""
+def test_every_change_makes_its_own_version_from_the_current_one_and_the_earlier_ones_stay_as_they_were(library):
+    """Before and after a publication, each change is the next number after the document's current version (+0.1 minor, the
+    next whole number major), and the version before keeps its number, text and why (the user, 2026-10-21: "1.2 gone??")."""
     library.db.add(m.GovernanceDocument(id=9, tenant_id=1, title="Access Policy", doc_type="policy", status="draft", current_version="1.0",
                                         content=RULES, owner_id=1))
     library.db.commit()
@@ -196,21 +197,16 @@ def test_until_it_is_published_every_change_goes_into_one_version_up_and_after_i
     t1 = RULES.replace("every year", "every month")
     t2 = t1.replace("system owner", "data owner")
     t3 = t2 + "\n## Exceptions\n\nThe CISO may grant one.\n"
-    t4 = t3.replace("may grant one", "may grant one in writing")
-    assert edit(t1, "monthly") == "1.1"
-    assert edit(t2, "owner") == "1.1"                                          # a second change: still 1.1
-    assert edit(t3, "exceptions") == "2.0"                                     # a major change: the one step becomes 2.0
-    assert edit(t4, "in writing") == "2.0"                                     # and never back to a minor step
-    assert [v for v, _, _ in _versions(library.db, 9)] == ["1.0", "2.0"]
-    row = library.db.query(m.GovernanceDocumentVersion).filter_by(document_id=9, version_number="2.0").one()
-    assert row.content == t4 and row.change_reason.split(" · ") == ["in writing", "exceptions", "owner", "monthly"]   # every why, newest first
+    assert [edit(t1, "monthly"), edit(t2, "owner"), edit(t3, "exceptions")] == ["1.1", "1.2", "2.0"]
+    rows = library.db.query(m.GovernanceDocumentVersion).filter_by(document_id=9).order_by(m.GovernanceDocumentVersion.id).all()
+    assert [(r.version_number, r.status, r.change_reason) for r in rows] == [("1.0", "superseded", None), ("1.1", "superseded", "monthly"),
+                                                                             ("1.2", "superseded", "owner"), ("2.0", "current", "exceptions")]
+    assert [r.content for r in rows] == [RULES, t1, t2, t3]                    # each keeps its own text
 
     doc = library.db.get(m.GovernanceDocument, 9)
     doc.status = "published"                                                   # 2.0 is in force
     library.db.commit()
-    t5 = t4.replace("every month", "every week")
-    assert edit(t5, "weekly") == "2.1"                                         # the first change after it makes the next number
-    assert edit(t5.replace("every week", "every fortnight"), "fortnightly") == "2.1"
-    assert edit(t5 + "\n## Records\n\nReviews are kept for five years.\n", "records") == "3.0"     # one step up from 2.0, now major
-    assert [v for v, _, _ in _versions(library.db, 9)] == ["1.0", "2.0", "3.0"]
+    t4 = t3.replace("every month", "every week")
+    assert [edit(t4, "weekly"), edit(t4 + "\n## Records\n\nReviews are kept for five years.\n", "records")] == ["2.1", "3.0"]
+    assert [v for v, _, _ in _versions(library.db, 9)] == ["1.0", "1.1", "1.2", "2.0", "2.1", "3.0"]
     assert library.db.get(m.GovernanceDocument, 9).last_published_version == "2.0"

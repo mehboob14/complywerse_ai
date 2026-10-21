@@ -70,6 +70,16 @@ def doc(world, did=5):
     return world.db.get(m.GovernanceDocument, did)
 
 
+def pending_change(world, sid, markdown="Access is reviewed every month."):
+    """A Comply Agent answer in studio session ``sid`` with one change waiting (its block 3 replaced): the message's id."""
+    s = world.db.get(m.StudioSession, sid)
+    msg = m.StudioMessage(session_id=sid, role="assistant", kind="chat", content="Done.", status="done", base_revision=s.revision_no,
+                          proposal={"ops": [{"id": "c1", "kind": "replace", "start": "B3", "end": "B3", "markdown": markdown, "status": "pending"}]})
+    world.db.add(msg)
+    world.db.commit()
+    return msg.id
+
+
 # every route that changes document 5 or its sign-off, with a body it would accept
 CHANGES = [
     ("put", "/governance/documents/5", {"json": {"title": "Changed"}}),
@@ -170,8 +180,9 @@ def test_saving_a_studio_draft_into_the_library_is_checked_again_when_it_is_save
     world.db.commit()
     r = world.http.post(f"/governance/studio/sessions/{sid}/save-to-document", json={})
     assert r.status_code == 403 and r.json()["detail"] == permissions.EDIT_REFUSED
-    s = world.db.get(m.StudioSession, sid)
-    assert service.version_after_accept(world.db, s, world.db.get(m.GRCUser, OWNER), 1) == {"saved": False, "why": permissions.EDIT_REFUSED}
+    mid = pending_change(world, sid)                                           # accepting Comply Agent's change stays in her draft
+    accepted = world.http.post(f"/governance/studio/sessions/{sid}/messages/{mid}/accept", json={})
+    assert accepted.status_code == 200 and accepted.json()["library_version"] is None and "every month" in accepted.json()["content"]
     assert doc(world).content == TEXT and world.db.query(m.GovernanceDocumentVersion).count() == 0
 
 

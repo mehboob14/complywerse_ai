@@ -121,7 +121,21 @@ def session_view(db, s, *, content: bool = True, user=None) -> Dict[str, Any]:
            "created_at": s.created_at.isoformat() if s.created_at else None, "updated_at": s.updated_at.isoformat() if s.updated_at else None}
     if content:
         out["content"] = s.content
+        out["original_version"] = _original_version(db, s)
     return out
+
+
+def _original_version(db, s) -> Optional[str]:
+    """For an uploaded file not in the library yet and changed here (an upload session from before uploads went into the library at
+    once): the version the file states, which Move to the library keeps it as; what the studio made of it becomes the next one,
+    minor or major as the person chooses. None when the move makes one version (``move_to_library``'s ``two``)."""
+    upload = _uploaded_original(s) if s.document_id is None else None
+    if upload is None or _norm_doc(s.content) == _norm_doc(_first_revision_text(db, s)):
+        return None
+    from .. import doc_version
+
+    # ponytail: reads the uploaded file on each read of such a session (they are rare and older); cache by path if that changes
+    return doc_version.detect(*upload)[0]
 
 
 def message_view(m) -> Dict[str, Any]:
@@ -987,9 +1001,11 @@ def _keep_original(upload: Tuple[str, str], folder: str) -> Dict[str, Any]:
 def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optional[str] = None, classification: Optional[str] = None,
                     parent_document_id: Optional[int] = None, framework_ids: Optional[List[int]] = None, description: Optional[str] = None,
                     owner_id: Optional[int] = None, department_id: Optional[int] = None, review_cycle_months: Optional[int] = None,
-                    effective_date: Optional[datetime] = None, next_review_date: Optional[datetime] = None):
+                    effective_date: Optional[datetime] = None, next_review_date: Optional[datetime] = None, change_type: Optional[str] = None):
     """Make the session's document a library document (draft, version 1.0). The session then edits that document. The classification
-    and review cycle not given are the session's setup (else internal, every 12 months)."""
+    and review cycle not given are the session's setup (else internal, every 12 months). An uploaded file changed here makes two
+    versions, the file and then what the studio made of it: ``change_type`` is the person's minor or major for the second one
+    (without it Comply Agent decides); anything else moves as one version and ``change_type`` changes nothing."""
     from ..doc_details import schedule
     from ....models import GovernanceDocument
     from ..action_logger import log_governance_action
@@ -1034,7 +1050,7 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
     from .. import doc_version
 
     start, found_in = doc_version.detect(*upload) if upload else ("1.0", "default")
-    decision = doc_version.decide(first_text or "", s.content, title=name) if two else None
+    decision = _decision(first_text or "", s.content, user, change_type, title=name) if two else None
     number = doc_version.next_version(start, decision["change"]) if decision else start
     doc = GovernanceDocument(tenant_id=tenant.id, title=name, description=description, content=None if word else s.content,
                              doc_type=doc_type or s.doc_type or "policy", classification=classification, parent_document_id=parent_document_id,
@@ -1081,18 +1097,14 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
     return doc
 
 
-def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str],
-                       earlier=None) -> None:
-    """Keep on a version what it changed and where each change came from (see ``change_chain``). The save never fails over it.
-    ``earlier``: the origins of what the version already held (a pending version collecting another save; ``old_text`` is then
-    the version before it - ``change_chain.carried_origins``), whose changes keep their authors."""
+def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str]) -> None:
+    """Keep on a version what it changed and where each change came from (see ``change_chain``). The save never fails over it."""
     from .. import change_chain as C
 
     try:
         origins = session_origins(db, s, since_revision=int((s.settings or {}).get("saved_revision") or 0))
         for o in origins:
             o["version"] = version_row.version_number
-        origins = list(earlier or []) + origins
         version_row.change_set = C.build_change_set(old_text or "", new_text or "", origins, default_kind="manual", by=user_name(user), by_id=user.id,
                                                     at=_now().isoformat(), extra={"session_id": s.id, "stage_before": stage_before, "stage_after": stage_after})
     except Exception:       # noqa: BLE001 - the chain is derived from the two texts when this is missing
@@ -1100,21 +1112,14 @@ def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *
     s.settings = {**(s.settings or {}), "saved_revision": s.revision_no}
 
 
-def _carried(db, pending, before, held_text: Optional[str]) -> list:
-    """The origins of what a pending version already holds (its stored change set, else its changes against the version before
-    it, credited to whoever made it), so a save into it keeps every change's author."""
-    from ....models import GRCUser
-    from .. import change_chain as C
+def _decision(old_text: str, new_text: str, user, change_type: Optional[str], *, title: str) -> Dict[str, str]:
+    """Major or minor for a version saved to the library: the person's own choice when they made one (``change_type``), else
+    Comply Agent's decision (by the rule when it cannot answer)."""
+    from .. import doc_version
 
-    try:
-        maker = db.get(GRCUser, pending.created_by) if pending.created_by else None
-        return C.carried_origins(C.version_text(before) if before is not None else "", held_text,
-                                 pending.change_set if isinstance(pending.change_set, dict) else None,
-                                 by=user_name(maker) if maker is not None else "", by_id=pending.created_by,
-                                 at=pending.created_at.isoformat() if pending.created_at else None)
-    except Exception:       # noqa: BLE001 - the version is saved without them
-        logger.warning("could not read who made the changes version %s holds", getattr(pending, "version_number", "?"), exc_info=True)
-        return []
+    if change_type in ("major", "minor"):
+        return doc_version.chosen(change_type, user_name(user))
+    return doc_version.decide(old_text, new_text, title=title)
 
 
 def _version_row(db, doc, number: str):
@@ -1124,8 +1129,9 @@ def _version_row(db, doc, number: str):
             .order_by(GovernanceDocumentVersion.id.desc()).first())
 
 
-def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force: bool = False):
-    """Save the session's document as the next version of its library document."""
+def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force: bool = False, change_type: Optional[str] = None):
+    """Save the session's document as the next version of its library document: a minor or a major change as the person chose
+    (``change_type``; without it Comply Agent decides). The versions before it stay as they were."""
     from ....models import GovernanceDocument
     from ..routers.documents import _snapshot_content_version
     from ..routers.versions import create_audit_log
@@ -1139,20 +1145,15 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
 
     ensure_not_archived(doc)                          # archived since the draft was opened: restored first
     if (s.settings or {}).get("file_master"):
-        return _save_file_version(db, s, user, doc, change_reason=change_reason, force=force)
+        return _save_file_version(db, s, user, doc, change_reason=change_reason, force=force, change_type=change_type)
     if _norm_doc(s.content) == _norm_doc(doc.content or ""):
         raise StudioError(f"Nothing has changed since the library version: version {doc.current_version or '1.0'} already holds every change.")
     if not force and (doc.content or "").strip() and _norm_doc(doc.content) != _norm_doc(s.base_content):
         raise Conflict("The document was changed in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
-    from ..doc_version import decide, summary_of
+    from ..doc_version import summary_of
 
     old_content, old_title, old_version, old_status = doc.content, doc.title, doc.current_version or "1.0", doc.status
-    from .. import doc_version
-
-    pending = doc_version.pending_row(db, doc)            # not published yet: this save goes into that one version
-    before = doc_version.before_pending(db, doc, pending) if pending is not None else None
-    earlier = _carried(db, pending, before, old_content) if pending is not None else None
-    decision = decide(old_content or "", s.content, title=doc.title)
+    decision = _decision(old_content or "", s.content, user, change_type, title=doc.title)
     doc.content, doc.updated_at = s.content, _now()
     new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
                                             change_type=decision["change"], change_reason=change_reason, user_id=user.id,
@@ -1166,60 +1167,11 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     row = _version_row(db, doc, new_version)
     if row is not None:
-        from .. import change_chain as _C
-
-        base_text = _C.version_text(before) if pending is not None and before is not None else None
-        _record_change_set(db, s, row, base_text if base_text is not None else (old_content or ""), s.content, user,
-                           stage_before=old_status, stage_after=doc.status, earlier=earlier)
+        _record_change_set(db, s, row, old_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
     s.settings = {k: v for k, v in (s.settings or {}).items() if k != "version_read"}       # it holds the newest version now
     db.commit()
     return doc
-
-
-def version_after_accept(db, s, user, accepted: int) -> Optional[Dict[str, Any]]:
-    """Accepted changes to a draft in the library become its next version at once: +1.0 for a major change, +0.1 for a minor one,
-    as Comply Agent judges it; the version before stays in the history with its file. ``None`` for a document not in the library.
-    A document in review or in force is not saved here (the user's decision, 2026-10-16): its accepted changes collect in the
-    studio until Save to library, which starts the review again. Never fails the accept: when no version can be made it says why,
-    and Save to library makes it later."""
-    from ....models import GovernanceDocument
-
-    if not s.document_id or not accepted:
-        return None
-    doc = db.get(GovernanceDocument, s.document_id)
-    if doc is not None and doc.status == "archived":
-        from ..permissions import ARCHIVED_LOCKED
-
-        return {"saved": False, "why": f"{ARCHIVED_LOCKED} This change stays in the Comply AI Studio until then."}
-    if doc is not None and (doc.status or "draft") != "draft":
-        state = {"pending_review": "in review", "pending_approval": "waiting for approval"}.get(doc.status, doc.status.replace("_", " "))
-        return {"saved": False, "why": f"The document is {state}, so this change stays in the studio. Save to library makes the next "
-                                       "version when you are ready; it starts the review again."}
-    from .. import doc_version
-
-    in_place = doc is not None and doc_version.pending_row(db, doc) is not None      # not published yet: the same version
-    reason = f"Accepted {accepted} change{'' if accepted == 1 else 's'} from Comply Agent"
-    try:        # the person's request, as the change set of this version keeps it, is the version's why
-        since = int((s.settings or {}).get("saved_revision") or 0)
-        ask = next((" ".join(o["request"].split()) for o in session_origins(db, s, since_revision=since) if (o.get("request") or "").strip()), "")
-    except Exception:       # noqa: BLE001 - the version is made without it
-        logger.warning("studio session %s: the request of the accepted changes could not be read", s.id, exc_info=True)
-        ask = ""
-    if ask:
-        reason += ": " + (ask if len(ask) <= 150 else ask[:149].rstrip() + "…")
-    try:
-        doc = save_to_document(db, s, user, change_reason=reason)
-    except StudioError as exc:
-        db.rollback()
-        return {"saved": False, "why": str(exc)}
-    except Exception:       # noqa: BLE001 - the accepted text is in the studio; Save to library tries again
-        db.rollback()
-        logger.warning("studio session %s: the accepted changes could not be saved as a new library version", s.id, exc_info=True)
-        return {"saved": False, "why": "The changes are in the document, but its new library version could not be made. Use Save to library to try again."}
-    row = _version_row(db, doc, doc.current_version)
-    return {"saved": True, "version": doc.current_version, "change": row.change_type if row is not None else None, "status": doc.status,
-            "in_place": in_place}
 
 
 def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary: str, reason: Optional[str], done: str, ext: str = "docx",
@@ -1244,21 +1196,6 @@ def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary:
         f.write(data)
     old_version, old_status = doc.current_version or "1.0", doc.status
     versions = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == doc.id)
-    from .. import doc_version
-
-    number, pending = doc_version.target(db, doc, change_type) if versions.count() else (None, None)
-    if pending is not None:              # not published yet: the new file goes into the one pending version
-        doc_version.update_pending(pending, number, change_type, title=doc.title, summary=summary, reason=reason,
-                                   files={"file_name": new_name, "file_path": new_path, "file_size": len(data), "file_type": ext})
-        db.flush()
-        doc.file_name, doc.file_path, doc.file_size, doc.file_type = new_name, new_path, len(data), ext
-        doc.current_version, doc.updated_at = number, _now()
-        doc_lifecycle.changed_after_review(db, doc, old_status, user.id, f"{done} (version {number}), so it needs approving again")
-        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=user.id, action=audit_action,
-                         action_details=f"{done}; version {number} (not published yet) now holds it" + (f". {reason}" if reason else "")
-                         + doc_lifecycle.outcome(old_status, doc.status, doc),
-                         field_changed="current_version", old_value=old_version, new_value=number)
-        return pending, number, old_status
     if versions.count() == 0:
         db.add(GovernanceDocumentVersion(document_id=doc.id, version_number=old_version, change_type="baseline", title=doc.title, file_name=old_name,
                                          file_path=old_path, file_size=old_size, file_type=old_type, change_summary="Original document, before it was changed",
@@ -1325,28 +1262,22 @@ def reanchor(db, doc, user_id: Optional[int]) -> None:
         logger.warning("could not anchor statements in the new file of document %s", doc.id, exc_info=True)
 
 
-def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force: bool):
-    """Save a document that is its file (an uploaded Word or PDF) as the next version: a new file. A Word file is the original with
-    the changes written into it; a PDF cannot be edited, so its new version is a Word copy built from the text and the PDF stays as
-    the earlier version. Statements are anchored in the new file again (organisations that have them tied to the file)."""
+def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force: bool, change_type: Optional[str] = None):
+    """Save a document that is its file (an uploaded Word or PDF) as the next version: a new file, minor or major as the person
+    chose (``change_type``; without it Comply Agent decides). A Word file is the original with the changes written into it; a PDF
+    cannot be edited, so its new version is a Word copy built from the text and the PDF stays as the earlier version. Statements are
+    anchored in the new file again (organisations that have them tied to the file)."""
     if _norm_doc(s.content) == _norm_doc(s.base_content) and not (s.settings or {}).get("file_changed"):     # (a tidy changes the file only)
         raise StudioError(f"Nothing has changed since the library version: version {doc.current_version or '1.0'} already holds every change.")
     if not force and doc.file_path != (s.settings or {}).get("library_file"):
         raise Conflict("The file of this document was replaced in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
-    from ..doc_version import decide, summary_of
+    from ..doc_version import summary_of
 
-    decision = decide(s.base_content or "", s.content, title=doc.title)
-    from .. import change_chain as _C, doc_version
-
-    pending = doc_version.pending_row(db, doc)            # not published yet: this save goes into that one version
-    before = doc_version.before_pending(db, doc, pending) if pending is not None else None
-    earlier = _carried(db, pending, before, _C.version_text(pending)) if pending is not None else None
-    base_text = (_C.version_text(before) if before is not None else None) if pending is not None else None
+    decision = _decision(s.base_content or "", s.content, user, change_type, title=doc.title)
     data, _notes = export_file(db, s, "docx", export_settings(db, s))
     row, new_version, old_status = write_file_version(db, doc, user, data, change_type=decision["change"], reason=change_reason, done="Edited in the Comply AI Studio",
                                                       summary=summary_of("Edited in the Comply AI Studio" + (": " + change_reason if change_reason else ""), decision))
-    _record_change_set(db, s, row, base_text if base_text is not None else (s.base_content or ""), s.content, user,
-                       stage_before=old_status, stage_after=doc.status, earlier=earlier)
+    _record_change_set(db, s, row, s.base_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
     s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
     s.settings = {**{k: v for k, v in (s.settings or {}).items() if k not in ("file_changed", "version_read")}, "library_file": doc.file_path}
     db.commit()

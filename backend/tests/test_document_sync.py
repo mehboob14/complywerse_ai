@@ -149,6 +149,13 @@ def test_a_draft_document_stays_a_draft_and_an_unmatched_statement_cannot_be_wri
         info = doc_sync.state(db, doc)
         assert [p["code"] for p in info["pending"]] == ["PS-0005-002"] and [b["code"] for b in info["not_found"]] == ["PS-0005-009"]
         assert doc_sync.apply(db, doc, world.user)["status"] == "draft"
+        first_file = doc.file_path
+        statement(db, "PS-0005-002").statement_text = "Passwords must be changed every 30 days."      # written back again, still a draft
+        db.commit()
+        assert doc_sync.apply(db, doc, world.user)["version"] == "1.2"
+        versions = db.query(m.GovernanceDocumentVersion).filter_by(document_id=5).order_by(m.GovernanceDocumentVersion.id).all()
+        assert [(v.version_number, v.status) for v in versions] == [("1.0", "superseded"), ("1.1", "superseded"), ("1.2", "current")]
+        assert versions[1].file_path == first_file and "every 60 days" in " ".join(texts(first_file))       # 1.1 keeps its own file
 
 
 def test_a_pdf_gets_a_word_copy_and_stays_as_the_earlier_version(world, monkeypatch):

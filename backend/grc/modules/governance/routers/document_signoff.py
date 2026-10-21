@@ -111,9 +111,8 @@ def _round(doc: GovernanceDocument) -> Optional[str]:
 
 def check_version(db: Session, doc: GovernanceDocument, shown: Optional[str], round_at: Optional[str] = None) -> None:
     """A decision is about the version the person was shown: refused when the document changed since (older callers send none).
-    Versions that only stamped someone's sign-off into its table are not a change to what was read. A change before the
-    document is published keeps its number (one pending version), but it starts a new round: a page from an earlier round is
-    refused too."""
+    Versions that only stamped someone's sign-off into its table are not a change to what was read. A change also starts a new
+    round (``signoff_round_at``): a page from an earlier round is refused too."""
     if round_at and _round(doc) and round_at != _round(doc):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT,
                             detail="The document changed since you opened it. Reload it and read it again.")
