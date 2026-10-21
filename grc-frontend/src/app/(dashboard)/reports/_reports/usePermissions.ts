@@ -5,8 +5,7 @@
 // `module:submodule:action` grammar, same wildcards, same admin bypass) so a
 // dataset appears in Reports if, and only if, its module would appear in the nav.
 //
-// (The Sidebar keeps its own copy of this logic inline; it is a large,
-// frequently-touched component, so it isn't refactored onto this hook here —
+// (The Sidebar's copy of these rules is in components/layout/navAccess.ts —
 // if you change the rules, change both.)
 
 import { useEffect, useState } from 'react';

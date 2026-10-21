@@ -24,6 +24,8 @@ import {
 import { listSpecs } from '../_reports/savedReports';
 import { datasetByKey } from '../_reports/datasets';
 import { CHART_TYPES } from '../_reports/PivotChart';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
 // Literal class strings: Tailwind only generates classes it can find verbatim
 // in source, so a template like `lg:col-span-${n}` would silently do nothing.
@@ -40,7 +42,12 @@ const RENDER_OPTIONS: { value: TileRender; label: string }[] = [
   ...CHART_TYPES.map((c) => ({ value: c.kind as TileRender, label: c.label })),
 ];
 
-export default function DashboardsPage() {
+// opened without Reports > Dashboards: the no-access page
+export default function GuardedDashboardsPage() {
+  return <PermissionGuard required={navPermissions('/reports/dashboards')}><DashboardsPage /></PermissionGuard>;
+}
+
+function DashboardsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const qc = useQueryClient();

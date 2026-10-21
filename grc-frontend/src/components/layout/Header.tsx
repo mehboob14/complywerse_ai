@@ -11,6 +11,7 @@ import DocumentsTabs, { inDocumentsArea } from '@/components/governance/Document
 import { usePermissions } from '@/hooks/usePermissions';
 import { parseUtc } from '@/lib/serverTime';
 import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
+import { navPermissions } from './navAccess';
 
 const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge', changes: 'To revise' };
 // a dropdown item that opens what it is about (a link: Tab, Enter)
@@ -150,7 +151,12 @@ export default function Header() {
     enabled: !!currentUser,
   });
   const docRequestItems = docRequests?.enabled ? docRequests.items ?? [] : [];
-  const canSeeGovernance = usePermissions().hasPermission('governance:policies:*');
+  const perms = usePermissions();
+  const canSeeGovernance = perms.hasPermission('governance:policies:*');
+  // the top bar's own links, each shown to the people its page lets in (as the sidebar's entries are)
+  const canAskComplyChat = perms.hasAnyPermission(navPermissions('/complychat'));
+  const canSeeUsers = perms.hasAnyPermission(navPermissions('/users'));
+  const canSeeAssessments = perms.hasPermission('compliance:assessments:*');
   const pendingApprovalCount = pendingApprovalItems.length + docRequestItems.length;
 
   // shown as read at once (row and badge), then told to the server; the refetch corrects it if that failed
@@ -261,21 +267,23 @@ export default function Header() {
       <div className="ml-3 flex items-center gap-2.5">
         {/* ComplyChat — global AI assistant, as a wide input (replaces the
             old search bar). Type a question and hit Enter to open the chat. */}
-        <form onSubmit={submitChat} className={`relative hidden ${inDocumentsArea(pathname) ? 'lg:block' : 'md:block'}`}>
-          <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
-          <input
-            value={chatQ}
-            onChange={(e) => setChatQ(e.target.value)}
-            placeholder="Ask ComplyChat anything…"
-            aria-label="Ask ComplyChat"
-            className="h-8 w-64 rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30"
-          />
-          <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">
-            <ChevronRight size={14} />
-          </button>
-        </form>
+        {canAskComplyChat && (
+          <form onSubmit={submitChat} className={`relative hidden ${inDocumentsArea(pathname) ? 'lg:block' : 'md:block'}`}>
+            <Sparkles size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-base)]" />
+            <input
+              value={chatQ}
+              onChange={(e) => setChatQ(e.target.value)}
+              placeholder="Ask ComplyChat anything…"
+              aria-label="Ask ComplyChat"
+              className="h-8 w-64 rounded-md border border-[var(--color-base)]/30 bg-[var(--color-base)]/5 pl-7 pr-8 text-xs text-[var(--color-text)] placeholder:text-[var(--color-muted)] transition-colors focus:w-80 focus:border-[var(--color-base)]/60 focus:bg-white focus:outline-none focus:ring-1 focus:ring-[var(--color-base)]/30"
+            />
+            <button type="submit" aria-label="Send" className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded p-1 text-[var(--color-base)] hover:bg-[var(--color-base)]/10">
+              <ChevronRight size={14} />
+            </button>
+          </form>
+        )}
         {/* on a narrower screen the Documents tabs need that room: ComplyChat is an icon there */}
-        {inDocumentsArea(pathname) && (
+        {canAskComplyChat && inDocumentsArea(pathname) && (
           <Link href="/complychat" aria-label="Ask ComplyChat" title="Ask ComplyChat"
             className="hidden rounded-md p-1.5 text-[var(--color-base)] transition-colors hover:bg-[var(--color-base)]/10 md:inline-flex lg:hidden">
             <Sparkles size={18} strokeWidth={1.75} />
@@ -363,17 +371,21 @@ export default function Header() {
                   ))
                 )}
               </div>
-              <div className="flex border-t border-gray-100 text-center text-xs font-medium text-blue-600">
-                {/* without governance access each document above still opens; the page itself is theirs only with access */}
-                {canSeeGovernance && (
-                  <Link href="/governance/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
-                    My Approvals →
-                  </Link>
-                )}
-                <Link href="/compliance/assessments/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
-                  Assessment approvals →
-                </Link>
-              </div>
+              {/* without governance or assessment access each item above still opens; the pages are theirs only with access */}
+              {(canSeeGovernance || canSeeAssessments) && (
+                <div className="flex border-t border-gray-100 text-center text-xs font-medium text-blue-600">
+                  {canSeeGovernance && (
+                    <Link href="/governance/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                      My Approvals →
+                    </Link>
+                  )}
+                  {canSeeAssessments && (
+                    <Link href="/compliance/assessments/approvals" onClick={() => setApprovalsOpen(false)} className="flex-1 px-4 py-2.5 hover:bg-gray-50">
+                      Assessment approvals →
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -490,17 +502,19 @@ export default function Header() {
               </div>
 
               <div className="py-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsUserMenuOpen(false);
-                    router.push('/users');
-                  }}
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
-                >
-                  <Users size={16} className="text-[var(--color-text-muted)]" />
-                  Users
-                </button>
+                {canSeeUsers && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsUserMenuOpen(false);
+                      router.push('/users');
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-[var(--color-text)] transition-colors hover:bg-[var(--color-subtle)]"
+                  >
+                    <Users size={16} className="text-[var(--color-text-muted)]" />
+                    Users
+                  </button>
+                )}
 
                 {isAdmin && (
                   <button
