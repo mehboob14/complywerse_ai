@@ -25,8 +25,10 @@ PDF_CELL_CAP = 600
 def _header_lines(c: Dict[str, Any], by: str) -> List[Tuple[str, str]]:
     d = c["document"]
     s = c["summary"]
+    # a filtered export says so, and with what, before its counts (which are of what it holds)
+    filtered = [("Filtered", "; ".join(f"{k}: {v}" for k, v in c["filters"]))] if c.get("filters") else []
     return [("Document", f"{d.get('code') or ''} {d['title']}".strip()), ("Current version", f"{d['version'] or ''} ({d['stage_label']})"),
-            ("Type", d.get("doc_type") or ""), ("Owner", d.get("owner") or ""), ("Approved by", d.get("approved_by") or ""),
+            ("Type", d.get("doc_type") or ""), ("Owner", d.get("owner") or ""), ("Approved by", d.get("approved_by") or ""), *filtered,
             ("Versions", str(s["versions"])), ("Changes recorded", str(s["changes"])), ("People who changed it", str(s["people"])),
             ("Words added / removed", f"+{s['words_added']} / -{s['words_removed']}"), ("Sources relied on", str(s["sources"])),
             ("Produced by", by), ("Produced on", datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"))]
@@ -154,7 +156,7 @@ def pdf_bytes(c: Dict[str, Any], by: str) -> bytes:
 def build(c: Dict[str, Any], fmt: str, by: str) -> Tuple[bytes, str, str]:
     """``(file bytes, media type, file name)`` for ``fmt`` (xlsx | pdf | csv)."""
     stem = re.sub(r"[^\w\- ]+", "", c["document"]["title"], flags=re.UNICODE).strip().replace(" ", "-")[:70] or "document"
-    stem = f"{stem}-change-log"
+    stem = f"{stem}-change-log{'-filtered' if c.get('filters') else ''}"
     if fmt == "xlsx":
         return xlsx_bytes(c, by), XLSX, f"{stem}.xlsx"
     if fmt == "pdf":
