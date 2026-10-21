@@ -12,6 +12,12 @@ from ..schemas import EmailConfigCreate, EmailConfigUpdate, EmailConfigResponse
 
 router = APIRouter(prefix="/notifications", tags=["Workflow Notifications"])
 
+# Email configuration holds SMTP credentials and the test endpoint USES them to
+# send mail, so these are administrator-only (or a role holding the workflow
+# engine's integrations right). Reads need :view, writes/test need :edit.
+_require_integrations_view = require_tenant_permission("workflow_engine:integrations:view")
+_require_integrations_edit = require_tenant_permission("workflow_engine:integrations:edit")
+
 
 def _to_utc_iso(value):
     if value is None:
@@ -32,7 +38,8 @@ def _resolve_tenant_id(current_user: GRCUser, db: Session) -> int:
 def create_email_config(
     config: EmailConfigCreate,
     current_user: GRCUser = Depends(require_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm: bool = Depends(_require_integrations_edit),
 ):
     """
     Configure email settings for workflow notifications (one-time setup).
@@ -77,7 +84,8 @@ def create_email_config(
 @router.get("/email-config", response_model=List[EmailConfigResponse])
 def list_email_configs(
     current_user: GRCUser = Depends(require_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm: bool = Depends(_require_integrations_view),
 ):
     """List all email configurations for the tenant"""
     from ....models import WorkflowEmailConfiguration
@@ -94,7 +102,8 @@ def list_email_configs(
 def get_email_config(
     config_id: int,
     current_user: GRCUser = Depends(require_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm: bool = Depends(_require_integrations_view),
 ):
     """Get a specific email configuration"""
     from ....models import WorkflowEmailConfiguration
@@ -116,7 +125,8 @@ def update_email_config(
     config_id: int,
     update_data: EmailConfigUpdate,
     current_user: GRCUser = Depends(require_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm: bool = Depends(_require_integrations_edit),
 ):
     """Update email configuration"""
     from ....models import WorkflowEmailConfiguration
@@ -144,7 +154,8 @@ def update_email_config(
 def delete_email_config(
     config_id: int,
     current_user: GRCUser = Depends(require_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm: bool = Depends(_require_integrations_edit),
 ):
     """Delete email configuration"""
     from ....models import WorkflowEmailConfiguration
@@ -169,7 +180,8 @@ def test_email_config(
     config_id: int,
     test_email: str,
     current_user: GRCUser = Depends(require_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm: bool = Depends(_require_integrations_edit),
 ):
     """Test email configuration by sending a test email"""
     from ....models import WorkflowEmailConfiguration
@@ -233,7 +245,8 @@ def test_email_config(
 @router.get("/check-setup")
 def check_notification_setup(
     current_user: GRCUser = Depends(require_auth),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _perm: bool = Depends(_require_integrations_view),
 ):
     """Check if user has configured notifications"""
     from ....models import WorkflowEmailConfiguration

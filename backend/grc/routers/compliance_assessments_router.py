@@ -29,7 +29,10 @@ from ..models import (
     Evidence, GRCUser, Tenant, get_db,
     EvidenceControlMapping, ParsedFrameworkControl, ComplianceSlaPolicy
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant
+from .auth_router import (
+    require_auth, get_user_tenants, get_user_primary_tenant,
+    is_tenant_admin, has_tenant_permission, platform_role_ids,
+)
 from ..services.assessment_assignees import (
     clean as clean_assignees, label as assignee_label, lists_for as assignee_lists, missing as missing_assignees,
 )
@@ -4387,6 +4390,22 @@ def delete_workflow(
     return None
 
 
+def _is_tier_approver(db, user, workflow, current_tier, my_role_ids=None) -> bool:
+    """True when `user` is the approver configured for `current_tier` of `workflow`:
+    the named user, or a member (through a platform-given role) of the named role."""
+    if workflow is None:
+        return False
+    tier = next((t for t in workflow.tiers if t.tier_order == current_tier), None)
+    if tier is None:
+        return False
+    if tier.approver_type == "user" and tier.approver_user_id == user.id:
+        return True
+    if tier.approver_type == "role" and tier.approver_role_id is not None:
+        role_ids = my_role_ids if my_role_ids is not None else set(platform_role_ids(db, user))
+        return tier.approver_role_id in role_ids
+    return False
+
+
 @router.get("/pending-approvals")
 def get_pending_approvals(
     db: Session = Depends(get_db),
@@ -4403,20 +4422,21 @@ def get_pending_approvals(
         AssessmentItemEvidence.status.in_(["pending_review", "pending_tier_1", "pending_tier_2", "pending_tier_3"])
     ).all()
     
+    # Who sees everything on the approvals page: administrators and the role that
+    # runs it (compliance:assessments:edit). Everyone else sees only the items they
+    # are the current-tier approver for — the header lists this endpoint to all.
+    is_admin = is_tenant_admin(db, current_user)
+    is_editor = has_tenant_permission(db, current_user, "compliance:assessments:edit")
+    sees_all = is_admin or is_editor
+    my_role_ids = set(platform_role_ids(db, current_user))
+
     result = []
     for item in pending_items:
-        can_approve = False
-        if item.workflow:
-            current_tier_obj = None
-            for tier in item.workflow.tiers:
-                if tier.tier_order == item.current_tier:
-                    current_tier_obj = tier
-                    break
-            
-            if current_tier_obj:
-                if current_tier_obj.approver_type == "user" and current_tier_obj.approver_user_id == current_user.id:
-                    can_approve = True
-        
+        tier_approver = _is_tier_approver(db, current_user, item.workflow, item.current_tier, my_role_ids)
+        if not (sees_all or tier_approver):
+            continue
+        can_approve = sees_all or tier_approver
+
         result.append({
             "id": item.id,
             "evidence_id": item.evidence_id,
@@ -4460,9 +4480,24 @@ def perform_approval_action(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Evidence link not found")
     from .auth_router import refuse_imported_accounts
     refuse_imported_accounts(db, [request.delegated_to])
-    
+
     action = request.action.lower()
-    
+
+    # Approving / rejecting / returning is restricted to the current tier's approver
+    # (named user or a member of the named role), administrators, and the role that
+    # runs the approvals page (compliance:assessments:edit). 'submit' stays open —
+    # it is how the person who attached the evidence sends it for review.
+    if action in ("approve", "reject", "return"):
+        if not (
+            is_tenant_admin(db, current_user)
+            or has_tenant_permission(db, current_user, "compliance:assessments:edit")
+            or _is_tier_approver(db, current_user, evidence_link.workflow, evidence_link.current_tier or 1)
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only this tier's approver can approve, reject or return this evidence.",
+            )
+
     if action == "submit":
         evidence_link.status = "pending_review"
         evidence_link.current_tier = 1

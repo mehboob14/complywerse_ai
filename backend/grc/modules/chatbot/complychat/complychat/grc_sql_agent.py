@@ -2699,6 +2699,134 @@ PAGINATION REQUIREMENT:
         }
 
 
+# ---------------------------------------------------------------------------
+# Security: ComplyChat may read business data only — never credentials or secrets.
+# The model writes the SQL, so validate_sql is the one gate before it runs on the
+# tenant DB (router.py runs it on the main path AND re-checks every retry-written
+# query). Two independent guards, both fail closed:
+#   1. no statement may NAME a secret column/table anywhere (SELECT list, FROM,
+#      JOIN, comma-join, subquery or CTE body);
+#   2. EVERY table the statement reads must have an allowed prefix.
+# ---------------------------------------------------------------------------
+
+# Tables that exist ONLY to hold credentials / secrets / SSO-identity-provider
+# config / integration credentials / stored AI prompts. Never readable here.
+_SECRET_TABLES = frozenset({
+    "grc_credential_profiles",          # discovery host/service logins (encrypted)
+    "grc_workflow_email_configs",       # SMTP username + password
+    "grc_identity_provider_configs",    # SSO / IdP client secrets
+    "grc_cloud_connectors",             # encrypted cloud credentials blob
+    "grc_workflow_engine_webhooks",     # webhook token + signing secret
+    "grc_electronic_signatures",        # HMAC seal keyed by the server secret
+    "ai_call_payloads",                 # stored prompts/answers (never export)
+    "ai_result_cache",                  # cached model answers (encrypted)
+})
+
+# A column (or any identifier) is secret when it contains one of these; the few
+# ordinary identifiers that merely contain such a run are allow-listed below.
+_SECRET_SUBSTRINGS = (
+    "password", "passwd", "secret", "token", "apikey", "api_key", "private_key",
+    "encrypted", "credential", "oauth", "mfa", "client_secret",
+    "refresh_token", "access_token",
+)
+_SECRET_ALLOWLIST = frozenset({"secretary", "secretary_id"})
+
+_VALID_PREFIXES = ("grc_", "cde_", "phase_")
+_VALID_BARE_TABLES = frozenset({
+    "users", "requirements", "risks", "findings", "phases",
+    "compliance_assessments", "evidence_submissions", "security_scans",
+    "required_evidence", "sub_requirements",
+    # real non-grc_-prefixed tables the schema ships
+    "organization_profile", "permissions", "role_permissions", "roles",
+    "user_roles", "audit_logs",
+})
+
+_STRING_LITERAL = re.compile(r"'(?:[^']|'')*'")
+
+
+def _strip_string_literals(sql_norm: str) -> str:
+    """Blank out single-quoted literals so a VALUE like 'api_key' is never read as a
+    column name, and a literal can neither inject nor hide a table reference."""
+    return _STRING_LITERAL.sub("''", sql_norm)
+
+
+def _names_a_secret(scan_sql: str):
+    """The first secret column/table the statement names, or None."""
+    for word in re.findall(r"[a-z_][a-z0-9_]*", scan_sql):
+        if word in _SECRET_TABLES:
+            return word
+        if word in _SECRET_ALLOWLIST:
+            continue
+        for bad in _SECRET_SUBSTRINGS:
+            if bad in word:
+                return word
+    return None
+
+
+# A function that turns a whole row into one value (JSON, a record, an array) would carry a secret column without the statement
+# naming it, so the name check above cannot see it: refused.
+_WHOLE_ROW = re.compile(r"\b(row_to_json|to_jsonb?|jsonb?_agg|jsonb?_object_agg|jsonb?_build_object|jsonb?_populate_record|"
+                        r"hstore|array_agg|row)\s*\(")
+# Values that are a password hash or an encrypted secret, wherever they come from (a whole-row select, a record cast to text)
+_SECRET_VALUE = re.compile(r"^\$(2[abxy]|argon2(id|i|d)?|pbkdf2[-_a-z0-9]*|scrypt|6|5)\$|^pbkdf2_[a-z0-9]+\$|^gAAAAA[A-Za-z0-9_-]{20,}")
+_HIDDEN = "[hidden]"
+
+
+def _is_secret_name(name) -> bool:
+    word = str(name or "").lower()
+    if word in _SECRET_ALLOWLIST:
+        return False
+    return any(bad in word for bad in _SECRET_SUBSTRINGS)
+
+
+def _scrub(value):
+    if isinstance(value, dict):
+        return {k: _scrub(v) for k, v in value.items() if not _is_secret_name(k)}
+    if isinstance(value, (list, tuple)):
+        return [_scrub(v) for v in value]
+    if isinstance(value, str) and (_SECRET_VALUE.search(value.strip()) or any(_SECRET_VALUE.search(part.strip(' "()'))
+                                                                             for part in value.split(",") if "$" in part or "gAAAAA" in part)):
+        return _HIDDEN
+    return value
+
+
+def drop_secret_columns(rows):
+    """The rows of a model-written query without a secret: validate_sql refuses statements that NAME a secret column, but a
+    wildcard or whole-row select (SELECT * FROM grc_users) names none — so every result is cleaned before it is formatted, shown
+    or sent to the model: secret-named columns (and keys inside JSON values) are dropped, and a value that is a password hash or
+    an encrypted token is hidden."""
+    return [_scrub(dict(row)) for row in rows or []]
+
+
+def _cte_names(scan_sql: str):
+    """Names bound by a WITH ... AS ( ... ) clause — table-like refs that are not
+    real tables, so they are exempt from the prefix check (their bodies are still
+    scanned for secrets like any other FROM/JOIN)."""
+    names = set(re.findall(r"\bwith\s+([a-z_][a-z0-9_]*)\s+as\s*\(", scan_sql))
+    names |= set(re.findall(r",\s*([a-z_][a-z0-9_]*)\s+as\s*\(", scan_sql))
+    return names
+
+
+def _tables_read(scan_sql: str):
+    """Every table the statement reads: the identifier after each FROM/JOIN (this
+    also reaches subquery and CTE bodies, which use their own FROM/JOIN), plus the
+    comma-joined tables inside a FROM list."""
+    tables = set()
+    for m in re.finditer(r"\b(?:from|join)\s+([a-z_][a-z0-9_]*)", scan_sql):
+        tables.add(m.group(1))
+    # `FROM a, b c, d` → b and d (first word of each comma part, only within the
+    # FROM list, which ends at the next clause keyword).
+    for m in re.finditer(
+        r"\bfrom\s+(.*?)(?=\bwhere\b|\bgroup\b|\border\b|\bhaving\b|\blimit\b|"
+        r"\bunion\b|\boffset\b|\bjoin\b|$)", scan_sql
+    ):
+        for part in m.group(1).split(",")[1:]:
+            tok = re.match(r"\s*([a-z_][a-z0-9_]*)", part)
+            if tok:
+                tables.add(tok.group(1))
+    return tables
+
+
 def validate_sql(sql: str) -> bool:
     """Validate that SQL is safe to execute"""
     if not sql or not sql.strip():
@@ -2752,21 +2880,32 @@ def validate_sql(sql: str) -> bool:
     if "from" not in normalized:
         logger.warning("[FAIL] SQL validation failed: Missing FROM clause")
         return False
-    
-    # Check if table name looks valid (allow grc_, cde_, phase_ prefixes, plus known non-prefixed tables)
-    from_match = re.search(r'from\s+(\w+)', normalized)
-    if from_match:
-        table_name = from_match.group(1)
-        # Valid prefixes and standalone table names
-        valid_prefixes = ('grc_', 'cde_', 'phase_')
-        valid_tables = ('users', 'requirements', 'risks', 'findings', 'phases', 
-                       'compliance_assessments', 'evidence_submissions', 'security_scans',
-                       'required_evidence', 'sub_requirements')
-        
-        if not (table_name.startswith(valid_prefixes) or table_name in valid_tables):
+
+    # --- Security guards (fail closed) -------------------------------------
+    # Scan with string literals blanked so a value never reads as a column name.
+    scan_sql = _strip_string_literals(normalized)
+
+    # 1. Never let the statement name a secret column or a credentials/secrets table
+    #    anywhere — SELECT list, FROM, JOIN, comma-join, subquery or CTE body.
+    secret = _names_a_secret(scan_sql)
+    if secret:
+        logger.warning(f"[FAIL] SQL validation failed: names a secret column/table '{secret}'")
+        return False
+    # ... nor pack a whole row into one value (it would carry a secret column without naming it)
+    whole_row = _WHOLE_ROW.search(scan_sql)
+    if whole_row:
+        logger.warning(f"[FAIL] SQL validation failed: whole-row function '{whole_row.group(1)}'")
+        return False
+
+    # 2. EVERY table read (not just the first FROM) must be an allowed table.
+    cte_names = _cte_names(scan_sql)
+    for table_name in _tables_read(scan_sql):
+        if table_name in cte_names:
+            continue
+        if not (table_name.startswith(_VALID_PREFIXES) or table_name in _VALID_BARE_TABLES):
             logger.warning(f"[FAIL] SQL validation failed: Invalid table name '{table_name}' (not a recognized database table)")
             return False
-    
+
     logger.info("[YES] SQL validation passed")
     return True
 

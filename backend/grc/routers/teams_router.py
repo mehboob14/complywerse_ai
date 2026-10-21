@@ -27,12 +27,21 @@ from sqlalchemy.orm import Session, joinedload
 
 from ..models import GRCUser, Team, TeamMember, get_db
 from .auth_router import (
-    require_auth, get_user_tenants, get_user_primary_tenant,
+    require_auth, get_user_tenants, get_user_primary_tenant, has_tenant_permission,
 )
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin/teams", tags=["Teams"])
+
+
+def _require_team_admin(db: Session, user: GRCUser) -> None:
+    """Team create/update/delete and membership changes are administrator-only
+    (or a role holding admin:users:edit). GETs stay open — teams are picker
+    targets across the app (asset owner, assignees, approval tiers)."""
+    if not has_tenant_permission(db, user, "admin:users:edit"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="Only an administrator can manage teams.")
 
 
 _VALID_ROLES_IN_TEAM = {"lead", "member", "viewer"}
@@ -173,6 +182,7 @@ def create_team(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    _require_team_admin(db, current_user)
     tenant_id = get_user_primary_tenant(current_user, db)
     if not tenant_id:
         raise HTTPException(
@@ -239,6 +249,7 @@ def update_team(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
     data = payload.model_dump(exclude_unset=True)
     if "name" in data:
@@ -274,6 +285,7 @@ def delete_team(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
     # Best-effort cleanup: clear ITAsset.owning_team_id pointing here so we
     # don't leave dangling FKs on databases without ON DELETE SET NULL.
@@ -316,6 +328,7 @@ def add_member(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
     role = (payload.role_in_team or "member").strip().lower()
     if role not in _VALID_ROLES_IN_TEAM:
@@ -373,6 +386,7 @@ def update_member(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
     member = (
         db.query(TeamMember)
@@ -402,6 +416,7 @@ def remove_member(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
+    _require_team_admin(db, current_user)
     team = _get_team_for_user(team_id, current_user, db)
     member = (
         db.query(TeamMember)

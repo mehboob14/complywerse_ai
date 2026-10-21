@@ -38,7 +38,10 @@ from sqlalchemy.orm import Session
 
 from grc.crypto import encrypt_secret
 from grc.models import IntegrationConnection, get_db, ITAsset, CredentialProfile
-from grc.routers.auth_router import get_user_primary_tenant, require_auth, GRCUser
+from grc.routers.auth_router import get_user_primary_tenant, require_auth, require_tenant_permission, GRCUser
+
+# Issuing a wizard token begins agent/connector enrollment — gate it as agent management.
+_require_agents = require_tenant_permission("compliance:agents:manage")
 
 router = APIRouter(prefix="/connect-wizard", tags=["Connect Wizard"])
 
@@ -176,6 +179,7 @@ def issue_token(
     body: IssueTokenIn,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_agents),
 ):
     """Issue a short-lived signed token for the wizard handshake.
 

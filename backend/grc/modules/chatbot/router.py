@@ -1164,7 +1164,7 @@ try:
     from grc_sql_agent import (
         detect_query_type, generate_sql_query, validate_sql, format_query_results,
         validate_columns_in_sql, get_fallback_data_for_question, generate_answer_from_fallback_data,
-        fetch_table_schema_from_db, load_full_database_schema
+        fetch_table_schema_from_db, load_full_database_schema, drop_secret_columns
     )  # type: ignore
     SQL_AGENT_ENABLED = True
     logger.info("[YES] SQL Agent loaded successfully (ChromaDB disabled)")
@@ -1358,6 +1358,20 @@ def _readable_hits(hits: List[Dict[str, Any]], library: bool) -> List[Dict[str, 
     if library:
         return hits
     return [h for h in hits if not str((h.get("payload") or {}).get("source_type") or "").startswith(_DOCUMENT_SOURCES)]
+
+
+def _own_chat_uploads_only(hits: List[Dict[str, Any]], uploaded_files: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Qdrant indexes chat uploads per tenant, so a file one person dropped into chat
+    can surface in another person's answer. Keep a chat_upload hit only when it is one
+    of THIS session's own uploaded files; every other source type is untouched."""
+    own_ids = {str(f.get("id")) for f in (uploaded_files or []) if f.get("id")}
+    kept: List[Dict[str, Any]] = []
+    for h in hits:
+        payload = h.get("payload") or {}
+        if str(payload.get("source_type") or "") == "chat_upload" and str(payload.get("source_id") or "") not in own_ids:
+            continue
+        kept.append(h)
+    return kept
 
 
 def _touches_documents(sql: str) -> bool:
@@ -2744,6 +2758,7 @@ def try_qdrant_rag_answer(
             source_types=None,
         )
     hits = _readable_hits(hits, library)
+    hits = _own_chat_uploads_only(hits, uploaded_files)
     if not hits:
         return None
 
@@ -3112,7 +3127,7 @@ Generate new SQL using ONLY the column names listed above.
                         limit=request.limit
                     )
                 
-                if retry_result and retry_result.get('sql'):
+                if retry_result and retry_result.get('sql') and validate_sql(retry_result['sql']):
                     logger.info(f"[YES] RETRY SUCCESSFUL: New SQL generated")
                     sql_query = retry_result['sql']
                     sql_result = retry_result
@@ -3182,8 +3197,8 @@ Generate new SQL using ONLY the column names listed above.
             result = db.execute(text(sql_query))
             rows = result.fetchall()
             
-            # Convert rows to dicts
-            data_list = [dict(row._mapping) for row in rows]
+            # Convert rows to dicts, without any secret (a wildcard select names no secret column)
+            data_list = drop_secret_columns([dict(row._mapping) for row in rows])
             logger.info(f"[YES] SQL returned {len(data_list)} rows (Total: {total_count}, Offset: {request.offset})")
             
             # Check if more results available
@@ -3307,7 +3322,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                             limit=request.limit
                         )
                     
-                    if retry_result and retry_result.get('sql') and (library or not _touches_documents(retry_result['sql'])):
+                    if retry_result and retry_result.get('sql') and validate_sql(retry_result['sql']) and (library or not _touches_documents(retry_result['sql'])):
                         retry_sql = retry_result['sql']
                         logger.info(f"[REFRESH] RETRY SQL: {retry_sql[:150]}...")
                         
@@ -3315,7 +3330,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                             # Try executing retry query
                             retry_exec = db.execute(text(retry_sql))
                             retry_rows = retry_exec.fetchall()
-                            retry_data = [dict(row._mapping) for row in retry_rows]
+                            retry_data = drop_secret_columns([dict(row._mapping) for row in retry_rows])
                             
                             logger.info(f"[YES] RETRY SUCCESSFUL: {len(retry_data)} rows")
                             

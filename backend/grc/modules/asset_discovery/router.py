@@ -1278,6 +1278,7 @@ def connect_discovered_device(
     body: DeviceConnectBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Give ONE discovered device a login, and promote it if the login works.
 
@@ -1384,6 +1385,7 @@ def connect_discovered_service(
     body: ServiceConnectBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Discovery→kind bridge: connect a discovered device AS the service the
     sweep detected on it (PostgreSQL on 5432, LDAP on 389/636, …) using that
@@ -1501,6 +1503,7 @@ def reconnect_asset(
     body: DeviceConnectBody,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Re-apply a login to a device that is ALREADY in inventory.
 
@@ -1556,6 +1559,7 @@ def disconnect_discovered_device(
     asset_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Undo a device connection so a different login can be tried.
 
@@ -1641,6 +1645,7 @@ def connect_all_discovered(
                           "whole backlog. Matches the queue's run filter."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Try the saved login(s) against the devices discovery found, and promote
     the ones that accept.
@@ -1807,6 +1812,7 @@ def connect_selected(
     body: ConnectSelectedIn,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     """Run the ticked saved login(s) against the specific devices the operator
     ticked, and promote the ones that accept a login.
@@ -2189,6 +2195,7 @@ def _credential_dict(c: CredentialProfile) -> dict:
 def list_credentials(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_discover),
 ):
     tid = get_user_primary_tenant(current_user, db)
     rows = db.query(CredentialProfile).filter(
