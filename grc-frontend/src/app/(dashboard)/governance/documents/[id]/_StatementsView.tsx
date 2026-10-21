@@ -161,7 +161,7 @@ function ParseProgress({ isParsing, parseStatus }: { isParsing: boolean; parseSt
   return (
     <div className="rounded-lg border border-[#d5dbe1] bg-[#f7f9fa] px-3 py-2" role="status">
       <div className="mb-1 flex items-center justify-between gap-2 text-xs">
-        <span className="truncate text-[#26323d]">{parseStatus?.status === 'queued' ? 'Waiting to start…' : parseStatus?.message || 'Reading the document into statements…'}</span>
+        <span className="truncate text-[#26323d]">{parseStatus?.status === 'queued' && !parseStatus?.automatic ? 'Waiting to start…' : parseStatus?.message || 'Reading the document into statements…'}</span>
         <span className="shrink-0 font-medium text-[#26323d]">{pct != null ? `${pct}%` : ''}</span>
       </div>
       <div className="h-1 w-full overflow-hidden rounded-full bg-[#e3e8ec]">
@@ -326,13 +326,17 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     queryFn: async () => (await governanceApi.getReparseProposals(documentId)).data as any,
     enabled: !!parseStatus?.has_proposals || parseStatus?.status === 'review_required',
   });
-  // a parse that ends after this view was left and opened again (its own polling stopped with it): the list is read again
+  // a parse that ends after this view was left and opened again (its own polling stopped with it), or the statements following a
+  // new version of the document by themselves: the list is read again
   const parseRunning = parseStatus?.status === 'parsing' || parseStatus?.status === 'queued';
   const wasRunning = useRef(parseRunning);
   useEffect(() => {
     if (wasRunning.current && !parseRunning) {
       onChanged();
       queryClient.invalidateQueries({ queryKey: ['reparse-proposals', documentId] });
+      if (parseStatus?.automatic && (parseStatus.added || parseStatus.changed || parseStatus.removed)) {
+        toast({ type: 'info', title: 'Statements updated', message: parseStatus.message });
+      }
     }
     wasRunning.current = parseRunning;
   }, [parseRunning]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -581,6 +585,9 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                         )}
                         {stmt.source_match === 'not_found' && (
                           <span className="mt-1 inline-block rounded border border-[#b8c4c8] px-1.5 py-0.5 text-[11px] text-[#3f4b58]" title="This wording was not found in the document file">Not found in the document</span>
+                        )}
+                        {stmt.status === 'superseded' && (
+                          <span className="mt-1 inline-block rounded border border-[#b8c4c8] px-1.5 py-0.5 text-[11px] text-[#3f4b58]" title="A newer version of the document no longer says this; it is kept with its history">No longer in the document</span>
                         )}
                         {stmt.statement_summary && <p className="mt-1 text-xs italic text-[#586472]">{stmt.statement_summary}</p>}
                       </>

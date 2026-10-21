@@ -33,6 +33,7 @@ export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   sent_for_review: 'Sent for review', sent_for_approval: 'Sent for approval', signed: 'Signed', rejected: 'Rejected', published: 'Published',
   acknowledged: 'Acknowledged', escalated: 'Escalated', status_changed: 'Status changed', version_created: 'New version',
   statements_written_to_document: 'Statements written to the document', review_requested: 'Review requested',
+  statements_updated_from_document: 'Statements updated from the document',
   approval_requested: 'Approval requested', acknowledgement_requested: 'Acknowledgement requested', file_uploaded: 'File uploaded',
   restored: 'Restored from the archive', changes_requested: 'Changes requested', resubmitted: 'Resubmitted', withdrawn: 'Withdrawn from review',
   delegated: 'Delegated', route_set: 'Approval route set',

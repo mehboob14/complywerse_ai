@@ -74,6 +74,9 @@ class GovernanceDocument(Base):
     # the version published last, never cleared (a withdrawal clears only published_version): whoever does not see drafts reads it
     # whenever the document is not published now and holds a newer number (permissions.in_force_row). Set by _remember_published.
     last_published_version = Column(String(50), nullable=True)
+    # the hashes of the parts of its text its statements reflect (modules/governance/statement_reparse.py): a new version is read
+    # again only where its parts differ from these
+    statement_parts = Column(JSON, nullable=True)
 
     tenant = relationship("Tenant", back_populates="governance_documents")
     owner = relationship("GRCUser", back_populates="owned_gov_documents", foreign_keys=[owner_id])
@@ -136,6 +139,50 @@ def _remember_published(doc, value, _old, _initiator):
     it stays when a withdrawal clears what is in force, so a once-published document never serves newer, unapproved text."""
     if value:
         doc.last_published_version = value
+
+
+from sqlalchemy.orm import Session as _Session  # noqa: E402
+
+_TEXT_CHANGED = "statement_reparse_documents"      # session.info: the documents whose text or file this transaction changed
+
+
+@_event.listens_for(GovernanceDocument.content, "set")
+@_event.listens_for(GovernanceDocument.file_path, "set")
+def _note_text_change(doc, value, old, _initiator):
+    """A new text or file, by any path (a save, a new file version, a restore, a write-back, a workflow): its statements follow it once
+    the change is committed (``_statements_follow`` below). A document being created is parsed by its create path instead. An old
+    value that was not loaded counts as a change (no query here); the job then finds every part the same and asks no AI."""
+    if value == old:
+        return
+    from sqlalchemy import inspect as _inspect
+
+    state = _inspect(doc)
+    if state.persistent and state.session is not None and state.identity:
+        state.session.info.setdefault(_TEXT_CHANGED, set()).add(state.identity[0])
+
+
+@_event.listens_for(_Session, "after_commit")
+def _statements_follow(session):
+    """One update of the statements per document whose text the commit changed, on real tenant sessions only (they carry their
+    tenant's slug: never a test's, never the master database). Never raises into the request."""
+    ids = session.info.pop(_TEXT_CHANGED, None)
+    slug = session.info.get("tenant_slug")
+    if not ids or not slug:
+        return
+    try:
+        from ..modules.governance.statement_reparse import start
+
+        start(slug, sorted(ids), session)
+    except Exception:       # noqa: BLE001 - the change is saved; its statements catch up with the next one
+        import logging
+
+        logging.getLogger(__name__).warning("statements of documents %s were not updated", sorted(ids), exc_info=True)
+
+
+@_event.listens_for(_Session, "after_soft_rollback")
+def _forget_text_change(session, previous_transaction):
+    if not getattr(previous_transaction, "nested", False):        # rolled back: nothing changed
+        session.info.pop(_TEXT_CHANGED, None)
 
 
 class GovernanceDocumentVersion(Base):

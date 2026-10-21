@@ -303,19 +303,23 @@ def auto_map_statement(db: Session, stmt, fw_ids=None) -> dict:
     return {"mapped": len(seen), "evidence": new_ev, "source": "ai"}
 
 
-def auto_map_document(db: Session, document_id: int) -> dict:
-    """Auto-map every active statement of a document. Best-effort per statement —
-    one failure never aborts the rest. Returns a summary."""
+def auto_map_document(db: Session, document_id: int, statement_ids=None) -> dict:
+    """Auto-map every active statement of a document (or only ``statement_ids``: the
+    new and changed ones of a new version). Best-effort per statement — one failure
+    never aborts the rest. Returns a summary."""
     # Scope the candidate pool to the document's OWN frameworks (applicable ∪
     # linked ∪ those picked on its Mappings tab) so we never map against the whole
     # catalog.
     doc = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
     fw_ids = (framework_scope(doc)["all"] or None) if doc is not None else None
 
-    stmts = db.query(PolicyStatement).filter(
+    query = db.query(PolicyStatement).filter(
         PolicyStatement.document_id == document_id,
         PolicyStatement.status == "active",
-    ).all()
+    )
+    if statement_ids is not None:
+        query = query.filter(PolicyStatement.id.in_(list(statement_ids) or [0]))
+    stmts = query.order_by(PolicyStatement.id).all()
     mapped_total, ev_total, ok = 0, 0, 0
     for s in stmts:
         try:

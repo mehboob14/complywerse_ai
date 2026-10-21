@@ -42,6 +42,7 @@ ORIGIN_LABEL = {"ai": "Comply Agent", "manual": "Edited by hand", "mixed": "Comp
                 "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
 # audit entries that matter to the chain: its change and approval log (the rest - views, downloads, field edits - do not)
 EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent_for_approval": "Sent for approval", "signed": "Signed",
+               "statements_updated_from_document": "Statements updated from the document",
                "reviewed": "Reviewed", "approved": "Approved", "rejected": "Rejected", "published": "Published", "acknowledged": "Acknowledged",
                "archived": "Archived", "restored": "Restored from the archive", "status_changed": "Status changed",
                "review_completed": "Review completed", "review_skipped": "Review skipped", "version_rollback": "Earlier version restored",
