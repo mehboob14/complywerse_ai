@@ -3,7 +3,7 @@
 /**
  * A document's gap analysis: run it against frameworks (in the background), read the coverage per framework and the findings,
  * and work them - owner, target date, status, override, accept the risk - or close a gap with a fix Comply Agent drafts, which
- * goes into the document (into its version not yet published, as every change does). Override takes an applied fix back out of
+ * goes into the document as its next version (as every change does, the versions before kept). Override takes an applied fix back out of
  * the document, every other change kept. Also: compare the document with another one. Used by the AI Studio's Gap analysis
  * view and the classic page. Readers read; the changes are for the document's editors (`canEdit`; the server checks them too).
  */
