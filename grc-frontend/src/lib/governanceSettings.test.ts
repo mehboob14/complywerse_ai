@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { changes, courseOf, noAccess, renderTemplate, retrySettings, sampleValues, templateProblem, validate, type GovernanceSettings } from './governanceSettings.ts';
+import { changes, courseOf, daysFor, noAccess, renderTemplate, retrySettings, sampleValues, shownKinds, templateProblem, validate, type GovernanceSettings } from './governanceSettings.ts';
 
 const base: GovernanceSettings = {
   review_days: 7, approval_days: 7, ack_days: 14, remind_days: 3, remind_every_days: 0, owner_after_days: 0, admin_after_days: 7,
@@ -84,4 +84,15 @@ test('without a governance right the settings are refused once and said so, not 
   assert.equal(retrySettings(0, refused), false);
   assert.equal(retrySettings(0, { response: { status: 502 } }), true);
   assert.equal(retrySettings(3, { response: { status: 502 } }), false);
+});
+
+test('proposed changes: their rows show only when the server has settings for them, given 3 days unless set', () => {
+  assert.deepEqual(shownKinds(base), ['review', 'approval', 'acknowledgement', 'changes']);          // a server from before proposals
+  const newer = { ...base, task_create: { ...base.task_create, decide: true, revise: false }, task_priority: { ...base.task_priority, decide: 'High' as const } };
+  assert.deepEqual(shownKinds(newer), ['review', 'approval', 'acknowledgement', 'changes', 'decide', 'revise']);
+  assert.deepEqual([daysFor('decide', base), daysFor('revise', { ...base, revise_days: 5 }), daysFor('changes', base), daysFor('review', base)], [3, 5, 7, 7]);
+  const today = new Date(2026, 9, 18);
+  assert.equal(sampleValues('decide', base, today).link, '/governance/documents/3?tab=proposals&proposal=12');
+  assert.equal(sampleValues('decide', base, today).due_date, '21 Oct 2026');
+  assert.equal(renderTemplate(base.task_description, sampleValues('decide', base, today)), 'Please accept or reject the proposed change "Acceptable Use Policy", version 1.2, by 21 Oct 2026.');
 });

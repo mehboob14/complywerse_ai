@@ -16,7 +16,9 @@ import {
 import { governanceApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import CreateControlDialog from '@/components/soc2/CreateControlDialog';
+import { fieldRows, goesToLine, pendingFor, proposedStatements, sendLabel, type Proposal } from '@/lib/proposals';
 import DocumentSyncPanel from './_DocumentSyncPanel';
+import { ProposalActions, useProposalRole, useProposedAnswer } from './_ProposalsView';
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string }> = {
   security: { bg: 'bg-primary-100', text: 'text-slate-700', border: 'border-primary-300' },
@@ -49,11 +51,23 @@ const BTN = 'inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8]
 const PRIMARY = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-1.5 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
 const ICON = 'rounded p-1 text-[#3f4b58] hover:bg-[#eef1f4] hover:text-[#0b4f46]';
 
-type StatementForm = { statement_text: string; statement_summary: string; category: string; priority: string; is_mandatory: boolean; source_section: string };
-const EMPTY_FORM: StatementForm = { statement_text: '', statement_summary: '', category: 'security', priority: 'medium', is_mandatory: true, source_section: '' };
+// the AI's one-line summary (statement_summary) is not edited here: it stays as it is and is shown under the statement; why the
+// statement changes is asked instead (change_reason, kept in its history and the Change log, and read by the owner of a proposal)
+type StatementForm = { statement_text: string; category: string; priority: string; is_mandatory: boolean; source_section: string; change_reason: string };
+const EMPTY_FORM: StatementForm = { statement_text: '', category: 'security', priority: 'medium', is_mandatory: true, source_section: '', change_reason: '' };
+/** What is sent: the fields, the justification as `change_reason`, and the same words as the message of a proposal (lib/proposals.ts). */
+const payload = (f: StatementForm) => ({ ...f, change_reason: f.change_reason.trim(), message: f.change_reason.trim() });
+const ready = (f: StatementForm) => !!f.statement_text.trim() && !!f.change_reason.trim();
+const formOf = (s: { statement_text?: string | null; category?: string | null; priority?: string | null; is_mandatory?: boolean | null; source_section?: string | null }): StatementForm => ({
+  statement_text: s.statement_text || '', category: s.category || 'security', priority: s.priority || 'medium', is_mandatory: s.is_mandatory ?? true,
+  source_section: s.source_section || '', change_reason: '',
+});
 
-/** The fields of a statement, for adding one or editing one. */
-function StatementFields({ form, setForm, autoFocus }: { form: StatementForm; setForm: (f: (prev: StatementForm) => StatementForm) => void; autoFocus?: boolean }) {
+/** The fields of a statement, for adding one or editing one, and why it changes (required). `proposeTo`: the person is not the
+ *  document's owner or author, so the change goes to them first. */
+function StatementFields({ form, setForm, autoFocus, idPrefix, proposeTo }: {
+  form: StatementForm; setForm: (f: (prev: StatementForm) => StatementForm) => void; autoFocus?: boolean; idPrefix: string; proposeTo?: string | null;
+}) {
   return (
     <div className="space-y-3">
       <label className="block">
@@ -61,10 +75,15 @@ function StatementFields({ form, setForm, autoFocus }: { form: StatementForm; se
         <textarea value={form.statement_text} rows={3} autoFocus={autoFocus} placeholder="What the document requires…" className={FIELD}
           onChange={(e) => setForm((p) => ({ ...p, statement_text: e.target.value }))} />
       </label>
-      <label className="block">
-        <span className={LABEL}>Summary <span className="font-normal text-[#586472]">(optional)</span></span>
-        <input type="text" value={form.statement_summary} className={FIELD} onChange={(e) => setForm((p) => ({ ...p, statement_summary: e.target.value }))} />
-      </label>
+      <div>
+        <label htmlFor={`${idPrefix}-why`} className={LABEL}>
+          Justification for this change <span className="font-normal text-[#586472]">(required{proposeTo ? `: ${proposeTo} reads it` : ''})</span>
+        </label>
+        <textarea id={`${idPrefix}-why`} value={form.change_reason} rows={2} maxLength={2000} required aria-required="true" className={FIELD}
+          placeholder="Why the statement changes, e.g. the new password standard asks for 12 characters"
+          onChange={(e) => setForm((p) => ({ ...p, change_reason: e.target.value }))} />
+        {proposeTo && <p className="mt-1 text-[11px] text-[#0b4f46]">{goesToLine(proposeTo)}</p>}
+      </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <label className="block">
           <span className={LABEL}>Category</span>
@@ -155,6 +174,34 @@ function StatementControlButton({ stmt, documentId, documentTitle, onCreated, ca
   );
 }
 
+/** A statement change someone proposed, waiting for the owner: who, what it changes, why, and Accept / Reject for the owner (Withdraw for
+ *  the proposer). */
+function ProposedStatementBox({ documentId, p, decider }: { documentId: number; p: Proposal; decider: string }) {
+  const rows = fieldRows(p.statement?.before, p.statement?.after).filter((r) => r.changed);
+  const what = p.source === 'statement_add' ? 'New statement proposed' : p.source === 'statement_delete' ? 'Removal proposed' : 'Change proposed';
+  return (
+    <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 p-3" role="note" aria-label={`${what} by ${p.proposed_by?.name}`}>
+      <p className="text-xs font-semibold text-amber-950">{what} by {p.proposed_by?.name} — waiting for {decider}</p>
+      {rows.length > 0 && (
+        <dl className="mt-1.5 space-y-1">
+          {rows.map((r) => (
+            <div key={r.key} className="text-xs">
+              <dt className="font-semibold text-[#3f4b58]">{r.label}</dt>
+              <dd className="break-words text-[#26323d]">
+                {r.before === '—' ? <span className="font-medium">{r.after}</span>
+                  : r.after === 'Removed' ? <><span className="line-through decoration-rose-400">{r.before}</span> (removed)</>
+                  : <><span className="line-through decoration-rose-400">{r.before}</span> → <span className="font-medium">{r.after}</span></>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {p.message && <p className="mt-1.5 break-words text-xs text-amber-950"><span className="font-semibold">Justification:</span> {p.message}</p>}
+      <div className="mt-2"><ProposalActions documentId={documentId} p={p} small /></div>
+    </div>
+  );
+}
+
 function ParseProgress({ isParsing, parseStatus }: { isParsing: boolean; parseStatus: any }) {
   if (!(isParsing || parseStatus?.status === 'parsing' || parseStatus?.status === 'queued')) return null;
   const pct = typeof parseStatus?.progress_percent === 'number' ? parseStatus.progress_percent : null;
@@ -175,7 +222,12 @@ function ParseProgress({ isParsing, parseStatus }: { isParsing: boolean; parseSt
   );
 }
 
-export default function StatementsView({ documentId, documentTitle, canEdit }: { documentId: number; documentTitle?: string; canEdit: boolean }) {
+export default function StatementsView({ documentId, documentTitle, canEdit, again = null, onAgainOpened }: {
+  documentId: number; documentTitle?: string; canEdit: boolean;
+  /** a statement change that was not accepted, sent again by its proposer: its form opens with what was proposed */
+  again?: Proposal | null;
+  onAgainOpened?: () => void;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const refreshStatements = () => {
@@ -240,14 +292,15 @@ export default function StatementsView({ documentId, documentTitle, canEdit }: {
     <>
       {canEdit && <DocumentSyncPanel documentId={documentId} />}
       <StatementsList statements={statements} statementsLoading={statementsLoading} statementsError={statementsError} documentId={documentId}
-        documentTitle={documentTitle} parsePolicyMutation={parsePolicyMutation} isParsing={isParsing} canEdit={canEdit} onChanged={refreshStatements} />
+        documentTitle={documentTitle} parsePolicyMutation={parsePolicyMutation} isParsing={isParsing} canEdit={canEdit} onChanged={refreshStatements}
+        again={again} onAgainOpened={onAgainOpened} />
     </>
   );
 }
 
-function StatementsList({ statements, statementsLoading, statementsError, parsePolicyMutation, isParsing, documentId, documentTitle, canEdit, onChanged }: {
+function StatementsList({ statements, statementsLoading, statementsError, parsePolicyMutation, isParsing, documentId, documentTitle, canEdit, onChanged, again, onAgainOpened }: {
   statements: any; statementsLoading: boolean; statementsError: boolean; parsePolicyMutation: { mutate: () => void; isPending: boolean }; isParsing: boolean;
-  documentId: number; documentTitle?: string; canEdit: boolean; onChanged: () => void;
+  documentId: number; documentTitle?: string; canEdit: boolean; onChanged: () => void; again: Proposal | null; onAgainOpened?: () => void;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -258,38 +311,50 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
   const [showAddForm, setShowAddForm] = useState(false);
   const [addForm, setAddForm] = useState<StatementForm>(EMPTY_FORM);
   const [deleteConfirm, setDeleteConfirm] = useState<number | null>(null);
+  const [deleteWhy, setDeleteWhy] = useState('');
   const [versionHistoryStmtId, setVersionHistoryStmtId] = useState<number | null>(null);
   const [compareVersions, setCompareVersions] = useState<{ a: number; b: number } | null>(null);
+  // a roll back by someone who is not the owner or author asks why first (it goes to the owner)
+  const [rollingBack, setRollingBack] = useState<{ versionId: number; why: string } | null>(null);
   const parsing = parsePolicyMutation.isPending || isParsing;
+  // changes by others than the owner or author wait for the owner's decision (lib/proposals.ts)
+  const { proposes, decider, list: changeProposals } = useProposalRole(documentId);
+  const proposeTo = proposes ? decider : null;
+  const handledAsProposal = useProposedAnswer();
 
   const addMutation = useMutation({
-    mutationFn: (data: StatementForm) => governanceApi.addStatement(documentId, data),
-    onSuccess: () => {
-      toast({ type: 'success', title: 'Statement added' });
-      onChanged();
+    mutationFn: (data: StatementForm) => governanceApi.addStatement(documentId, payload(data)),
+    onSuccess: (res) => {
       setShowAddForm(false);
       setAddForm(EMPTY_FORM);
+      if (handledAsProposal(res?.data, decider)) return;                  // waits for the owner: not in the list yet
+      toast({ type: 'success', title: 'Statement added' });
+      onChanged();
     },
     onError: (error: any) => toast({ type: 'error', title: 'Not added', message: error?.response?.data?.detail || error?.message || 'The statement could not be added.' }),
   });
   const updateMutation = useMutation({
-    mutationFn: ({ stmtId, data }: { stmtId: number; data: StatementForm }) => governanceApi.updateStatement(documentId, stmtId, data),
-    onSuccess: () => {
+    // statement_summary is not sent: the AI's summary stays as it is
+    mutationFn: ({ stmtId, data }: { stmtId: number; data: StatementForm }) => governanceApi.updateStatement(documentId, stmtId, payload(data)),
+    onSuccess: (res) => {
+      setEditingStmtId(null);
+      if (handledAsProposal(res?.data, decider)) return;                  // the statement is as it was until the owner accepts
       toast({ type: 'success', title: 'Statement saved' });
       onChanged();
       queryClient.invalidateQueries({ queryKey: ['statement-versions', documentId] });
       queryClient.invalidateQueries({ queryKey: ['statement-diff', documentId] });
       queryClient.invalidateQueries({ queryKey: ['document-sync'] });
-      setEditingStmtId(null);
     },
     onError: (error: any) => toast({ type: 'error', title: 'Not saved', message: error?.response?.data?.detail || 'The statement could not be saved.' }),
   });
   const deleteMutation = useMutation({
-    mutationFn: (stmtId: number) => governanceApi.deleteStatement(documentId, stmtId),
-    onSuccess: () => {
+    mutationFn: ({ stmtId, why }: { stmtId: number; why?: string }) => governanceApi.deleteStatement(documentId, stmtId, why),
+    onSuccess: (res) => {
+      setDeleteConfirm(null);
+      setDeleteWhy('');
+      if (handledAsProposal(res?.data, decider)) return;
       toast({ type: 'success', title: 'Statement deleted' });
       onChanged();
-      setDeleteConfirm(null);
     },
     onError: (error: any) => toast({ type: 'error', title: 'Not deleted', message: error?.response?.data?.detail || 'The statement could not be deleted.' }),
   });
@@ -305,8 +370,10 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     enabled: !!versionHistoryStmtId && !!compareVersions,
   });
   const rollbackMutation = useMutation({
-    mutationFn: ({ stmtId, versionId }: { stmtId: number; versionId: number }) => governanceApi.rollbackStatement(documentId, stmtId, versionId),
-    onSuccess: () => {
+    mutationFn: ({ stmtId, versionId, why }: { stmtId: number; versionId: number; why?: string }) => governanceApi.rollbackStatement(documentId, stmtId, versionId, why),
+    onSuccess: (res) => {
+      setRollingBack(null);
+      if (handledAsProposal(res?.data, decider)) return;
       toast({ type: 'success', title: 'Rolled back', message: 'The statement has the wording of that version again.' });
       onChanged();
       queryClient.invalidateQueries({ queryKey: ['statement-versions', documentId, versionHistoryStmtId] });
@@ -374,11 +441,18 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
   });
   const startEdit = (stmt: any) => {
     setEditingStmtId(stmt.id);
-    setEditStmtForm({
-      statement_text: stmt.statement_text || '', statement_summary: stmt.statement_summary || '', category: stmt.category || 'security',
-      priority: stmt.priority || 'medium', is_mandatory: stmt.is_mandatory ?? true, source_section: stmt.source_section || '',
-    });
+    setEditStmtForm(formOf(stmt));
   };
+  // Propose again (a statement change that was not accepted): its form opens with what was proposed, for its proposer to adjust
+  useEffect(() => {
+    if (!again || statementsLoading) return;
+    const after = again.statement?.after;
+    const target = stmts.find((s: any) => s.id === again.statement?.id);
+    if (again.source === 'statement_add' && after) { setAddForm(formOf(after)); setShowAddForm(true); }
+    else if (again.source === 'statement_delete' && target) setDeleteConfirm(target.id);
+    else if (target) { setEditingStmtId(target.id); setEditStmtForm(after ? formOf(after) : formOf(target)); }
+    onAgainOpened?.();
+  }, [again, statementsLoading]); // eslint-disable-line react-hooks/exhaustive-deps
   const exportCsv = async () => {
     try {
       const response = await governanceApi.exportPolicyStatements(documentId);
@@ -398,13 +472,22 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
   const addPanel = showAddForm && canEdit && (
     <section className="rounded-xl border border-[#99d5cc] bg-white p-4">
       <h4 className="mb-3 flex items-center gap-2 text-sm font-semibold text-[#0b4f46]"><Plus className="h-4 w-4" aria-hidden /> New statement</h4>
-      <StatementFields form={addForm} setForm={setAddForm} autoFocus />
+      <StatementFields form={addForm} setForm={setAddForm} autoFocus idPrefix="statement-new" proposeTo={proposeTo} />
       <div className="mt-3 flex justify-end gap-2 border-t border-[#e3e8ec] pt-3">
         <button type="button" onClick={() => setShowAddForm(false)} className={BTN}>Cancel</button>
-        <button type="button" onClick={() => addMutation.mutate(addForm)} disabled={addMutation.isPending || !addForm.statement_text.trim()} className={PRIMARY}>
-          {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add statement
+        <button type="button" onClick={() => addMutation.mutate(addForm)} disabled={addMutation.isPending || !ready(addForm)} className={PRIMARY}
+          title={ready(addForm) ? undefined : 'Write the statement and why it is added first'}>
+          {addMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} {proposeTo ? sendLabel(proposeTo) : 'Add statement'}
         </button>
       </div>
+    </section>
+  );
+  // new statements proposed by others, waiting for the owner (they are not statements yet)
+  const proposedNew = proposedStatements(changeProposals?.items);
+  const proposedPanel = proposedNew.length > 0 && (
+    <section className="rounded-xl border border-amber-300 bg-white p-4" aria-label="New statements proposed">
+      <h4 className="text-sm font-semibold text-[#1f2933]">New statements proposed</h4>
+      {proposedNew.map((p) => <ProposedStatementBox key={p.id} documentId={documentId} p={p} decider={decider} />)}
     </section>
   );
 
@@ -419,6 +502,7 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     return (
       <div className="space-y-4">
         {addPanel}
+        {proposedPanel}
         <section className="rounded-xl border border-[#d5dbe1] bg-white p-8 text-center">
           <ClipboardList className="mx-auto mb-3 h-10 w-10 text-[#7b8794]" aria-hidden />
           <p className="text-sm font-medium text-[#1f2933]">This document has no statements yet</p>
@@ -472,6 +556,7 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
 
       <ParseProgress isParsing={isParsing} parseStatus={parseStatus} />
       {addPanel}
+      {proposedPanel}
 
       {canEdit && pendingProposals.length > 0 && (
         <section className="space-y-3 rounded-xl border border-amber-300 bg-amber-50 p-4">
@@ -550,16 +635,19 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
             </button>
             {isExpanded && (
               <div className="divide-y divide-[#e3e8ec] border-t border-[#e3e8ec]">
-                {catStmts.map((stmt: any, idx: number) => (
+                {catStmts.map((stmt: any, idx: number) => {
+                  const waiting = pendingFor(changeProposals?.items, stmt.id);
+                  return (
                   <div key={stmt.id || idx} className="p-4">
                     {editingStmtId === stmt.id ? (
                       <div>
-                        <StatementFields form={editStmtForm} setForm={setEditStmtForm} autoFocus />
+                        <StatementFields form={editStmtForm} setForm={setEditStmtForm} autoFocus idPrefix={`statement-${stmt.id}`} proposeTo={proposeTo} />
                         <div className="mt-3 flex justify-end gap-2">
                           <button type="button" onClick={() => setEditingStmtId(null)} className={BTN}>Cancel</button>
                           <button type="button" onClick={() => updateMutation.mutate({ stmtId: stmt.id, data: editStmtForm })}
-                            disabled={updateMutation.isPending || !editStmtForm.statement_text.trim()} className={PRIMARY}>
-                            {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save
+                            disabled={updateMutation.isPending || !ready(editStmtForm)} className={PRIMARY}
+                            title={ready(editStmtForm) ? undefined : 'Write why the statement changes first'}>
+                            {updateMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} {proposeTo ? sendLabel(proposeTo) : 'Save'}
                           </button>
                         </div>
                       </div>
@@ -576,15 +664,15 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                             <StatementControlButton stmt={stmt} documentId={documentId} documentTitle={documentTitle} canCreate={canEdit} onCreated={onChanged} />
                             <button type="button" onClick={() => setVersionHistoryStmtId(stmt.id)} className={ICON} title="History" aria-label="History"><History className="h-3.5 w-3.5" /></button>
                             {canEdit && <button type="button" onClick={() => startEdit(stmt)} className={ICON} title="Edit" aria-label="Edit"><Pencil className="h-3.5 w-3.5" /></button>}
-                            {canEdit && (deleteConfirm === stmt.id ? (
+                            {canEdit && (deleteConfirm === stmt.id && !proposeTo ? (
                               <span className="flex items-center gap-1">
-                                <button type="button" onClick={() => deleteMutation.mutate(stmt.id)} disabled={deleteMutation.isPending}
+                                <button type="button" onClick={() => deleteMutation.mutate({ stmtId: stmt.id })} disabled={deleteMutation.isPending}
                                   className="rounded bg-[#b42318] px-2 py-0.5 text-xs font-medium text-white hover:bg-[#912018] disabled:opacity-50">
                                   {deleteMutation.isPending ? 'Deleting…' : 'Delete'}
                                 </button>
                                 <button type="button" onClick={() => setDeleteConfirm(null)} className="rounded px-2 py-0.5 text-xs text-[#3f4b58] hover:bg-[#eef1f4]">Cancel</button>
                               </span>
-                            ) : (
+                            ) : deleteConfirm === stmt.id ? null : (
                               <button type="button" onClick={() => setDeleteConfirm(stmt.id)} className="rounded p-1 text-[#3f4b58] hover:bg-rose-50 hover:text-[#9b1c1c]" title="Delete" aria-label="Delete">
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
@@ -602,10 +690,30 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                           <span className="mt-1 inline-block rounded border border-[#b8c4c8] px-1.5 py-0.5 text-[11px] text-[#3f4b58]" title="A newer version of the document no longer says this; it is kept with its history">No longer in the document</span>
                         )}
                         {stmt.statement_summary && <p className="mt-1 text-xs italic text-[#586472]">{stmt.statement_summary}</p>}
+                        {/* a removal by someone who is not the owner or author: why, then it goes to the owner */}
+                        {canEdit && proposeTo && deleteConfirm === stmt.id && (
+                          <div className="mt-2 space-y-2 rounded-lg border border-rose-200 bg-rose-50/50 p-3">
+                            <label htmlFor={`statement-${stmt.id}-remove-why`} className="block text-xs font-semibold text-[#26323d]">
+                              Why remove it — {proposeTo} reads this <span className="font-normal text-[#586472]">(required)</span>
+                            </label>
+                            <textarea id={`statement-${stmt.id}-remove-why`} value={deleteWhy} onChange={(e) => setDeleteWhy(e.target.value)} rows={2} maxLength={2000}
+                              required aria-required="true" autoFocus className={FIELD} />
+                            <p className="text-[11px] text-[#0b4f46]">{goesToLine(proposeTo)}</p>
+                            <div className="flex flex-wrap justify-end gap-2">
+                              <button type="button" onClick={() => { setDeleteConfirm(null); setDeleteWhy(''); }} className={BTN}>Cancel</button>
+                              <button type="button" onClick={() => deleteMutation.mutate({ stmtId: stmt.id, why: deleteWhy })} disabled={deleteMutation.isPending || !deleteWhy.trim()}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-[#b42318] px-3 py-1.5 text-sm font-semibold text-white hover:bg-[#912018] disabled:opacity-50">
+                                {deleteMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sendLabel(proposeTo)}
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        {waiting && <ProposedStatementBox documentId={documentId} p={waiting} decider={decider} />}
                       </>
                     )}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </section>
@@ -646,7 +754,8 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                               <div className="flex items-center gap-2">
                                 <button type="button" onClick={() => setCompareVersions({ a: v.id, b: versionData.versions[0].id })} className={BTN}><GitCompare className="h-3.5 w-3.5" /> Compare</button>
                                 {canEdit && (
-                                  <button type="button" onClick={() => rollbackMutation.mutate({ stmtId: versionHistoryStmtId, versionId: v.id })} disabled={rollbackMutation.isPending} className={BTN}>
+                                  <button type="button" disabled={rollbackMutation.isPending} className={BTN}
+                                    onClick={() => (proposeTo ? setRollingBack({ versionId: v.id, why: '' }) : rollbackMutation.mutate({ stmtId: versionHistoryStmtId, versionId: v.id }))}>
                                     <RotateCcw className="h-3.5 w-3.5" /> {rollbackMutation.isPending ? 'Rolling back…' : 'Roll back to this'}
                                   </button>
                                 )}
@@ -659,6 +768,23 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
                             {v.changed_at && <span className="flex items-center gap-1"><Clock className="h-3 w-3" aria-hidden /> {new Date(v.changed_at).toLocaleString()}</span>}
                             {v.change_reason && <span className="italic">&quot;{v.change_reason}&quot;</span>}
                           </div>
+                          {proposeTo && rollingBack && rollingBack.versionId === v.id && (
+                            <div className="mt-3 space-y-2 rounded-lg border border-[#99d5cc] bg-[#f3fbf9] p-3">
+                              <label htmlFor={`statement-rollback-why-${v.id}`} className="block text-xs font-semibold text-[#26323d]">
+                                Justification for this change — {proposeTo} reads it <span className="font-normal text-[#586472]">(required)</span>
+                              </label>
+                              <textarea id={`statement-rollback-why-${v.id}`} value={rollingBack.why} rows={2} maxLength={2000} required aria-required="true" autoFocus className={FIELD}
+                                onChange={(e) => setRollingBack({ versionId: v.id, why: e.target.value })} />
+                              <p className="text-[11px] text-[#0b4f46]">{goesToLine(proposeTo)}</p>
+                              <div className="flex flex-wrap justify-end gap-2">
+                                <button type="button" onClick={() => setRollingBack(null)} className={BTN}>Cancel</button>
+                                <button type="button" disabled={rollbackMutation.isPending || !rollingBack.why.trim()} className={PRIMARY}
+                                  onClick={() => rollbackMutation.mutate({ stmtId: versionHistoryStmtId, versionId: v.id, why: rollingBack.why })}>
+                                  {rollbackMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />} {sendLabel(proposeTo)}
+                                </button>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       );
                     })}

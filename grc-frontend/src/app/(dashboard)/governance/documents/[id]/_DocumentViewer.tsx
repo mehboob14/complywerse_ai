@@ -16,6 +16,8 @@ import { PageLoader, RightSlidePanel } from '@/components/ui';
 import RichTextEditor from '../_RichTextEditor';
 import { SIGNOFF_STATUS } from '../_SignoffControl';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
+import { ProposeNote, useProposedAnswer } from './_ProposalsView';
+import { sendLabel } from '@/lib/proposals';
 import { ackBaseline, openingBaseline } from '../_view/trackedChanges';
 import { versionGroups } from '../_workspace/library';
 import WordView from '@/components/governance/WordView';
@@ -143,7 +145,7 @@ const childrenToText = (node: React.ReactNode): string => {
 // Document CONTENT version history — timeline + diff + restore, mirroring the
 // statement version modal but for the whole document body (item #3a).
 export function DocumentVersionHistoryPanel({
-  documentId, isOpen, onClose, onRestored, onCompare, canRestore = true, status,
+  documentId, isOpen, onClose, onRestored, onCompare, canRestore = true, status, proposeTo = null,
 }: {
   documentId: number; isOpen: boolean; onClose: () => void; onRestored: () => void;
   /** people who may not change the document see the versions and their files, without Restore */
@@ -152,8 +154,11 @@ export function DocumentVersionHistoryPanel({
   status?: string;
   /** organisations with the change chain: compare a version with the document as it is now in the tracked-changes view (files too) */
   onCompare?: (versionId: number) => void;
+  /** the person is not its owner or author: a restore goes to this person (the owner) to accept, with a message they read */
+  proposeTo?: string | null;
 }) {
   const { toast } = useToast();
+  const handledAsProposal = useProposedAnswer();
   const [fetching, setFetching] = useState<number | null>(null);
   const downloadFile = async (v: any) => {
     setFetching(v.id);
@@ -189,7 +194,7 @@ export function DocumentVersionHistoryPanel({
   const [restoring, setRestoring] = useState<{ id: number; why: string } | null>(null);
   const rollbackMutation = useMutation({
     mutationFn: async (r: { id: number; why: string }) => governanceApi.rollbackDocumentVersion(documentId, r.id, r.why),
-    onSuccess: () => { setRestoring(null); refetch(); onRestored(); },
+    onSuccess: (res) => { setRestoring(null); if (handledAsProposal(res?.data, proposeTo ?? undefined)) return; refetch(); onRestored(); },
     onError: (e) => toast({ type: 'error', title: 'Not restored', message: studioProblem(e) }),
   });
 
@@ -256,17 +261,24 @@ export function DocumentVersionHistoryPanel({
                       Version {v.version_number} becomes the document again, as a new version; the versions after it are kept.
                       {['approved', 'published'].includes(status ?? '') ? ' It is approved, so it goes back to review.' : ''}
                     </p>
-                    <label className="mt-2 block">
-                      <span className="text-[11px] font-semibold text-amber-950">Why <span className="font-normal">(optional)</span></span>
-                      <input type="text" value={restoring.why} maxLength={500} placeholder="e.g. The last edit was made in error" autoFocus
-                        onChange={(e) => setRestoring({ id: v.id, why: e.target.value })}
-                        className="mt-1 w-full rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
-                    </label>
+                    {proposeTo ? (
+                      <div className="mt-2">
+                        <ProposeNote id={`restore-why-${v.id}`} decider={proposeTo} value={restoring.why} autoFocus placeholder="e.g. The last edit was made in error"
+                          onChange={(why) => setRestoring({ id: v.id, why })} />
+                      </div>
+                    ) : (
+                      <label className="mt-2 block">
+                        <span className="text-[11px] font-semibold text-amber-950">Why <span className="font-normal">(optional)</span></span>
+                        <input type="text" value={restoring.why} maxLength={500} placeholder="e.g. The last edit was made in error" autoFocus
+                          onChange={(e) => setRestoring({ id: v.id, why: e.target.value })}
+                          className="mt-1 w-full rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
+                      </label>
+                    )}
                     <div className="mt-2 flex justify-end gap-2">
                       <button type="button" onClick={() => setRestoring(null)} className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs text-slate-700 hover:bg-slate-50">Cancel</button>
-                      <button type="button" onClick={() => rollbackMutation.mutate(restoring)} disabled={rollbackMutation.isPending}
+                      <button type="button" onClick={() => rollbackMutation.mutate(restoring)} disabled={rollbackMutation.isPending || (!!proposeTo && !restoring.why.trim())}
                         className="inline-flex items-center gap-1 rounded-md bg-amber-700 px-2.5 py-1 text-xs font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
-                        {rollbackMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} Restore
+                        {rollbackMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RotateCcw className="h-3 w-3" />} {proposeTo ? sendLabel(proposeTo) : 'Restore'}
                       </button>
                     </div>
                   </div>
@@ -555,10 +567,13 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
   const openEditor = () => { startEdit(); setShowFullViewer(true); };
   const closeFullViewer = () => { setShowFullViewer(false); if (editing) setEditing(false); };
 
+  const handledAsProposal = useProposedAnswer();
   const saveContentMutation = useMutation({
     mutationFn: async () =>
       governanceApi.editDocumentContent(doc.id, { content: editContent, change_reason: editReason || undefined }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      // not the owner or author: the edit waits for the owner's decision (the server's sentence says so); the document is as it was
+      if (handledAsProposal(res?.data)) { setEditing(false); setEditReason(''); return; }
       queryClient.invalidateQueries({ queryKey: ['governance-document', doc.id] });
       queryClient.invalidateQueries({ queryKey: ['document-versions', doc.id] });
       setEditing(false);

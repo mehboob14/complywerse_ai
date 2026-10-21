@@ -16,6 +16,7 @@ import { parseUtc } from '@/lib/serverTime';
 import { day } from '@/lib/documentLifecycle';
 import { assigneeOptions, assigneePlaceholder, chosenFrom, sentToast, withChosen, type TargetOption } from '@/lib/signoffTargets';
 import { SIGN_LABEL, STEP_NOUN, againLine, seeChangesHref, type MyStep, type RouteView } from '@/lib/approvalRoutes';
+import { signRoleOf } from '@/lib/proposals';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import { retryUnlessRefused } from './_view/docRoute';
@@ -198,10 +199,12 @@ export function SignoffAction({ documentId, due, version: shown }: {
     onError: (e: any) => toast({ type: 'error', title: 'Not delegated', message: e?.response?.data?.detail || 'Could not delegate.' }),
   });
 
-  const role = data?.my_actionable_role;
+  // the proposer whose change the owner did not accept signs it as it is with their own step (lib/proposals.ts)
+  const role = signRoleOf(data);
   if (!role) return null;
   const review = role === 'reviewer';
   const step = data?.my_step;
+  const asIs = !data?.my_actionable_role && !!step?.may_sign_as_is;
   // a route's own stage names what is asked ("concurrence"); an older server: review or approval
   const kind = step?.kind ?? (review ? 'review' : 'approval');
   const canReject = step ? step.can_reject : true;
@@ -229,12 +232,13 @@ export function SignoffAction({ documentId, due, version: shown }: {
       <div className="flex items-start gap-3">
         <span className="rounded-full bg-primary-50 p-2">{review ? <UserCheck className="h-5 w-5 text-primary-700" /> : <ShieldCheck className="h-5 w-5 text-primary-700" />}</span>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900">Your {STEP_NOUN[kind]} is needed{again ? ' again' : ''}{dueText ? ` by ${dueText}` : ''}</h3>
+          <h3 className="text-sm font-semibold text-gray-900">{asIs ? 'Sign it as it is' : <>Your {STEP_NOUN[kind]} is needed{again ? ' again' : ''}{dueText ? ` by ${dueText}` : ''}</>}</h3>
           <p className="text-xs text-gray-600">
             {step && data?.route?.custom ? `${step.stage_name}${step.in_turn ? ', in turn' : ''}. ` : ''}
             {step?.on_behalf_of ? `For ${step.on_behalf_of}, who handed it to you. ` : ''}
-            Read the document, then draw your signature and sign it. Or ask for changes: the author makes them and it comes back to you
-            {canReject ? '; reject it with a reason to send it back to draft' : ''}.
+            {asIs ? 'Your change was not accepted. Sign the document as it is: your signature counts and the others stand, as nothing changed. Or propose another change from Proposed changes.'
+              : <>Read the document, then draw your signature and sign it. Or ask for changes: the author makes them and it comes back to you
+                {canReject ? '; reject it with a reason to send it back to draft' : ''}.</>}
           </p>
         </div>
       </div>
@@ -249,17 +253,19 @@ export function SignoffAction({ documentId, due, version: shown }: {
                 className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50">
                 {sign.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4" />} {SIGN_LABEL[kind]}
               </button>
-              <button type="button" onClick={() => setMode('changes')}
-                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50">
-                <MessageSquareWarning className="h-4 w-4" /> Ask for changes
-              </button>
-              {canReject && (
+              {!asIs && (
+                <button type="button" onClick={() => setMode('changes')}
+                  className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-amber-300 px-4 py-2 text-sm font-medium text-amber-900 hover:bg-amber-50">
+                  <MessageSquareWarning className="h-4 w-4" /> Ask for changes
+                </button>
+              )}
+              {canReject && !asIs && (
                 <button type="button" onClick={() => setMode('reject')}
                   className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 hover:bg-rose-50">
                   <XCircle className="h-4 w-4" /> Reject
                 </button>
               )}
-              {canDelegate && (
+              {canDelegate && !asIs && (
                 <button type="button" onClick={() => setMode('delegate')} className="inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-100">
                   <UserRoundPlus className="h-3.5 w-3.5" /> Delegate to someone else
                 </button>

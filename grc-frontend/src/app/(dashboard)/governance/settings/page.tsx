@@ -11,7 +11,7 @@ import { clsx } from 'clsx';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
 import {
-  CHANNELS, EVENTS, KIND_LABEL, KINDS, PLACEHOLDERS, PRIORITIES, STEP_LABEL, changes, courseOf, noAccess, renderTemplate, retrySettings, sampleValues, validate,
+  CHANNELS, EVENTS, KIND_LABEL, PLACEHOLDERS, PRIORITIES, STEP_LABEL, changes, courseOf, daysFor, noAccess, renderTemplate, retrySettings, sampleValues, shownKinds, validate,
   type Channel, type GovernanceSettings, type Kind, type Priority, type SettingsAnswer,
 } from '@/lib/governanceSettings';
 
@@ -321,7 +321,7 @@ export default function GovernanceSettingsPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e4e8ec]">
-              {KINDS.map((k) => (
+              {shownKinds(s).map((k) => (
                 <tr key={k}>
                   <td className="px-2 py-2 sm:px-3 text-[13px] text-[#1f2933]">{KIND_LABEL[k]}</td>
                   <td className="px-2 py-2 sm:px-3">
@@ -338,10 +338,14 @@ export default function GovernanceSettingsPage() {
                     </select>
                   </td>
                   <td className="px-2 py-2 sm:px-3 text-[12px] text-[#26323d]">
-                    {/* the request's own due date: the days are set once, under Due dates */}
-                    <a href="#due" className="whitespace-nowrap text-[#0b6b58] underline-offset-2 hover:underline" title="Days from when the person is asked. Change them under Due dates">
-                      {(k === 'acknowledgement' ? s.ack_days : k === 'review' ? s.review_days : s.approval_days) || '?'} days
-                    </a>
+                    {/* the request's own due date: the days are set once, under Due dates (a proposed change's are not set there) */}
+                    {k === 'decide' || k === 'revise' ? (
+                      <span className="whitespace-nowrap" title="Days from when the change was proposed or not accepted">{daysFor(k, s)} days</span>
+                    ) : (
+                      <a href="#due" className="whitespace-nowrap text-[#0b6b58] underline-offset-2 hover:underline" title="Days from when the person is asked. Change them under Due dates">
+                        {daysFor(k, s) || '?'} days
+                      </a>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -396,7 +400,7 @@ export default function GovernanceSettingsPage() {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-[13px] font-medium text-[#26323d]">Preview</p>
               <div role="radiogroup" aria-label="Preview the task for" className="inline-flex rounded-lg border border-[#d5dbe1] bg-white p-0.5">
-                {KINDS.map((k) => (
+                {shownKinds(s).map((k) => (
                   <label key={k} className="relative">
                     <input type="radio" name="preview-kind" checked={previewKind === k} onChange={() => setPreviewKind(k)} className="peer sr-only" />
                     <span className="block cursor-pointer select-none rounded-md px-2 py-0.5 text-[12px] font-medium text-[#586472] hover:text-[#1f2933] peer-checked:bg-[#e6f4f1] peer-checked:text-[#0b6b58] peer-focus-visible:ring-2 peer-focus-visible:ring-[#0f766e]/40">

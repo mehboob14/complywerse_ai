@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BookOpen, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
   ListTree, Loader2, Send, ShieldCheck, Sparkles, Table2, Users, XCircle, type LucideIcon,
-  RotateCcw, FileCheck2, FileInput, FileX2, ListPlus, ListX, PencilLine, RefreshCw, Undo2, Wrench,
+  RotateCcw, FileCheck2, FileInput, FileX2, ListPlus, ListX, PencilLine, RefreshCw, Undo2, Wrench, GitPullRequest,
 } from 'lucide-react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
@@ -94,6 +94,11 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   statement_changed_by_fix: { label: 'Statement changed by a gap fix', icon: Wrench, tone: SLATE },
   statement_fix_undone: { label: 'Gap fix on a statement undone', icon: Undo2, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   statements_written_to_document: { label: 'Statements written into the document', icon: FileInput, tone: SLATE },
+  // changes proposed by others than the owner or author, and the owner's decision on them (lib/proposals.ts)
+  change_proposed: { label: 'Change proposed', icon: GitPullRequest, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  proposal_accepted: { label: 'Proposed change accepted', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  proposal_rejected: { label: 'Proposed change not accepted', icon: XCircle, tone: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  proposal_withdrawn: { label: 'Proposed change withdrawn', icon: Undo2, tone: SLATE },
 };
 
 const STAGE_NAME: Record<string, string> = {

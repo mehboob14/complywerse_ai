@@ -23,6 +23,8 @@ import { useLibraryDocuments } from '../_DetailsFields';
 import { versionLabel } from '../_view/versionLabel';
 import { formatDate } from './_DocumentViewer';
 import { frameworkTypeLabel, lastFailedRuns, outdatedRuns } from './_gapAnalysis';
+import { gapJustification, sendLabel } from '@/lib/proposals';
+import { ProposeNote, useProposalRole, useProposedAnswer } from './_ProposalsView';
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   fully_compliant: { bg: 'bg-emerald-50', text: 'text-emerald-800', label: 'Fully compliant' },
@@ -114,6 +116,9 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   const id = documentId;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // not the owner or author: a fix (or taking one back out) goes to the owner to accept, with its justification (lib/proposals.ts)
+  const { proposes, decider } = useProposalRole(documentId);
+  const handledAsProposal = useProposedAnswer();
 
   const [showGapModal, setShowGapModal] = useState(false);
   const [showNcaCompareModal, setShowNcaCompareModal] = useState(false);
@@ -256,18 +261,20 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
     onError: (error: any) => toast({ type: 'error', title: 'Not saved', message: error?.response?.data?.detail || 'The finding could not be saved.' }),
   });
   const overrideMutation = useMutation({
-    mutationFn: ({ findingId, data }: { findingId: number; data: { override_status: string; override_justification: string } }) =>
+    mutationFn: ({ findingId, data }: { findingId: number; data: { override_status: string; override_justification: string; message?: string } }) =>
       governanceApi.overrideGapFinding(findingId, data),
     onSuccess: (response: any) => {
+      setEditingRow(null);
+      setEditAction(null);
+      setOverrideForm({ status: 'fully_compliant', justification: '' });
+      // the override is saved; taking its fix back out of the document waits for the owner
+      if (handledAsProposal(response?.data, decider)) { refreshFindings(); return; }
       const back = response?.data?.taken_back_version as string | undefined;
       const left = !!response?.data?.fix_left_in_document;
       toast({ type: 'success', title: 'Override saved', message: back ? `The fix was taken back out of the document (version ${back}); every other change stays.`
         : left ? 'Its clause was changed in the document since, so the document was left as it is. Change it there if it should go.' : undefined });
       if (back) refreshDocument();
       else refreshFindings();
-      setEditingRow(null);
-      setEditAction(null);
-      setOverrideForm({ status: 'fully_compliant', justification: '' });
     },
     onError: (error: any) => toast({ type: 'error', title: 'Not overridden', message: error?.response?.data?.detail || 'The override could not be saved.' }),
   });
@@ -297,9 +304,10 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   const applyGapFixMutation = useMutation({
     mutationFn: ({ findingId, data }: {
       findingId: number;
-      data: { mode: 'replace' | 'append'; proposed_text: string; current_text?: string | null; section_heading?: string; change_reason?: string };
+      data: { mode: 'replace' | 'append'; proposed_text: string; current_text?: string | null; section_heading?: string; change_reason?: string; message?: string };
     }) => governanceApi.applyGapFix(findingId, data),
     onSuccess: (response: any) => {
+      if (handledAsProposal(response?.data, decider)) { refreshFindings(); closeAddressGap(); return; }     // waits for the owner
       const r = response?.data || {};
       const v = r.applied_version_number as string | undefined;
       const st = r.document_status as string | undefined;
@@ -546,7 +554,8 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                       targetDateForm={targetDateForm} setTargetDateForm={setTargetDateForm}
                       statusUpdateForm={statusUpdateForm} setStatusUpdateForm={setStatusUpdateForm}
                       onUpdateFinding={(findingId: number, data: any) => updateFindingMutation.mutate({ findingId, data })}
-                      onOverride={(findingId: number, data: any) => overrideMutation.mutate({ findingId, data })}
+                      onOverride={(findingId: number, data: any) => overrideMutation.mutate({ findingId, data: { ...data, message: data.override_justification } })}
+                      proposeTo={proposes ? decider : null}
                       onAcceptRisk={(findingId: number, data: any) => acceptRiskMutation.mutate({ findingId, data })}
                       onAddressGap={(f: any) => {
                         // what the server already holds for this finding (empty until Comply Agent drafted one)
@@ -555,7 +564,8 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                         setAddressGapOriginal(f.original_clause_text || '');
                         setAddressGapDraft(f.suggested_clause_text || '');
                         setAddressGapHeading([f.framework_name, f.clause_reference, f.clause_title].filter(Boolean).join(' — '));
-                        setAddressGapReason('');
+                        // a proposer's message starts as the finding's why (its gap and what is missing), for the owner to read
+                        setAddressGapReason(proposes ? gapJustification(f) : '');
                       }}
                       isPending={updateFindingMutation.isPending || overrideMutation.isPending || acceptRiskMutation.isPending}
                     />
@@ -656,13 +666,20 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                 </>
               )}
 
-              <label className="block">
-                <span className="mb-1.5 block text-sm font-medium text-[#26323d]">Why <span className="text-xs font-normal text-[#586472]">(optional, kept in the version history)</span></span>
-                <input type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
-              </label>
-              <p className="text-xs text-[#586472]">
-                The fix is saved as the document&apos;s next version; earlier versions are kept, and Override takes it back out.
-              </p>
+              {proposes ? (
+                <ProposeNote id={`gap-why-${addressGapFinding.id}`} decider={decider} value={addressGapReason} onChange={setAddressGapReason}
+                  placeholder="e.g. Closing the gap before the audit" />
+              ) : (
+                <>
+                  <label className="block">
+                    <span className="mb-1.5 block text-sm font-medium text-[#26323d]">Why <span className="text-xs font-normal text-[#586472]">(optional, kept in the version history)</span></span>
+                    <input type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
+                  </label>
+                  <p className="text-xs text-[#586472]">
+                    The fix is saved as the document&apos;s next version; earlier versions are kept, and Override takes it back out.
+                  </p>
+                </>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 border-t border-[#e3e8ec] px-5 py-3">
@@ -676,11 +693,13 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                     current_text: addressGapMode === 'replace' ? addressGapOriginal : undefined,
                     section_heading: addressGapMode === 'append' ? (addressGapHeading || undefined) : undefined,
                     change_reason: addressGapReason || undefined,
+                    message: addressGapReason.trim() || undefined,
                   },
                 })}
-                disabled={!addressGapDraft.trim() || applyGapFixMutation.isPending || (addressGapMode === 'replace' && !addressGapOriginal.trim())}
+                disabled={!addressGapDraft.trim() || applyGapFixMutation.isPending || (addressGapMode === 'replace' && !addressGapOriginal.trim()) || (proposes && !addressGapReason.trim())}
                 className={PRIMARY}>
-                {applyGapFixMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> Applying…</> : <><Check className="h-4 w-4" /> {addressGapMode === 'replace' ? 'Replace the clause' : 'Add the clause'}</>}
+                {applyGapFixMutation.isPending ? <><Loader2 className="h-4 w-4 animate-spin" /> {proposes ? 'Sending…' : 'Applying…'}</>
+                  : <><Check className="h-4 w-4" /> {proposes ? sendLabel(decider) : addressGapMode === 'replace' ? 'Replace the clause' : 'Add the clause'}</>}
               </button>
             </div>
           </div>
@@ -784,7 +803,7 @@ function GapFindingRow({
   tenantUsers, overrideForm, setOverrideForm, acceptRiskForm, setAcceptRiskForm,
   assignOwnerForm, setAssignOwnerForm, targetDateForm, setTargetDateForm,
   statusUpdateForm, setStatusUpdateForm,
-  onUpdateFinding, onOverride, onAcceptRisk, onAddressGap, isPending,
+  onUpdateFinding, onOverride, onAcceptRisk, onAddressGap, isPending, proposeTo,
 }: any) {
   const pill = (s: { bg: string; text: string; label: string }) => <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${s.bg} ${s.text}`}>{s.label}</span>;
   const toggle = (action: string) => (e: React.MouseEvent) => { e.stopPropagation(); onSetEditAction(editAction === action && isEditing ? null : action); };
@@ -941,6 +960,7 @@ function GapFindingRow({
                         {finding.applied_at && (
                           <p className="rounded-md bg-amber-50 px-2 py-1.5 text-xs text-amber-900">
                             Its fix is in the document. Overriding takes that fix back out; every other change to the document stays. If its clause was changed since, the document is left as it is.
+                            {proposeTo ? ` Taking it back out goes to ${proposeTo} to accept or reject, with your “Why”; the document does not change until then.` : ''}
                           </p>
                         )}
                         <label className="block">
@@ -955,7 +975,7 @@ function GapFindingRow({
                         </label>
                         <button type="button" onClick={() => onOverride(finding.id, { override_status: overrideForm.status, override_justification: overrideForm.justification })}
                           disabled={!overrideForm.justification.trim() || isPending} className={SAVE}>
-                          {isPending ? 'Saving…' : finding.applied_at ? 'Override and take the fix back' : 'Override'}
+                          {isPending ? 'Saving…' : finding.applied_at ? (proposeTo ? `Override and send the take back to ${proposeTo}` : 'Override and take the fix back') : 'Override'}
                         </button>
                       </div>
                     )}

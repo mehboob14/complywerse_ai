@@ -144,3 +144,15 @@ test('changes asked for: the author is sent to Resubmit, and the task says where
   assert.equal(requestLine(req({ kind: 'review', status: 'held' })), 'Review of version 1.2 · on hold while changes are made');
   assert.equal(requestLine(req({ kind: 'review', status: 'delegated', done_at: '2026-10-21T09:00:00' })), 'Delegated on 21 Oct 2026');
 });
+
+test('a proposed change: the owner decides on it, the proposer revises it; both open Proposed changes on it', () => {
+  assert.equal(actionHref(3, 'decide', 12), '/governance/documents/3?tab=proposals&proposal=12');
+  assert.equal(actionHref(3, 'revise', 12), '/governance/documents/3?tab=proposals&proposal=12');
+  assert.equal(actionHref(3, 'decide'), '/governance/documents/3?tab=proposals');
+  assert.equal(actionHref(3, 'review', 12), '/governance/documents/3?act=sign');          // other kinds keep their step
+  assert.equal(requestLine(req({ kind: 'decide', status: 'pending', due_date: '2026-10-30', proposal_id: 12 })), 'Decide on a proposed change · due 30 Oct 2026');
+  assert.equal(requestLine(req({ kind: 'revise', status: 'pending', due_date: null, overdue: true })), 'Your change was not accepted · overdue');
+  assert.equal(requestLine(req({ kind: 'decide', status: 'done', done_at: '2026-10-21T09:00:00' })), 'Decided on 21 Oct 2026');
+  assert.match(closesWhen(req({ kind: 'decide' }), true), /when you accept or reject the proposed change in the document/);
+  assert.match(closesWhen(req({ kind: 'revise' }), true), /when you propose your change again, sign it as it is or withdraw your change/);
+});

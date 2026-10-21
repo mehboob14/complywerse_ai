@@ -25,6 +25,8 @@ import {
   UserCheck,
   FileCheck2,
   PenLine,
+  GitPullRequest,
+  RotateCcw,
 } from 'lucide-react';
 
 // What the person is asked to do on a document (the document life cycle), most pressing first.
@@ -33,6 +35,9 @@ const ASKS = [
   { kind: 'review', title: 'To review', verb: 'Review', icon: UserCheck },
   { kind: 'acknowledgement', title: 'To acknowledge', verb: 'Acknowledge', icon: FileCheck2 },
   { kind: 'changes', title: 'Changes asked for', verb: 'Make the changes', icon: PenLine },
+  // changes others proposed to a document you own or wrote, and your own change the owner did not accept (lib/proposals.ts)
+  { kind: 'decide', title: 'Decide on a proposed change', verb: 'Decide', icon: GitPullRequest },
+  { kind: 'revise', title: 'Your change was not accepted', verb: 'Revise', icon: RotateCcw },
 ] as const;
 
 // the server's times are naive UTC (parseUtc), not the viewer's local time
@@ -335,7 +340,9 @@ export default function ApprovalsPage() {
       enabled: boolean; total: number;
       items: Array<{ id: number; kind: string; document_id: number; title: string; doc_type: string; due_date: string | null; overdue: boolean; escalation_level: number;
         /** asked again after changes: what they did before and what changed (servers from before leave it out) */
-        again?: Again | null }>;
+        again?: Again | null;
+        /** a decide or revise request: the proposed change it is about */
+        proposal_id?: number | null }>;
     },
   });
   const lifecycleOn = !!docRequests?.enabled;
@@ -474,7 +481,7 @@ export default function ApprovalsPage() {
                       return (
                         <div key={it.id}>
                           <a
-                            href={actionHref(it.document_id, kind)}
+                            href={actionHref(it.document_id, kind, it.proposal_id)}
                             className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 transition-colors hover:border-primary-300 hover:bg-primary-50/30"
                           >
                             <div className="min-w-0">

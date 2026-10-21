@@ -11,7 +11,9 @@ import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import { dateTime, day } from '@/lib/documentLifecycle';
 import { earlierLine, type PersonState, type RouteStage, type RouteView } from '@/lib/approvalRoutes';
+import type { Proposal } from '@/lib/proposals';
 import { useSignoff } from './_SignoffControl';
+import { ProposalHold } from './[id]/_ProposalsView';
 
 const STATE: Record<PersonState, { label: string; tone: string }> = {
   signed: { label: 'Signed', tone: 'border-emerald-300 bg-emerald-50 text-emerald-800' },
@@ -90,13 +92,15 @@ export function RouteStages({ route, prepared }: { route: RouteView; prepared?: 
   );
 }
 
-/** While changes asked for are being made: who asked, what, and (for whoever may change it) Resubmit and Withdraw. */
-export function HoldBanner({ documentId, onResubmit }: { documentId: number; onResubmit?: () => void }) {
+/** While changes asked for are being made: who asked, what, and (for whoever may change it) Resubmit and Withdraw. A hold for a
+ *  change someone proposed (kind "proposal") says who decides on it and, after a rejection, what the proposer does. */
+export function HoldBanner({ documentId, onResubmit, onProposeAgain }: { documentId: number; onResubmit?: () => void; onProposeAgain?: (p: Proposal) => void }) {
   const { data } = useSignoff(documentId);
   const [open, setOpen] = useState(false);
   const hold = data?.route?.hold;
   if (!hold) return null;
   const where = data?.route?.stages.find((s) => s.position === hold.stage_position)?.name;
+  if (hold.kind === 'proposal') return <ProposalHold documentId={documentId} hold={hold} stage={where} onProposeAgain={onProposeAgain} />;
   return (
     <section className="flex flex-wrap items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3" role="status">
       <MessageSquareWarning className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden />

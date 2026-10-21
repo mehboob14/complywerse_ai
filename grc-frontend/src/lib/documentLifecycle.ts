@@ -3,8 +3,9 @@
 import { parseUtc } from '@/lib/serverTime';
 
 export interface LifecycleRow {
-  /** changes: the author is asked to make the changes someone asked for (an approval route on hold) */
-  id: number; kind: 'review' | 'approval' | 'acknowledgement' | 'changes'; user_id: number; user: string | null;
+  /** changes: the author is asked to make the changes someone asked for (an approval route on hold); decide: the owner or author
+   *  decides on a change someone proposed; revise: the proposer after it was not accepted (lib/proposals.ts) */
+  id: number; kind: 'review' | 'approval' | 'acknowledgement' | 'changes' | 'decide' | 'revise'; user_id: number; user: string | null;
   /** delegated: handed to someone else; held: waiting while changes are made; changes_requested: this person asked for changes */
   status: 'pending' | 'done' | 'rejected' | 'cancelled' | 'delegated' | 'held' | 'changes_requested'; version: string | null; requested_at: string | null;
   due_date: string | null; done_at: string | null; comment: string | null; overdue: boolean; escalation_level: number;
@@ -28,7 +29,8 @@ export interface DocumentLifecycle {
 /** An organisation without the life cycle feature is answered `{ enabled: false }` and nothing else. */
 export type LifecycleReply = DocumentLifecycle | { enabled: false };
 
-export const LIFECYCLE_KIND_LABEL = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for' } as const;
+export const LIFECYCLE_KIND_LABEL = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for',
+  decide: 'Decide on a proposed change', revise: 'Your change was not accepted' } as const;
 export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   sent_for_review: 'Sent for review', sent_for_approval: 'Sent for approval', signed: 'Signed', rejected: 'Rejected', published: 'Published',
   acknowledged: 'Acknowledged', escalated: 'Escalated', status_changed: 'Status changed', version_created: 'New version',
@@ -43,6 +45,11 @@ export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   statement_rolled_back: 'Statement rolled back', statements_reparsed: 'Statements re-read from the document',
   statement_corrected_to_file: "Statement matched to the document's wording", statement_out_of_document: 'Statement edit no longer in the document',
   statement_changed_by_fix: 'Statement changed by a gap fix', statement_fix_undone: 'Gap fix on a statement undone',
+  // changes proposed by others than the owner or author (lib/proposals.ts)
+  change_proposed: 'Change proposed',
+  proposal_accepted: 'Proposed change accepted',
+  proposal_rejected: 'Proposed change not accepted',
+  proposal_withdrawn: 'Proposed change withdrawn',
 };
 export const eventLabel = (kind: string) => LIFECYCLE_EVENT_LABEL[kind] || (kind.charAt(0).toUpperCase() + kind.slice(1)).replace(/_/g, ' ');
 
