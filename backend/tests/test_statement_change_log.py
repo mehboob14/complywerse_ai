@@ -160,9 +160,16 @@ def test_a_statement_matched_to_the_documents_wording_is_logged_only_when_its_wo
     statement(db, "PS-0005-001").statement_text = "All administrators must use multi-factor authentication."      # the AI's paraphrase
     db.commit()
     assert world.http.post("/documents/5/document-sync/check?again=true").status_code == 200
+    # its first match is part of reading the document into statements (a new document's parse corrects many): its history keeps
+    # it, the Change log does not
+    assert statement(db, "PS-0005-001").statement_text == S1 and rows(db, action="statement_corrected_to_file") == []
+    assert statement(db, "PS-0005-003").statement_text == S3                  # its quotation marks follow the file
+    word = Document(world.path)                                               # the file's wording changes afterwards (a new file)
+    next(p for p in word.paragraphs if p.text == LONG).text = LONG.replace("system owner", "system's owner")
+    word.save(world.path)
+    assert world.http.post("/documents/5/document-sync/check?again=true").status_code == 200
     (row,) = rows(db, action="statement_corrected_to_file")
-    assert (row.old_value, row.new_value, row.action_details) == ("All administrators must use multi-factor authentication.", S1, "PS-0005-001")
-    assert statement(db, "PS-0005-003").statement_text == S3                  # its quotation marks follow the file, not worth a row
+    assert (row.old_value, row.new_value, row.action_details) == (LONG, LONG.replace("system owner", "system's owner"), "PS-0005-004")
     world.http.post("/documents/5/document-sync/check?again=true")
     assert len(rows(db, action="statement_corrected_to_file")) == 1
 
@@ -237,6 +244,35 @@ def test_a_gap_fix_that_changes_or_adds_a_statement_and_its_undo_are_logged(worl
         ("statement_fix_undone", f"{added.statement_code} · retracted: the fix for ISO/IEC 27001 A.5.18 that added it was taken back", QUARTERLY, None)]
     kinds = [e["kind"] for e in world.http.get("/documents/6/change-chain").json()["events"]]
     assert kinds == ["statement_changed_by_fix", "statement_changed_by_fix", "statement_fix_undone", "statement_fix_undone"]
+
+
+def test_a_gap_fix_in_a_word_document_and_its_undo_leave_the_statement_in_step_with_the_file(world, monkeypatch):
+    """The fix writes the new wording into the file and into the statement: nothing waits to be written (it used to, and "Update
+    document" then failed with 409), and after its undo the statement and the file say the old wording again."""
+    monkeypatch.setattr(gaps, "get_user_tenants", lambda user, session: [1])
+    db, me = world.db, world.db.get(m.GRCUser, 1)
+    assert world.http.post("/documents/5/document-sync/check?again=true").status_code == 200      # the statements are matched to the file
+    db.add(m.PolicyGapAnalysisRun(id=2, tenant_id=1, document_id=5))
+    db.flush()
+    db.add(m.PolicyGapFinding(id=3, tenant_id=1, analysis_run_id=2, document_id=5, framework_name="ISO/IEC 27001", clause_reference="A.5.17",
+                              compliance_status="partially_compliant", remediation_status="open"))
+    db.commit()
+    gaps.apply_finding_fix(finding_id=3, body=gaps.ApplyFixRequest(mode="replace", current_text=S2, proposed_text=S2_NEW), db=db, current_user=me)
+    db.expire_all()
+    doc = db.get(m.GovernanceDocument, 5)
+    assert any(S2_NEW in p.text for p in Document(doc.file_path).paragraphs)
+    ps2 = statement(db, "PS-0005-002")
+    assert (ps2.statement_text, ps2.source_text, ps2.source_match) == (S2_NEW, S2_NEW, "exact")
+    assert doc_sync.state(db, doc)["pending"] == []
+
+    gaps.override_finding(finding_id=3, override=gaps.FindingOverrideRequest(override_status="not_addressed", override_justification="No"),
+                          db=db, current_user=me)
+    db.expire_all()
+    doc = db.get(m.GovernanceDocument, 5)
+    assert any(S2 in p.text for p in Document(doc.file_path).paragraphs)
+    ps2 = statement(db, "PS-0005-002")
+    assert (ps2.statement_text, ps2.source_text, ps2.source_match) == (S2, S2, "exact")
+    assert doc_sync.state(db, doc)["pending"] == []
 
 
 # ── re-read from the document ────────────────────────────────────────────────

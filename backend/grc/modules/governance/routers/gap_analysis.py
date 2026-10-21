@@ -1293,6 +1293,9 @@ def _sync_statement_on_apply(
                 matched.statement_text = proposed_text
             matched.document_version_id = new_version.id
             matched.updated_at = datetime.utcnow()
+            # the fix wrote this wording into the document itself: matched to the file again (document sync), not an edit waiting
+            # to be written there
+            matched.source_text = matched.source_start = matched.source_match = None
             finding.applied_statement_id = matched.id
             log_statement_change(db, matched, user_id, "statement_changed_by_fix", old=finding.applied_statement_prev_text,
                                  new=matched.statement_text, detail=f"the fix for {_gap_name(finding)}")
@@ -1593,6 +1596,7 @@ def override_finding(
                 if finding.applied_statement_prev_text is not None:
                     _create_version_snapshot(db, stmt, "gap_remediation_undo", current_user.id)
                     stmt.statement_text = finding.applied_statement_prev_text
+                    stmt.source_text = stmt.source_start = stmt.source_match = None     # the document says it again (as above)
                     log_statement_change(db, stmt, current_user.id, "statement_fix_undone", old=fixed, new=stmt.statement_text,
                                          detail=f"the fix for {_gap_name(finding)} taken back")
                 else:

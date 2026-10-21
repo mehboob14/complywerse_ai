@@ -197,6 +197,7 @@ def anchor(db, document, user_id: Optional[int] = None, *, again: bool = False) 
     for s in _statements(db, document.id):
         counts["total"] += 1
         pending = s.source_text is not None and (s.statement_text or "").strip() != s.source_text.strip()
+        matched_before = s.source_match is not None     # its first match is part of reading the document: no Change log row
         if pending or (s.source_match is not None and not again):
             if s.source_start is not None and s.source_text:
                 claimed.append((s.source_start, s.source_start + len(s.source_text)))
@@ -221,7 +222,7 @@ def anchor(db, document, user_id: Optional[int] = None, *, again: bool = False) 
         if (s.statement_text or "").strip() != original.strip():       # the statement is the document's own wording, character for character
             was, s.statement_text = s.statement_text, original[:10000]
             _create_version_snapshot(db, s, "verbatim_correction", who, "Wording corrected to match the document")
-            if _norm_plain(was) != _norm_plain(s.statement_text):          # its words changed, not only its spaces or quotation marks
+            if matched_before and _norm_plain(was) != _norm_plain(s.statement_text):   # its words changed, not only spaces or quotes
                 log_statement_change(db, s, who, "statement_corrected_to_file", old=was, new=s.statement_text)
         s.source_text, s.source_start, s.source_match = original, found["start"], found["match"]
         counts[found["match"]] += 1
