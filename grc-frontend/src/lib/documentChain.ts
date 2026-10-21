@@ -207,8 +207,10 @@ export const documentChainApi = {
     },
   revert: async (id: number, body: { from_version_id: number; hunks: number[]; hash?: string; reason?: string }) =>
     (await apiClient.post(`/governance/documents/${id}/change-chain/revert`, body)).data as { version: string; status: string; changes_taken_back: number; notes?: string[] },
-  exportFile: async (id: number, format: ExportFormat): Promise<{ blob: Blob; filename: string }> => {
-    const res = await apiClient.get(`/governance/documents/${id}/change-chain/export`, { params: { format }, responseType: 'blob' });
+  /** the whole change log, or (`filters`, from changeLog.exportParams) what the Change log shows: "Export filtered" */
+  exportFile: async (id: number, format: ExportFormat, filters?: Array<[string, string]>): Promise<{ blob: Blob; filename: string }> => {
+    const params = new URLSearchParams([['format', format], ...(filters ?? [])]);          // repeated keys: people=1&people=2
+    const res = await apiClient.get(`/governance/documents/${id}/change-chain/export`, { params, responseType: 'blob' });
     return { blob: res.data as Blob, filename: filenameOf(res.headers?.['content-disposition'], `change-chain.${format}`) };
   },
   /** one version as it was: its text, or (has_file) its file, read with versionFile */

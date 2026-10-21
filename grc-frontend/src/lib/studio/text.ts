@@ -129,6 +129,18 @@ export function plural(n: number, one: string, many = `${one}s`): string {
   return `${num(n)} ${n === 1 ? one : many}`;
 }
 
+const MARKS = new RegExp('[\\u0300-\\u036f]', 'g');
+const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(MARKS, '');
+
+/** Whether every word of the search is somewhere in the fields ("iso 27001", "nca ecc" …), accents folded ("revision" finds
+ *  "Révision"). An empty search matches everything. */
+export function matches(q: string, ...fields: Array<string | number | null | undefined>): boolean {
+  const words = fold(q.trim()).split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = fold(fields.filter((f) => f != null && f !== '').join(' '));
+  return words.every((w) => hay.includes(w));
+}
+
 export function ago(iso: string | null | undefined): string {
   if (!iso) return '';
   // the server's times are naive UTC
