@@ -456,7 +456,8 @@ PERMISSION_MATRIX = [
             {
                 "name": "tasks",
                 "display_name": "Task Board",
-                "actions": ["view", "create", "edit", "delete"]
+                # view_all: see everyone's tasks (services/task_visibility); without it a person sees the tasks they take part in
+                "actions": ["view", "create", "edit", "delete", "view_all"]
             },
             {
                 "name": "reports",

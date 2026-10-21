@@ -3923,7 +3923,7 @@ def search_link_targets(
     40,000 rows cannot be shipped to the browser and filtered there."""
     tenant_id = get_user_primary_tenant(current_user, db)
     try:
-        items = scf_record_links.search_targets(db, tenant_id, type, q, limit)
+        items = scf_record_links.search_targets(db, tenant_id, type, q, limit, user=current_user)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     return {"type": type, "items": items}

@@ -477,14 +477,17 @@ def _apply_inline_linkages(
         if n > 0:
             task_ids_clean.append(n)
     if task_ids_clean:
-        tasks = (
+        from ....models import GRCUser
+        from ....services import task_visibility
+
+        # only tasks the person may see (another person's task is left alone, as Task Management would)
+        tasks = task_visibility.visible(db, db.get(GRCUser, user_id), (
             db.query(CriticalTask)
             .filter(
                 CriticalTask.id.in_(task_ids_clean),
                 CriticalTask.tenant_id == tenant_id,
             )
-            .all()
-        )
+        )).all()
         for task in tasks:
             task.linked_issue_id = issue.id
             counts["tasks"] = counts.get("tasks", 0) + 1

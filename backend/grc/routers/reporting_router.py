@@ -387,9 +387,9 @@ def _apply_query_filters(
 ):
     """Shared WHERE builder for /query and /aggregate. Returns (query, skipped_filters)."""
     if dataset_key == "tasks" and user is not None and db is not None:
-        # another person's document task names a document (maybe a draft) they may not read: left out as in Task Management
-        from ..modules.governance import doc_lifecycle, permissions as doc_permissions
-        q = doc_lifecycle.without_others_tasks(q, user, reads_all=doc_permissions.visible_filter(db, user) is None)
+        # the tasks the person may see, as on their Task Board (services/task_visibility)
+        from ..services import task_visibility
+        q = task_visibility.visible(db, user, q)
     if dataset_key == "gov_documents" and user is not None and db is not None:
         # the documents a person may read, as every other list of documents (never-published drafts stay with who may see them)
         from ..modules.governance import permissions as doc_permissions

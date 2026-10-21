@@ -55,6 +55,20 @@ def manual_task(db, owner=6):
     return t
 
 
+def grant(db, uid, *names, role_id=901):
+    """A role of its own for ``uid`` holding ``names`` (critical_tasks:tasks:view_all: everyone's tasks, services/task_visibility)."""
+    if db.get(m.Role, role_id) is None:
+        db.add(m.Role(id=role_id, tenant_id=1, name=f"Role {role_id}"))
+        db.add(m.UserRole(user_id=uid, role_id=role_id, tenant_id=1))
+    for name in names:
+        perm = db.query(m.Permission).filter_by(name=name).first() or m.Permission(name=name, resource=name.rsplit(":", 1)[0],
+                                                                                   action=name.rsplit(":", 1)[1])
+        db.add(perm)
+        db.flush()
+        db.add(m.RolePermission(role_id=role_id, permission_id=perm.id))
+    db.commit()
+
+
 # ── what the task says ───────────────────────────────────────────────────────
 def test_the_task_says_in_plain_words_what_to_do_and_by_when(world):
     with world.factory() as db:
@@ -229,8 +243,10 @@ def test_document_tasks_show_only_to_the_person_asked_and_to_who_may_read_the_do
     http.me["u"] = 2                                                             # the person asked
     assert rana.id in [t["id"] for t in http.get("/critical-tasks").json()["items"]]
     assert http.get(f"/critical-tasks/{rana.id}").json()["document_request"]["kind"] == "review"
-    http.me["u"] = 3                                                             # the other reviewer reads the draft: opens it by its link
-    assert http.get(f"/critical-tasks/{rana.id}").status_code == 200
+    http.me["u"] = 3                                                             # the other reviewer reads the draft, takes no part in her task
+    assert http.get(f"/critical-tasks/{rana.id}").status_code == 404
+    grant(db, 3, "critical_tasks:tasks:view_all")                                # seeing every task: the document rule, as before:
+    assert http.get(f"/critical-tasks/{rana.id}").status_code == 200           # opens it by its link
     assert rana.id not in [t["id"] for t in http.get("/critical-tasks").json()["items"]]     # but lists show their own
     http.me["u"] = 7                                                             # an administrator: everything
     assert {rana.id, other.id} <= {t["id"] for t in http.get("/critical-tasks").json()["items"]}
