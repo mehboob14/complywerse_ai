@@ -1290,6 +1290,7 @@ def scan_now_push(
     asset_id: int,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_agents_perm),
 ):
     """Set the pending_scan flag on any agent bound to this asset.
 

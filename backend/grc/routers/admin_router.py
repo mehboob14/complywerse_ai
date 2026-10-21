@@ -1365,6 +1365,9 @@ def update_password_policy(
       - lockout_threshold 3..50, lockout_minutes 1..1440 (24h)
       - session_idle_timeout_minutes 5..1440
     """
+    if not has_tenant_permission(tenant_db, user, "admin:settings:edit"):
+        raise HTTPException(status_code=403, detail="Only an administrator can change the password policy.")
+
     from ..models import PasswordPolicy as _PP
     from ..services.password_policy import get_active_password_policy
 
@@ -1434,6 +1437,8 @@ def list_role_members(
 
     Used by the Role Management page to expand a role and show *who* has it.
     """
+    if not has_tenant_permission(tenant_db, user, "admin:roles:view"):
+        raise HTTPException(status_code=403, detail="Only an administrator can view role members.")
     role = tenant_db.query(Role).filter(Role.id == role_id).first()
     if not role:
         raise HTTPException(status_code=404, detail="Role not found")

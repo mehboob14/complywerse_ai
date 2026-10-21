@@ -9,9 +9,18 @@ from ..schemas import (
     BusinessUnitCreate, BusinessUnitResponse, UserResponse,
     MessageResponse
 )
-from .auth_router import require_auth
+from .auth_router import require_auth, is_tenant_admin
 
 router = APIRouter(prefix="/tenants", tags=["Tenants"])
+
+_NOT_ADMIN = "Only an administrator can change the organisation."
+
+
+def _require_admin(db: Session, user: GRCUser) -> None:
+    """Writes to the organisation record are administrator-only. GETs stay open —
+    user/BU pickers across the app read them."""
+    if not is_tenant_admin(db, user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=_NOT_ADMIN)
 
 
 @router.get("", response_model=List[TenantResponse])
@@ -31,6 +40,7 @@ def create_tenant(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _require_admin(db, current_user)
     existing = db.query(Tenant).filter(Tenant.slug == tenant.slug).first()
     if existing:
         raise HTTPException(
@@ -75,13 +85,14 @@ def update_tenant(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _require_admin(db, current_user)
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     if tenant_update.slug:
         existing = db.query(Tenant).filter(
             Tenant.slug == tenant_update.slug,
@@ -108,13 +119,14 @@ def delete_tenant(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _require_admin(db, current_user)
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     db.delete(tenant)
     db.commit()
     return None
@@ -178,13 +190,14 @@ def add_user_to_tenant(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _require_admin(db, current_user)
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     user = db.query(GRCUser).filter(GRCUser.id == tenant_user.user_id).first()
     if not user:
         raise HTTPException(
@@ -255,13 +268,14 @@ def create_business_unit(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
+    _require_admin(db, current_user)
     tenant = db.query(Tenant).filter(Tenant.id == tenant_id).first()
     if not tenant:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Tenant not found"
         )
-    
+
     if business_unit.parent_id:
         parent = db.query(BusinessUnit).filter(
             BusinessUnit.id == business_unit.parent_id,

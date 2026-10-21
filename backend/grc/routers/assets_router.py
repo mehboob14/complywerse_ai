@@ -33,7 +33,7 @@ from ..schemas import (
     AssetDetailResponse, AssetCoverageAnalysis,
     LifecycleTransitionRequest,
 )
-from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token, refuse_imported_accounts
+from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, decode_token, refuse_imported_accounts, has_tenant_permission
 # Phase 5.4 + 5.3 helpers — keep all logic out of the router body.
 from ..services.asset_criticality import recompute_for_asset as recompute_asset_criticality
 from ..services import asset_lifecycle
@@ -2272,6 +2272,15 @@ def get_asset_detail(
     )
 
 
+def _require_collect(db: Session, user: GRCUser) -> None:
+    """Re-collecting an asset over a saved login, and reading the saved service
+    logins, use stored credentials — gate them the same as live discovery:
+    compliance:discover:execute or assets:asset_inventory:edit (administrators pass)."""
+    if not has_tenant_permission(db, user, "compliance:discover:execute", "assets:asset_inventory:edit"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail="You do not have permission to collect this asset's inventory.")
+
+
 @router.post("/{asset_id}/probe-inventory")
 def probe_asset_inventory(
     asset_id: int,
@@ -2282,6 +2291,7 @@ def probe_asset_inventory(
     credential — a re-scan that refreshes OS / hardware / software / deep
     inventory without re-entering a login. No-op with a clear message when no
     saved credential covers the host."""
+    _require_collect(db, current_user)
     user_tenants = get_user_tenants(current_user, db)
     asset = db.query(ITAsset).filter(
         ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
@@ -2331,6 +2341,7 @@ def list_asset_service_logins(
     """Saved logins that can collect this asset's typed service — so the UI can
     offer a pick-a-saved-login dropdown (and an 'add new' option) instead of
     making the operator re-enter a credential they already saved."""
+    _require_collect(db, current_user)
     user_tenants = get_user_tenants(current_user, db)
     asset = db.query(ITAsset).filter(
         ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),
@@ -2376,6 +2387,7 @@ def collect_asset_service(
     already saved when you set the software up (its IntegrationConnection); only
     if none exists does it need a login in the body. No re-discovery, no
     duplicate, and no re-entering a credential you already gave."""
+    _require_collect(db, current_user)
     user_tenants = get_user_tenants(current_user, db)
     asset = db.query(ITAsset).filter(
         ITAsset.id == asset_id, ITAsset.tenant_id.in_(user_tenants),

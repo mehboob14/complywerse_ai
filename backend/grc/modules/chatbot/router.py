@@ -1360,6 +1360,20 @@ def _readable_hits(hits: List[Dict[str, Any]], library: bool) -> List[Dict[str, 
     return [h for h in hits if not str((h.get("payload") or {}).get("source_type") or "").startswith(_DOCUMENT_SOURCES)]
 
 
+def _own_chat_uploads_only(hits: List[Dict[str, Any]], uploaded_files: Optional[List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """Qdrant indexes chat uploads per tenant, so a file one person dropped into chat
+    can surface in another person's answer. Keep a chat_upload hit only when it is one
+    of THIS session's own uploaded files; every other source type is untouched."""
+    own_ids = {str(f.get("id")) for f in (uploaded_files or []) if f.get("id")}
+    kept: List[Dict[str, Any]] = []
+    for h in hits:
+        payload = h.get("payload") or {}
+        if str(payload.get("source_type") or "") == "chat_upload" and str(payload.get("source_id") or "") not in own_ids:
+            continue
+        kept.append(h)
+    return kept
+
+
 def _touches_documents(sql: str) -> bool:
     return bool(_DOCUMENT_TABLES.search(sql or ""))
 
@@ -2744,6 +2758,7 @@ def try_qdrant_rag_answer(
             source_types=None,
         )
     hits = _readable_hits(hits, library)
+    hits = _own_chat_uploads_only(hits, uploaded_files)
     if not hits:
         return None
 
@@ -3112,7 +3127,7 @@ Generate new SQL using ONLY the column names listed above.
                         limit=request.limit
                     )
                 
-                if retry_result and retry_result.get('sql'):
+                if retry_result and retry_result.get('sql') and validate_sql(retry_result['sql']):
                     logger.info(f"[YES] RETRY SUCCESSFUL: New SQL generated")
                     sql_query = retry_result['sql']
                     sql_result = retry_result
@@ -3307,7 +3322,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                             limit=request.limit
                         )
                     
-                    if retry_result and retry_result.get('sql') and (library or not _touches_documents(retry_result['sql'])):
+                    if retry_result and retry_result.get('sql') and validate_sql(retry_result['sql']) and (library or not _touches_documents(retry_result['sql'])):
                         retry_sql = retry_result['sql']
                         logger.info(f"[REFRESH] RETRY SQL: {retry_sql[:150]}...")
                         
