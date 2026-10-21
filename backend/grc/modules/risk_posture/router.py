@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from grc.models import GRCUser, ITAsset, get_db
-from grc.routers.auth_router import PLATFORM_GRANT, get_user_primary_tenant, require_auth
+from grc.routers.auth_router import PLATFORM_GRANT, get_user_primary_tenant, require_auth, require_tenant_permission
 
 from .service import compute_asset_risk, compute_tenant_posture
 
@@ -60,7 +60,10 @@ def _is_owner_scoped(current_user: GRCUser, tenant_id: int, db: Session) -> bool
     return not any(r in {"Administrator", "Auditor", "Scanning Admin"} for r in role_names)
 
 
-@router.get("/dashboard")
+# The estate's risk posture is read on the Risk Posture page (sidebar: erm:risks) and on Cybersecurity Assurance → Performance
+# (any of its cyber rights): one of those view rights.
+@router.get("/dashboard", dependencies=[Depends(require_tenant_permission(
+    "erm:risks:view", "assets:asset_inventory:view", "vulnerabilities:vulnerability_register:view"))])
 def get_dashboard(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),

@@ -56,6 +56,9 @@ logger = logging.getLogger(__name__)
 # Defining what to scan is a security-sensitive act — gate writes the same way
 # the live CIDR/AD probes are gated.
 _require_discover = require_tenant_permission("compliance:discover:execute")
+# What discovery found, as Cybersecurity Assurance → Performance and IT Asset Discovery show it: the asset inventory's view right
+# (the sidebar's IT Asset Discovery permission)
+_require_inventory_view = require_tenant_permission("assets:asset_inventory:view")
 
 router = APIRouter(prefix="/discovery", tags=["Asset Discovery"])
 
@@ -750,6 +753,7 @@ class ResolveIn(BaseModel):
 def easm_scorecard(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_inventory_view),
 ):
     """Attack-surface health scorecard — the tenant's external (outside-in) assets
     graded by the EASM probe, aggregated for a fleet dashboard plus a per-asset
@@ -899,6 +903,7 @@ def list_discovered_devices(
                     "Omit for the full backlog (every unclaimed device across all runs)."),
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
+    _perm: bool = Depends(_require_inventory_view),
 ):
     """The devices discovery found — read from OBSERVATIONS, not from inventory.
 
