@@ -6,6 +6,7 @@ import { governanceApi } from '@/lib/api';
 import apiClient from '@/lib/api';
 import { parseUtc } from '@/lib/serverTime';
 import { actionHref } from '@/lib/documentTasks';
+import { againLine, seeChangesHref, type Again } from '@/lib/approvalRoutes';
 import { GovernanceActionReviewItem } from '@/types';
 import { SearchInput, RightSlidePanel } from '@/components/ui';
 import {
@@ -332,7 +333,9 @@ export default function ApprovalsPage() {
     queryKey: ['my-document-requests'],
     queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
       enabled: boolean; total: number;
-      items: Array<{ id: number; kind: string; document_id: number; title: string; doc_type: string; due_date: string | null; overdue: boolean; escalation_level: number }>;
+      items: Array<{ id: number; kind: string; document_id: number; title: string; doc_type: string; due_date: string | null; overdue: boolean; escalation_level: number;
+        /** asked again after changes: what they did before and what changed (servers from before leave it out) */
+        again?: Again | null }>;
     },
   });
   const lifecycleOn = !!docRequests?.enabled;
@@ -466,24 +469,30 @@ export default function ApprovalsPage() {
                     <Icon size={13} /> {title} · {list.length}
                   </p>
                   <div className="space-y-1.5">
-                    {list.map((it) => (
-                      <a
-                        key={it.id}
-                        href={actionHref(it.document_id, kind)}
-                        className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 transition-colors hover:border-primary-300 hover:bg-primary-50/30"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium text-black">{it.title}</p>
-                          <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
-                            <span className="capitalize">{it.doc_type}</span>
-                            <span>· due {parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) ?? '-'}</span>
-                            {it.overdue && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">overdue</span>}
-                            {it.escalation_level > 0 && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">escalated</span>}
-                          </p>
+                    {list.map((it) => {
+                      const changes = seeChangesHref(it.document_id, it.again);
+                      return (
+                        <div key={it.id}>
+                          <a
+                            href={actionHref(it.document_id, kind)}
+                            className="flex items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white px-3 py-2 transition-colors hover:border-primary-300 hover:bg-primary-50/30"
+                          >
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium text-black">{it.title}</p>
+                              <p className="flex flex-wrap items-center gap-1.5 text-[11px] text-gray-600">
+                                <span className="capitalize">{it.doc_type}</span>
+                                <span>· due {parseUtc(it.due_date)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) ?? '-'}</span>
+                                {it.overdue && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">overdue</span>}
+                                {it.escalation_level > 0 && <span className="rounded-full border border-rose-300 bg-rose-50 px-1.5 font-medium text-rose-700">escalated</span>}
+                              </p>
+                              {it.again && <p className="mt-0.5 text-xs text-amber-900">{againLine(it.again, (d) => formatDate(d ?? undefined))}</p>}
+                            </div>
+                            <span className="shrink-0 rounded-lg bg-primary-600 px-3 py-1 text-xs font-medium text-white">{it.again ? `${verb} again` : verb}</span>
+                          </a>
+                          {changes && <a href={changes} className="ml-3 mt-0.5 inline-block text-[11px] font-medium text-[#0b6b58] hover:underline">See what changed</a>}
                         </div>
-                        <span className="shrink-0 rounded-lg bg-primary-600 px-3 py-1 text-xs font-medium text-white">{verb}</span>
-                      </a>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               );

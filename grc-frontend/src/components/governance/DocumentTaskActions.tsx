@@ -4,9 +4,10 @@
 // (it opens the document with that popup) and the document. Rules and words: lib/documentTasks.ts.
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowUpRight, FileText, Lock, PenLine } from 'lucide-react';
+import { ArrowUpRight, FileText, GitCompare, Lock, PenLine } from 'lucide-react';
 import { authedFetch } from '@/lib/auth-fetch';
-import { closesWhen, requestLine, taskButtons, type DocumentRequest } from '@/lib/documentTasks';
+import { againLine, seeChangesHref } from '@/lib/approvalRoutes';
+import { closesWhen, momentDayOf, requestLine, taskButtons, type DocumentRequest } from '@/lib/documentTasks';
 
 /** The signed-in user's id (same query as My Work), or null while it loads. */
 export function useMyUserId(): number | null {
@@ -36,6 +37,9 @@ export function DocumentTaskCard({ request, meId }: { request: DocumentRequest |
   }
   const mine = meId != null && request.user_id === meId;
   const buttons = taskButtons(request, meId);
+  // asked again after changes: why, and the document's changes since the version they signed or asked on (their own task only)
+  const again = mine ? request.again ?? null : null;
+  const changes = seeChangesHref(request.document_id, again);
   return (
     <section aria-label="Document request" className="rounded-lg border border-[#99d5cc] bg-[#effaf8] px-4 py-3">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -44,6 +48,7 @@ export function DocumentTaskCard({ request, meId }: { request: DocumentRequest |
           <div className="min-w-0">
             <p className="break-words text-[14px] font-semibold text-[#1f2933]">{request.document_title || `Document #${request.document_id}`}</p>
             <p className={`mt-0.5 text-[12px] ${request.overdue ? 'font-semibold text-[#b42318]' : 'text-[#26323d]'}`}>{requestLine(request)}</p>
+            {again && <p className="mt-0.5 text-[12px] text-[#26323d]">{againLine(again, (iso) => momentDayOf(iso) ?? '-')}</p>}
           </div>
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
@@ -52,6 +57,9 @@ export function DocumentTaskCard({ request, meId }: { request: DocumentRequest |
               {b.primary ? <PenLine size={14} aria-hidden /> : <ArrowUpRight size={14} aria-hidden />} {b.label}
             </Link>
           ))}
+          {changes && (
+            <Link href={changes} className={SECONDARY}><GitCompare size={14} aria-hidden /> See what changed</Link>
+          )}
         </div>
       </div>
       <p className="mt-2 flex items-start gap-1.5 text-[12px] leading-5 text-[#26323d]">

@@ -72,11 +72,12 @@ export function ackBaseline(versions: Array<Timed & { number: string }>, number:
 }
 
 const APPROVAL_EVENTS = new Set(['sent_for_review', 'sent_for_approval', 'submitted', 'signed', 'reviewed', 'approved', 'rejected', 'published',
-  'review_completed', 'review_skipped', 'acknowledged', 'request_cancelled', 'participant_removed', 'return_to_draft', 'escalated', 'delegated']);
+  'review_completed', 'review_skipped', 'acknowledged', 'request_cancelled', 'participant_removed', 'return_to_draft', 'escalated', 'delegated',
+  'review_again_requested']);
 
 /** A chain event that belongs under "Approvals": sent for review or approval, reviewed, signed, approved, rejected, published,
- *  acknowledged, a request withdrawn, escalated or delegated, a reviewer or approver removed, back to draft, or a status set to
- *  approved or published by hand. Not "Created", not a restore, not an owner change. */
+ *  acknowledged, a request withdrawn, escalated or delegated, a reviewer or approver removed, back to draft, asked again after
+ *  changes, or a status set to approved or published by hand. Not "Created", not a restore, not an owner change. */
 export const isApprovalEvent = (e: { kind: string; to: string | null }): boolean =>
   APPROVAL_EVENTS.has(e.kind) || (e.kind === 'status_changed' && (e.to === 'approved' || e.to === 'published'));
 

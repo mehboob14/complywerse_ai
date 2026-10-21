@@ -284,6 +284,9 @@ _COLUMN_ADDS = [
     ("grc_document_obligations", "stage_position", "INTEGER", None),
     ("grc_document_obligations", "on_behalf_of", "INTEGER", None),
     ("grc_governance_documents", "route_stage", "INTEGER", None),
+    # ...and, on changes asked for, the version they were asked on and the newest signature then (its stage is signed again)
+    ("grc_document_route_holds", "version_id", "INTEGER", None),
+    ("grc_document_route_holds", "signature_mark", "INTEGER", None),
     # Statement <-> original document sync (cfsb): the wording as the file has it and where
     ("grc_policy_statements", "source_text", "TEXT", None),
     ("grc_policy_statements", "source_start", "INTEGER", None),

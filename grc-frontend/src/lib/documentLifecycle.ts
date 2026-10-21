@@ -37,6 +37,7 @@ export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   approval_requested: 'Approval requested', acknowledgement_requested: 'Acknowledgement requested', file_uploaded: 'File uploaded',
   restored: 'Restored from the archive', changes_requested: 'Changes requested', resubmitted: 'Resubmitted', withdrawn: 'Withdrawn from review',
   delegated: 'Delegated', route_set: 'Approval route set',
+  review_again_requested: 'Asked again after changes',
   // changes to the document's statements
   statement_added: 'Statement added', statement_edited: 'Statement edited', statement_deleted: 'Statement removed',
   statement_rolled_back: 'Statement rolled back', statements_reparsed: 'Statements re-read from the document',

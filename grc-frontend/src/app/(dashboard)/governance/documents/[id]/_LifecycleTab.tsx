@@ -11,6 +11,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Check, ChevronRight, Clock, FileCheck2, Loader2, Search } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { dateTime, day, eventLabel, type DocumentLifecycle as Lifecycle, type LifecycleRow as Row } from '@/lib/documentLifecycle';
+import { askedAgain } from '@/lib/approvalRoutes';
 import { noAccess, retrySettings, type SettingsAnswer } from '@/lib/governanceSettings';
 import { useToast } from '@/components/ui/ToastProvider';
 import SignaturePad from '@/components/governance/SignaturePad';
@@ -200,8 +201,11 @@ function ReviewAndApproval({ rows, signoff, meId }: { rows: Row[]; signoff?: Sig
                         {manyVersions && r.version && <span className="text-[11px] text-gray-500">version {r.version}</span>}
                       </div>
                       <p className="mt-0.5 text-xs text-gray-600">
-                        {r.status === 'pending' ? `Due ${day(r.due_date)}` : r.status === 'done' && r.done_at ? `${step.doneLabel} ${dateTime(r.done_at)}`
-                          : r.status === 'rejected' && r.done_at ? `Rejected ${dateTime(r.done_at)}` : ''}
+                        {[r.status === 'pending' ? `Due ${day(r.due_date)}` : r.status === 'done' && r.done_at ? `${step.doneLabel} ${dateTime(r.done_at)}`
+                          : r.status === 'rejected' && r.done_at ? `Rejected ${dateTime(r.done_at)}` : '',
+                        // a newer request of the same person: this one is history (signed v1.0, then asked again after changes)
+                        (r.status === 'done' || r.status === 'changes_requested') && askedAgain(rows, r)
+                          ? `${r.status === 'done' && r.version ? `signed v${r.version} · ` : ''}asked again after changes` : ''].filter(Boolean).join(' · ')}
                       </p>
                       {r.comment && <p className="mt-0.5 text-xs italic text-gray-700">“{r.comment}”</p>}
                       {r.status === 'done' && sig && <SignatureSeal id={sig.id} fingerprint={sig.image_sha256 ?? ''} />}

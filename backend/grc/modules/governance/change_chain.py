@@ -50,6 +50,7 @@ EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent
                "return_to_draft": "Returned to draft", "request_cancelled": "Request withdrawn", "participant_removed": "Reviewer or approver removed",
                "owner_assigned": "Owner changed", "escalated": "Escalated", "delegated": "Delegated", "submitted": "Submitted",
                "changes_requested": "Changes requested", "resubmitted": "Resubmitted", "withdrawn": "Withdrawn from review",
+               "review_again_requested": "Asked again after changes",
                "route_set": "Approval route set"}
 _EVENT_ACTIONS = set(EVENT_LABEL)
 # a change to one of the document's statements (field_changed "statement": the statement's wording before and after, cut to a few lines)

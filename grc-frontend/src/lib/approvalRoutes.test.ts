@@ -3,7 +3,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { blankStage, defaultStages, isDefaultShape, moved, picked, routeProblem, routeSummary, stagesOf, toApi, type DraftStage, type RouteView } from './approvalRoutes.ts';
+import {
+  againLine, askedAgain, blankStage, defaultStages, earlierLine, isDefaultShape, moved, picked, routeProblem, routeSummary, seeChangesHref, stagesOf, toApi,
+  type Again, type DraftStage, type RouteView,
+} from './approvalRoutes.ts';
 
 const u = (id: number, display: string) => ({ target_type: 'user', target_id: id, display });
 const RANA = u(2, 'Rana'), RAFAY = u(3, 'Rafay'), UMA = u(6, 'Uma');
@@ -69,4 +72,23 @@ test('people keep their turn when more are picked, and move up and down', () => 
   assert.deepEqual(picked(['user:2'], [RAFAY, RANA]).map((p) => p.target_id), [2]);
   assert.deepEqual(moved([1, 2, 3], 2, -1), [1, 3, 2]);
   assert.deepEqual(moved([1, 2, 3], 0, -1), [1, 2, 3]);
+});
+
+test('someone asked again after changes reads what they did and what changed since', () => {
+  const day = (iso: string | null) => (iso ? iso.slice(0, 10) : '-');
+  const signed: Again = { kind: 'signed', stage: 'Review', stage_kind: 'review', at: '2026-10-21T09:00:00', version: '1.0', version_id: 12,
+    comment: null, now: '1.2', changed: true, by: 'Olivia', note: null };
+  assert.equal(againLine(signed, day), 'You reviewed this on 2026-10-21 (v1.0). Olivia made changes since (v1.0 → v1.2). Please review it again.');
+  assert.equal(againLine({ ...signed, stage_kind: 'approval' }, day), 'You approved this on 2026-10-21 (v1.0). Olivia made changes since (v1.0 → v1.2). Please approve it again.');
+  assert.equal(againLine({ ...signed, changed: false }, day), 'You reviewed this on 2026-10-21 (v1.0). Olivia resubmitted it without changing the text (v1.2). Please review it again.');
+  const asked: Again = { ...signed, kind: 'changes', comment: 'Name the approver.' };
+  assert.equal(againLine(asked, day), 'You asked for changes on 2026-10-21: “Name the approver.”. Olivia resubmitted it (v1.2) — see what changed.');
+  assert.equal(seeChangesHref(5, signed), '/governance/documents/5?changes=12');
+  assert.equal(seeChangesHref(5, { ...signed, changed: false }), null);                  // nothing to show
+  assert.equal(seeChangesHref(5, { ...signed, version_id: null }), null);
+  assert.equal(seeChangesHref(5, null), null);
+  assert.equal(earlierLine({ kind: 'signed', at: null, by: 'Rana', on_behalf_of: null, version: '1.0', comment: null }), 'Signed v1.0 · asked again after changes');
+  assert.equal(earlierLine({ kind: 'changes', at: null, by: 'Rafay', on_behalf_of: null, version: null, comment: 'x' }), 'Asked for changes · asked again after changes');
+  const rows = [{ id: 1, user_id: 2, kind: 'review' }, { id: 2, user_id: 3, kind: 'review' }, { id: 3, user_id: 2, kind: 'review' }];
+  assert.deepEqual(rows.map((r) => askedAgain(rows, r)), [true, false, false]);           // the newest request is the one that waits
 });

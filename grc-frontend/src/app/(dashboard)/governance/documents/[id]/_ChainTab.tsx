@@ -80,6 +80,7 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   delegated: { label: 'Delegated', icon: Send, tone: SLATE },
   changes_requested: { label: 'Changes requested', icon: RotateCcw, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   resubmitted: { label: 'Resubmitted', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  review_again_requested: { label: 'Asked again after changes', icon: RotateCcw, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   withdrawn: { label: 'Withdrawn from review', icon: RotateCcw, tone: SLATE },
   route_set: { label: 'Approval route set', icon: Users, tone: SLATE },
   // changes to the document's statements (not approvals): each shows the statement's wording before and after

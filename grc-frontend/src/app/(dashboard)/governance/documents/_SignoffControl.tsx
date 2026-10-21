@@ -7,18 +7,20 @@
 // Backend: /governance/documents/{id}/signoff/*.
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { governanceApi } from '@/lib/api';
 import { MultiSelectDropdown } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { parseUtc } from '@/lib/serverTime';
+import { day } from '@/lib/documentLifecycle';
 import { assigneeOptions, assigneePlaceholder, chosenFrom, sentToast, withChosen, type TargetOption } from '@/lib/signoffTargets';
-import { SIGN_LABEL, STEP_NOUN, type MyStep, type RouteView } from '@/lib/approvalRoutes';
+import { SIGN_LABEL, STEP_NOUN, againLine, seeChangesHref, type MyStep, type RouteView } from '@/lib/approvalRoutes';
 import SignaturePad from '@/components/governance/SignaturePad';
 import SignatureSeal from '@/components/governance/SignatureSeal';
 import { retryUnlessRefused } from './_view/docRoute';
 import {
-  Loader2, Send, CheckCircle, XCircle, Clock, Users as UsersIcon, UserCheck, PenLine, ShieldCheck, Pencil, MessageSquareWarning, UserRoundPlus,
+  Loader2, Send, CheckCircle, XCircle, Clock, Users as UsersIcon, UserCheck, PenLine, ShieldCheck, Pencil, MessageSquareWarning, UserRoundPlus, GitCompare,
 } from 'lucide-react';
 
 export type Participant = { target_type: string; target_id: number; display?: string; stage_position?: number | null; position?: number | null };
@@ -28,6 +30,8 @@ export type SignoffSignature = {
   signed_at: string | null; comment: string | null; esign?: { id: number; image_sha256: string } | null;
   /** signed by a delegate for this person (newer servers) */
   on_behalf_of_name?: string | null;
+  /** its stage started again after changes: kept, it no longer counts (newer servers) */
+  asked_again?: boolean;
 };
 export type Signoff = {
   status: string;
@@ -203,13 +207,29 @@ export function SignoffAction({ documentId, due, version: shown }: {
   const canReject = step ? step.can_reject : true;
   const canDelegate = step ? step.can_delegate : false;
   const dueText = due ? parseUtc(due)?.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric', timeZone: /^\d{4}-\d{2}-\d{2}$/.test(due) ? 'UTC' : undefined }) : null;
+  // asked again after changes: what they did before and what changed since (servers from before leave it out)
+  const again = step?.again ?? null;
+  const changesHref = seeChangesHref(documentId, again);
 
   return (
     <section className="rounded-xl border-2 border-primary-300 bg-white p-4 shadow-sm" aria-label={`Your ${STEP_NOUN[kind]}`}>
+      {again && (
+        <div className="mb-3 flex flex-wrap items-start gap-x-3 gap-y-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2" role="note">
+          <p className="min-w-[14rem] flex-1 text-sm text-amber-950">
+            {againLine(again, day)}
+            {again.note && <span className="mt-0.5 block text-xs text-amber-900">{again.by || 'The author'} wrote: “{again.note}”</span>}
+          </p>
+          {changesHref && (
+            <Link href={changesHref} className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-semibold text-amber-950 hover:bg-amber-100">
+              <GitCompare className="h-3.5 w-3.5" aria-hidden /> See what changed
+            </Link>
+          )}
+        </div>
+      )}
       <div className="flex items-start gap-3">
         <span className="rounded-full bg-primary-50 p-2">{review ? <UserCheck className="h-5 w-5 text-primary-700" /> : <ShieldCheck className="h-5 w-5 text-primary-700" />}</span>
         <div className="min-w-0">
-          <h3 className="text-sm font-semibold text-gray-900">Your {STEP_NOUN[kind]} is needed{dueText ? ` by ${dueText}` : ''}</h3>
+          <h3 className="text-sm font-semibold text-gray-900">Your {STEP_NOUN[kind]} is needed{again ? ' again' : ''}{dueText ? ` by ${dueText}` : ''}</h3>
           <p className="text-xs text-gray-600">
             {step && data?.route?.custom ? `${step.stage_name}${step.in_turn ? ', in turn' : ''}. ` : ''}
             {step?.on_behalf_of ? `For ${step.on_behalf_of}, who handed it to you. ` : ''}
@@ -441,7 +461,7 @@ export function SignoffTrail({ documentId }: { documentId: number }) {
                 <p className="text-sm text-gray-900">
                   <span className="font-medium">{s.signer_name}</span>
                   {s.on_behalf_of_name && <span className="text-gray-600"> for {s.on_behalf_of_name}</span>}
-                  <span className="text-gray-600"> · {s.role_label} · {s.decision === 'rejected' ? 'rejected' : 'signed'}</span>
+                  <span className="text-gray-600"> · {s.role_label} · {s.decision === 'rejected' ? 'rejected' : 'signed'}{s.asked_again ? ' · asked again after changes' : ''}</span>
                 </p>
                 <p className="flex items-center gap-1 text-[11px] text-gray-500">
                   <Clock className="h-3 w-3" />{s.signed_at ? (parseUtc(s.signed_at)?.toLocaleString() ?? '') : ''}
