@@ -2,9 +2,10 @@
 
 /**
  * Register TABLE of the Governance Documents workspace, built on the shipped DataTable<GovDoc>. Columns: Title · Type · Lifecycle ·
- * Owner · Frameworks · Ver · Actions. Every document has an arrow before its title: opened, it shows the document's versions (newest
- * first, each a link to that version on the document page) and the documents under it (parent_document_id) as rows of the same table,
- * one level in, which open the same way. The shell owns filtering/data + action handlers.
+ * Owner · Frameworks · Ver · Actions. Every document has an arrow before its title: opened, it shows every version of the document
+ * (each major version with its minor versions under it, newest major first; each opens the document on that version) and the
+ * documents under it (parent_document_id) as rows of the same table, one level in, which open the same way. The shell owns
+ * filtering/data + action handlers.
  */
 
 import { useMemo, useState } from 'react';
@@ -39,7 +40,7 @@ import { LifecycleHover } from './LifecycleHover';
 import { RowActionsMenu } from './RowActionsMenu';
 import { bulkActionIds } from './archive';
 import { NOTHING_OPEN, buildTree, collapseAll, expandAll, flip, openness, treeEntries, type Fold } from './docTree';
-import { shownFrameworkIds, versionStates } from './library';
+import { shownFrameworkIds, versionGroups, versionStates, type VersionState } from './library';
 import { retryUnlessRefused } from '../_view/docRoute';
 
 export interface RegisterTableProps {
@@ -113,8 +114,27 @@ function TitleCell({ doc, depth, match, childCount, open, parentTitle, onToggle 
   );
 }
 
-/** A document's versions, newest first, read as the document page reads them (its Versions view: the change chain; where the chain is
- *  off, the version history): number, state, size, date and who made it, each a link to that version on the document page. */
+/** One version of a document: number, state, size, date and who made it; it opens the document on that version. */
+function VersionLink({ doc, v, original }: { doc: GovDoc; v: VersionRow & { state: VersionState }; original: boolean }) {
+  const word = v.state === 'in-force' ? 'In force' : v.state === 'superseded' ? 'Superseded' : statusLabel(doc.status);
+  const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
+  // text-[#fff], not text-white: the library's governance-light repaints text-white grey
+  const look = inForce ? 'border-[#0f766e] bg-[#0f766e] text-[#fff]' : v.state === 'superseded' ? 'border-[#d5dbe1] text-[#586472]' : 'border-[#9aa5b1] text-[#1f2933]';
+  return (
+    <Link
+      href={`/governance/documents/${doc.id}?read=${v.id}`}
+      className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1 text-[12px] text-[#26323d] hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
+    >
+      <span className="font-semibold tabular-nums text-[#1f2933]">{verLabel(v.number)}</span>
+      <span className={`rounded border px-1.5 text-[11px] font-medium leading-4 ${look}`}>{word}</span>
+      {/* on a phone the table is wider than the screen: the rest of the line goes under the number, in view */}
+      <span className="text-[11px] text-[#586472] max-sm:basis-full">{[original ? 'The original' : SIZE[v.kind ?? ''], day(v.at), v.by || 'Unknown'].filter(Boolean).join(' · ')}</span>
+    </Link>
+  );
+}
+
+/** Every version of a document, read as the document page reads them (its Change log: the change chain; where the chain is off, the
+ *  version history), as a hierarchy: each major version with its minor versions under it, newest major first (library.versionGroups). */
 function Versions({ doc, depth }: { doc: GovDoc; depth: number }) {
   const chain = useQuery({ queryKey: ['document-chain', doc.id], queryFn: () => documentChainApi.chain(doc.id), staleTime: 15_000, retry: retryUnlessRefused });
   const off = chain.data?.enabled === false;
@@ -139,28 +159,19 @@ function Versions({ doc, depth }: { doc: GovDoc; depth: number }) {
   }
   if (failed) return <p style={note} role="alert" className="text-[12px] text-[#9b1c1c]">{problemOf(failed, 'The versions could not be read.')}</p>;
   if (lines.length === 0) return <p style={note} className="text-[12px] text-[#586472]">No versions recorded yet.</p>;
+  const original = lines[lines.length - 1].id;
   return (
-    <ul aria-label={`Versions of ${doc.title}, newest first`} style={{ marginLeft: depth * STEP + STEP / 2 }} className="border-l border-[#d5dbe1] pl-2">
-      {lines.map((v, i) => {
-        const word = v.state === 'in-force' ? 'In force' : v.state === 'superseded' ? 'Superseded' : statusLabel(doc.status);
-        const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
-        // text-[#fff], not text-white: the library's governance-light repaints text-white grey
-        const look = inForce ? 'border-[#0f766e] bg-[#0f766e] text-[#fff]' : v.state === 'superseded' ? 'border-[#d5dbe1] text-[#586472]' : 'border-[#9aa5b1] text-[#1f2933]';
-        const size = i === lines.length - 1 ? 'The original' : SIZE[v.kind ?? ''];
-        return (
-          <li key={v.id}>
-            <Link
-              href={`/governance/documents/${doc.id}?tab=versions&version=${v.id}`}
-              className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1 text-[12px] text-[#26323d] hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
-            >
-              <span className="font-semibold tabular-nums text-[#1f2933]">{verLabel(v.number)}</span>
-              <span className={`rounded border px-1.5 text-[11px] font-medium leading-4 ${look}`}>{word}</span>
-              {/* on a phone the table is wider than the screen: the rest of the line goes under the number, in view */}
-              <span className="text-[11px] text-[#586472] max-sm:basis-full">{[size, day(v.at), v.by || 'Unknown'].filter(Boolean).join(' · ')}</span>
-            </Link>
-          </li>
-        );
-      })}
+    <ul aria-label={`Versions of ${doc.title}, newest major version first`} style={{ marginLeft: depth * STEP + STEP / 2 }} className="border-l border-[#d5dbe1] pl-2">
+      {versionGroups(lines).map((g) => (
+        <li key={g.head.id}>
+          <VersionLink doc={doc} v={g.head} original={g.head.id === original} />
+          {g.minors.length > 0 && (
+            <ul aria-label={`Minor versions after ${verLabel(g.head.number)}, newest first`} className="ml-3 border-l border-[#e1e6eb] pl-2">
+              {g.minors.map((v) => <li key={v.id}><VersionLink doc={doc} v={v} original={v.id === original} /></li>)}
+            </ul>
+          )}
+        </li>
+      ))}
     </ul>
   );
 }

@@ -97,6 +97,9 @@ export interface Session {
   document_version_in_force?: string | null;
   /** the person may save it back to the library (Save to the library, Move to the library); missing: allowed */
   may_save?: boolean;
+  /** an uploaded file not in the library yet and changed here (an older upload): the version the file keeps when it moves to the
+   *  library; what was changed here becomes the next one, minor or major as the person chooses. Null or missing: one version. */
+  original_version?: string | null;
   revision: number;
   base_label: string | null;
   instructions: Instructions;
@@ -408,6 +411,7 @@ export interface MoveToLibrary {
   review_cycle_months?: number;
   effective_date?: string;                       // YYYY-MM-DD
   next_review_date?: string;                     // the effective date (or today) + the review cycle when left out
+  change_type?: 'major' | 'minor';               // an upload changed here (Session.original_version): the second version's size
 }
 
 /** The sentence the server wrote for a failed call (never a stack trace). */
@@ -489,7 +493,8 @@ export const studioApi = {
   stop: (id: number, messageId: number) => post<Message>(`/sessions/${id}/messages/${messageId}/stop`),
   /** a whole document as far as it is written, while Comply Agent writes it */
   draftPreview: (id: number, messageId: number) => get<{ seq: number; markdown: string }>(`/sessions/${id}/messages/${messageId}/preview`),
-  /** `library_version`: a library document's next version, made by the accept (null when the document is not in the library) */
+  /** an accept changes the studio's text only: Save to the library makes the library's next version (`library_version` is null,
+   *  kept for older screens) */
   accept: (id: number, messageId: number, body: { op_ids?: string[]; overrides?: Record<string, string> } = {}) =>
     post<{ accepted: number; conflicts: number; revision: number; content: string; message: Message; library_version?: LibraryVersion | null }>(`/sessions/${id}/messages/${messageId}/accept`, body),
   reject: (id: number, messageId: number, body: { op_ids?: string[] } = {}) => post<{ message: Message }>(`/sessions/${id}/messages/${messageId}/reject`, body),
@@ -516,8 +521,9 @@ export const studioApi = {
     post<Redline>(`/sessions/${id}/compare`, body),
 
   moveToLibrary: (id: number, body: MoveToLibrary) => post<{ document_id: number; title: string; version: string }>(`/sessions/${id}/move-to-library`, body),
-  saveToDocument: (id: number, body: { change_reason?: string; force?: boolean } = {}) =>
-    post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null; in_place?: boolean }>(`/sessions/${id}/save-to-document`, body),
+  /** the next version of the library document, minor or major as the person chose (`change_type`; without it Comply Agent decides) */
+  saveToDocument: (id: number, body: { change_reason?: string; force?: boolean; change_type?: 'major' | 'minor' } = {}) =>
+    post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null }>(`/sessions/${id}/save-to-document`, body),
 
   assets: () => get<{ items: Asset[] }>('/assets'),
   uploadAsset: async (file: File, makeDefault = false): Promise<Asset> => {
@@ -561,8 +567,8 @@ export interface BlockLook {
 /** The page of a Word file, in points, and the look of its normal text. */
 export interface PageLook { width?: number; left?: number; right?: number; top?: number; normal?: BlockLook }
 
-/** An accept that made the library document's next version (`change`: major is +1.0, minor +0.1), or why it did not */
-export interface LibraryVersion { saved: boolean; version?: string; change?: 'major' | 'minor' | null; status?: string; why?: string; in_place?: boolean }
+/** A library version an action made (`change`: major is the next whole number, minor +0.1), or why it did not; an accept makes none */
+export interface LibraryVersion { saved: boolean; version?: string; change?: 'major' | 'minor' | null; status?: string; why?: string }
 
 export function saveBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);

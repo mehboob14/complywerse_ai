@@ -23,6 +23,20 @@ export function versionStates<V extends { number: string }>(
   return newestFirst.map((v, i) => ({ ...v, state: i === inForceAt ? 'in-force' : v.number === current ? 'current' : 'superseded' }));
 }
 
+/**
+ * A document's versions as a hierarchy (the user, 2026-10-21: "all version should be there in proper hierarchical manner"): one
+ * group per major number, newest major first; `head` is the group's first version (its x.0, or where the document started, e.g. an
+ * uploaded 4.3) and `minors` the versions after it, newest first. `newestFirst`: the versions, newest first; nothing is dropped.
+ */
+export function versionGroups<V extends { number: string }>(newestFirst: readonly V[]): { major: string; head: V; minors: V[] }[] {
+  const groups = new Map<string, V[]>();
+  for (const v of newestFirst) {
+    const major = v.number.split('.')[0];
+    groups.set(major, [...(groups.get(major) ?? []), v]);
+  }
+  return Array.from(groups, ([major, rows]) => ({ major, head: rows[rows.length - 1], minors: rows.slice(0, -1) }));
+}
+
 /** The frameworks the register's Frameworks column shows: those the Details dialog edits (applicable_framework_ids), else the
  *  document's own framework_ids when none are set (the server defaults one to the other on creation). */
 export function shownFrameworkIds(d: { applicable_framework_ids?: number[] | null; framework_ids?: number[] | null }): number[] {

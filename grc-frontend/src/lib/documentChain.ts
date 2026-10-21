@@ -208,7 +208,8 @@ export const documentChainApi = {
   },
   /** one version as it was: its text, or (has_file) its file, read with versionFile */
   version: async (versionId: number) => (await apiClient.get(`/governance/versions/${versionId}`)).data as {
-    id: number; version_number: string; content: string | null; has_file: boolean; file_name: string | null; file_type: string | null;
+    id: number; document_id: number; version_number: string; status: string; content: string | null; has_file: boolean; file_name: string | null;
+    file_type: string | null;
   },
   /** the file of one version (the original upload, or a later file), named with its version: "policy v1.0.docx" */
   versionFile: async (id: number, versionId: number, name: string, number: string): Promise<{ blob: Blob; filename: string }> => {

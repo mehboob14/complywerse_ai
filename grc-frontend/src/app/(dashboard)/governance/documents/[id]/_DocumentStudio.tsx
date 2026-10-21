@@ -229,6 +229,26 @@ export default function DocumentStudio() {
     router.replace(`/governance/documents/${id}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
   }, [actAsked, docQ.data, lifecycleQ.isFetching, signoff.isFetching]);
 
+  // ?read=<version id> (a version in the documents table): the document opens on that version - the current one is the document
+  // itself - and the parameter then goes, as ?act= does
+  const readAsked = Number(search?.get('read')) || null;
+  const readQ = useQuery({ queryKey: ['document-version', readAsked], queryFn: () => documentChainApi.version(readAsked as number),
+    enabled: valid && !!readAsked, staleTime: 60_000, retry: retryUnlessRefused });
+  useEffect(() => {
+    if (!readAsked || readQ.isPending) return;
+    const v = readQ.data;
+    if (v && v.document_id === id) {
+      setViewState('document');
+      setTrackedRange(null);
+      setReading(v.status === 'current' ? null : { id: v.id, number: v.version_number });
+    } else {
+      toast({ type: 'error', title: 'That version could not be opened', message: readQ.error ? problemOf(readQ.error) : 'It is not a version of this document.' });
+    }
+    const q = new URLSearchParams(search?.toString() ?? '');
+    q.delete('read');
+    router.replace(`/governance/documents/${id}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
+  }, [readAsked, readQ.isPending, readQ.data]);
+
   if (!valid) return <NotFound library={library} />;
   // a backend from before the AI Studio's document view (not restarted, or not deployed yet): the classic page
   if ((accessQ.error as any)?.response?.status === 404) return <ClassicDocumentPage />;
