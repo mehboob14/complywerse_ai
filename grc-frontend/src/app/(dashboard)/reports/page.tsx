@@ -21,6 +21,8 @@ import { listSpecs } from './_reports/savedReports';
 import { usePermissions } from './_reports/usePermissions';
 import { EMPTY_TOKEN, encodeMultiValue } from './_reports/filter-utils';
 import { isActiveCondition } from './_reports/grid-utils';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
 const RECENT_KEY = 'grc.reports.recentDatasets';
 
@@ -43,10 +45,15 @@ function pushRecent(key: string) {
   }
 }
 
-export default function ReportsPage() {
+// opened by its URL without the sidebar entry's right: the no-access page
+export default function GuardedReportsPage() {
+  return <PermissionGuard required={navPermissions('/reports')}><ReportsPage /></PermissionGuard>;
+}
+
+function ReportsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { loaded: permsLoaded, authenticated, canUse } = usePermissions();
+  const { loaded: permsLoaded, authenticated, can, canUse } = usePermissions();
   const [activeKey, setActiveKey] = useState<string | undefined>(undefined);
   /** Start blank — user chooses any module; no default dataset. */
   const [blankEmpty, setBlankEmpty] = useState(true);
@@ -210,20 +217,25 @@ export default function ReportsPage() {
     <div className="flex min-h-[calc(100dvh-3.5rem)] flex-col bg-white">
       {/* Actions sit under the app Header — no duplicate title / blurb */}
       <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-b border-slate-100 px-4 py-2 lg:px-6">
-        <Link
-          href="/reports/analytics"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-        >
-          <LayoutDashboard className="h-3.5 w-3.5 text-slate-400" />
-          Analytics
-        </Link>
-        <Link
-          href="/reports/dashboards"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-        >
-          <LayoutDashboard className="h-3.5 w-3.5 text-slate-400" />
-          Dashboards
-        </Link>
+        {/* Trends and Saved exports need what this page needs; Analytics and Dashboards their own rights */}
+        {can(navPermissions('/reports/analytics')) && (
+          <Link
+            href="/reports/analytics"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            <LayoutDashboard className="h-3.5 w-3.5 text-slate-400" />
+            Analytics
+          </Link>
+        )}
+        {can(navPermissions('/reports/dashboards')) && (
+          <Link
+            href="/reports/dashboards"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          >
+            <LayoutDashboard className="h-3.5 w-3.5 text-slate-400" />
+            Dashboards
+          </Link>
+        )}
         <Link
           href="/reports/trends"
           className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"

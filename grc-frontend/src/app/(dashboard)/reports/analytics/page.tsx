@@ -18,6 +18,8 @@ import {
 } from 'lucide-react';
 import { reportingMetabaseApi } from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
 type StarterDash = {
   key: string;
@@ -46,7 +48,12 @@ type MetabaseStatus = {
   licence_note?: string;
 };
 
-export default function ReportsAnalyticsPage() {
+// opened by its URL without the sidebar entry's right: the no-access page
+export default function GuardedReportsAnalyticsPage() {
+  return <PermissionGuard required={navPermissions('/reports/analytics')}><ReportsAnalyticsPage /></PermissionGuard>;
+}
+
+function ReportsAnalyticsPage() {
   const { toast } = useToast();
   const qc = useQueryClient();
   const [opening, setOpening] = useState<string | null>(null);

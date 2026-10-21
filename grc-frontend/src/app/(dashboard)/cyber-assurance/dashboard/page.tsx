@@ -19,6 +19,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, AlertTriangle, ArrowRight, Boxes, Bug, ClipboardCheck, Globe, RefreshCw, ShieldAlert } from 'lucide-react';
 import apiClient, { compliancePluginsApi, discoveryApi, riskPostureApi } from '@/cyber-assurance/lib/api';
 import { SCORECARD_QUERY_KEYS } from '@/cyber-assurance/components/dashboard/scorecard-query-keys';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 import {
   BAND, BAND_ORDER, CARD_SHADOW, Card, Empty, Eyebrow, FONT, Figure, Key, Loading, Pill, Skel, T, Unavailable,
   alpha, nfmt, pctOf, plural, toBand, type Band,
@@ -53,7 +55,12 @@ const KEYS = {
 const ALL_KEYS = Object.values(KEYS);
 const get = (url: string) => async () => (await apiClient.get(url)).data;
 
-export default function PerformancePage() {
+// opened by its URL without one of the sidebar entry's rights: the no-access page
+export default function GuardedPerformancePage() {
+  return <PermissionGuard required={navPermissions('/cyber-assurance/dashboard')}><PerformancePage /></PermissionGuard>;
+}
+
+function PerformancePage() {
   const qc = useQueryClient();
   const summary = useQuery<ExecSummary>({ queryKey: KEYS.summary, queryFn: get('/exec-dashboard/summary'), retry: 1 });
   const trends = useQuery<Trends>({ queryKey: KEYS.trends, queryFn: get('/vuln-management/dashboard/trends?period=90d'), retry: 1 });

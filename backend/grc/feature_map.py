@@ -210,7 +210,7 @@ _FORMAT_PAGES = {
 
 
 # ── The menu's shape, for the workflow builder's trees ───────────────────────
-# Places above are flat (module, page). The sidebar (components/layout/Sidebar.tsx)
+# Places above are flat (module, page). The sidebar (its entries: components/layout/navAccess.ts)
 # nests some of them; these say how, so a trigger is found where the page is.
 PARENT: Dict[str, str] = {"Assessments": "Compliance Management", "Business Continuity": "Compliance Management"}
 SUBGROUPS: Dict[Place, str] = {("Risk Management", page): "Operational Risk" for page in (

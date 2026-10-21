@@ -3,270 +3,36 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  FileSpreadsheet,
   Shield,
   ScrollText,
-  FileText,
-  ClipboardCheck,
   GitPullRequest,
-  Rss,
-  AlertTriangle,
   Users,
-  ClipboardList,
-  Server,
   Radar,
   Settings,
   ChevronDown,
   ChevronRight,
   BarChart3,
-  Target,
   Activity,
-  AlertCircle,
-  Bug,
-  Crosshair,
-  Clock,
   Layers,
-  Workflow,
   Globe,
-  Calendar,
   Bot,
-  FolderKanban,
-  ListTodo,
   ShieldCheck,
-  Gavel,
-  Landmark,
-  ShieldAlert,
-  LifeBuoy,
   CalendarClock,
-  Zap,
-  Bookmark,
-  Building2,
   Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { useState, useEffect } from "react";
 import { clsx } from "clsx";
 import { apiClient } from "@/lib/api";
+import {
+  NO_ACCESS, flattenLeaves, isGroup, navAccessFromMe, navigation, visibleNav,
+  type NavAccess, type NavEntry, type NavGroup, type NavItem,
+} from "./navAccess";
 
 const navIconProps = {
   size: 18,
   strokeWidth: 1.75,
 };
-
-interface NavItem {
-  name: string;
-  href: string;
-  icon: LucideIcon;
-  requiredPermissions?: string[];
-  requiredModules?: string[];
-  /** Path prefix for active-highlighting when it differs from href. */
-  activeMatch?: string;
-  /** A client-specific module the tenant must have (/auth/me tenant.features) — admins included. */
-  requiredFeature?: string;
-}
-
-interface NavGroup {
-  name: string;
-  icon?: LucideIcon;
-  items: NavEntry[];   // may contain nested groups (folder ΓåÆ sub-dropdown)
-  defaultOpen?: boolean;
-  requiredModules?: string[];
-  adminOnly?: boolean;
-}
-
-type NavEntry = (NavItem & { requiredModules?: string[]; adminOnly?: boolean }) | NavGroup;
-
-const ADMIN_DEFAULT_MODULES = [
-  'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
-  'vulnerabilities', 'assets', 'frameworks', 'reports', 'admin', 'workflow_engine', 'integrations',
-  'is_projects', 'critical_tasks', 'bcm'
-];
-
-const AUTHENTICATED_DEFAULT_MODULES = [
-  'dashboard', 'risks', 'erm', 'controls', 'compliance', 'evidence', 'governance',
-  'vulnerabilities', 'assets', 'frameworks', 'reports', 'workflow_engine', 'integrations',
-  'is_projects', 'critical_tasks', 'bcm'
-];
-
-const normalizePerm = (perm: string): string => {
-  const cleaned = perm.trim();
-  if (!cleaned) return '';
-  return cleaned.includes('.') ? cleaned.replace(/\./g, ':') : cleaned;
-};
-
-const extractModuleFromPerm = (perm: string): string => {
-  const normalized = normalizePerm(perm);
-  return normalized.split(':')[0] || '';
-};
-
-const navigation: NavEntry[] = [
-  {
-    name: 'Performance Overview',
-    href: '/dashboard',
-    icon: LayoutDashboard,
-    requiredModules: ['dashboard'],
-    requiredPermissions: ['dashboard:overview:*']
-  },
-  // Task Management sits where My Work did; My Work stays reachable from the dashboard.
-  {
-    name: 'Task Management',
-    href: '/tasks',
-    icon: ListTodo,
-    requiredModules: ['critical_tasks'],
-    requiredPermissions: ['critical_tasks:tasks:*', 'critical_tasks:reports:view']
-  },
-  {
-    name: 'Governance',
-    icon: Landmark,
-    requiredModules: ['governance'],
-    items: [
-      { name: 'Overview', href: '/governance', icon: LayoutDashboard, requiredPermissions: ['governance:policies:*'] },
-      { name: 'Documents', href: '/governance/documents', icon: ScrollText, requiredPermissions: ['governance:policies:*'] },
-      { name: 'My Approvals', href: '/governance/approvals', icon: ClipboardCheck, requiredPermissions: ['governance:policies:*'] },
-      { name: 'Committees', href: '/governance/committees', icon: Users, requiredPermissions: ['governance:committees:*'] },
-      { name: 'KRIs', href: '/erm/kris', icon: Activity, requiredPermissions: ['erm:kris:*'] },
-      { name: 'KPI Report', href: '/governance/kpi-report', icon: Target, requiredPermissions: ['erm:kris:*'] },
-      { name: 'Projects', href: '/is-projects', icon: FolderKanban, requiredPermissions: ['is_projects:projects:*', 'is_projects:dashboard:view'] },
-    ],
-  },
-  {
-    name: 'Risk Management',
-    icon: ShieldAlert,
-    requiredModules: ['risks', 'erm'],
-    items: [
-      { name: 'Overview', href: '/erm', icon: LayoutDashboard, requiredPermissions: ['erm:risks:*'] },
-      {
-        name: 'Operational Risk',
-        icon: Layers,
-        items: [
-          { name: 'Risk Register', href: '/erm/risks', icon: AlertTriangle, requiredPermissions: ['erm:risks:*'] },
-          { name: 'Risk Assessments', href: '/erm/risk-assessments', icon: ClipboardList, requiredPermissions: ['risks:risk_assessment:*', 'erm:rcsa:*'] },
-          { name: 'RCSA', href: '/erm/rcsa', icon: ClipboardList, requiredPermissions: ['erm:rcsa:*'] },
-          // moved out of Advanced Analytics into the sidebar
-          { name: 'Scenario Analysis', href: '/erm/analytics/scenario', icon: Target, requiredPermissions: ['erm:risks:*'] },
-          { name: 'Bow-Tie Analysis', href: '/erm/analytics/bowtie', icon: Workflow, requiredPermissions: ['erm:risks:*'] },
-          { name: 'Advanced Analytics', href: '/erm/analytics', icon: BarChart3, requiredPermissions: ['erm:risks:*'] },
-        ],
-      },
-    ],
-  },
-  {
-    name: 'Third-Party Vendor Risk',
-    href: '/vendor-risk',
-    icon: Building2,
-    requiredModules: ['erm'],
-    requiredPermissions: ['erm:risks:*'],
-  },
-  {
-    name: 'Compliance Management',
-    icon: ShieldCheck,
-    requiredModules: ['compliance', 'controls', 'evidence', 'frameworks'],
-    items: [
-      { name: 'Overview', href: '/compliance', icon: LayoutDashboard, requiredPermissions: ['compliance:frameworks:*', 'controls:control_library:*', 'evidence:evidence_library:*'] },
-      { name: 'Frameworks', href: '/frameworks/manage', activeMatch: '/frameworks', icon: Layers, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Evidence Management', href: '/evidence', icon: FileText, requiredPermissions: ['evidence:evidence_library:*', 'evidence:evidence_upload:*'] },
-      { name: 'Access Reviews', href: '/compliance/access-reviews', icon: Users, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Regulatory Changes', href: '/governance/regulatory-changes', icon: GitPullRequest, requiredPermissions: ['governance:regulatory_changes:*'] },
-      { name: 'Regulatory Feeds', href: '/governance/regulatory-feeds', icon: Rss, requiredPermissions: ['governance:regulatory_changes:*'] },
-      {
-        name: 'Assessments',
-        icon: ClipboardCheck,
-        items: [
-          { name: 'Overview', href: '/assessments', icon: LayoutDashboard, requiredPermissions: ['compliance:assessments:*'] },
-          // Cyber Security features now live on a dedicated hub page
-          // (/cyber-security) instead of a nested 7-item dropdown.
-          { name: 'Cyber Security', href: '/cyber-security', activeMatch: '/cyber-security', icon: ShieldAlert, requiredPermissions: ['compliance:assessments:*'] },
-          // NCA features now live on a dedicated hub page (/nca) instead of a
-          // nested 4-item dropdown.
-          { name: 'NCA', href: '/nca', activeMatch: '/nca', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Digital Operations Maturity', href: '/assessments/digital_ops_maturity', icon: Target, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'DPIA / PIA', href: '/assessments/dpia', icon: ClipboardList, requiredPermissions: ['compliance:assessments:*'] },
-          { name: 'Saudi PDPL', href: '/assessments/pdpl', icon: ShieldCheck, requiredPermissions: ['compliance:assessments:*'] },
-        ],
-      },
-      {
-        name: 'Business Continuity',
-        icon: LifeBuoy,
-        requiredModules: ['bcm'],
-        items: [
-          { name: 'Overview', href: '/bcm', icon: LayoutDashboard, requiredPermissions: ['bcm:dashboard:*'] },
-          { name: 'Continuity Plans', href: '/bcm/plans', icon: ClipboardList, requiredPermissions: ['bcm:plans:*'] },
-          { name: 'Drills & Invocations', href: '/bcm/drills', icon: CalendarClock, requiredPermissions: ['bcm:drills:*'] },
-        ],
-      },
-    ],
-  },
-  // Scope is configured from Common controls, and checks and assurance live on
-  // each control; their standalone routes still work.
-  {
-    name: 'Controls Automation',
-    icon: Zap,
-    requiredModules: ['controls'],
-    items: [
-      { name: 'Overview', href: '/automation/overview', icon: LayoutDashboard, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-      { name: 'Common Controls', href: '/automation/soc2-controls', icon: Layers, requiredPermissions: ['controls:control_library:*', 'compliance:frameworks:*'] },
-    ],
-  },
-  {
-    name: 'Issue & Incident Management',
-    icon: AlertCircle,
-    items: [
-      { name: 'Issues', href: '/issues', icon: ListTodo, requiredPermissions: ['issue_management:issues:*'] },
-      { name: 'Incidents', href: '/erm/incidents', icon: AlertCircle, requiredPermissions: ['erm:incidents:*'] },
-    ],
-  },
-  {
-    name: 'Cybersecurity Assurance',
-    icon: ShieldCheck,
-    // Cloned from Ava (the standalone cyber product) into the /cyber-assurance
-    // namespace: these routes render Ava's UI on GRC's shell + DB + login.
-    // Mirrors Ava's own sidebar exactly. GRC's native cyber pages
-    // (/asset-discovery, /assets, /vulnerabilities, /risk-posture) stay in the
-    // codebase untouched, just no longer linked from here.
-    items: [
-      { name: 'Performance',            href: '/cyber-assurance/dashboard',       icon: LayoutDashboard },
-      { name: 'IT Asset Discovery',     href: '/cyber-assurance/asset-discovery', icon: Radar,      requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'IT Asset Inventory',     href: '/cyber-assurance/assets',          icon: Server,     requiredPermissions: ['assets:asset_inventory:*'] },
-      { name: 'Assets Risk Posture',    href: '/cyber-assurance/risk-posture',    icon: Activity,   requiredPermissions: ['erm:risks:*'] },
-      { name: 'Vulnerabilities',        href: '/cyber-assurance/vulnerabilities', icon: Bug,        requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'Vulnerability Scanning', href: '/cyber-assurance/scan-flows',      icon: Crosshair,  requiredPermissions: ['vulnerabilities:vulnerability_register:*'], requiredModules: ['vulnerabilities'] },
-      { name: 'AI Pentest',             href: '/cyber-assurance/pentest',         icon: Bot },
-    ],
-  },
-  {
-    name: 'Auditor Portal',
-    icon: Gavel,
-    // issue_management: a role with only issue permissions still reaches the
-    // Issue Register; the other items keep their own permission gates.
-    requiredModules: ['frameworks', 'compliance', 'issue_management'],
-    items: [
-      { name: 'Portal', href: '/auditor-portal', icon: Gavel, requiredPermissions: ['compliance:frameworks:*'] },
-      { name: 'Internal Audit', href: '/auditor-portal/internal-audit', icon: ClipboardCheck, requiredPermissions: ['compliance:assessments:*'] },
-      { name: 'Statutory Audit', href: '/auditor-portal/statutory-audit', icon: ScrollText, requiredPermissions: ['compliance:assessments:*'] },
-      // Audit Services' register — the client's monthly issue workbook, validated and reported.
-      { name: 'Issue Register', href: '/auditor-portal/issue-register', icon: FileSpreadsheet, requiredPermissions: ['issue_management:issues:*'], requiredFeature: 'audit_register' },
-    ],
-  },
-  // Reports — Analytics (Metabase) is primary for cross-module authoring;
-  // Quick export keeps the native register builder for simple CSVs.
-  {
-    name: 'Reports',
-    icon: BarChart3,
-    items: [
-      { name: 'Analytics', href: '/reports/analytics', icon: LayoutDashboard, activeMatch: '/reports/analytics' },
-      { name: 'Quick export', href: '/reports', icon: BarChart3 },
-      { name: 'Saved exports', href: '/reports/saved', icon: Bookmark },
-    ],
-  },
-  // Issues moved into "Issue & Incident Management" (top-bar quick action removed in Header.tsx).
-  // ComplyChat remains the global AI assistant in the top bar.
-  // Administration stays as the pinned bottom popover.
-];
-
-function isGroup(item: NavEntry): item is NavGroup {
-  return 'items' in item;
-}
 
 // Nested-nav helpers: a group may contain sub-groups (folder ΓåÆ sub-dropdown).
 function leafHrefs(entries: NavEntry[]): string[] {
@@ -281,11 +47,6 @@ function bestActiveHref(pathname: string, items: NavItem[]): string | undefined 
     })
     .sort((a, b) => matchPath(b).length - matchPath(a).length)
     .map((it) => it.href)[0];
-}
-function flattenLeaves(entries: NavEntry[]): NavItem[] {
-  const out: NavItem[] = [];
-  for (const e of entries) { if (isGroup(e)) out.push(...flattenLeaves(e.items)); else out.push(e); }
-  return out;
 }
 
 // A nested collapsible (Assessments ΓåÆ Cyber Security ΓåÆ templates). Indented one
@@ -610,10 +371,7 @@ function AdministrationPopover({
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
-  const [allowedModules, setAllowedModules] = useState<string[]>([]);
-  const [allowedPermissions, setAllowedPermissions] = useState<string[]>([]);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [features, setFeatures] = useState<string[]>([]);
+  const [access, setAccess] = useState<NavAccess>(NO_ACCESS);
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -635,36 +393,8 @@ export default function Sidebar() {
         }
       }
 
-      if (data?.authenticated && data.user) {
-        const rawPermissions: string[] = data.user.permissions || [];
-        const permissions: string[] = rawPermissions
-          .filter((perm) => typeof perm === 'string')
-          .map((perm) => normalizePerm(perm));
-        const explicitModules: string[] = data.user.allowed_modules || [];
-        const modulesFromPermissions = permissions
-          .map((perm) => extractModuleFromPerm(perm))
-          .filter((m) => !!m);
-        const resolvedModules = Array.from(new Set([
-          ...explicitModules,
-          ...modulesFromPermissions,
-        ]));
-
-        // Defensive fallback: some tenants can return authenticated user with empty role payload.
-        // In that case, avoid collapsing sidebar to a near-empty state.
-        const hasNoAccessPayload = resolvedModules.length === 0 && permissions.length === 0;
-
-        setAllowedModules(hasNoAccessPayload ? AUTHENTICATED_DEFAULT_MODULES : resolvedModules);
-        setAllowedPermissions(permissions);
-        setFeatures(Array.isArray(data.tenant?.features) ? data.tenant.features : []);
-        const adminStatus = data.user.is_admin || false;
-        setIsAdmin(adminStatus);
-
-        // If admin but no modules/permissions set, initialize with all modules
-        if (adminStatus && resolvedModules.length === 0) {
-          setAllowedModules(ADMIN_DEFAULT_MODULES);
-          setAllowedPermissions(['*:*:*']);
-        }
-      }
+      // an administrator sees every entry; anyone else what their role's permissions open (navAccess.visibleNav)
+      setAccess(navAccessFromMe(data));
       setLoaded(true);
     };
 
@@ -675,71 +405,7 @@ export default function Sidebar() {
       });
   }, []);
 
-  const matchesPermission = (requiredPerm: string) => {
-    const required = normalizePerm(requiredPerm);
-
-    // Admin bypass
-    if (allowedPermissions.includes('*:*:*')) return true;
-
-    // Exact match
-    if (allowedPermissions.includes(required)) return true;
-
-    // If required permission is a wildcard like "risks:risk_register:*"
-    if (required.endsWith(':*')) {
-      const prefix = required.slice(0, -2); // "risks:risk_register"
-      // Check if user has ANY permission starting with this prefix
-      return allowedPermissions.some((perm) => perm.startsWith(prefix + ':'));
-    }
-
-    // If required permission is specific like "risks:risk_register:view"
-    // Check if user has a wildcard that covers it
-    const parts = required.split(':');
-    if (parts.length === 3) {
-      const wildcardPerm = `${parts[0]}:${parts[1]}:*`;
-      if (allowedPermissions.includes(wildcardPerm)) return true;
-
-      // Also check module-level wildcard
-      const moduleWildcard = `${parts[0]}:*:*`;
-      if (allowedPermissions.includes(moduleWildcard)) return true;
-    }
-
-    return false;
-  };
-
-  const hasPermission = (required?: string[]) => {
-    if (!required || required.length === 0) return true;
-    if (isAdmin) return true;
-    return required.some((perm) => matchesPermission(perm));
-  };
-
-  const hasModuleAccess = (required?: string[]) => {
-    if (!required || required.length === 0) return true;
-    if (isAdmin) return true;
-    return required.some((mod) => allowedModules.includes(mod));
-  };
-
-  const canAccessItem = (item: NavItem & { requiredModules?: string[]; adminOnly?: boolean }) => {
-    if (item.adminOnly && !isAdmin) return false;
-    if (item.requiredFeature && !features.includes(item.requiredFeature)) return false;
-    if (!hasModuleAccess(item.requiredModules)) return false;
-    return hasPermission(item.requiredPermissions);
-  };
-
-  // Recursive: groups may now contain nested groups (folder ΓåÆ sub-dropdown).
-  const filterEntries = (entries: NavEntry[]): NavEntry[] =>
-    entries.reduce<NavEntry[]>((acc, item) => {
-      if (isGroup(item)) {
-        if (item.adminOnly && !isAdmin) return acc;
-        if (!hasModuleAccess(item.requiredModules)) return acc;
-        const kids = filterEntries(item.items);
-        if (kids.length === 0) return acc;
-        acc.push({ ...item, items: kids });
-        return acc;
-      }
-      if (canAccessItem(item)) acc.push(item);
-      return acc;
-    }, []);
-  const filteredNavigation: NavEntry[] = loaded ? filterEntries(navigation) : [];
+  const filteredNavigation: NavEntry[] = loaded ? visibleNav(navigation, access) : [];
 
   return (
     <aside
@@ -799,7 +465,7 @@ export default function Sidebar() {
           entry was `adminOnly: true`, and admins bypass module + perm
           checks, so the effective gate is just "is admin". Non-admins
           see no Administration row at all. */}
-      <AdministrationPopover collapsed={collapsed} visible={loaded && isAdmin} />
+      <AdministrationPopover collapsed={collapsed} visible={loaded && access.isAdmin} />
     </aside>
   );
 }

@@ -42,9 +42,18 @@ from ..models import (
 )
 from ..services import metric_catalog, metric_snapshots
 from ..services import report_linkages, report_open_catalog
-from .auth_router import get_user_primary_tenant, get_user_tenants, is_tenant_admin, require_auth, tenant_permission_names
+from .auth_router import (
+    get_user_primary_tenant, get_user_tenants, is_tenant_admin, require_auth, require_tenant_permission, tenant_permission_names,
+)
 
 router = APIRouter(prefix="/reporting", tags=["Reporting Engine"])
+
+# Reports' own rights (Administration > Roles > Reports & Analytics): saved reports and dashboards need reports:reports or
+# reports:dashboards, Analytics (Metabase) reports:analytics, a trend snapshot any of the three. Queries, aggregates, linkages
+# and trends already check the right of each dataset's own module (_user_can), so they are left as they are.
+_SAVED = [Depends(require_tenant_permission("reports:reports:view", "reports:dashboards:view"))]
+_ANALYTICS = [Depends(require_tenant_permission("reports:analytics:view"))]
+_ANY_REPORTS = [Depends(require_tenant_permission("reports:reports:view", "reports:dashboards:view", "reports:analytics:view"))]
 
 MAX_LIMIT = 500
 
@@ -1020,7 +1029,7 @@ def _kind_filter(kind: str):
     return ReportDefinition.kind == kind
 
 
-@router.get("/reports")
+@router.get("/reports", dependencies=_SAVED)
 def list_reports(
     kind: str = "report",
     db: Session = Depends(get_db),
@@ -1049,7 +1058,7 @@ def list_reports(
     return {"reports": [_report_out(r, user.id) for r in rows]}
 
 
-@router.get("/reports/{slug}")
+@router.get("/reports/{slug}", dependencies=_SAVED)
 def get_report(slug: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Fetch one saved report by slug (own or shared-in-tenant)."""
     _ensure_report_table(db)
@@ -1070,7 +1079,7 @@ def get_report(slug: str, db: Session = Depends(get_db), user=Depends(require_au
     return _report_out(shared, user.id)
 
 
-@router.post("/reports")
+@router.post("/reports", dependencies=_SAVED)
 def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Create or update one of the caller's own reports (keyed by slug).
 
@@ -1102,7 +1111,7 @@ def upsert_report(body: ReportDefIn, db: Session = Depends(get_db), user=Depends
     return _report_out(row, user.id)
 
 
-@router.delete("/reports/{slug}")
+@router.delete("/reports/{slug}", dependencies=_SAVED)
 def delete_report(slug: str, db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Delete one of the caller's own reports. Shared reports owned by someone
     else are not the caller's to remove."""
@@ -1397,7 +1406,7 @@ def reset_target(metric: str, dimension: str = "overall", dimension_value: str =
     return {"ok": True, "metric": metric, "target": m.target, "warn": m.warn, "critical": m.critical}
 
 
-@router.post("/trends/snapshot")
+@router.post("/trends/snapshot", dependencies=_ANY_REPORTS)
 def capture_snapshot(db: Session = Depends(get_db), user=Depends(require_auth)) -> Dict[str, Any]:
     """Capture today's cross-module snapshot on demand (idempotent per day) so a
     user doesn't have to wait for the nightly sweep to see a fresh point."""
@@ -1413,7 +1422,7 @@ class MetabaseSsoBody(BaseModel):
     groups: Optional[List[str]] = None
 
 
-@router.get("/metabase/status")
+@router.get("/metabase/status", dependencies=_ANALYTICS)
 def metabase_status(
     db: Session = Depends(get_db),
     user=Depends(require_auth),
@@ -1464,7 +1473,7 @@ def metabase_status(
     }
 
 
-@router.post("/metabase/sso")
+@router.post("/metabase/sso", dependencies=_ANALYTICS)
 def metabase_sso_url(
     request: Request,
     body: MetabaseSsoBody,
@@ -1526,7 +1535,7 @@ def metabase_sso_url(
     }
 
 
-@router.get("/metabase/embed/{dashboard_key}")
+@router.get("/metabase/embed/{dashboard_key}", dependencies=_ANALYTICS)
 def metabase_embed_dashboard(
     dashboard_key: str,
     user=Depends(require_auth),
@@ -1571,7 +1580,7 @@ def metabase_embed_dashboard(
     }
 
 
-@router.post("/metabase/ensure-views", status_code=200)
+@router.post("/metabase/ensure-views", status_code=200, dependencies=_ANALYTICS)
 def metabase_ensure_views(
     db: Session = Depends(get_db),
     user=Depends(require_auth),

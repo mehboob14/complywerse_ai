@@ -9,11 +9,15 @@
 export const dynamic = 'force-dynamic';
 
 import TrendsView from '../_reports/TrendsView';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
 export default function ReportsTrendsPage() {
   return (
-    <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 flex-col overflow-hidden bg-white">
-      <TrendsView />
-    </div>
+    <PermissionGuard required={navPermissions('/reports/trends')}>
+      <div className="flex min-h-[calc(100dvh-3.5rem)] min-w-0 flex-col overflow-hidden bg-white">
+        <TrendsView />
+      </div>
+    </PermissionGuard>
   );
 }

@@ -15,6 +15,8 @@ import {
   duplicateSpec, listSpecs, persistSpec, removeSpec, type SpecSource,
 } from '../_reports/savedReports';
 import { usePermissions } from '../_reports/usePermissions';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
 function fmtWhen(iso?: string | null): string {
   if (!iso) return '—';
@@ -23,7 +25,12 @@ function fmtWhen(iso?: string | null): string {
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export default function SavedReportsPage() {
+// opened by its URL without the sidebar entry's right: the no-access page
+export default function GuardedSavedReportsPage() {
+  return <PermissionGuard required={navPermissions('/reports/saved')}><SavedReportsPage /></PermissionGuard>;
+}
+
+function SavedReportsPage() {
   const router = useRouter();
   const { loaded: permsLoaded, canUse } = usePermissions();
   const [specs, setSpecs] = useState<ReportSpec[]>([]);

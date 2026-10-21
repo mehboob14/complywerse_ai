@@ -27,6 +27,8 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getTenantSlug } from '@/lib/api';
 import { useAutoGrow } from '@/lib/useAutoGrow';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
 interface Source {
   rank: number;
@@ -144,7 +146,12 @@ const SUGGESTED_PROMPTS = [
   },
 ];
 
-export default function ComplyChatPage() {
+// opened without Dashboard > ComplyChat > view (the top bar shows ComplyChat to the same people): the no-access page
+export default function GuardedComplyChatPage() {
+  return <PermissionGuard required={navPermissions('/complychat')}><ComplyChatPage /></PermissionGuard>;
+}
+
+function ComplyChatPage() {
   const [conversations, setConversations] = useState<Conversation[]>(() => loadStoredConversations());
   const [activeConversationId, setActiveConversationId] = useState<string>(() => {
     if (typeof window === 'undefined') return '';

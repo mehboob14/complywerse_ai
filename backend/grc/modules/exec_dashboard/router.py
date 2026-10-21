@@ -12,11 +12,13 @@ from sqlalchemy.orm import Session
 from grc.models import GRCUser, ITAsset, Vulnerability, VulnerabilityAssetLink, get_db
 from grc.models._pentest_exploit_results import PentestExploitResult
 from grc.modules.vuln_management.routers.dashboard import RESOLVED_STATUSES
-from grc.routers.auth_router import get_user_tenants, require_auth
+from grc.routers.auth_router import get_user_tenants, require_auth, require_tenant_permission
 
 from .service import summarize
 
-router = APIRouter(prefix="/exec-dashboard", tags=["Executive Dashboard"])
+# the summary is vulnerability findings (with their assets and pentest results): the vulnerability register's view right
+router = APIRouter(prefix="/exec-dashboard", tags=["Executive Dashboard"],
+                   dependencies=[Depends(require_tenant_permission("vulnerabilities:vulnerability_register:view"))])
 
 _V_KEYS = ("id", "severity", "status", "source", "discovered_at", "kev_flag", "public_exploit_count",
            "exploitdb_count", "epss_score", "cve_id", "affected_host", "nvd_last_synced_at", "public_exploit_synced_at")

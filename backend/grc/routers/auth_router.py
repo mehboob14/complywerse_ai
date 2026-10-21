@@ -355,8 +355,8 @@ def _tenant_features(db: Session) -> List[str]:
     return ["audit_register"] if audit_register_enabled(db) else []
 
 
-def require_tenant_permission(permission_name: str):
-    """Dependency factory: confirms current user has the named permission within the tenant DB.
+def require_tenant_permission(*permission_names: str):
+    """Dependency factory: confirms current user has the named permission (or any one of several) within the tenant DB.
 
     Administrators (is_tenant_admin) are granted everything; a deactivated user nothing.
     """
@@ -387,7 +387,7 @@ def require_tenant_permission(permission_name: str):
 
         if not user.is_active:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User account is deactivated")
-        if not has_tenant_permission(db, user, permission_name):
+        if not has_tenant_permission(db, user, *permission_names):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Permission denied")
 
         return True

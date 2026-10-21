@@ -19,8 +19,15 @@ import { describeRules } from '../_reports/grid-utils';
 import { filterReportRows, loadReportRows, resolveReportColumns } from '../_reports/reportData';
 import ReportDataTable from '../_reports/ReportDataTable';
 import type { ReportSpec } from '../_reports/types';
+import PermissionGuard from '@/components/ui/PermissionGuard';
+import { navPermissions } from '@/components/layout/navAccess';
 
-export default function ReportPrintPage() {
+// printed from Quick export: its right, else the no-access page
+export default function GuardedReportPrintPage() {
+  return <PermissionGuard required={navPermissions('/reports/print')}><ReportPrintPage /></PermissionGuard>;
+}
+
+function ReportPrintPage() {
   const [spec, setSpec] = useState<ReportSpec | null>(null);
   const [ready, setReady] = useState(false);
 
