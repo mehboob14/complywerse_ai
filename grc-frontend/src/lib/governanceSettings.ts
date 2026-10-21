@@ -3,7 +3,8 @@
 // GET/PUT /governance/documents/lifecycle/settings. Pure helpers here (tested in governanceSettings.test.ts); the page is
 // app/(dashboard)/governance/settings/page.tsx.
 
-export type Kind = 'review' | 'approval' | 'acknowledgement' | 'changes';
+/** decide: the owner or author decides on a change someone proposed; revise: the proposer after it was not accepted (lib/proposals.ts) */
+export type Kind = 'review' | 'approval' | 'acknowledgement' | 'changes' | 'decide' | 'revise';
 export type GovEvent = 'request' | 'reminder' | 'overdue' | 'escalation' | 'approved' | 'published' | 'rejected' | 'changes' | 'resubmitted' | 'delegated';
 export type Channel = 'in_app' | 'email' | 'both' | 'off';
 export type Priority = 'Critical' | 'High' | 'Medium' | 'Low';
@@ -18,8 +19,12 @@ export interface GovernanceSettings {
   admin_after_days: number;
   escalate_role_id: number | null;
   notify: Record<GovEvent, Channel>;
-  task_create: Record<Kind, boolean>;
-  task_priority: Record<Kind, Priority>;
+  /** per kind of request; a server from before proposed changes sends no decide or revise (the page shows the kinds it sends) */
+  task_create: Partial<Record<Kind, boolean>>;
+  task_priority: Partial<Record<Kind, Priority>>;
+  /** days to decide on a proposed change, and to revise one that was not accepted (the contract: 3 unless set; key names assumed) */
+  decide_days?: number;
+  revise_days?: number;
   task_title: string;
   task_description: string;
   /** the Task Management category of every request's task */
@@ -40,15 +45,26 @@ export interface SettingsAnswer {
   can_four_eyes?: boolean;
 }
 
-export const KINDS: Kind[] = ['review', 'approval', 'acknowledgement', 'changes'];
-export const KIND_LABEL: Record<Kind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for' };
-export const ACTION: Record<Kind, string> = { review: 'Review', approval: 'Approve', acknowledgement: 'Acknowledge', changes: 'Revise' };
+export const KINDS: Kind[] = ['review', 'approval', 'acknowledgement', 'changes', 'decide', 'revise'];
+export const KIND_LABEL: Record<Kind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for',
+  decide: 'Decide on a proposed change', revise: 'Change not accepted' };
+export const ACTION: Record<Kind, string> = { review: 'Review', approval: 'Approve', acknowledgement: 'Acknowledge', changes: 'Revise', decide: 'Decide', revise: 'Revise' };
 /** {verb}: what the person is asked to do, in a sentence (the server's doc_lifecycle._STEP) */
 export const VERB: Record<Kind, string> = { review: 'review and sign', approval: 'approve and sign', acknowledgement: 'acknowledge',
-  changes: 'make the changes asked for and resubmit' };
+  changes: 'make the changes asked for and resubmit', decide: 'accept or reject the proposed change', revise: 'propose your change again or sign it as it is' };
 /** the buttons a task of each kind shows in Task Management (doc_lifecycle.ACTION_LABEL) */
 export const STEP_LABEL: Record<Kind, string> = { review: 'Review and sign', approval: 'Approve and sign', acknowledgement: 'Acknowledge',
-  changes: 'Make the changes' };
+  changes: 'Make the changes', decide: 'Decide', revise: 'Revise' };
+/** The kinds of request the server has settings for (one from before proposed changes has no decide or revise). */
+export const shownKinds = (s: Pick<GovernanceSettings, 'task_create'>): Kind[] => KINDS.filter((k) => k in (s.task_create ?? {}));
+/** The days a request of a kind is given: its own setting (a changes request: the approvers'); a proposed change's 3 unless set. */
+export function daysFor(kind: Kind, s: GovernanceSettings): number {
+  if (kind === 'acknowledgement') return s.ack_days;
+  if (kind === 'review') return s.review_days;
+  if (kind === 'decide') return s.decide_days ?? 3;
+  if (kind === 'revise') return s.revise_days ?? 3;
+  return s.approval_days;
+}
 export const PRIORITIES: Priority[] = ['Critical', 'High', 'Medium', 'Low'];
 export const CHANNELS: { value: Channel; label: string }[] = [
   { value: 'in_app', label: 'In-app' }, { value: 'email', label: 'Email' }, { value: 'both', label: 'Both' }, { value: 'off', label: 'Off' },
@@ -67,8 +83,8 @@ export const EVENTS: { key: GovEvent; label: string; who: string }[] = [
 ];
 
 export const PLACEHOLDERS: { key: string; label: string }[] = [
-  { key: 'action', label: 'Review, Approve, Acknowledge or Revise' },
-  { key: 'verb', label: 'review and sign, approve and sign, acknowledge, or make the changes asked for and resubmit' },
+  { key: 'action', label: 'Review, Approve, Acknowledge, Revise or Decide' },
+  { key: 'verb', label: 'review and sign, approve and sign, acknowledge, make the changes asked for and resubmit, or accept or reject the proposed change' },
   { key: 'document', label: 'Document title' },
   { key: 'version', label: 'Version' },
   { key: 'due_date', label: 'Due date' },
@@ -150,16 +166,17 @@ export const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86_400
 
 /** What the placeholders say for a sample request of ``kind`` made today. */
 export function sampleValues(kind: Kind, s: GovernanceSettings, today: Date = new Date()): Record<string, string> {
-  const days = kind === 'acknowledgement' ? s.ack_days : kind === 'review' ? s.review_days : s.approval_days;
+  const days = daysFor(kind, s);
   return {
     action: ACTION[kind], verb: VERB[kind], document: 'Acceptable Use Policy', version: '1.2', due_date: day(addDays(today, days || 0)),
-    owner: 'Sara Khan', link: kind === 'acknowledgement' ? '/governance/documents/3' : '/governance/documents/3?tab=lifecycle',
+    owner: 'Sara Khan', link: kind === 'acknowledgement' ? '/governance/documents/3'
+      : kind === 'decide' || kind === 'revise' ? '/governance/documents/3?tab=proposals&proposal=12' : '/governance/documents/3?tab=lifecycle',
   };
 }
 
 /** A request's whole course in dates, for the summary line: asked, reminders, due, owner told, escalated. */
 export function courseOf(kind: Kind, s: GovernanceSettings, today: Date = new Date()) {
-  const days = kind === 'acknowledgement' ? s.ack_days : kind === 'review' ? s.review_days : s.approval_days;
+  const days = daysFor(kind, s);
   const due = addDays(today, days);
   // a reminder further ahead than the request is long goes at once (the next daily run), as the server does
   const firstReminder = s.remind_days > 0 ? addDays(due, -Math.min(s.remind_days, days)) : null;

@@ -13,7 +13,8 @@ import { parseUtc } from '@/lib/serverTime';
 import { assessmentApprovalHref, docRequestHref, notificationHref } from './headerLinks';
 import { navPermissions } from './navAccess';
 
-const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge', changes: 'To revise' };
+const DOC_ASK: Record<string, string> = { review: 'To review', approval: 'To approve', acknowledgement: 'To acknowledge', changes: 'To revise',
+  decide: 'A proposed change to decide on', revise: 'Your change was not accepted' };
 // a dropdown item that opens what it is about (a link: Tab, Enter)
 const ITEM_LINK = 'flex gap-3 px-4 py-3 text-xs hover:bg-[#f3f6f8] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0f766e]';
 // the Pending approvals and Notifications dropdowns: under the bar across a phone's width, else at the button
@@ -145,7 +146,7 @@ export default function Header() {
   const { data: docRequests, refetch: refetchDocRequests } = useQuery({
     queryKey: ['my-document-requests'],
     queryFn: async () => (await apiClient.get('/governance/documents/lifecycle/mine')).data as {
-      enabled: boolean; items?: Array<{ id: number; kind: string; document_id: number; title: string; due_date: string | null; overdue: boolean }>;
+      enabled: boolean; items?: Array<{ id: number; kind: string; document_id: number; title: string; due_date: string | null; overdue: boolean; proposal_id?: number | null }>;
     },
     refetchInterval: 60000,
     enabled: !!currentUser,

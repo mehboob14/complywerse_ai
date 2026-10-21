@@ -16,9 +16,9 @@ export function notificationHref(n: { link?: string | null; url?: string | null;
 }
 
 /** A document request opens the document with the person's own step open (Review and sign, Approve and sign, Acknowledge), as My
- * Approvals and Task Management do. */
-export function docRequestHref(r: { kind: string; document_id: number }): string {
-  return actionHref(r.document_id, r.kind as RequestKind);
+ * Approvals and Task Management do; a decision on a proposed change opens that proposal. */
+export function docRequestHref(r: { kind: string; document_id: number; proposal_id?: number | null }): string {
+  return actionHref(r.document_id, r.kind as RequestKind, r.proposal_id);
 }
 
 /** The id of an item on the assessment approvals page (its source and id: evidence and assessment ids can be equal). */

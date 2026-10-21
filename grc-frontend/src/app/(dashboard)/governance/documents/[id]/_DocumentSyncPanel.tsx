@@ -7,6 +7,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileCheck2, Loader2 } from 'lucide-react';
 import apiClient from '@/lib/api';
 import { useToast } from '@/components/ui/ToastProvider';
+import { sendLabel } from '@/lib/proposals';
+import { ProposeNote, useProposalRole, useProposedAnswer } from './_ProposalsView';
 
 interface Pending { id: number; code: string | null; was: string; now: string }
 interface SyncState {
@@ -49,11 +51,15 @@ export default function DocumentSyncPanel({ documentId }: { documentId: string |
     onError: (e: any) => toast({ type: 'error', title: 'Check failed', message: e?.response?.data?.detail || 'Could not read the document.' }),
   });
 
+  // not the owner or author: writing the statements in goes to the owner to accept, with a message they read
+  const { proposes, decider } = useProposalRole(Number(documentId));
+  const handledAsProposal = useProposedAnswer();
   const apply = useMutation({
-    mutationFn: async () => (await apiClient.post(`${base}/apply`, { change_reason: reason.trim() || null })).data,
+    mutationFn: async () => (await apiClient.post(`${base}/apply`, { change_reason: reason.trim() || null, message: reason.trim() || undefined })).data,
     onSuccess: (r: any) => {
       setConfirming(false);
       setReason('');
+      if (handledAsProposal(r, decider)) return;                         // the document is as it was until the owner accepts
       refresh();
       toast({ type: 'success', title: `Document updated to version ${r.version}`,
               message: `${r.updated} statement${r.updated === 1 ? '' : 's'} written into the document${r.sent_to_review ? '; it is back in review' : ''}.` });
@@ -109,12 +115,16 @@ export default function DocumentSyncPanel({ documentId }: { documentId: string |
                 {data.creates_word_copy && ' The file is a PDF, so the new version is a Word copy; the PDF stays as the earlier version.'}
                 {needsReview && ' The document goes back to review.'}
               </p>
-              <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why were the statements changed? (optional)"
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none" />
+              {proposes ? (
+                <ProposeNote id={`sync-why-${documentId}`} decider={decider} value={reason} onChange={setReason} placeholder="e.g. The statements on passwords follow the new standard" />
+              ) : (
+                <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why were the statements changed? (optional)"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none" />
+              )}
               <div className="flex gap-2">
-                <button type="button" onClick={() => apply.mutate()} disabled={apply.isPending}
+                <button type="button" onClick={() => apply.mutate()} disabled={apply.isPending || (proposes && !reason.trim())}
                   className="inline-flex items-center gap-1 rounded-lg bg-primary-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-50">
-                  {apply.isPending && <Loader2 className="h-3 w-3 animate-spin" />} Write to document
+                  {apply.isPending && <Loader2 className="h-3 w-3 animate-spin" />} {proposes ? sendLabel(decider) : 'Write to document'}
                 </button>
                 <button type="button" onClick={() => setConfirming(false)} className="rounded-lg px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-100">Cancel</button>
               </div>

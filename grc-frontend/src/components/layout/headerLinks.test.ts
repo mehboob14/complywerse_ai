@@ -43,6 +43,9 @@ test('a document request opens the person\'s own step, as My Approvals and Task 
   assert.equal(docRequestHref({ kind: 'review', document_id: 3 }), '/governance/documents/3?act=sign');
   assert.equal(docRequestHref({ kind: 'approval', document_id: 8 }), '/governance/documents/8?act=sign');
   assert.equal(docRequestHref({ kind: 'approval', document_id: 8 }), actionHref(8, 'approval'));
+  // a decision on a proposed change (the owner) or the proposer's revision opens Proposed changes on it
+  assert.equal(docRequestHref({ kind: 'decide', document_id: 8, proposal_id: 4 }), '/governance/documents/8?tab=proposals&proposal=4');
+  assert.equal(docRequestHref({ kind: 'revise', document_id: 8 }), '/governance/documents/8?tab=proposals');
 });
 
 test('an evidence approval opens the approvals page at its own item', () => {

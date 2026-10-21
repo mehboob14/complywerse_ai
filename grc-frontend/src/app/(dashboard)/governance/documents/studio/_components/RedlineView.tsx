@@ -94,6 +94,36 @@ function Row({ row, number, focused }: { row: RedlineRow; number: number; focuse
   );
 }
 
+/** One side of a row shown in two columns: what it said (`delete` kept) or what it says now (`insert` kept); null where the block
+ *  is not on that side (added: nothing before it; removed: nothing after). */
+function sideOf(row: RedlineRow, keep: 'delete' | 'insert'): RedlineRow | null {
+  if (row.status === (keep === 'delete' ? 'inserted' : 'deleted')) return null;
+  const segs = (s: Segment[]) => s.filter(([op]) => op === 'equal' || op === keep);
+  const gone = keep === 'delete' ? 'inserted' : 'deleted';
+  return { ...row, segments: row.segments && segs(row.segments),
+           table: row.table?.filter((r) => r.status !== gone).map((r) => ({ ...r, cells: r.cells.map(segs) })) };
+}
+
+/** A block in two columns, the library's text left and the proposed one right; on a phone the two stack, each named. */
+function SideBySide({ row, number, labels }: { row: RedlineRow; number: number; labels: { before: string; after: string } }) {
+  const before = sideOf(row, 'delete');
+  const after = sideOf(row, 'insert');
+  const same = row.status === 'equal';
+  const cell = (r: RedlineRow | null, label: string, hideOnPhone: boolean, missing: string) => (
+    <div className={`min-w-0 ${hideOnPhone ? 'hidden sm:block' : ''}`}>
+      {!same && <p className="px-3 pt-1 text-[10px] font-semibold uppercase tracking-wide text-[#586472] sm:hidden">{label}</p>}
+      {r ? <Row row={r} number={number} />
+        : <p className="h-full rounded-r border-l-4 border-dashed border-l-[#c5ccd3] bg-[#f8fafb] px-3 py-1.5 text-[11px] italic text-[#586472]">{missing}</p>}
+    </div>
+  );
+  return (
+    <div className="grid gap-x-3 sm:grid-cols-2">
+      {cell(before, labels.before, false, 'New in the proposed text')}
+      {cell(after, labels.after, same, 'Removed in the proposed text')}
+    </div>
+  );
+}
+
 export function StatsLine({ stats }: { stats: Stats | null | undefined }) {
   if (!stats) return null;
   const parts = [
@@ -149,7 +179,11 @@ function ChangeHeader({ hunk, changes }: { hunk: ChainHunk; changes: RedlineChan
   );
 }
 
-export default function RedlineView({ rows, empty = 'Nothing changed.', changes, focus }: { rows: RedlineRow[]; empty?: string; changes?: RedlineChanges; focus?: Focus }) {
+export default function RedlineView({ rows, empty = 'Nothing changed.', changes, focus, sides }: {
+  rows: RedlineRow[]; empty?: string; changes?: RedlineChanges; focus?: Focus;
+  /** two columns instead of one (a proposed change beside the library's text), named so */
+  sides?: { before: string; after: string };
+}) {
   const [all, setAll] = useState(false);
   // the change a card asked to see: highlighted and brought into view, the others around it as they are
   const focused = useMemo(() => focusRows(rows, focus), [rows, focus]);
@@ -192,7 +226,7 @@ export default function RedlineView({ rows, empty = 'Nothing changed.', changes,
       if (focused.has(i) && !focused.has(i - 1)) {
         out.push(<p key={`fl${i}`} className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-[#0b6b58]">The change you chose</p>);
       }
-      out.push(<Row key={i} row={row} number={numbered[i]} focused={focused.has(i)} />);
+      out.push(sides ? <SideBySide key={i} row={row} number={numbered[i]} labels={sides} /> : <Row key={i} row={row} number={numbered[i]} focused={focused.has(i)} />);
     } else {
       folded += 1;
     }
@@ -205,6 +239,12 @@ export default function RedlineView({ rows, empty = 'Nothing changed.', changes,
           {all ? 'Show only what changed' : 'Show the whole document'}
         </button>
       </div>
+      {sides && (
+        <div className="sticky top-0 z-[2] hidden grid-cols-2 gap-x-3 border-b border-[#d5dbe1] bg-white pb-1.5 pt-1 sm:grid">
+          <p className="px-3 text-xs font-semibold text-[#1f2933]">{sides.before}</p>
+          <p className="px-3 text-xs font-semibold text-[#1f2933]">{sides.after}</p>
+        </div>
+      )}
       {out}
     </div>
   );

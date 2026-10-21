@@ -205,7 +205,8 @@ export const documentChainApi = {
       why_not: string | null;
       versions: BaselineVersion[];
     },
-  revert: async (id: number, body: { from_version_id: number; hunks: number[]; hash?: string; reason?: string }) =>
+  /** (`message`: why, for the owner when the take back becomes a proposed change; it answers {proposed: true, …} then: lib/proposals.ts) */
+  revert: async (id: number, body: { from_version_id: number; hunks: number[]; hash?: string; reason?: string; message?: string }) =>
     (await apiClient.post(`/governance/documents/${id}/change-chain/revert`, body)).data as { version: string; status: string; changes_taken_back: number; notes?: string[] },
   /** the whole change log, or (`filters`, from changeLog.exportParams) what the Change log shows: "Export filtered" */
   exportFile: async (id: number, format: ExportFormat, filters?: Array<[string, string]>): Promise<{ blob: Blob; filename: string }> => {

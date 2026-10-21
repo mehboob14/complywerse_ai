@@ -36,7 +36,13 @@ export interface RouteStage {
   /** it started again after changes asked for at it were resubmitted */
   restarted?: boolean;
 }
-export interface RouteHold { id: number; stage_position: number | null; requested_by: string | null; requested_by_id: number; requested_at: string | null; comment: string }
+export interface RouteHold {
+  id: number; stage_position: number | null; requested_by: string | null; requested_by_id: number; requested_at: string | null; comment: string;
+  /** changes asked for (servers from before proposals leave it out), or a change someone proposed, waiting for the owner (lib/proposals.ts) */
+  kind?: 'changes' | 'proposal';
+  proposal_id?: number | null;
+  proposal_status?: 'pending' | 'accepted' | 'rejected' | 'withdrawn' | null;
+}
 export interface RouteView { custom: boolean; current: number | null; stages: RouteStage[]; hold: RouteHold | null }
 /** Why someone is asked again at a stage that started again after changes (routes.again_for: my_step, My Approvals, a task):
  *  they had signed it or asked for the changes; the version then (its row: "See what changed" compares from it) and now. */
@@ -50,6 +56,8 @@ export interface MyStep {
   can_reject: boolean; can_delegate: boolean; on_behalf_of: string | null;
   /** asked again after changes (servers from before leave it out) */
   again?: Again | null;
+  /** the proposer after the owner rejected their change: they may sign the document as it is (servers from before leave it out) */
+  may_sign_as_is?: boolean;
 }
 
 export const KIND_OPTIONS: { value: StageKind; label: string }[] = [

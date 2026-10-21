@@ -338,8 +338,9 @@ export const governanceApi = {
   // Diff two content versions (version ROW ids) + restore a prior version.
   compareDocumentVersions: (versionAId: number, versionBId: number) =>
     apiClient.get(`/governance/versions/compare/${versionAId}/${versionBId}`),
+  // the reason is also the message the owner reads when the restore becomes a proposed change (lib/proposals.ts)
   rollbackDocumentVersion: (documentId: number, versionId: number, reason?: string) =>
-    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, reason?.trim() ? { rollback_reason: reason.trim() } : {}),
+    apiClient.post(`/governance/versions/document/${documentId}/rollback/${versionId}`, reason?.trim() ? { rollback_reason: reason.trim(), message: reason.trim() } : {}),
   // Edit document body content with a version snapshot + audit ("why").
   editDocumentContent: (documentId: number, data: { content: string; change_reason?: string }) =>
     apiClient.put(`/governance/documents/${documentId}`, data),
@@ -430,16 +431,19 @@ export const governanceApi = {
     apiClient.post(`/governance/documents/${documentId}/statements`, data),
   updateStatement: (documentId: number, statementId: number, data: any) =>
     apiClient.put(`/governance/documents/${documentId}/statements/${statementId}`, data),
-  deleteStatement: (documentId: number, statementId: number) =>
-    apiClient.delete(`/governance/documents/${documentId}/statements/${statementId}`),
+  // `reason`: why, for the owner when the removal becomes a proposed change (lib/proposals.ts)
+  deleteStatement: (documentId: number, statementId: number, reason?: string) =>
+    apiClient.delete(`/governance/documents/${documentId}/statements/${statementId}`,
+      reason?.trim() ? { data: { change_reason: reason.trim(), message: reason.trim() } } : undefined),
   getDocumentViewHtml: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/view-html`),
   getStatementVersions: (documentId: number, statementId: number) =>
     apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/versions`),
   getStatementDiff: (documentId: number, statementId: number, versionA: number, versionB: number) =>
     apiClient.get(`/governance/documents/${documentId}/statements/${statementId}/diff`, { params: { version_a: versionA, version_b: versionB } }),
-  rollbackStatement: (documentId: number, statementId: number, versionId: number) =>
-    apiClient.post(`/governance/documents/${documentId}/statements/${statementId}/rollback`, { version_id: versionId }),
+  rollbackStatement: (documentId: number, statementId: number, versionId: number, reason?: string) =>
+    apiClient.post(`/governance/documents/${documentId}/statements/${statementId}/rollback`,
+      { version_id: versionId, ...(reason?.trim() ? { change_reason: reason.trim(), message: reason.trim() } : {}) }),
   getReparseProposals: (documentId: number) =>
     apiClient.get(`/governance/documents/${documentId}/reparse-proposals`),
   applyReparseProposals: (documentId: number, decisions: Array<{index: number, action: string}>) =>
@@ -604,7 +608,8 @@ export const governanceApi = {
     apiClient.get(`/governance/gap-analysis/export/${documentId}`, { responseType: 'blob' }),
   updateGapFinding: (findingId: number, data: Record<string, any>) =>
     apiClient.put(`/governance/gap-analysis/findings/${findingId}`, data),
-  overrideGapFinding: (findingId: number, data: { override_status: string; override_justification: string }) =>
+  // `message`: why, for the owner when taking an applied fix back out becomes a proposed change (lib/proposals.ts)
+  overrideGapFinding: (findingId: number, data: { override_status: string; override_justification: string; message?: string }) =>
     apiClient.put(`/governance/gap-analysis/findings/${findingId}/override`, data),
   acceptGapRisk: (findingId: number, data: { justification: string; expiry_date?: string }) =>
     apiClient.put(`/governance/gap-analysis/findings/${findingId}/accept-risk`, {
@@ -625,6 +630,8 @@ export const governanceApi = {
       current_text?: string | null;
       section_heading?: string;
       change_reason?: string;
+      /** why, for the owner when the fix becomes a proposed change (lib/proposals.ts) */
+      message?: string;
     }
   ) =>
     apiClient.post(`/governance/gap-analysis/findings/${findingId}/apply-fix`, data),

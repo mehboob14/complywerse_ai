@@ -16,6 +16,8 @@ import { originLook } from '../studio/_components/ChangeAttribution';
 import { dateTime, day } from '@/lib/documentLifecycle';
 import { InitialsAvatar } from '../_workspace/lib';
 import { approvedVersionId, compareLine, defaultBaseline, versionOrigin, versionPill, versionsBetween } from '../_view/trackedChanges';
+import { ProposeNote, useProposalRole, useProposedAnswer } from './_ProposalsView';
+import { sendLabel } from '@/lib/proposals';
 
 const MUTED = 'text-[#586472]';
 
@@ -62,13 +64,18 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
     staleTime: 10_000,
   });
 
+  // not the owner or author: a take back goes to the owner to accept, with a message they read (lib/proposals.ts)
+  const { proposes, decider } = useProposalRole(documentId);
+  const handledAsProposal = useProposedAnswer();
   const takeBack = useMutation({
     mutationFn: async () => documentChainApi.revert(documentId, {
       from_version_id: baseline as number, hunks: [asking!.current_id ?? asking!.id], hash: redline.data?.current_hash ?? redline.data?.hash, reason: reason.trim() || undefined,
+      message: reason.trim() || undefined,
     }),
     onSuccess: (r) => {
       setAsking(null);
       setReason('');
+      if (handledAsProposal(r, decider)) return;                         // the document is as it was until the owner accepts
       for (const key of ['document-chain', 'document-chain-redline', 'document-versions', 'governance-document', 'document-lifecycle']) qc.invalidateQueries({ queryKey: [key] });
       onChanged?.();
       toast({ type: r.notes?.length ? 'warning' : 'success', title: 'Change taken back',
@@ -165,19 +172,23 @@ export default function TrackedChanges({ documentId, status, initial, onChanged,
             <div className="min-w-0 flex-1">
               <p className="font-semibold">Take back the change in “{asking.section || 'the top of the document'}”?</p>
               <p className="mt-0.5 text-xs text-amber-900">
-                It becomes a new version made by you; the text goes back to what version {redline.data?.from.number} had. Nothing else changes.
+                It becomes a new version{proposes ? '' : ' made by you'}; the text goes back to what version {redline.data?.from.number} had. Nothing else changes.
                 {resets ? ' This document is approved, so it goes back to review.' : ''}
               </p>
-              <label className="mt-3 block">
-                <span className="text-xs font-semibold text-amber-950">Why <span className="font-normal">(optional, kept with the new version)</span></span>
-                <input type="text" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="e.g. This wording was agreed with Legal" autoFocus
-                  className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
-              </label>
+              {proposes ? (
+                <div className="mt-3"><ProposeNote id="take-back-why" decider={decider} value={reason} onChange={setReason} autoFocus placeholder="e.g. This wording was agreed with Legal" /></div>
+              ) : (
+                <label className="mt-3 block">
+                  <span className="text-xs font-semibold text-amber-950">Why <span className="font-normal">(optional, kept with the new version)</span></span>
+                  <input type="text" value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} placeholder="e.g. This wording was agreed with Legal" autoFocus
+                    className="mt-1 w-full rounded-lg border border-amber-300 bg-white px-2.5 py-1.5 text-sm text-[#1f2933] placeholder:text-[#586472] focus:outline-none focus:ring-2 focus:ring-amber-400/40" />
+                </label>
+              )}
               {takeBack.isError && <p className="mt-2 rounded-lg border border-rose-200 bg-white px-2.5 py-1.5 text-xs text-rose-800" role="alert">Not taken back: {problemOf(takeBack.error)}</p>}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <button type="button" disabled={takeBack.isPending} onClick={() => takeBack.mutate()}
+                <button type="button" disabled={takeBack.isPending || (proposes && !reason.trim())} onClick={() => takeBack.mutate()}
                   className="inline-flex items-center gap-1.5 rounded-lg bg-amber-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-60">
-                  {takeBack.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} Take it back
+                  {takeBack.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Undo2 className="h-4 w-4" />} {proposes ? sendLabel(decider) : 'Take it back'}
                 </button>
                 <button type="button" onClick={() => ask(null)} className="rounded-lg border border-[#cbd5e1] bg-white px-3 py-1.5 text-sm font-semibold text-[#334155] hover:bg-[#f8fafc]">Cancel</button>
               </div>

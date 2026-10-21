@@ -36,6 +36,8 @@ test('viewOf maps every old tab and every new view', () => {
     ['versions', 'versions'],
     ['change-log', 'versions'],                 // the Change log
     ['history', 'versions'],
+    ['proposals', 'proposals'],                 // Proposed changes (a task's or a notification's link: ?tab=proposals&proposal=<id>)
+    ['proposed-changes', 'proposals'],
   ];
   for (const [tab, view] of cases) assert.equal(viewOf(tab), view, tab);
 });
@@ -50,10 +52,11 @@ test('viewOf ignores case and spaces, falls back to document', () => {
   assert.equal(viewOf('constructor'), 'document');
 });
 
-test('VIEWS lists the seven views in order; statements, mappings and gap analysis are the library\'s', () => {
+test('VIEWS lists the eight views in order; statements, mappings and gap analysis are the library\'s', () => {
   assert.deepEqual(VIEWS.map((v) => [v.key, v.label]), [
     ['document', 'Document'],
     ['approvals', 'Approvals'],
+    ['proposals', 'Proposed changes'],
     ['discussion', 'Discussion'],
     ['statements', 'Statements'],
     ['mappings', 'Mappings'],

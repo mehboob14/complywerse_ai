@@ -521,8 +521,10 @@ export const studioApi = {
     post<Redline>(`/sessions/${id}/compare`, body),
 
   moveToLibrary: (id: number, body: MoveToLibrary) => post<{ document_id: number; title: string; version: string }>(`/sessions/${id}/move-to-library`, body),
-  /** the next version of the library document, minor or major as the person chose (`change_type`; without it Comply Agent decides) */
-  saveToDocument: (id: number, body: { change_reason?: string; force?: boolean; change_type?: 'major' | 'minor' } = {}) =>
+  /** the next version of the library document, minor or major as the person chose (`change_type`; without it Comply Agent decides).
+   *  Someone who is not the document's owner or author gets {proposed: true, proposal, message} instead: the owner decides
+   *  (`message`: why, for the owner; lib/proposals.ts) */
+  saveToDocument: (id: number, body: { change_reason?: string; message?: string; force?: boolean; change_type?: 'major' | 'minor' } = {}) =>
     post<{ document_id: number; version: string; status: string; change?: 'major' | 'minor' | null }>(`/sessions/${id}/save-to-document`, body),
 
   assets: () => get<{ items: Asset[] }>('/assets'),

@@ -2,8 +2,10 @@
 // task_request / locked_change; the router adds `document_request` to such a task's JSON). Pure helpers, tested in
 // documentTasks.test.ts; used by the Task Management pages and by the document page's ?act= link.
 import type { Again } from './approvalRoutes';
+import { proposalHref } from './proposals.ts';
 
-export type RequestKind = 'review' | 'approval' | 'acknowledgement' | 'changes';
+/** decide: the owner or author decides on a change someone proposed; revise: the proposer after it was not accepted (lib/proposals.ts) */
+export type RequestKind = 'review' | 'approval' | 'acknowledgement' | 'changes' | 'decide' | 'revise';
 
 /** What the server says about the request behind a document task (`task.document_request`). */
 export interface DocumentRequest {
@@ -23,6 +25,8 @@ export interface DocumentRequest {
   action_label: string;
   /** asked again after changes: what they did before and what changed since (servers from before leave it out) */
   again?: Again | null;
+  /** a decide or revise request: the proposed change it is about */
+  proposal_id?: number | null;
 }
 
 export interface TaskLike {
@@ -39,8 +43,10 @@ export function isDocumentTask(t: TaskLike | null | undefined): boolean {
 
 export type Act = 'ack' | 'sign' | 'changes';
 
-/** The document page with the person's own step open (as the server's doc_lifecycle.action_href builds it). */
-export function actionHref(documentId: number, kind: RequestKind): string {
+/** The document page with the person's own step open (as the server's doc_lifecycle.action_href builds it); a decision on a proposed
+ *  change, or the proposer's revision, opens Proposed changes on that proposal. */
+export function actionHref(documentId: number, kind: RequestKind, proposalId?: number | null): string {
+  if (kind === 'decide' || kind === 'revise') return proposalHref(documentId, proposalId);
   return `/governance/documents/${documentId}?act=${kind === 'acknowledgement' ? 'ack' : kind === 'changes' ? 'changes' : 'sign'}`;
 }
 
@@ -135,15 +141,19 @@ export function momentOf(iso: string | null | undefined): string | null {
   return t ? `${momentDayOf(iso)}, ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}` : null;
 }
 
-const NOUN: Record<RequestKind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for' };
+const NOUN: Record<RequestKind, string> = { review: 'Review', approval: 'Approval', acknowledgement: 'Acknowledgement', changes: 'Changes asked for',
+  decide: 'Decide on a proposed change', revise: 'Your change was not accepted' };
 const DONE: Record<RequestKind, string> = { review: 'Reviewed and signed', approval: 'Approved and signed', acknowledgement: 'Acknowledged',
-  changes: 'Changes made and resubmitted' };
+  changes: 'Changes made and resubmitted', decide: 'Decided', revise: 'Done' };
 const DOING: Record<RequestKind, string> = { review: 'review and sign it', approval: 'approve and sign it', acknowledgement: 'acknowledge it',
-  changes: 'make the changes and resubmit it' };
+  changes: 'make the changes and resubmit it', decide: 'accept or reject the proposed change',
+  revise: 'propose your change again, sign it as it is or withdraw your change' };
+/** a proposed change is not of a version: its line names only what is asked */
+const NO_VERSION: ReadonlySet<RequestKind> = new Set<RequestKind>(['decide', 'revise']);
 
 /** One line on where the request stands: "Acknowledgement of version 1.2 · due 30 Oct 2026 · overdue", "Acknowledged on …". */
 export function requestLine(req: DocumentRequest): string {
-  const of = `${NOUN[req.kind]}${req.version ? ` of version ${req.version}` : ''}`;
+  const of = `${NOUN[req.kind] ?? req.kind}${req.version && !NO_VERSION.has(req.kind) ? ` of version ${req.version}` : ''}`;
   if (req.status === 'done') return `${DONE[req.kind]}${dayOf(req.done_at) ? ` on ${dayOf(req.done_at)}` : ''}`;
   if (req.status === 'rejected') return `Rejected${dayOf(req.done_at) ? ` on ${dayOf(req.done_at)}` : ''}`;
   if (req.status === 'cancelled') return `${of} · no longer needed`;

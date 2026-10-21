@@ -1,10 +1,11 @@
 // Which document view a URL opens. Old ?tab= links (emails, tasks, bookmarks) keep working.
 
-export type DocView = 'document' | 'approvals' | 'discussion' | 'statements' | 'mappings' | 'gaps' | 'versions';
+export type DocView = 'document' | 'approvals' | 'proposals' | 'discussion' | 'statements' | 'mappings' | 'gaps' | 'versions';
 
 export const VIEWS: { key: DocView; label: string }[] = [
   { key: 'document', label: 'Document' },
   { key: 'approvals', label: 'Approvals' },
+  { key: 'proposals', label: 'Proposed changes' },   // changes by others than the owner or author, waiting for their decision (shown once there is one)
   { key: 'discussion', label: 'Discussion' },
   { key: 'statements', label: 'Statements' },
   { key: 'mappings', label: 'Mappings' },
@@ -25,6 +26,10 @@ const ALIASES: Record<string, DocView> = {
   comments: 'discussion',
   remarks: 'discussion',
   'review-history': 'approvals',
+  proposals: 'proposals',
+  proposal: 'proposals',
+  proposed: 'proposals',
+  'proposed-changes': 'proposals',
   statements: 'statements',
   mappings: 'mappings',
   controls: 'mappings',

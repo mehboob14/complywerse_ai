@@ -42,6 +42,8 @@ import ReviewHistory from './_ReviewHistory';
 import { ClassicDocumentPage } from './_LegacyDocumentPage';
 import StatementsView from './_StatementsView';
 import GapAnalysisView from './_GapAnalysisView';
+import ProposalsView, { ProposalsBanner, ProposeNote, useProposals, useProposedAnswer } from './_ProposalsView';
+import { deciderName, sendLabel, signRoleOf, type Proposal } from '@/lib/proposals';
 import { LIBRARY_VIEWS, VIEWS, retryUnlessRefused, viewOf, type DocView } from '../_view/docRoute';
 import { inForceLine, lastAcknowledged, primaryAction, publishLine, rejectionOf, stepLine } from '../_view/docActions';
 
@@ -107,15 +109,21 @@ export default function DocumentStudio() {
   const [downloading, setDownloading] = useState<string | null>(null);
   // ?version=<id> (a version in the library tree): the Versions view opens on it
   const focusVersion = Number(search?.get('version')) || undefined;
-  const setView = (v: DocView) => {
+  // ?proposal=<id> (a task, a notification, My Approvals): Proposed changes opens on it
+  const proposalAsked = Number(search?.get('proposal')) || null;
+  const setView = (v: DocView, proposal?: number) => {
     setViewState(v);
     if (v !== 'document') setReading(null);
     const q = new URLSearchParams(search?.toString() ?? '');
     q.set('tab', v);
     q.delete('details');
     q.delete('version');
+    if (proposal) q.set('proposal', String(proposal));
+    else q.delete('proposal');
     router.replace(`/governance/documents/${id}?${q.toString()}`, { scroll: false });
   };
+  // a statement change that was not accepted, sent again: its form opens in Statements with what was proposed
+  const [again, setAgain] = useState<Proposal | null>(null);
   // a link to this same document with another ?tab= (the top bar's Pending approvals, a notification, Mappings' "no statements
   // yet" link to Statements) does not load the page again: the view follows the URL
   const tabAsked = search?.get('tab') ?? null;
@@ -142,6 +150,12 @@ export default function DocumentStudio() {
     queryFn: async () => (await apiClient.get(`/governance/documents/${id}/annotations`)).data,
   });
   const openRemarks = (remarksQ.data?.annotations ?? []).filter((a) => a.status === 'open').length;
+  // changes proposed by others than the owner or author (a server without them answers 404: no view, nothing changes)
+  const proposalsQ = useProposals(valid ? id : null);
+  const proposalCount = proposalsQ.data?.items.length ?? 0;
+  const proposalsWaiting = proposalsQ.data?.pending ?? 0;
+  useEffect(() => { if (view === 'proposals' && proposalsQ.isError) setViewState('document'); }, [view, proposalsQ.isError]);
+  const handledAsProposal = useProposedAnswer();
 
   const refreshAll = () => {
     for (const key of ['governance-document', 'document-access', 'doc-signoff', 'document-lifecycle', 'document-chain', 'document-chain-redline',
@@ -162,7 +176,12 @@ export default function DocumentStudio() {
   });
   const restore = useMutation({
     mutationFn: (v: { id: number; why?: string }) => governanceApi.rollbackDocumentVersion(id, v.id, v.why),
-    onSuccess: () => { setRestoring(null); refreshAll(); toast({ type: 'success', title: 'Restored', message: 'That version is the document again, as a new version; the later ones are kept.' }); },
+    onSuccess: (res) => {
+      setRestoring(null);
+      if (handledAsProposal(res?.data, deciderName(docQ.data))) return;           // sent to the owner: the document is as it was
+      refreshAll();
+      toast({ type: 'success', title: 'Restored', message: 'That version is the document again, as a new version; the later ones are kept.' });
+    },
     onError: (e) => toast({ type: 'error', title: 'Not restored', message: problemOf(e) }),
   });
   const { hasPermission, isLoading: permsLoading } = usePermissions();
@@ -205,8 +224,9 @@ export default function DocumentStudio() {
     if (!on) setPopup('history');
   }, [focusVersion, accessQ.data, lifecycleQ.isLoading, lifecycleQ.data]);
 
-  // a sign-off done in the popup: the step is gone, so is the popup
-  const myRole = signoff.data?.my_actionable_role ?? null;
+  // a sign-off done in the popup: the step is gone, so is the popup. The proposer whose change was not accepted signs it as it is
+  // with their own step (my_step.may_sign_as_is)
+  const myRole = signRoleOf(signoff.data);
   useEffect(() => { if (popup === 'sign' && signoff.data && !myRole) setPopup(null); }, [popup, myRole, signoff.data]);
 
   // ?act=ack / ?act=sign (a task's button in Task Management, My Approvals): the person's own step opens at once, or a note says
@@ -220,7 +240,7 @@ export default function DocumentStudio() {
     const doneOn = (lcd ? [...lcd.approvals, ...lcd.acknowledgements.people] : [])
       .filter((r) => r.user_id === lcd?.me?.id && kinds.includes(r.kind) && r.status === 'done').map((r) => r.done_at ?? '').sort().pop() || null;
     const out = actOutcome({ act: actAsked, myAck: !!lcd?.mine.some((r) => r.kind === 'acknowledgement' && r.status === 'pending'),
-      myRole: signoff.data?.my_actionable_role, doneOn, asked: !!lcd?.approvals.some((r) => r.user_id === lcd.me?.id && kinds.includes(r.kind)),
+      myRole: signRoleOf(signoff.data), doneOn, asked: !!lcd?.approvals.some((r) => r.user_id === lcd.me?.id && kinds.includes(r.kind)),
       canResubmit: !!signoff.data?.can_resubmit });
     if ('popup' in out) setPopup(out.popup);
     else toast({ type: 'info', title: out.title, message: out.message });
@@ -278,11 +298,23 @@ export default function DocumentStudio() {
   const lifecycleOn = !!(access?.lifecycle ?? lc);
   const myAck = lc?.mine.find((r) => r.kind === 'acknowledgement' && r.status === 'pending') ?? null;
   const mySign = lc?.mine.find((r) => (r.kind === 'review' || r.kind === 'approval') && r.status === 'pending') ?? null;
-  // a stage of a route of its own names its step ("Concur and sign"); changes asked for: the author's step is Resubmit
+  // a stage of a route of its own names its step ("Concur and sign"); changes asked for: the author's step is Resubmit. A route held
+  // for a proposed change is resubmitted by the owner's decision, not by Resubmit
   const myStep = signoff.data?.route?.custom ? signoff.data.my_step : null;
+  const asIs = !signoff.data?.my_actionable_role && !!signoff.data?.my_step?.may_sign_as_is;
+  const proposalHold = signoff.data?.route?.hold?.kind === 'proposal';
   const primary = primaryAction({ status: doc.status, myAck: !!myAck, myRole, canEdit, canPublish, inForce: !!doc.version_in_force,
-    canResubmit: !!signoff.data?.can_resubmit && doc.status !== 'archived', stepLabel: myStep ? STEP_LABEL[myStep.kind] : undefined });
-  const personal = primary && ['acknowledge', 'review', 'approve'].includes(primary.kind) ? primary : null;
+    canResubmit: !!signoff.data?.can_resubmit && doc.status !== 'archived' && !proposalHold,
+    stepLabel: asIs ? 'Sign it as it is' : myStep ? STEP_LABEL[myStep.kind] : undefined });
+  const decider = deciderName(doc);
+  const proposes = proposalsQ.data?.can_decide === false;                // this person's changes go to the owner first
+  const openProposal = (pid: number) => setView('proposals', pid);
+  // the proposer sends a change that was not accepted again: their draft in the AI Studio, or the statement's own form
+  const proposeAgain = (p: Proposal) => {
+    if (p.kind === 'statement') { setAgain(p); setView('statements'); } else edit.mutate(false);
+  };
+  // (signing a change that was not accepted "as it is" is said by the hold's banner)
+  const personal = !asIs && primary && ['acknowledge', 'review', 'approve'].includes(primary.kind) ? primary : null;
   const due = primary?.kind === 'acknowledge' ? myAck?.due_date : mySign?.due_date;
   const version = doc.current_version || '1.0';
   // while a new version is on its way the published one stays in force: someone who reads that one (the server sent `newer_version`)
@@ -417,10 +449,11 @@ export default function DocumentStudio() {
           {/* the views: in the bar on very wide screens, on their own row below it otherwise */}
           <nav aria-label="Views" className="order-last -mx-1 flex w-full overflow-x-auto px-1 [scrollbar-width:none] 2xl:order-none 2xl:mx-0 2xl:w-auto 2xl:px-0 [&::-webkit-scrollbar]:hidden">
             <div className="inline-flex rounded-lg bg-[#eef1f4] p-0.5" role="tablist">
-              {VIEWS.filter((v) => library || !LIBRARY_VIEWS.has(v.key)).map((v) => {
+              {VIEWS.filter((v) => (library || !LIBRARY_VIEWS.has(v.key)) && (v.key !== 'proposals' || proposalCount > 0 || view === 'proposals')).map((v) => {
                 const on = view === v.key;
                 const badge = v.key === 'approvals' ? (personal && primary?.kind !== 'acknowledge' ? 'Your step' : pendingApprovals ? String(pendingApprovals) : '')
-                  : v.key === 'discussion' && openRemarks ? String(openRemarks) : '';
+                  : v.key === 'discussion' && openRemarks ? String(openRemarks)
+                  : v.key === 'proposals' && proposalsWaiting ? String(proposalsWaiting) : '';
                 return (
                   <button key={v.key} type="button" role="tab" aria-selected={on} onClick={() => setView(v.key)}
                     className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-3 py-1 text-sm font-medium ${on ? 'bg-white text-[#0b4f46] shadow-sm' : 'text-[#3f4b58] hover:text-[#1f2933]'}`}>
@@ -435,7 +468,10 @@ export default function DocumentStudio() {
       </header>
 
       {/* ── the view ────────────────────────────────────────────────── */}
-      <div className="min-h-0 flex-1 overflow-y-auto"><div className="mx-auto w-full max-w-6xl space-y-3 px-3 py-4 sm:px-4">
+      {/* (Proposed changes is wider: two documents side by side) */}
+      <div className="min-h-0 flex-1 overflow-y-auto"><div className={`mx-auto w-full space-y-3 px-3 py-4 sm:px-4 ${view === 'proposals' ? 'max-w-[1600px]' : 'max-w-6xl'}`}>
+        {/* (where the route's hold for a proposed change shows its own banner, that one says it) */}
+        {view !== 'proposals' && !(proposalHold && (view === 'document' || view === 'approvals')) && <ProposalsBanner documentId={id} doc={doc} onOpen={openProposal} />}
         {archived && (
           <div className="flex flex-wrap items-center gap-3 rounded-xl border border-[#c3ccd5] bg-[#eef1f4] px-4 py-2.5" role="status">
             <Archive className="h-4 w-4 shrink-0 text-[#3f4b58]" aria-hidden />
@@ -468,7 +504,7 @@ export default function DocumentStudio() {
             )}
           </div>
         )}
-        {view === 'document' && <HoldBanner documentId={id} onResubmit={() => setPopup('resubmit')} />}
+        {view === 'document' && <HoldBanner documentId={id} onResubmit={() => setPopup('resubmit')} onProposeAgain={proposeAgain} />}
         {rejected && view === 'document' && (
           <div className="flex items-start gap-3 rounded-xl border border-rose-300 bg-rose-50 px-4 py-2.5" role="status">
             <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#9b1c1c]" aria-hidden />
@@ -498,6 +534,9 @@ export default function DocumentStudio() {
             </>
           )
         )}
+        {view === 'proposals' && (
+          <ProposalsView documentId={id} doc={doc} asked={proposalAsked} onPick={openProposal} onProposeAgain={proposeAgain} />
+        )}
         {/* the Discussion: everyone who can open the document comments (its author, reviewers, approvers, the people asked to acknowledge it) */}
         {view === 'discussion' && (
           <section className="space-y-2">
@@ -506,7 +545,7 @@ export default function DocumentStudio() {
           </section>
         )}
         {/* statements, the library's own Mappings page and gap analysis: for people who read the library; changes for its editors */}
-        {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={mayChange} />}
+        {view === 'statements' && library && <StatementsView documentId={id} documentTitle={doc.title} canEdit={mayChange} again={again} onAgainOpened={() => setAgain(null)} />}
         {view === 'mappings' && library && <GovernanceMappingsPage initialDocumentId={id} canEdit={mayChange} />}
         {view === 'gaps' && library && <GapAnalysisView documentId={id} tenantId={doc.tenant_id} canEdit={mayChange} />}
         {view === 'versions' && (
@@ -528,7 +567,7 @@ export default function DocumentStudio() {
       <SubmitDialog documentId={id} doc={doc} open={popup === 'submit'} onClose={() => setPopup(null)} />
       <ResubmitDialog documentId={id} open={popup === 'resubmit'} onClose={() => setPopup(null)} />
       <AnimatedModal isOpen={popup === 'sign'} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE}
-        title={myStep ? STEP_LABEL[myStep.kind] : primary?.kind === 'approve' ? 'Approve and sign' : 'Review and sign'} subtitle={`${doc.title} · version ${version}`}>
+        title={asIs ? 'Sign it as it is' : myStep ? STEP_LABEL[myStep.kind] : primary?.kind === 'approve' ? 'Approve and sign' : 'Review and sign'} subtitle={`${doc.title} · version ${version}`}>
         <div className="p-4"><SignoffAction documentId={id} due={mySign?.due_date} version={version} /></div>
       </AnimatedModal>
       <AnimatedModal isOpen={popup === 'ack' && !!myAck} onClose={() => setPopup(null)} size="xl" className={FULL_ON_PHONE} title="Acknowledge"
@@ -580,7 +619,9 @@ export default function DocumentStudio() {
         footer={(
           <div className="flex justify-end gap-2">
             <button type="button" onClick={() => setRestoring(null)} className={BTN}>Cancel</button>
-            <button type="button" onClick={() => restoring && restore.mutate(restoring)} disabled={restore.isPending} className={PRIMARY}>{restore.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Restore</button>
+            <button type="button" onClick={() => restoring && restore.mutate(restoring)} disabled={restore.isPending || (proposes && !restoring?.why?.trim())} className={PRIMARY}>
+              {restore.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : proposes ? <Send className="h-4 w-4" aria-hidden /> : null} {proposes ? sendLabel(decider) : 'Restore'}
+            </button>
           </div>
         )}>
         <div className="space-y-3 px-5 py-4">
@@ -589,16 +630,22 @@ export default function DocumentStudio() {
             {['approved', 'published'].includes(doc.status) ? ' It is approved, so it goes back to review.' : ''}
             {doc.version_in_force ? ` Everyone else keeps reading the published version v${doc.version_in_force} until the new one is published.` : ''}
           </p>
-          <label className="block">
-            <span className="text-xs font-semibold text-[#26323d]">Why <span className="font-normal text-[#586472]">(optional)</span></span>
-            <input type="text" value={restoring?.why ?? ''} maxLength={500} placeholder="e.g. The last edit was made in error"
-              onChange={(e) => setRestoring((r) => (r ? { ...r, why: e.target.value } : r))}
-              className="mt-1 w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#586472] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]" />
-          </label>
+          {proposes ? (
+            <ProposeNote id="restore-why" decider={decider} value={restoring?.why ?? ''} placeholder="e.g. The last edit was made in error"
+              onChange={(v) => setRestoring((r) => (r ? { ...r, why: v } : r))} />
+          ) : (
+            <label className="block">
+              <span className="text-xs font-semibold text-[#26323d]">Why <span className="font-normal text-[#586472]">(optional)</span></span>
+              <input type="text" value={restoring?.why ?? ''} maxLength={500} placeholder="e.g. The last edit was made in error"
+                onChange={(e) => setRestoring((r) => (r ? { ...r, why: e.target.value } : r))}
+                className="mt-1 w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#586472] focus:border-[#0f766e] focus:outline-none focus:ring-1 focus:ring-[#0f766e]" />
+            </label>
+          )}
         </div>
       </AnimatedModal>
       {mayChange && <DocumentSignoffPanel documentId={id} isOpen={popup === 'control'} onClose={() => setPopup(null)} onDone={refreshAll} />}
-      <DocumentVersionHistoryPanel documentId={id} isOpen={popup === 'history'} onClose={() => setPopup(null)} canRestore={mayChange} status={doc.status} onRestored={() => { setPopup(null); refreshAll(); }} />
+      <DocumentVersionHistoryPanel documentId={id} isOpen={popup === 'history'} onClose={() => setPopup(null)} canRestore={mayChange} status={doc.status} onRestored={() => { setPopup(null); refreshAll(); }}
+        proposeTo={proposes ? decider : null} />
     </div>
   );
 }

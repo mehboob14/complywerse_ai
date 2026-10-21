@@ -13,12 +13,15 @@ import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Archive, ArrowLeft, BookMarked, Check, CheckCircle2, ChevronDown, Download, Eye, EyeOff, FilePlus2, FileText, GitCompare, History, Info, Library, ListChecks, Loader2,
-  MessageSquare, Pencil, Save, Settings2, Sparkles, Square, X,
+  MessageSquare, Pencil, Save, Send, Settings2, Sparkles, Square, X,
 } from 'lucide-react';
 import { PageLoader } from '@/components/ui';
 import { useToast } from '@/components/ui/ToastProvider';
 import { isConflict, problemOf, studioApi, type AnswerItem, type Attachment, type Issue, type Message, type Session } from '@/lib/studio/api';
-import { ARCHIVED_NOTE, acceptedLine, countPlaceholders, countWords, maySaveToLibrary, num, plural } from '@/lib/studio/text';
+import { ARCHIVED_NOTE, acceptedLine, ago, countPlaceholders, countWords, maySaveToLibrary, num, plural } from '@/lib/studio/text';
+import { proposalHref, sendLabel, sessionProposal } from '@/lib/proposals';
+import { useMyUserId } from '@/components/governance/DocumentTaskActions';
+import { useProposalRole } from '../../[id]/_ProposalsView';
 import StudioEditor, { type EditorMode, type StudioEditorHandle } from '../_components/StudioEditor';
 import ChatPanel from '../_components/ChatPanel';
 import { useLiveProgress } from '../_components/useLiveProgress';
@@ -399,6 +402,12 @@ export default function StudioWorkspacePage() {
   const words = useMemo(() => countWords(text), [text]);
   const placeholders = useMemo(() => countPlaceholders(text), [text]);
 
+  // someone who may edit the library document but is not its owner or author sends their changes to the owner (D35): the bar says so,
+  // and the changes sent from here show while they wait or after they were not accepted
+  const proposalRole = useProposalRole(session?.document_id ?? null);
+  const meId = useMyUserId();
+  const sent = sessionProposal(proposalRole.list?.items, id, meId);
+
   // ── gates ──────────────────────────────────────────────────────────────────
   if (status.isLoading || sessionQuery.isLoading) return <PageLoader />;
   if (status.data && !status.data.enabled) {
@@ -431,6 +440,8 @@ export default function StudioWorkspacePage() {
   const errorCount = issues.filter((i) => i.severity === 'error').length;
   const warnCount = issues.filter((i) => i.severity === 'warning').length;
   const saveLabel = { saved: 'Saved', dirty: 'Unsaved changes', saving: 'Saving…', conflict: 'Not saved', error: 'Not saved' }[saveState];
+  const proposes = inLibrary && proposalRole.proposes;
+  const decider = proposalRole.decider;
 
   return (
     // the whole page under the top bar (3rem): the margins cancel the page's own padding (14px, 16px from lg in compact density)
@@ -464,7 +475,7 @@ export default function StudioWorkspacePage() {
                 className="inline-flex items-center gap-1 text-[#0b6b58] hover:underline"><Library className="h-3.5 w-3.5" /> In the library{session.document_version ? `, version ${session.document_version}` : ''}</Link>
               {session.unsaved_in_library && maySave && (
                 <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} title="Saved here in the studio; the library still holds the version before"
-                  className="font-semibold text-[#8a6100] hover:underline">Changes not saved to the library yet · Save to the library</button>
+                  className="font-semibold text-[#8a6100] hover:underline">{proposes ? `Changes not in the library yet · ${sendLabel(decider)}` : 'Changes not saved to the library yet · Save to the library'}</button>
               )}
             </>
           ) : <span>Not in the library yet</span>}
@@ -493,7 +504,10 @@ export default function StudioWorkspacePage() {
             <span title={`Every change is saved in the library${session.document_version ? `, in version ${session.document_version}` : ''}. Change the text and it can be saved again.`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#b9dccb] bg-[#eef8f3] px-2.5 py-1.5 text-xs font-semibold text-[#0a5a38]"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved in the library</span>
           ) : inLibrary ? (
-            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Save className="h-3.5 w-3.5" /> Save to the library</button>
+            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"
+              title={proposes ? `${decider} accepts or rejects your changes; the library does not change until then` : undefined}>
+              {proposes ? <><Send className="h-3.5 w-3.5" aria-hidden /> {sendLabel(decider)}</> : <><Save className="h-3.5 w-3.5" /> Save to the library</>}
+            </button>
           ) : (
             <button type="button" onClick={() => setDialog('move')} className="inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-[#0b5f58]"><Library className="h-3.5 w-3.5" /> Move to the library</button>
           )}
@@ -512,6 +526,22 @@ export default function StudioWorkspacePage() {
           {archived ? (
             <span>{ARCHIVED_NOTE} <Link href={`/governance/documents/${session.document_id}`} className="font-semibold text-[#0b6b58] underline">Open the document</Link></span>
           ) : <span>You can compare and try changes here; only the document’s owner, author or editors can save them to the library.</span>}
+        </div>
+      )}
+
+      {/* the changes sent from here to the owner: waiting for the decision, or not accepted (the note, and Propose again) */}
+      {sent && session.document_id && (
+        <div className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 border-b px-4 py-1.5 text-xs ${sent.status === 'rejected' ? 'border-rose-200 bg-rose-50 text-[#7a1616]' : 'border-amber-200 bg-amber-50 text-amber-950'}`} role="status">
+          <Send className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="min-w-0 flex-1">
+            {sent.status === 'rejected'
+              ? <><span className="font-semibold">{sent.decided_by?.name || decider} did not accept your changes</span>{sent.decision_note ? `: “${sent.decision_note}”` : '.'} Change them here and propose them again.</>
+              : <><span className="font-semibold">Waiting for {decider}&apos;s decision</span> on the changes you sent{sent.proposed_at ? ` ${ago(sent.proposed_at)}` : ''}. The library does not change until then.</>}
+          </span>
+          {sent.status === 'rejected' && maySave && (
+            <button type="button" onClick={() => { setDialog('save'); void onSessionChanged(); }} className="rounded-md bg-white px-2.5 py-1 font-semibold text-[#7a1616] ring-1 ring-rose-200 hover:bg-rose-100">Propose again</button>
+          )}
+          <Link href={proposalHref(session.document_id, sent.id)} className="font-semibold underline">See it</Link>
         </div>
       )}
 
