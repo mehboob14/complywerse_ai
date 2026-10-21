@@ -26,6 +26,7 @@ import { clsx } from 'clsx';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { getTenantSlug } from '@/cyber-assurance/lib/api';
+import { useAutoGrow } from '@/lib/useAutoGrow';
 
 interface Source {
   rank: number;
@@ -170,12 +171,7 @@ export default function ComplyChatPage() {
     scrollToBottom();
   }, [messages]);
 
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
-    }
-  }, [inputMessage]);
+  useAutoGrow(textareaRef, inputMessage);
 
   useEffect(() => {
     if (!activeConversationId && conversations.length > 0) {
@@ -918,7 +914,7 @@ export default function ComplyChatPage() {
                   placeholder="Ask about controls, evidence, risks, or upload files for analysis..."
                   rows={1}
                   className="w-full resize-none rounded-xl border border-slate-300 bg-white px-3 py-2.5 pr-11 text-sm text-black placeholder-slate-400 focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20 scrollbar-thin"
-                  style={{ minHeight: '42px', maxHeight: '132px' }}
+                  style={{ minHeight: '42px' }}
                 />
                 <button
                   type="submit"

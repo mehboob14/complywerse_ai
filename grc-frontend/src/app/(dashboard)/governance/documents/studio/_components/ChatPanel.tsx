@@ -11,6 +11,7 @@ import remarkGfm from 'remark-gfm';
 import { AlertTriangle, BookOpen, Check, CheckCircle2, ChevronDown, ChevronRight, FileText, GitCompare, Lightbulb, Loader2, MessageCircleQuestion, Paperclip, Pencil, Send, Sparkles, Square, Undo2, Wand2, X, XCircle } from 'lucide-react';
 import { problemOf, studioApi, type AnswerItem, type Attachment, type Message, type Op, type Question, type ReferenceUsed, type Session } from '@/lib/studio/api';
 import { num, plural, wordDiff } from '@/lib/studio/text';
+import { useAutoGrow } from '@/lib/useAutoGrow';
 import LiveTurn from './LiveTurn';
 import type { Focus } from './RedlineView';
 import { SetupCard } from './SetupFields';
@@ -499,8 +500,11 @@ export default function ChatPanel(props: ChatPanelProps) {
   const working = chat.some((m) => m.status === 'working');
   const [text, setText] = useState('');
   const end = useRef<HTMLDivElement>(null);
+  const list = useRef<HTMLDivElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
   const atBottom = useRef(true);                                // follow the answer as it is written, unless the person scrolled up to read
+  // the message box grows with what is typed or pasted; the latest message stays in view above it
+  useAutoGrow(area, text, () => { if (atBottom.current && list.current) list.current.scrollTop = list.current.scrollHeight; });
   useEffect(() => {
     if (atBottom.current) end.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [chat.length, chat[chat.length - 1]?.status, chat[chat.length - 1]?.stage, chat[chat.length - 1]?.live?.seq]);
@@ -548,7 +552,7 @@ export default function ChatPanel(props: ChatPanelProps) {
           <p className="mt-0.5">Ask your administrator to connect Comply Agent. The editor, checks, comparison of versions and export all work without it.</p>
         </div>
       )}
-      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3" aria-live="polite"
+      <div ref={list} className="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3" aria-live="polite"
         onScroll={(e) => { const el = e.currentTarget; atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 96; }}>
         {chat.length === 0 && notStarted(session) && WRITTEN_WHOLE.includes(session.doc_type) && <SetupCard session={session} onChanged={props.onReferencesChanged} />}
         {chat.length === 0 && (
@@ -624,7 +628,7 @@ export default function ChatPanel(props: ChatPanelProps) {
             disabled={!aiConfigured}
             aria-label="Message to Comply Agent"
             placeholder={aiConfigured ? 'Ask anything: a draft, a rewrite, a gap analysis against a file you attach …' : 'Comply Agent is not connected yet'}
-            className="min-h-[2.75rem] flex-1 resize-y rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0] disabled:bg-[#f1f3f5]"
+            className="min-h-[2.75rem] flex-1 resize-none rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0] disabled:bg-[#f1f3f5]"
           />
           {working ? (
             <button type="button" onClick={props.onStop} disabled={props.stopping} title="Stop Comply Agent: nothing it is writing is applied"
