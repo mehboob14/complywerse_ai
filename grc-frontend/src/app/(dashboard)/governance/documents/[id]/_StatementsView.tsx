@@ -362,6 +362,9 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     });
     return groups;
   }, [stmts]);
+  // the statements a newer version no longer says stay listed with their history, but are not counted as the document's
+  const removed = stmts.filter((s: any) => s.status === 'superseded').length;
+  const inDocument = (list: any[]) => list.filter((s: any) => s.status !== 'superseded').length;
 
   const toggleCategory = (cat: string) => setCollapsed((prev) => {
     const next = new Set(prev);
@@ -446,10 +449,13 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
-          <h3 className="text-base font-semibold text-[#1f2933]">{stmts.length} statement{stmts.length !== 1 ? 's' : ''}</h3>
-          {categoryKeys.map((cat) => {
+          <h3 className="text-base font-semibold text-[#1f2933]">
+            {stmts.length - removed} statement{stmts.length - removed !== 1 ? 's' : ''}
+            {removed > 0 && <span className="font-normal text-[#586472]"> · {removed} no longer in the document</span>}
+          </h3>
+          {categoryKeys.filter((cat) => inDocument(grouped[cat]) > 0).map((cat) => {
             const colors = CATEGORY_COLORS[cat] || OTHER_COLORS;
-            return <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>{formatCategory(cat)}: {grouped[cat].length}</span>;
+            return <span key={cat} className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors.bg} ${colors.text}`}>{formatCategory(cat)}: {inDocument(grouped[cat])}</span>;
           })}
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -535,7 +541,10 @@ function StatementsList({ statements, statementsLoading, statementsError, parseP
               className="flex w-full items-center justify-between px-4 py-3 text-left hover:bg-[#f7f9fa]">
               <span className="flex items-center gap-3">
                 <span className={`rounded-lg px-2.5 py-1 text-xs font-semibold ${colors.bg} ${colors.text}`}>{formatCategory(cat)}</span>
-                <span className="text-sm text-[#3f4b58]">{catStmts.length} statement{catStmts.length !== 1 ? 's' : ''}</span>
+                <span className="text-sm text-[#3f4b58]">
+                  {inDocument(catStmts)} statement{inDocument(catStmts) !== 1 ? 's' : ''}
+                  {inDocument(catStmts) < catStmts.length && ` · ${catStmts.length - inDocument(catStmts)} no longer in the document`}
+                </span>
               </span>
               {isExpanded ? <ChevronUp className="h-4 w-4 text-[#586472]" aria-hidden /> : <ChevronDown className="h-4 w-4 text-[#586472]" aria-hidden />}
             </button>
