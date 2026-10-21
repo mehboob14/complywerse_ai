@@ -3,7 +3,7 @@
 /**
  * A document's gap analysis: run it against frameworks (in the background), read the coverage per framework and the findings,
  * and work them - owner, target date, status, override, accept the risk - or close a gap with a fix Comply Agent drafts, which
- * goes into the document (into its version not yet published, as every change does). Override takes an applied fix back out of
+ * goes into the document as its next version (as every change does, the versions before kept). Override takes an applied fix back out of
  * the document, every other change kept. Also: compare the document with another one. Used by the AI Studio's Gap analysis
  * view and the classic page. Readers read; the changes are for the document's editors (`canEdit`; the server checks them too).
  */
@@ -306,8 +306,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
       const where = st === 'pending_review' ? ' It is in review again, with its reviewers.'
         : st === 'pending_approval' ? ' It is waiting for its approvers again.'
         : st === 'draft' ? ' Send it for review when it is ready.' : '';
-      const saved = !v ? 'Saved to the document.'
-        : r.in_place ? `It is in version ${v}, with the other changes not yet published.` : `Saved as version ${v}; the version before is kept.`;
+      const saved = v ? `Saved as version ${v}; the version before is kept.` : 'Saved to the document.';
       const notes = Array.isArray(r.notes) && r.notes.length ? ` ${r.notes.join(' ')}` : '';
       toast({ type: 'success', title: 'Fix applied', message: `${saved}${where}${notes}` });
       refreshDocument();
@@ -662,7 +661,7 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
                 <input type="text" value={addressGapReason} onChange={(e) => setAddressGapReason(e.target.value)} placeholder="e.g. Closing the gap before the audit" className={FIELD} />
               </label>
               <p className="text-xs text-[#586472]">
-                The fix goes into the document&apos;s version not yet published (or its next version) with the other changes; earlier versions are kept, and Override takes it back out.
+                The fix is saved as the document&apos;s next version; earlier versions are kept, and Override takes it back out.
               </p>
             </div>
 

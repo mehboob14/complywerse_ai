@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Response, UploadFile, status
@@ -133,6 +133,8 @@ class MoveIn(BaseModel):
     review_cycle_months: Optional[int] = None      # the session's setup, else 12, when not given
     effective_date: Optional[datetime] = None
     next_review_date: Optional[datetime] = None    # the effective date (or today) + the review cycle, when not given
+    # an uploaded file changed here moves as two versions: the person's minor or major for the second (else Comply Agent decides)
+    change_type: Optional[Literal["major", "minor"]] = None
 
     def details(self) -> Dict[str, Any]:
         return self.model_dump(include={"description", "owner_id", "department_id", "review_cycle_months", "effective_date", "next_review_date"})
@@ -141,6 +143,7 @@ class MoveIn(BaseModel):
 class SaveIn(BaseModel):
     change_reason: Optional[str] = None
     force: bool = False
+    change_type: Optional[Literal["major", "minor"]] = None     # the person's choice; without it Comply Agent decides (older callers)
 
 
 class TemplateIn(BaseModel):
@@ -539,8 +542,8 @@ def accept_changes(session_id: int, message_id: int, body: OpsIn, db: Session = 
     s = _session(db, session_id, user)
     m = _message(db, s, message_id)
     result = service.accept_ops(db, s, m, body.op_ids or _pending_ids(m), user.id, overrides=body.overrides)
-    saved = service.version_after_accept(db, s, user, result["accepted"])        # a library draft: its next version
-    return {**result, "revision": s.revision_no, "content": s.content, "message": service.message_view(m), "library_version": saved}
+    # an accept stays in the studio: only Save to the library writes the library (the user, 2026-10-21); the key stays for older screens
+    return {**result, "revision": s.revision_no, "content": s.content, "message": service.message_view(m), "library_version": None}
 
 
 @router.post("/sessions/{session_id}/messages/{message_id}/reject", dependencies=[Depends(require_studio)])
@@ -770,7 +773,8 @@ def move_to_library(session_id: int, body: MoveIn, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail=str(exc))
     try:
         doc = service.move_to_library(db, s, user, title=body.title, doc_type=body.doc_type, classification=body.classification,
-                                      parent_document_id=body.parent_document_id, framework_ids=body.framework_ids, **body.details())
+                                      parent_document_id=body.parent_document_id, framework_ids=body.framework_ids,
+                                      change_type=body.change_type, **body.details())
     except service.StudioError as exc:
         raise _problem(exc)
     return {"document_id": doc.id, "title": doc.title, "version": doc.current_version}
@@ -779,18 +783,14 @@ def move_to_library(session_id: int, body: MoveIn, db: Session = Depends(get_db)
 @router.post("/sessions/{session_id}/save-to-document", dependencies=[Depends(require_studio)])
 def save_to_document(session_id: int, body: SaveIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     s = _session(db, session_id, user)
-    from .. import doc_version
-    from ....models import GovernanceDocument
-
-    linked = db.get(GovernanceDocument, s.document_id) if s.document_id else None
-    in_place = linked is not None and doc_version.pending_row(db, linked) is not None      # not published yet: the same version
     try:
-        doc = service.save_to_document(db, s, user, change_reason=body.change_reason, force=body.force)
+        doc = service.save_to_document(db, s, user, change_reason=body.change_reason, force=body.force, change_type=body.change_type)
     except service.StudioError as exc:
         raise _problem(exc)
     row = service._version_row(db, doc, doc.current_version)
+    # in_place: always false now that every save makes its own version (kept for older screens)
     return {"document_id": doc.id, "version": doc.current_version, "status": doc.status, "change": row.change_type if row is not None else None,
-            "in_place": in_place}
+            "in_place": False}
 
 
 # ── logos ────────────────────────────────────────────────────────────────────

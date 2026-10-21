@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { acceptedLine, maySaveToLibrary, num, plural, saveWarning, savedNote } from './text.ts';
+import { acceptedLine, maySaveToLibrary, nextVersion, num, plural, saveWarning, savedNote } from './text.ts';
 
 test('nothing is saved to the library from an archived document, nor by someone who may only read it', () => {
   assert.equal(maySaveToLibrary({ may_save: true, document_status: 'draft' }), true);
@@ -9,10 +9,18 @@ test('nothing is saved to the library from an archived document, nor by someone 
   assert.equal(maySaveToLibrary({ may_save: true, document_status: 'archived' }), false);
 });
 
-test('an accept says it is in the document only when the library has it too', () => {
-  assert.equal(acceptedLine(2, true, true), '2 changes accepted and written into the document.');
-  assert.equal(acceptedLine(1, false, false), '1 change accepted and written into the document.');
-  assert.equal(acceptedLine(2, true, false), '2 changes accepted here in the studio; the library is not changed.');
+test('an accept stays in the studio: a library document has it only once it is saved to the library', () => {
+  assert.equal(acceptedLine(2, true), '2 changes accepted here in the studio; the library is not changed until you save to it.');
+  assert.equal(acceptedLine(1, false), '1 change accepted and written into the document.');    // not in the library yet
+});
+
+test('the minor and the major version a save makes, numbered as the server numbers them', () => {
+  assert.deepEqual([nextVersion('1.1', 'minor'), nextVersion('1.2', 'major')], ['1.2', '2.0']);     // the user's 1.2, then 2.0
+  assert.deepEqual([nextVersion('1.9', 'minor'), nextVersion('1.9', 'major')], ['1.10', '2.0']);    // 1.10 follows 1.9
+  assert.deepEqual([nextVersion('4.0', 'minor'), nextVersion('4.0', 'major')], ['4.1', '5.0']);     // a file that starts at 4.0
+  assert.deepEqual([nextVersion('2.0.1', 'minor'), nextVersion('2.0.1', 'major')], ['2.1', '3.0']); // a patch number goes
+  assert.deepEqual([nextVersion(null, 'minor'), nextVersion(undefined, 'major'), nextVersion('', 'minor')], ['1.1', '2.0', '1.1']);
+  assert.deepEqual([nextVersion('7', 'minor'), nextVersion('7', 'major')], ['1.1', '2.0']);          // as the server: one part counts as 1.0
 });
 
 test('counts are written with a thousands separator', () => {
@@ -48,8 +56,6 @@ test('the toast after saving says the version, major or minor, and where the doc
   assert.match(savedNote({ version: '1.1', status: 'pending_approval' }, 'pending_approval').message!, /waiting for approval/);
   assert.match(savedNote({ version: '1.1', status: 'draft' }, 'pending_review').message!, /a draft again/);
   assert.equal(savedNote({ version: '1.1', status: 'published' }, 'published').message, undefined);
-  // not published yet: the change went into the version already on its way, which keeps its number
-  assert.deepEqual(savedNote({ version: '1.1', change: 'minor', status: 'draft', in_place: true }, 'draft'),
-    { title: 'Saved in version 1.1 (minor change)', message: 'It stays version 1.1 until it is published: changes made before then go into this version.' });
-  assert.match(savedNote({ version: '2.0', status: 'pending_review', in_place: true }, 'pending_review').message!, /in review again/);
+  // every save is a version of its own, a draft too: never "saved in" a version that stays until it is published
+  assert.deepEqual(savedNote({ version: '1.2', change: 'minor', status: 'draft' }, 'draft'), { title: 'Saved as version 1.2 (minor change)', message: undefined });
 });

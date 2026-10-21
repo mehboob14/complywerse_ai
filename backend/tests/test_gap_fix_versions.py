@@ -1,5 +1,5 @@
-"""A gap fix is saved as every other change is (D28): until the document is published, every fix goes into its one pending
-version. Override takes one fix back out on its own - every other change kept, in that same version - and the finding is
+"""A gap fix is saved as every other change is: the document's next version, the versions before it kept as they were (the user,
+2026-10-21). Override takes one fix back out on its own - every other change kept - as a version of its own, and the finding is
 open again. A document that is its Word file gets the fix, and its take back, written into a new file."""
 import pytest
 from docx import Document
@@ -66,33 +66,39 @@ def _undo(db, finding_id=1):
                                  db=db, current_user=_user(db))
 
 
-def test_two_fixes_on_a_draft_make_one_version_and_undo_takes_back_only_its_own_fix(db):
+def _row(db, number):
+    return db.query(m.GovernanceDocumentVersion).filter_by(document_id=5, version_number=number).one()
+
+
+def test_each_fix_on_a_draft_makes_its_own_version_and_undo_takes_back_only_its_own_fix(db):
     first, second = _add(db), _replace(db)
-    assert first["in_place"] is False and second["in_place"] is True              # the second fix joins the version the first made
-    assert second["applied_version_id"] == first["applied_version_id"] and second["applied_version_number"] == first["applied_version_number"]
-    number = first["applied_version_number"]
-    assert _versions(db) == [("1.0", "superseded"), (number, "current")]
+    assert (first["in_place"], first["applied_version_number"]) == (False, "2.0")               # a section added: major
+    assert (second["in_place"], second["applied_version_number"]) == (False, "2.1")             # a sentence sharpened: minor
+    assert second["applied_version_id"] != first["applied_version_id"]
+    assert _versions(db) == [("1.0", "superseded"), ("2.0", "superseded"), ("2.1", "current")]
+    assert QUARTERLY in _row(db, "2.0").content and SHARPER not in _row(db, "2.0").content          # 2.0 keeps its own text
     doc = db.get(m.GovernanceDocument, 5)
-    assert QUARTERLY in doc.content and SHARPER in doc.content and doc.current_version == number
+    assert QUARTERLY in doc.content and SHARPER in doc.content and doc.current_version == "2.1"
     added_statement = db.get(m.PolicyGapFinding, 1).applied_statement_id
 
     out = _undo(db)
     doc = db.get(m.GovernanceDocument, 5)
     assert doc.content == TEXT.replace(YEARLY, SHARPER)                          # only the first fix (and its heading) went
-    assert _versions(db) == [("1.0", "superseded"), (number, "current")]         # still the one pending version
-    row = db.query(m.GovernanceDocumentVersion).filter_by(document_id=5, status="current").one()
-    assert row.content == doc.content and out["taken_back_version"] == number == doc.current_version
-    assert [i["origin"] for i in row.change_set["items"]] == ["manual"]          # what is left: the second fix, made by hand
+    assert _versions(db) == [("1.0", "superseded"), ("2.0", "superseded"), ("2.1", "superseded"), ("3.0", "current")]
+    row = _row(db, "3.0")                                                        # a section taken out: major, a version of its own
+    assert row.content == doc.content and out["taken_back_version"] == "3.0" == doc.current_version
+    assert {i["origin"] for i in row.change_set["items"]} == {"revert"}
+    assert QUARTERLY in _row(db, "2.1").content                                  # the fix is still in the versions that had it
     assert out["remediation_status"] == "open" and out["compliance_status"] == "not_addressed" and out["applied_at"] is None
     assert db.get(m.PolicyStatement, added_statement).status == "superseded"     # the statement the fix added is retracted
     kept = db.get(m.PolicyGapFinding, 2)
     assert kept.applied_at is not None and kept.remediation_status == "in_progress"
 
     _undo(db, 2)                                                                  # the other one too: the text of 1.0 again
-    assert db.get(m.GovernanceDocument, 5).content == TEXT
+    assert db.get(m.GovernanceDocument, 5).content == TEXT and db.get(m.GovernanceDocument, 5).current_version == "3.1"
 
 
-def test_after_a_publication_a_fix_makes_the_next_number_and_the_next_fix_joins_it(db):
+def test_after_a_publication_each_fix_makes_the_next_number(db):
     doc = db.get(m.GovernanceDocument, 5)
     doc.status, doc.last_published_version, doc.published_version = "published", "1.0", "1.0"
     db.commit()
@@ -100,7 +106,8 @@ def test_after_a_publication_a_fix_makes_the_next_number_and_the_next_fix_joins_
     assert first["in_place"] is False and first["applied_version_number"] == "1.1"     # a reworded rule: minor
     assert first["document_status"] == "draft"                                        # nobody to sign it: a draft again
     second = _add(db)
-    assert second["in_place"] is True and _versions(db) == [("1.0", "superseded"), ("2.0", "current")]   # a section added: major
+    assert second["applied_version_number"] == "2.0"                                  # a section added: major
+    assert _versions(db) == [("1.0", "superseded"), ("1.1", "superseded"), ("2.0", "current")]
 
 
 def test_an_undo_leaves_a_fix_edited_since_in_the_document_and_still_overrides_the_finding(db):
@@ -145,4 +152,6 @@ def test_a_document_that_is_its_word_file_gets_the_fix_and_its_take_back_in_a_ne
     doc = db.get(m.GovernanceDocument, 5)
     text = "\n".join(p.text for p in Document(doc.file_path).paragraphs)
     assert QUARTERLY not in text and "A.5.18" not in text and "Access is granted on need to know." in text
-    assert len(_versions(db)) == 2                                               # the same pending version holds it
+    rows = db.query(m.GovernanceDocumentVersion).filter_by(document_id=5).order_by(m.GovernanceDocumentVersion.id).all()
+    assert [r.version_number for r in rows] == ["1.0", out["applied_version_number"], "3.0"]     # the take back is a version of its own
+    assert QUARTERLY in "\n".join(p.text for p in Document(rows[1].file_path).paragraphs)          # and the fix's file stays as it was

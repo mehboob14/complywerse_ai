@@ -11,7 +11,7 @@ from grc.modules.governance import doc_sync, permissions
 from grc.modules.governance.routers.documents import _snapshot_content_version
 from grc.modules.governance.studio import service
 
-from test_governance_permissions import ADMIN, EDITOR, OWNER, PUBLISHER, SAM, TEXT, doc, world  # noqa: F401  (world is a fixture)
+from test_governance_permissions import ADMIN, EDITOR, OWNER, PUBLISHER, SAM, TEXT, doc, pending_change, world  # noqa: F401  (world is a fixture)
 
 LOCKED = (409, permissions.ARCHIVED_LOCKED)
 
@@ -100,9 +100,10 @@ def test_the_ai_studio_does_not_write_an_archived_document(archived):
     w.me["id"] = OWNER
     r = w.http.post(f"/governance/studio/sessions/{w.sid}/save-to-document", json={"force": True})
     assert (r.status_code, r.json()["detail"]) == LOCKED
-    s, owner = w.db.get(m.StudioSession, w.sid), w.db.get(m.GRCUser, OWNER)
-    got = service.version_after_accept(w.db, s, owner, 1)                     # an accept stays in the studio and says so
-    assert got["saved"] is False and got["why"].startswith(permissions.ARCHIVED_LOCKED)
+    owner = w.db.get(m.GRCUser, OWNER)
+    mid = pending_change(w, w.sid)                                             # an accept stays in the studio: the document is not changed
+    got = w.http.post(f"/governance/studio/sessions/{w.sid}/messages/{mid}/accept", json={})
+    assert got.status_code == 200 and got.json()["library_version"] is None
     access = w.http.get("/governance/studio/documents/5/access").json()
     assert (access["openable"], access["reason"]) == (False, permissions.ARCHIVED_LOCKED)    # Edit in Comply AI Studio is disabled
     d = doc(w)

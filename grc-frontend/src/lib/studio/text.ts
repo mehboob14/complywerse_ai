@@ -96,20 +96,23 @@ export function maySaveToLibrary(s: { may_save?: boolean; document_status?: stri
 
 export const ARCHIVED_NOTE = 'This document is archived, so nothing here is saved to the library. Restore it in the library to change it.';
 
-/** The line after changes are accepted: written into the document when the library has them too (or the work is not in the
- *  library yet), else kept here in the studio (`saved`: the accept's `library_version.saved`). */
-export function acceptedLine(n: number, inLibrary: boolean, saved: boolean): string {
-  return `${plural(n, 'change')} accepted ${!inLibrary || saved ? 'and written into the document' : 'here in the studio; the library is not changed'}.`;
+/** The line after changes are accepted: an accept stays in the studio, so for a library document the library has them only once
+ *  they are saved to it (Save to the library); work not in the library yet is simply the document. */
+export function acceptedLine(n: number, inLibrary: boolean): string {
+  return `${plural(n, 'change')} accepted ${inLibrary ? 'here in the studio; the library is not changed until you save to it' : 'and written into the document'}.`;
+}
+
+/** The version a minor or a major change makes of `current`, as the server numbers it (versions.increment_version): minor +0.1
+ *  ("1.9" → "1.10"), major the next whole number ("1.2" → "2.0"); a document with no version counts as 1.0. */
+export function nextVersion(current: string | null | undefined, change: 'major' | 'minor'): string {
+  const parts = (current || '1.0').split('.').map((p) => Number.parseInt(p, 10) || 0);
+  const [major, minor] = parts.length === 2 || parts.length === 3 ? parts : [1, 0];
+  return change === 'major' ? `${major + 1}.0` : `${major}.${minor + 1}`;
 }
 
 /** The toast after Save to the library: the version, major or minor, and where the document is now (`before`: its status before). */
-export function savedNote(r: { version: string; change?: 'major' | 'minor' | null; status?: string; in_place?: boolean }, before?: string | null): { title: string; message?: string } {
-  // a document not published yet collects every change in one version: it stays that number until it is published
-  const title = r.in_place ? `Saved in version ${r.version}${r.change ? ` (${r.change} change)` : ''}`
-    : `Saved as version ${r.version}${r.change ? ` (${r.change} change)` : ''}`;
-  if (r.in_place && (r.status === 'draft' || !r.status)) {
-    return { title, message: `It stays version ${r.version} until it is published: changes made before then go into this version.` };
-  }
+export function savedNote(r: { version: string; change?: 'major' | 'minor' | null; status?: string }, before?: string | null): { title: string; message?: string } {
+  const title = `Saved as version ${r.version}${r.change ? ` (${r.change} change)` : ''}`;
   const message = r.status === 'pending_review' ? 'It is in review again: everyone signs from the start.'
     : r.status === 'pending_approval' ? 'It is waiting for approval: the approvers sign from the start.'
     : r.status === 'draft' && before && before !== 'draft' ? 'It is a draft again: choose its reviewers and send it for review.'

@@ -240,21 +240,13 @@ export default function StudioWorkspacePage() {
       setCompare((c) => (c?.type === 'preview' ? null : c));
       if (r.conflicts) toast({ title: `${plural(r.conflicts, 'change')} could not be placed`, message: 'The text they change was edited after Comply Agent read it. Ask again, or make the change yourself.', type: 'warning' });
       if (r.accepted) {
-        const v = r.library_version;
-        toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success',
-                message: v?.saved ? (v.in_place
-                  ? `Saved in version ${v.version}${v.change ? ` (${v.change} change)` : ''}: it stays ${v.version} until it is published.`
-                  : `Saved as version ${v.version}${v.change ? ` (${v.change} change)` : ''}; the version before is kept in the history.`)
-                  : session && maySaveToLibrary(session) ? v?.why : undefined });   // `why` speaks of saving to the library
-        // marked from the revision before this accept (its own revision is the one after): a saved version has moved the
-        // session's starting point to the accepted text, so "since the start" would show nothing
+        // an accept stays in the studio (the user, 2026-10-21): the bar's "not saved to the library yet" (applyServerContent marked
+        // the session unsaved) leads to Save to the library, where the person chooses a minor or a major version
+        toast({ title: `${plural(r.accepted, 'change')} accepted`, type: 'success' });
+        // marked from the revision before this accept (its own revision is the one after)
         // (offered when some can be marked: a spacing tidy is not in the text; the count is the toast's, all that were accepted)
         const marked = (r.message.proposal?.ops ?? []).filter((o) => opIds.includes(o.id) && o.status === 'accepted' && o.kind !== 'tidy').length;
-        setJustAccepted(marked ? { n: r.accepted, from: r.revision - 1, to: r.revision, line: acceptedLine(r.accepted, !!session?.document_id, !!v?.saved) } : null);
-        if (v?.saved) {
-          patchSessionCache({ unsaved_in_library: false });
-          onSessionChanged();                                                 // its label names the new version
-        }
+        setJustAccepted(marked ? { n: r.accepted, from: r.revision - 1, to: r.revision, line: acceptedLine(r.accepted, !!session?.document_id) } : null);
       }
     } catch (e) { toast({ title: 'Could not accept', message: problemOf(e), type: 'error' }); }
   };
@@ -496,7 +488,7 @@ export default function StudioWorkspacePage() {
             <GitCompare className="h-3.5 w-3.5" /> Tracked changes
           </button>
           <button type="button" onClick={() => setDialog('export')} className="inline-flex items-center gap-1.5 rounded-lg border border-[#b8c4c8] bg-white px-2.5 py-1.5 text-xs font-semibold text-[#26323d] hover:bg-[#f1f3f5]"><Download className="h-3.5 w-3.5" /> Export</button>
-          {/* everything is in the library already (an accepted change on a draft is saved at once): nothing to save until the text changes */}
+          {/* everything is in the library already (saved with Save to the library): nothing to save until the text changes */}
           {!maySave ? null : inLibrary && session.unsaved_in_library === false && saveState === 'saved' ? (
             <span title={`Every change is saved in the library${session.document_version ? `, in version ${session.document_version}` : ''}. Change the text and it can be saved again.`}
               className="inline-flex items-center gap-1.5 rounded-lg border border-[#b9dccb] bg-[#eef8f3] px-2.5 py-1.5 text-xs font-semibold text-[#0a5a38]"><CheckCircle2 className="h-3.5 w-3.5" aria-hidden /> Saved in the library</span>

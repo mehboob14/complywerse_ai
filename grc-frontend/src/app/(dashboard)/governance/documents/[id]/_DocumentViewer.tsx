@@ -17,6 +17,7 @@ import RichTextEditor from '../_RichTextEditor';
 import { SIGNOFF_STATUS } from '../_SignoffControl';
 import TrackedChanges, { SinceApproved } from './_TrackedChanges';
 import { ackBaseline, openingBaseline } from '../_view/trackedChanges';
+import { versionGroups } from '../_workspace/library';
 import WordView from '@/components/governance/WordView';
 import { GovernanceDocumentMarkdown } from '@/components/governance/GovernanceDocumentMarkdown';
 import { useRouter } from 'next/navigation';
@@ -750,8 +751,13 @@ export function DocumentViewerTab({ document: doc, htmlContent, htmlLoading, doc
                   }}
                   className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800">
                   <option value="current">v{doc?.current_version || '1.0'} (current)</option>
-                  {[...(chainQ.data?.versions ?? [])].slice(0, -1).reverse().map((v: any) => (
-                    <option key={v.id} value={String(v.id)}>v{v.number}{v.kind === 'baseline' || v.origin === 'initial' ? ' (the original)' : ''}</option>
+                  {/* every earlier version, each major with its minor versions, newest first (the newest row is the current one) */}
+                  {versionGroups([...(chainQ.data?.versions ?? [])].slice(0, -1).reverse()).map((g) => (
+                    <optgroup key={g.head.id} label={`Version ${g.major}`}>
+                      {[...g.minors, g.head].map((v: any) => (
+                        <option key={v.id} value={String(v.id)}>v{v.number}{v.kind === 'baseline' || v.origin === 'initial' ? ' (the original)' : ''}</option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </label>

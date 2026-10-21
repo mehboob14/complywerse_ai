@@ -390,9 +390,6 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     # ── the version ──
     old_version = document.current_version or "1.0"
     versions = db.query(GovernanceDocumentVersion).filter(GovernanceDocumentVersion.document_id == document.id)
-    from .doc_version import pending_row, target, update_pending
-
-    pending = pending_row(db, document) if versions.count() else None      # not published yet: it goes into that one version
     if versions.count() == 0:
         db.add(GovernanceDocumentVersion(
             document_id=document.id, version_number=old_version, change_type="baseline", title=document.title,
@@ -403,31 +400,25 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
         replaced = versions.filter(GovernanceDocumentVersion.version_number == old_version).order_by(GovernanceDocumentVersion.id.desc()).first()
         if replaced is not None and not replaced.file_path and old_path:      # its file was put in place before its row held it
             replaced.file_name, replaced.file_path, replaced.file_size, replaced.file_type = old_name, old_path, document.file_size, old_type
-        if pending is None:
-            versions.filter(GovernanceDocumentVersion.status == "current").update({"status": "superseded"})
+        versions.filter(GovernanceDocumentVersion.status == "current").update({"status": "superseded"})
     # major or minor, as Comply Agent reads what changed in the document's text (doc_version)
     from .doc_version import decide, next_version, verdict
 
     decision = decide(before, "\n\n".join(p.text for p in paragraphs), title=document.title)
-    new_version, pending = target(db, document, decision["change"]) if pending is not None else (next_version(old_version, decision["change"]), None)
+    new_version = next_version(old_version, decision["change"])
     codes = [p["code"] for p in info["pending"] if p["code"] not in conflicts]
     content = document.content
     if content:
         for item in info["pending"]:
             if item["code"] not in conflicts and content.count(item["was"]) == 1:
                 content = content.replace(item["was"], item["now"].strip(), 1)
-    summary = f"{len(edits)} policy statement(s) updated in the document: " + ", ".join(codes) + ". " + verdict(decision)
-    if pending is not None:
-        update_pending(pending, new_version, decision["change"], title=document.title, content=content, summary=summary, reason=change_reason,
-                       files={"file_name": new_name, "file_path": new_path, "file_size": os.path.getsize(new_path), "file_type": "docx"})
-        row = pending
-    else:
-        row = GovernanceDocumentVersion(
-            document_id=document.id, version_number=new_version, change_type=decision["change"], title=document.title, content=content,
-            file_name=new_name, file_path=new_path, file_size=os.path.getsize(new_path), file_type="docx",
-            change_summary=summary, change_reason=change_reason, status="current", created_by=user.id, created_at=datetime.utcnow())
-        row.change_set = _change_set(document, content, new_path, new_name, [p for p in info["pending"] if p["code"] not in conflicts], user)
-        db.add(row)
+    row = GovernanceDocumentVersion(
+        document_id=document.id, version_number=new_version, change_type=decision["change"], title=document.title, content=content,
+        file_name=new_name, file_path=new_path, file_size=os.path.getsize(new_path), file_type="docx",
+        change_summary=f"{len(edits)} policy statement(s) updated in the document: " + ", ".join(codes) + ". " + verdict(decision),
+        change_reason=change_reason, status="current", created_by=user.id, created_at=datetime.utcnow())
+    row.change_set = _change_set(document, content, new_path, new_name, [p for p in info["pending"] if p["code"] not in conflicts], user)
+    db.add(row)
     db.flush()
 
     old_status = document.status

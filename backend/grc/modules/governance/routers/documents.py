@@ -909,9 +909,10 @@ def _snapshot_content_version(
     already holds the NEW content. Preserves the original as a baseline on the
     first edit, supersedes the prior current, inserts a new current, and bumps
     document.current_version: the major number for a "major" change, else the
-    minor one. Returns the new version number."""
+    minor one. Every change makes its own version, and the ones before it are
+    kept (the user, 2026-10-21); only a sign-off stamp makes no number. Returns
+    the new version number."""
     from .versions import increment_version
-    from .. import doc_version
 
     permissions.ensure_not_archived(document)          # every text change of a document passes here
     existing = db.query(GovernanceDocumentVersion).filter(
@@ -925,14 +926,6 @@ def _snapshot_content_version(
             _fold_change(db, document, stamped, old_content, document.content, user_id, "signoff", change_reason)
             stamped.content, stamped.title = document.content, document.title
             return document.current_version or old_version
-    if existing:
-        number, pending = doc_version.target(db, document, change_type)
-        if pending is not None:          # not published yet: the change goes into the one pending version
-            _fold_change(db, document, pending, old_content, document.content, user_id, "manual", change_reason)
-            doc_version.update_pending(pending, number, change_type, title=document.title, content=document.content,
-                                       summary=summary or f"{change_type} update".strip(), reason=change_reason)
-            document.current_version = number
-            return number
     if existing == 0:
         db.add(GovernanceDocumentVersion(
             document_id=document.id, version_number=old_version, change_type="baseline",
@@ -1850,7 +1843,7 @@ def restore_document(
     current_user: GRCUser = Depends(require_auth)
 ):
     """An archived document back as a draft (documents are archived, never deleted: D29), by whoever may change it. Nothing comes
-    back in force: it is reviewed, approved and published again. No version is made; its next change makes the next one (D28)."""
+    back in force: it is reviewed, approved and published again. No version is made; its next change makes the next one."""
     if document.status != "archived":
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Only an archived document can be restored.")
     document.status = "draft"
@@ -2027,47 +2020,39 @@ async def upload_document_file(
         new_version, change_type, decided = doc_version.for_new_file(
             current_ver, document.file_path, document.file_name, file_path, file.filename,
             old_content=document.content, title=document.title)
-        number, pending = doc_version.target(db, document, change_type)
-        if pending is not None:          # not published yet: the new file goes into the one pending version
-            doc_version.update_pending(pending, number, change_type, title=document.title,
-                                       summary=change_summary or f"File updated: {file.filename}. {decided}", reason=change_reason,
-                                       files={"file_name": file.filename, "file_path": file_path, "file_size": file_size, "file_type": file_ext})
-            new_version = number
-            document.current_version = new_version
-        else:
-            if current_row is None:         # an older document with no row for its number: what it held is kept first, as that version
-                db.add(V(document_id=document_id, version_number=current_ver, change_type="baseline", title=document.title,
-                         content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
-                         file_type=document.file_type, change_summary="Original document, before it was changed", status="superseded",
-                         created_by=current_user.id))
-            elif not current_row.file_path and document.file_path:      # its file was put in place before its row held it
-                current_row.file_name, current_row.file_path = document.file_name, document.file_path
-                current_row.file_size, current_row.file_type = document.file_size, document.file_type
-        
-            existing_versions = db.query(GovernanceDocumentVersion).filter(
-                GovernanceDocumentVersion.document_id == document_id,
-                GovernanceDocumentVersion.status == "current"
-            ).all()
-            for v in existing_versions:
-                v.status = "superseded"
-        
-            version = GovernanceDocumentVersion(
-                document_id=document_id,
-                version_number=new_version,
-                change_type=change_type,
-                title=document.title,
-                content=document.content,
-                file_name=file.filename,
-                file_path=file_path,
-                file_size=file_size,
-                file_type=file_ext,
-                change_summary=change_summary or f"File updated: {file.filename}. {decided}",
-                change_reason=change_reason,
-                status="current",
-                created_by=current_user.id
-            )
-            db.add(version)
-            document.current_version = new_version
+        if current_row is None:         # an older document with no row for its number: what it held is kept first, as that version
+            db.add(V(document_id=document_id, version_number=current_ver, change_type="baseline", title=document.title,
+                     content=document.content, file_name=document.file_name, file_path=document.file_path, file_size=document.file_size,
+                     file_type=document.file_type, change_summary="Original document, before it was changed", status="superseded",
+                     created_by=current_user.id))
+        elif not current_row.file_path and document.file_path:      # its file was put in place before its row held it
+            current_row.file_name, current_row.file_path = document.file_name, document.file_path
+            current_row.file_size, current_row.file_type = document.file_size, document.file_type
+
+        existing_versions = db.query(GovernanceDocumentVersion).filter(
+            GovernanceDocumentVersion.document_id == document_id,
+            GovernanceDocumentVersion.status == "current"
+        ).all()
+        for v in existing_versions:
+            v.status = "superseded"
+
+        version = GovernanceDocumentVersion(
+            document_id=document_id,
+            version_number=new_version,
+            change_type=change_type,
+            title=document.title,
+            content=document.content,
+            file_name=file.filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file_ext,
+            change_summary=change_summary or f"File updated: {file.filename}. {decided}",
+            change_reason=change_reason,
+            status="current",
+            created_by=current_user.id
+        )
+        db.add(version)
+        document.current_version = new_version
     else:       # the same version with another file: the row of that version holds it (made when there is none)
         if current_row is None:
             db.query(V).filter(V.document_id == document_id, V.status == "current").update({"status": "superseded"})

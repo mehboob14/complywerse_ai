@@ -7,7 +7,7 @@ import { AlertTriangle, CircleAlert, Download, FileText, Info, Loader2 } from 'l
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import { DOC_TYPE_LABEL, isConflict, problemOf, problemOfBlob, saveBlob, studioApi, type ExportNote, type ExportOptions, type MoveToLibrary, type Session } from '@/lib/studio/api';
-import { ARCHIVED_NOTE, maySaveToLibrary, saveWarning, savedNote } from '@/lib/studio/text';
+import { ARCHIVED_NOTE, maySaveToLibrary, nextVersion, saveWarning, savedNote } from '@/lib/studio/text';
 import AssetImage from './AssetImage';
 import { DocumentDetailsFields, useDocumentDetails } from '../../_DetailsFields';
 import { NO_SIGNOFF, ReviewerApproverFields, saveSignoffChoice, type SignoffChoice } from '../../_SignoffControl';
@@ -19,6 +19,33 @@ import { titleCase, withCurrent } from '../../_DetailsFields';
 const input = 'w-full rounded-lg border border-[#b8c4c8] bg-white px-3 py-2 text-sm text-[#1f2933] placeholder:text-[#7b8794] focus:outline-none focus:ring-2 focus:ring-[#1ed4b0]';
 const primary = 'inline-flex items-center gap-1.5 rounded-lg bg-[#0f766e] px-3.5 py-2 text-sm font-semibold text-white hover:bg-[#0b5f58] disabled:opacity-50';
 const secondary = 'rounded-lg border border-[#b8c4c8] bg-white px-3.5 py-2 text-sm font-semibold text-[#3f4b58] hover:bg-[#f1f3f5]';
+
+type Change = 'major' | 'minor';
+const CHANGES: { key: Change; label: string; hint: string }[] = [
+  { key: 'minor', label: 'Minor change', hint: 'The meaning stays: wording, clarifications, formatting.' },
+  { key: 'major', label: 'Major change', hint: 'What it requires changes: rules, scope, roles or approvals.' },
+];
+
+/** Minor or major: the person decides when the work goes into the library (the user, 2026-10-21: "let user decide it"), each option
+ *  with the version it makes from `current`; nothing is chosen for them. */
+function VersionChoice({ current, value, onChange, question }: { current: string | null | undefined; value: Change | null; onChange: (c: Change) => void; question: string }) {
+  return (
+    <fieldset>
+      <legend className="text-xs font-semibold text-[#26323d]">{question}</legend>
+      <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
+        {CHANGES.map((c) => (
+          <label key={c.key} className={`cursor-pointer rounded-lg border p-2.5 ${value === c.key ? 'border-[#0f766e] bg-[#f3fbf9] ring-1 ring-[#0f766e]' : 'border-[#c5ccd3] bg-white hover:bg-[#f8fafb]'}`}>
+            <span className="flex items-center gap-2 text-sm font-semibold text-[#1f2933]">
+              <input type="radio" name="version-change" checked={value === c.key} onChange={() => onChange(c.key)} className="accent-[#0f766e]" />
+              {c.label} → v{nextVersion(current, c.key)}
+            </span>
+            <span className="mt-0.5 block pl-6 text-[11px] text-[#586472]">{c.hint}</span>
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
 
 function Notes({ notes }: { notes: ExportNote[] }) {
   if (!notes.length) return null;
@@ -134,10 +161,14 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   const [frameworks, setFrameworks] = useState<number[]>(() => Array.from(new Set(session.references.flatMap((r) => (r.kind === 'framework' && r.source_id != null ? [r.source_id] : [])))));
   const fws = useQuery({ queryKey: ['studio', 'frameworks'], queryFn: studioApi.frameworks, staleTime: 120_000 });
   const [signoff, setSignoff] = useState<SignoffChoice>(NO_SIGNOFF);
+  // an uploaded file changed here moves as two versions: the file as it states, then the person's minor or major one
+  const original = session.original_version ?? null;
+  const [change, setChange] = useState<Change | null>(null);
   const move = useMutation({
     mutationFn: async () => {
       await flush();
-      const r = await studioApi.moveToLibrary(session.id, { ...(detailsPayload(details.form) as Partial<MoveToLibrary>), framework_ids: frameworks });
+      const r = await studioApi.moveToLibrary(session.id, { ...(detailsPayload(details.form) as Partial<MoveToLibrary>), framework_ids: frameworks,
+                                                            ...(original && change ? { change_type: change } : {}) });
       try { await saveSignoffChoice(r.document_id, signoff); } catch (e) {
         toast({ title: 'The reviewers and approvers were not saved', message: `${problemOf(e)} Choose them in Submit for review.`, type: 'error' });
       }
@@ -148,12 +179,16 @@ export function MoveToLibraryDialog({ session, onClose, flush, onDone }: { sessi
   });
   return (
     <AnimatedModal isOpen onClose={onClose} title="Move to the document library" size="lg"
-      subtitle={session.kind === 'upload' && session.source.name
-        ? `It becomes a draft. Your uploaded file ${session.source.name} is kept as version 1.0, the original${session.revision > 1 ? '; what you changed here becomes version 1.1' : ''}. Statements are extracted from it as for any new document.`
+      subtitle={original ? `It becomes a draft. Your uploaded file ${session.source.name ?? ''} is kept as version ${original}, the original.`
+        : session.kind === 'upload' && session.source.name
+        ? `It becomes a draft: your uploaded file ${session.source.name}, at the version it states. Statements are extracted from it as for any new document.`
         : 'It becomes a draft, version 1.0. Statements are extracted from it as for any new document.'}
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
-        <button type="button" className={primary} disabled={!details.form.title.trim() || move.isPending} onClick={() => move.mutate()}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
+        <button type="button" className={primary} disabled={!details.form.title.trim() || move.isPending || (!!original && !change)} onClick={() => move.mutate()}
+          title={original && !change ? 'Choose a minor or a major change first' : undefined}>{move.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />} Move to the library</button></div>}>
       <div className="space-y-4 p-5">
+        {original && <VersionChoice current={original} value={change} onChange={setChange}
+          question={`What you changed here becomes the next version after ${original}. Is it a minor or a major change?`} />}
         <DocumentDetailsFields d={details} />
         <ReviewerApproverFields value={signoff} onChange={setSignoff} />
         {fws.data && fws.data.items.length > 0 && (
@@ -176,13 +211,19 @@ export function SaveToDocumentDialog({ session, onClose, flush, onDone, onConfli
   const { toast } = useToast();
   const [reason, setReason] = useState('');
   const [conflict, setConflict] = useState<string | null>(null);
+  // minor or major: the person's own choice, nothing chosen for them; the versions before stay in the library as they are
+  const [change, setChange] = useState<Change | null>(null);
+  const current = session.document_version;
   const save = useMutation({
-    mutationFn: async (force: boolean) => { await flush(); return studioApi.saveToDocument(session.id, { change_reason: reason || undefined, force }); },
+    mutationFn: async (force: boolean) => {
+      await flush();
+      return studioApi.saveToDocument(session.id, { change_reason: reason || undefined, force, ...(change ? { change_type: change } : {}) });
+    },
     onSuccess: (r) => { toast({ ...savedNote(r, session.document_status), type: 'success' }); onDone(); },
     // a refusal may be the document archived while this was open: the session is read again, so no "Save anyway" is offered then
     onError: (e) => {
       if (isConflict(e)) { setConflict(problemOf(e)); onConflict?.(); }
-      // nothing new since the library version (an accepted change was saved at once): not a failure
+      // nothing new since the library version (saved already, in another window): not a failure
       else if (/^Nothing has changed/.test(problemOf(e))) { toast({ title: 'Already saved in the library', message: problemOf(e), type: 'info' }); onDone(); }
       else toast({ title: 'Could not save', message: problemOf(e), type: 'error' });
     },
@@ -194,8 +235,11 @@ export function SaveToDocumentDialog({ session, onClose, flush, onDone, onConfli
   return (
     <AnimatedModal isOpen onClose={onClose} title="Save to the library" subtitle={`${session.title} — saved as its next version`} size="md"
       footer={<div className="flex justify-end gap-2"><button type="button" className={secondary} onClick={onClose}>Cancel</button>
-        {!archived && <button type="button" className={primary} disabled={save.isPending} onClick={() => save.mutate(!!conflict)}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {conflict ? 'Save anyway' : 'Save as a new version'}</button>}</div>}>
+        {!archived && <button type="button" className={primary} disabled={save.isPending || !change} onClick={() => save.mutate(!!conflict)}
+          title={change ? undefined : 'Choose a minor or a major change first'}>{save.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : null} {conflict ? 'Save anyway' : change ? `Save as version ${nextVersion(current, change)}` : 'Save as a new version'}</button>}</div>}>
       {archived ? <p className="p-5 text-sm text-[#26323d]" role="status">{ARCHIVED_NOTE}</p> : <div className="space-y-3 p-5">
+        <VersionChoice current={current} value={change} onChange={setChange}
+          question={`It becomes the next version after ${current ? `v${current}` : 'the one in the library'}, and every version before stays. Is it a minor or a major change?`} />
         <label className="block"><span className="text-xs font-semibold text-[#26323d]">What changed (optional)</span><textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={3} placeholder="e.g. Updated the password rules to match the new standard" className={`${input} mt-1`} /></label>
         {warning && <p className="flex gap-1.5 rounded-lg bg-[#fffbed] px-2.5 py-2 text-xs text-[#6b4e00]"><AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden /> {warning}</p>}
         {conflict && <p className="rounded-lg border border-[#f0cf7a] bg-[#fffbed] p-3 text-sm text-[#6b4e00]" role="alert">{conflict}</p>}

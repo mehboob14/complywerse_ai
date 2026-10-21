@@ -1148,18 +1148,15 @@ def _gap_name(finding: PolicyGapFinding) -> str:
 
 def _write_text(db: Session, document: GovernanceDocument, user: GRCUser, old_text: str, new_text: str, *, change_type: str,
                 origin: str, summary: str, reason: str, done: str):
-    """Put ``new_text`` into the document as every other save does (D28): until it is published, into its one pending version,
-    else as the next number. A document that is its Word or PDF file gets a new file, as a take back does (a Word file is edited
-    in place, a PDF becomes a Word copy). The version's change set says who made the change. Does not commit.
-    Returns ``(version row, number, notes, is_file)``."""
-    from .. import change_chain as C, doc_lifecycle, doc_version
+    """Put ``new_text`` into the document as every other save does: its next version, the versions before it kept. A document that
+    is its Word or PDF file gets a new file, as a take back does (a Word file is edited in place, a PDF becomes a Word copy). The
+    version's change set says who made the change. Does not commit. Returns ``(version row, number, notes, is_file)``."""
+    from .. import change_chain as C, doc_lifecycle
     from .documents import _snapshot_content_version, create_audit_log
 
     is_file = not (document.content or "").strip()
     old_version, old_status = document.current_version or "1.0", document.status
     name = user.display_name or user.username or "A user"
-    pending = doc_version.pending_row(db, document)
-    held = dict(pending.change_set) if pending is not None and isinstance(pending.change_set, dict) else None
     notes: List[str] = []
     if is_file:
         from ..studio import service as studio
@@ -1181,17 +1178,8 @@ def _write_text(db: Session, document: GovernanceDocument, user: GRCUser, old_te
         create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id, action="content_edited",
                          field_changed="current_version", old_value=old_version, new_value=number,
                          action_details=f"{reason}; version {number}" + doc_lifecycle.outcome(old_status, document.status, document))
-    at = datetime.utcnow().isoformat()
-    if row is not None and pending is not None and row.id == pending.id:
-        before = doc_version.before_pending(db, document, row)
-        maker = db.get(GRCUser, row.created_by) if row.created_by else None
-        cs = C.fold(C.version_text(before) if before is not None else "", old_text, new_text, held, kind=origin, by=name, by_id=user.id,
-                    at=at, version=number, reason=reason, held_by=(maker.display_name or maker.username) if maker is not None else "",
-                    held_by_id=row.created_by, held_at=row.created_at.isoformat() if row.created_at else None)
-        if cs is not None:
-            row.change_set = cs
-    elif row is not None:
-        cs = C.build_change_set(old_text, new_text, [], default_kind=origin, by=name, by_id=user.id, at=at)
+    if row is not None:
+        cs = C.build_change_set(old_text, new_text, [], default_kind=origin, by=name, by_id=user.id, at=datetime.utcnow().isoformat())
         for item in cs["items"]:
             item["reason"] = reason
         row.change_set = cs
@@ -1340,10 +1328,9 @@ def apply_finding_fix(
       - "replace" — splice `proposed_text` in for the verbatim `current_text`
       - "append" — append `proposed_text` under a new section heading
 
-    The change is saved as every other save is (D28): until the document is published it goes into its one pending version, else
-    it makes the next number (major or minor, as Comply Agent or the rule judges it). A document that is its Word or PDF file gets
-    the fix in a new file (a Word file edited in place, a PDF a Word copy). The finding links to that version; Override takes the
-    fix back out on its own (``override_finding``).
+    The change is saved as every other save is: the document's next version (major or minor, as Comply Agent or the rule judges
+    it), the versions before it kept. A document that is its Word or PDF file gets the fix in a new file (a Word file edited in
+    place, a PDF a Word copy). The finding links to that version; Override takes the fix back out on its own (``override_finding``).
     """
     user_tenants = get_user_tenants(current_user, db)
 
@@ -1421,14 +1408,13 @@ def apply_finding_fix(
         heading = " — ".join(heading_parts) if heading_parts else "Compliance Update"
         new_content = original_content + f"\n\n## {heading}\n\n{proposed_text}\n"
 
-    # ---- Write it as every other save is (D28): until the document is published, into its one pending version. ----
+    # ---- Write it as every other save is: the document's next version. ----
     # Applying a remediation edits the document, so a reviewed one is reviewed again from the start by the same people (a new
     # round, also while in review or approval), as every other new version is; a draft stays a draft.
     gap = _gap_name(finding)
     reason = (body.change_reason or "").strip()[:2000] or f"Gap fix for {gap}"
     decision = doc_version.decide(original_content, new_content, title=document.title)
     drafted = proposed_text == (finding.suggested_clause_text or "").strip()        # Comply Agent's draft, as it wrote it
-    in_place = doc_version.pending_row(db, document) is not None                     # not published yet: into that one version
     new_version, new_version_label, notes, is_file = _write_text(
         db, document, current_user, original_content, new_content, change_type=decision["change"], origin="ai" if drafted else "manual",
         summary=doc_version.summary_of(f"Gap fix ({'clause replaced' if mode == 'replace' else 'clause added'}) for {gap}", decision),
@@ -1479,7 +1465,7 @@ def apply_finding_fix(
         "previous_version_number": original_version_label,
         "compliance_status": finding.compliance_status,
         "document_status": document.status,
-        "in_place": in_place,            # it went into the version not published yet, with the other changes
+        "in_place": False,               # always false now that every fix makes its own version (kept for older screens)
         "notes": notes,                  # about the document's file (e.g. a PDF became a Word copy)
     }
 
@@ -1556,8 +1542,8 @@ def override_finding(
         )
 
     # If this finding's remediation clause was applied to the document, an override is an UNDO: that fix's text is taken back
-    # out of the document, every other change kept, as a take back is saved (D28: into the pending version while there is one),
-    # and the applied audit trail is cleared before the override is recorded.
+    # out of the document, every other change kept, as a take back is saved (the document's next version), and the applied audit
+    # trail is cleared before the override is recorded.
     taken_back, refiled, left = None, None, False
     if finding.applied_at:
         document = db.query(GovernanceDocument).filter(
