@@ -17,6 +17,11 @@ test('the composer keeps the paperclip, drop, paste, Enter to send and Stop', ()
   }
 });
 
+test('the message box grows with what is typed or pasted (user request, 2026-10-21), so nobody has to drag it bigger', () => {
+  assert.ok(src.includes('useAutoGrow(area, text'));
+  assert.ok(!src.includes('resize-y'));
+});
+
 test('the composer button is named apart from the top bar quick ask, also called Send', () => {
   assert.ok(src.includes('aria-label="Send to Comply Agent"'));
   assert.ok(!src.includes('aria-label="Send"'));
