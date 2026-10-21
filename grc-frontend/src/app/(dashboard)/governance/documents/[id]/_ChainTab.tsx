@@ -54,6 +54,7 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   status_changed: { label: 'Status changed', icon: GitCommitVertical, tone: SLATE },
   review_completed: { label: 'Review completed', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
   version_rollback: { label: 'Earlier version restored', icon: History, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  statements_updated_from_document: { label: 'Statements updated from the document', icon: ListTree, tone: SLATE },
   // the rest of the approval trail the document's history records
   submitted: { label: 'Submitted', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   reviewed: { label: 'Reviewed', icon: ShieldCheck, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },

@@ -626,6 +626,8 @@ def _split_text_into_chunks(text: str, chunk_size: int = 20000, overlap: int = 5
         chunk = text[start:end].strip()
         if chunk:
             chunks.append(chunk)
+        if end >= len(text):        # the end is read: without this the last 500 characters came again, one shorter each time (12 calls)
+            break
 
         start = max(start + 1, end - overlap)
 
@@ -645,7 +647,9 @@ def _is_duplicate(new_text: str, existing_statements: List[dict], threshold: flo
     return False
 
 
-def parse_policy_statements_with_openai(text: str, document_title: str, progress_callback=None) -> List[dict]:
+def parse_policy_statements_with_openai(text: str, document_title: str, progress_callback=None, at_least: int = 15) -> List[dict]:
+    """The statements of ``text``. ``at_least``: how many a section of a whole document is expected to hold (0 for the few parts of a
+    new version that changed: there a floor would make the AI split or invent statements)."""
     if not AI_INTEGRATIONS_OPENAI_API_KEY or not AI_INTEGRATIONS_OPENAI_BASE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -679,6 +683,7 @@ def parse_policy_statements_with_openai(text: str, document_title: str, progress
     )
 
     total_chunks = len(chunks)
+    floor = f"You must extract AT LEAST {at_least} statements from this section if it contains policy language.\n\n" if at_least else ""
 
     for chunk_idx, chunk_text in enumerate(chunks):
         current_chunk = chunk_idx + 1
@@ -691,9 +696,7 @@ Analyze the following section from the document titled "{document_title}" and ex
 
 Extract EVERY individual policy statement, requirement, obligation, and mandate. Copy the EXACT wording from the document - do NOT paraphrase, summarize, rewrite, or generalize. Each extracted statement must be a direct quote from the document text. Do NOT combine statements. Each sentence that contains 'shall', 'must', 'should', 'will', 'required', 'responsible', 'prohibited', or similar directive language is a separate statement. A typical policy document contains 30-100+ statements.
 
-You must extract AT LEAST 15 statements from this section if it contains policy language.
-
-IMPORTANT: Extract EVERY distinct statement. Look for ALL sentences containing directive language (shall, must, should, will, required, prohibited, responsible for, etc.). Include statements from tables, appendices, and all subsections. Each distinct requirement is a separate statement.
+{floor}IMPORTANT: Extract EVERY distinct statement. Look for ALL sentences containing directive language (shall, must, should, will, required, prohibited, responsible for, etc.). Include statements from tables, appendices, and all subsections. Each distinct requirement is a separate statement.
 
 For each policy statement you find, extract:
 1. statement_text: Copy the EXACT text from the document - do NOT paraphrase, summarize, or rewrite. Use the precise wording as it appears in the document. If a statement spans multiple sentences, include all of them exactly as written.
@@ -980,7 +983,7 @@ def get_parse_status(
     return status_info
 
 
-def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = None):
+def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = None, incremental: bool = False):
     """Body of the policy-parse job. Takes an open tenant-scoped session and
     runs to completion.
 
@@ -988,7 +991,12 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
     legacy in-process callers) AND Redis `job_status` (for cross-process
     visibility — uvicorn and the celery worker are different processes, so
     only Redis is observable from the HTTP status endpoint).
+
+    ``incremental``: started by a new version of the document (statement_reparse): a document with statements has them follow the
+    new text, reading only the parts that changed; one without is parsed whole, as on create.
     """
+    from .. import statement_reparse
+
     # Cross-process status helper. Captures `tenant_slug` + `document_id` from
     # the closure so each call site is a one-liner. Stamps `updated_at` on
     # every write so the status endpoint can detect dead workers (entries
@@ -1009,21 +1017,24 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
         if not document:
             _write_status({"status": "failed", "error": "Document not found"})
             return
+        if user_id is None:                     # a change nobody was named for (a workflow, say)
+            user_id = statement_reparse.actor(db, document)
 
-        file_path = document.file_path
-        file_type = document.file_type
+        if incremental:
+            if db.query(PolicyStatement.id).filter(PolicyStatement.document_id == document_id).first():
+                try:
+                    return statement_reparse.run(db, document, user_id, tenant_slug, _write_status)
+                except Exception as e:
+                    db.rollback()
+                    _write_status({"status": "failed", "error": str(e)[:500], "automatic": True})
+                    raise
+            if not _auto_parseable(document):   # nothing an automatic parse reads, as on create
+                _write_status({"status": "idle"})
+                return {"status": "skipped"}
 
-        extracted_text = None
-
+        read_as = statement_reparse.text_key(document)
         # Prefer source file extraction for uploaded documents to avoid parsing rendered HTML blobs.
-        if file_path and os.path.exists(file_path):
-            try:
-                extracted_text = extract_text_from_file(file_path, file_type)
-            except Exception:
-                extracted_text = None
-
-        if (not extracted_text or not extracted_text.strip()) and document.content and document.content.strip():
-            extracted_text = document.content
+        extracted_text = statement_reparse.document_text(document)
 
         if not extracted_text or not extracted_text.strip():
             _write_status({"status": "failed", "error": "Document has no content or file to parse"})
@@ -1128,6 +1139,8 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
                     "total": len(proposals),
                     "new_count": sum(1 for p in proposals if p["type"] == "new"),
                     "update_count": sum(1 for p in proposals if p["type"] == "update"),
+                    # the text this read, by its parts: what the statements reflect once the proposals are applied
+                    "parts": [p.hash for p in statement_reparse.parts_of(extracted_text)],
                 })
 
                 _write_status({
@@ -1172,11 +1185,18 @@ def _parse_policy_body(db, document_id: int, user_id: int, tenant_slug: str = No
                     )
                     db.add(compliance_record)
 
+                statement_reparse.record(db, document, extracted_text)      # the parts of the text each statement came from
                 db.commit()
 
                 # Hold each statement to the document's own wording (tenants with document sync only).
                 from ..doc_sync import anchor_after_parse
                 anchor_after_parse(db, document_id, user_id)
+                if statement_reparse.text_key(document) != read_as:          # saved again while it was read: that change too
+                    try:
+                        statement_reparse.run(db, document, user_id, tenant_slug, _write_status, remap=False)
+                    except Exception:       # noqa: BLE001 - the statements of what was read stand; the next version catches up
+                        db.rollback()
+                        logger.warning("document %s: the version saved during its parse was not read", document_id, exc_info=True)
 
                 # ── Recommend & link controls (internal ERM + framework) for every
                 # new statement. Dispatched as its OWN background step now that the
@@ -1329,6 +1349,22 @@ def parse_policy_document(
     }
 
 
+def _auto_parseable(document) -> bool:
+    """Something an automatic parse can read. Only a FILE whose type is text-extractable —
+    extract_text_from_file handles pdf/docx/doc; xls/xlsx raise, which
+    would otherwise dispatch a guaranteed-"failed" parse on a perfectly
+    valid spreadsheet upload (and that terminal "failed" status is never
+    swept). Non-extractable uploads fall back to requiring inline content."""
+    file_type = str(getattr(document, "file_type", "") or "").lower()
+    has_extractable_file = bool(
+        getattr(document, "file_path", None)
+        and os.path.exists(document.file_path)
+        and file_type in ("pdf", "docx", "doc")
+    )
+    has_content = bool(getattr(document, "content", None) and str(document.content).strip())
+    return has_extractable_file or has_content
+
+
 def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_id: int, user_id: int) -> bool:
     """Auto-dispatch policy-statement parsing right after a document is created.
 
@@ -1353,24 +1389,15 @@ def maybe_autoparse_document(db: Session, tenant_slug: Optional[str], document_i
         ).first()
         if not document:
             return False
+        from ..statement_reparse import STARTED
+        if document_id in (db.info.get(STARTED) or ()):     # its new text already started a parse when it was committed
+            return True
         already_parsed = db.query(PolicyStatement.id).filter(
             PolicyStatement.document_id == document_id
         ).first()
         if already_parsed:
             return False
-        # Only auto-parse a FILE when its type is text-extractable —
-        # extract_text_from_file handles pdf/docx/doc; xls/xlsx raise, which
-        # would otherwise dispatch a guaranteed-"failed" parse on a perfectly
-        # valid spreadsheet upload (and that terminal "failed" status is never
-        # swept). Non-extractable uploads fall back to requiring inline content.
-        file_type = str(getattr(document, "file_type", "") or "").lower()
-        has_extractable_file = bool(
-            getattr(document, "file_path", None)
-            and os.path.exists(document.file_path)
-            and file_type in ("pdf", "docx", "doc")
-        )
-        has_content = bool(getattr(document, "content", None) and str(document.content).strip())
-        if not (has_extractable_file or has_content):
+        if not _auto_parseable(document):
             return False
 
         # Share the manual parse endpoint's per-tenant ceiling so a burst of
@@ -1874,7 +1901,7 @@ def get_reparse_proposals(
     if not proposals:
         return {"document_id": document_id, "proposals": [], "total": 0}
 
-    return {"document_id": document_id, **proposals}
+    return {"document_id": document_id, **{k: v for k, v in proposals.items() if k != "parts"}}   # (parts: hashes for the server)
 
 
 @router.post("/{document_id}/reparse-proposals/apply", dependencies=[Depends(require_doc_changer)])
@@ -1900,6 +1927,7 @@ def apply_reparse_proposals(
     accepted = 0
     rejected = 0
     changed, added = [], []             # the statements' codes, for the document's Change log
+    touched = []                    # the statements changed or added: placed in the document and mapped again below
 
     version_id = None
     from ....models import DocumentVersion
@@ -1948,6 +1976,7 @@ def apply_reparse_proposals(
                     _create_version_snapshot(db, statement, "ai_reparse", current_user.id, "Re-parsed from document")
                     accepted += 1
                     changed.append(statement.statement_code or str(statement.id))
+                    touched.append(statement.id)
 
             elif proposal["type"] == "new":
                 existing_count = db.query(PolicyStatement).filter(
@@ -1986,6 +2015,7 @@ def apply_reparse_proposals(
                 db.add(compliance_record)
                 accepted += 1
                 added.append(statement_code)
+                touched.append(new_statement.id)
 
     if accepted:
         from .documents import create_audit_log
@@ -2033,6 +2063,13 @@ def apply_reparse_proposals(
     else:
         # Keep the reviewer's decisions so far for the next call.
         _save_proposals(tenant_slug, document_id, proposals_data)
+    if touched:
+        from .. import statement_reparse
+        try:
+            statement_reparse.after_proposals(db, document, touched, proposals_data.get("parts"), current_user.id, tenant_slug)
+        except Exception:       # noqa: BLE001 - the choices are applied; the next version places and maps them
+            db.rollback()
+            logger.warning("document %s: applied statements were not placed or mapped again", document_id, exc_info=True)
 
     return {
         "message": f"Processed {accepted + rejected} proposals: {accepted} accepted, {rejected} rejected",

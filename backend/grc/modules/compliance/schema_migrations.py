@@ -288,6 +288,10 @@ _COLUMN_ADDS = [
     ("grc_policy_statements", "source_text", "TEXT", None),
     ("grc_policy_statements", "source_start", "INTEGER", None),
     ("grc_policy_statements", "source_match", "VARCHAR(20)", None),
+    # Statements follow every new version (modules/governance/statement_reparse.py): the hashes of the parts of a document's text its
+    # statements reflect, and the part each statement came from
+    ("grc_governance_documents", "statement_parts", "JSON", None),
+    ("grc_policy_statements", "source_hash", "VARCHAR(40)", None),
     # AI Governance: the use case a call belonged to (set by the data-protection guard)
     ("ai_usage_events", "use_case_id", "VARCHAR(150)", "ix_ai_usage_events_use_case_id"),
     # Audit register — columns added after the first tenants already had the

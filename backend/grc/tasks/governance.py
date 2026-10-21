@@ -44,11 +44,12 @@ def set_status(tenant_slug: str, namespace: str, resource_id: Any, payload: dict
     name="grc.tasks.governance.parse_policy_document",
     max_retries=2,
 )
-def parse_policy_document(self, tenant_slug: str, document_id: int, user_id: int, db: Session = None) -> dict:
+def parse_policy_document(self, tenant_slug: str, document_id: int, user_id: int, incremental: bool = False, db: Session = None) -> dict:
     """Extract policy statements from a governance document via OpenAI.
 
     Idempotency: a Redis lock keyed on (tenant, document) prevents two parallel
-    parses of the same doc.
+    parses of the same doc. ``incremental``: started by a new version (only what
+    changed is read; a parse already running reads the new version when it ends).
     """
     logger.info("parse_policy_document START tenant=%s doc=%s task=%s", tenant_slug, document_id, self.request.id)
     try:
@@ -63,12 +64,13 @@ def parse_policy_document(self, tenant_slug: str, document_id: int, user_id: int
                 module_key="governance",
                 feature_key="policy_statement_parsing",
             ):
-                result = _parse_policy_body(db, document_id, user_id, tenant_slug)
+                result = _parse_policy_body(db, document_id, user_id, tenant_slug, incremental=incremental)
             logger.info("parse_policy_document DONE tenant=%s doc=%s", tenant_slug, document_id)
             return result or {"status": "completed"}
     except LockNotAcquired:
-        set_status(tenant_slug, "policy_parse", document_id,
-                   {"status": "skipped", "message": "Another worker is already parsing this document"})
+        if not incremental:             # (a new version: the parse running reads it when it ends; its status stays)
+            set_status(tenant_slug, "policy_parse", document_id,
+                       {"status": "skipped", "message": "Another worker is already parsing this document"})
         return {"status": "skipped"}
     except Exception as exc:
         logger.exception("parse_policy_document failed: %s", exc)
@@ -87,7 +89,7 @@ def parse_policy_document(self, tenant_slug: str, document_id: int, user_id: int
 # Celery path, so the existing polling endpoint is identical for both.
 
 
-def dispatch_parse_in_thread(tenant_slug: str, document_id: int, user_id: int) -> str:
+def dispatch_parse_in_thread(tenant_slug: str, document_id: int, user_id: int, incremental: bool = False) -> str:
     """Kick off policy-statement parsing on a background thread.
 
     Returns a synthetic task id that the API can return to the caller so
@@ -101,7 +103,7 @@ def dispatch_parse_in_thread(tenant_slug: str, document_id: int, user_id: int) -
     task_id = f"thread-{uuid.uuid4().hex[:12]}"
     t = threading.Thread(
         target=_run_parse_with_own_session,
-        args=(tenant_slug, document_id, user_id, task_id),
+        args=(tenant_slug, document_id, user_id, task_id, incremental),
         daemon=True,
         name=f"policy-parse-{document_id}",
     )
@@ -110,7 +112,7 @@ def dispatch_parse_in_thread(tenant_slug: str, document_id: int, user_id: int) -
 
 
 def _run_parse_with_own_session(
-    tenant_slug: str, document_id: int, user_id: int, task_id: str,
+    tenant_slug: str, document_id: int, user_id: int, task_id: str, incremental: bool = False,
 ) -> None:
     """Thread entry-point: open a tenant session, run the pure-Python body,
     record status into Redis (parsing → completed / failed). Mirrors the
@@ -139,7 +141,7 @@ def _run_parse_with_own_session(
                 module_key="governance",
                 feature_key="policy_statement_parsing",
             ):
-                _parse_policy_body(db, document_id, user_id, tenant_slug)
+                _parse_policy_body(db, document_id, user_id, tenant_slug, incremental=incremental)
             try:
                 db.commit()
             except Exception:
@@ -148,9 +150,10 @@ def _run_parse_with_own_session(
             logger.info("parse_policy_document(thread) DONE tenant=%s doc=%s task=%s",
                         tenant_slug, document_id, task_id)
     except LockNotAcquired:
-        set_status(tenant_slug, "policy_parse", document_id,
-                   {"status": "skipped",
-                    "message": "Another worker is already parsing this document"})
+        if not incremental:             # (a new version: the parse running reads it when it ends; its status stays)
+            set_status(tenant_slug, "policy_parse", document_id,
+                       {"status": "skipped",
+                        "message": "Another worker is already parsing this document"})
     except Exception as exc:  # noqa: BLE001
         try:
             db.rollback()
@@ -166,7 +169,7 @@ def _run_parse_with_own_session(
             pass
 
 
-def dispatch_parse(tenant_slug: str, document_id: int, user_id: int) -> str:
+def dispatch_parse(tenant_slug: str, document_id: int, user_id: int, incremental: bool = False) -> str:
     """Fire policy-statement parsing in the background. Prefers Celery (a worker
     on the `parsing` queue picks it up); falls back to an in-process daemon
     thread when the broker is unreachable or `DISABLE_CELERY_DISPATCH=1`.
@@ -176,13 +179,14 @@ def dispatch_parse(tenant_slug: str, document_id: int, user_id: int) -> str:
     since the job re-reads it through a separate tenant session.
     """
     import os as _os
+    extra = {"incremental": True} if incremental else {}
     force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
     if not force_thread:
         try:
-            return parse_policy_document.delay(tenant_slug, document_id, user_id).id
+            return parse_policy_document.delay(tenant_slug, document_id, user_id, **extra).id
         except Exception as exc:  # noqa: BLE001
             logger.warning("parse celery dispatch failed (%s); falling back to thread", exc)
-    return dispatch_parse_in_thread(tenant_slug, document_id, user_id)
+    return dispatch_parse_in_thread(tenant_slug, document_id, user_id, **extra)
 
 
 def _gap_runs_failed(db: Session, run_ids: list, message: str) -> None:
@@ -328,9 +332,10 @@ def run_gap_analysis(self, tenant_slug: str, run_ids: list, document_id: int, us
     name="grc.tasks.governance.auto_map_document_controls",
     max_retries=1,
 )
-def auto_map_document_controls(self, tenant_slug: str, document_id: int, db: Session = None) -> dict:
+def auto_map_document_controls(self, tenant_slug: str, document_id: int, statement_ids: Optional[list] = None, db: Session = None) -> dict:
     """Recommend internal (ERM) + framework controls for every statement of a
-    freshly-parsed document and persist the 360° linkage. Idempotent per document
+    freshly-parsed document (or only ``statement_ids``: the new and changed ones of
+    a new version) and persist the 360° linkage. Idempotent per document
     (a Redis lock prevents overlapping runs)."""
     logger.info("auto_map_document_controls START tenant=%s doc=%s task=%s", tenant_slug, document_id, self.request.id)
     try:
@@ -344,7 +349,7 @@ def auto_map_document_controls(self, tenant_slug: str, document_id: int, db: Ses
                 module_key="governance",
                 feature_key="statement_auto_mapping",
             ):
-                result = auto_map_document(db, document_id)
+                result = auto_map_document(db, document_id, statement_ids)
             set_status(tenant_slug, "statement_auto_map", document_id, {"updated_at": datetime.utcnow().isoformat(), "status": "completed", **(result or {})})
             logger.info("auto_map_document_controls DONE tenant=%s doc=%s result=%s", tenant_slug, document_id, result)
             return result or {"status": "completed"}
@@ -358,7 +363,7 @@ def auto_map_document_controls(self, tenant_slug: str, document_id: int, db: Ses
         raise
 
 
-def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: str) -> None:
+def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: str, statement_ids: Optional[list] = None) -> None:
     """Thread entry-point mirroring the Celery task — opens its own tenant
     session so the control recommendation runs without a worker."""
     from ..db import open_tenant_session
@@ -380,7 +385,7 @@ def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: 
                 module_key="governance",
                 feature_key="statement_auto_mapping",
             ):
-                result = auto_map_document(db, document_id)
+                result = auto_map_document(db, document_id, statement_ids)
             set_status(tenant_slug, "statement_auto_map", document_id, {"updated_at": datetime.utcnow().isoformat(), "status": "completed", **(result or {})})
             logger.info("auto_map(thread) DONE tenant=%s doc=%s task=%s result=%s", tenant_slug, document_id, task_id, result)
     except LockNotAcquired:
@@ -400,14 +405,14 @@ def _run_auto_map_with_own_session(tenant_slug: str, document_id: int, task_id: 
             pass
 
 
-def dispatch_auto_map_in_thread(tenant_slug: str, document_id: int) -> str:
+def dispatch_auto_map_in_thread(tenant_slug: str, document_id: int, statement_ids: Optional[list] = None) -> str:
     """Run the control recommendation on a daemon thread (no worker required)."""
     import threading
     import uuid
     task_id = f"thread-{uuid.uuid4().hex[:12]}"
     t = threading.Thread(
         target=_run_auto_map_with_own_session,
-        args=(tenant_slug, document_id, task_id),
+        args=(tenant_slug, document_id, task_id, statement_ids),
         daemon=True,
         name=f"auto-map-{document_id}",
     )
@@ -415,22 +420,24 @@ def dispatch_auto_map_in_thread(tenant_slug: str, document_id: int) -> str:
     return task_id
 
 
-def dispatch_auto_map(tenant_slug: str, document_id: int) -> str:
+def dispatch_auto_map(tenant_slug: str, document_id: int, statement_ids: Optional[list] = None) -> str:
     """Fire the control-recommendation step in the background. Prefers Celery
     (a worker on the `parsing` queue picks it up); falls back to an in-process
     daemon thread when the broker is unreachable or dispatch is disabled.
 
     Safe to call from inside the parse flow — the caller must have committed the
     statements first, since the job reads them through a separate session.
+    ``statement_ids``: only these statements (the new and changed ones of a new version).
     """
     import os as _os
+    extra = {"statement_ids": list(statement_ids)} if statement_ids else {}
     force_thread = _os.environ.get("DISABLE_CELERY_DISPATCH", "").strip().lower() in ("1", "true", "yes", "on")
     if not force_thread:
         try:
-            return auto_map_document_controls.delay(tenant_slug, document_id).id
+            return auto_map_document_controls.delay(tenant_slug, document_id, **extra).id
         except Exception as exc:  # noqa: BLE001
             logger.warning("auto-map celery dispatch failed (%s); falling back to thread", exc)
-    return dispatch_auto_map_in_thread(tenant_slug, document_id)
+    return dispatch_auto_map_in_thread(tenant_slug, document_id, **extra)
 
 
 __all__ = [
