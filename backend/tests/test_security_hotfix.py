@@ -88,6 +88,49 @@ def test_validate_sql_refuses_secrets_and_unknown_tables(sql):
     assert validate_sql(sql) is False
 
 
+# A whole-row value carries a secret column without naming it: those functions are refused ...
+WHOLE_ROW_SQL = [
+    "SELECT row_to_json(u) FROM grc_users u",
+    "SELECT to_jsonb(u) FROM grc_users u",
+    "SELECT json_agg(u) FROM grc_users u",
+    "SELECT jsonb_build_object('u', u) FROM grc_users u",
+    "SELECT array_agg(u) FROM grc_users u",
+    "SELECT ROW(u.*) FROM grc_users u",
+]
+
+
+@pytest.mark.parametrize("sql", WHOLE_ROW_SQL)
+def test_validate_sql_refuses_whole_row_functions(sql):
+    assert validate_sql(sql) is False
+
+
+# ... and a wildcard select names none, so every result row is cleaned before it is formatted, shown or sent to the model
+from grc.modules.chatbot.complychat.complychat.grc_sql_agent import drop_secret_columns  # noqa: E402
+
+
+def test_select_star_rows_lose_their_secret_columns_and_hash_like_values():
+    assert validate_sql("SELECT * FROM grc_users") is True            # nothing secret is named: the rows are cleaned instead
+    rows = [{"id": 1, "username": "admin", "email": "a@x.test", "password_hash": "$2b$12$abcdefghijklmnopqrstuv",
+             "mfa_secret": "JBSWY3DPEHPK3PXP", "secretary_id": 4, "settings": {"api_key": "k", "theme": "dark"},
+             "note": "$argon2id$v=19$m=65536$c2FsdA$aGFzaA", "blob": "gAAAAABlZXhhbXBsZS1mZXJuZXQtdG9rZW4tdmFsdWU=",
+             "as_text": '(1,admin,"$2b$12$abcdefghijklmnopqrstuv",t)', "title": "Access policy"}]
+    (row,) = drop_secret_columns(rows)
+    assert "password_hash" not in row and "mfa_secret" not in row
+    assert row["secretary_id"] == 4 and row["settings"] == {"theme": "dark"} and row["title"] == "Access policy"
+    assert row["note"] == row["blob"] == row["as_text"] == "[hidden]"
+    assert row["username"] == "admin" and row["email"] == "a@x.test"
+
+
+def test_the_router_cleans_both_model_written_queries_before_using_their_rows():
+    import inspect
+
+    from grc.modules.chatbot import router as chat
+
+    source = inspect.getsource(chat)
+    assert "data_list = drop_secret_columns([dict(row._mapping) for row in rows])" in source
+    assert "retry_data = drop_secret_columns([dict(row._mapping) for row in retry_rows])" in source
+
+
 # ── chat_upload hits stay with the person who uploaded them ───────────────────
 
 from grc.modules.chatbot.router import _own_chat_uploads_only  # noqa: E402

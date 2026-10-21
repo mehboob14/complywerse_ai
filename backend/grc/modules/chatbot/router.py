@@ -1164,7 +1164,7 @@ try:
     from grc_sql_agent import (
         detect_query_type, generate_sql_query, validate_sql, format_query_results,
         validate_columns_in_sql, get_fallback_data_for_question, generate_answer_from_fallback_data,
-        fetch_table_schema_from_db, load_full_database_schema
+        fetch_table_schema_from_db, load_full_database_schema, drop_secret_columns
     )  # type: ignore
     SQL_AGENT_ENABLED = True
     logger.info("[YES] SQL Agent loaded successfully (ChromaDB disabled)")
@@ -3197,8 +3197,8 @@ Generate new SQL using ONLY the column names listed above.
             result = db.execute(text(sql_query))
             rows = result.fetchall()
             
-            # Convert rows to dicts
-            data_list = [dict(row._mapping) for row in rows]
+            # Convert rows to dicts, without any secret (a wildcard select names no secret column)
+            data_list = drop_secret_columns([dict(row._mapping) for row in rows])
             logger.info(f"[YES] SQL returned {len(data_list)} rows (Total: {total_count}, Offset: {request.offset})")
             
             # Check if more results available
@@ -3330,7 +3330,7 @@ Generate new SQL using ONLY the column names listed above. Use PostgreSQL syntax
                             # Try executing retry query
                             retry_exec = db.execute(text(retry_sql))
                             retry_rows = retry_exec.fetchall()
-                            retry_data = [dict(row._mapping) for row in retry_rows]
+                            retry_data = drop_secret_columns([dict(row._mapping) for row in retry_rows])
                             
                             logger.info(f"[YES] RETRY SUCCESSFUL: {len(retry_data)} rows")
                             

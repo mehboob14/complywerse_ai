@@ -2763,6 +2763,41 @@ def _names_a_secret(scan_sql: str):
     return None
 
 
+# A function that turns a whole row into one value (JSON, a record, an array) would carry a secret column without the statement
+# naming it, so the name check above cannot see it: refused.
+_WHOLE_ROW = re.compile(r"\b(row_to_json|to_jsonb?|jsonb?_agg|jsonb?_object_agg|jsonb?_build_object|jsonb?_populate_record|"
+                        r"hstore|array_agg|row)\s*\(")
+# Values that are a password hash or an encrypted secret, wherever they come from (a whole-row select, a record cast to text)
+_SECRET_VALUE = re.compile(r"^\$(2[abxy]|argon2(id|i|d)?|pbkdf2[-_a-z0-9]*|scrypt|6|5)\$|^pbkdf2_[a-z0-9]+\$|^gAAAAA[A-Za-z0-9_-]{20,}")
+_HIDDEN = "[hidden]"
+
+
+def _is_secret_name(name) -> bool:
+    word = str(name or "").lower()
+    if word in _SECRET_ALLOWLIST:
+        return False
+    return any(bad in word for bad in _SECRET_SUBSTRINGS)
+
+
+def _scrub(value):
+    if isinstance(value, dict):
+        return {k: _scrub(v) for k, v in value.items() if not _is_secret_name(k)}
+    if isinstance(value, (list, tuple)):
+        return [_scrub(v) for v in value]
+    if isinstance(value, str) and (_SECRET_VALUE.search(value.strip()) or any(_SECRET_VALUE.search(part.strip(' "()'))
+                                                                             for part in value.split(",") if "$" in part or "gAAAAA" in part)):
+        return _HIDDEN
+    return value
+
+
+def drop_secret_columns(rows):
+    """The rows of a model-written query without a secret: validate_sql refuses statements that NAME a secret column, but a
+    wildcard or whole-row select (SELECT * FROM grc_users) names none — so every result is cleaned before it is formatted, shown
+    or sent to the model: secret-named columns (and keys inside JSON values) are dropped, and a value that is a password hash or
+    an encrypted token is hidden."""
+    return [_scrub(dict(row)) for row in rows or []]
+
+
 def _cte_names(scan_sql: str):
     """Names bound by a WITH ... AS ( ... ) clause — table-like refs that are not
     real tables, so they are exempt from the prefix check (their bodies are still
@@ -2855,6 +2890,11 @@ def validate_sql(sql: str) -> bool:
     secret = _names_a_secret(scan_sql)
     if secret:
         logger.warning(f"[FAIL] SQL validation failed: names a secret column/table '{secret}'")
+        return False
+    # ... nor pack a whole row into one value (it would carry a secret column without naming it)
+    whole_row = _WHOLE_ROW.search(scan_sql)
+    if whole_row:
+        logger.warning(f"[FAIL] SQL validation failed: whole-row function '{whole_row.group(1)}'")
         return False
 
     # 2. EVERY table read (not just the first FROM) must be an allowed table.
