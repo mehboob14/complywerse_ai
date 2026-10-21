@@ -100,6 +100,8 @@ class SettingsIn(BaseModel):
     task_description: Optional[str] = None
     task_category: Optional[str] = None
     four_eyes: Optional[bool] = None          # nobody approves a document they wrote (administrators only)
+    decide_days: Optional[int] = None         # proposed changes (proposals.py): the owner's days to accept or reject one
+    revise_days: Optional[int] = None         # ... and its proposer's to revise one that was not accepted
 
 
 SETTINGS_RIGHT = "governance:settings:edit"

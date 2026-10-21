@@ -275,6 +275,33 @@ def on_hold(db, doc) -> bool:
     return open_hold(db, doc) is not None
 
 
+def is_proposal(hold) -> bool:
+    """A hold that waits for the owner to accept or reject a change someone proposed (proposals.py), not for changes asked for."""
+    return hold is not None and (getattr(hold, "kind", None) or "changes") == "proposal"
+
+
+def changed_since(db, doc, hold) -> bool:
+    """A new version of the document was made since the hold began (a sign-off stamp is not one)."""
+    from ...models import GovernanceDocumentVersion as V
+
+    return db.query(V.id).filter(V.document_id == doc.id, V.id > (hold.version_id or 0),
+                                 V.change_type != "signoff").first() is not None
+
+
+def may_sign_as_is(db, doc, hold, user_id: int) -> bool:
+    """The owner did not accept the change that holds the route: its proposer may sign the document as it is (nothing changed, so the
+    others' signatures stand) - when nothing else changed it since and no other proposed change waits."""
+    if not is_proposal(hold) or not hold.proposal_id:
+        return False
+    from ...models import DocumentChangeProposal as P
+
+    p = db.get(P, hold.proposal_id)
+    if p is None or p.status != "rejected" or p.proposed_by != user_id:
+        return False
+    waiting = db.query(P.id).filter(P.document_id == doc.id, P.kind == "document", P.status == "pending").first()
+    return waiting is None and not changed_since(db, doc, hold)
+
+
 def resumed(db, doc, position: Optional[int] = None) -> List[Any]:
     """This round's changes asked for that were resubmitted with a minor change (or none), oldest first (at ``position`` only, when
     given): each started its stage again. Holds resolved before marks existed (``signature_mark``) restarted nothing."""
@@ -357,7 +384,8 @@ def again_for(db, doc, stage: Stage, user_id: int) -> Optional[Dict[str, Any]]:
     return {"kind": kind, "stage": stage.name, "stage_kind": stage.kind, "at": _iso(row.requested_at if kind == "changes" else row.signed_at),
             "version": version, "version_id": vid, "comment": row.comment if kind == "changes" else None, "now": doc.current_version,
             "changed": any(h.change == "minor" for h in holds[holds.index(base):]),
-            "by": _names(db, [last.resolved_by]).get(last.resolved_by), "note": last.resubmit_note}
+            "by": _names(db, [last.resolved_by]).get(last.resolved_by), "note": last.resubmit_note,
+            "proposed": kind == "changes" and is_proposal(row)}      # they proposed the change the owner accepted (proposals.py)
 
 
 def again_text(again: Dict[str, Any], ask: bool = True) -> str:
@@ -368,6 +396,8 @@ def again_text(again: Dict[str, Any], ask: bool = True) -> str:
     on = f" on {at.day} {at:%b %Y}" if at else ""
     by = again.get("by") or "The author"
     now = f" (v{again['now']})" if again.get("now") else ""
+    if again.get("proposed"):
+        return f'You proposed a change{on}: "{again.get("comment") or ""}". {by} accepted it{now}' + (" — see what changed." if ask else ".")
     if again["kind"] == "changes":
         asked = f'You asked for changes{on}: "{again.get("comment") or ""}". '
         if not again.get("changed"):
@@ -390,6 +420,7 @@ class Step:
     stage: Stage
     assignment_id: Optional[int]
     on_behalf_of: Optional[int] = None
+    as_is: bool = False             # the proposer signs it as it is after their change was not accepted (``may_sign_as_is``)
 
 
 def round_requests(db, doc, user_id: int, stage: Stage):
@@ -405,19 +436,25 @@ def round_requests(db, doc, user_id: int, stage: Stage):
 
 def step_for(db, doc, user_id: int, assignments: Sequence[Any], signatures: Sequence[Any]) -> Optional[Step]:
     """What ``user_id`` may do now: sign (or ask for changes, reject where allowed, delegate) at the current stage, or nothing.
-    Nobody acts while the route is held; nobody signs a stage twice; the author never approves (four-eyes); in turn, only the
-    person whose turn it is; a delegate acts for whoever handed it over, who then no longer does."""
+    Nobody acts while the route is held - except the proposer of a change the owner did not accept, who may sign it as it is
+    (``may_sign_as_is``); nobody signs a stage twice; the author never approves (four-eyes); in turn, only the person whose turn it
+    is; a delegate acts for whoever handed it over, who then no longer does."""
     route = stages(db, doc)
     stage = current(db, doc, route)
-    if stage is None or on_hold(db, doc):
+    if stage is None:
+        return None
+    hold = open_hold(db, doc)
+    as_is = hold is not None and may_sign_as_is(db, doc, hold, user_id)
+    if hold is not None and not as_is:
         return None
     stage_sigs = signatures_of(stage, signatures)
     if user_id in {s.signer_user_id for s in stage_sigs}:
         return None
     requests = round_requests(db, doc, user_id, stage)
-    handed = next((o for o in reversed(requests) if o.status == "pending" and o.on_behalf_of), None)
+    waiting = ("pending", "held") if as_is else ("pending",)          # (held: the requests that wait while it is held)
+    handed = next((o for o in reversed(requests) if o.status in waiting and o.on_behalf_of), None)
     if handed is not None:
-        return None if handed.on_behalf_of in signer_ids(stage_sigs) else Step(stage, handed.assignment_id, handed.on_behalf_of)
+        return None if handed.on_behalf_of in signer_ids(stage_sigs) else Step(stage, handed.assignment_id, handed.on_behalf_of, as_is)
     if any(o.status == "delegated" for o in requests):
         return None                                  # handed over to someone else this round
     if user_id in four_eyes_excluded(db, doc, stage) or user_id in signer_ids(stage_sigs) or done(db, doc, stage, assignments, signatures):
@@ -425,7 +462,7 @@ def step_for(db, doc, user_id: int, assignments: Sequence[Any], signatures: Sequ
     candidates = askable(db, doc, stage, assignments, signatures) if stage.order == "in_turn" else assignments_of(stage, assignments)
     for a in candidates:
         if user_id in _members(db, doc, a):
-            return Step(stage, a.id)
+            return Step(stage, a.id, as_is=as_is)
     return None
 
 
@@ -525,6 +562,8 @@ def view(db, doc, assignments: Sequence[Any], signatures: Sequence[Any], names: 
         "hold": None if hold is None else {
             "id": hold.id, "stage_position": hold.stage_position, "requested_by": names.get(hold.requested_by) or _names(db, [hold.requested_by]).get(hold.requested_by),
             "requested_by_id": hold.requested_by, "requested_at": _iso(hold.requested_at), "comment": hold.comment,
+            # changes asked for, or a change someone proposed that waits for the owner (requested_by proposed it; comment says why)
+            "kind": hold.kind or "changes", "proposal_id": hold.proposal_id, "proposal_status": _proposal_status(db, hold),
         },
     }
 
@@ -533,6 +572,14 @@ def _names(db, ids) -> Dict[int, str]:
     from . import doc_lifecycle
 
     return doc_lifecycle._names(db, ids)
+
+
+def _proposal_status(db, hold) -> Optional[str]:
+    if not is_proposal(hold) or not hold.proposal_id:
+        return None
+    from ...models import DocumentChangeProposal as P
+
+    return db.query(P.status).filter(P.id == hold.proposal_id).scalar()
 
 
 def validate(stages_in: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:

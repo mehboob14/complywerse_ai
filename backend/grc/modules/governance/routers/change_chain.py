@@ -65,6 +65,7 @@ class RevertIn(BaseModel):
     hunks: List[int]                             # the changes to take back, by the ids the redline gave them
     hash: Optional[str] = None                   # the redline's fingerprint of the document: an edit made meanwhile is refused
     reason: Optional[str] = None
+    message: Optional[str] = None                # the why by its other name (a proposed change: proposals.py)
 
 
 @router.post("/{document_id}/change-chain/revert", dependencies=[Depends(require_doc_editor)])
@@ -98,8 +99,39 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Nothing would change.")
 
     n = len(wanted)
-    done = f"Took back {n} change{'' if n == 1 else 's'} made since version {base_v.version_number}"
-    why = (body.reason or "").strip()[:2000]          # the person's why
+    reason = body.reason or body.message
+    from .. import proposals
+
+    if proposals.required(db, current_user, doc):
+        # taking the changes back waits for the owner (or author) to accept it: the text it makes (and the file, for a file document)
+        proposal = proposals.propose(db, doc, current_user, source="take_back", message=reason, content=new_content,
+                                     file=proposals.file_of(db, doc, new_content),
+                                     payload={"since_version": base_v.version_number, "from_version_id": base_v.id, "changes": n,
+                                              "hunks": sorted(wanted), "reason": reason})
+        db.commit()
+        return {"version": doc.current_version, "status": doc.status, "changes_taken_back": 0, "notes": [],
+                **proposals.answer(db, proposal, current_user, doc)}
+    new_version, notes = take_back(db, doc, current_user, base_v.version_number, n, reason, new_content)
+    db.commit()
+    if is_file:
+        from ..studio import service as studio
+
+        studio.reanchor(db, doc, current_user.id)
+    return {"version": new_version, "status": doc.status, "changes_taken_back": n, "notes": notes}
+
+
+def take_back(db: Session, doc, current_user: GRCUser, since_version: str, n: int, reason_in: Optional[str], new_content: str,
+              data: Optional[bytes] = None):
+    """``new_content`` (the document with ``n`` changes made since version ``since_version`` taken back) becomes its next version, by
+    ``current_user``; a document that is its file gets it as a new file (``data``: the file already made, an accepted proposal). Take
+    back, and an accepted proposal of one (proposals.py). Does not commit. Returns ``(the new number, notes about the file)``."""
+    ensure_not_archived(doc)
+    is_file = not (doc.content or "").strip()            # an uploaded Word or PDF: the file is the document
+    old_content = C.document_text(doc)
+    if old_content is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="The text of this document's file cannot be read, so a change cannot be taken back here.")
+    done = f"Took back {n} change{'' if n == 1 else 's'} made since version {since_version}"
+    why = (reason_in or "").strip()[:2000]          # the person's why
     reason, summary = why or done, f"{done}: {why}" if why else done
     kind = doc_version.by_rule(old_content, new_content)        # major or minor, as any version (the rule: no AI call)
     old_title, old_version, old_status = doc.title, doc.current_version or "1.0", doc.status
@@ -110,7 +142,8 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
         # Word copy; the file it replaces stays as the earlier version, so the original is never lost
         from ..studio import service as studio
 
-        data, notes = studio.file_bytes(db, doc, new_content)
+        if data is None:
+            data, notes = studio.file_bytes(db, doc, new_content)
         row, new_version, _ = studio.write_file_version(db, doc, current_user, data, change_type=kind, summary=summary, reason=reason,
                                                         done="Changes were taken back")
     else:
@@ -122,7 +155,7 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
                .order_by(GovernanceDocumentVersion.id.desc()).first())
     if row is not None:
         cs = C.build_change_set(old_content, new_content, [], default_kind="revert", by=name, by_id=current_user.id, at=datetime.utcnow().isoformat(),
-                                extra={"reverts": {"since_version": base_v.version_number, "changes": n}, "stage_before": old_status})
+                                extra={"reverts": {"since_version": since_version, "changes": n}, "stage_before": old_status})
         for item in cs["items"]:
             item["reason"] = reason
         row.change_set = cs
@@ -132,10 +165,7 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
         create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="content_edited", field_changed="current_version",
                          old_value=old_version, new_value=new_version, action_details=f"{reason}; version {new_version}"
                          + doc_lifecycle.outcome(old_status, doc.status, doc))
-    db.commit()
-    if is_file:
-        studio.reanchor(db, doc, current_user.id)
-    return {"version": new_version, "status": doc.status, "changes_taken_back": n, "notes": notes}
+    return new_version, notes
 
 
 @router.get("/{document_id}/change-chain/export", dependencies=[Depends(require_doc_reader)])

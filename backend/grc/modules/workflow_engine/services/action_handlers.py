@@ -2855,6 +2855,13 @@ class WorkflowActionHandlers:
             if doc_id:
                 doc = _find_doc(int(doc_id))
                 if doc:
+                    # only an empty draft's text is filled in: never a document that is its file (an uploaded Word or PDF, whose text
+                    # is empty), nor one in review, approved or published (its text is what was, or is being, signed)
+                    if doc.file_path or doc.status != "draft":
+                        logger.info("workflow.action.generate_policy_ai_draft doc_id=%s left as it is (status %s, file %s)",
+                                    doc.id, doc.status, bool(doc.file_path))
+                        return {"action": "generate_policy_ai_draft", "result": "left_as_it_is", "document_id": doc.id,
+                                "reason": "Only an empty draft that is not a file gets a drafted text."}
                     if not doc.content:
                         doc.content = (
                             f"# {doc.title}\n\n"

@@ -28,7 +28,7 @@ from ....models import (
     AttestationCampaign, AuditObservationDocumentLink, BcmPlan, BcmRecoveryStrategy,
     DocumentAttestationAcknowledgment, DocumentAttestationCampaign, DocumentAttestationRecipient,
     DocumentSignature, DocumentSignoffAssignment, DocumentObligation, DocumentWorkflowAction, DocumentWorkflowInstance,
-    DocumentRouteHold, DocumentRouteStage,
+    DocumentRouteHold, DocumentRouteStage, DocumentChangeProposal,
     ElectronicSignature, IssueGovernanceLink, MeetingAgendaItem, OversightAction, PolicyAttestation, PolicyException,
     PolicyGapAnalysisRun, PolicyGapFinding, RegulatoryImplementationTask, StatementControlMapping, StudioSession,
 )
@@ -153,6 +153,7 @@ class GovernanceDocumentUpdate(BaseModel):
     # Edit metadata (not a document column) — the "why" for a content edit,
     # captured into the version snapshot + audit trail.
     change_reason: Optional[str] = None
+    message: Optional[str] = None           # the same "why" by its other name (a proposed change: proposals.py)
     tags: Optional[List[str]] = None
 
 
@@ -1053,7 +1054,8 @@ def update_document(
     refuse_imported_accounts(db, [update_data.get(k) for k in ("owner_id", "author_id") if update_data.get(k) != getattr(document, k)])
     # change_reason is edit metadata, not a document column — pull it out so the
     # field loop doesn't try to setattr/getattr a non-existent attribute.
-    change_reason = update_data.pop("change_reason", None)
+    change_reason = update_data.pop("change_reason", None) or update_data.pop("message", None)
+    update_data.pop("message", None)
 
     # Capture prior state BEFORE mutating so we can snapshot + audit it.
     old_content = document.content
@@ -1064,6 +1066,14 @@ def update_document(
         "content" in update_data
         and (update_data.get("content") or "") != (old_content or "")
     )
+    from .. import proposals
+
+    proposal = None
+    if content_changing and proposals.required(db, current_user, document):
+        # the text waits for the owner (or author) to accept it; the details sent with it are saved now, as they always are
+        proposal = proposals.propose(db, document, current_user, source="edit", message=change_reason,
+                                     content=update_data.pop("content"), payload={"change_reason": change_reason})
+        content_changing = False
 
     changed_fields = []
     for field, new_value in update_data.items():
@@ -1077,31 +1087,8 @@ def update_document(
     # Content edit → version snapshot (mirrors the statement edit→snapshot→history
     # pattern) so document body is fully versioned + restorable with who/when/why.
     if content_changing:
-        from ..doc_version import decide, summary_of
-        decision = decide(old_content or "", document.content or "", title=document.title)
-        _snapshot_content_version(
-            db, document, old_content=old_content, old_title=old_title,
-            old_version=old_version, change_type=decision["change"], change_reason=change_reason,
-            user_id=current_user.id, summary=summary_of("Content edited", decision),
-        )
-        if "status" not in update_data:          # the new text is reviewed again, as an AI Studio save is
-            doc_lifecycle.changed_after_review(db, document, old_status, current_user.id,
-                                               f"Content edited (version {document.current_version}), so it needs approving again")
-        if document.status == "published":       # published and edited in one request: the new number is the one in force
-            document.published_version = document.current_version
-
-    def _preview(v):
-        s = "" if v is None else str(v)
-        return (s[:2000] + "…") if len(s) > 2000 else s
-
-    # Rich audit: content edits capture old/new (+ reason); metadata edits log names.
-    if content_changing:
-        create_audit_log(
-            db=db, document_id=document_id, tenant_id=document.tenant_id,
-            user_id=current_user.id, action="content_edited", field_changed="content",
-            old_value=_preview(old_content), new_value=_preview(document.content),
-            action_details=change_reason or "Document content edited",
-        )
+        _content_edited(db, document, current_user.id, old_content=old_content, old_title=old_title, old_version=old_version,
+                        old_status=old_status, change_reason=change_reason, reviewed_again="status" not in update_data)
     non_content = [c for c in changed_fields if c["field"] != "content"]
     if non_content:
         create_audit_log(
@@ -1113,7 +1100,48 @@ def update_document(
     db.commit()
     db.refresh(document)
 
-    return serialize_document(document, db)
+    out = serialize_document(document, db)
+    return {**out, **proposals.answer(db, proposal, current_user, document)} if proposal is not None else out
+
+
+def _preview(v):
+    s = "" if v is None else str(v)
+    return (s[:2000] + "…") if len(s) > 2000 else s
+
+
+def _content_edited(db: Session, document: GovernanceDocument, user_id: int, *, old_content, old_title, old_version, old_status,
+                    change_reason, reviewed_again: bool = True) -> None:
+    """``document.content`` holds an edited text (PUT): its next version, reviewed again (approved or published, or while in review),
+    and the history row with the text before and after. Does not commit."""
+    from ..doc_version import decide, summary_of
+
+    decision = decide(old_content or "", document.content or "", title=document.title)
+    _snapshot_content_version(
+        db, document, old_content=old_content, old_title=old_title,
+        old_version=old_version, change_type=decision["change"], change_reason=change_reason,
+        user_id=user_id, summary=summary_of("Content edited", decision),
+    )
+    if reviewed_again:                        # the new text is reviewed again, as an AI Studio save is
+        doc_lifecycle.changed_after_review(db, document, old_status, user_id,
+                                           f"Content edited (version {document.current_version}), so it needs approving again")
+    if document.status == "published":       # published and edited in one request: the new number is the one in force
+        document.published_version = document.current_version
+    # Rich audit: content edits capture old/new (+ reason)
+    create_audit_log(
+        db=db, document_id=document.id, tenant_id=document.tenant_id,
+        user_id=user_id, action="content_edited", field_changed="content",
+        old_value=_preview(old_content), new_value=_preview(document.content),
+        action_details=change_reason or "Document content edited",
+    )
+
+
+def apply_content_edit(db: Session, document: GovernanceDocument, user: GRCUser, content: Optional[str], change_reason) -> None:
+    """A text edit someone proposed, accepted (proposals.py): as PUT writes it, by them. Does not commit."""
+    permissions.ensure_not_archived(document)
+    old_content, old_title, old_version, old_status = document.content, document.title, document.current_version or "1.0", document.status
+    document.content, document.updated_at = content, datetime.utcnow()
+    _content_edited(db, document, user.id, old_content=old_content, old_title=old_title, old_version=old_version,
+                    old_status=old_status, change_reason=change_reason)
 
 
 class SignoffEntry(BaseModel):
@@ -1237,6 +1265,7 @@ _DELETE_WITH_DOCUMENT = (  # a table goes before the tables it points at
     DocumentSignoffAssignment.document_id,
     DocumentRouteStage.document_id,
     DocumentRouteHold.document_id,
+    DocumentChangeProposal.document_id,
     DocumentObligation.document_id,
     DocumentAnnotation.document_id,
     PolicyReviewHistory.document_id,
@@ -1259,6 +1288,7 @@ _UNLINK_FROM_DOCUMENT = (
     BcmPlan.document_ref_id,
     BcmRecoveryStrategy.activation_procedure_ref,
     StudioSession.document_id,  # the AI Studio draft, its chat and versions stay; it can be moved to the library again
+    DocumentChangeProposal.statement_id,  # (the proposals go with the document)
 )
 
 
@@ -1966,10 +1996,13 @@ async def upload_document_file(
     change_summary: Optional[str] = Form(None),
     change_reason: Optional[str] = Form(None),
     create_new_version: bool = Form(True),
+    message: Optional[str] = Form(None),            # the why by its other name (a proposed change: proposals.py)
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
-    """Upload a file (PDF, Word, Excel) for an existing governance document"""
+    """Upload a file (PDF, Word, Excel) for an existing governance document. From anyone but its owner or author it waits for them
+    (proposals.py): the file is kept beside the library's, the document keeps its own."""
+    change_reason = change_reason or message
     user_tenants = get_user_tenants(current_user, db)
     
     document = db.query(GovernanceDocument).filter(
@@ -1997,19 +2030,61 @@ async def upload_document_file(
             detail=f"Only PDF, Word (.doc, .docx), and Excel (.xls, .xlsx) files are supported"
         )
     
+    from .. import proposals
+
+    proposing = proposals.required(db, current_user, document)
+    if proposing and not ((change_reason or "").strip() or (change_summary or "").strip()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=proposals.MESSAGE_REQUIRED)
+
     unique_id = str(uuid.uuid4())
     safe_filename = f"{unique_id}_{file.filename}"
     file_path = os.path.join(GOVERNANCE_UPLOAD_DIR, safe_filename)
-    
+
     content = await file.read()
     file_size = len(content)
-    
+
     with open(file_path, "wb") as f:
         f.write(content)
-    
+
+    if proposing:           # the new file waits for the owner (or author) to accept it; the document keeps its own file
+        proposal = proposals.propose(
+            db, document, current_user, source="file", message=change_reason or change_summary,
+            file={"path": file_path, "name": file.filename, "type": file_ext, "size": file_size},
+            payload={"change_summary": change_summary, "change_reason": change_reason, "create_new_version": create_new_version})
+        db.commit()
+        db.refresh(document)
+        return {"document": serialize_document(document, db), **proposals.answer(db, proposal, current_user, document)}
+
+    attach_file(db, document, current_user, file_path, file.filename, file_size, file_ext, change_summary, change_reason, create_new_version)
+    db.commit()
+    db.refresh(document)
+
+    # Auto-run parsing after a file is attached (guarded + non-fatal). Skips
+    # docs that are already parsed — re-parsing an existing doc stays manual.
+    try:
+        from .policy_parser import maybe_autoparse_document
+        maybe_autoparse_document(
+            db, _resolve_tenant_slug_for_autoparse(document.tenant_id), document.id, current_user.id
+        )
+    except Exception:
+        logger.warning("auto-parse hook failed for doc %s", document.id, exc_info=True)
+
+    return {
+        "message": "File uploaded successfully",
+        "document": serialize_document(document, db)
+    }
+
+
+def attach_file(db: Session, document: GovernanceDocument, current_user: GRCUser, file_path: str, filename: str, file_size: int,
+                file_ext: str, change_summary: Optional[str], change_reason: Optional[str], create_new_version: bool = True) -> None:
+    """The file at ``file_path`` (saved beside the library's files) becomes the document's file: a new version, or the same version's
+    file when it is not in force and no new version was asked for; reviewed again as every new version is. Upload a file, and an
+    accepted proposal of one (proposals.py). Does not commit."""
+    permissions.ensure_not_archived(document)
+    document_id = document.id
     old_file_name = document.file_name
     old_status = document.status
-    
+
     current_ver = document.current_version or "1.0"
     V = GovernanceDocumentVersion
     current_row = (db.query(V).filter(V.document_id == document_id, V.version_number == current_ver)
@@ -2018,7 +2093,7 @@ async def upload_document_file(
     if (create_new_version and document.file_name) or current_ver in (permissions.in_force_number(document), permissions.published_last(document)):
         from .. import doc_version
         new_version, change_type, decided = doc_version.for_new_file(
-            current_ver, document.file_path, document.file_name, file_path, file.filename,
+            current_ver, document.file_path, document.file_name, file_path, filename,
             old_content=document.content, title=document.title)
         if current_row is None:         # an older document with no row for its number: what it held is kept first, as that version
             db.add(V(document_id=document_id, version_number=current_ver, change_type="baseline", title=document.title,
@@ -2042,11 +2117,11 @@ async def upload_document_file(
             change_type=change_type,
             title=document.title,
             content=document.content,
-            file_name=file.filename,
+            file_name=filename,
             file_path=file_path,
             file_size=file_size,
             file_type=file_ext,
-            change_summary=change_summary or f"File updated: {file.filename}. {decided}",
+            change_summary=change_summary or f"File updated: {filename}. {decided}",
             change_reason=change_reason,
             status="current",
             created_by=current_user.id
@@ -2057,12 +2132,12 @@ async def upload_document_file(
         if current_row is None:
             db.query(V).filter(V.document_id == document_id, V.status == "current").update({"status": "superseded"})
             current_row = V(document_id=document_id, version_number=current_ver, change_type="major", title=document.title,
-                            content=document.content, change_summary=change_summary or f"File uploaded: {file.filename}",
+                            content=document.content, change_summary=change_summary or f"File uploaded: {filename}",
                             change_reason=change_reason, status="current", created_by=current_user.id)
             db.add(current_row)
-        current_row.file_name, current_row.file_path, current_row.file_size, current_row.file_type = file.filename, file_path, file_size, file_ext
+        current_row.file_name, current_row.file_path, current_row.file_size, current_row.file_type = filename, file_path, file_size, file_ext
     
-    document.file_name = file.filename
+    document.file_name = filename
     document.file_path = file_path
     document.file_size = file_size
     document.file_type = file_ext
@@ -2077,10 +2152,10 @@ async def upload_document_file(
         tenant_id=document.tenant_id,
         user_id=current_user.id,
         action="file_uploaded",
-        action_details=f"File uploaded: {file.filename} ({file_size} bytes)" + doc_lifecycle.outcome(old_status, document.status, document),
+        action_details=f"File uploaded: {filename} ({file_size} bytes)" + doc_lifecycle.outcome(old_status, document.status, document),
         field_changed="file_name",
         old_value=old_file_name,
-        new_value=file.filename
+        new_value=filename
     )
     
     # Log the action for review
@@ -2088,36 +2163,18 @@ async def upload_document_file(
         db=db,
         tenant_id=document.tenant_id,
         action_type="document_file_uploaded",
-        action_description=f"File uploaded to document: '{document.title}' - {file.filename}",
+        action_description=f"File uploaded to document: '{document.title}' - {filename}",
         entity_type="governance_document",
         action_user_id=current_user.id,
         entity_id=document.id,
         action_metadata={
             "document_code": document.document_code,
             "doc_type": document.doc_type,
-            "file_name": file.filename,
+            "file_name": filename,
             "file_size": file_size,
             "version": document.current_version
         }
     )
-    
-    db.commit()
-    db.refresh(document)
-
-    # Auto-run parsing after a file is attached (guarded + non-fatal). Skips
-    # docs that are already parsed — re-parsing an existing doc stays manual.
-    try:
-        from .policy_parser import maybe_autoparse_document
-        maybe_autoparse_document(
-            db, _resolve_tenant_slug_for_autoparse(document.tenant_id), document.id, current_user.id
-        )
-    except Exception:
-        logger.warning("auto-parse hook failed for doc %s", document.id, exc_info=True)
-
-    return {
-        "message": "File uploaded successfully",
-        "document": serialize_document(document, db)
-    }
 
 
 @router.get("/{document_id}/download-file", dependencies=[Depends(permissions.require_doc_reader)])

@@ -37,8 +37,11 @@ from . import permissions, routes
 logger = logging.getLogger(__name__)
 
 # Defaults, overridable per organisation (Governance > Settings; ``settings``). Keys are only ever added, never renamed.
-KINDS = ("review", "approval", "acknowledgement", "changes")      # changes: the author makes the changes asked for (routes.py)
-EVENTS = ("request", "reminder", "overdue", "escalation", "approved", "published", "rejected", "changes", "resubmitted", "delegated")
+# changes: the author makes the changes asked for (routes.py); decide: the owner (or author) accepts or rejects a change someone
+# else proposed, revise: its proposer after it was not accepted (proposals.py)
+KINDS = ("review", "approval", "acknowledgement", "changes", "decide", "revise")
+EVENTS = ("request", "reminder", "overdue", "escalation", "approved", "published", "rejected", "changes", "resubmitted", "delegated",
+          "proposed", "proposal_decided")
 CHANNELS: Dict[str, tuple] = {"in_app": ("in_app",), "email": ("email",), "both": ("in_app", "email"), "off": ()}
 PRIORITIES = ("Critical", "High", "Medium", "Low")              # Task Management's
 PLACEHOLDERS = ("document", "version", "due_date", "action", "owner", "link", "verb")
@@ -54,7 +57,9 @@ DEFAULTS: Dict[str, Any] = {
     "escalate_role_id": None,                                               # the members of this role are the escalation (None: administrators)
     "notify": {e: "both" for e in EVENTS},                                  # per event: in_app | email | both | off
     "task_create": {k: True for k in KINDS},                                # a Task Management task for each request
-    "task_priority": {"review": "High", "approval": "High", "acknowledgement": "Medium", "changes": "High"},
+    "task_priority": {"review": "High", "approval": "High", "acknowledgement": "Medium", "changes": "High", "decide": "High", "revise": "High"},
+    "decide_days": 3,                                                       # the owner is given this long to accept or reject a proposed change
+    "revise_days": 3,                                                       # its proposer this long to revise one not accepted
     "task_title": "{action}: {document}",
     # plain words; Task Management shows the links as buttons (task_request), never as a path in the text
     "task_description": "Please {verb} \"{document}\", version {version}, by {due_date}.",
@@ -62,29 +67,39 @@ DEFAULTS: Dict[str, Any] = {
     "four_eyes": True,                                                      # nobody approves a document they wrote (D33; administrators only)
 }
 _LIMITS = {"approval_days": (1, 365), "ack_days": (1, 365), "remind_days": (0, 60), "admin_after_days": (1, 365),
-           "review_days": (1, 365), "remind_every_days": (0, 60), "owner_after_days": (0, 365)}
+           "review_days": (1, 365), "remind_every_days": (0, 60), "owner_after_days": (0, 365), "decide_days": (1, 365),
+           "revise_days": (1, 365)}
 _LABELS = {"approval_days": "Days to approve", "review_days": "Days to review", "ack_days": "Days to acknowledge",
            "remind_days": "Days before the due date for the first reminder", "remind_every_days": "Days between reminders",
-           "owner_after_days": "Days overdue before the owner is told", "admin_after_days": "Days overdue before escalating further"}
+           "owner_after_days": "Days overdue before the owner is told", "admin_after_days": "Days overdue before escalating further",
+           "decide_days": "Days to accept or reject a proposed change", "revise_days": "Days to revise a change that was not accepted"}
 _MAPS = {"notify": (EVENTS, CHANNELS), "task_create": (KINDS, None), "task_priority": (KINDS, PRIORITIES)}
 _TEMPLATES = {"task_title": ("Task title", 200), "task_description": ("Task description", 2000)}
 SOURCE_MODULE = "document_lifecycle"
 SOURCE_TYPE = "DocumentObligation"
 _STAGE_KIND = {"reviewer": "review", "approver": "approval"}
-_VERB = {"review": "Review", "approval": "Approve", "acknowledgement": "Acknowledge", "changes": "Revise"}
+_VERB = {"review": "Review", "approval": "Approve", "acknowledgement": "Acknowledge", "changes": "Revise", "decide": "Decide on",
+         "revise": "Revise your change to"}
 _STEP = {"review": "review and sign", "approval": "approve and sign", "acknowledgement": "acknowledge",     # {verb}
-         "changes": "make the changes asked for and resubmit"}
-ACTION_LABEL = {"review": "Review and sign", "approval": "Approve and sign", "acknowledgement": "Acknowledge", "changes": "Make the changes"}
+         "changes": "make the changes asked for and resubmit", "decide": "accept or reject the change proposed to",
+         "revise": "revise the change you proposed to"}
+ACTION_LABEL = {"review": "Review and sign", "approval": "Approve and sign", "acknowledgement": "Acknowledge", "changes": "Make the changes",
+                "decide": "Decide on a proposed change", "revise": "Your change was not accepted"}
 _ACT = {"review": "sign", "approval": "sign", "acknowledgement": "ack", "changes": "changes"}      # ?act= on the document page opens that popup
-_NOUN = {"review": "Review", "approval": "Approval", "acknowledgement": "Acknowledgement", "changes": "Changes"}
+_NOUN = {"review": "Review", "approval": "Approval", "acknowledgement": "Acknowledgement", "changes": "Changes", "decide": "Decision",
+         "revise": "Revision"}
+_PROPOSAL_KINDS = ("decide", "revise")                                # they open the proposed change (``action_href``)
 _SIGNING = ("review", "approval")
 _PENDING_STAGE = ("pending_review", "pending_approval")
 
 
-def _link(doc, kind: str = "") -> str:
+def _link(doc, kind: str = "", proposal_id: Optional[int] = None) -> str:
     """Where a notification or a task about ``doc`` opens: for a request (``kind``), the document with the person's own step open
-    (``action_href``: ?act=ack / ?act=sign, as Pending approvals, My Approvals and the tasks open it), else its Approvals."""
-    return action_href(doc.id, kind) if kind in _ACT else f"/governance/documents/{doc.id}?tab=lifecycle"
+    (``action_href``: ?act=ack / ?act=sign, as Pending approvals, My Approvals and the tasks open it; a proposed change, its
+    Proposed changes), else its Approvals."""
+    if kind in _ACT or kind in _PROPOSAL_KINDS:
+        return action_href(doc.id, kind, proposal_id)
+    return f"/governance/documents/{doc.id}?tab=lifecycle"
 
 
 def _app_url(path: str) -> str:
@@ -238,6 +253,8 @@ class TaskSettings:
 
 def due_days(cfg: Dict[str, Any], kind: str) -> int:
     """How many days a request of ``kind`` is given."""
+    if kind in _PROPOSAL_KINDS:
+        return cfg[f"{kind}_days"]
     return cfg["ack_days"] if kind == "acknowledgement" else cfg["review_days"] if kind == "review" else cfg["approval_days"]
 
 
@@ -266,7 +283,7 @@ def task_values(db, ob, doc, spec: Optional[TaskSettings] = None) -> Dict[str, s
         owner = _names(db, [doc.owner_id]).get(doc.owner_id, "-")
     return {"document": doc.title or "", "version": ob.document_version or doc.current_version or "",
             "due_date": f"{ob.due_date:%d %b %Y}" if ob.due_date else "no date", "action": _VERB[ob.kind],
-            "owner": owner, "link": _app_url(_link(doc, ob.kind)), "verb": _STEP[ob.kind]}
+            "owner": owner, "link": _app_url(_link(doc, ob.kind, ob.proposal_id)), "verb": _STEP[ob.kind]}
 
 
 def _safe(fn):
@@ -421,13 +438,14 @@ def _held(db, document_id: int, kind: str) -> list:
 
 def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], days: int, assignment_id: Optional[int] = None,
              version: Optional[str] = None, stage_position: Optional[int] = None, on_behalf_of: Optional[int] = None,
-             why: Optional[str] = None) -> List[int]:
+             why: Optional[str] = None, proposal_id: Optional[int] = None) -> List[int]:
     """Ask each person (once) about ``version`` (the newest by default); returns the ones newly asked. A request that waited while
     changes were made is opened again from today, not made twice. ``on_behalf_of``: a delegate, asked for whoever handed it over;
-    ``why``: asked again after changes (its task says so, ``_open_twin``)."""
+    ``why``: asked again after changes (its task says so, ``_open_twin``); ``proposal_id``: a request about a proposed change
+    (decide, revise), one per person and proposed change."""
     from ...models import DocumentObligation
 
-    already = {o.user_id for o in _pending(db, doc.id, [kind])}
+    already = {o.user_id for o in _pending(db, doc.id, [kind]) if proposal_id is None or o.proposal_id == proposal_id}
     waited = {o.user_id: o for o in _held(db, doc.id, kind)}
     asked: List[int] = []
     cfg = settings(db, doc.tenant_id)
@@ -444,7 +462,7 @@ def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], day
             ob = DocumentObligation(tenant_id=doc.tenant_id, document_id=doc.id, kind=kind, user_id=uid, assignment_id=assignment_id,
                                     document_version=version or doc.current_version, status="pending", requested_by=by,
                                     due_date=datetime.utcnow() + timedelta(days=days), stage_position=stage_position,
-                                    on_behalf_of=on_behalf_of)
+                                    on_behalf_of=on_behalf_of, proposal_id=proposal_id)
             db.add(ob)
         db.flush()
         _open_twin(db, ob, doc, by, cfg, viewers, why)
@@ -691,8 +709,8 @@ def on_resubmitted(db, doc, by: int, hold) -> None:
     resumed = hold.outcome == "resumed"
     asked = _open_current(db, doc, by) if resumed else []
     _end_held(db, doc)                                  # who still waits is asked when their turn comes
-    if hold.requested_by in asked:
-        return                                          # asked again just now, with what changed
+    if hold.requested_by in asked or (hold.kind or "changes") == "proposal":
+        return                                          # asked again just now, with what changed (a proposer is told it was accepted)
     who = _names(db, [by]).get(by, "The author")
     note = f": {hold.resubmit_note}" if hold.resubmit_note else ""
     st = routes.current(db, doc)
@@ -701,6 +719,106 @@ def on_resubmitted(db, doc, by: int, hold) -> None:
             + (f"Everyone at {st.name} signs it again, from the first; you are asked again when it is your turn." if resumed and st
                else "It is a major change, so it is signed again from the start."), "info",
             link=_link(doc, st.obligation_kind if st else ""), event="resubmitted")
+
+
+def _proposal_requests(db, doc, proposal, kinds=_PROPOSAL_KINDS):
+    from ...models import DocumentObligation
+
+    return _pending(db, doc.id, kinds).filter(DocumentObligation.proposal_id == proposal.id).order_by(DocumentObligation.id).all()
+
+
+def _in_tasks(tasked: set, uid: int) -> str:
+    return " It is in your tasks." if uid in tasked else ""
+
+
+@_safe
+def on_proposed(db, doc, by: int, proposal, hold=None) -> None:
+    """Someone who is not the owner or author changed the document or a statement (proposals.py): the owner and the author (else the
+    administrators) are asked to accept or reject it, with a task. In review the change holds the route (``hold``): everyone else's
+    requests wait (no reminders, no task) until the owner decides, and they are told."""
+    from . import proposals
+
+    who = _names(db, [by]).get(by, "Someone")
+    deciders = proposals.deciders(db, doc)
+    asked = _request(db, doc, "decide", deciders, by, due_days(settings(db, doc.tenant_id), "decide"), proposal_id=proposal.id)
+    tasked = _with_task(db, doc, "decide", asked)
+    for uid in deciders:
+        _notify(db, doc, [uid], f"Change proposed: {doc.title}",
+                f'{who} proposed a change: "{proposal.message}". Accept or reject it.{_in_tasks(tasked, uid)}', "warning",
+                link=_link(doc, "decide", proposal.id), event="proposed")
+    _mark_emailed(db, doc.id, "decide", asked)
+    if hold is None:
+        return
+    waiting = []
+    for ob in _pending(db, doc.id, _SIGNING).all():
+        ob.status = "held"
+        waiting.append(ob.user_id)
+        _close(db, ob, completed=False)
+    owner = " or ".join(_names(db, proposals.owners(db, doc)).values()) or "the owner"
+    _notify(db, doc, set(waiting) - {by} - set(deciders), f"On hold: {doc.title}",
+            f"{who} proposed a change; {owner} decides first. You are asked again when it is decided.", "info")
+
+
+@_safe
+def on_proposal_decided(db, doc, by: int, proposal, number: Optional[str] = None, held: bool = False, may_sign: bool = False) -> None:
+    """The owner accepted (``number``: the version it became) or rejected a proposed change: their request is done (the other
+    decider's ends), and its proposer is told. Not accepted, the proposer is asked to revise it, with a task: in review, to sign it
+    as it is (``may_sign``) or propose another change; otherwise to propose it again, or leave it."""
+    now = datetime.utcnow()
+    for ob in _proposal_requests(db, doc, proposal, ("decide",)):
+        mine = ob.user_id == by
+        ob.status, ob.done_at, ob.comment = ("done" if mine else "cancelled"), now, proposal.decision_note
+        _close(db, ob, completed=mine, by=by)
+    title, note = doc.title, proposal.decision_note or ""
+    if proposal.status == "accepted":
+        _notify(db, doc, [proposal.proposed_by], f"Change accepted: {title}", f'Your change to "{title}" was accepted (v{number}).',
+                "success", link=_link(doc, "revise", proposal.id), event="proposal_decided")
+        return
+    asked = _request(db, doc, "revise", [proposal.proposed_by], by, due_days(settings(db, doc.tenant_id), "revise"), proposal_id=proposal.id)
+    tasked = _with_task(db, doc, "revise", asked)
+    if held:
+        then = "Sign it as it is, or propose another change." if may_sign else "Propose another change, or withdraw it so the review goes on."
+    else:
+        then = "Revise it and propose it again, or leave it."
+    _notify(db, doc, [proposal.proposed_by], f"Change not accepted: {title}",
+            f'Your change to "{title}" was not accepted: "{note}". {then}{_in_tasks(tasked, proposal.proposed_by)}', "warning",
+            link=_link(doc, "revise", proposal.id), event="proposal_decided")
+    _mark_emailed(db, doc.id, "revise", asked)
+
+
+@_safe
+def on_proposal_closed(db, doc, by: int, proposal, withdrawn: bool = False) -> None:
+    """A proposed change was withdrawn, proposed again, or (not accepted) signed as it is: what was asked about it ends - the
+    owner's decision is no longer needed, the proposer's revision is done. A withdrawn one is told to the owner."""
+    now = datetime.utcnow()
+    waiting = []
+    for ob in _proposal_requests(db, doc, proposal):
+        if ob.kind == "decide":
+            waiting.append(ob.user_id)
+        ob.status, ob.done_at = ("done" if ob.kind == "revise" else "cancelled"), now
+        _close(db, ob, completed=ob.kind == "revise", by=by)
+    if withdrawn and waiting:
+        who = _names(db, [by]).get(by, "Someone")
+        _notify(db, doc, waiting, f"Proposed change withdrawn: {doc.title}",
+                f"{who} withdrew the change they proposed to \"{doc.title}\". Nothing is asked of you now.", "info")
+
+
+@_safe
+def on_released(db, doc, by: Optional[int], signer: Optional[int] = None, signature_id: Optional[int] = None) -> None:
+    """A proposed change that held the route ended without changing the document (its proposer signed it as it is, or withdrew it):
+    the review goes on where it was. The requests that waited are asked again from today; the one who signed it as it is has
+    theirs done (a role or team they signed for, the others' too)."""
+    now = datetime.utcnow()
+    held = [ob for kind in _SIGNING for ob in _held(db, doc.id, kind)]
+    theirs = {ob.assignment_id for ob in held if signer is not None and ob.user_id == signer}
+    for ob in held:
+        if signer is not None and ob.user_id == signer:
+            ob.status, ob.done_at, ob.signature_id = "done", now, signature_id
+        elif ob.assignment_id is not None and ob.assignment_id in theirs:
+            ob.status, ob.done_at = "cancelled", now
+    if doc.status in _PENDING_STAGE:
+        _open_current(db, doc, by)
+    _end_held(db, doc)
 
 
 @_safe
@@ -886,8 +1004,9 @@ def outcome(old: Optional[str], new: Optional[str], doc=None) -> str:
         return "; it is a draft again" if new != old else ""
     from sqlalchemy.orm import object_session
 
-    if doc is not None and old == new and object_session(doc) is not None and routes.on_hold(object_session(doc), doc):
-        return "; resubmit it when the changes asked for are made"
+    hold = routes.open_hold(object_session(doc), doc) if doc is not None and old == new and object_session(doc) is not None else None
+    if hold is not None:          # (a proposed change being accepted: what follows is said when it is)
+        return "" if (hold.kind or "changes") == "proposal" else "; resubmit it when the changes asked for are made"
     who = "its reviewers" if new == "pending_review" else "its approvers"
     return f"; {'signed again from the start by' if old in _PENDING_STAGE else 'sent back to'} {who}"
 
@@ -1115,8 +1234,11 @@ def without_others_tasks(query, user, reads_all: bool = False):
     return query.filter(or_(func.coalesce(CriticalTask.source_module, "") != SOURCE_MODULE, CriticalTask.assigned_owner_id == user.id))
 
 
-def action_href(document_id: int, kind: str) -> str:
-    """The document with the person's own step open (Review and sign / Approve and sign / Acknowledge)."""
+def action_href(document_id: int, kind: str, proposal_id: Optional[int] = None) -> str:
+    """The document with the person's own step open (Review and sign / Approve and sign / Acknowledge; a proposed change to decide
+    on or revise: its Proposed changes, that change open)."""
+    if kind in _PROPOSAL_KINDS:
+        return f"/governance/documents/{document_id}?tab=proposals" + (f"&proposal={proposal_id}" if proposal_id else "")
     return f"/governance/documents/{document_id}?act={_ACT[kind]}"
 
 
@@ -1162,8 +1284,9 @@ def task_requests(db, tasks) -> Dict[int, Optional[Dict[str, Any]]]:
                       "version": ob.document_version, "status": ob.status, "user_id": ob.user_id, "due_date": _iso(ob.due_date),
                       "done_at": _iso(ob.done_at), "overdue": bool(pending and ob.due_date and ob.due_date < now),
                       "open_href": f"/governance/documents/{ob.document_id}", "action_label": ACTION_LABEL[ob.kind],
-                      "action_href": action_href(ob.document_id, ob.kind) if pending else None,
-                      "again": again_of(db, doc, ob)}         # asked again after changes: what they did before, what changed
+                      "action_href": action_href(ob.document_id, ob.kind, ob.proposal_id) if pending else None,
+                      "again": again_of(db, doc, ob),         # asked again after changes: what they did before, what changed
+                      "proposal_id": ob.proposal_id}          # decide / revise: the proposed change
     return out
 
 
@@ -1209,7 +1332,8 @@ def _row(ob, names: Dict[int, str], now: datetime, seals: Optional[Dict[int, str
             "done_at": _iso(ob.done_at), "comment": ob.comment, "assignment_id": ob.assignment_id,
             "overdue": bool(ob.status == "pending" and ob.due_date and ob.due_date < now),
             "escalation_level": ob.escalation_level or 0, "task_id": ob.critical_task_id,
-            "esign": {"id": ob.esign_id, "image_sha256": (seals or {}).get(ob.esign_id)} if ob.esign_id else None}
+            "esign": {"id": ob.esign_id, "image_sha256": (seals or {}).get(ob.esign_id)} if ob.esign_id else None,
+            "proposal_id": ob.proposal_id}
 
 
 def timeline(db, doc, names: Dict[int, str], obligations, previews: bool = True) -> List[Dict[str, Any]]:
@@ -1340,7 +1464,7 @@ def sweep(db) -> Dict[str, int]:
 
     def tell(ob, doc, subject: str, message: str, tone: str, event: str) -> None:
         """One email about one request; the list of what waits (``_email_waiting``) then leaves it out, so nobody gets two."""
-        out["emailed"] += _notify(db, doc, [ob.user_id], subject, message, tone, link=_link(doc, ob.kind), event=event)
+        out["emailed"] += _notify(db, doc, [ob.user_id], subject, message, tone, link=_link(doc, ob.kind, ob.proposal_id), event=event)
         if "email" in channels(cfg, event) and ob.emailed_at is None:          # emailed (as the list marks what it emailed)
             ob.emailed_at = now
 
@@ -1430,4 +1554,5 @@ def mine(db, user_id: int) -> list:
             .order_by(DocumentObligation.due_date.asc(), DocumentObligation.id).all())
     return [{"id": ob.id, "kind": ob.kind, "document_id": d.id, "title": d.title, "doc_type": d.doc_type, "status": d.status,
              "version": ob.document_version, "due_date": _iso(ob.due_date), "overdue": bool(ob.due_date and ob.due_date < now),
-             "escalation_level": ob.escalation_level or 0, "again": again_of(db, d, ob)} for ob, d in rows]
+             "escalation_level": ob.escalation_level or 0, "again": again_of(db, d, ob),
+             "proposal_id": ob.proposal_id} for ob, d in rows]           # decide / revise: the proposed change

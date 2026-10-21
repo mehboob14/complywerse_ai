@@ -248,6 +248,9 @@ def test_every_new_number_of_a_published_text_is_the_one_in_force(world):
     db.commit()
     for did, who in ((10, ADMIN), (16, EDITOR)):
         world.me["id"] = who
+        # as its author (a change by anyone but the owner or author waits for them: test_document_proposals.py, D35)
+        doc(world, did).author_id = who
+        world.db.commit()
         assert world.http.put(f"/governance/documents/{did}", json={"status": "published", "content": SIGNED + "\nMore.\n"}).status_code == 200
         d = doc(world, did)
         assert d.status != "published" and d.published_version == "1.0" != d.current_version, who

@@ -34,8 +34,11 @@ def test_defaults_keep_the_old_meanings_and_review_days_follow_approval_days_unt
         assert (s["approval_days"], s["review_days"], s["ack_days"], s["remind_days"], s["admin_after_days"]) == (7, 7, 14, 3, 7)
         assert (s["remind_every_days"], s["owner_after_days"], s["escalate_role_id"], s["email"]) == (0, 0, None, True)
         assert s["notify"] == {e: "both" for e in life.EVENTS}
-        assert s["task_create"] == {"review": True, "approval": True, "acknowledgement": True, "changes": True}
-        assert s["task_priority"] == {"review": "High", "approval": "High", "acknowledgement": "Medium", "changes": "High"}
+        # decide / revise: a change someone proposed, the owner's decision and its proposer's revision (proposals.py)
+        assert s["task_create"] == {"review": True, "approval": True, "acknowledgement": True, "changes": True, "decide": True, "revise": True}
+        assert s["task_priority"] == {"review": "High", "approval": "High", "acknowledgement": "Medium", "changes": "High",
+                                      "decide": "High", "revise": "High"}
+        assert (s["decide_days"], s["revise_days"]) == (3, 3)
         assert s["four_eyes"] is True                                                          # authors do not approve their own
         assert life.save_settings(db, 1, {"approval_days": 10}, 1)["review_days"] == 10          # follows until set
         assert life.save_settings(db, 1, {"review_days": 2}, 1)["review_days"] == 2

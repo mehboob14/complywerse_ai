@@ -14,7 +14,8 @@ class DocumentObligation(Base):
     id = Column(Integer, primary_key=True, index=True)
     tenant_id = Column(Integer, ForeignKey("grc_tenants.id"), nullable=False, index=True)
     document_id = Column(Integer, ForeignKey("grc_governance_documents.id"), nullable=False, index=True)
-    kind = Column(String(20), nullable=False)                     # review | approval | acknowledgement | changes (the author's)
+    # review | approval | acknowledgement | changes (the author's) | decide (the owner's: a proposed change) | revise (its proposer's)
+    kind = Column(String(20), nullable=False)
     user_id = Column(Integer, ForeignKey("grc_users.id"), nullable=False, index=True)
     assignment_id = Column(Integer, nullable=True)                # the sign-off assignment (a user, role or team) this came from
     document_version = Column(String(50), nullable=True)          # the version it was asked for
@@ -35,6 +36,7 @@ class DocumentObligation(Base):
     escalated_at = Column(DateTime, nullable=True)
     emailed_at = Column(DateTime, nullable=True)                  # when the person was emailed about it, if email is on
     overdue_at = Column(DateTime, nullable=True)                  # when the person was told it is overdue
+    proposal_id = Column(Integer, nullable=True)                  # decide / revise: the proposed change it is about
 
     __table_args__ = (
         Index("ix_doc_obligation_doc_kind", "document_id", "kind", "status"),

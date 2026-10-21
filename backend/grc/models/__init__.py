@@ -54,4 +54,5 @@ from ._77_ai_call_payloads import *  # noqa: F401,F403 - the prompts and answers
 from ._80_document_studio import *  # noqa: F401,F403 - AI Studio: sessions, revisions, chat, references, templates, logos
 from ._79_document_obligations import *  # noqa: F401,F403 - who a document is waiting for: reviews, approvals, acknowledgements
 from ._81_document_routes import *  # noqa: F401,F403 - a document's approval route: its stages, and the changes asked for while it waits
+from ._82_document_change_proposals import *  # noqa: F401,F403 - changes by anyone but the owner or author, waiting for their accept
 from ._78_ai_result_cache import *  # noqa: F401,F403 - answers to AI requests that repeat exactly, encrypted, expiring

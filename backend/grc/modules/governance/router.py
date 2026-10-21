@@ -4,6 +4,9 @@ from ...routers import policy_exception_router
 
 router = APIRouter(prefix="/governance", tags=["Governance Module"])
 
+# a document's proposed changes (proposals.py): before the documents' own /{document_id} routes
+from .routers.document_proposals import router as document_proposals_router  # noqa: E402
+router.include_router(document_proposals_router, tags=["Governance Proposed Changes"])
 router.include_router(documents_router, tags=["Governance Documents"])
 router.include_router(document_signoff_router, tags=["Governance Sign-off"])
 router.include_router(versions_router, tags=["Governance Document Versions"])

@@ -2,6 +2,8 @@ import os
 from typing import List, Optional
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 from sqlalchemy.orm import Session, joinedload
 from pydantic import BaseModel
 import difflib
@@ -31,10 +33,12 @@ class VersionCreate(BaseModel):
     change_reason: Optional[str] = None
     title: Optional[str] = None
     content: Optional[str] = None
+    message: Optional[str] = None           # the why by its other name (a proposed change: proposals.py)
 
 
 class VersionRollback(BaseModel):
     rollback_reason: Optional[str] = None
+    message: Optional[str] = None           # the why by its other name (a proposed change: proposals.py)
 
 
 def validate_tenant_access(user: GRCUser, tenant_id: int, db: Session) -> None:
@@ -182,13 +186,32 @@ def create_version(
             detail="Document not found"
         )
     permissions.ensure_not_archived(document)
-    
+
     if version_data.change_type not in ["major", "minor", "patch"]:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="change_type must be one of: major, minor, patch"
         )
-    
+    from .. import proposals
+
+    if version_data.content and version_data.content != (document.content or "") and proposals.required(db, current_user, document):
+        # a version with a new text waits for the owner (or author) to accept it; numbered when it is applied
+        proposal = proposals.propose(db, document, current_user, source="version",
+                                     message=version_data.change_reason or version_data.message or version_data.change_summary,
+                                     content=version_data.content,
+                                     change_type=version_data.change_type, payload=version_data.model_dump())
+        db.commit()
+        return JSONResponse(status_code=status.HTTP_200_OK, content=jsonable_encoder(proposals.answer(db, proposal, current_user, document)))
+    new_version = _new_version(db, document, current_user, version_data)
+    db.commit()
+    db.refresh(new_version)
+
+    return serialize_version(new_version)
+
+
+def _new_version(db: Session, document: GovernanceDocument, current_user: GRCUser, version_data: VersionCreate) -> GovernanceDocumentVersion:
+    """The document's next version, as the person asked for it (with a text, the new text reviewed again). Does not commit."""
+    document_id = document.id
     if db.query(GovernanceDocumentVersion.id).filter(GovernanceDocumentVersion.document_id == document_id).first() is None:
         # an older document with no versions yet: what it holds now is kept first, as its own version (the version in force)
         db.add(GovernanceDocumentVersion(
@@ -212,7 +235,7 @@ def create_version(
         # the document's file stays its file: the row holds it too, so it is still there once a later version replaces it
         file_name=document.file_name, file_path=document.file_path, file_size=document.file_size, file_type=document.file_type,
         change_summary=version_data.change_summary,
-        change_reason=version_data.change_reason,
+        change_reason=version_data.change_reason or version_data.message,
         status="current",
         created_by=current_user.id,
         created_at=datetime.utcnow()
@@ -245,11 +268,13 @@ def create_version(
         old_value=old_version,
         new_value=new_version_number
     )
-    
-    db.commit()
-    db.refresh(new_version)
-    
-    return serialize_version(new_version)
+    return new_version
+
+
+def apply_version(db: Session, document: GovernanceDocument, user: GRCUser, version_data: VersionCreate) -> GovernanceDocumentVersion:
+    """A version someone proposed, accepted (proposals.py): as create makes it, by them. Does not commit."""
+    permissions.ensure_not_archived(document)
+    return _new_version(db, document, user, version_data)
 
 
 @router.get("/{version_id}")
@@ -403,13 +428,52 @@ def rollback_to_version(
             detail="Target version not found for this document"
         )
     
-    rollback_reason = ((rollback_data.rollback_reason if rollback_data else None) or "").strip()[:2000] or None     # the person's why
+    rollback_reason = ((rollback_data.rollback_reason or rollback_data.message if rollback_data else None) or "").strip()[:2000] or None     # the person's why
+    from .. import proposals
+
+    if proposals.required(db, current_user, document):
+        # the restore waits for the owner (or author) to accept it: the version it brings back, its text or its file
+        is_file = _is_file_version(target_version)
+        file = ({"path": target_version.file_path, "name": target_version.file_name or os.path.basename(target_version.file_path),
+                 "type": target_version.file_type, "size": target_version.file_size} if is_file else None)
+        proposal = proposals.propose(db, document, current_user, source="restore", message=rollback_reason,
+                                     content=None if is_file else target_version.content, file=file,
+                                     payload={"version_id": target_version.id, "number": target_version.version_number,
+                                              "rollback_reason": rollback_reason})
+        db.commit()
+        return JSONResponse(status_code=status.HTTP_200_OK, content=jsonable_encoder(proposals.answer(db, proposal, current_user, document)))
+    row, old_version, is_file = restore_version(db, document, current_user, target_version, rollback_reason)
+    db.commit()
+    if is_file:
+        from ..studio import service as studio
+
+        studio.reanchor(db, document, current_user.id)
+    db.refresh(row)
+    return {
+        "message": f"Successfully rolled back to version {target_version.version_number}",
+        "new_version": serialize_version(row),
+        "rollback_from": old_version,
+        "rollback_to_content_from": target_version.version_number,
+        "status": document.status,
+    }
+
+
+def _is_file_version(target_version: GovernanceDocumentVersion) -> bool:
+    return bool(not (target_version.content or "").strip() and target_version.file_path and os.path.exists(target_version.file_path))
+
+
+def restore_version(db: Session, document: GovernanceDocument, current_user: GRCUser, target_version: GovernanceDocumentVersion,
+                    rollback_reason: Optional[str]):
+    """``target_version`` again, as the document's next version (its file, for a version that is a file), reviewed again. Restore,
+    and an accepted proposal of one (proposals.py). Does not commit. Returns ``(version row, the number before, is a file)``."""
+    permissions.ensure_not_archived(document)
+    document_id = document.id
     change_summary = f"Rollback to version {target_version.version_number}"
     if rollback_reason:
         change_summary += f": {rollback_reason}"
     kind = _restore_kind(db, document, target_version)
 
-    if not (target_version.content or "").strip() and target_version.file_path and os.path.exists(target_version.file_path):
+    if _is_file_version(target_version):
         # a version that is a file (an uploaded Word or PDF, the original or a later one): that file becomes the document's file
         # again, as a new version; the files after it stay as the versions they were
         from ..studio import service as studio
@@ -423,16 +487,7 @@ def rollback_to_version(
             done=f"Version {target_version.version_number} restored", audit_action="version_rollback")
         row.change_reason = rollback_reason or f"Rollback from version {old_version} to version {target_version.version_number}"
         document.content = None
-        db.commit()
-        studio.reanchor(db, document, current_user.id)
-        db.refresh(row)
-        return {
-            "message": f"Successfully rolled back to version {target_version.version_number}",
-            "new_version": serialize_version(row),
-            "rollback_from": old_version,
-            "rollback_to_content_from": target_version.version_number,
-            "status": document.status,
-        }
+        return row, old_version, True
 
     db.query(GovernanceDocumentVersion).filter(
         GovernanceDocumentVersion.document_id == document_id,
@@ -477,17 +532,7 @@ def rollback_to_version(
     # restored text is reviewed again, as a file is (approved or published, or while in review or approval)
     doc_lifecycle.changed_after_review(db, document, document.status, current_user.id,
                                        f"Version {target_version.version_number} restored (version {new_version_number}), so it needs approving again")
-
-    db.commit()
-    db.refresh(new_version)
-    
-    return {
-        "message": f"Successfully rolled back to version {target_version.version_number}",
-        "new_version": serialize_version(new_version),
-        "rollback_from": old_version,
-        "rollback_to_content_from": target_version.version_number,
-        "status": document.status,
-    }
+    return new_version, old_version, False
 
 
 @router.get("/document/{document_id}/history", dependencies=[Depends(require_doc_reader)])

@@ -58,6 +58,7 @@ class FindingUpdateRequest(BaseModel):
 class FindingOverrideRequest(BaseModel):
     override_status: str
     override_justification: str
+    message: Optional[str] = None       # a proposed undo's why by its other name (proposals.py); the justification is used first
 
 
 class RiskAcceptanceRequest(BaseModel):
@@ -923,6 +924,7 @@ class ApplyFixRequest(BaseModel):
     current_text: Optional[str] = None
     section_heading: Optional[str] = None
     change_reason: Optional[str] = None  # optional commit-style note for the version row
+    message: Optional[str] = None        # its why by its other name (a proposed fix: proposals.py; else from the finding)
 
 
 def _generate_clause_fix(document: GovernanceDocument, finding: PolicyGapFinding) -> dict:
@@ -1147,10 +1149,11 @@ def _gap_name(finding: PolicyGapFinding) -> str:
 
 
 def _write_text(db: Session, document: GovernanceDocument, user: GRCUser, old_text: str, new_text: str, *, change_type: str,
-                origin: str, summary: str, reason: str, done: str):
+                origin: str, summary: str, reason: str, done: str, data: Optional[bytes] = None):
     """Put ``new_text`` into the document as every other save does: its next version, the versions before it kept. A document that
-    is its Word or PDF file gets a new file, as a take back does (a Word file is edited in place, a PDF becomes a Word copy). The
-    version's change set says who made the change. Does not commit. Returns ``(version row, number, notes, is_file)``."""
+    is its Word or PDF file gets a new file, as a take back does (a Word file is edited in place, a PDF becomes a Word copy; ``data``:
+    the file already made, an accepted proposal). The version's change set says who made the change. Does not commit. Returns
+    ``(version row, number, notes, is_file)``."""
     from .. import change_chain as C, doc_lifecycle
     from .documents import _snapshot_content_version, create_audit_log
 
@@ -1162,7 +1165,8 @@ def _write_text(db: Session, document: GovernanceDocument, user: GRCUser, old_te
         from ..studio import service as studio
 
         try:
-            data, notes = studio.file_bytes(db, document, new_text)
+            if data is None:
+                data, notes = studio.file_bytes(db, document, new_text)
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"The document's file could not be written: {exc}")
         row, number, _ = studio.write_file_version(db, document, user, data, change_type=change_type, summary=summary, reason=reason, done=done)
@@ -1369,7 +1373,7 @@ def apply_finding_fix(
     ensure_editor(db, current_user, document)
     ensure_not_archived(document)
 
-    from .. import change_chain as C, doc_version
+    from .. import change_chain as C
 
     # the text the fix goes into: the content, or for a document that is its Word or PDF file, the file's text
     original_content = C.document_text(document)
@@ -1377,7 +1381,6 @@ def apply_finding_fix(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST,
                             detail="The text of this document's file cannot be read, so the fix cannot be written into it.")
     original_version_label = document.current_version or "1.0"
-    original_status = document.status
 
     # ---- Compute the new content. --------------------------------------
     if mode == "replace":
@@ -1408,43 +1411,23 @@ def apply_finding_fix(
         heading = " — ".join(heading_parts) if heading_parts else "Compliance Update"
         new_content = original_content + f"\n\n## {heading}\n\n{proposed_text}\n"
 
-    # ---- Write it as every other save is: the document's next version. ----
-    # Applying a remediation edits the document, so a reviewed one is reviewed again from the start by the same people (a new
-    # round, also while in review or approval), as every other new version is; a draft stays a draft.
-    gap = _gap_name(finding)
-    reason = (body.change_reason or "").strip()[:2000] or f"Gap fix for {gap}"
-    decision = doc_version.decide(original_content, new_content, title=document.title)
-    drafted = proposed_text == (finding.suggested_clause_text or "").strip()        # Comply Agent's draft, as it wrote it
-    new_version, new_version_label, notes, is_file = _write_text(
-        db, document, current_user, original_content, new_content, change_type=decision["change"], origin="ai" if drafted else "manual",
-        summary=doc_version.summary_of(f"Gap fix ({'clause replaced' if mode == 'replace' else 'clause added'}) for {gap}", decision),
-        reason=reason, done="A gap fix was applied")
+    fix = {"mode": mode, "current_text": body.current_text if mode == "replace" else None, "proposed_text": proposed_text,
+           "change_reason": body.change_reason or body.message}
+    from .. import proposals
 
-    now = datetime.utcnow()
-    finding.applied_clause_text = proposed_text
-    finding.replacement_mode = mode
-    finding.original_clause_text = body.current_text if mode == "replace" else None
-    finding.applied_at = now
-    finding.applied_by = current_user.id
-    finding.applied_version_id = new_version.id if new_version is not None else None
-    finding.applied_prev_status = original_status
-    # The clause now lives in the document, so the gap is addressed — flip the
-    # compliance status to fully_compliant so the register reflects the fix.
-    # Remediation stays IN PROGRESS (NOT auto-closed): it closes only once the
-    # document's reviewer/approver approve the change (see update_document_status
-    # in the documents router). An override/undo reverts both.
-    finding.compliance_status = "fully_compliant"
-    finding.remediation_status = "in_progress"
-    finding.actual_close_date = None
-    finding.updated_at = now
-
-    # Keep the policy-statement register in sync with the applied clause: update
-    # the AI-matched statement (replace) or add one (append). Best-effort.
-    _sync_statement_on_apply(
-        db, document, finding, mode,
-        body.current_text if mode == "replace" else None,
-        proposed_text, new_version, current_user.id, user_tenants,
-    )
+    if proposals.required(db, current_user, document):
+        # the fix waits for the owner (or author) to accept it; the finding stays as it is until then. Its why: the gap analysis's own
+        proposal = proposals.propose(
+            db, document, current_user, source="gap_fix", message=fix["change_reason"], prefill=proposals.gap_justification(finding),
+            content=new_content, file=proposals.file_of(db, document, new_content), finding=finding,
+            payload={**fix, "finding": {"id": finding.id, "clause_reference": finding.clause_reference, "clause_title": finding.clause_title}})
+        db.commit()
+        return {"finding_id": finding.id, "document_id": document.id, "mode": mode, "applied_at": None,
+                "remediation_status": finding.remediation_status, "applied_version_id": None, "applied_version_number": None,
+                "previous_version_number": original_version_label, "compliance_status": finding.compliance_status,
+                "document_status": document.status, "in_place": False, "notes": [], **proposals.answer(db, proposal, current_user, document)}
+    new_version, new_version_label, notes, is_file = apply_fix(db, document, finding, current_user, fix, new_content,
+                                                               user_tenants=user_tenants, original_content=original_content)
 
     db.commit()
     if is_file:
@@ -1468,6 +1451,58 @@ def apply_finding_fix(
         "in_place": False,               # always false now that every fix makes its own version (kept for older screens)
         "notes": notes,                  # about the document's file (e.g. a PDF became a Word copy)
     }
+
+
+def apply_fix(db: Session, document: GovernanceDocument, finding: PolicyGapFinding, user: GRCUser, fix: dict, new_content: str, data=None,
+              user_tenants: Optional[list] = None, original_content: Optional[str] = None):
+    """Write a gap fix (``fix``: mode, current_text, proposed_text, change_reason; ``new_content`` the document with it) as every other
+    save is - the document's next version - and record it on the finding and its statement. Apply fix, and an accepted proposal of
+    one (proposals.py; ``data``: the file it made). Does not commit. Returns ``(version row, number, notes, is_file)``."""
+    from .. import change_chain as C, doc_version
+
+    ensure_not_archived(document)
+    if original_content is None:
+        original_content = C.document_text(document) or ""
+    original_status = document.status
+    mode, proposed_text = fix["mode"], fix["proposed_text"]
+    # ---- Write it as every other save is: the document's next version. ----
+    # Applying a remediation edits the document, so a reviewed one is reviewed again from the start by the same people (a new
+    # round, also while in review or approval), as every other new version is; a draft stays a draft.
+    gap = _gap_name(finding)
+    reason = (fix.get("change_reason") or "").strip()[:2000] or f"Gap fix for {gap}"
+    decision = doc_version.decide(original_content, new_content, title=document.title)
+    drafted = proposed_text == (finding.suggested_clause_text or "").strip()        # Comply Agent's draft, as it wrote it
+    new_version, new_version_label, notes, is_file = _write_text(
+        db, document, user, original_content, new_content, change_type=decision["change"], origin="ai" if drafted else "manual",
+        summary=doc_version.summary_of(f"Gap fix ({'clause replaced' if mode == 'replace' else 'clause added'}) for {gap}", decision),
+        reason=reason, done="A gap fix was applied", data=data)
+
+    now = datetime.utcnow()
+    finding.applied_clause_text = proposed_text
+    finding.replacement_mode = mode
+    finding.original_clause_text = fix.get("current_text") if mode == "replace" else None
+    finding.applied_at = now
+    finding.applied_by = user.id
+    finding.applied_version_id = new_version.id if new_version is not None else None
+    finding.applied_prev_status = original_status
+    # The clause now lives in the document, so the gap is addressed — flip the
+    # compliance status to fully_compliant so the register reflects the fix.
+    # Remediation stays IN PROGRESS (NOT auto-closed): it closes only once the
+    # document's reviewer/approver approve the change (see update_document_status
+    # in the documents router). An override/undo reverts both.
+    finding.compliance_status = "fully_compliant"
+    finding.remediation_status = "in_progress"
+    finding.actual_close_date = None
+    finding.updated_at = now
+
+    # Keep the policy-statement register in sync with the applied clause: update
+    # the AI-matched statement (replace) or add one (append). Best-effort.
+    _sync_statement_on_apply(
+        db, document, finding, mode,
+        fix.get("current_text") if mode == "replace" else None,
+        proposed_text, new_version, user.id, user_tenants or [document.tenant_id],
+    )
+    return new_version, new_version_label, notes, is_file
 
 
 @router.put("/findings/{finding_id}")
@@ -1541,15 +1576,53 @@ def override_finding(
             detail=f"Invalid override status. Must be one of: {', '.join(valid_statuses)}"
         )
 
-    # If this finding's remediation clause was applied to the document, an override is an UNDO: that fix's text is taken back
-    # out of the document, every other change kept, as a take back is saved (the document's next version), and the applied audit
-    # trail is cleared before the override is recorded.
+    document = db.query(GovernanceDocument).filter(
+        GovernanceDocument.id == finding.document_id,
+        GovernanceDocument.tenant_id.in_(user_tenants),
+    ).first() if finding.applied_at else None
+    from .. import proposals
+
+    if document is not None and proposals.required(db, current_user, document):
+        ensure_not_archived(document)
+        from .. import change_chain as C
+
+        old_text = C.document_text(document)
+        new_text = _take_back(old_text, finding) if old_text is not None else None
+        if new_text is not None and new_text != old_text:
+            # taking the fix back out of the document waits for the owner (or author) to accept it, and so does the override
+            proposal = proposals.propose(
+                db, document, current_user, source="gap_undo", message=override.override_justification or override.message, content=new_text,
+                file=proposals.file_of(db, document, new_text), finding=finding,
+                payload={"override_status": override.override_status, "override_justification": override.override_justification,
+                         "finding": {"id": finding.id, "clause_reference": finding.clause_reference, "clause_title": finding.clause_title}})
+            db.commit()
+            return {**serialize_finding(finding, db), "taken_back_version": None, "fix_left_in_document": False,
+                    **proposals.answer(db, proposal, current_user, document)}
+    taken_back, left, refiled = undo_fix(db, document, finding, current_user, override.override_status, override.override_justification,
+                                         user_tenants=user_tenants)
+
+    db.commit()
+    if refiled is not None:
+        from ..studio import service as studio
+
+        studio.reanchor(db, refiled, current_user.id)
+    db.refresh(finding)
+
+    # taken_back_version: the version the document is at after its fix was taken back (None: no fix was taken back);
+    # fix_left_in_document: its fix's clause was changed in the document since, so the document was left as it is
+    return {**serialize_finding(finding, db), "taken_back_version": taken_back, "fix_left_in_document": left}
+
+
+def undo_fix(db: Session, document: Optional[GovernanceDocument], finding: PolicyGapFinding, user: GRCUser, override_status: str,
+             override_justification: Optional[str], *, data=None, user_tenants: Optional[list] = None):
+    """Override a finding. When its remediation clause was applied to the document, it is an UNDO: that fix's text is taken back out
+    of the document, every other change kept, as a take back is saved (the document's next version; ``data``: the file an accepted
+    proposal made), its statement change is reverted, and the applied audit trail is cleared before the override is recorded.
+    Override, and an accepted proposal of one (proposals.py). Does not commit. Returns ``(the version taken back to, the fix was left
+    in the document, the document whose file was replaced)``."""
+    tenants = user_tenants or ([document.tenant_id] if document is not None else [finding.tenant_id])
     taken_back, refiled, left = None, None, False
     if finding.applied_at:
-        document = db.query(GovernanceDocument).filter(
-            GovernanceDocument.id == finding.document_id,
-            GovernanceDocument.tenant_id.in_(user_tenants),
-        ).first()
         if document:
             ensure_not_archived(document)       # taking the fix back out changes the document
             from .. import change_chain as C, doc_version
@@ -1562,32 +1635,32 @@ def override_finding(
                 left = True
             elif new_text != old_text:
                 gap = _gap_name(finding)
-                why = (override.override_justification or "").strip()
+                why = (override_justification or "").strip()
                 reason = f"Gap fix for {gap} taken back" + (f": {why}" if why else "")
                 _row, taken_back, _notes, is_file = _write_text(
-                    db, document, current_user, old_text, new_text, change_type=doc_version.by_rule(old_text, new_text), origin="revert",
-                    summary=f"Gap fix for {gap} taken back", reason=reason[:2000], done="A gap fix was taken back")
+                    db, document, user, old_text, new_text, change_type=doc_version.by_rule(old_text, new_text), origin="revert",
+                    summary=f"Gap fix for {gap} taken back", reason=reason[:2000], done="A gap fix was taken back", data=data)
                 refiled = document if is_file else None
         # Revert the statement change too: restore the prior text (replace) or
         # retract the statement that was created (append).
         if finding.applied_statement_id and not left:
             stmt = db.query(PolicyStatement).filter(
                 PolicyStatement.id == finding.applied_statement_id,
-                PolicyStatement.tenant_id.in_(user_tenants),
+                PolicyStatement.tenant_id.in_(tenants),
             ).first()
             if stmt:
                 from .policy_parser import log_statement_change
 
                 fixed = stmt.statement_text
                 if finding.applied_statement_prev_text is not None:
-                    _create_version_snapshot(db, stmt, "gap_remediation_undo", current_user.id)
+                    _create_version_snapshot(db, stmt, "gap_remediation_undo", user.id)
                     stmt.statement_text = finding.applied_statement_prev_text
                     stmt.source_text = stmt.source_start = stmt.source_match = None     # the document says it again (as above)
-                    log_statement_change(db, stmt, current_user.id, "statement_fix_undone", old=fixed, new=stmt.statement_text,
+                    log_statement_change(db, stmt, user.id, "statement_fix_undone", old=fixed, new=stmt.statement_text,
                                          detail=f"the fix for {_gap_name(finding)} taken back")
                 else:
                     stmt.status = "superseded"
-                    log_statement_change(db, stmt, current_user.id, "statement_fix_undone", old=fixed,
+                    log_statement_change(db, stmt, user.id, "statement_fix_undone", old=fixed,
                                          detail=f"retracted: the fix for {_gap_name(finding)} that added it was taken back")
                 stmt.updated_at = datetime.utcnow()
         finding.applied_at = None
@@ -1601,23 +1674,13 @@ def override_finding(
         finding.remediation_status = "open"
 
     finding.is_overridden = True
-    finding.override_status = override.override_status
-    finding.override_justification = override.override_justification
-    finding.overridden_by = current_user.id
+    finding.override_status = override_status
+    finding.override_justification = override_justification
+    finding.overridden_by = user.id
     finding.overridden_at = datetime.utcnow()
-    finding.compliance_status = override.override_status
+    finding.compliance_status = override_status
     finding.updated_at = datetime.utcnow()
-
-    db.commit()
-    if refiled is not None:
-        from ..studio import service as studio
-
-        studio.reanchor(db, refiled, current_user.id)
-    db.refresh(finding)
-
-    # taken_back_version: the version the document is at after its fix was taken back (None: no fix was taken back);
-    # fix_left_in_document: its fix's clause was changed in the document since, so the document was left as it is
-    return {**serialize_finding(finding, db), "taken_back_version": taken_back, "fix_left_in_document": left}
+    return taken_back, left, refiled
 
 
 @router.put("/findings/{finding_id}/accept-risk")

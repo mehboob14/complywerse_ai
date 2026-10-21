@@ -341,9 +341,17 @@ def _change_set(document, content: Optional[str], new_path: str, new_name: str, 
 
 def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, Any]:
     """Write every pending statement edit into a new copy of the document's file and record the next version."""
-    from ...models import GovernanceDocumentVersion, PolicyStatement
+    out = write_prepared(db, document, user, prepare(db, document), change_reason)
+    db.commit()
+    return out
+
+
+def prepare(db, document) -> Dict[str, Any]:
+    """Every pending statement edit written into a new copy of the document's file (beside the library's files; the document keeps
+    its own): what ``write_prepared`` makes the next version of, at once or once a proposal of it is accepted (proposals.py).
+    Raises ValueError / LookupError with a sentence."""
+    from ...models import PolicyStatement
     from .routers.documents import GOVERNANCE_UPLOAD_DIR
-    from .routers.versions import create_audit_log
     from .permissions import ensure_not_archived
 
     ensure_not_archived(document)
@@ -386,6 +394,37 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     before = "\n\n".join(p.text for p in paragraphs)
     rewrite(paragraphs, spans, edits)
     doc.save(new_path)
+    content = document.content
+    if content:
+        for item in info["pending"]:
+            if item["code"] not in conflicts and content.count(item["was"]) == 1:
+                content = content.replace(item["was"], item["now"].strip(), 1)
+    return {"new_path": new_path, "new_name": new_name, "editable": editable, "edits": len(edits), "conflicts": conflicts,
+            "pending": info["pending"], "content": content, "before": before, "after": "\n\n".join(p.text for p in paragraphs)}
+
+
+def _file_text(path: Optional[str], file_type: str) -> str:
+    try:
+        return "\n\n".join(p.text for p in file_paragraphs(path, file_type)[1]) if path and os.path.exists(path) else ""
+    except Exception:       # noqa: BLE001 - an unreadable file: the change is decided from what can be read
+        return ""
+
+
+def write_prepared(db, document, user, prepared: Dict[str, Any], change_reason: Optional[str] = None) -> Dict[str, Any]:
+    """The file ``prepare`` wrote becomes the document's next version, by ``user``; the statements written into it are its wording
+    from now on, and every statement is found in it again. Apply, and an accepted proposal of it (proposals.py: ``prepared`` as it was
+    kept, without its texts, which are read from the files again)."""
+    from ...models import GovernanceDocumentVersion, PolicyStatement
+    from .routers.versions import create_audit_log
+    from .permissions import ensure_not_archived
+
+    ensure_not_archived(document)
+    old_path, old_name, old_type = document.file_path, document.file_name, (document.file_type or "").lower()
+    new_path, new_name = prepared["new_path"], prepared["new_name"]
+    pending, conflicts, editable = prepared["pending"], prepared["conflicts"], prepared["editable"]
+    before = prepared["before"] if "before" in prepared else _file_text(old_path, old_type)
+    after = prepared["after"] if "after" in prepared else _file_text(new_path, "docx")
+    edits = prepared["edits"]
 
     # ── the version ──
     old_version = document.current_version or "1.0"
@@ -404,20 +443,16 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     # major or minor, as Comply Agent reads what changed in the document's text (doc_version)
     from .doc_version import decide, next_version, verdict
 
-    decision = decide(before, "\n\n".join(p.text for p in paragraphs), title=document.title)
+    decision = decide(before, after, title=document.title)
     new_version = next_version(old_version, decision["change"])
-    codes = [p["code"] for p in info["pending"] if p["code"] not in conflicts]
-    content = document.content
-    if content:
-        for item in info["pending"]:
-            if item["code"] not in conflicts and content.count(item["was"]) == 1:
-                content = content.replace(item["was"], item["now"].strip(), 1)
+    codes = [p["code"] for p in pending if p["code"] not in conflicts]
+    content = prepared["content"]
     row = GovernanceDocumentVersion(
         document_id=document.id, version_number=new_version, change_type=decision["change"], title=document.title, content=content,
         file_name=new_name, file_path=new_path, file_size=os.path.getsize(new_path), file_type="docx",
-        change_summary=f"{len(edits)} policy statement(s) updated in the document: " + ", ".join(codes) + ". " + verdict(decision),
+        change_summary=f"{edits} policy statement(s) updated in the document: " + ", ".join(codes) + ". " + verdict(decision),
         change_reason=change_reason, status="current", created_by=user.id, created_at=datetime.utcnow())
-    row.change_set = _change_set(document, content, new_path, new_name, [p for p in info["pending"] if p["code"] not in conflicts], user)
+    row.change_set = _change_set(document, content, new_path, new_name, [p for p in pending if p["code"] not in conflicts], user)
     db.add(row)
     db.flush()
 
@@ -429,21 +464,21 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
     sent = doc_lifecycle.changed_after_review(db, document, old_status, user.id,
                                               f"Statements written into the document (version {new_version}), so it needs approving again")
 
-    for item in info["pending"]:
-        if item["code"] in conflicts:
-            continue
-        s = by_id[item["id"]]
-        s.source_text, s.document_version_id = s.statement_text.strip(), row.id
+    written = [item for item in pending if item["code"] not in conflicts]
+    by_id = {s.id: s for s in db.query(PolicyStatement).filter(PolicyStatement.id.in_([i["id"] for i in written] or [0])).all()}
+    for item in written:
+        s = by_id.get(item["id"])
+        if s is not None:              # (the wording written into the file: an edit made since is still to be written)
+            s.source_text, s.document_version_id = (item["now"] or "").strip(), row.id
     db.flush()
     # offsets moved: find every statement again in the new file
     anchor(db, document, user.id, again=True)
 
     create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id,
                      action="statements_written_to_document",
-                     action_details=f"{len(edits)} statement edit(s) written into the document ({', '.join(map(str, codes))}); version {new_version} created"
+                     action_details=f"{edits} statement edit(s) written into the document ({', '.join(map(str, codes))}); version {new_version} created"
                                     + doc_lifecycle.outcome(old_status, document.status, document),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
-    db.commit()
-    return {"version": new_version, "version_id": row.id, "updated": len(edits), "conflicts": conflicts,
+    return {"version": new_version, "version_id": row.id, "updated": edits, "conflicts": conflicts,
             "status": document.status, "sent_to_review": sent,
             "file_type": "docx", "word_copy": not editable}
