@@ -39,6 +39,7 @@ export default function DocumentSyncPanel({ documentId }: { documentId: string |
     queryClient.invalidateQueries({ queryKey: ['document-policy-statements'] });
     queryClient.invalidateQueries({ queryKey: ['governance-document'] });
     queryClient.invalidateQueries({ predicate: (q) => q.queryKey.some((k) => typeof k === 'string' && k.includes('version')) });
+    for (const key of ['document-chain', 'document-chain-redline']) queryClient.invalidateQueries({ queryKey: [key] });   // the Change log
   };
 
   const check = useMutation({

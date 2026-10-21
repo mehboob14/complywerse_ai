@@ -103,6 +103,9 @@ export interface ChainEvent {
   from: string | null;
   to: string | null;
   stage: string;
+  /** a change to one of the document's statements: its wording before and after (null when added / removed); absent from older servers */
+  before?: string | null;
+  after?: string | null;
 }
 
 export interface DocumentChain {
@@ -152,6 +155,7 @@ export type ExportFormat = 'xlsx' | 'pdf' | 'csv';
 export const ORIGIN_LABEL: Record<string, string> = {
   ai: 'Comply Agent', manual: 'Edited by hand', mixed: 'Comply Agent and edited by hand', revert: 'Taken back', restore: 'Earlier version restored',
   signoff: 'Sign-off stamp', initial: 'The original', file: 'File replaced', import: 'Imported', unknown: 'Changed', nochange: 'No change to the text',
+  statement: 'From statements',
 };
 
 /** "Comply Agent · accepted by Olivia", "Edited by Sara", "Taken back by Khalid": who and how, in a few words. */
@@ -163,6 +167,7 @@ export function byLine(origin: string, by: string, coverage = 1): string {
     case 'revert': return `Taken back by ${who}`;
     case 'restore': return `Earlier version restored by ${who}`;
     case 'signoff': return `Sign-off stamp · ${who}`;
+    case 'statement': return `From statements · ${who}`;
     case 'initial': return 'The original';
     default: return who ? `Changed by ${who}` : 'Changed';
   }

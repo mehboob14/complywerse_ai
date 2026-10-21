@@ -8,7 +8,7 @@
  * Colours follow the design system and stay readable inside the platform shell (which repaints slate classes): the AI is
  * teal, an edit by hand is neutral, taking back and restoring are amber, a sign-off is emerald, the original is outlined.
  */
-import { AlertTriangle, CheckCircle2, FileSignature, FileUp, Flag, GitCommitVertical, History, Minus, PencilLine, Sparkles, Undo2, type LucideIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileSignature, FileUp, Flag, GitCommitVertical, History, ListChecks, Minus, PencilLine, Sparkles, Undo2, type LucideIcon } from 'lucide-react';
 import { byLine, sourceLabel, type ChainSource, type ChangeBy } from '@/lib/documentChain';
 import { ago } from '@/lib/studio/text';
 
@@ -24,6 +24,8 @@ export const ORIGIN_LOOK: Record<string, OriginLook> = {
   ai: { icon: Sparkles, pill: 'bg-primary-50 text-[#0b6b58] ring-primary-100', node: 'bg-primary-50 text-[#0b6b58] ring-primary-100' },
   mixed: { icon: Sparkles, pill: 'bg-primary-50 text-[#0b6b58] ring-primary-100', node: 'bg-primary-50 text-[#0b6b58] ring-primary-100' },
   manual: { icon: PencilLine, pill: 'bg-[#f1f5f9] text-[#334155] ring-[#e2e8f0]', node: 'bg-[#f1f5f9] text-[#475569] ring-[#e2e8f0]' },
+  // statements edited by a person and written into the document: neutral like an edit by hand, told apart by its icon
+  statement: { icon: ListChecks, pill: 'bg-[#f1f5f9] text-[#334155] ring-[#e2e8f0]', node: 'bg-[#f1f5f9] text-[#475569] ring-[#e2e8f0]' },
   revert: { icon: Undo2, pill: 'bg-amber-50 text-amber-800 ring-amber-200', node: 'bg-amber-50 text-amber-700 ring-amber-200' },
   restore: { icon: History, pill: 'bg-amber-50 text-amber-800 ring-amber-200', node: 'bg-amber-50 text-amber-700 ring-amber-200' },
   signoff: { icon: FileSignature, pill: 'bg-emerald-50 text-emerald-800 ring-emerald-200', node: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },

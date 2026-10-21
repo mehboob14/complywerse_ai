@@ -178,7 +178,10 @@ function ParseProgress({ isParsing, parseStatus }: { isParsing: boolean; parseSt
 export default function StatementsView({ documentId, documentTitle, canEdit }: { documentId: number; documentTitle?: string; canEdit: boolean }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const refreshStatements = () => queryClient.invalidateQueries({ queryKey: ['document-policy-statements', documentId] });
+  const refreshStatements = () => {
+    queryClient.invalidateQueries({ queryKey: ['document-policy-statements', documentId] });
+    queryClient.invalidateQueries({ queryKey: ['document-chain'] });             // the Change log records every statement change
+  };
 
   const { data: statements, isLoading: statementsLoading, isError: statementsError } = useQuery({
     queryKey: ['document-policy-statements', documentId],

@@ -880,6 +880,38 @@ def _create_version_snapshot(db: Session, statement: PolicyStatement, change_typ
     return version
 
 
+WORDING_CAP = 300          # characters of a statement's wording kept in its document's audit log (the Change log)
+_OTHER_FIELDS = {"statement_summary": "summary", "category": "category", "priority": "priority", "is_mandatory": "mandatory",
+                 "source_section": "section"}          # what an edit can change besides the wording, as the Change log names it
+
+
+def _wording(old: Optional[str], new: Optional[str], cap: int = WORDING_CAP):
+    """A statement's wording before and after as the Change log keeps it: white space collapsed, each cut to ``cap`` characters
+    from a little before where the two first differ, so a change late in a long statement still shows."""
+    a, b = (" ".join(t.split()) if t else None for t in (old, new))
+    start = 0
+    if a and b and max(len(a), len(b)) > cap:
+        start = max(0, next((i for i, (x, y) in enumerate(zip(a, b)) if x != y), min(len(a), len(b))) - cap // 4)
+
+    def cut(t):
+        return t and ("… " if start else "") + t[start:start + cap] + (" …" if len(t) > start + cap else "")
+    return cut(a), cut(b)
+
+
+def log_statement_change(db: Session, statement: PolicyStatement, user_id: Optional[int], action: str, *, old: Optional[str] = None,
+                         new: Optional[str] = None, detail: str = "") -> None:
+    """One row in the audit log of the statement's document, which its Change log shows: the statement's code and what happened
+    (``detail``), its wording before and after. Nothing without a person to name (a row needs one)."""
+    if not user_id:
+        return
+    from .documents import create_audit_log
+
+    before, after = _wording(old, new)
+    create_audit_log(db=db, document_id=statement.document_id, tenant_id=statement.tenant_id, user_id=user_id, action=action,
+                     action_details=" · ".join(p for p in (statement.statement_code or f"Statement {statement.id}", detail) if p),
+                     field_changed="statement", old_value=before, new_value=after)
+
+
 @router.get("/{document_id}/parse-status", dependencies=[Depends(require_doc_reader)])
 def get_parse_status(
     document_id: int,
@@ -1510,6 +1542,7 @@ def add_policy_statement(
     db.flush()
 
     _create_version_snapshot(db, statement, "manual_add", current_user.id)
+    log_statement_change(db, statement, current_user.id, "statement_added", new=statement.statement_text)
 
     compliance_record = PolicyStatementCompliance(
         tenant_id=document.tenant_id,
@@ -1574,6 +1607,7 @@ def update_policy_statement(
             detail="Policy statement not found for this document"
         )
 
+    was = {k: getattr(statement, k) for k in ("statement_text", *_OTHER_FIELDS)}
     if request.statement_text is not None:
         statement.statement_text = request.statement_text[:10000]
     if request.statement_summary is not None:
@@ -1591,6 +1625,12 @@ def update_policy_statement(
 
     # Snapshot the resulting state so version history always includes the edited content.
     _create_version_snapshot(db, statement, "manual_edit", current_user.id, request.change_reason)
+    reworded = statement.statement_text != was["statement_text"]
+    others = [label for k, label in _OTHER_FIELDS.items() if getattr(statement, k) != was[k]]
+    if reworded or others:
+        log_statement_change(db, statement, current_user.id, "statement_edited", old=was["statement_text"] if reworded else None,
+                             new=statement.statement_text if reworded else None,
+                             detail=" · ".join(p for p in ("changed: " + ", ".join(others) if others else "", (request.change_reason or "").strip()) if p))
 
     db.commit()
     db.refresh(statement)
@@ -1693,6 +1733,7 @@ def rollback_statement(
     if not target_version:
         raise HTTPException(status_code=404, detail="Version not found")
 
+    old_text = statement.statement_text
     statement.statement_text = target_version.statement_text
     statement.statement_summary = target_version.statement_summary
     statement.category = target_version.category
@@ -1720,6 +1761,9 @@ def rollback_statement(
         current_user.id,
         f"Rolled back to version {target_display_version}"
     )
+    reworded = statement.statement_text != old_text
+    log_statement_change(db, statement, current_user.id, "statement_rolled_back", old=old_text if reworded else None,
+                         new=statement.statement_text if reworded else None, detail=f"back to version {target_display_version}")
 
     audit = AuditLog(
         tenant_id=document.tenant_id,
@@ -1854,6 +1898,7 @@ def apply_reparse_proposals(
 
     accepted = 0
     rejected = 0
+    changed, added = [], []             # the statements' codes, for the document's Change log
 
     version_id = None
     from ....models import DocumentVersion
@@ -1901,6 +1946,7 @@ def apply_reparse_proposals(
 
                     _create_version_snapshot(db, statement, "ai_reparse", current_user.id, "Re-parsed from document")
                     accepted += 1
+                    changed.append(statement.statement_code or str(statement.id))
 
             elif proposal["type"] == "new":
                 existing_count = db.query(PolicyStatement).filter(
@@ -1938,6 +1984,15 @@ def apply_reparse_proposals(
                 )
                 db.add(compliance_record)
                 accepted += 1
+                added.append(statement_code)
+
+    if accepted:
+        from .documents import create_audit_log
+
+        create_audit_log(db=db, document_id=document_id, tenant_id=document.tenant_id, user_id=current_user.id, action="statements_reparsed",
+                         field_changed="statement", action_details=" · ".join(p for p in (
+                             f"{len(changed)} changed ({', '.join(changed)})" if changed else "",
+                             f"{len(added)} added ({', '.join(added)})" if added else "", f"{rejected} not taken" if rejected else "") if p))
 
     audit = AuditLog(
         tenant_id=document.tenant_id,
@@ -2040,6 +2095,16 @@ def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
 
 
+from ....models import IssueGovernanceLink, PolicyGapFinding, StatementControlMapping  # noqa: E402
+
+# Deleting a statement. Its ORM cascade removes its versions, compliance records and evidence links; every other row that points at
+# it is listed here, as for a deleted document (documents._DELETE_WITH_DOCUMENT): a link that exists only for it goes with it, a
+# record that merely came from it (a control made from it, a gap fix that changed it) is kept and unlinked. Without this a mapped
+# statement could not be deleted (a foreign-key error on Postgres). tests/test_statement_change_log.py fails on a new reference.
+_DELETE_WITH_STATEMENT = (StatementControlMapping.statement_id, IssueGovernanceLink.policy_statement_id)
+_UNLINK_FROM_STATEMENT = (InternalControl.source_statement_id, PolicyGapFinding.applied_statement_id)
+
+
 @router.delete("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_changer)])
 def delete_policy_statement(
     document_id: int,
@@ -2073,6 +2138,11 @@ def delete_policy_statement(
     db.query(PolicyStatementCompliance).filter(
         PolicyStatementCompliance.statement_id == statement_id
     ).delete(synchronize_session='fetch')
+    for column in _UNLINK_FROM_STATEMENT:
+        db.query(column.class_).filter(column == statement_id).update({column: None}, synchronize_session=False)
+    for column in _DELETE_WITH_STATEMENT:
+        db.query(column.class_).filter(column == statement_id).delete(synchronize_session=False)
+    log_statement_change(db, statement, current_user.id, "statement_deleted", old=statement.statement_text)
 
     db.delete(statement)
     db.commit()

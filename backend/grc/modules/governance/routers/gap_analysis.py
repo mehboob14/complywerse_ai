@@ -1231,6 +1231,8 @@ def _sync_statement_on_apply(
     Stores applied_statement_id / applied_statement_prev_text on the finding so
     an override/undo can restore (replace) or retract (append) it. Best-effort:
     a failure here is logged but never blocks the document change."""
+    from .policy_parser import log_statement_change
+
     try:
         if mode == "replace" and current_text:
             matched = _find_matching_statement(db, document.id, tenant_ids, current_text)
@@ -1248,6 +1250,8 @@ def _sync_statement_on_apply(
             matched.document_version_id = new_version.id
             matched.updated_at = datetime.utcnow()
             finding.applied_statement_id = matched.id
+            log_statement_change(db, matched, user_id, "statement_changed_by_fix", old=finding.applied_statement_prev_text,
+                                 new=matched.statement_text, detail=f"the fix for {_gap_name(finding)}")
         elif mode == "append":
             existing_count = db.query(PolicyStatement).filter(
                 PolicyStatement.document_id == document.id
@@ -1272,6 +1276,8 @@ def _sync_statement_on_apply(
             _create_version_snapshot(db, new_stmt, "gap_remediation", user_id, change_reason=reason)
             finding.applied_statement_id = new_stmt.id
             finding.applied_statement_prev_text = None  # marks a created statement
+            log_statement_change(db, new_stmt, user_id, "statement_changed_by_fix", new=new_stmt.statement_text,
+                                 detail=f"added by the fix for {_gap_name(finding)}")
     except Exception as sync_exc:  # noqa: BLE001
         logger.warning("gap apply: statement sync skipped: %s: %s", type(sync_exc).__name__, sync_exc)
 
@@ -1537,11 +1543,18 @@ def override_finding(
                 PolicyStatement.tenant_id.in_(user_tenants),
             ).first()
             if stmt:
+                from .policy_parser import log_statement_change
+
+                fixed = stmt.statement_text
                 if finding.applied_statement_prev_text is not None:
                     _create_version_snapshot(db, stmt, "gap_remediation_undo", current_user.id)
                     stmt.statement_text = finding.applied_statement_prev_text
+                    log_statement_change(db, stmt, current_user.id, "statement_fix_undone", old=fixed, new=stmt.statement_text,
+                                         detail=f"the fix for {_gap_name(finding)} taken back")
                 else:
                     stmt.status = "superseded"
+                    log_statement_change(db, stmt, current_user.id, "statement_fix_undone", old=fixed,
+                                         detail=f"retracted: the fix for {_gap_name(finding)} that added it was taken back")
                 stmt.updated_at = datetime.utcnow()
         finding.applied_at = None
         finding.applied_by = None

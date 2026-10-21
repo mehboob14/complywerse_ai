@@ -6,7 +6,7 @@ type V = Pick<ChainVersion, 'id' | 'origin' | 'changes' | 'restored_from' | 'rev
 
 const SHORT: Record<string, string> = {
   ai: 'Comply Agent', manual: 'By hand', mixed: 'Comply Agent and by hand', revert: 'Taken back', restore: 'Restored', signoff: 'Sign-off stamp',
-  initial: 'Original', file: 'File replaced', import: 'Imported', nochange: 'No change',
+  initial: 'Original', file: 'File replaced', import: 'Imported', nochange: 'No change', statement: 'From statements',
 };
 
 /** What made a version: "Comply Agent", "By hand", "Taken back", "Restored v1.0", "Sign-off stamp", "Original". */
