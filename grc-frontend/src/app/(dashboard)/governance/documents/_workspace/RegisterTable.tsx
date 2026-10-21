@@ -114,19 +114,23 @@ function TitleCell({ doc, depth, match, childCount, open, parentTitle, onToggle 
   );
 }
 
-/** One version of a document: number, state, size, date and who made it; it opens the document on that version. */
+/** One version of a document: number, state, size, date and who made it; it opens the document on that version. Only the current
+ *  version (the document's state) and the one in force carry a badge; an earlier version needs none (the user, 2026-10-21: every
+ *  older row saying "Superseded" read as an error). */
 function VersionLink({ doc, v, original }: { doc: GovDoc; v: VersionRow & { state: VersionState }; original: boolean }) {
-  const word = v.state === 'in-force' ? 'In force' : v.state === 'superseded' ? 'Superseded' : statusLabel(doc.status);
+  const earlier = v.state === 'superseded';
+  const word = v.state === 'in-force' ? 'In force' : earlier ? null : statusLabel(doc.status);
   const inForce = v.state === 'in-force' || (v.state === 'current' && doc.status === 'published');
   // text-[#fff], not text-white: the library's governance-light repaints text-white grey
-  const look = inForce ? 'border-[#0f766e] bg-[#0f766e] text-[#fff]' : v.state === 'superseded' ? 'border-[#d5dbe1] text-[#586472]' : 'border-[#9aa5b1] text-[#1f2933]';
+  const look = inForce ? 'border-[#0f766e] bg-[#0f766e] text-[#fff]' : 'border-[#9aa5b1] text-[#1f2933]';
   return (
     <Link
       href={`/governance/documents/${doc.id}?read=${v.id}`}
       className="flex flex-wrap items-center gap-x-2 gap-y-0.5 rounded-md px-1.5 py-1 text-[12px] text-[#26323d] hover:bg-[#eef2f6] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0f766e]"
     >
       <span className="font-semibold tabular-nums text-[#1f2933]">{verLabel(v.number)}</span>
-      <span className={`rounded border px-1.5 text-[11px] font-medium leading-4 ${look}`}>{word}</span>
+      {word ? <span className={`rounded border px-1.5 text-[11px] font-medium leading-4 ${look}`}>{word}</span>
+        : <span className="sr-only">earlier version</span>}
       {/* on a phone the table is wider than the screen: the rest of the line goes under the number, in view */}
       <span className="text-[11px] text-[#586472] max-sm:basis-full">{[original ? 'The original' : SIZE[v.kind ?? ''], day(v.at), v.by || 'Unknown'].filter(Boolean).join(' · ')}</span>
     </Link>
