@@ -42,6 +42,7 @@ _PLAIN_JOB_ERRORS = {
     "Framework not found", "The gap analysis could not be started.", "The gap analysis did not finish. Run it again.",
     "The gap analysis stopped before it finished. Run it again.",
     "Another gap analysis of this document was running. Run it again when it is done.",
+    "Cancelled automatically: the gap analysis stopped before it finished (the server or the worker restarted). Run it again.",
 }
 _AI_DOWN = re.compile(r"openai|anthropic|not configured|api[ _-]?key|connection error|error code: \d{3}|rate.?limit|timed? ?out|"
                       r"quota|budget|overloaded|AIBlocked", re.I)

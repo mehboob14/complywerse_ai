@@ -36,6 +36,10 @@ class PolicyGapAnalysisRun(Base):
     completed_at = Column(DateTime, nullable=True)
     created_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # the job's heartbeat (at pickup and after every batch; no onupdate: only the job's beats count). A run that waits or runs
+    # with no sign of life for 15 minutes is cancelled automatically (gap_analysis.is_orphaned)
+    updated_at = Column(DateTime, nullable=True)
+    document_version = Column(String(50), nullable=True)   # the document's current_version the run read (as wide as that column)
 
     document = relationship("GovernanceDocument")
     framework = relationship("UploadedFramework")
