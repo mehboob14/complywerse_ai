@@ -361,6 +361,7 @@ def get_signoff(
         signer_names.setdefault(s.signer_user_id, f"User #{s.signer_user_id}")
 
     route = routes.stages(db, doc)
+    voided = {x.id for s in route for x in routes.earlier_of(s, signatures)}       # given before their stage started again
     progress = {}
     for rt in ("reviewer", "approver"):
         counts = [routes.progress(db, doc, s, assignments, signatures) for s in route if s.role_type == rt and not s.informs]
@@ -387,6 +388,7 @@ def get_signoff(
                 "this_round": not doc.signoff_round_at or (s.signed_at is not None and s.signed_at >= doc.signoff_round_at),
                 "stage_position": s.stage_position,
                 "on_behalf_of": s.on_behalf_of, "on_behalf_of_name": signer_names.get(s.on_behalf_of) if s.on_behalf_of else None,
+                "asked_again": s.id in voided,      # its stage started again after changes: kept, it no longer counts
             } for s in all_sigs
         ],
         "round_started_at": doc.signoff_round_at.isoformat() if doc.signoff_round_at else None,
@@ -400,6 +402,8 @@ def get_signoff(
             "kind_label": step.stage.label, "role_type": step.stage.role_type, "in_turn": step.stage.order == "in_turn",
             "can_reject": step.stage.allow_reject, "can_delegate": step.stage.allow_delegate,
             "on_behalf_of": _name(db, step.on_behalf_of),
+            # asked again after changes: when they signed (the version, and its row to show what changed since) or what they asked
+            "again": routes.again_for(db, doc, step.stage, current_user.id),
         },
         "can_resubmit": editor and route_view["hold"] is not None and doc.status != "archived",
         "can_withdraw": editor and doc.status in routes.PENDING,
@@ -737,7 +741,8 @@ def request_changes(
     current_user: GRCUser = Depends(require_auth),
 ):
     """Instead of signing, the person whose turn it is asks for changes: the route waits (nobody else signs) until the author makes
-    them and resubmits, and comes back to the person who asked (D33)."""
+    them and resubmits, and its stage is then signed again by everyone in it, the person who asked among them (D33). The hold keeps
+    the version it was asked on and the newest signature then (``routes.restarts``)."""
     comment = (body.comment or "").strip()
     if not comment:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Say what should change: the author reads it.")
@@ -745,9 +750,15 @@ def request_changes(
     doc = _doc_or_404(document_id, user_tenants, db)
     check_version(db, doc, body.version, body.round_at)
     step = _my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document.")
+    from sqlalchemy import func
+
+    shown = (db.query(GovernanceDocumentVersion.id).filter(GovernanceDocumentVersion.document_id == doc.id)
+             .order_by(GovernanceDocumentVersion.id.desc()).first())
+    newest = db.query(func.max(DocumentSignature.id)).filter(DocumentSignature.document_id == doc.id).scalar() or 0
     hold = DocumentRouteHold(tenant_id=doc.tenant_id, document_id=doc.id, round_at=doc.signoff_round_at, stage_position=step.stage.position,
                              requested_by=current_user.id, on_behalf_of=step.on_behalf_of, requested_at=datetime.utcnow(),
-                             comment=comment, assignment_id=step.assignment_id, content_before=doc.content)
+                             comment=comment, assignment_id=step.assignment_id, content_before=doc.content,
+                             version_id=shown[0] if shown else None, signature_mark=newest)
     db.add(hold)
     doc.updated_at = datetime.utcnow()
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="changes_requested",
@@ -766,9 +777,10 @@ def resubmit(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """The changes asked for are made: the route goes on. A minor change (or none, by doc_version.by_rule) goes back to the stage it
-    waited at, the person who asked first in line again and earlier signatures standing; a major one, or one the author calls
-    major, starts the route again from its first stage (D33)."""
+    """The changes asked for are made: the route goes on. A minor change (or none, by doc_version.by_rule) starts the stage it waited
+    at again for everyone in it (the user, 2026-10-21): the signatures given there before no longer count (``routes.restarts``) and
+    everyone is asked again, told what changed since (in turn: from the first); earlier stages' signatures stand. A major one, or one
+    the author calls major, starts the route again from its first stage (D33)."""
     from ..doc_version import by_rule
 
     user_tenants = get_user_tenants(current_user, db)
@@ -782,12 +794,14 @@ def resubmit(
     note = (body.note or "").strip() or None
     hold.resolved_at, hold.resolved_by, hold.resubmit_note, hold.change = now, current_user.id, note, size
     who = _name(db, hold.requested_by) or "the person who asked"
+    held_at = routes.stage_at(routes.stages(db, doc), hold.stage_position)
     if size == "major":
         hold.outcome = "restarted"
         why = f"Resubmitted with a major change after {who} asked for changes, so it is signed again from the start"
     else:
         hold.outcome = "resumed"
-        why = f"Resubmitted after {who} asked for changes ({'no change to the text' if size == 'none' else 'a minor change'}): it goes back to {who}"
+        why = (f"Resubmitted after {who} asked for changes ({'no change to the text' if size == 'none' else 'a minor change'}): everyone at "
+               f"{held_at.name if held_at else 'its stage'} signs it again; the stages before stand")
     doc.updated_at = now
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="resubmitted",
                      field_changed="signoff", old_value=hold.comment[:500], new_value=size,
@@ -797,9 +811,32 @@ def resubmit(
         doc_lifecycle.restart_round(db, doc, current_user.id)
     doc_lifecycle.on_resubmitted(db, doc, current_user.id, hold)
     if size != "major":
-        doc_lifecycle.recheck_stage(db, doc, current_user.id)      # meanwhile the people left may all have signed, or be nobody
+        _log_asked_again(db, doc, hold, current_user.id)
+        doc_lifecycle.recheck_stage(db, doc, current_user.id)      # meanwhile the people left may be nobody
     db.commit()
     return {**get_signoff(document_id, db, current_user), "outcome": hold.outcome, "change": size}
+
+
+def _log_asked_again(db: Session, doc: GovernanceDocument, hold: DocumentRouteHold, by: int) -> None:
+    """The Change log's "Asked again after changes": the stage the changes were asked at starts again, naming everyone in it and
+    who had signed it (that signature no longer counts) or asked for the changes."""
+    st = routes.stage_at(routes.stages(db, doc), hold.stage_position)
+    if st is None:
+        return
+    holds = routes.resumed(db, doc, st.position)
+    earlier = routes.earlier_of(st, _signatures(db, doc.id))
+    names, tagged = [], []
+    for a in routes.assignments_of(st, _assignments(db, doc.id)):
+        act = routes.last_act(holds, earlier, set(doc_lifecycle._members(db, doc, a)))
+        names.append(_target_display(db, a.target_type, a.target_id))
+        tagged.append(names[-1] + ("" if act is None else " (asked for the changes)" if act[0] == "changes" else " (had signed)"))
+    if not names:
+        return
+    first = st.order == "in_turn" and len(names) > 1
+    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="review_again_requested", field_changed="signoff",
+                     old_value=None, new_value=", ".join(names)[:500],
+                     action_details=f"{st.name} starts again{' from its first person' if first else ''} after the changes: "
+                                    f"{(', then ' if first else ', ').join(tagged)} {'is' if len(names) == 1 else 'are'} asked again")
 
 
 @router.post("/{document_id}/signoff/withdraw", dependencies=[Depends(require_doc_changer)])

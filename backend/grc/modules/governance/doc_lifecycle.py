@@ -359,18 +359,22 @@ def _history(db, task_id: int, user_id: Optional[int], action: str, field=None, 
                                old_value=None if old is None else str(old), new_value=None if new is None else str(new)))
 
 
-def _open_twin(db, ob, doc, by: Optional[int], cfg: Optional[Dict[str, Any]] = None, viewers: Optional[set] = None) -> None:
+def _open_twin(db, ob, doc, by: Optional[int], cfg: Optional[Dict[str, Any]] = None, viewers: Optional[set] = None,
+               why: Optional[str] = None) -> None:
     """The request's Task Management task, as Governance > Settings > Task creation says (none when it is switched off), for a
-    person who may open Task Management (``_task_viewers``; ``viewers`` when the caller looked them up)."""
+    person who may open Task Management (``_task_viewers``; ``viewers`` when the caller looked them up). ``why``: asked again after
+    changes (``_open_stage``): its title says so ("Review again: ...") and its description starts with why."""
     from ...models import CriticalTask
 
     spec = task_settings(cfg or settings(db, ob.tenant_id), ob.kind)
     if not spec.create or ob.user_id not in (_task_viewers(db) if viewers is None else viewers):
         return
     values = task_values(db, ob, doc, spec)
+    if why:
+        values["action"] = f"{values['action']} again"
     ct = CriticalTask(
         tenant_id=ob.tenant_id, title=render(spec.title, values, DEFAULTS["task_title"])[:255],
-        description=render(spec.description, values, DEFAULTS["task_description"]),
+        description=(f"{why} " if why else "") + render(spec.description, values, DEFAULTS["task_description"]),
         source="Governance document", source_module=SOURCE_MODULE, source_entity_type=SOURCE_TYPE,
         source_entity_id=ob.id, category=spec.category[:100], status="Open",
         priority=spec.priority, due_date=ob.due_date,
@@ -406,24 +410,44 @@ def _pending(db, document_id: int, kinds: Iterable[str], user_id: Optional[int] 
     return q.filter(DocumentObligation.user_id == user_id) if user_id else q
 
 
+def _held(db, document_id: int, kind: str) -> list:
+    """The requests of ``kind`` waiting while changes asked for are made (``on_changes_requested``)."""
+    from ...models import DocumentObligation
+
+    db.flush()
+    return (db.query(DocumentObligation).filter(DocumentObligation.document_id == document_id, DocumentObligation.kind == kind,
+                                                DocumentObligation.status == "held").order_by(DocumentObligation.id).all())
+
+
 def _request(db, doc, kind: str, user_ids: Iterable[int], by: Optional[int], days: int, assignment_id: Optional[int] = None,
-             version: Optional[str] = None, stage_position: Optional[int] = None) -> List[int]:
-    """Ask each person (once) about ``version`` (the newest by default); returns the ones newly asked."""
+             version: Optional[str] = None, stage_position: Optional[int] = None, on_behalf_of: Optional[int] = None,
+             why: Optional[str] = None) -> List[int]:
+    """Ask each person (once) about ``version`` (the newest by default); returns the ones newly asked. A request that waited while
+    changes were made is opened again from today, not made twice. ``on_behalf_of``: a delegate, asked for whoever handed it over;
+    ``why``: asked again after changes (its task says so, ``_open_twin``)."""
     from ...models import DocumentObligation
 
     already = {o.user_id for o in _pending(db, doc.id, [kind])}
+    waited = {o.user_id: o for o in _held(db, doc.id, kind)}
     asked: List[int] = []
     cfg = settings(db, doc.tenant_id)
     viewers = _task_viewers(db) if task_settings(cfg, kind).create else set()
     for uid in dict.fromkeys(int(u) for u in user_ids if u):
         if uid in already:
             continue
-        ob = DocumentObligation(tenant_id=doc.tenant_id, document_id=doc.id, kind=kind, user_id=uid, assignment_id=assignment_id,
-                                document_version=version or doc.current_version, status="pending", requested_by=by,
-                                due_date=datetime.utcnow() + timedelta(days=days), stage_position=stage_position)
-        db.add(ob)
+        ob = waited.get(uid)
+        if ob is not None:              # the same request again, due from today, its reminders and escalation from the start
+            ob.status, ob.document_version, ob.due_date = "pending", version or doc.current_version, datetime.utcnow() + timedelta(days=days)
+            ob.reminded_at = ob.overdue_at = ob.escalated_at = ob.emailed_at = None
+            ob.escalation_level = 0
+        else:
+            ob = DocumentObligation(tenant_id=doc.tenant_id, document_id=doc.id, kind=kind, user_id=uid, assignment_id=assignment_id,
+                                    document_version=version or doc.current_version, status="pending", requested_by=by,
+                                    due_date=datetime.utcnow() + timedelta(days=days), stage_position=stage_position,
+                                    on_behalf_of=on_behalf_of)
+            db.add(ob)
         db.flush()
-        _open_twin(db, ob, doc, by, cfg, viewers)
+        _open_twin(db, ob, doc, by, cfg, viewers, why)
         asked.append(uid)
     return asked
 
@@ -436,26 +460,64 @@ def _with_task(db, doc, kind: str, user_ids: Iterable[int]) -> set:
 
 
 # ── hooks called by the sign-off, publish and participant flows ──────────────
-def _open_stage(db, doc, stage, by: Optional[int], quiet: Iterable[int] = ()) -> None:
+def _again_words(db, doc, st, uid: int, waited: bool) -> Optional[tuple]:
+    """Why ``uid`` is asked again at a stage that started again after changes, as (the alert's event, its message, the task's first
+    sentence): they had signed it or asked for the changes (``routes.again_for``), or their request waited while the changes were
+    made. None when they are asked for the first time."""
+    again = routes.again_for(db, doc, st, uid)
+    if again is not None:
+        note = f' {again["by"] or "The author"} wrote: "{again["note"]}"' if again["note"] else ""
+        return ("resubmitted" if again["kind"] == "changes" else "request"), routes.again_text(again) + note, routes.again_text(again, ask=False)
+    held = routes.resumed(db, doc, st.position) if waited else []
+    if not held:
+        return None
+    h = held[-1]
+    names = _names(db, [h.resolved_by, h.requested_by])
+    by, asker = names.get(h.resolved_by, "The author"), names.get(h.requested_by, "someone")
+    why = f"{by} resubmitted it (v{doc.current_version}) after {asker} asked for changes."
+    note = f' {by} wrote: "{h.resubmit_note}"' if h.resubmit_note else ""
+    return "request", f"{why} Please {routes.VERB.get(st.kind, 'review')} it.{note}", why
+
+
+def _open_stage(db, doc, stage, by: Optional[int], quiet: Iterable[int] = ()) -> List[int]:
     """Ask the people of the stage's participants to ask now (``routes.askable``: all at once, every one nobody has signed for this
-    round; in turn, the first; never the author at approval, four-eyes): one already asked or signed for is not asked again when the
-    participants are saved. ``stage`` is a ``routes.Stage``, or "reviewer" / "approver" for the default route's. ``quiet``: asked
-    without the alert (they were just told it is their turn another way)."""
+    round; in turn, the first; never the author at approval, four-eyes; a step handed over: its delegate, ``routes.holders``): one
+    already asked or signed for is not asked again when the participants are saved. ``stage`` is a ``routes.Stage``, or "reviewer" /
+    "approver" for the default route's. ``quiet``: asked without the alert (they were just told it is their turn another way). At a
+    stage that started again after changes each is told, and their task says, why they are asked again (``_again_words``). Returns
+    who was asked."""
     from .routers.document_signoff import _assignments, _signatures
 
-    st = stage if isinstance(stage, routes.Stage) else routes.DEFAULT_ROUTE[0 if stage == "reviewer" else 1]
+    if isinstance(stage, routes.Stage):
+        st = stage
+    else:
+        i = 0 if stage == "reviewer" else 1
+        st = routes.stage_at(routes.stages(db, doc), i + 1) or routes.DEFAULT_ROUTE[i]
     kind = st.obligation_kind
     asked: List[int] = []
     cfg = settings(db, doc.tenant_id)
     days = st.due_days or due_days(cfg, kind)
     db.flush()          # the round just started (the models' listener) must be the one read
-    excluded = routes.four_eyes_excluded(db, doc, st)
+    restarted = st.restarted_after is not None
+    waited = {o.user_id for o in _held(db, doc.id, kind)} if restarted else set()
+    words: Dict[int, tuple] = {}
     for a in routes.askable(db, doc, st, _assignments(db, doc.id), _signatures(db, doc.id)):
-        asked += _request(db, doc, kind, [u for u in _members(db, doc, a) if u not in excluded], by, days, a.id,
-                          stage_position=st.position if st.custom else None)
+        for uid, for_whom in routes.holders(db, doc, st, a):
+            said = _again_words(db, doc, st, uid, uid in waited) if restarted else None
+            got = _request(db, doc, kind, [uid], by, days, a.id, stage_position=st.position if st.custom else None,
+                           on_behalf_of=for_whom, why=said[2] if said else None)
+            asked += got
+            if got and said:
+                words[uid] = said
     told = [u for u in asked if u not in set(quiet)]
     tasked = _with_task(db, doc, kind, told)       # none when Settings switched tasks off, nor for who cannot open Task Management
-    for who, where in ((tasked, "in your tasks and "), (set(told) - tasked, "")):
+    for uid in (u for u in told if u in words):
+        event, message, _why = words[uid]
+        _notify(db, doc, [uid], f"{routes.AGAIN.get(st.kind, 'Review again')}: {doc.title}",
+                f"{message} It is {'in your tasks and ' if uid in tasked else ''}in the document's Approvals.", "warning",
+                link=_link(doc, kind), event=event)
+    told_plain = [u for u in told if u not in words]
+    for who, where in ((tasked & set(told_plain), "in your tasks and "), (set(told_plain) - tasked, "")):
         if st.custom:
             ask = "It is your turn to" if st.order == "in_turn" else "You have been asked to"
             _notify(db, doc, who, f"{routes.KIND_NAME[st.kind]} requested: {doc.title}",
@@ -466,13 +528,14 @@ def _open_stage(db, doc, stage, by: Optional[int], quiet: Iterable[int] = ()) ->
                     f"You have been asked to {'review' if kind == 'review' else 'approve'} \"{doc.title}\". "
                     f"It is {where}in the document's Approvals.", "warning", link=_link(doc, kind), event="request")
     _mark_emailed(db, doc.id, kind, told)
+    return asked
 
 
-def _open_current(db, doc, by: Optional[int], quiet: Iterable[int] = ()) -> None:
-    """Ask the people of the stage the document is at (its status on the default route, ``route_stage`` on one of its own)."""
+def _open_current(db, doc, by: Optional[int], quiet: Iterable[int] = ()) -> List[int]:
+    """Ask the people of the stage the document is at (its status on the default route, ``route_stage`` on one of its own); returns
+    who was asked."""
     st = routes.current(db, doc)
-    if st is not None and not st.informs:
-        _open_stage(db, doc, st, by, quiet)
+    return _open_stage(db, doc, st, by, quiet) if st is not None and not st.informs else []
 
 
 def _inform(db, doc, after: int, upto: Optional[int] = None) -> None:
@@ -617,22 +680,26 @@ def on_changes_requested(db, doc, by: int, stage: routes.Stage, hold) -> None:
 
 @_safe
 def on_resubmitted(db, doc, by: int, hold) -> None:
-    """The changes are made: the author's request is done; on a minor change the stage it waited at is asked again (the person who
-    asked first, when in turn), on a major one the new round was asked already (``restart_round``)."""
+    """The changes are made: the author's request is done. On a minor change (or none) the stage it waited at starts again (the
+    user, 2026-10-21): everyone there is asked again - all at once, or in turn from the first - each request that waited opened
+    again, and each person told what changed since they signed or asked (``_open_stage``); on a major one the new round was asked
+    already (``restart_round``). The person who asked, when not asked again yet (in turn, later), is told it was resubmitted."""
     now = datetime.utcnow()
     for ob in _pending(db, doc.id, ["changes"]).all():
         ob.status, ob.done_at, ob.comment = "done", now, hold.resubmit_note
         _close(db, ob, completed=True, by=by)
-    _end_held(db, doc)
     resumed = hold.outcome == "resumed"
-    if resumed:
-        _open_current(db, doc, by, quiet=[hold.requested_by])
+    asked = _open_current(db, doc, by) if resumed else []
+    _end_held(db, doc)                                  # who still waits is asked when their turn comes
+    if hold.requested_by in asked:
+        return                                          # asked again just now, with what changed
     who = _names(db, [by]).get(by, "The author")
     note = f": {hold.resubmit_note}" if hold.resubmit_note else ""
     st = routes.current(db, doc)
     _notify(db, doc, [hold.requested_by], f"Resubmitted: {doc.title}",
             f"{who} made the changes you asked for on \"{doc.title}\" and resubmitted it{note}. "
-            + ("It is your turn again." if resumed else "It is a major change, so it is signed again from the start."), "info",
+            + (f"Everyone at {st.name} signs it again, from the first; you are asked again when it is your turn." if resumed and st
+               else "It is a major change, so it is signed again from the start."), "info",
             link=_link(doc, st.obligation_kind if st else ""), event="resubmitted")
 
 
@@ -791,7 +858,7 @@ def changed_after_review(db, doc, old_status: Optional[str], by: Optional[int], 
     """The document's text or file became a new version. One that is approved or published, or in review or approval, is
     reviewed again from the start by the same people (the user's decisions of 2026-10-16): a new round, so signatures given on
     the earlier text no longer count. While changes asked for are being made (routes.py) it stays where it is: resubmitting
-    decides (a minor change goes back to the person who asked, a major one starts again). Writes the status row; True when it is
+    decides (a minor change starts that stage again for everyone in it, a major one the whole route). Writes the status row; True when it is
     (back) in review or approval afterwards."""
     from .routers.versions import create_audit_log
 
@@ -1081,22 +1148,31 @@ def task_requests(db, tasks) -> Dict[int, Optional[Dict[str, Any]]]:
     ours = [ct for ct in tasks if _claims(ct) and ct.source_entity_id]
     if not ours:
         return {}
-    rows = (db.query(DocumentObligation, GovernanceDocument.title).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
+    rows = (db.query(DocumentObligation, GovernanceDocument).join(GovernanceDocument, GovernanceDocument.id == DocumentObligation.document_id)
             .filter(DocumentObligation.id.in_({ct.source_entity_id for ct in ours})).all())
-    found = {ob.id: (ob, title) for ob, title in rows}
+    found = {ob.id: (ob, doc) for ob, doc in rows}
     now, out = datetime.utcnow(), {}
     for ct in ours:
-        ob, title = found.get(ct.source_entity_id, (None, None))
+        ob, doc = found.get(ct.source_entity_id, (None, None))
         if ob is None or ob.critical_task_id != ct.id:          # a task that only claims the link shows nothing of the request
             out[ct.id] = None
             continue
         pending = ob.status == "pending"
-        out[ct.id] = {"request_id": ob.id, "kind": ob.kind, "document_id": ob.document_id, "document_title": title,
+        out[ct.id] = {"request_id": ob.id, "kind": ob.kind, "document_id": ob.document_id, "document_title": doc.title,
                       "version": ob.document_version, "status": ob.status, "user_id": ob.user_id, "due_date": _iso(ob.due_date),
                       "done_at": _iso(ob.done_at), "overdue": bool(pending and ob.due_date and ob.due_date < now),
                       "open_href": f"/governance/documents/{ob.document_id}", "action_label": ACTION_LABEL[ob.kind],
-                      "action_href": action_href(ob.document_id, ob.kind) if pending else None}
+                      "action_href": action_href(ob.document_id, ob.kind) if pending else None,
+                      "again": again_of(db, doc, ob)}         # asked again after changes: what they did before, what changed
     return out
+
+
+def again_of(db, doc, ob) -> Optional[Dict[str, Any]]:
+    """For a waiting review or approval: why it is asked again after changes (``routes.again_for``); None otherwise."""
+    if ob.kind not in _SIGNING or ob.status != "pending" or doc.status not in _PENDING_STAGE:
+        return None
+    st = routes.stage_at(routes.stages(db, doc), ob.stage_position or (1 if ob.kind == "review" else 2))
+    return routes.again_for(db, doc, st, ob.user_id)
 
 
 def sync_from_critical_task(db, critical_task_id: int, user_id: Optional[int] = None) -> None:
@@ -1354,4 +1430,4 @@ def mine(db, user_id: int) -> list:
             .order_by(DocumentObligation.due_date.asc(), DocumentObligation.id).all())
     return [{"id": ob.id, "kind": ob.kind, "document_id": d.id, "title": d.title, "doc_type": d.doc_type, "status": d.status,
              "version": ob.document_version, "due_date": _iso(ob.due_date), "overdue": bool(ob.due_date and ob.due_date < now),
-             "escalation_level": ob.escalation_level or 0} for ob, d in rows]
+             "escalation_level": ob.escalation_level or 0, "again": again_of(db, d, ob)} for ob, d in rows]

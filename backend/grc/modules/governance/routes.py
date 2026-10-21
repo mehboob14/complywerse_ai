@@ -13,13 +13,16 @@ route reaches its first approval stage and pending_approval from there on (it ne
 ``route_stage`` is the stage it is at.
 
 On either route the person whose turn it is may ask for changes instead of signing: the route is held (an open
-grc_document_route_holds row of this round) and nobody signs until it is resubmitted. A minor change (or none) resumes the route
-at the stage it was held at, earlier signatures standing; a major one starts the route again. Nobody approves a document they
-wrote (four-eyes, Governance > Settings, on by default). A delegate signs for the person who handed the step over
-(``on_behalf_of``)."""
+grc_document_route_holds row of this round) and nobody signs until it is resubmitted. A minor change (or none) starts the stage it
+was held at again for everyone in it (the user, 2026-10-21): the signatures given there before stay in the history but no longer
+count (``restarts``, ``signatures_of``), everyone is asked again (in turn: from the first; any one or at least N: the count starts
+again) and told what changed since they signed or asked (``again_for``); earlier stages' signatures stand. A major one starts the
+route again. Nobody approves a document they wrote (four-eyes, Governance > Settings, on by default). A delegate signs for the
+person who handed the step over (``on_behalf_of``)."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 KIND_LABEL = {"review": "Reviewed by", "concurrence": "Concurred by", "recommendation": "Recommended by", "approval": "Approved by",
@@ -27,6 +30,8 @@ KIND_LABEL = {"review": "Reviewed by", "concurrence": "Concurred by", "recommend
 KIND_NAME = {"review": "Review", "concurrence": "Concurrence", "recommendation": "Recommendation", "approval": "Approval",
              "information": "For information"}
 VERB = {"review": "review", "concurrence": "concur with", "recommendation": "recommend", "approval": "approve"}
+DID = {"review": "reviewed", "concurrence": "concurred with", "recommendation": "recommended", "approval": "approved"}
+AGAIN = {"review": "Review again", "concurrence": "Concur again", "recommendation": "Recommend again", "approval": "Approve again"}
 STAGE_KINDS = tuple(KIND_LABEL)
 ORDERS = ("together", "in_turn")
 RULES = ("all", "any", "at_least")
@@ -47,6 +52,9 @@ class Stage:
     allow_reject: bool = False
     allow_delegate: bool = True
     custom: bool = False
+    # started again this round after changes asked for at it were resubmitted (``restarts``): its signatures up to this signature
+    # id no longer count (None: it did not)
+    restarted_after: Optional[int] = None
 
     @property
     def role_type(self) -> str:
@@ -74,10 +82,12 @@ def stages(db, doc) -> List[Stage]:
 
     rows = (db.query(DocumentRouteStage).filter(DocumentRouteStage.document_id == doc.id)
             .order_by(DocumentRouteStage.position, DocumentRouteStage.id).all())
+    again = restarts(db, doc)
     if not rows:
-        return list(DEFAULT_ROUTE)
+        return [replace(s, restarted_after=again.get(s.position)) for s in DEFAULT_ROUTE]
     return [Stage(r.position, r.name, r.kind, r.order_mode or "together", r.rule or "all", r.min_count, r.due_days,
-                  bool(r.signature), bool(r.allow_reject), r.allow_delegate is not False, custom=True) for r in rows]
+                  bool(r.signature), bool(r.allow_reject), r.allow_delegate is not False, custom=True,
+                  restarted_after=again.get(r.position)) for r in rows]
 
 
 def is_custom(route: Sequence[Stage]) -> bool:
@@ -97,10 +107,25 @@ def assignments_of(stage: Stage, assignments: Iterable[Any]) -> List[Any]:
     return sorted(picked, key=lambda a: (a.position if a.position is not None else 10 ** 6, a.id or 0))
 
 
-def signatures_of(stage: Stage, signatures: Iterable[Any]) -> List[Any]:
+def _at(stage: Stage, signatures: Iterable[Any]) -> List[Any]:
     if stage.custom:
         return [s for s in signatures if s.stage_position == stage.position]
     return [s for s in signatures if s.role_type == stage.role_type]
+
+
+def signatures_of(stage: Stage, signatures: Iterable[Any]) -> List[Any]:
+    """The stage's signatures that count, of this round's (``signatures``): at a stage that started again after changes were asked
+    for there, only those given since (``Stage.restarted_after``). Every check of a stage reads its signatures here."""
+    if stage.restarted_after is None:
+        return _at(stage, signatures)
+    return [s for s in _at(stage, signatures) if (s.id or 0) > stage.restarted_after]
+
+
+def earlier_of(stage: Stage, signatures: Iterable[Any]) -> List[Any]:
+    """This round's signatures at a stage given before it started again: they stay in the history and no longer count."""
+    if stage.restarted_after is None:
+        return []
+    return [s for s in _at(stage, signatures) if (s.id or 0) <= stage.restarted_after]
 
 
 def signer_ids(signatures: Iterable[Any]) -> Set[int]:
@@ -250,6 +275,115 @@ def on_hold(db, doc) -> bool:
     return open_hold(db, doc) is not None
 
 
+def resumed(db, doc, position: Optional[int] = None) -> List[Any]:
+    """This round's changes asked for that were resubmitted with a minor change (or none), oldest first (at ``position`` only, when
+    given): each started its stage again. Holds resolved before marks existed (``signature_mark``) restarted nothing."""
+    from ...models import DocumentRouteHold as H
+
+    q = db.query(H).filter(H.document_id == doc.id, H.outcome == "resumed", H.signature_mark.isnot(None))
+    q = q.filter(H.round_at == doc.signoff_round_at) if doc.signoff_round_at else q.filter(H.round_at.is_(None))
+    if position is not None:
+        q = q.filter(H.stage_position == position)
+    return q.order_by(H.id).all()
+
+
+def restarts(db, doc) -> Dict[int, int]:
+    """The stages that started again this round, {position: the newest signature id when its changes were asked for}: everyone there
+    signs again, so the stage's signatures up to that one no longer count (``signatures_of``); earlier stages' still do. Read from
+    the holds, never by changing a signature (they are append-only, the e-signatures sealed)."""
+    out: Dict[int, int] = {}
+    for h in resumed(db, doc):
+        if h.stage_position is not None:
+            out[h.stage_position] = max(h.signature_mark, out.get(h.stage_position, 0))
+    return out
+
+
+def holders(db, doc, stage: Stage, a) -> List[Tuple[int, Optional[int]]]:
+    """Who is asked for participant ``a`` at ``stage``, as (person, for whom): its people (four-eyes applied), except anyone who
+    handed their step over this round, whose delegate (the newest hand-over) is asked for them instead."""
+    from ...models import DocumentObligation as O
+
+    q = db.query(O).filter(O.document_id == doc.id, O.assignment_id == a.id, O.kind == stage.obligation_kind)
+    if doc.signoff_round_at:
+        q = q.filter(O.requested_at >= doc.signoff_round_at)
+    rows = [o for o in q.order_by(O.id).all() if o.stage_position == stage.position or (o.stage_position is None and not stage.custom)]
+    handed = [o for o in rows if o.status == "delegated"]
+    out = [(u, None) for u in sorted(_members(db, doc, a) - four_eyes_excluded(db, doc, stage) - {o.user_id for o in handed})]
+    for principal in dict.fromkeys(o.on_behalf_of or o.user_id for o in handed):
+        last = next((o for o in reversed(rows) if o.on_behalf_of == principal and o.status != "delegated"), None)
+        if last is not None:
+            out.append((last.user_id, principal))
+    return out
+
+
+def last_act(holds: Sequence[Any], earlier: Sequence[Any], people: Set[int]) -> Optional[Tuple[str, Any]]:
+    """What ``people`` did last at a stage before it started again: ("changes", the changes they asked for) or ("signed", their
+    signature, which no longer counts). Signature ids order the two (a hold keeps the newest signature id when it was asked)."""
+    sig = max((s for s in earlier if s.signer_user_id in people or (s.on_behalf_of and s.on_behalf_of in people)), key=lambda s: s.id, default=None)
+    ask = next((h for h in reversed(holds) if h.requested_by in people or (h.on_behalf_of and h.on_behalf_of in people)), None)
+    if ask is not None and (sig is None or sig.id <= (ask.signature_mark or 0)):
+        return "changes", ask
+    return ("signed", sig) if sig is not None else None
+
+
+def again_for(db, doc, stage: Stage, user_id: int) -> Optional[Dict[str, Any]]:
+    """Why ``user_id`` is asked again at ``stage``: it started again after changes asked for there were resubmitted, and they had
+    signed it (that signature no longer counts) or asked for the changes. What their step, My Approvals, their task and the message
+    say: when, the version they signed and its row (to show what changed since: the change chain's redline from it), what they asked,
+    the version now, who resubmitted it and what they wrote. None when the stage did not start again or they had done neither."""
+    if stage is None or stage.restarted_after is None:
+        return None
+    from ...models import ElectronicSignature as E, GovernanceDocumentVersion as V
+    from .routers.document_signoff import _signatures
+
+    holds = resumed(db, doc, stage.position)
+    act = last_act(holds, earlier_of(stage, _signatures(db, doc.id)), {user_id}) if holds else None
+    if act is None:
+        return None
+    kind, row = act
+    last = holds[-1]
+    if kind == "changes":
+        base, version, vid = row, None, None
+    else:
+        base = next((h for h in holds if (h.signature_mark or 0) >= row.id), last)       # the first changes asked for after it
+        version = db.query(E.document_version).filter(E.record_type == "document_signoff", E.record_id == row.id).limit(1).scalar()
+        found = db.query(V.id).filter(V.document_id == doc.id, V.version_number == version).order_by(V.id.desc()).first() if version else None
+        vid = found[0] if found else None
+    if vid is None:
+        first = db.query(V.id).filter(V.document_id == doc.id).order_by(V.id).first()   # none when asked: the text then is the first one kept
+        vid = base.version_id or (first[0] if first else None)
+    if version is None and vid is not None:
+        version = db.query(V.version_number).filter(V.id == vid).limit(1).scalar()
+    return {"kind": kind, "stage": stage.name, "stage_kind": stage.kind, "at": _iso(row.requested_at if kind == "changes" else row.signed_at),
+            "version": version, "version_id": vid, "comment": row.comment if kind == "changes" else None, "now": doc.current_version,
+            "changed": any(h.change == "minor" for h in holds[holds.index(base):]),
+            "by": _names(db, [last.resolved_by]).get(last.resolved_by), "note": last.resubmit_note}
+
+
+def again_text(again: Dict[str, Any], ask: bool = True) -> str:
+    """What someone asked again reads in a message: "You reviewed this on 21 Oct 2026 (v1.0). Olivia made changes since (v1.0 → v1.2).
+    Please review it again." / "You asked for changes on 21 Oct 2026: "...". Olivia resubmitted it (v1.2) — see what changed."
+    Without ``ask``, only why (a task's description goes on with its own request). The screens say it with the reader's dates."""
+    at = datetime.fromisoformat(again["at"]) if again.get("at") else None
+    on = f" on {at.day} {at:%b %Y}" if at else ""
+    by = again.get("by") or "The author"
+    now = f" (v{again['now']})" if again.get("now") else ""
+    if again["kind"] == "changes":
+        asked = f'You asked for changes{on}: "{again.get("comment") or ""}". '
+        if not again.get("changed"):
+            return f"{asked}{by} resubmitted it without changing the text{now}."
+        return f"{asked}{by} resubmitted it{now}" + (" — see what changed." if ask else ".")
+    kind = again.get("stage_kind") or "review"
+    signed = f" (v{again['version']})" if again.get("version") else ""
+    if not again.get("changed"):
+        since = f"{by} resubmitted it without changing the text{now}."
+    elif again.get("version") and again.get("now"):
+        since = f"{by} made changes since (v{again['version']} → v{again['now']})."
+    else:
+        since = f"{by} made changes since."
+    return f"You {DID.get(kind, 'reviewed')} this{on}{signed}. {since}" + (f" Please {VERB.get(kind, 'review')} it again." if ask else "")
+
+
 # ── whose turn it is ─────────────────────────────────────────────────────────
 @dataclass(frozen=True)
 class Step:
@@ -302,8 +436,9 @@ def _iso(dt) -> Optional[str]:
 
 def view(db, doc, assignments: Sequence[Any], signatures: Sequence[Any], names: Dict[int, str], display) -> Dict[str, Any]:
     """The route as the Approvals view draws it: each stage with its rule and each participant's state this round (signed,
-    waiting, not yet asked, changes asked for, delegated, not needed), and the changes asked for, while they are."""
-    from ...models import DocumentObligation as O
+    waiting, not yet asked, changes asked for, delegated, not needed), what they did before their stage started again after
+    changes (``earlier``: signed, with the version, or asked for the changes), and the changes asked for, while they are."""
+    from ...models import DocumentObligation as O, ElectronicSignature as E, GovernanceDocumentVersion as V
 
     route = stages(db, doc)
     cur = current(db, doc, route)
@@ -313,11 +448,19 @@ def view(db, doc, assignments: Sequence[Any], signatures: Sequence[Any], names: 
         q = q.filter(O.requested_at >= doc.signoff_round_at)
     obligations = q.order_by(O.id).all()
     names.update({k: v for k, v in _names(db, {o.user_id for o in obligations} - set(names)).items()})
+    again = {s.position: resumed(db, doc, s.position) for s in route if s.restarted_after is not None}
+    voided = [x for s in route for x in earlier_of(s, signatures)]
+    signed_on = dict(db.query(E.record_id, E.document_version).filter(E.record_type == "document_signoff",
+                                                                     E.record_id.in_([x.id for x in voided]))) if voided else {}
+    asked_on = [h.version_id for hs in again.values() for h in hs if h.version_id]
+    numbers = dict(db.query(V.id, V.version_number).filter(V.id.in_(asked_on))) if asked_on else {}
+    names.update(_names(db, {h.requested_by for hs in again.values() for h in hs} - set(names)))
     finished = doc.status in ("approved", "published")
     out = []
     for s in route:
         assigns = assignments_of(s, assignments)
         sigs = signatures_of(s, signatures)
+        before = earlier_of(s, signatures)
         req = {a.id: m for a, m in required(db, doc, s, assigns)} if assigns else {}
         at_it = cur is not None and s.position == cur.position
         turn = askable(db, doc, s, assignments, signatures)[:1] if at_it and s.order == "in_turn" else []
@@ -352,6 +495,15 @@ def view(db, doc, assignments: Sequence[Any], signatures: Sequence[Any], names: 
             else:
                 state = "not_yet"
             pending = next((o for o in reversed(mine) if o.status == "pending"), None)
+            act = last_act(again[s.position], before, members) if again.get(s.position) else None
+            earlier = None
+            if act is not None and act[0] == "signed":
+                earlier = {"kind": "signed", "at": _iso(act[1].signed_at), "by": names.get(act[1].signer_user_id),
+                           "on_behalf_of": names.get(act[1].on_behalf_of) if act[1].on_behalf_of else None,
+                           "version": signed_on.get(act[1].id), "comment": None}
+            elif act is not None:
+                earlier = {"kind": "changes", "at": _iso(act[1].requested_at), "by": names.get(act[1].requested_by),
+                           "on_behalf_of": None, "version": numbers.get(act[1].version_id), "comment": act[1].comment}
             people.append({
                 "assignment_id": a.id, "target_type": a.target_type, "target_id": a.target_id, "display": display(a), "state": state,
                 "signer": names.get(sig.signer_user_id) if sig is not None else None,
@@ -360,11 +512,12 @@ def view(db, doc, assignments: Sequence[Any], signatures: Sequence[Any], names: 
                 "comment": sig.comment if sig is not None else hold.comment if state == "changes_requested" else None,
                 "due_date": _iso(pending.due_date) if pending is not None else None,
                 "delegated_to": names.get(handed.user_id) if handed is not None else None,
+                "earlier": earlier,                  # before the stage started again after changes ("Signed v1.0 · asked again")
             })
         out.append({
             "position": s.position, "name": s.name, "kind": s.kind, "kind_label": s.label, "order": s.order, "rule": s.rule,
             "min_count": s.min_count, "due_days": s.due_days, "signature": s.signature, "allow_reject": s.allow_reject,
-            "allow_delegate": s.allow_delegate, "status": status, "people": people,
+            "allow_delegate": s.allow_delegate, "status": status, "people": people, "restarted": s.restarted_after is not None,
             "progress": progress(db, doc, s, assignments, signatures) if assigns and not s.informs else None,
         })
     return {

@@ -46,6 +46,10 @@ class DocumentRouteHold(Base):
     comment = Column(Text, nullable=False)
     assignment_id = Column(Integer, nullable=True)                    # the participant who asked (their stage's assignment)
     content_before = Column(Text, nullable=True)                      # the text when it was asked, to size the change at resubmission
+    version_id = Column(Integer, nullable=True)                       # the version it was asked on: who is asked again sees what changed since
+    # the document's newest signature id when it was asked: resubmitted with a minor change (or none), its stage starts again and
+    # the signatures there up to this one no longer count (routes.restarts)
+    signature_mark = Column(Integer, nullable=True)
     resolved_at = Column(DateTime, nullable=True)
     resolved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     resubmit_note = Column(Text, nullable=True)
