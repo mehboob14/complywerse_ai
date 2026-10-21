@@ -733,6 +733,20 @@ def reject_document(
     return get_signoff(document_id, db, current_user)
 
 
+def _hold_marks(db: Session, doc: GovernanceDocument, asked_at: Optional[datetime] = None):
+    """What a hold keeps when changes are asked for (routes.restarts): the version shown then and the document's newest signature.
+    ``asked_at``: a hold asked for before holds kept them gets them when it is resubmitted (nobody signs while it is held, so the
+    newest signature is the same; the version is the newest made by then)."""
+    from sqlalchemy import func
+
+    q = db.query(GovernanceDocumentVersion.id).filter(GovernanceDocumentVersion.document_id == doc.id)
+    if asked_at is not None:
+        q = q.filter(GovernanceDocumentVersion.created_at <= asked_at)
+    shown = q.order_by(GovernanceDocumentVersion.id.desc()).first()
+    newest = db.query(func.max(DocumentSignature.id)).filter(DocumentSignature.document_id == doc.id).scalar() or 0
+    return (shown[0] if shown else None), newest
+
+
 @router.post("/{document_id}/signoff/request-changes", dependencies=[Depends(require_doc_reader)])
 def request_changes(
     document_id: int,
@@ -750,15 +764,11 @@ def request_changes(
     doc = _doc_or_404(document_id, user_tenants, db)
     check_version(db, doc, body.version, body.round_at)
     step = _my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document.")
-    from sqlalchemy import func
-
-    shown = (db.query(GovernanceDocumentVersion.id).filter(GovernanceDocumentVersion.document_id == doc.id)
-             .order_by(GovernanceDocumentVersion.id.desc()).first())
-    newest = db.query(func.max(DocumentSignature.id)).filter(DocumentSignature.document_id == doc.id).scalar() or 0
+    shown, newest = _hold_marks(db, doc)
     hold = DocumentRouteHold(tenant_id=doc.tenant_id, document_id=doc.id, round_at=doc.signoff_round_at, stage_position=step.stage.position,
                              requested_by=current_user.id, on_behalf_of=step.on_behalf_of, requested_at=datetime.utcnow(),
                              comment=comment, assignment_id=step.assignment_id, content_before=doc.content,
-                             version_id=shown[0] if shown else None, signature_mark=newest)
+                             version_id=shown, signature_mark=newest)
     db.add(hold)
     doc.updated_at = datetime.utcnow()
     create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="changes_requested",
@@ -800,6 +810,9 @@ def resubmit(
         why = f"Resubmitted with a major change after {who} asked for changes, so it is signed again from the start"
     else:
         hold.outcome = "resumed"
+        if hold.signature_mark is None:                 # asked for before holds kept their marks: the stage starts again all the same
+            shown, hold.signature_mark = _hold_marks(db, doc, hold.requested_at)
+            hold.version_id = hold.version_id or shown
         why = (f"Resubmitted after {who} asked for changes ({'no change to the text' if size == 'none' else 'a minor change'}): everyone at "
                f"{held_at.name if held_at else 'its stage'} signs it again; the stages before stand")
     doc.updated_at = now

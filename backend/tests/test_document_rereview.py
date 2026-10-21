@@ -407,6 +407,23 @@ def test_a_second_request_for_changes_starts_the_stage_again_once_more(db):
     assert sign(db, RAFAY)["status"] == "pending_approval"
 
 
+def test_changes_asked_for_before_this_release_start_the_stage_again_when_resubmitted(db):
+    two_reviewers_then_mina(db)
+    send(db)
+    sign(db, RANA)
+    ask_changes(db, RAFAY)
+    hold = db.query(m.DocumentRouteHold).one()
+    hold.signature_mark = hold.version_id = None                  # as a hold asked for before holds kept their marks
+    db.commit()
+    edit(db)
+    resubmit(db)
+    assert hold.signature_mark == db.query(m.DocumentSignature).one().id and hold.version_id is None   # no version was kept then
+    assert pending(db) == [("review", RANA), ("review", RAFAY)] and view(db, RANA)["my_step"]["again"]["kind"] == "signed"
+    hold.signature_mark = None                                    # one resolved before this release restarted nothing
+    db.commit()
+    assert routes.restarts(db, doc(db)) == {} and view(db, RANA)["my_step"] is None
+
+
 def test_the_sentences_people_read():
     signed = {"kind": "signed", "at": "2026-10-21T09:15:00", "version": "1.0", "now": "1.2", "by": "Olivia Owner", "changed": True,
               "stage_kind": "review"}
