@@ -21,8 +21,9 @@ import hashlib
 import logging
 import os
 import re
+import unicodedata
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
 from .studio import blocks as B
@@ -480,15 +481,7 @@ def chain(db, doc, upto=None) -> Dict[str, Any]:
                        "detail": a.action_details or "", "from": a.old_value if a.field_changed == "status" else None,
                        "to": _status_after(a), "stage": _stage_at(history, a.performed_at),
                        "before": a.old_value if statement else None, "after": a.new_value if statement else None})
-    all_sources: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
-    for v in out_versions:
-        for it in v["items"]:
-            for s in it.get("sources") or []:
-                key = (str(s.get("title")), str(s.get("locator")), str(s.get("quote"))[:60])
-                row = all_sources.setdefault(key, {**s, "versions": []})
-                if v["number"] not in row["versions"]:
-                    row["versions"].append(v["number"])
-    people = {v["by"] for v in out_versions if v["by"]} | {e["actor"] for e in events if e["actor"]}
+    sources = _cited(out_versions)
     return {
         "enabled": True,
         "document": {"id": doc.id, "title": doc.title, "code": doc.document_code, "status": doc.status, "in_force": in_force_number(doc),
@@ -496,12 +489,29 @@ def chain(db, doc, upto=None) -> Dict[str, Any]:
                      "stage_label": STAGE_LABEL.get(doc.status, doc.status), "owner": names.get(doc.owner_id), "author": names.get(doc.author_id),
                      "approved_by": names.get(doc.approved_by), "approved_at": _iso(doc.approved_at), "doc_type": doc.doc_type,
                      "is_file": bool(doc.file_path) and not (doc.content or "").strip(), "file_type": doc.file_type},
-        "versions": out_versions, "events": events, "sources": list(all_sources.values()),
-        "summary": {"versions": len(out_versions), "changes": sum(v["changes"] for v in out_versions), "people": len(people),
-                    "ai_assisted": sum(1 for v in out_versions for i in v["items"] if i.get("origin") in ("ai",)),
-                    "sources": len(all_sources),
-                    "words_added": sum(v["words_added"] for v in out_versions), "words_removed": sum(v["words_removed"] for v in out_versions)},
+        "versions": out_versions, "events": events, "sources": sources, "summary": _summary(out_versions, events, sources),
     }
+
+
+def _cited(versions: Sequence[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """The sources the changes rest on, once each, with the versions that cite them."""
+    all_sources: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
+    for v in versions:
+        for it in v["items"]:
+            for s in it.get("sources") or []:
+                key = (str(s.get("title")), str(s.get("locator")), str(s.get("quote"))[:60])
+                row = all_sources.setdefault(key, {**s, "versions": []})
+                if v["number"] not in row["versions"]:
+                    row["versions"].append(v["number"])
+    return list(all_sources.values())
+
+
+def _summary(versions: Sequence[Dict[str, Any]], events: Sequence[Dict[str, Any]], sources: Sequence[Dict[str, Any]]) -> Dict[str, int]:
+    people = {v["by"] for v in versions if v["by"]} | {e["actor"] for e in events if e["actor"]}
+    return {"versions": len(versions), "changes": sum(v["changes"] for v in versions), "people": len(people),
+            "ai_assisted": sum(1 for v in versions for i in v["items"] if i.get("origin") in ("ai",)),
+            "sources": len(sources),
+            "words_added": sum(v["words_added"] for v in versions), "words_removed": sum(v["words_removed"] for v in versions)}
 
 
 def baseline_options(db, doc) -> List[Dict[str, Any]]:
@@ -621,3 +631,121 @@ CATALOG_HEADERS = {
     "sources": ["Source", "Kind", "Where in it", "Quoted words", "Check", "Versions"],
     "approvals": ["Date", "Event", "By", "Detail"],
 }
+
+
+# ── the Change log's filters (the screen's, and its "Export filtered") ──────
+# The same rules as the screen (grc-frontend/src/lib/changeLog.ts): people, a time span, the source of a change and a search narrow
+# the changes of each version (a search that finds the version itself - its number, author, summary - keeps all its changes), and a
+# version stays when one of its changes is left or when it matches by itself; activity has no source, so a source never removes an
+# event; ``kinds`` chooses which entries are there.
+LOG_KINDS = {"text": "Changes to the text", "review": "Reviews & approvals", "statement": "Statements", "other": "Other activity"}
+LOG_SOURCES = ("ai", "manual", "statement", "revert", "restore", "file", "import", "signoff", "initial")
+_OTHER_EVENTS = {"created", "archived", "restored", "status_changed", "version_rollback", "owner_assigned"}
+
+
+def event_group(e: Dict[str, Any]) -> str:
+    """What an event is to the filters: a change to a statement; other activity (created, archived, restored from the archive, a
+    status set by hand, an earlier version restored, a new owner); else a step of the review and approval trail. A status set to
+    approved or published is an approval."""
+    kind = e.get("kind") or ""
+    if kind.startswith("statement"):
+        return "statement"
+    if kind in _OTHER_EVENTS and not (kind == "status_changed" and e.get("to") in ("approved", "published")):
+        return "other"
+    return "review"
+
+
+def _fold(text: Any) -> str:
+    """Lower case without accents (the screen's ``matches``): "Révision" is found by "revision"."""
+    return "".join(ch for ch in unicodedata.normalize("NFKD", str(text or "").lower()) if not 0x300 <= ord(ch) <= 0x36F)
+
+
+def _found(words: Sequence[str], *fields: Any) -> bool:
+    hay = _fold(" ".join(str(f) for f in fields if f not in (None, "")))
+    return all(w in hay for w in words)
+
+
+def _moment(text: Optional[str], name: str) -> Optional[datetime]:
+    if not (text or "").strip():
+        return None
+    try:
+        dt = datetime.fromisoformat(text.strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise ValueError(f"{name} must be a date and time such as 2026-10-01T00:00:00 (UTC).") from None
+    return dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+
+
+def filter_chain(c: Dict[str, Any], *, people: Optional[Sequence[str]] = None, date_from: Optional[str] = None, date_to: Optional[str] = None,
+                 sources: Optional[Sequence[str]] = None, kinds: Optional[Sequence[str]] = None, search: Optional[str] = None) -> Dict[str, Any]:
+    """The chain as the Change log shows it with these filters, each optional (none given: ``c`` itself). ``people`` are person keys
+    (a user's id; the name of someone without one), ``date_from`` (included) and ``date_to`` (not included) UTC times, ``sources``
+    origins (LOG_SOURCES), ``kinds`` the entries kept (LOG_KINDS), ``search`` words that must all be found. The summary and the
+    sources are counted again for what is left; ``filters`` says what was applied, for the export's header."""
+    P = {str(p).strip() for p in people or [] if str(p).strip()}
+    S = {s for s in sources or [] if s}
+    K = {k for k in kinds or [] if k}
+    unknown = sorted(S - set(LOG_SOURCES)) + sorted(K - set(LOG_KINDS))
+    if unknown:
+        raise ValueError(f"Unknown filter value: {', '.join(unknown)}.")
+    start, end = _moment(date_from, "date_from"), _moment(date_to, "date_to")
+    words = _fold(search).split()
+    if not (P or S or K or start or end or words):
+        return c
+    # a person is their user id; someone known only by name (an older change) is the id that name has elsewhere in the chain
+    pairs = ([(v["by"], v.get("by_id")) for v in c["versions"]] + [(i.get("by"), i.get("by_id")) for v in c["versions"] for i in v["items"]]
+             + [(e.get("actor"), e.get("actor_id")) for e in c["events"]])
+    ids: Dict[str, int] = {}
+    for name, pid in pairs:
+        if name and pid is not None:
+            ids.setdefault(name, pid)
+
+    def key(name: Optional[str], pid: Optional[int]) -> str:
+        return str(pid) if pid is not None else str(ids.get(name or "", name or ""))
+
+    def in_time(at: Optional[str]) -> bool:
+        if start is None and end is None:
+            return True
+        if not at:
+            return False
+        t = datetime.fromisoformat(at)
+        return (start is None or t >= start) and (end is None or t < end)
+
+    def item_ok(it: Dict[str, Any], whole: bool) -> bool:
+        """A change of a version: its author and origin, and the search unless the version matched the search as a whole."""
+        cited = [f"{s.get('ref') or ''} {s.get('title') or ''} {s.get('locator') or ''} {s.get('quote') or ''}" for s in it.get("sources") or []]
+        return ((not P or key(it.get("by"), it.get("by_id")) in P) and (not S or it.get("origin") in S)
+                and (whole or _found(words, it.get("section"), it.get("before_text"), it.get("after_text"), it.get("request"), it.get("reason"),
+                                     it.get("by"), *cited)))
+
+    versions: List[Dict[str, Any]] = []
+    if not K or "text" in K:
+        for v in c["versions"]:
+            if not in_time(v["at"]):
+                continue
+            whole = not words or _found(words, f"v{v['number']}", v["by"], v["summary"], v["reason"], v.get("file_name"), v.get("origin_label"),
+                                        v.get("stage_label"))
+            items = [it for it in v["items"] if item_ok(it, whole)]
+            itself = (whole and (not P or key(v["by"], v.get("by_id")) in P)
+                      and (not S or ("restore" if v.get("restored_from") else v.get("origin")) in S))
+            if items or itself:
+                versions.append({**v, "items": items, "changes": len(items), "words_added": sum(i["words_added"] for i in items),
+                                 "words_removed": sum(i["words_removed"] for i in items)})
+    events = [e for e in c["events"]
+              if (not K or event_group(e) in K) and in_time(e["at"]) and (not P or key(e.get("actor"), e.get("actor_id")) in P)
+              and (not words or _found(words, EVENT_LABEL.get(e["kind"], e["kind"]), e.get("actor"), e.get("detail"), e.get("before"), e.get("after")))]
+    names = {key(n, i): n for n, i in pairs if n}
+    told: List[Tuple[str, str]] = []
+    if P:
+        told.append(("People", ", ".join(sorted(names.get(p, p) for p in P))))
+    if start:
+        told.append(("From", f"{start:%Y-%m-%d %H:%M} UTC"))
+    if end:
+        told.append(("Before", f"{end:%Y-%m-%d %H:%M} UTC"))
+    if S:
+        told.append(("Source", ", ".join(ORIGIN_LABEL[s] for s in LOG_SOURCES if s in S)))
+    if K:
+        told.append(("Showing", ", ".join(label for k, label in LOG_KINDS.items() if k in K)))
+    if words:
+        told.append(("Search", f"“{(search or '').strip()}”"))
+    cited = _cited(versions)
+    return {**c, "versions": versions, "events": events, "sources": cited, "summary": _summary(versions, events, cited), "filters": told}

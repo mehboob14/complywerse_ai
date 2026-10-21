@@ -10,7 +10,7 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { BookMarked, Eye, EyeOff, FileText, Layers, Loader2, Paperclip, Plus, Search, Trash2, Upload } from 'lucide-react';
 import { DOC_TYPE_LABEL, problemOf, studioApi, type FrameworkItem, type LibraryDoc, type Reference, type ReferenceScope, type Session } from '@/lib/studio/api';
 import { useToast } from '@/components/ui/ToastProvider';
-import { plural } from '@/lib/studio/text';
+import { matches, plural } from '@/lib/studio/text';
 import { SIGNOFF_STATUS } from '../../_SignoffControl';
 import { docLine } from './homeLists';
 
@@ -40,15 +40,7 @@ function useDebounced<T>(value: T, ms = 300): T {
   return v;
 }
 
-const fold = (s: string) => s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
-
-/** Whether every word of the search is somewhere in the fields ("iso 27001", "nca ecc" …). An empty search matches everything. */
-export function matches(q: string, ...fields: Array<string | number | null | undefined>): boolean {
-  const words = fold(q.trim()).split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const hay = fold(fields.filter((f) => f != null && f !== '').join(' '));
-  return words.every((w) => hay.includes(w));
-}
+export { matches };
 
 export function SearchBox({ value, onChange, placeholder, label }: { value: string; onChange: (v: string) => void; placeholder: string; label: string }) {
   return (

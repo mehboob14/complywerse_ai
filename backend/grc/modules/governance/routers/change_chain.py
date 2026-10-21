@@ -139,13 +139,21 @@ def revert_changes(document_id: int, body: RevertIn, db: Session = Depends(get_d
 
 
 @router.get("/{document_id}/change-chain/export", dependencies=[Depends(require_doc_reader)])
-def export_chain(document_id: int, format: str = "xlsx", db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
-    """The whole chain as one file: Excel (a sheet each for versions, changes, sources and approvals), PDF or CSV."""
+def export_chain(document_id: int, format: str = "xlsx", people: Optional[List[str]] = Query(None), date_from: Optional[str] = None,
+                 date_to: Optional[str] = None, sources: Optional[List[str]] = Query(None), kinds: Optional[List[str]] = Query(None),
+                 search: Optional[str] = None, db: Session = Depends(get_db), current_user: GRCUser = Depends(require_auth)):
+    """The whole chain as one file: Excel (a sheet each for versions, changes, sources and approvals), PDF or CSV. The Change log's
+    filters, when given, narrow it to what the screen shows ("Export filtered", ``change_chain.filter_chain``): ``people`` (user
+    ids), ``date_from`` / ``date_to`` (UTC), ``sources``, ``kinds`` (each repeatable) and ``search``."""
     doc = _doc_or_404(document_id, get_user_tenants(current_user, db), db)
     _enabled_or_404(db)
     fmt = (format or "xlsx").lower()
     if fmt not in ("xlsx", "pdf", "csv"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Choose xlsx, pdf or csv.")
-    data, media_type, filename = change_chain_export.build(C.chain(db, doc, upto=version_for(db, current_user, doc)), fmt,
-                                                           current_user.display_name or current_user.username or "a user")
+    c = C.chain(db, doc, upto=version_for(db, current_user, doc))
+    try:
+        c = C.filter_chain(c, people=people, date_from=date_from, date_to=date_to, sources=sources, kinds=kinds, search=search)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+    data, media_type, filename = change_chain_export.build(c, fmt, current_user.display_name or current_user.username or "a user")
     return Response(content=data, media_type=media_type, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
