@@ -1,6 +1,7 @@
 // A document review, approval or acknowledgement request as a task in Task Management (backend: governance/doc_lifecycle.py
 // task_request / locked_change; the router adds `document_request` to such a task's JSON). Pure helpers, tested in
 // documentTasks.test.ts; used by the Task Management pages and by the document page's ?act= link.
+import type { Again } from './approvalRoutes';
 
 export type RequestKind = 'review' | 'approval' | 'acknowledgement' | 'changes';
 
@@ -20,6 +21,8 @@ export interface DocumentRequest {
   /** the document with the person's own step open; null once it is no longer waiting */
   action_href: string | null;
   action_label: string;
+  /** asked again after changes: what they did before and what changed since (servers from before leave it out) */
+  again?: Again | null;
 }
 
 export interface TaskLike {

@@ -101,7 +101,7 @@ export default function DocumentStudio() {
   const [popup, setPopup] = useState<Popup | null>(() => (search?.get('details') === '1' ? 'details' : null));
   const [stale, setStale] = useState<DraftOpened | null>(null);
   const [restoring, setRestoring] = useState<{ id: number; number: string; why?: string } | null>(null);
-  const [trackedRange, setTrackedRange] = useState<{ from: number; to: number } | null>(null);
+  const [trackedRange, setTrackedRange] = useState<{ from: number; to: number | null } | null>(null);
   // an earlier version read in the Document view (Read on its card in Versions), until "Back to the current version"
   const [reading, setReading] = useState<{ id: number; number: string } | null>(null);
   const [downloading, setDownloading] = useState<string | null>(null);
@@ -248,6 +248,20 @@ export default function DocumentStudio() {
     q.delete('read');
     router.replace(`/governance/documents/${id}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
   }, [readAsked, readQ.isPending, readQ.data]);
+
+  // ?changes=<version id> ("See what changed" for someone asked again after changes): the document with its changes marked since
+  // that version (Tracked changes); the parameter then goes, as ?read= does
+  const changesAsked = Number(search?.get('changes')) || null;
+  useEffect(() => {
+    if (!changesAsked) return;
+    setPopup(null);
+    setReading(null);
+    setTrackedRange({ from: changesAsked, to: null });
+    setViewState('document');
+    const q = new URLSearchParams(search?.toString() ?? '');
+    q.delete('changes');
+    router.replace(`/governance/documents/${id}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
+  }, [changesAsked]);
 
   if (!valid) return <NotFound library={library} />;
   // a backend from before the AI Studio's document view (not restarted, or not deployed yet): the classic page

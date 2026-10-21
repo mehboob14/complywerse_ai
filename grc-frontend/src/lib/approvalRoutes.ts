@@ -19,22 +19,37 @@ export interface DraftStage {
 
 /** Where each person of a stage is this round (routes.view). */
 export type PersonState = 'signed' | 'waiting' | 'not_yet' | 'changes_requested' | 'delegated' | 'not_needed' | 'informed';
+/** What a person did at a stage before it started again after changes (routes.view `earlier`): signed (that signature no longer
+ *  counts) or asked for the changes. */
+export interface Earlier { kind: 'signed' | 'changes'; at: string | null; by: string | null; on_behalf_of: string | null; version: string | null; comment: string | null }
 export interface RoutePerson {
   assignment_id: number; target_type: string; target_id: number; display: string; state: PersonState;
   signer: string | null; on_behalf_of: string | null; at: string | null; comment: string | null; due_date: string | null; delegated_to: string | null;
+  /** servers from before stages started again after changes leave it out */
+  earlier?: Earlier | null;
 }
 export type StageStatus = 'done' | 'current' | 'on_hold' | 'waiting' | 'not_started' | 'skipped' | 'informed';
 export interface RouteStage {
   position: number; name: string; kind: StageKind; kind_label: string; order: StageOrder; rule: StageRule; min_count: number | null;
   due_days: number | null; signature: boolean; allow_reject: boolean; allow_delegate: boolean; status: StageStatus; people: RoutePerson[];
   progress: { required: number; signed: number } | null;
+  /** it started again after changes asked for at it were resubmitted */
+  restarted?: boolean;
 }
 export interface RouteHold { id: number; stage_position: number | null; requested_by: string | null; requested_by_id: number; requested_at: string | null; comment: string }
 export interface RouteView { custom: boolean; current: number | null; stages: RouteStage[]; hold: RouteHold | null }
+/** Why someone is asked again at a stage that started again after changes (routes.again_for: my_step, My Approvals, a task):
+ *  they had signed it or asked for the changes; the version then (its row: "See what changed" compares from it) and now. */
+export interface Again {
+  kind: 'signed' | 'changes'; stage: string; stage_kind: StageKind; at: string | null; version: string | null; version_id: number | null;
+  comment: string | null; now: string | null; changed: boolean; by: string | null; note: string | null;
+}
 /** The step the person reading may take now (GET .../signoff `my_step`). */
 export interface MyStep {
   stage_position: number; stage_name: string; kind: StageKind; kind_label: string; role_type: 'reviewer' | 'approver'; in_turn: boolean;
   can_reject: boolean; can_delegate: boolean; on_behalf_of: string | null;
+  /** asked again after changes (servers from before leave it out) */
+  again?: Again | null;
 }
 
 export const KIND_OPTIONS: { value: StageKind; label: string }[] = [
@@ -136,6 +151,41 @@ export function routeSummary(stages: DraftStage[], nameOf: (t: Target) => string
   if (!parts.length) return '';
   const text = parts.join('; then ');
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}.`;
+}
+
+const DID: Record<StageKind, string> = {
+  review: 'reviewed', concurrence: 'concurred with', recommendation: 'recommended', approval: 'approved', information: 'read',
+};
+const DO: Record<StageKind, string> = { review: 'review', concurrence: 'concur with', recommendation: 'recommend', approval: 'approve', information: 'read' };
+
+/** Why the person is asked again, as their step, My Approvals and their task say it (the message says the same): "You reviewed this
+ *  on 21 Oct 2026 (v1.0). Olivia made changes since (v1.0 → v1.2). Please review it again." or "You asked for changes on 21 Oct 2026:
+ *  “…”. Olivia resubmitted it (v1.2) — see what changed." `day` writes a date in the reader's words. */
+export function againLine(a: Again, day: (iso: string | null) => string): string {
+  const on = a.at ? ` on ${day(a.at)}` : '';
+  const by = a.by || 'The author';
+  const now = a.now ? ` (v${a.now})` : '';
+  const unchanged = `${by} resubmitted it without changing the text${now}.`;
+  if (a.kind === 'changes') return `You asked for changes${on}: “${a.comment ?? ''}”. ${a.changed ? `${by} resubmitted it${now} — see what changed.` : unchanged}`;
+  const since = !a.changed ? unchanged : a.version && a.now ? `${by} made changes since (v${a.version} → v${a.now}).` : `${by} made changes since.`;
+  return `You ${DID[a.stage_kind] ?? 'reviewed'} this${on}${a.version ? ` (v${a.version})` : ''}. ${since} Please ${DO[a.stage_kind] ?? 'review'} it again.`;
+}
+
+/** Where "See what changed" goes: the document with its changes marked since the version they signed or asked on; null when the
+ *  text did not change or that version is not known. */
+export function seeChangesHref(documentId: number, a: Again | null | undefined): string | null {
+  return a?.changed && a.version_id ? `/governance/documents/${documentId}?changes=${a.version_id}` : null;
+}
+
+/** A person's step before their stage started again, in the route view: "Signed v1.0 · asked again after changes". */
+export function earlierLine(e: Earlier): string {
+  const what = e.kind === 'signed' ? `Signed${e.version ? ` v${e.version}` : ''}` : `Asked for changes${e.version ? ` on v${e.version}` : ''}`;
+  return `${what} · asked again after changes`;
+}
+
+/** A request someone was asked again later (their stage started again after changes, or a new round): the earlier one is history. */
+export function askedAgain(rows: { id: number; user_id: number; kind: string }[], row: { id: number; user_id: number; kind: string }): boolean {
+  return rows.some((r) => r.user_id === row.user_id && r.kind === row.kind && r.id > row.id);
 }
 
 /** Swap a stage, or a person within a stage, with its neighbour (`by` -1 up, +1 down); the list unchanged at either end. */

@@ -84,7 +84,7 @@ test('a person asked again opens on the changes since the version they last ackn
 
 test('only review, approval, signing, rejection and publication events are approvals', () => {
   for (const kind of ['sent_for_review', 'sent_for_approval', 'signed', 'rejected', 'published', 'review_completed',
-    'reviewed', 'approved', 'acknowledged', 'request_cancelled', 'participant_removed', 'return_to_draft']) assert.ok(isApprovalEvent({ kind, to: null }), kind);
+    'reviewed', 'approved', 'acknowledged', 'request_cancelled', 'participant_removed', 'return_to_draft', 'review_again_requested']) assert.ok(isApprovalEvent({ kind, to: null }), kind);
   assert.ok(isApprovalEvent({ kind: 'status_changed', to: 'approved' }));
   assert.ok(!isApprovalEvent({ kind: 'status_changed', to: 'pending_review' }));
   assert.ok(!isApprovalEvent({ kind: 'created', to: null }));

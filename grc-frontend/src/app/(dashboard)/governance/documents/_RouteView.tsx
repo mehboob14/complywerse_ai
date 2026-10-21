@@ -10,7 +10,7 @@ import { governanceApi } from '@/lib/api';
 import { AnimatedModal } from '@/components/ui/AnimatedModal';
 import { useToast } from '@/components/ui/ToastProvider';
 import { dateTime, day } from '@/lib/documentLifecycle';
-import type { PersonState, RouteStage, RouteView } from '@/lib/approvalRoutes';
+import { earlierLine, type PersonState, type RouteStage, type RouteView } from '@/lib/approvalRoutes';
 import { useSignoff } from './_SignoffControl';
 
 const STATE: Record<PersonState, { label: string; tone: string }> = {
@@ -55,7 +55,8 @@ export function RouteStages({ route, prepared }: { route: RouteView; prepared?: 
                 {s.status === 'done' || s.status === 'informed' ? <Check className="h-3 w-3" aria-label="done" /> : s.position}
               </span>
               <span className="text-sm font-semibold text-gray-900">{s.name}</span>
-              <span className="text-[11px] text-gray-500">{[how(s), s.due_days ? `${s.due_days} days each` : '', STAGE_NOTE[s.status]].filter(Boolean).join(' · ')}</span>
+              <span className="text-[11px] text-gray-500">{[how(s), s.due_days ? `${s.due_days} days each` : '', STAGE_NOTE[s.status],
+                s.restarted && s.status !== 'done' ? 'started again after changes' : ''].filter(Boolean).join(' · ')}</span>
               {s.progress && s.progress.required > 0 && <span className="ml-auto text-[11px] font-medium text-gray-700">{s.progress.signed}/{s.progress.required} signed</span>}
             </div>
             <ul className="mt-2 space-y-1.5 pl-7">
@@ -71,6 +72,13 @@ export function RouteStages({ route, prepared }: { route: RouteView; prepared?: 
                     {p.state === 'waiting' && p.due_date && <span className="inline-flex items-center gap-1 text-gray-600"><Clock className="h-3 w-3" aria-hidden />due {day(p.due_date)}</span>}
                     {p.state === 'delegated' && p.delegated_to && <span className="inline-flex items-center gap-1 text-gray-600"><UserRoundPlus className="h-3 w-3" aria-hidden />to {p.delegated_to}</span>}
                     {p.comment && <span className="basis-full italic text-gray-700">“{p.comment}”</span>}
+                    {p.earlier && (
+                      <span className="basis-full text-[11px] text-gray-600">
+                        {earlierLine(p.earlier)}{p.earlier.by && p.earlier.by !== p.display ? ` (${p.earlier.by}${p.earlier.on_behalf_of ? ` for ${p.earlier.on_behalf_of}` : ''})` : ''}
+                        {p.earlier.at ? `, ${dateTime(p.earlier.at)}` : ''}
+                        {p.earlier.kind === 'changes' && p.earlier.comment ? <span className="italic"> · “{p.earlier.comment}”</span> : null}
+                      </span>
+                    )}
                   </li>
                 );
               })}
@@ -98,7 +106,7 @@ export function HoldBanner({ documentId, onResubmit }: { documentId: number; onR
           {where ? ` at ${where}` : ''}: {hold.comment}
         </p>
         <p className="mt-0.5 text-xs text-amber-900">
-          Nobody signs until the changes are made and it is resubmitted. A minor change goes back to {hold.requested_by || 'them'}; a major one starts again from the first stage.
+          Nobody signs until the changes are made and it is resubmitted. Then everyone {where ? `at ${where}` : 'at this stage'} signs it again, {hold.requested_by || 'they'} among them, and sees what changed; the stages before stand. A major change starts again from the first stage.
         </p>
       </div>
       {data?.can_resubmit && (
@@ -122,11 +130,13 @@ export function ResubmitDialog({ documentId, open, onClose }: { documentId: numb
   const [note, setNote] = useState('');
   const [major, setMajor] = useState(false);
   const hold = data?.route?.hold;
+  const where = data?.route?.stages.find((s) => s.position === hold?.stage_position)?.name;
   const resubmit = useMutation({
     mutationFn: async () => (await governanceApi.resubmitSignoff(documentId, { note: note.trim() || undefined, major })).data,
     onSuccess: (out: { outcome?: string } | undefined) => {
       toast({ type: 'success', title: 'Resubmitted',
-              message: out?.outcome === 'restarted' ? 'A major change: it is signed again from the first stage.' : `It goes back to ${hold?.requested_by || 'the person who asked'}.` });
+              message: out?.outcome === 'restarted' ? 'A major change: it is signed again from the first stage.'
+                : `Everyone ${where ? `at ${where}` : 'at that stage'} is asked to sign it again, and told what changed.` });
       setNote(''); setMajor(false); onClose(); refresh();
     },
     onError: (e: any) => toast({ type: 'error', title: 'Not resubmitted', message: e?.response?.data?.detail || 'Could not resubmit it.' }),
@@ -150,7 +160,7 @@ export function ResubmitDialog({ documentId, open, onClose }: { documentId: numb
         <label className="flex items-start gap-2 text-sm text-[#26323d]">
           <input type="checkbox" checked={major} onChange={(e) => setMajor(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-[#b8c4c8]" />
           <span>It is a major change: everyone signs again from the first stage.
-            <span className="block text-[11px] text-[#586472]">Otherwise the size of the change decides: a minor one goes back to {hold?.requested_by || 'the person who asked'} and earlier signatures stand.</span>
+            <span className="block text-[11px] text-[#586472]">Otherwise the size of the change decides: after a minor one everyone {where ? `at ${where}` : 'at that stage'} signs it again, {hold?.requested_by || 'the person who asked'} among them; the stages before stand.</span>
           </span>
         </label>
       </div>
