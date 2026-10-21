@@ -15,8 +15,9 @@ from sqlalchemy.pool import StaticPool
 
 from grc.models import (
     AuditLog, Base, CriticalTask, CriticalTaskApproval, CriticalTaskComment, CriticalTaskHistory, CriticalTaskSubTask,
-    GovernanceDocument, GRCUser, NormalizedControl, NotificationPreference, RegulatoryChange,
-    RegulatoryImpactAssessment, RegulatoryImplementationTask, RegulatoryLink, RegulatoryObligation, Tenant, UserRole, get_db,
+    GovernanceDocument, GRCUser, NormalizedControl, NotificationPreference, Permission, RegulatoryChange,
+    RegulatoryImpactAssessment, RegulatoryImplementationTask, RegulatoryLink, RegulatoryObligation, Role, RolePermission, Tenant,
+    UserRole, get_db,
 )
 from grc.modules.governance import regulatory_tasks
 from grc.modules.governance.routers import regulatory_changes
@@ -28,7 +29,8 @@ critical_tasks_router = importlib.import_module("grc.routers.critical_tasks_rout
 _TABLES = [Tenant, GRCUser, RegulatoryChange, RegulatoryImpactAssessment, RegulatoryImplementationTask,
            RegulatoryObligation, RegulatoryLink, GovernanceDocument, NormalizedControl, AuditLog, CriticalTask,
            CriticalTaskSubTask, CriticalTaskComment, CriticalTaskHistory, CriticalTaskApproval, NotificationPreference,
-           UserRole]                                     # who is a platform account (auth_router.platform_account) reads it
+           UserRole,                                     # who is a platform account (auth_router.platform_account) reads it
+           Role, Permission, RolePermission]             # who sees every task (services/task_visibility) reads them
 
 
 @pytest.fixture()

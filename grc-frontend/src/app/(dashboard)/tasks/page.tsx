@@ -71,6 +71,10 @@ interface CriticalTaskItem {
 interface TaskListResponse {
   items: CriticalTaskItem[];
   total: number;
+  /** 'mine': the tasks the person takes part in (owner, assignee, reviewer, creator); 'all': an administrator or view_all. */
+  scope?: 'all' | 'mine';
+  /** With 'mine': the owners of the person's tasks, for the Owner filter. */
+  owners?: TaskUser[];
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -550,11 +554,15 @@ export default function TaskBoardPage() {
     });
   };
 
-  const userItems = users.map((u) => ({
+  const toItem = (u: TaskUser) => ({
     value: String(u.id),
     label: u.display_name || u.username || u.email || `User #${u.id}`,
     subLabel: u.email,
-  }));
+  });
+  const userItems = users.map(toItem);
+  const onlyMine = data?.scope === 'mine';
+  // someone who sees only their own tasks picks among the owners of those (the server lists them, whatever is filtered now)
+  const ownerItems = onlyMine ? (data?.owners || []).map(toItem) : userItems;
 
   return (
     <div className="-m-4 lg:-m-5 text-[var(--color-text)]">
@@ -587,7 +595,11 @@ export default function TaskBoardPage() {
           <div className="flex items-start justify-between gap-3 flex-wrap">
             <div className="min-w-0">
               <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Task Board</h1>
-              <p className="mt-1 text-sm text-slate-600">Centralized critical task management — {total} tasks</p>
+              <p className="mt-1 text-sm text-slate-600">
+                {onlyMine
+                  ? <>Your tasks — {total}. These are the tasks you own, are assigned to, review or created.</>
+                  : <>Centralized critical task management — {total} tasks</>}
+              </p>
             </div>
             <div className="flex items-center gap-2 flex-wrap">
               <div className="flex items-center rounded-full border border-[var(--color-border)] bg-white overflow-hidden">
@@ -669,7 +681,7 @@ export default function TaskBoardPage() {
             />
             <MultiSelectDropdown
               title="Owner"
-              items={userItems}
+              items={ownerItems}
               selectedValues={filters.assigned_owner_id ? [filters.assigned_owner_id] : []}
               onApply={(v) => setSingleFilter('assigned_owner_id', v[0] || '')}
               multiSelect={false}

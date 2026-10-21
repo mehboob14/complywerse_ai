@@ -267,8 +267,11 @@ def search_targets(
     type_key: str,
     q: Optional[str] = None,
     limit: int = 20,
+    *,
+    user: Any,
 ) -> List[Dict[str, Any]]:
-    """Records of one type this tenant could link, newest first.
+    """Records of one type this tenant could link, newest first; tasks only
+    those ``user`` may see (services/task_visibility).
 
     Search is server-side: a tenant with 40k vulnerabilities cannot ship the
     list to the browser and filter it there.
@@ -276,6 +279,10 @@ def search_targets(
     spec = _spec(type_key)
     limit = max(1, min(int(limit or 20), MAX_LIMIT))
     query = _base_query(db, tenant_id, spec)
+    if spec.model is CriticalTask:
+        from grc.services import task_visibility
+
+        query = task_visibility.visible(db, user, query)
     term = (q or "").strip()
     if term:
         like = f"%{term}%"

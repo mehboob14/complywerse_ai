@@ -43,6 +43,8 @@ interface ReportSummary {
   owner_workload: Record<string, number>;
   completion_by_source: Record<string, SourceCompletion>;
   trend_data: TrendEntry[];
+  /** 'mine': counts of the tasks the person takes part in; 'all': every task (an administrator or view_all). */
+  scope?: 'all' | 'mine';
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -146,7 +148,9 @@ export default function TaskReportsPage() {
         <div className="min-w-0">
           <h1 className="text-lg sm:text-xl font-semibold text-slate-900 tracking-tight">Task Reports</h1>
           <p className="mt-1 text-sm text-slate-600">
-            Analytics and insights for critical task management
+            {report.scope === 'mine'
+              ? 'Analytics for your tasks: the ones you own, are assigned to, review or created'
+              : 'Analytics and insights for critical task management'}
           </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">

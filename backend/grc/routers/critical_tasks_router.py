@@ -18,6 +18,7 @@ from ..models import (
 )
 from .auth_router import require_auth, get_user_tenants, get_user_primary_tenant, require_tenant_permission
 from .auth_router import platform_account, refuse_imported_accounts
+from ..services import task_visibility
 from ..services.ai_gateway.field_policies import AliasBook, ai_view
 
 logger = logging.getLogger(__name__)
@@ -389,12 +390,6 @@ def _serialize_task(task, include_relations=False, prefetched: Optional[dict] = 
     return result
 
 
-def _without_others_document_tasks(db: Session, user, query):
-    """The board's (and Reports') tasks: another person's document task only for someone who reads every document."""
-    from ..modules.governance import doc_lifecycle, permissions
-    return doc_lifecycle.without_others_tasks(query, user, reads_all=permissions.visible_filter(db, user) is None)
-
-
 def _refuse_document_link(values: dict) -> None:
     """Only a document's request makes a task linked to it (doc_lifecycle._open_twin), never Task Management."""
     from ..modules.governance import doc_lifecycle
@@ -404,9 +399,8 @@ def _refuse_document_link(values: dict) -> None:
 
 
 def _hidden(db: Session, user, task) -> bool:
-    """Another person's document task about a document the user may not read: answered as if it did not exist."""
-    from ..modules.governance import doc_lifecycle
-    return not doc_lifecycle.may_see_task(db, user, task)
+    """A task the person may not see (task_visibility: they take no part in it): answered as if it did not exist."""
+    return not task_visibility.may_see(db, user, task)
 
 
 def _sync_mirrors(db: Session, task_ids, user_id: Optional[int]) -> None:
@@ -590,11 +584,12 @@ def list_tasks(
     current_user: GRCUser = Depends(require_auth),
 ):
     user_tenants = get_user_tenants(current_user, db)
-    query = db.query(CriticalTask).options(
+    cut, everyone = task_visibility.scope(db, current_user)        # the tasks the person may see, then their filters
+    query = cut(db.query(CriticalTask).options(
         joinedload(CriticalTask.assigned_owner),
         joinedload(CriticalTask.reviewer),
         joinedload(CriticalTask.created_by),
-    ).filter(CriticalTask.tenant_id.in_(user_tenants))
+    ).filter(CriticalTask.tenant_id.in_(user_tenants)))
 
     if source:
         query = query.filter(CriticalTask.source == source)
@@ -612,7 +607,6 @@ def list_tasks(
         query = query.filter(CriticalTask.due_date <= due_before)
     if due_after:
         query = query.filter(CriticalTask.due_date >= due_after)
-    query = _without_others_document_tasks(db, current_user, query)
 
     total = query.count()
 
@@ -634,7 +628,14 @@ def list_tasks(
     if changed:
         db.commit()
     pre = _prefetch(db, tasks)
-    return {"items": [_serialize_task(t, prefetched=pre) for t in tasks], "total": total}
+    out = {"items": [_serialize_task(t, prefetched=pre) for t in tasks], "total": total, "scope": "all" if everyone else "mine"}
+    if not everyone:        # the Owner filter offers the owners of the person's own tasks, whatever is filtered now
+        rows = cut(db.query(GRCUser.id, GRCUser.username, GRCUser.display_name, GRCUser.email)
+                   .join(CriticalTask, CriticalTask.assigned_owner_id == GRCUser.id)
+                   .filter(CriticalTask.tenant_id.in_(user_tenants))).distinct().all()
+        out["owners"] = sorted(({"id": u.id, "username": u.username, "display_name": u.display_name or u.username, "email": u.email}
+                                for u in rows), key=lambda u: ((u["display_name"] or "").lower(), u["id"]))
+    return out
 
 
 @router.get("/my-tasks")
@@ -652,17 +653,13 @@ def my_tasks(
         or_(
             CriticalTask.assigned_owner_id == current_user.id,
             CriticalTask.reviewer_id == current_user.id,
-            CriticalTask.assigned_user_ids.isnot(None),
+            task_visibility.assigned_to(db, current_user.id),
         ),
     )
     from ..modules.governance import doc_lifecycle
     # a document task is the person's own (its reviewer, set by hand, is not the person asked)
     query = doc_lifecycle.without_others_tasks(query, current_user)
-    tasks = query.order_by(CriticalTask.due_date.asc().nullslast(), CriticalTask.priority.desc()).all()
-    # ponytail: assignee lists are matched here, not in SQL (JSON membership differs by database);
-    # move it into the query if a tenant's task count makes this slow.
-    mine = [t for t in tasks if current_user.id in (t.assigned_owner_id, t.reviewer_id)
-            or current_user.id in (t.assigned_user_ids or [])]
+    mine = query.order_by(CriticalTask.due_date.asc().nullslast(), CriticalTask.priority.desc()).all()
     pre = _prefetch(db, mine)
     return [_serialize_task(t, prefetched=pre) for t in mine]
 
@@ -712,11 +709,10 @@ def reports_summary(
     current_user: GRCUser = Depends(require_auth),
 ):
     user_tenants = get_user_tenants(current_user, db)
-    from ..modules.governance import doc_lifecycle, permissions
-    reads_all = permissions.visible_filter(db, current_user) is None
+    cut, everyone = task_visibility.scope(db, current_user)
 
-    def board(query):       # what the board lists (_without_others_document_tasks): every count is of those tasks only
-        return doc_lifecycle.without_others_tasks(query.filter(CriticalTask.tenant_id.in_(user_tenants)), current_user, reads_all)
+    def board(query):       # what the person's board lists: every count is of those tasks only
+        return cut(query.filter(CriticalTask.tenant_id.in_(user_tenants)))
 
     base = board(db.query(CriticalTask))
 
@@ -839,6 +835,7 @@ def reports_summary(
         "owner_workload": owner_workload,
         "completion_by_source": completion_by_source,
         "trend_data": trend_data,
+        "scope": "all" if everyone else "mine",
     }
 
 
@@ -850,7 +847,7 @@ def bulk_action(
     current_user: GRCUser = Depends(require_auth),
 ):
     user_tenants = get_user_tenants(current_user, db)
-    tasks = _without_others_document_tasks(db, current_user, db.query(CriticalTask).filter(
+    tasks = task_visibility.visible(db, current_user, db.query(CriticalTask).filter(       # others' tasks are left out
         CriticalTask.id.in_(payload.task_ids),
         CriticalTask.tenant_id.in_(user_tenants),
     )).all()
@@ -976,13 +973,13 @@ def run_auto_escalation(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """Manually trigger auto-escalation evaluation across all active tasks in user's tenants."""
+    """Manually trigger auto-escalation evaluation across the active tasks the person may see (an administrator: all)."""
     user_tenants = get_user_tenants(current_user, db)
-    active_tasks = db.query(CriticalTask).filter(
+    active_tasks = task_visibility.visible(db, current_user, db.query(CriticalTask).filter(
         CriticalTask.tenant_id.in_(user_tenants),
         CriticalTask.status.notin_(["Completed", "Verified"]),
         CriticalTask.due_date.isnot(None),
-    ).all()
+    )).all()
 
     escalated = 0
     sla_warned = 0
@@ -1860,12 +1857,11 @@ def ai_prioritize_tasks(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    from ..modules.governance import doc_lifecycle
     user_tenants = get_user_tenants(current_user, db)
-    tasks = doc_lifecycle.without_others_tasks(db.query(CriticalTask).filter(        # (their titles name documents)
+    tasks = task_visibility.visible(db, current_user, db.query(CriticalTask).filter(        # the person's board only
         CriticalTask.tenant_id.in_(user_tenants),
         CriticalTask.status.notin_(["Completed", "Verified"]),
-    ), current_user).order_by(CriticalTask.created_at.desc()).limit(50).all()
+    )).order_by(CriticalTask.created_at.desc()).limit(50).all()
 
     if not tasks:
         return {"suggestions": [], "message": "No open tasks to prioritize"}
@@ -1971,15 +1967,14 @@ def ai_predict_escalations(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    from ..modules.governance import doc_lifecycle
     user_tenants = get_user_tenants(current_user, db)
-    tasks = doc_lifecycle.without_others_tasks(db.query(CriticalTask).options(        # (their titles name documents)
+    tasks = task_visibility.visible(db, current_user, db.query(CriticalTask).options(        # the person's board only
         joinedload(CriticalTask.assigned_owner),
     ).filter(
         CriticalTask.tenant_id.in_(user_tenants),
         CriticalTask.status.notin_(["Completed", "Verified"]),
         CriticalTask.due_date.isnot(None),
-    ), current_user).order_by(CriticalTask.due_date.asc()).limit(50).all()
+    )).order_by(CriticalTask.due_date.asc()).limit(50).all()
 
     if not tasks:
         return {"predictions": [], "message": "No tasks with SLA to analyze"}
@@ -2027,7 +2022,7 @@ def ai_balance_workload(
 ):
     from ..modules.governance import doc_lifecycle
     user_tenants = get_user_tenants(current_user, db)
-    tasks = _without_others_document_tasks(db, current_user, db.query(CriticalTask).options(       # the board's tasks only
+    tasks = task_visibility.visible(db, current_user, db.query(CriticalTask).options(       # the person's board only
         joinedload(CriticalTask.assigned_owner),
     ).filter(
         CriticalTask.tenant_id.in_(user_tenants),
