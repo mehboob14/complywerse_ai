@@ -7,6 +7,13 @@ clock's own tests drive it directly.
 import os
 
 os.environ.setdefault("DISABLE_PLATFORM_CLOCK", "1")
+# Tests never reach a real Redis or Celery worker. When the local platform runs (Redis in WSL on 6379 and a worker), a test
+# that created a document or started a parse would queue a real job, and the worker would run it against the real tenant
+# database with the same slug (many tests use "cfsb"). Port 1 refuses at once, so every job takes the in-process path the
+# suite is written for. Set before anything imports grc.config; load_dotenv never overrides a variable already set.
+for _name, _db in (("REDIS_URL", 0), ("CELERY_BROKER_URL", 1), ("CELERY_RESULT_BACKEND", 2)):
+    os.environ[_name] = f"redis://127.0.0.1:1/{_db}"
+os.environ["DISABLE_CELERY_DISPATCH"] = "1"
 
 
 import pytest  # noqa: E402
