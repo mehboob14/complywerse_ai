@@ -132,8 +132,8 @@ def _sentences(norm: str, idx: List[int], paragraphs: List[Tuple[int, int]]) -> 
     return spans + [(spans[i][0], spans[i + 1][1]) for i in range(len(spans) - 1)]
 
 
-def locate(flat: str, text: str, claimed: List[Tuple[int, int]], _cache: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """Where ``text`` is in ``flat``: ``{"start", "end", "match"}`` in ``flat`` coordinates, ``match`` exact or corrected."""
+def locate(flat: str, text: str, claimed: List[Tuple[int, int]], _cache: Dict[str, Any], fuzzy: bool = True) -> Optional[Dict[str, Any]]:
+    """Where ``text`` is in ``flat``: ``{"start", "end", "match"}`` in ``flat`` coordinates, ``match`` exact or (``fuzzy``) corrected."""
     if "n" not in _cache:
         _cache["n"] = _norm(flat)
     norm, idx = _cache["n"]
@@ -151,6 +151,8 @@ def locate(flat: str, text: str, claimed: List[Tuple[int, int]], _cache: Dict[st
             start, end = to_flat(at, at + len(wanted))
             return {"start": start, "end": end, "match": "exact"}
         at = norm.find(wanted, at + 1)
+    if not fuzzy:
+        return None
 
     if "s" not in _cache:
         _cache["s"] = _sentences(norm, idx, _cache.get("spans", []))
@@ -189,8 +191,9 @@ def anchor(db, document, user_id: Optional[int] = None, *, again: bool = False) 
     flat, _spans = flatten(paragraphs)
     cache: Dict[str, Any] = {"spans": _spans}
     claimed: List[Tuple[int, int]] = []
-    from .routers.policy_parser import _create_version_snapshot
+    from .routers.policy_parser import _create_version_snapshot, log_statement_change
 
+    who = user_id or document.owner_id
     for s in _statements(db, document.id):
         counts["total"] += 1
         pending = s.source_text is not None and (s.statement_text or "").strip() != s.source_text.strip()
@@ -200,6 +203,15 @@ def anchor(db, document, user_id: Optional[int] = None, *, again: bool = False) 
             counts[s.source_match or "not_found"] = counts.get(s.source_match or "not_found", 0) + 1
             continue
         found = locate(flat, s.statement_text or "", claimed, cache)
+        earlier = _earlier_wording(s, flat, claimed, cache) if s.source_match in _WRITABLE and (found or {}).get("match") != "exact" else None
+        if earlier:
+            # the file holds an earlier wording of it again (its change was taken back, an earlier version restored): its wording
+            # is an edit that is not in the document, as before it was written there
+            s.source_text, s.source_start, s.source_match = flat[earlier["start"]:earlier["end"]], earlier["start"], "exact"
+            claimed.append((earlier["start"], earlier["end"]))
+            counts["exact"] += 1
+            log_statement_change(db, s, who, "statement_out_of_document", old=s.source_text, new=s.statement_text)
+            continue
         if not found:
             s.source_match, s.source_text, s.source_start = "not_found", None, None
             counts["not_found"] += 1
@@ -207,13 +219,24 @@ def anchor(db, document, user_id: Optional[int] = None, *, again: bool = False) 
         original = flat[found["start"]:found["end"]]
         claimed.append((found["start"], found["end"]))
         if (s.statement_text or "").strip() != original.strip():       # the statement is the document's own wording, character for character
-            s.statement_text = original[:10000]
-            _create_version_snapshot(db, s, "verbatim_correction", user_id or document.owner_id,
-                                     "Wording corrected to match the document")
+            was, s.statement_text = s.statement_text, original[:10000]
+            _create_version_snapshot(db, s, "verbatim_correction", who, "Wording corrected to match the document")
+            if _norm_plain(was) != _norm_plain(s.statement_text):          # its words changed, not only its spaces or quotation marks
+                log_statement_change(db, s, who, "statement_corrected_to_file", old=was, new=s.statement_text)
         s.source_text, s.source_start, s.source_match = original, found["start"], found["match"]
         counts[found["match"]] += 1
     db.commit()
     return counts
+
+
+def _earlier_wording(statement, flat: str, claimed: List[Tuple[int, int]], cache: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    """Where the file holds, exactly, a wording the statement had before (its history, newest first); None when it holds none."""
+    now = _norm_plain(statement.statement_text)
+    for v in sorted(statement.versions, key=lambda v: (v.version_number or 0, v.id or 0), reverse=True):
+        found = locate(flat, v.statement_text or "", claimed, cache, fuzzy=False) if _norm_plain(v.statement_text) != now else None
+        if found:
+            return found
+    return None
 
 
 def anchor_after_parse(db, document_id: int, user_id: Optional[int] = None) -> None:
@@ -295,6 +318,24 @@ def _word_copy(paragraphs: List[Paragraph], title: str, path: str) -> None:
     for p in paragraphs:
         doc.add_paragraph(p.text)
     doc.save(path)
+
+
+def _change_set(document, content: Optional[str], new_path: str, new_name: str, written: List[Dict[str, Any]], user) -> Optional[Dict[str, Any]]:
+    """What a version written from statements changes in the document's text (``document`` still holds the file before), each change
+    marked as coming from the statements and naming the ones it holds, for the Change log. None when a text cannot be read."""
+    from types import SimpleNamespace
+    from . import change_chain as C
+
+    old = C.document_text(document)
+    new = C.version_text(SimpleNamespace(id=None, content=content, file_path=new_path, file_name=new_name, file_size=os.path.getsize(new_path)))
+    if old is None or new is None:
+        return None
+    by = getattr(user, "display_name", None) or getattr(user, "username", None) or ""
+    cs = C.build_change_set(old, new, [], default_kind="statement", by=by, by_id=user.id, at=datetime.utcnow().isoformat(), extra={"origin": "statement"})
+    for item in cs["items"]:
+        codes = [p["code"] or str(p["id"]) for p in written if _norm_plain(p["now"]) and _norm_plain(p["now"]) in _norm_plain(item["after_text"])]
+        item["reason"] = "From statement " + ", ".join(codes) if codes else "From statements"
+    return cs
 
 
 def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, Any]:
@@ -384,6 +425,7 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
             document_id=document.id, version_number=new_version, change_type=decision["change"], title=document.title, content=content,
             file_name=new_name, file_path=new_path, file_size=os.path.getsize(new_path), file_type="docx",
             change_summary=summary, change_reason=change_reason, status="current", created_by=user.id, created_at=datetime.utcnow())
+        row.change_set = _change_set(document, content, new_path, new_name, [p for p in info["pending"] if p["code"] not in conflicts], user)
         db.add(row)
     db.flush()
 
@@ -406,7 +448,7 @@ def apply(db, document, user, change_reason: Optional[str] = None) -> Dict[str, 
 
     create_audit_log(db=db, document_id=document.id, tenant_id=document.tenant_id, user_id=user.id,
                      action="statements_written_to_document",
-                     action_details=f"{len(edits)} statement edit(s) written into the document; version {new_version} created"
+                     action_details=f"{len(edits)} statement edit(s) written into the document ({', '.join(map(str, codes))}); version {new_version} created"
                                     + doc_lifecycle.outcome(old_status, document.status, document),
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     db.commit()

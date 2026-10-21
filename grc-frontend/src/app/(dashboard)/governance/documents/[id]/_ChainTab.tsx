@@ -12,7 +12,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   BookOpen, BookOpenCheck, CheckCircle2, ChevronDown, ChevronRight, FileDown, FileSpreadsheet, FileText, GitCompare, GitCommitVertical, History,
   ListTree, Loader2, Send, ShieldCheck, Sparkles, Table2, Users, XCircle, type LucideIcon,
-  RotateCcw,
+  RotateCcw, FileCheck2, FileInput, FileX2, ListPlus, ListX, PencilLine, RefreshCw, Undo2, Wrench,
 } from 'lucide-react';
 import { documentChainApi, ORIGIN_LABEL, shapeOf, sourceLabel, type ChainEvent, type ChainItem, type ChainSource, type ChainVersion, type ExportFormat } from '@/lib/documentChain';
 import { isApprovalEvent } from '../_view/trackedChanges';
@@ -70,6 +70,17 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   resubmitted: { label: 'Resubmitted', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   withdrawn: { label: 'Withdrawn from review', icon: RotateCcw, tone: SLATE },
   route_set: { label: 'Approval route set', icon: Users, tone: SLATE },
+  // changes to the document's statements (not approvals): each shows the statement's wording before and after
+  statement_added: { label: 'Statement added', icon: ListPlus, tone: SLATE },
+  statement_edited: { label: 'Statement edited', icon: PencilLine, tone: SLATE },
+  statement_deleted: { label: 'Statement removed', icon: ListX, tone: SLATE },
+  statement_rolled_back: { label: 'Statement rolled back', icon: History, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  statements_reparsed: { label: 'Statements re-read from the document', icon: RefreshCw, tone: SLATE },
+  statement_corrected_to_file: { label: "Statement matched to the document's wording", icon: FileCheck2, tone: SLATE },
+  statement_out_of_document: { label: 'Statement edit no longer in the document', icon: FileX2, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  statement_changed_by_fix: { label: 'Statement changed by a gap fix', icon: Wrench, tone: SLATE },
+  statement_fix_undone: { label: 'Gap fix on a statement undone', icon: Undo2, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  statements_written_to_document: { label: 'Statements written into the document', icon: FileInput, tone: SLATE },
 };
 
 /** sources with nothing to name them by (a change made on the person's request) are labelled by what they rest on, not "Source" */
@@ -112,7 +123,7 @@ function SectionPath({ section }: { section: string }) {
   );
 }
 
-function Diff({ item }: { item: ChainItem }) {
+function Diff({ item }: { item: Pick<ChainItem, 'status' | 'before_text' | 'after_text'> }) {
   const segs: Segment[] = useMemo(() => (item.status === 'modified' ? wordDiff(item.before_text, item.after_text) : []), [item]);
   if (item.status === 'inserted') {
     return <p className="whitespace-pre-wrap rounded-lg border-l-[3px] border-l-emerald-500 bg-emerald-50/60 px-3 py-2 text-[13px] leading-relaxed text-emerald-950">{item.after_text}</p>;
@@ -251,6 +262,9 @@ function EventRow({ e }: { e: ChainEvent }) {
         {e.detail && <span className={`min-w-0 flex-1 ${MUTED}`}>{e.detail}</span>}
         <span className={`ml-auto shrink-0 ${MUTED}`}>{dateTime(e.at)}</span>
       </div>
+      {(e.before || e.after) && (                                  // a statement's wording, from what to what
+        <div className="mb-1"><Diff item={{ status: e.before && e.after ? 'modified' : e.after ? 'inserted' : 'deleted', before_text: e.before ?? '', after_text: e.after ?? '' }} /></div>
+      )}
     </li>
   );
 }

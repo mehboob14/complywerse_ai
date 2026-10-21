@@ -32,10 +32,15 @@ export const LIFECYCLE_KIND_LABEL = { review: 'Review', approval: 'Approval', ac
 export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   sent_for_review: 'Sent for review', sent_for_approval: 'Sent for approval', signed: 'Signed', rejected: 'Rejected', published: 'Published',
   acknowledged: 'Acknowledged', escalated: 'Escalated', status_changed: 'Status changed', version_created: 'New version',
-  statements_written_to_document: 'Statements written to the document', review_requested: 'Review requested',
+  statements_written_to_document: 'Statements written into the document', review_requested: 'Review requested',
   approval_requested: 'Approval requested', acknowledgement_requested: 'Acknowledgement requested', file_uploaded: 'File uploaded',
   restored: 'Restored from the archive', changes_requested: 'Changes requested', resubmitted: 'Resubmitted', withdrawn: 'Withdrawn from review',
   delegated: 'Delegated', route_set: 'Approval route set',
+  // changes to the document's statements
+  statement_added: 'Statement added', statement_edited: 'Statement edited', statement_deleted: 'Statement removed',
+  statement_rolled_back: 'Statement rolled back', statements_reparsed: 'Statements re-read from the document',
+  statement_corrected_to_file: "Statement matched to the document's wording", statement_out_of_document: 'Statement edit no longer in the document',
+  statement_changed_by_fix: 'Statement changed by a gap fix', statement_fix_undone: 'Gap fix on a statement undone',
 };
 export const eventLabel = (kind: string) => LIFECYCLE_EVENT_LABEL[kind] || (kind.charAt(0).toUpperCase() + kind.slice(1)).replace(/_/g, ' ');
 

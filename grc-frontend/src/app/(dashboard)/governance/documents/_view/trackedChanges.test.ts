@@ -91,3 +91,9 @@ test('only review, approval, signing, rejection and publication events are appro
   assert.ok(!isApprovalEvent({ kind: 'version_rollback', to: null }));
   assert.ok(!isApprovalEvent({ kind: 'owner_assigned', to: null }));                  // an owner change is not an approval
 });
+
+test('a version written from statements says so, and a change to a statement is not an approval', () => {
+  assert.equal(versionOrigin(v(6, 'statement', 1)), 'From statements');
+  for (const kind of ['statement_added', 'statement_edited', 'statement_deleted', 'statement_rolled_back', 'statements_reparsed', 'statement_corrected_to_file',
+    'statement_out_of_document', 'statement_changed_by_fix', 'statement_fix_undone', 'statements_written_to_document']) assert.ok(!isApprovalEvent({ kind, to: null }), kind);
+});

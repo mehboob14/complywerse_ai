@@ -39,7 +39,7 @@ STAGE_LABEL = {"draft": "Draft", "pending_review": "In review", "pending_approva
                "published": "Published", "expired": "Expired", "archived": "Archived", "exception_applied": "Exception applied"}
 ORIGIN_LABEL = {"ai": "Comply Agent", "manual": "Edited by hand", "mixed": "Comply Agent and edited by hand", "revert": "Taken back",
                 "restore": "Earlier version restored", "signoff": "Sign-off stamp", "initial": "The original", "file": "File replaced",
-                "import": "Imported", "unknown": "Changed", "nochange": "No change to the text"}
+                "import": "Imported", "unknown": "Changed", "nochange": "No change to the text", "statement": "From statements"}
 # audit entries that matter to the chain: its change and approval log (the rest - views, downloads, field edits - do not)
 EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent_for_approval": "Sent for approval", "signed": "Signed",
                "reviewed": "Reviewed", "approved": "Approved", "rejected": "Rejected", "published": "Published", "acknowledged": "Acknowledged",
@@ -50,6 +50,15 @@ EVENT_LABEL = {"created": "Created", "sent_for_review": "Sent for review", "sent
                "changes_requested": "Changes requested", "resubmitted": "Resubmitted", "withdrawn": "Withdrawn from review",
                "route_set": "Approval route set"}
 _EVENT_ACTIONS = set(EVENT_LABEL)
+# a change to one of the document's statements (field_changed "statement": the statement's wording before and after, cut to a few lines)
+STATEMENT_EVENT_LABEL = {"statement_added": "Statement added", "statement_edited": "Statement edited", "statement_deleted": "Statement removed",
+                         "statement_rolled_back": "Statement rolled back", "statements_reparsed": "Statements re-read from the document",
+                         "statement_corrected_to_file": "Statement matched to the document's wording",
+                         "statement_out_of_document": "Statement edit no longer in the document",
+                         "statement_changed_by_fix": "Statement changed by a gap fix", "statement_fix_undone": "Gap fix on a statement undone",
+                         "statements_written_to_document": "Statements written into the document"}
+EVENT_LABEL.update(STATEMENT_EVENT_LABEL)
+_EVENT_ACTIONS |= set(STATEMENT_EVENT_LABEL)
 
 
 # ── cutting a difference into changes ────────────────────────────────────────
@@ -465,9 +474,11 @@ def chain(db, doc, upto=None) -> Dict[str, Any]:
     for a in audit:
         if a.action not in _EVENT_ACTIONS:
             continue
+        statement = a.field_changed == "statement"           # a statement's wording before and after (``from``/``to`` are stages)
         events.append({"at": _iso(a.performed_at), "kind": a.action, "actor": names.get(a.performed_by), "actor_id": a.performed_by,
                        "detail": a.action_details or "", "from": a.old_value if a.field_changed == "status" else None,
-                       "to": _status_after(a), "stage": _stage_at(history, a.performed_at)})
+                       "to": _status_after(a), "stage": _stage_at(history, a.performed_at),
+                       "before": a.old_value if statement else None, "after": a.new_value if statement else None})
     all_sources: Dict[Tuple[str, str, str], Dict[str, Any]] = {}
     for v in out_versions:
         for it in v["items"]:
@@ -592,8 +603,14 @@ def catalog(c: Dict[str, Any]) -> Dict[str, List[List[Any]]]:
     sources = [[s.get("title") or s.get("ref") or "", s.get("kind") or "", s.get("locator") or "", s.get("quote") or "",
                 "found" if s.get("verified") else ("not found" if s.get("verified") is False else ""), ", ".join(str(n) for n in s.get("versions", []))]
                for s in c["sources"]]
-    approvals = [[_clock(e["at"]), EVENT_LABEL.get(e["kind"], e["kind"]), e["actor"] or "", e["detail"] or ""] for e in c["events"]]
+    approvals = [[_clock(e["at"]), EVENT_LABEL.get(e["kind"], e["kind"]), e["actor"] or "", _event_detail(e)] for e in c["events"]]
     return {"versions": versions, "changes": changes, "sources": sources, "approvals": approvals}
+
+
+def _event_detail(e: Dict[str, Any]) -> str:
+    """An event's detail; a change to a statement adds its wording: “before” → “after”."""
+    words = " → ".join(f"“{t}”" for t in (e.get("before"), e.get("after")) if t)
+    return " · ".join(p for p in (e["detail"], words) if p)
 
 
 CATALOG_HEADERS = {
