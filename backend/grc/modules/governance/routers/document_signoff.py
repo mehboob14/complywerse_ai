@@ -39,6 +39,7 @@ _ROLE_LABEL = {"prepared_by": "Prepared by", "reviewer": "Reviewed by", "approve
 # Which document.status corresponds to each stage awaiting signatures.
 _STAGE_STATUS = {"reviewer": "pending_review", "approver": "pending_approval"}
 ON_HOLD = "Changes were asked for: it waits for the author to make them and resubmit it."
+ON_HOLD_PROPOSAL = "A change was proposed: it waits for the owner to accept or reject it."
 OWN_ROUTE = ("This document follows an approval route of its own. Change who reviews and approves it in Submit for review "
              "(withdraw it from review first if it is in review).")
 
@@ -314,7 +315,20 @@ def _user_actionable_role(db: Session, tenant_ids: List[int], doc: GovernanceDoc
 def _my_step_or_403(db: Session, doc: GovernanceDocument, user_id: int, refused: str) -> routes.Step:
     step = _step(db, doc, user_id)
     if step is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=ON_HOLD if routes.on_hold(db, doc) else refused)
+        hold = routes.open_hold(db, doc)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
+                            detail=refused if hold is None else ON_HOLD_PROPOSAL if routes.is_proposal(hold) else ON_HOLD)
+    return step
+
+
+AS_IS_ONLY = "The change you proposed holds it: sign it as it is, or propose another change."
+
+
+def _signing_only(step: routes.Step) -> routes.Step:
+    """While a proposed change holds the route its proposer may only sign it as it is (or propose again): no rejecting, delegating
+    or asking for changes then."""
+    if step.as_is:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=AS_IS_ONLY)
     return step
 
 
@@ -370,6 +384,9 @@ def get_signoff(
     step = routes.step_for(db, doc, current_user.id, assignments, signatures)
     route_view = routes.view(db, doc, assignments, signatures, dict(signer_names), lambda a: _target_display(db, a.target_type, a.target_id))
     editor = can_edit(db, current_user, doc)
+    from .. import proposals
+
+    decide = proposals.decide_summary(db, current_user, doc)       # the owner (or author): changes proposed that wait for them
 
     return {
         "document_id": document_id,
@@ -394,19 +411,26 @@ def get_signoff(
         "round_started_at": doc.signoff_round_at.isoformat() if doc.signoff_round_at else None,
         "version": doc.current_version or "1.0",
         "progress": progress,
-        "my_actionable_role": step.stage.role_type if step else None,   # 'reviewer' | 'approver' | null — can sign now
+        # 'reviewer' | 'approver' | null — can sign now (null while a proposed change holds it: its proposer's my_step says may_sign_as_is)
+        "my_actionable_role": step.stage.role_type if step and not step.as_is else None,
         # the route: its stages and each person's state, and the changes asked for while they wait (routes.view)
         "route": route_view,
         "my_step": None if step is None else {
             "stage_position": step.stage.position, "stage_name": step.stage.name, "kind": step.stage.kind,
             "kind_label": step.stage.label, "role_type": step.stage.role_type, "in_turn": step.stage.order == "in_turn",
-            "can_reject": step.stage.allow_reject, "can_delegate": step.stage.allow_delegate,
+            # signing it as it is is the one step while it is held (no rejecting, delegating or asking for changes then)
+            "can_reject": step.stage.allow_reject and not step.as_is, "can_delegate": step.stage.allow_delegate and not step.as_is,
             "on_behalf_of": _name(db, step.on_behalf_of),
             # asked again after changes: when they signed (the version, and its row to show what changed since) or what they asked
             "again": routes.again_for(db, doc, step.stage, current_user.id),
+            # the owner did not accept the change they proposed: they may sign it as it is (nothing changed: the others' signatures stand)
+            "may_sign_as_is": step.as_is,
+            "decide": decide,
         },
-        "can_resubmit": editor and route_view["hold"] is not None and doc.status != "archived",
+        # changes asked for are resubmitted; a proposed change that holds it is accepted or rejected by the owner instead
+        "can_resubmit": editor and route_view["hold"] is not None and route_view["hold"]["kind"] != "proposal" and doc.status != "archived",
         "can_withdraw": editor and doc.status in routes.PENDING,
+        "decide": decide,                  # {count, first_id} for the owner (or author) while proposed changes wait for them, else null
     }
 
 
@@ -547,6 +571,11 @@ def send_for_review(
     ensure_not_archived(doc)                           # out of the archive only by Restore, then sent as a draft
     if routes.on_hold(db, doc):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Changes were asked for: resubmit it when they are made.")
+    from .. import proposals
+
+    waiting = proposals.waiting_before_send(db, doc)          # a proposed change is decided first (it would hold the review)
+    if waiting:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=waiting)
     assignments = _assignments(db, document_id)
     route = routes.stages(db, doc)
     if routes.is_custom(route):
@@ -667,6 +696,10 @@ def sign_document(
         content_sha256=seen_sha, request=request,
     )
     doc.updated_at = datetime.utcnow()
+    if step.as_is:          # the proposer signs it as it is after the owner did not accept their change: the hold ends, nothing restarts
+        from .. import proposals
+
+        proposals.signed_as_is(db, doc, current_user.id)
 
     advanced_to = advance_if_complete(db, doc, user_tenants, current_user.id)      # this signature included
     moved = ""
@@ -679,6 +712,7 @@ def sign_document(
         action="signed", field_changed="signoff",
         old_value=None, new_value=f"{role_label}: {stamped}",
         action_details=(body.comment or f"Signed as {role_label}{f' for {principal}' if principal else ''}")
+        + (" · as it is: the change they proposed was not accepted" if step.as_is else "")
         + f" · e-signature {esig.image_sha256[:12]}, seal {esig.seal[:12]}"
         + (moved or (f" → {advanced_to}" if advanced_to else "")),
     )
@@ -688,6 +722,8 @@ def sign_document(
                          action_details="Reviewed, but none of its approvers can sign it, so it is a draft again: choose other approvers and send it for review")
     db.flush()
     doc_lifecycle.on_signed(db, doc, current_user.id, role_type, signature.id, esig.id, advanced_to, stage=stage)
+    if step.as_is:          # the requests that waited are asked again (the signer's done): the review goes on where it was
+        doc_lifecycle.on_released(db, doc, current_user.id, signer=current_user.id, signature_id=signature.id)
     db.commit()
     return get_signoff(document_id, db, current_user)
 
@@ -707,7 +743,7 @@ def reject_document(
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     check_version(db, doc, body.version, body.round_at)
-    step = _my_step_or_403(db, doc, current_user.id, "You are not an assigned signer at this stage.")
+    step = _signing_only(_my_step_or_403(db, doc, current_user.id, "You are not an assigned signer at this stage."))
     if not step.stage.allow_reject:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN,
                             detail=f"At {step.stage.name} you can sign or ask for changes; rejecting is not part of this stage.")
@@ -763,7 +799,7 @@ def request_changes(
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     check_version(db, doc, body.version, body.round_at)
-    step = _my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document.")
+    step = _signing_only(_my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document."))
     shown, newest = _hold_marks(db, doc)
     hold = DocumentRouteHold(tenant_id=doc.tenant_id, document_id=doc.id, round_at=doc.signoff_round_at, stage_position=step.stage.position,
                              requested_by=current_user.id, on_behalf_of=step.on_behalf_of, requested_at=datetime.utcnow(),
@@ -787,47 +823,78 @@ def resubmit(
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth),
 ):
-    """The changes asked for are made: the route goes on. A minor change (or none, by doc_version.by_rule) starts the stage it waited
-    at again for everyone in it (the user, 2026-10-21): the signatures given there before no longer count (``routes.restarts``) and
-    everyone is asked again, told what changed since (in turn: from the first); earlier stages' signatures stand. A major one, or one
-    the author calls major, starts the route again from its first stage (D33)."""
-    from ..doc_version import by_rule
-
+    """The changes asked for are made: the route goes on. A minor change (or none, by doc_version.by_rule on the document's text, or
+    its file's text) starts the stage it waited at again for everyone in it (the user, 2026-10-21): the signatures given there before
+    no longer count (``routes.restarts``) and everyone is asked again, told what changed since (in turn: from the first); earlier
+    stages' signatures stand. A major one, or one the author calls major, starts the route again from its first stage (D33). A
+    proposed change that holds it is accepted or rejected by its owner instead (proposals.py)."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
     hold = routes.open_hold(db, doc)
     if hold is None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No changes are waiting to be resubmitted.")
-    same = (hold.content_before or "") == (doc.content or "")
-    size = "major" if body.major else "none" if same else by_rule(hold.content_before, doc.content)
+    if routes.is_proposal(hold):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT,
+                            detail="A proposed change holds it: its owner accepts or rejects it in Proposed changes.")
+    size = "major" if body.major else change_since(db, doc, hold)
+    resume(db, doc, hold, current_user.id, size, body.note)
+    db.commit()
+    return {**get_signoff(document_id, db, current_user), "outcome": hold.outcome, "change": size}
+
+
+def change_since(db: Session, doc: GovernanceDocument, hold: DocumentRouteHold) -> str:
+    """none | minor | major: how much the document changed since the hold began (doc_version.by_rule, no AI): its text, or - for a
+    document that is its Word or PDF file, whose own text is empty - its file's text then (the version it was asked on) and now.
+    (Sizing a file document by its empty text called every change "none".)"""
+    from ..doc_version import by_rule
+
+    if not (doc.file_path and not (doc.content or "").strip()):
+        return "none" if (hold.content_before or "") == (doc.content or "") else by_rule(hold.content_before, doc.content)
+    from .. import change_chain as C
+
+    row = db.get(GovernanceDocumentVersion, hold.version_id) if hold.version_id else None
+    before = C.version_text(row) if row is not None else None
+    after = C.document_text(doc)
+    if before is None or after is None:             # a file that cannot be read: a new version since is a minor change
+        return "minor" if routes.changed_since(db, doc, hold) else "none"
+    return "none" if before == after else by_rule(before, after)
+
+
+def resume(db: Session, doc: GovernanceDocument, hold: DocumentRouteHold, by: int, size: str, note: Optional[str] = None, *,
+           done: Optional[str] = None, log: bool = True) -> str:
+    """The hold ends as a resubmission does (``size``: none | minor | major): a minor change (or none) starts the stage it waited at
+    again for everyone in it, a major one the whole route. ``done``: what ended it, when it is not a resubmission (a proposed change
+    accepted: proposals.py), whose own Change log row then says so (``log`` False: no "Resubmitted" row). Returns what happens, as
+    the history says it. Does not commit."""
     now = datetime.utcnow()
-    note = (body.note or "").strip() or None
-    hold.resolved_at, hold.resolved_by, hold.resubmit_note, hold.change = now, current_user.id, note, size
+    note = (note or "").strip() or None
+    hold.resolved_at, hold.resolved_by, hold.resubmit_note, hold.change = now, by, note, size
     who = _name(db, hold.requested_by) or "the person who asked"
     held_at = routes.stage_at(routes.stages(db, doc), hold.stage_position)
     if size == "major":
         hold.outcome = "restarted"
-        why = f"Resubmitted with a major change after {who} asked for changes, so it is signed again from the start"
+        why = (f"{done} (a major change), so it is signed again from the start" if done else
+               f"Resubmitted with a major change after {who} asked for changes, so it is signed again from the start")
     else:
         hold.outcome = "resumed"
         if hold.signature_mark is None:                 # asked for before holds kept their marks: the stage starts again all the same
             shown, hold.signature_mark = _hold_marks(db, doc, hold.requested_at)
             hold.version_id = hold.version_id or shown
-        why = (f"Resubmitted after {who} asked for changes ({'no change to the text' if size == 'none' else 'a minor change'}): everyone at "
-               f"{held_at.name if held_at else 'its stage'} signs it again; the stages before stand")
+        why = (f"{done or f'Resubmitted after {who} asked for changes'} ({'no change to the text' if size == 'none' else 'a minor change'}): "
+               f"everyone at {held_at.name if held_at else 'its stage'} signs it again; the stages before stand")
     doc.updated_at = now
-    create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=current_user.id, action="resubmitted",
-                     field_changed="signoff", old_value=hold.comment[:500], new_value=size,
-                     action_details=why + (f". {note}" if note else ""))
+    if log:
+        create_audit_log(db=db, document_id=doc.id, tenant_id=doc.tenant_id, user_id=by, action="resubmitted",
+                         field_changed="signoff", old_value=hold.comment[:500], new_value=size,
+                         action_details=why + (f". {note}" if note else ""))
     db.flush()
     if size == "major":
-        doc_lifecycle.restart_round(db, doc, current_user.id)
-    doc_lifecycle.on_resubmitted(db, doc, current_user.id, hold)
+        doc_lifecycle.restart_round(db, doc, by)
+    doc_lifecycle.on_resubmitted(db, doc, by, hold)
     if size != "major":
-        _log_asked_again(db, doc, hold, current_user.id)
-        doc_lifecycle.recheck_stage(db, doc, current_user.id)      # meanwhile the people left may be nobody
-    db.commit()
-    return {**get_signoff(document_id, db, current_user), "outcome": hold.outcome, "change": size}
+        _log_asked_again(db, doc, hold, by)
+        doc_lifecycle.recheck_stage(db, doc, by)      # meanwhile the people left may be nobody
+    return why
 
 
 def _log_asked_again(db: Session, doc: GovernanceDocument, hold: DocumentRouteHold, by: int) -> None:
@@ -892,7 +959,7 @@ def delegate(
     it over no longer does. Where the stage allows it (on by default)."""
     user_tenants = get_user_tenants(current_user, db)
     doc = _doc_or_404(document_id, user_tenants, db)
-    step = _my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document.")
+    step = _signing_only(_my_step_or_403(db, doc, current_user.id, "It is not your turn to review or approve this document."))
     stage = step.stage
     if not stage.allow_delegate:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"{stage.name} cannot be delegated.")

@@ -122,6 +122,10 @@ def session_view(db, s, *, content: bool = True, user=None) -> Dict[str, Any]:
     if content:
         out["content"] = s.content
         out["original_version"] = _original_version(db, s)
+        from .. import proposals
+
+        # saved to the library as a change that waits for the owner (or was not accepted): the draft stays unsaved meanwhile
+        out["proposal"] = proposals.for_session(db, s)
     return out
 
 
@@ -1097,19 +1101,37 @@ def move_to_library(db, s, user, *, title: Optional[str] = None, doc_type: Optio
     return doc
 
 
-def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str]) -> None:
-    """Keep on a version what it changed and where each change came from (see ``change_chain``). The save never fails over it."""
+def _change_set(db, s, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str],
+                version: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """What a save changes and where each change came from (see ``change_chain``): the session's changes since its last save. None
+    when it cannot be made (the chain then compares the two texts)."""
     from .. import change_chain as C
 
     try:
         origins = session_origins(db, s, since_revision=int((s.settings or {}).get("saved_revision") or 0))
         for o in origins:
-            o["version"] = version_row.version_number
-        version_row.change_set = C.build_change_set(old_text or "", new_text or "", origins, default_kind="manual", by=user_name(user), by_id=user.id,
-                                                    at=_now().isoformat(), extra={"session_id": s.id, "stage_before": stage_before, "stage_after": stage_after})
+            o["version"] = version
+        return C.build_change_set(old_text or "", new_text or "", origins, default_kind="manual", by=user_name(user), by_id=user.id,
+                                  at=_now().isoformat(), extra={"session_id": s.id, "stage_before": stage_before, "stage_after": stage_after})
     except Exception:       # noqa: BLE001 - the chain is derived from the two texts when this is missing
-        logger.warning("could not record the change set of version %s of studio session %s", getattr(version_row, "version_number", "?"), s.id, exc_info=True)
+        logger.warning("could not record the change set of version %s of studio session %s", version or "?", s.id, exc_info=True)
+        return None
+
+
+def _record_change_set(db, s, version_row, old_text: str, new_text: str, user, *, stage_before: Optional[str], stage_after: Optional[str]) -> None:
+    """Keep on a version what it changed and where each change came from (see ``change_chain``). The save never fails over it."""
+    cs = _change_set(db, s, old_text, new_text, user, stage_before=stage_before, stage_after=stage_after, version=version_row.version_number)
+    if cs is not None:
+        version_row.change_set = cs
     s.settings = {**(s.settings or {}), "saved_revision": s.revision_no}
+
+
+def _keep_change_set(db, s, row, old_text: str, new_text: str, user, *, stage_before, stage_after, change_set=None) -> None:
+    """The version's change set: as it was proposed (``change_set``, an accepted proposal: who made what then), else the session's."""
+    if change_set is not None:
+        row.change_set = {**change_set, "stage_before": stage_before, "stage_after": stage_after}
+    elif s is not None:
+        _record_change_set(db, s, row, old_text, new_text, user, stage_before=stage_before, stage_after=stage_after)
 
 
 def _decision(old_text: str, new_text: str, user, change_type: Optional[str], *, title: str) -> Dict[str, str]:
@@ -1131,11 +1153,10 @@ def _version_row(db, doc, number: str):
 
 def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force: bool = False, change_type: Optional[str] = None):
     """Save the session's document as the next version of its library document: a minor or a major change as the person chose
-    (``change_type``; without it Comply Agent decides). The versions before it stay as they were."""
+    (``change_type``; without it Comply Agent decides). The versions before it stay as they were. Someone who is not the document's
+    owner or author proposes it instead (proposals.py): the library is left as it is, the session stays unsaved and waits for the
+    owner, and the proposal is returned."""
     from ....models import GovernanceDocument
-    from ..routers.documents import _snapshot_content_version
-    from ..routers.versions import create_audit_log
-    from .. import doc_lifecycle
 
     doc = db.get(GovernanceDocument, s.document_id) if s.document_id else None
     if doc is None:
@@ -1150,11 +1171,42 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
         raise StudioError(f"Nothing has changed since the library version: version {doc.current_version or '1.0'} already holds every change.")
     if not force and (doc.content or "").strip() and _norm_doc(doc.content) != _norm_doc(s.base_content):
         raise Conflict("The document was changed in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
+    from .. import proposals
+
+    if proposals.required(db, user, doc):
+        return _propose(db, s, user, doc, change_reason=change_reason, change_type=change_type, base_text=doc.content or "")
+    _save_text(db, s, user, doc, s.content, change_reason=change_reason, change_type=change_type)
+    db.commit()
+    return doc
+
+
+def _propose(db, s, user, doc, *, change_reason: Optional[str], change_type: Optional[str], base_text: str, file=None):
+    """A save to the library by someone who is not the document's owner or author: kept as a proposal (the text, and for a document
+    that is its file the file it would get), who made each change as the session says it. Commits."""
+    from .. import proposals
+
+    cs = _change_set(db, s, base_text, s.content, user, stage_before=doc.status, stage_after=None)
+    p = proposals.propose(db, doc, user, source="studio", message=change_reason, content=s.content, file=file, change_type=change_type,
+                          session_id=s.id, change_set=cs,
+                          payload={"change_reason": change_reason, "revision": s.revision_no, "file_master": file is not None})
+    s.updated_at = _now()
+    db.commit()
+    return p
+
+
+def _save_text(db, s, user, doc, content: str, *, change_reason: Optional[str], change_type: Optional[str], change_set=None,
+               revision: Optional[int] = None) -> None:
+    """``content`` becomes the library document's next version (Save to the library, and an accepted proposal of one, by its
+    proposer: ``change_set`` as it was proposed, ``revision`` the session's then). The session, when there is one, is based on it
+    now. Does not commit."""
+    from ..routers.documents import _snapshot_content_version
+    from ..routers.versions import create_audit_log
+    from .. import doc_lifecycle
     from ..doc_version import summary_of
 
     old_content, old_title, old_version, old_status = doc.content, doc.title, doc.current_version or "1.0", doc.status
-    decision = _decision(old_content or "", s.content, user, change_type, title=doc.title)
-    doc.content, doc.updated_at = s.content, _now()
+    decision = _decision(old_content or "", content, user, change_type, title=doc.title)
+    doc.content, doc.updated_at = content, _now()
     new_version = _snapshot_content_version(db, doc, old_content=old_content, old_title=old_title, old_version=old_version,
                                             change_type=decision["change"], change_reason=change_reason, user_id=user.id,
                                             summary=summary_of("Edited in the Comply AI Studio" + (": " + change_reason if change_reason else ""), decision))
@@ -1167,11 +1219,33 @@ def save_to_document(db, s, user, *, change_reason: Optional[str] = None, force:
                      field_changed="current_version", old_value=old_version, new_value=new_version)
     row = _version_row(db, doc, new_version)
     if row is not None:
-        _record_change_set(db, s, row, old_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
-    s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
-    s.settings = {k: v for k, v in (s.settings or {}).items() if k != "version_read"}       # it holds the newest version now
-    db.commit()
-    return doc
+        _keep_change_set(db, s, row, old_content or "", content, user, stage_before=old_status, stage_after=doc.status, change_set=change_set)
+    if s is not None:
+        s.base_content, s.base_label, s.updated_at = content, f"{doc.title} v{new_version}", _now()
+        s.settings = {k: v for k, v in (s.settings or {}).items() if k != "version_read"}       # it holds the newest version now
+        if revision is not None:
+            s.settings = {**s.settings, "saved_revision": revision}
+
+
+def apply_proposal(db, doc, user, p) -> None:
+    """A save to the library someone proposed, accepted (proposals.py): the text (or the file) as it was proposed becomes the next
+    version, by them; their draft, when it is still there, is based on it from now on. Does not commit."""
+    from ....models import StudioSession
+    from .. import change_chain as C, proposals
+
+    s = db.get(StudioSession, p.studio_session_id) if p.studio_session_id else None
+    s = s if s is not None and s.document_id == doc.id else None
+    payload = p.payload or {}
+    reason, revision = payload.get("change_reason"), payload.get("revision")
+    if payload.get("file_master"):
+        data = proposals.file_data(p)
+        if data is None:
+            raise StudioError("The proposed file is no longer there. Reject this change and ask for it again.")
+        _save_file(db, s, user, doc, data, p.proposed_content, base_text=C.document_text(doc) or "", change_reason=reason,
+                   change_type=p.change_type, change_set=p.change_set, revision=revision)
+    else:
+        _save_text(db, s, user, doc, p.proposed_content, change_reason=reason, change_type=p.change_type, change_set=p.change_set,
+                   revision=revision)
 
 
 def write_file_version(db, doc, user, data: bytes, *, change_type: str, summary: str, reason: Optional[str], done: str, ext: str = "docx",
@@ -1271,18 +1345,33 @@ def _save_file_version(db, s, user, doc, *, change_reason: Optional[str], force:
         raise StudioError(f"Nothing has changed since the library version: version {doc.current_version or '1.0'} already holds every change.")
     if not force and doc.file_path != (s.settings or {}).get("library_file"):
         raise Conflict("The file of this document was replaced in the library after you opened it. Reload it in the studio, or save anyway to replace it.")
-    from ..doc_version import summary_of
+    from .. import proposals
 
-    decision = _decision(s.base_content or "", s.content, user, change_type, title=doc.title)
     data, _notes = export_file(db, s, "docx", export_settings(db, s))
-    row, new_version, old_status = write_file_version(db, doc, user, data, change_type=decision["change"], reason=change_reason, done="Edited in the Comply AI Studio",
-                                                      summary=summary_of("Edited in the Comply AI Studio" + (": " + change_reason if change_reason else ""), decision))
-    _record_change_set(db, s, row, s.base_content or "", s.content, user, stage_before=old_status, stage_after=doc.status)
-    s.base_content, s.base_label, s.updated_at = s.content, f"{doc.title} v{new_version}", _now()
-    s.settings = {**{k: v for k, v in (s.settings or {}).items() if k not in ("file_changed", "version_read")}, "library_file": doc.file_path}
+    if proposals.required(db, user, doc):
+        f = proposals.store_file(data, f"{os.path.splitext(doc.file_name or doc.title or 'document')[0]}.docx")
+        return _propose(db, s, user, doc, change_reason=change_reason, change_type=change_type, base_text=s.base_content or "", file=f)
+    _save_file(db, s, user, doc, data, s.content, base_text=s.base_content or "", change_reason=change_reason, change_type=change_type)
     db.commit()
     reanchor(db, doc, user.id)
     return doc
+
+
+def _save_file(db, s, user, doc, data: bytes, content: str, *, base_text: str, change_reason: Optional[str], change_type: Optional[str],
+               change_set=None, revision: Optional[int] = None) -> None:
+    """``data`` becomes the next version of a document that is its file (``content`` its text): Save to the library, and an accepted
+    proposal of one, by its proposer. The session, when there is one, is based on it now. Does not commit."""
+    from ..doc_version import summary_of
+
+    decision = _decision(base_text or "", content, user, change_type, title=doc.title)
+    row, new_version, old_status = write_file_version(db, doc, user, data, change_type=decision["change"], reason=change_reason, done="Edited in the Comply AI Studio",
+                                                      summary=summary_of("Edited in the Comply AI Studio" + (": " + change_reason if change_reason else ""), decision))
+    _keep_change_set(db, s, row, base_text or "", content, user, stage_before=old_status, stage_after=doc.status, change_set=change_set)
+    if s is not None:
+        s.base_content, s.base_label, s.updated_at = content, f"{doc.title} v{new_version}", _now()
+        s.settings = {**{k: v for k, v in (s.settings or {}).items() if k not in ("file_changed", "version_read")}, "library_file": doc.file_path}
+        if revision is not None:
+            s.settings = {**s.settings, "saved_revision": revision}
 
 
 # ── export ───────────────────────────────────────────────────────────────────

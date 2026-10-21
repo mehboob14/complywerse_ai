@@ -287,6 +287,10 @@ _COLUMN_ADDS = [
     # ...and, on changes asked for, the version they were asked on and the newest signature then (its stage is signed again)
     ("grc_document_route_holds", "version_id", "INTEGER", None),
     ("grc_document_route_holds", "signature_mark", "INTEGER", None),
+    # Proposed changes (modules/governance/proposals.py): a hold that waits for the owner's accept, and the requests about one
+    ("grc_document_route_holds", "kind", "VARCHAR(20) DEFAULT 'changes'", None),
+    ("grc_document_route_holds", "proposal_id", "INTEGER", None),
+    ("grc_document_obligations", "proposal_id", "INTEGER", None),
     # Statement <-> original document sync (cfsb): the wording as the file has it and where
     ("grc_policy_statements", "source_text", "TEXT", None),
     ("grc_policy_statements", "source_start", "INTEGER", None),

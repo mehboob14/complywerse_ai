@@ -11,8 +11,8 @@ from pydantic import BaseModel
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
-from ....models import (GRCUser, GovernanceDocument, StudioAsset, StudioMessage, StudioReference, StudioSession, StudioTemplate, Tenant,
-                        UploadedFramework, get_db)
+from ....models import (DocumentChangeProposal, GRCUser, GovernanceDocument, StudioAsset, StudioMessage, StudioReference, StudioSession,
+                        StudioTemplate, Tenant, UploadedFramework, get_db)
 from ....routers.auth_router import require_auth
 from ....services.ai_gateway import claude_client
 from ..permissions import can_edit, edit_filter, is_admin as _is_admin, visible_filter
@@ -144,6 +144,7 @@ class SaveIn(BaseModel):
     change_reason: Optional[str] = None
     force: bool = False
     change_type: Optional[Literal["major", "minor"]] = None     # the person's choice; without it Comply Agent decides (older callers)
+    message: Optional[str] = None                               # the why by its other name (a proposed change: governance/proposals.py)
 
 
 class TemplateIn(BaseModel):
@@ -784,9 +785,16 @@ def move_to_library(session_id: int, body: MoveIn, db: Session = Depends(get_db)
 def save_to_document(session_id: int, body: SaveIn, db: Session = Depends(get_db), user: GRCUser = Depends(require_auth)):
     s = _session(db, session_id, user)
     try:
-        doc = service.save_to_document(db, s, user, change_reason=body.change_reason, force=body.force, change_type=body.change_type)
+        doc = service.save_to_document(db, s, user, change_reason=body.change_reason or body.message, force=body.force,
+                                       change_type=body.change_type)
     except service.StudioError as exc:
         raise _problem(exc)
+    if isinstance(doc, DocumentChangeProposal):         # not the owner or author: it waits for them (proposals.py)
+        from .. import proposals
+
+        library = db.get(GovernanceDocument, doc.document_id)
+        return {"document_id": library.id, "version": library.current_version, "status": library.status, "change": None, "in_place": False,
+                **proposals.answer(db, doc, user, library)}
     row = service._version_row(db, doc, doc.current_version)
     # in_place: always false now that every save makes its own version (kept for older screens)
     return {"document_id": doc.id, "version": doc.current_version, "status": doc.status, "change": row.change_type if row is not None else None,

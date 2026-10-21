@@ -96,6 +96,10 @@ class CreatePolicyStatementRequest(BaseModel):
     is_mandatory: bool = True
     source_section: Optional[str] = None
     ai_extracted_keywords: Optional[List[str]] = None
+    # the justification for this change (kept in its history and the Change log): optional for the document's owner or author,
+    # required from anyone else, whose change waits for them (proposals.py); ``message`` is the same by its other name
+    change_reason: Optional[str] = None
+    message: Optional[str] = None
 
 
 class UpdatePolicyStatementRequest(BaseModel):
@@ -105,11 +109,26 @@ class UpdatePolicyStatementRequest(BaseModel):
     priority: Optional[str] = None
     is_mandatory: Optional[bool] = None
     source_section: Optional[str] = None
-    change_reason: Optional[str] = None
+    change_reason: Optional[str] = None             # the justification (see CreatePolicyStatementRequest)
+    message: Optional[str] = None
 
 
 class RollbackStatementRequest(BaseModel):
     version_id: int
+    change_reason: Optional[str] = None             # the justification (see CreatePolicyStatementRequest)
+    message: Optional[str] = None
+
+
+class DeleteStatementRequest(BaseModel):
+    change_reason: Optional[str] = None             # the justification (see CreatePolicyStatementRequest); also ?change_reason=
+    message: Optional[str] = None
+
+
+def _justified(request):
+    """The justification of a statement change, whichever of its names it came by (change_reason, else message)."""
+    if not (request.change_reason or "").strip() and (getattr(request, "message", None) or "").strip():
+        request.change_reason = request.message
+    return request
 
 
 class ApplyReparseProposalsRequest(BaseModel):
@@ -1544,12 +1563,34 @@ def add_policy_statement(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="statement_text is required"
         )
+    from .. import proposals
 
+    request = _justified(request)
+    if proposals.required(db, current_user, document):
+        # the new statement waits for the owner (or author) to accept it; its code is given when it is added
+        after = {"statement_text": request.statement_text[:10000], "category": request.category, "priority": request.priority or "medium",
+                 "is_mandatory": request.is_mandatory, "source_section": request.source_section}
+        proposal = proposals.propose(db, document, current_user, source="statement_add", message=request.change_reason,
+                                     payload={"request": request.model_dump(), "code": None, "before": None, "after": after})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+
+    statement, compliance_record = _add_statement(db, document, current_user, request)
+    logger.info(f"[ADD STATEMENT] Statement created successfully: id={statement.id}, code={statement.statement_code}")
+    return serialize_statement(statement, compliance_record.id)
+
+
+def _add_statement(db: Session, document: GovernanceDocument, user: GRCUser, request: CreatePolicyStatementRequest, commit: bool = True):
+    """A statement added by hand (``request.change_reason``: why, kept in its history): the next code of the document, its first
+    snapshot, its compliance record, the Change log row and the governance action. Add, and an accepted proposal of one
+    (proposals.py, ``commit`` False). Returns ``(statement, compliance record)``."""
+    document_id = document.id
     existing_count = db.query(PolicyStatement).filter(
         PolicyStatement.document_id == document_id
     ).count()
     next_idx = existing_count + 1
     statement_code = f"PS-{document_id:04d}-{next_idx:03d}"
+    reason = (request.change_reason or "").strip() or None
 
     statement = PolicyStatement(
         tenant_id=document.tenant_id,
@@ -1563,14 +1604,14 @@ def add_policy_statement(
         source_section=request.source_section,
         ai_extracted_keywords=request.ai_extracted_keywords or [],
         status="active",
-        created_by=current_user.id,
+        created_by=user.id,
         created_at=datetime.utcnow()
     )
     db.add(statement)
     db.flush()
 
-    _create_version_snapshot(db, statement, "manual_add", current_user.id)
-    log_statement_change(db, statement, current_user.id, "statement_added", new=statement.statement_text)
+    _create_version_snapshot(db, statement, "manual_add", user.id, reason)
+    log_statement_change(db, statement, user.id, "statement_added", new=statement.statement_text, detail=reason or "")
 
     compliance_record = PolicyStatementCompliance(
         tenant_id=document.tenant_id,
@@ -1579,8 +1620,11 @@ def add_policy_statement(
         owner_id=document.owner_id
     )
     db.add(compliance_record)
-    db.commit()
-    db.refresh(statement)
+    if commit:
+        db.commit()
+        db.refresh(statement)
+    else:
+        db.flush()
 
     # Log the action for review
     log_governance_action(
@@ -1589,7 +1633,7 @@ def add_policy_statement(
         action_type="policy_statement_created",
         action_description=f"Policy statement '{statement.statement_code}' created: {statement.statement_text[:100]}...",
         entity_type="policy_statement",
-        action_user_id=current_user.id,
+        action_user_id=user.id,
         entity_id=statement.id,
         action_metadata={
             "document_id": document_id,
@@ -1598,10 +1642,9 @@ def add_policy_statement(
             "priority": statement.priority
         }
     )
-    db.commit()
-
-    logger.info(f"[ADD STATEMENT] Statement created successfully: id={statement.id}, code={statement.statement_code}")
-    return serialize_statement(statement, compliance_record.id)
+    if commit:
+        db.commit()
+    return statement, compliance_record
 
 
 @router.put("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_changer)])
@@ -1635,30 +1678,19 @@ def update_policy_statement(
             detail="Policy statement not found for this document"
         )
 
+    from .. import proposals
+
+    request = _justified(request)
     was = {k: getattr(statement, k) for k in ("statement_text", *_OTHER_FIELDS)}
-    if request.statement_text is not None:
-        statement.statement_text = request.statement_text[:10000]
-    if request.statement_summary is not None:
-        statement.statement_summary = request.statement_summary[:500] if request.statement_summary else None
-    if request.category is not None:
-        statement.category = request.category
-    if request.priority is not None:
-        statement.priority = request.priority
-    if request.is_mandatory is not None:
-        statement.is_mandatory = request.is_mandatory
-    if request.source_section is not None:
-        statement.source_section = request.source_section
-
-    statement.updated_at = datetime.utcnow()
-
-    # Snapshot the resulting state so version history always includes the edited content.
-    _create_version_snapshot(db, statement, "manual_edit", current_user.id, request.change_reason)
-    reworded = statement.statement_text != was["statement_text"]
-    others = [label for k, label in _OTHER_FIELDS.items() if getattr(statement, k) != was[k]]
-    if reworded or others:
-        log_statement_change(db, statement, current_user.id, "statement_edited", old=was["statement_text"] if reworded else None,
-                             new=statement.statement_text if reworded else None,
-                             detail=" · ".join(p for p in ("changed: " + ", ".join(others) if others else "", (request.change_reason or "").strip()) if p))
+    if _edited(statement, request) != was and proposals.required(db, current_user, document):
+        # the edit waits for the owner (or author) to accept it; the statement stays as it is until then
+        after = {**proposals.statement_fields(statement), **{k: v for k, v in _edited(statement, request).items() if k in proposals.STATEMENT_FIELDS}}
+        proposal = proposals.propose(db, document, current_user, source="statement_edit", message=request.change_reason, statement=statement,
+                                     payload={"request": request.model_dump(exclude_unset=True), "code": statement.statement_code,
+                                              "before": proposals.statement_fields(statement), "after": after})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+    _edit_statement(db, statement, current_user, request)
 
     db.commit()
     db.refresh(statement)
@@ -1668,6 +1700,38 @@ def update_policy_statement(
     ).first()
 
     return serialize_statement(statement, compliance.id if compliance else None)
+
+
+def _edited(statement: PolicyStatement, request: UpdatePolicyStatementRequest) -> dict:
+    """The statement's wording and fields as the edit would leave them (nothing is changed here)."""
+    out = {k: getattr(statement, k) for k in ("statement_text", *_OTHER_FIELDS)}
+    if request.statement_text is not None:
+        out["statement_text"] = request.statement_text[:10000]
+    if request.statement_summary is not None:
+        out["statement_summary"] = request.statement_summary[:500] if request.statement_summary else None
+    for key in ("category", "priority", "is_mandatory", "source_section"):
+        if getattr(request, key) is not None:
+            out[key] = getattr(request, key)
+    return out
+
+
+def _edit_statement(db: Session, statement: PolicyStatement, user: GRCUser, request: UpdatePolicyStatementRequest) -> None:
+    """An edit of a statement by hand: its new wording and fields, the snapshot with the justification, the Change log row. Edit, and
+    an accepted proposal of one (proposals.py). Does not commit."""
+    was = {k: getattr(statement, k) for k in ("statement_text", *_OTHER_FIELDS)}
+    for key, value in _edited(statement, request).items():
+        setattr(statement, key, value)
+
+    statement.updated_at = datetime.utcnow()
+
+    # Snapshot the resulting state so version history always includes the edited content.
+    _create_version_snapshot(db, statement, "manual_edit", user.id, request.change_reason)
+    reworded = statement.statement_text != was["statement_text"]
+    others = [label for k, label in _OTHER_FIELDS.items() if getattr(statement, k) != was[k]]
+    if reworded or others:
+        log_statement_change(db, statement, user.id, "statement_edited", old=was["statement_text"] if reworded else None,
+                             new=statement.statement_text if reworded else None,
+                             detail=" · ".join(p for p in ("changed: " + ", ".join(others) if others else "", (request.change_reason or "").strip()) if p))
 
 
 @router.get("/{document_id}/statements/{statement_id}/versions", dependencies=[Depends(require_doc_reader)])
@@ -1760,7 +1824,37 @@ def rollback_statement(
     ).first()
     if not target_version:
         raise HTTPException(status_code=404, detail="Version not found")
+    from .. import proposals
 
+    request = _justified(request)
+    if proposals.required(db, current_user, document):
+        # the rollback waits for the owner (or author) to accept it; the statement stays as it is until then
+        proposal = proposals.propose(db, document, current_user, source="statement_rollback", message=request.change_reason,
+                                     statement=statement,
+                                     payload={"version_id": target_version.id, "code": statement.statement_code,
+                                              "before": proposals.statement_fields(statement), "after": proposals.statement_fields(target_version)})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+    target_display_version = _rollback_statement(db, document, statement, target_version, current_user, request.change_reason)
+    db.commit()
+    db.refresh(statement)
+
+    compliance = db.query(PolicyStatementCompliance).filter(
+        PolicyStatementCompliance.statement_id == statement.id
+    ).first()
+
+    return {
+        "message": f"Statement rolled back to version {target_display_version}",
+        "statement": serialize_statement(statement, compliance.id if compliance else None)
+    }
+
+
+def _rollback_statement(db: Session, document: GovernanceDocument, statement: PolicyStatement, target_version: PolicyStatementVersion,
+                        current_user: GRCUser, change_reason: Optional[str] = None) -> int:
+    """A statement back to one of its versions (``change_reason``: why, kept with its snapshot): its snapshot, the Change log and the
+    audit rows. Rollback, and an accepted proposal of one (proposals.py). Does not commit. Returns the version number it went back to."""
+    statement_id, document_id, target_version_id = statement.id, document.id, target_version.id
+    reason = (change_reason or "").strip()
     old_text = statement.statement_text
     statement.statement_text = target_version.statement_text
     statement.statement_summary = target_version.statement_summary
@@ -1787,11 +1881,12 @@ def rollback_statement(
         statement,
         "rollback",
         current_user.id,
-        f"Rolled back to version {target_display_version}"
+        f"Rolled back to version {target_display_version}" + (f": {reason}" if reason else "")
     )
     reworded = statement.statement_text != old_text
     log_statement_change(db, statement, current_user.id, "statement_rolled_back", old=old_text if reworded else None,
-                         new=statement.statement_text if reworded else None, detail=f"back to version {target_display_version}")
+                         new=statement.statement_text if reworded else None,
+                         detail=f"back to version {target_display_version}" + (f" · {reason}" if reason else ""))
 
     audit = AuditLog(
         tenant_id=document.tenant_id,
@@ -1807,17 +1902,7 @@ def rollback_statement(
         }
     )
     db.add(audit)
-    db.commit()
-    db.refresh(statement)
-
-    compliance = db.query(PolicyStatementCompliance).filter(
-        PolicyStatementCompliance.statement_id == statement.id
-    ).first()
-
-    return {
-        "message": f"Statement rolled back to version {target_display_version}",
-        "statement": serialize_statement(statement, compliance.id if compliance else None)
-    }
+    return target_display_version
 
 
 @router.get("/{document_id}/statements/{statement_id}/diff", dependencies=[Depends(require_doc_reader)])
@@ -2081,6 +2166,7 @@ def apply_reparse_proposals(
 
 class DocumentSyncRequest(BaseModel):
     change_reason: Optional[str] = None
+    message: Optional[str] = None           # the why by its other name (a proposed change: proposals.py)
 
 
 def _sync_target(db: Session, document_id: int, current_user: GRCUser):
@@ -2123,14 +2209,32 @@ def apply_document_sync(document_id: int, body: DocumentSyncRequest, db: Session
     document = _sync_target(db, document_id, current_user)
     if not doc_sync.enabled(db):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document sync is not enabled for this organisation")
+    from .. import proposals
+
+    reason = body.change_reason or body.message
+    proposing = proposals.required(db, current_user, document)
+    if proposing and not (reason or "").strip():
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=proposals.MESSAGE_REQUIRED)
     try:
-        return doc_sync.apply(db, document, current_user, body.change_reason)
+        if not proposing:
+            return doc_sync.apply(db, document, current_user, reason)
+        # writing the statements into the document waits for the owner (or author): the new file is made now, beside the library's
+        prepared = doc_sync.prepare(db, document)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
     except LookupError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    kept = {k: v for k, v in prepared.items() if k not in ("before", "after")}         # the texts are read from the files again
+    proposal = proposals.propose(
+        db, document, current_user, source="write_back", message=reason, content=prepared["content"],
+        file={"path": prepared["new_path"], "name": prepared["new_name"], "type": "docx", "size": os.path.getsize(prepared["new_path"])},
+        payload={"prepared": kept, "change_reason": reason})
+    db.commit()
+    return {"version": document.current_version, "version_id": None, "updated": 0, "conflicts": prepared["conflicts"],
+            "status": document.status, "sent_to_review": False, "file_type": "docx", "word_copy": not prepared["editable"],
+            **proposals.answer(db, proposal, current_user, document)}
 
 
 from ....models import IssueGovernanceLink, PolicyGapFinding, StatementControlMapping  # noqa: E402
@@ -2139,14 +2243,19 @@ from ....models import IssueGovernanceLink, PolicyGapFinding, StatementControlMa
 # it is listed here, as for a deleted document (documents._DELETE_WITH_DOCUMENT): a link that exists only for it goes with it, a
 # record that merely came from it (a control made from it, a gap fix that changed it) is kept and unlinked. Without this a mapped
 # statement could not be deleted (a foreign-key error on Postgres). tests/test_statement_change_log.py fails on a new reference.
+from ....models import DocumentChangeProposal  # noqa: E402
+
 _DELETE_WITH_STATEMENT = (StatementControlMapping.statement_id, IssueGovernanceLink.policy_statement_id)
-_UNLINK_FROM_STATEMENT = (InternalControl.source_statement_id, PolicyGapFinding.applied_statement_id)
+# (a proposed change to the statement keeps its wording before and after: it stays, no longer linked)
+_UNLINK_FROM_STATEMENT = (InternalControl.source_statement_id, PolicyGapFinding.applied_statement_id, DocumentChangeProposal.statement_id)
 
 
 @router.delete("/{document_id}/statements/{statement_id}", dependencies=[Depends(require_doc_changer)])
 def delete_policy_statement(
     document_id: int,
     statement_id: int,
+    body: Optional[DeleteStatementRequest] = None,
+    change_reason: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: GRCUser = Depends(require_auth)
 ):
@@ -2172,7 +2281,25 @@ def delete_policy_statement(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Policy statement not found for this document"
         )
+    reason = ((_justified(body).change_reason if body is not None else None) or change_reason or "").strip() or None
+    from .. import proposals
 
+    if proposals.required(db, current_user, document):
+        # removing it waits for the owner (or author) to accept it; the statement stays until then
+        proposal = proposals.propose(db, document, current_user, source="statement_delete", message=reason, statement=statement,
+                                     payload={"code": statement.statement_code, "before": proposals.statement_fields(statement), "after": None})
+        db.commit()
+        return proposals.answer(db, proposal, current_user, document)
+    _delete_statement(db, statement, current_user, reason)
+    db.commit()
+
+    return {"message": "Statement deleted"}
+
+
+def _delete_statement(db: Session, statement: PolicyStatement, user: GRCUser, reason: Optional[str] = None) -> None:
+    """A statement removed (``reason``: why, in its Change log row): its compliance records and links go with it, records that came from
+    it are kept, unlinked. Delete, and an accepted proposal of it (proposals.py). Does not commit."""
+    statement_id = statement.id
     db.query(PolicyStatementCompliance).filter(
         PolicyStatementCompliance.statement_id == statement_id
     ).delete(synchronize_session='fetch')
@@ -2180,12 +2307,37 @@ def delete_policy_statement(
         db.query(column.class_).filter(column == statement_id).update({column: None}, synchronize_session=False)
     for column in _DELETE_WITH_STATEMENT:
         db.query(column.class_).filter(column == statement_id).delete(synchronize_session=False)
-    log_statement_change(db, statement, current_user.id, "statement_deleted", old=statement.statement_text)
+    log_statement_change(db, statement, user.id, "statement_deleted", old=statement.statement_text, detail=reason or "")
 
     db.delete(statement)
-    db.commit()
 
-    return {"message": "Statement deleted"}
+
+def apply_statement_proposal(db: Session, document: GovernanceDocument, user: GRCUser, p) -> None:
+    """A change to a statement someone proposed, accepted (proposals.py): as its own endpoint makes it, by them, with their
+    justification. Does not commit."""
+    from .. import proposals
+
+    payload = p.payload or {}
+    reason = p.message
+    if p.source == "statement_add":
+        request = CreatePolicyStatementRequest(**{**(payload.get("request") or {}), "change_reason": reason})
+        statement, _record = _add_statement(db, document, user, request, commit=False)
+        p.statement_id, p.payload = statement.id, {**payload, "code": statement.statement_code}       # the statement it became
+        return
+    statement = db.get(PolicyStatement, p.statement_id) if p.statement_id else None
+    if statement is None or statement.document_id != document.id:
+        raise proposals.Stale("The statement this change is about is no longer there. Reject it.")
+    if p.source == "statement_edit":
+        _edit_statement(db, statement, user, UpdatePolicyStatementRequest(**{**(payload.get("request") or {}), "change_reason": reason}))
+    elif p.source == "statement_delete":
+        _delete_statement(db, statement, user, reason)
+    elif p.source == "statement_rollback":
+        target = db.get(PolicyStatementVersion, payload.get("version_id"))
+        if target is None or target.statement_id != statement.id:
+            raise proposals.Stale("The version this change rolls back to is no longer there. Reject it.")
+        _rollback_statement(db, document, statement, target, user, reason)
+    else:
+        raise ValueError(f"Unknown proposed change to a statement: {p.source}")
 
 
 @router.post("/{document_id}/statements/convert-to-controls", dependencies=[Depends(require_doc_changer)], response_model=List[InternalControlFromStatementResponse])

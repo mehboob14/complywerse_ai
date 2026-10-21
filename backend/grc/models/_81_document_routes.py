@@ -54,6 +54,9 @@ class DocumentRouteHold(Base):
     resolved_by = Column(Integer, ForeignKey("grc_users.id"), nullable=True)
     resubmit_note = Column(Text, nullable=True)
     change = Column(String(10), nullable=True)                        # none | minor | major, at resubmission
-    outcome = Column(String(20), nullable=True)                       # resumed | restarted | withdrawn
+    outcome = Column(String(20), nullable=True)                       # resumed | restarted | withdrawn | as_is (a proposal, nothing changed)
+    # changes (asked for; None on rows from before) | proposal (a change someone proposed waits for the owner: proposals.py)
+    kind = Column(String(20), nullable=True, default="changes")
+    proposal_id = Column(Integer, nullable=True)                      # the proposed change it waits for
 
     __table_args__ = (Index("ix_doc_route_hold_doc", "document_id", "resolved_at"),)

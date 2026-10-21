@@ -83,6 +83,10 @@ const EVENT: Record<string, { label: string; icon: LucideIcon; tone: string }> =
   review_again_requested: { label: 'Asked again after changes', icon: RotateCcw, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
   withdrawn: { label: 'Withdrawn from review', icon: RotateCcw, tone: SLATE },
   route_set: { label: 'Approval route set', icon: Users, tone: SLATE },
+  change_proposed: { label: 'Change proposed', icon: Send, tone: 'bg-amber-50 text-amber-700 ring-amber-200' },
+  proposal_accepted: { label: 'Proposed change accepted', icon: CheckCircle2, tone: 'bg-emerald-50 text-emerald-700 ring-emerald-200' },
+  proposal_rejected: { label: 'Proposed change not accepted', icon: XCircle, tone: 'bg-rose-50 text-rose-700 ring-rose-200' },
+  proposal_withdrawn: { label: 'Proposed change withdrawn', icon: RotateCcw, tone: SLATE },
   // changes to the document's statements (not approvals): each shows the statement's wording before and after
   statement_added: { label: 'Statement added', icon: ListPlus, tone: SLATE },
   statement_edited: { label: 'Statement edited', icon: PencilLine, tone: SLATE },
