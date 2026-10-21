@@ -367,7 +367,7 @@ PERMISSION_MATRIX = [
         "submodules": [
             {
                 "name": "organization",
-                "display_name": "Organization Profile",
+                "display_name": "Organization Profile & Departments",
                 "actions": ["view", "edit"]
             },
             {
