@@ -9,7 +9,7 @@ import math
 import re
 import threading
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -87,7 +87,8 @@ def analyze_clauses_batch(policy_text: str, clauses: List[dict], framework_name:
 
     client = OpenAI(
         api_key=AI_INTEGRATIONS_OPENAI_API_KEY,
-        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL
+        base_url=AI_INTEGRATIONS_OPENAI_BASE_URL,
+        timeout=180,        # a batch is never silent for ORPHAN_AFTER (3 tries at most, the SDK's default retries)
     )
 
     clauses_text = ""
@@ -351,14 +352,44 @@ def serialize_finding(finding: PolicyGapFinding, db: Session) -> dict:
     }
 
 
+# A run that waits or runs with no sign of life (the job's beat, else its start, else its creation) for ORPHAN_AFTER is orphaned:
+# its job is gone (the server or the worker restarted, or the job was stopped). The job beats at pickup and after every batch, for
+# each of its runs still running, and one batch is never silent that long (the AI call's timeout). The POST and the job cancel
+# such runs in the database (cancel_orphaned_runs); the pages show them cancelled at once (serialize_run; a GET writes nothing).
+ORPHAN_AFTER = timedelta(minutes=15)
+ORPHANED = "Cancelled automatically: the gap analysis stopped before it finished (the server or the worker restarted). Run it again."
+_UNDER_WAY = ("queued", "running")
+
+
+def is_orphaned(run: PolicyGapAnalysisRun, now: Optional[datetime] = None) -> bool:
+    last = run.updated_at or run.started_at or run.created_at
+    return run.status in _UNDER_WAY and last is not None and last < (now or datetime.utcnow()) - ORPHAN_AFTER
+
+
+def cancel_orphaned_runs(db: Session) -> None:
+    """``is_orphaned`` as one UPDATE over the tenant's runs: failed with ORPHANED (a status the pages know). The caller commits."""
+    R = PolicyGapAnalysisRun
+    now = datetime.utcnow()
+    db.query(R).filter(R.status.in_(_UNDER_WAY), func.coalesce(R.updated_at, R.started_at, R.created_at) < now - ORPHAN_AFTER) \
+        .update({R.status: "failed", R.completed_at: now, R.error_message: ORPHANED}, synchronize_session=False)
+
+
+def _beat(db: Session, run_ids: list) -> None:
+    """The job is alive: each of its runs still running says so, the ones waiting for their turn too. The caller commits."""
+    R = PolicyGapAnalysisRun
+    db.query(R).filter(R.id.in_(list(run_ids or [])), R.status == "running") \
+        .update({R.updated_at: datetime.utcnow()}, synchronize_session=False)
+
+
 def serialize_run(run: PolicyGapAnalysisRun) -> dict:
+    orphaned = is_orphaned(run)
     return {
         "id": run.id,
         "tenant_id": run.tenant_id,
         "document_id": run.document_id,
         "uploaded_framework_id": run.uploaded_framework_id,
         "framework_name": run.framework_name,
-        "status": run.status,
+        "status": "failed" if orphaned else run.status,
         "run_type": run.run_type,
         "total_clauses_analyzed": run.total_clauses_analyzed,
         "fully_compliant_count": run.fully_compliant_count,
@@ -367,23 +398,31 @@ def serialize_run(run: PolicyGapAnalysisRun) -> dict:
         "not_applicable_count": run.not_applicable_count,
         "compliance_percentage": run.compliance_percentage,
         "ai_model_used": None,              # kept in the database; the page never shows a model name (the key stays for old readers)
-        "error_message": public_job_error(run.error_message),       # the stored text stays for the logs
+        "error_message": ORPHANED if orphaned else public_job_error(run.error_message),       # the stored text stays for the logs
         "started_at": run.started_at.isoformat() if run.started_at else None,
         "completed_at": run.completed_at.isoformat() if run.completed_at else None,
         "created_by": run.created_by,
         "clauses_total": getattr(run, "clauses_total", 0) or 0,
         "clauses_processed": getattr(run, "clauses_processed", 0) or 0,
+        "document_version": run.document_version,       # the version it read; None for runs made before it was recorded
     }
 
 
 def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant_slug: str = None):
-    """Body of the gap-analysis job. Takes an open tenant-scoped session."""
+    """Body of the gap-analysis job. Takes an open tenant-scoped session.
+
+    Only runs still running are done: a run cancelled (it stays cancelled, also when that happens while it is done) or finished by
+    an earlier delivery of this job (Celery redelivers after a worker is lost) is left as it is. A run still running is done from
+    its first clause: its findings are written with 'completed', so it has none yet and nothing is duplicated."""
     try:
+        cancel_orphaned_runs(db)        # this job's own runs too, when it comes too late for them: the pages already said cancelled
+        _beat(db, run_ids)
+        db.commit()
         document = db.query(GovernanceDocument).filter(GovernanceDocument.id == document_id).first()
         if not document:
             for run_id in run_ids:
                 run = db.query(PolicyGapAnalysisRun).filter(PolicyGapAnalysisRun.id == run_id).first()
-                if run:
+                if run and run.status == "running":
                     run.status = "failed"
                     run.error_message = "Document not found"
                     run.completed_at = datetime.utcnow()
@@ -394,7 +433,7 @@ def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant
         if not policy_text:
             for run_id in run_ids:
                 run = db.query(PolicyGapAnalysisRun).filter(PolicyGapAnalysisRun.id == run_id).first()
-                if run:
+                if run and run.status == "running":
                     run.status = "failed"
                     run.error_message = "No text could be extracted from the document"
                     run.completed_at = datetime.utcnow()
@@ -403,7 +442,7 @@ def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant
 
         for run_id in run_ids:
             run = db.query(PolicyGapAnalysisRun).filter(PolicyGapAnalysisRun.id == run_id).first()
-            if not run:
+            if not run or run.status != "running":
                 continue
 
             try:
@@ -442,15 +481,20 @@ def _gap_analysis_body(db, run_ids: list, document_id: int, user_id: int, tenant
                 all_findings_data = []
 
                 for i in range(0, len(clauses), batch_size):
+                    if run.status != "running":         # cancelled meanwhile (read again after each commit): no more AI spent on it
+                        break
                     batch = clauses[i:i + batch_size]
                     batch_for_api = [{"reference": c["reference"], "title": c["title"], "requirement": c["requirement"]} for c in batch]
                     findings_data = analyze_clauses_batch(policy_text, batch_for_api, framework.name, document.title or "")
                     all_findings_data.extend(findings_data)
                     try:
                         run.clauses_processed = min(len(clauses), (run.clauses_processed or 0) + len(batch))
+                        _beat(db, run_ids)
                         db.commit()
                     except Exception:
                         db.rollback()
+                if run.status != "running":
+                    continue
 
                 all_findings_data = post_process_scope_filter(all_findings_data, document.title or "", policy_text)
 
@@ -606,11 +650,18 @@ def run_gap_analysis(
 
     # The rate limit before any run is made: a refused run leaves nothing behind. It fails open without Redis (optional
     # locally), and then Celery, whose broker is that Redis, is not tried: the job runs on a thread at once.
-    from ....tasks.base import tenant_rate_limit, RateLimitExceeded
+    from ....tasks.base import release_tenant_lock, tenant_rate_limit, RateLimitExceeded
     try:
         redis_up = tenant_rate_limit(tenant_slug, bucket="gap_analysis")
     except RateLimitExceeded:
         raise HTTPException(status_code=429, detail="Too many gap-analysis runs in the last minute; try again shortly")
+
+    # the runs nobody works on any more are cancelled (committed with the new runs). With nothing of this document under way, a
+    # lock on its job can only be left by a job that stopped: it would refuse the new run as busy until it expires (30 minutes)
+    cancel_orphaned_runs(db)
+    if not db.query(PolicyGapAnalysisRun.id).filter(PolicyGapAnalysisRun.document_id == document.id,
+                                                    PolicyGapAnalysisRun.status.in_(_UNDER_WAY)).first():
+        release_tenant_lock(tenant_slug, f"gap_analysis:{document.id}")
 
     all_runs = []
 
@@ -631,7 +682,8 @@ def run_gap_analysis(
             run_type="manual",
             ai_model_used=get_openai_model(),
             started_at=datetime.utcnow(),
-            created_by=current_user.id
+            created_by=current_user.id,
+            document_version=document.current_version,     # the job reads the newest text (get_document_text)
         )
         db.add(run)
         db.flush()
@@ -713,19 +765,11 @@ def get_analysis_runs(
         PolicyGapAnalysisRun.tenant_id.in_(user_tenants)
     ).order_by(PolicyGapAnalysisRun.started_at.desc()).all()
 
-    # A run still 'running' long after its job could have ended (the worker or the server stopped; Celery stops a job at 20
-    # minutes) is shown as failed, so the page stops polling. Nothing is written (a GET writes nothing): a job that does
-    # finish late still records its result.
-    STALE_AFTER_SECONDS = 1800  # 30 minutes
-    now = datetime.utcnow()
-    rows = [serialize_run(r) for r in runs]
-    for r, row in zip(runs, rows):
-        if r.status == "running" and r.started_at and (now - r.started_at).total_seconds() > STALE_AFTER_SECONDS:
-            row.update(status="failed", error_message="The gap analysis did not finish. Run it again.")
-
+    # an orphaned run is shown cancelled (serialize_run), so the page stops polling; the next run or job writes it
     return {
         "document_id": document_id,
-        "runs": rows,
+        "current_version": document.current_version,      # the page compares each run's `document_version` with it
+        "runs": [serialize_run(r) for r in runs],
         "total": len(runs)
     }
 

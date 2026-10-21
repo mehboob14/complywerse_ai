@@ -532,6 +532,9 @@ _COLUMN_ADDS = [
     ("grc_parsed_framework_controls", "assessment_criteria", "JSON DEFAULT '[]'::json", None),
     # Per-criterion met/not-met state on each journey control implementation.
     ("grc_control_implementations", "criteria_status", "JSON DEFAULT '{}'::json", None),
+    # Gap-analysis runs: the job's heartbeat (a run silent for 15 minutes is cancelled automatically) and the version it read
+    ("grc_policy_gap_analysis_runs", "updated_at", "TIMESTAMP", None),
+    ("grc_policy_gap_analysis_runs", "document_version", "VARCHAR(50)", None),
     # Gap-analysis remediation: AI-drafted clause text + apply-to-document
     # audit columns. Populated via /gap-analysis/findings/{id}/generate-fix
     # and /apply-fix endpoints with human-in-the-loop edit/approve.

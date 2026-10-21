@@ -197,7 +197,9 @@ def test_a_comparison_rerun_refused_without_redis_keeps_the_comparison_there_is(
     assert db.get(m.ControlComparisonRun, 4).status == "completed"          # not deleted before the refusal
 
 
-def test_a_run_running_far_longer_than_a_job_can_take_is_shown_failed_and_nothing_is_written(world):
+def test_a_run_whose_job_went_silent_long_ago_is_shown_cancelled_and_nothing_is_written(world):
+    from grc.modules.governance.routers.gap_analysis import ORPHANED
+
     db = world.db
     old = db.get(m.PolicyGapAnalysisRun, 1)
     old.status, old.started_at, old.ai_model_used = "running", datetime.utcnow() - timedelta(hours=2), "gpt-5.5"
@@ -207,7 +209,7 @@ def test_a_run_running_far_longer_than_a_job_can_take_is_shown_failed_and_nothin
     r = world.http.get("/governance/gap-analysis/runs/5")
     assert r.status_code == 200, r.text
     rows = {x["id"]: x for x in r.json()["runs"]}
-    assert (rows[1]["status"], rows[1]["error_message"]) == ("failed", "The gap analysis did not finish. Run it again.")
+    assert (rows[1]["status"], rows[1]["error_message"]) == ("failed", ORPHANED)          # no beat for two hours
     assert rows[3]["status"] == "running"
     assert all("ai_model_used" in x and x["ai_model_used"] is None for x in rows.values()) and "gpt" not in r.text
     db.expire_all()

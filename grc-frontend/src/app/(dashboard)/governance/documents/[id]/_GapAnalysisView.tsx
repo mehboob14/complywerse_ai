@@ -22,7 +22,7 @@ import NcaCompareModal from '@/components/governance/NcaCompareModal';
 import { useLibraryDocuments } from '../_DetailsFields';
 import { versionLabel } from '../_view/versionLabel';
 import { formatDate } from './_DocumentViewer';
-import { frameworkTypeLabel, lastFailedRuns } from './_gapAnalysis';
+import { frameworkTypeLabel, lastFailedRuns, outdatedRuns } from './_gapAnalysis';
 
 const COMPLIANCE_STATUS_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   fully_compliant: { bg: 'bg-emerald-50', text: 'text-emerald-800', label: 'Fully compliant' },
@@ -220,11 +220,11 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   const refreshFindings = () => {
     for (const key of ['document-gap-findings', 'compliance-summary', 'gap-recommended-controls']) queryClient.invalidateQueries({ queryKey: [key, id] });
   };
-  // a fix or its take back changed the document: its text, versions and change chain
+  // a fix or its take back changed the document: its text, versions and change chain (and the version the runs are compared with)
   const refreshDocument = () => {
     refreshFindings();
     for (const key of ['governance-document', 'document-versions', 'document-view-html', 'document-access', 'document-lifecycle', 'doc-signoff',
-      'document-chain', 'document-chain-redline', 'document-policy-statements']) queryClient.invalidateQueries({ queryKey: [key] });
+      'document-chain', 'document-chain-redline', 'document-policy-statements', 'gap-analysis-runs']) queryClient.invalidateQueries({ queryKey: [key] });
   };
 
   const runGapAnalysisMutation = useMutation({
@@ -359,8 +359,11 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
   const running = runs.filter((r: any) => r.status === 'running' || r.status === 'queued');
   // the frameworks whose last run failed, with the server's reason, until they are run again
   const failed = lastFailedRuns(runs);
-  const runFailedAgain = () => {
-    const ids = Array.from(new Set(failed.map((r: any) => r.uploaded_framework_id).filter((v: any) => v != null))) as number[];
+  // the results made on an earlier version of the document (never run again by themselves: each run reads the whole document)
+  const currentVersion: string | null = gapAnalysisRuns?.current_version ?? null;
+  const outdated = outdatedRuns(runs, currentVersion);
+  const runAgain = (again: any[]) => {
+    const ids = Array.from(new Set(again.map((r: any) => r.uploaded_framework_id).filter((v: any) => v != null))) as number[];
     if (!ids.length) { setShowGapModal(true); return; }
     runGapAnalysisMutation.mutate({ document_id: id, framework_ids: ids },
       { onError: (e) => toast({ type: 'error', title: 'Not started', message: notStarted(e) }) });
@@ -438,13 +441,26 @@ export default function GapAnalysisView({ documentId, tenantId, canEdit }: { doc
               ))}
             </ul>
             {canEdit && (
-              <button type="button" onClick={runFailedAgain} disabled={runGapAnalysisMutation.isPending} className={BTN}>
+              <button type="button" onClick={() => runAgain(failed)} disabled={runGapAnalysisMutation.isPending} className={BTN}>
                 {runGapAnalysisMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Run again
               </button>
             )}
           </div>
         )}
       </section>
+
+      {outdated.length > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <p className="min-w-0 flex-1 text-xs text-amber-900">
+            Made on {versionLabel(outdated[0].document_version)}. The document is now {versionLabel(currentVersion)}. Run it again to check the new version.
+          </p>
+          {canEdit && (
+            <button type="button" onClick={() => runAgain(outdated)} disabled={runGapAnalysisMutation.isPending} className={BTN}>
+              {runGapAnalysisMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />} Run again
+            </button>
+          )}
+        </div>
+      )}
 
       <ComplianceSummarySection summary={complianceSummary} loading={summaryLoading} />
 

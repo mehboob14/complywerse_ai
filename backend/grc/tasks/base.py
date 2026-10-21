@@ -135,6 +135,19 @@ def tenant_lock(
                 logger.exception("tenant_lock release failed for %s", key)
 
 
+def release_tenant_lock(tenant_slug: str, resource: str) -> None:
+    """Drop a ``tenant_lock`` whoever holds it: only for a holder known to be gone (its work was cancelled as stopped), whose
+    lock would otherwise refuse the next job as busy until its TTL ends. In Redis, and the one held in this process without it."""
+    validate_slug(tenant_slug)
+    key = f"lock:{tenant_slug}:{resource}"
+    with _local_guard:
+        _local_locks.discard(key)
+    try:
+        get_redis().delete(key)
+    except _REDIS_DOWN:
+        pass
+
+
 # ─── Per-tenant rate limit ────────────────────────────────────────────────────
 
 class RateLimitExceeded(Exception):
@@ -236,7 +249,8 @@ class TenantTask(Task):
             db.close()
 
 
-__all__ = ["TenantTask", "tenant_lock", "tenant_rate_limit", "LockNotAcquired", "RateLimitExceeded", "get_redis", "ping_tenant"]
+__all__ = ["TenantTask", "tenant_lock", "release_tenant_lock", "tenant_rate_limit", "LockNotAcquired", "RateLimitExceeded", "get_redis",
+           "ping_tenant"]
 
 
 # ─── Diagnostic / health-check task ─────────────────────────────────────────
