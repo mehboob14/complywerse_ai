@@ -232,16 +232,20 @@ def test_at_least_n_counts_again_from_nothing(db):
     assert sign(db, RANA)["status"] == "pending_approval"
 
 
-def test_any_one_counts_again_from_nothing(db):
+def test_any_one_asks_everyone_at_the_stage_again(db):
     set_route(db, stage("review", [person(RANA), person(RAFAY)], name="Review"),
               stage("approval", [person(MINA), person(MO)], name="Approval", rule="any"))
     send(db)
     sign(db, RANA)
     sign(db, RAFAY)
     ask_changes(db, MINA)                                         # any one approves; Mina asks for changes instead
+    waited = db.query(m.DocumentObligation).filter_by(user_id=MO, status="held").one()
     edit(db)
     resubmit(db)
     assert doc(db).status == "pending_approval" and pending(db) == [("approval", MINA), ("approval", MO)]
+    assert pending(db, "review") == [] and stage_view(db, 2)["progress"] == {"required": 1, "signed": 0}
+    assert waited.status == "pending" and last_alert(db, MO).subject == "Approve again: Access policy"
+    assert last_alert(db, MINA).subject == "Approve again: Access policy" and view(db, MINA)["my_step"]["again"]["kind"] == "changes"
     assert sign(db, MO)["status"] == "approved"
 
 
