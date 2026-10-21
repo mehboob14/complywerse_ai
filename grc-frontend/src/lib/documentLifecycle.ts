@@ -40,10 +40,6 @@ export const LIFECYCLE_EVENT_LABEL: Record<string, string> = {
   restored: 'Restored from the archive', changes_requested: 'Changes requested', resubmitted: 'Resubmitted', withdrawn: 'Withdrawn from review',
   delegated: 'Delegated', route_set: 'Approval route set',
   review_again_requested: 'Asked again after changes',
-  change_proposed: 'Change proposed',
-  proposal_accepted: 'Proposed change accepted',
-  proposal_rejected: 'Proposed change not accepted',
-  proposal_withdrawn: 'Proposed change withdrawn',
   // changes to the document's statements
   statement_added: 'Statement added', statement_edited: 'Statement edited', statement_deleted: 'Statement removed',
   statement_rolled_back: 'Statement rolled back', statements_reparsed: 'Statements re-read from the document',
