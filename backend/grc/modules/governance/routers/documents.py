@@ -2241,7 +2241,8 @@ def download_document_file(
 def export_document(
     document_id: int,
     db: Session = Depends(get_db),
-    current_user: GRCUser = Depends(require_auth)
+    current_user: GRCUser = Depends(require_auth),
+    with_record: bool = False,
 ):
     """Download any governance document.
 
@@ -2250,6 +2251,11 @@ def export_document(
     markdown ``content`` is rendered to a PDF (via the shared artifact
     exporter) so that content-only / AI-drafted documents are downloadable
     too.
+
+    ``with_record`` adds the document's approval record (approval_record.py) after its own pages - a PDF, or a Word file - so what
+    compliance hands an auditor carries who approved it. A file of another kind is served unchanged with the header
+    ``X-Approval-Record: separate`` (its record is then a file of its own, ``/approval-record/export``). The stored file is never
+    modified. Without it, nothing is different.
     """
     user_tenants = get_user_tenants(current_user, db)
 
@@ -2267,6 +2273,10 @@ def export_document(
     src = permissions.version_for(db, current_user, document) or document      # the version in force, for who reads that one
     # Prefer the native uploaded file when present on disk.
     if src.file_path and os.path.exists(src.file_path):
+        if with_record:
+            from .approval_record import file_with_record
+
+            return file_with_record(db, current_user, document, src, ALLOWED_FILE_TYPES)
         return FileResponse(
             path=src.file_path,
             filename=src.file_name or f"document_{document_id}",
@@ -2279,10 +2289,19 @@ def export_document(
         title = document.title or "document"
         data, media_type, ext = build_export("pdf", title=title, content=src.content or "")
         safe_name = re.sub(r"[^A-Za-z0-9._-]+", "_", title.strip())[:80] or "document"
+        headers = {"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'}
+        if with_record:
+            from .approval_record import pdf_with_record
+
+            merged = pdf_with_record(db, current_user, document, data)          # None: it could not be made, the PDF is served as it is
+            if merged is None:
+                headers["X-Approval-Record"] = "separate"
+            else:
+                data, headers = merged, {"Content-Disposition": f'attachment; filename="{safe_name}-with-approval-record.{ext}"'}
         return StreamingResponse(
             io.BytesIO(data),
             media_type=media_type,
-            headers={"Content-Disposition": f'attachment; filename="{safe_name}.{ext}"'}
+            headers=headers
         )
 
     raise HTTPException(
