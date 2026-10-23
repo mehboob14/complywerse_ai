@@ -2,9 +2,11 @@
 
 
 import { PageLoader } from '@/cyber-assurance/components/ui';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { vulnManagementApi } from '@/cyber-assurance/lib/api';
+import { apiErrorText } from '@/lib/apiError';
+import { PATH_TARGETS, freeLevels, pathBody, pathSummary, type EscalationPath } from '@/lib/vulnDepartments';
 import { usePermissions } from '@/cyber-assurance/hooks/usePermissions';
 import {
   Users,
@@ -57,22 +59,15 @@ interface DepartmentVulnerability {
   priority: string;
 }
 
-interface EscalationPath {
-  id: number;
-  name: string;
-  description?: string;
-  escalation_order: number;
-  target_user_id?: number;
-  target_role?: string;
-  time_threshold_hours?: number;
-}
-
 export default function DepartmentsManagementPage() {
   const queryClient = useQueryClient();
   const { hasPermission } = usePermissions();
   const canCreate = hasPermission('vulnerabilities:vulnerability_register:create');
   const canEdit = hasPermission('vulnerabilities:vulnerability_register:edit');
   const canDelete = hasPermission('vulnerabilities:vulnerability_register:delete');
+  // A department's members and escalation paths are the organisation's structure: the server wants this right for them.
+  const canManageOrg = hasPermission('admin:organization:edit');
+  const [actionError, setActionError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -149,16 +144,20 @@ export default function DepartmentsManagementPage() {
   const addMemberMutation = useMutation({
     mutationFn: ({ deptId, data }: { deptId: number; data: { user_id: number; role?: string; email_notifications_enabled?: boolean; escalation_order?: number } }) => 
       vulnManagementApi.departments.addMember(deptId, data),
+    onError: (e) => setActionError(apiErrorText(e, 'The member could not be added.')),
     onSuccess: () => {
+      setActionError(null);
       queryClient.invalidateQueries({ queryKey: ['department-members', selectedDepartment?.id] });
       queryClient.invalidateQueries({ queryKey: ['all-departments'] });
     },
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: ({ deptId, memberId }: { deptId: number; memberId: number }) => 
-      vulnManagementApi.departments.removeMember(deptId, memberId),
+    mutationFn: ({ deptId, userId }: { deptId: number; userId: number }) => 
+      vulnManagementApi.departments.removeMember(deptId, userId),
+    onError: (e) => setActionError(apiErrorText(e, 'The member could not be removed.')),
     onSuccess: () => {
+      setActionError(null);
       queryClient.invalidateQueries({ queryKey: ['department-members', selectedDepartment?.id] });
       queryClient.invalidateQueries({ queryKey: ['all-departments'] });
     },
@@ -167,10 +166,25 @@ export default function DepartmentsManagementPage() {
   const createEscalationPathMutation = useMutation({
     mutationFn: ({ deptId, data }: { deptId: number; data: Record<string, unknown> }) => 
       vulnManagementApi.departments.createEscalationPath(deptId, data),
+    onError: (e) => setActionError(apiErrorText(e, 'The escalation path could not be added.')),
     onSuccess: () => {
+      setActionError(null);
       queryClient.invalidateQueries({ queryKey: ['escalation-paths', selectedDepartment?.id] });
     },
   });
+
+  const deleteEscalationPathMutation = useMutation({
+    mutationFn: ({ deptId, pathId }: { deptId: number; pathId: number }) =>
+      vulnManagementApi.departments.deleteEscalationPath(deptId, pathId),
+    onError: (e) => setActionError(apiErrorText(e, 'The escalation path could not be removed.')),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ['escalation-paths', selectedDepartment?.id] });
+    },
+  });
+
+  // an error belongs to the window it came from: clear it when a window opens or closes or another department is chosen
+  useEffect(() => { setActionError(null); }, [selectedDepartment?.id, showMemberModal, showEscalationModal]);
 
   const filteredDepartments = departments?.filter(dept => 
     dept.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -487,6 +501,7 @@ export default function DepartmentsManagementPage() {
               </button>
             </div>
 
+            {canManageOrg && (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -529,10 +544,12 @@ export default function DepartmentsManagementPage() {
                 <input type="checkbox" name="email_notifications" defaultChecked className="rounded" />
                 Email
               </label>
-              <button type="submit" disabled={addMemberMutation.isPending} className="btn-primary">
+              <button type="submit" disabled={addMemberMutation.isPending} className="btn-primary" aria-label="Add member">
                 <UserPlus size={16} />
               </button>
             </form>
+            )}
+            {actionError && <p role="alert" className="mb-3 text-sm text-red-600">{actionError}</p>}
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {(!departmentMembers || departmentMembers.length === 0) ? (
@@ -558,16 +575,19 @@ export default function DepartmentsManagementPage() {
                         }`}>
                           {member.role}
                         </span>
-                        {member.escalation_order && (
+                        {!!member.escalation_order && (
                           <span className="ml-2 text-xs cw-text-muted">#{member.escalation_order}</span>
                         )}
                       </div>
+                      {canManageOrg && (
                       <button
-                        onClick={() => removeMemberMutation.mutate({ deptId: selectedDepartment.id, memberId: member.id })}
+                        onClick={() => removeMemberMutation.mutate({ deptId: selectedDepartment.id, userId: member.user_id })}
                         className="cw-text-muted hover:text-red-600"
+                        aria-label={`Remove ${member.user_name || 'member'}`}
                       >
                         <Trash2 size={14} />
                       </button>
+                      )}
                     </div>
                   </div>
                 ))
@@ -593,63 +613,53 @@ export default function DepartmentsManagementPage() {
               </button>
             </div>
 
+            {canManageOrg && escalationPaths && freeLevels(escalationPaths).length > 0 && (
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
                 createEscalationPathMutation.mutate({
                   deptId: selectedDepartment.id,
-                  data: {
-                    name: formData.get('name') as string,
-                    description: formData.get('description') as string || undefined,
-                    escalation_order: parseInt(formData.get('escalation_order') as string) || 1,
-                    target_role: formData.get('target_role') as string || undefined,
-                    time_threshold_hours: parseInt(formData.get('time_threshold_hours') as string) || undefined,
-                  },
+                  data: pathBody({
+                    level: formData.get('escalation_level') as string,
+                    target: formData.get('target_role') as string,
+                    threshold: formData.get('sla_threshold_percent') as string,
+                    auto: formData.get('auto_escalate') === 'on',
+                  }),
                 });
-                (e.target as HTMLFormElement).reset();
               }}
               className="space-y-3 mb-4 p-3 rounded-lg bg-[var(--color-subtle)]"
             >
               <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="Path name *"
-                  className="input-field"
-                  required
-                />
-                <select name="target_role" className="input-field">
-                  <option value="">Target role</option>
-                  <option value="head">Head</option>
-                  <option value="lead">Lead</option>
-                  <option value="member">Member</option>
-                </select>
+                <label className="text-xs cw-text-muted">
+                  Level
+                  <select name="escalation_level" className="input-field mt-1 w-full">
+                    {freeLevels(escalationPaths).map((l) => <option key={l} value={l}>Level {l}</option>)}
+                  </select>
+                </label>
+                <label className="text-xs cw-text-muted">
+                  Escalate to
+                  <select name="target_role" className="input-field mt-1 w-full">
+                    {PATH_TARGETS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </label>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="number"
-                  name="escalation_order"
-                  placeholder="Order (1, 2, 3...)"
-                  className="input-field"
-                />
-                <input
-                  type="number"
-                  name="time_threshold_hours"
-                  placeholder="Hours threshold"
-                  className="input-field"
-                />
+                <label className="text-xs cw-text-muted">
+                  When this much of the SLA has passed (%)
+                  <input type="number" name="sla_threshold_percent" min={1} defaultValue={75} className="input-field mt-1 w-full" />
+                </label>
+                <label className="flex items-end gap-2 pb-2 text-sm text-slate-600">
+                  <input type="checkbox" name="auto_escalate" defaultChecked className="rounded" />
+                  Escalate automatically
+                </label>
               </div>
-              <input
-                type="text"
-                name="description"
-                placeholder="Description (optional)"
-                className="input-field w-full"
-              />
               <button type="submit" disabled={createEscalationPathMutation.isPending} className="btn-primary w-full">
                 {createEscalationPathMutation.isPending ? 'Adding...' : 'Add Escalation Path'}
               </button>
             </form>
+            )}
+            {actionError && <p role="alert" className="mb-3 text-sm text-red-600">{actionError}</p>}
 
             <div className="space-y-2 max-h-64 overflow-y-auto">
               {(!escalationPaths || escalationPaths.length === 0) ? (
@@ -659,16 +669,22 @@ export default function DepartmentsManagementPage() {
                   <div key={path.id} className="flex items-center justify-between p-3 rounded-lg bg-[var(--color-subtle)]">
                     <div className="flex items-center gap-3">
                       <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-700 text-sm font-medium">
-                        {path.escalation_order}
+                        {path.escalation_level}
                       </div>
                       <div>
-                        <p className="text-sm font-medium cw-text-default">{path.name}</p>
-                        <p className="text-xs cw-text-muted">
-                          {path.target_role && `To: ${path.target_role}`}
-                          {path.time_threshold_hours && ` | After ${path.time_threshold_hours}h`}
-                        </p>
+                        <p className="text-sm font-medium cw-text-default">Level {path.escalation_level}</p>
+                        <p className="text-xs cw-text-muted">{pathSummary(path)}</p>
                       </div>
                     </div>
+                    {canManageOrg && (
+                    <button
+                      onClick={() => deleteEscalationPathMutation.mutate({ deptId: selectedDepartment.id, pathId: path.id })}
+                      className="cw-text-muted hover:text-red-600"
+                      aria-label={`Remove level ${path.escalation_level} escalation path`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                    )}
                   </div>
                 ))
               )}

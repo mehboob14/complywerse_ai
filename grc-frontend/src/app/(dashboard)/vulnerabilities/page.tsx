@@ -6,6 +6,8 @@ import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tansta
 import * as XLSX from 'xlsx';
 import { vulnManagementApi } from '@/lib/api';
 import apiClient from '@/lib/api';
+import { apiErrorText } from '@/lib/apiError';
+import { PATH_TARGETS, freeLevels, pathBody, pathSummary, type EscalationPath } from '@/lib/vulnDepartments';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useTabParam } from '@/lib/useTabParam';
 import { SearchInput, MultiSelectDropdown, PageLoader } from '@/components/ui';
@@ -78,16 +80,6 @@ interface DepartmentVulnerability {
   severity: string;
   status: string;
   priority: string;
-}
-
-interface EscalationPath {
-  id: number;
-  name: string;
-  description?: string;
-  escalation_order: number;
-  target_user_id?: number;
-  target_role?: string;
-  time_threshold_hours?: number;
 }
 
 interface SLAConfig {
@@ -163,6 +155,9 @@ function getStatusStyle(status: string) {
 
 export default function VulnerabilitiesPage() {
   const { hasPermission } = usePermissions();
+  // A department's members and escalation paths are the organisation's structure: the server wants this right for them.
+  const canManageOrg = hasPermission('admin:organization:edit');
+  const [actionError, setActionError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useTabParam<'overview' | 'vulnerabilities' | 'departments' | 'sla'>('vulnerabilities', ['overview', 'vulnerabilities', 'departments', 'sla']);
   const [registerType, setRegisterType] = useState<'standard' | 'nca'>('standard');
 
@@ -514,16 +509,20 @@ export default function VulnerabilitiesPage() {
   const addMemberMutation = useMutation({
     mutationFn: ({ deptId, data }: { deptId: number; data: { user_id: number; role?: string; email_notifications_enabled?: boolean; escalation_order?: number } }) =>
       vulnManagementApi.departments.addMember(deptId, data),
+    onError: (e) => setActionError(apiErrorText(e, 'The member could not be added.')),
     onSuccess: () => {
+      setActionError(null);
       queryClient.invalidateQueries({ queryKey: ['department-members', selectedDepartment?.id] });
       queryClient.invalidateQueries({ queryKey: ['all-departments-tab'] });
     },
   });
 
   const removeMemberMutation = useMutation({
-    mutationFn: ({ deptId, memberId }: { deptId: number; memberId: number }) =>
-      vulnManagementApi.departments.removeMember(deptId, memberId),
+    mutationFn: ({ deptId, userId }: { deptId: number; userId: number }) =>
+      vulnManagementApi.departments.removeMember(deptId, userId),
+    onError: (e) => setActionError(apiErrorText(e, 'The member could not be removed.')),
     onSuccess: () => {
+      setActionError(null);
       queryClient.invalidateQueries({ queryKey: ['department-members', selectedDepartment?.id] });
       queryClient.invalidateQueries({ queryKey: ['all-departments-tab'] });
     },
@@ -532,10 +531,25 @@ export default function VulnerabilitiesPage() {
   const createEscalationPathMutation = useMutation({
     mutationFn: ({ deptId, data }: { deptId: number; data: Record<string, unknown> }) =>
       vulnManagementApi.departments.createEscalationPath(deptId, data),
+    onError: (e) => setActionError(apiErrorText(e, 'The escalation path could not be added.')),
     onSuccess: () => {
+      setActionError(null);
       queryClient.invalidateQueries({ queryKey: ['escalation-paths', selectedDepartment?.id] });
     },
   });
+
+  const deleteEscalationPathMutation = useMutation({
+    mutationFn: ({ deptId, pathId }: { deptId: number; pathId: number }) =>
+      vulnManagementApi.departments.deleteEscalationPath(deptId, pathId),
+    onError: (e) => setActionError(apiErrorText(e, 'The escalation path could not be removed.')),
+    onSuccess: () => {
+      setActionError(null);
+      queryClient.invalidateQueries({ queryKey: ['escalation-paths', selectedDepartment?.id] });
+    },
+  });
+
+  // an error belongs to the window it came from: clear it when a window opens or closes or another department is chosen
+  useEffect(() => { setActionError(null); }, [selectedDepartment?.id, showMemberModal, showEscalationModal]);
 
   // SLA mutations
   const updateSlaMutation = useMutation({
@@ -1379,9 +1393,9 @@ export default function VulnerabilitiesPage() {
 
               {/* Modal Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t border-[var(--color-border)]">
-                <button 
-                  type="button" 
-                  onClick={() => setShowBulkAssignModal(false)} 
+                <button
+                  type="button"
+                  onClick={() => setShowBulkAssignModal(false)}
                   className="cw-btn-secondary inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium whitespace-nowrap transition-opacity"
                 >
                   Cancel
@@ -1503,7 +1517,7 @@ export default function VulnerabilitiesPage() {
                           <p className="text-sm cw-text-muted">No vulnerabilities assigned</p>
                         ) : (
                           departmentVulnerabilities.slice(0, 5).map((vuln) => (
-                            <Link key={vuln.id} href={`/vulnerabilities/${vuln.vulnerability_id}`} className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-subtle)] hover:bg-[var(--color-hover)] transition-colors">
+                            <Link key={vuln.id} href={`/vulnerabilities/${vuln.id}`} className="flex items-center justify-between p-2 rounded-lg bg-[var(--color-subtle)] hover:bg-[var(--color-hover)] transition-colors">
                               <div className="flex items-center gap-2">
                                 <span className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs ${deptSeverityStyles[vuln.severity] || deptSeverityStyles.info}`}>{vuln.severity}</span>
                                 <span className="text-sm cw-text truncate max-w-[150px]">{vuln.title}</span>
@@ -1573,13 +1587,16 @@ export default function VulnerabilitiesPage() {
                   <h2 className="text-xl font-bold cw-text">Members — {selectedDepartment.name}</h2>
                   <button onClick={() => { setShowMemberModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text"><X size={20} /></button>
                 </div>
+                {canManageOrg && (
                 <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); const userId = parseInt(fd.get('user_id') as string); if (userId) { addMemberMutation.mutate({ deptId: selectedDepartment.id, data: { user_id: userId, role: fd.get('role') as string || 'member', email_notifications_enabled: fd.get('email_notifications') === 'on', escalation_order: parseInt(fd.get('escalation_order') as string) || undefined } }); (e.target as HTMLFormElement).reset(); } }} className="flex gap-2 mb-4 flex-wrap">
                   <input type="number" name="user_id" placeholder="User ID" className="cw-field flex-1 min-w-[100px]" required />
                   <select name="role" className="cw-field w-28"><option value="member">Member</option><option value="lead">Lead</option><option value="head">Head</option></select>
                   <input type="number" name="escalation_order" placeholder="Order" className="cw-field w-20" />
                   <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" name="email_notifications" defaultChecked className="rounded" />Email</label>
-                  <button type="submit" disabled={addMemberMutation.isPending} className="cw-btn-primary"><UserPlus size={16} /></button>
+                  <button type="submit" disabled={addMemberMutation.isPending} className="cw-btn-primary" aria-label="Add member"><UserPlus size={16} /></button>
                 </form>
+                )}
+                {actionError && <p role="alert" className="mb-3 text-sm text-red-600">{actionError}</p>}
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {(!departmentMembers || departmentMembers.length === 0) ? (
                     <p className="text-sm cw-text-muted text-center py-4">No members</p>
@@ -1591,7 +1608,7 @@ export default function VulnerabilitiesPage() {
                       </div>
                       <div className="flex items-center gap-3">
                         <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs ${member.role === 'head' ? 'bg-primary-50 text-primary-700' : member.role === 'lead' ? 'bg-blue-50 text-blue-700' : 'bg-slate-50 text-slate-700'}`}>{member.role}</span>
-                        <button onClick={() => removeMemberMutation.mutate({ deptId: selectedDepartment.id, memberId: member.id })} className="cw-text-muted hover:text-red-600"><Trash2 size={14} /></button>
+                        {canManageOrg && <button onClick={() => removeMemberMutation.mutate({ deptId: selectedDepartment.id, userId: member.user_id })} className="cw-text-muted hover:text-red-600" aria-label={`Remove ${member.user_name || 'member'}`}><Trash2 size={14} /></button>}
                       </div>
                     </div>
                   ))}
@@ -1609,25 +1626,36 @@ export default function VulnerabilitiesPage() {
                   <h2 className="text-xl font-bold cw-text">Escalation Paths — {selectedDepartment.name}</h2>
                   <button onClick={() => { setShowEscalationModal(false); setSelectedDepartment(null); }} className="cw-text-muted hover:cw-text"><X size={20} /></button>
                 </div>
-                <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createEscalationPathMutation.mutate({ deptId: selectedDepartment.id, data: { name: fd.get('name') as string, description: fd.get('description') as string || undefined, escalation_order: parseInt(fd.get('escalation_order') as string) || 1, target_role: fd.get('target_role') as string || undefined, time_threshold_hours: parseInt(fd.get('time_threshold_hours') as string) || undefined } }); (e.target as HTMLFormElement).reset(); }} className="space-y-3 mb-4 p-3 rounded-lg bg-[var(--color-subtle)]">
+                {canManageOrg && escalationPaths && freeLevels(escalationPaths).length > 0 && (
+                <form onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); createEscalationPathMutation.mutate({ deptId: selectedDepartment.id, data: pathBody({ level: fd.get('escalation_level') as string, target: fd.get('target_role') as string, threshold: fd.get('sla_threshold_percent') as string, auto: fd.get('auto_escalate') === 'on' }) }); }} className="space-y-3 mb-4 p-3 rounded-lg bg-[var(--color-subtle)]">
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="text" name="name" placeholder="Path name *" className="cw-field" required />
-                    <select name="target_role" className="cw-field"><option value="">Target role</option><option value="head">Head</option><option value="lead">Lead</option><option value="member">Member</option></select>
+                    <label className="text-xs cw-text-muted">Level
+                      <select name="escalation_level" className="cw-field mt-1 w-full">{freeLevels(escalationPaths).map((l) => <option key={l} value={l}>Level {l}</option>)}</select>
+                    </label>
+                    <label className="text-xs cw-text-muted">Escalate to
+                      <select name="target_role" className="cw-field mt-1 w-full">{PATH_TARGETS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}</select>
+                    </label>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <input type="number" name="escalation_order" placeholder="Order (1, 2, 3...)" className="cw-field" />
-                    <input type="number" name="time_threshold_hours" placeholder="Hours threshold" className="cw-field" />
+                    <label className="text-xs cw-text-muted">When this much of the SLA has passed (%)
+                      <input type="number" name="sla_threshold_percent" min={1} defaultValue={75} className="cw-field mt-1 w-full" />
+                    </label>
+                    <label className="flex items-end gap-2 pb-2 text-sm text-slate-600"><input type="checkbox" name="auto_escalate" defaultChecked className="rounded" />Escalate automatically</label>
                   </div>
-                  <input type="text" name="description" placeholder="Description (optional)" className="cw-field w-full" />
                   <button type="submit" disabled={createEscalationPathMutation.isPending} className="cw-btn-primary w-full">{createEscalationPathMutation.isPending ? 'Adding...' : 'Add Escalation Path'}</button>
                 </form>
+                )}
+                {actionError && <p role="alert" className="mb-3 text-sm text-red-600">{actionError}</p>}
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {(!escalationPaths || escalationPaths.length === 0) ? (
                     <p className="text-sm cw-text-muted text-center py-4">No escalation paths configured</p>
                   ) : escalationPaths.map((path) => (
-                    <div key={path.id} className="flex items-center gap-3 p-3 rounded-lg bg-[var(--color-subtle)]">
-                      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-700 text-sm font-medium">{path.escalation_order}</div>
-                      <div><p className="text-sm font-medium cw-text">{path.name}</p><p className="text-xs cw-text-muted">{path.target_role && `To: ${path.target_role}`}{path.time_threshold_hours && ` | After ${path.time_threshold_hours}h`}</p></div>
+                    <div key={path.id} className="flex items-center justify-between gap-3 p-3 rounded-lg bg-[var(--color-subtle)]">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-50 text-orange-700 text-sm font-medium">{path.escalation_level}</div>
+                        <div><p className="text-sm font-medium cw-text">Level {path.escalation_level}</p><p className="text-xs cw-text-muted">{pathSummary(path)}</p></div>
+                      </div>
+                      {canManageOrg && <button onClick={() => deleteEscalationPathMutation.mutate({ deptId: selectedDepartment.id, pathId: path.id })} className="cw-text-muted hover:text-red-600" aria-label={`Remove level ${path.escalation_level} escalation path`}><Trash2 size={14} /></button>}
                     </div>
                   ))}
                 </div>

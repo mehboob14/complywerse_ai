@@ -3208,22 +3208,26 @@ export const vulnManagementApi = {
     delete: (id: number) => apiClient.delete(`/vuln-management/departments/${id}`),
     addMember: (deptId: number, data: { user_id: number; role?: string; email_notifications_enabled?: boolean; escalation_order?: number }) => 
       apiClient.post(`/vuln-management/departments/${deptId}/members`, data),
-    removeMember: (deptId: number, memberId: number) => 
-      apiClient.delete(`/vuln-management/departments/${deptId}/members/${memberId}`),
+    // the server removes a member by the person's user id (not the membership row's id)
+    removeMember: (deptId: number, userId: number) => 
+      apiClient.delete(`/vuln-management/departments/${deptId}/members/${userId}`),
     getMembers: (deptId: number) =>
       apiClient.get(`/vuln-management/departments/${deptId}/members`),
     getVulnerabilityDepartments: (vulnId: number) => 
       apiClient.get(`/vuln-management/vulnerabilities/${vulnId}/departments`),
     assignDepartment: (vulnId: number, data: { department_id: number; priority?: string; sla_override_days?: number; notes?: string }) => 
       apiClient.post(`/vuln-management/vulnerabilities/${vulnId}/assign-department`, data),
-    removeDepartmentAssignment: (vulnId: number, assignmentId: number) => 
-      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assign-department/${assignmentId}`),
+    // taken back by the department's id (the route is .../assign-department/{dept_id})
+    removeDepartmentAssignment: (vulnId: number, deptId: number) => 
+      apiClient.delete(`/vuln-management/vulnerabilities/${vulnId}/assign-department/${deptId}`),
     getDepartmentVulnerabilities: (deptId: number) =>
       apiClient.get(`/vuln-management/departments/${deptId}/vulnerabilities`),
     getEscalationPaths: (deptId: number) =>
       apiClient.get(`/vuln-management/departments/${deptId}/escalation-paths`),
     createEscalationPath: (deptId: number, data: Record<string, unknown>) =>
       apiClient.post(`/vuln-management/departments/${deptId}/escalation-paths`, data),
+    deleteEscalationPath: (deptId: number, pathId: number) =>
+      apiClient.delete(`/vuln-management/departments/${deptId}/escalation-paths/${pathId}`),
     bulkAssign: (data: { vulnerability_ids: number[]; department_id: number; priority?: string; notes?: string }) =>
       apiClient.post('/vuln-management/vulnerabilities/bulk-assign', data),
   },
